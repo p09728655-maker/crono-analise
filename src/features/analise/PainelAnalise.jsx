@@ -5,6 +5,7 @@ import {
 } from '../../domain/cronoanalise.js';
 import { obterEstudo } from '../../lib/api.js';
 import { CartaControle, GraficoYamazumi } from './graficos.jsx';
+import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import RelatorioImpressao from './RelatorioImpressao.jsx';
 
 /**
@@ -87,6 +88,8 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
       <div className="somente-tela">
         <header style={est.cabecalho}>
           <button type="button" onClick={aoVoltar} style={est.botaoVoltar}>← Estudos</button>
+          {/* Variante para fundo claro: o painel de analise usa tema claro. */}
+          <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={est.logo} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={est.titulo}>{estudo.nome}</h1>
             <p style={est.subtitulo}>
@@ -251,6 +254,7 @@ const est = {
     minHeight: 40, padding: '0 16px', background: claro.papel, border: `1px solid ${claro.borda}`,
     borderRadius: 8, color: claro.textoMedio, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
   },
+  logo: { height: 36, width: 'auto', display: 'block', flexShrink: 0 },
   titulo: { margin: 0, fontSize: 22, fontWeight: 700 },
   subtitulo: { margin: '2px 0 0', fontSize: 13, color: claro.textoFraco },
   botaoImprimir: {

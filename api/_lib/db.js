@@ -13,10 +13,10 @@ import postgres from 'postgres';
 const url = process.env.DATABASE_URL;
 
 if (!url) {
-  console.error('[ritmoprod] DATABASE_URL nao configurada.');
+  console.error('[ritmopatrimar] DATABASE_URL nao configurada.');
 } else if (!url.includes('6543') && url.includes('supabase')) {
   console.warn(
-    '[ritmoprod] DATABASE_URL parece apontar para a conexao direta do Supabase. ' +
+    '[ritmopatrimar] DATABASE_URL parece apontar para a conexao direta do Supabase. ' +
     'Em serverless use a Transaction Pooler (porta 6543).',
   );
 }

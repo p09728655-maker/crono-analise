@@ -1,6 +1,13 @@
-# RitmoProd — Estudo de Tempos
+# RitmoPatrimar — Estudo de Tempos
 
 Cronoanálise e estudo de tempos para chão de fábrica. **Patrimar Móveis.**
+
+O logotipo vive embutido em base64 (`src/theme/logo.js`), em duas variantes —
+uma para fundo claro, outra para fundo escuro, porque a palavra "móveis" é
+quase preta e sumiria sobre o grafite do app. Embutido de propósito: o
+relatório impresso nunca sai sem a marca por causa de uma requisição que
+falhou justamente na hora de imprimir, e funciona offline. Custo: PNG
+quantizado em 32 cores, ~6 KB cada.
 
 Coleta de tempos no posto (furadeira, seccionadora, coladeira), cálculo de
 tempo padrão, capacidade e estabilidade de processo, com backend próprio e

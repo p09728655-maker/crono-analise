@@ -114,11 +114,11 @@ export default handler(async (req, res) => {
       throw new ErroHttp(429, 'Limite de uso da IA atingido. Tente em alguns minutos.');
     }
     if (err instanceof Anthropic.AuthenticationError) {
-      console.error('[ritmoprod] ANTHROPIC_API_KEY invalida.');
+      console.error('[ritmopatrimar] ANTHROPIC_API_KEY invalida.');
       throw new ErroHttp(503, 'Analise por IA indisponivel');
     }
     if (err instanceof Anthropic.APIError) {
-      console.error('[ritmoprod] erro da API Anthropic:', err.status, err.message);
+      console.error('[ritmopatrimar] erro da API Anthropic:', err.status, err.message);
       throw new ErroHttp(502, 'Falha ao consultar a IA');
     }
     throw err;

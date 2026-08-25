@@ -1,11 +1,13 @@
 {
-  "name": "RitmoProd — Estudo de Tempos",
-  "short_name": "RitmoProd",
+  "name": "RitmoPatrimar — Estudo de Tempos",
+  "short_name": "RitmoPatrimar",
+  "description": "Cronoanálise e estudo de tempos — Patrimar Móveis",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#14171A",
   "theme_color": "#14171A",
   "orientation": "any",
+  "lang": "pt-BR",
   "icons": [
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]

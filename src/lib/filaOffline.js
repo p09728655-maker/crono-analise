@@ -10,6 +10,11 @@
  * torna o reenvio idempotente do lado do servidor.
  */
 
+// Mantido como 'ritmoprod' de proposito, apesar do app hoje se chamar
+// RitmoPatrimar. Este e' o nome do banco IndexedDB no aparelho: renomear
+// orfanaria qualquer ciclo ja' enfileirado e ainda nao sincronizado. E' um
+// identificador interno, invisivel ao usuario — nao vale o risco de perder
+// coleta por consistencia cosmetica.
 const BANCO = 'ritmoprod';
 const VERSAO = 1;
 const FILA = 'fila';

@@ -1,9 +1,9 @@
 {
-  "name": "ritmoprod",
+  "name": "ritmopatrimar",
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "RitmoProd — Estudo de Tempos e Cronoanalise (Patrimar Moveis)",
+  "description": "RitmoPatrimar — Estudo de Tempos e Cronoanalise (Patrimar Moveis)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

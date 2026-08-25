@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { cores, espaco, fonte, raio, tamanho, ALVO_MINIMO } from '../../theme/tokens.js';
 import { criarEstudo, listarEstudos } from '../../lib/api.js';
+import { LOGO_PATRIMAR_CLARO } from '../../theme/logo.js';
 
 export default function ListaEstudos({ aoAbrir }) {
   const [estudos, setEstudos] = useState([]);
@@ -32,9 +33,13 @@ export default function ListaEstudos({ aoAbrir }) {
   return (
     <div style={est.tela}>
       <header style={est.cabecalho}>
-        <div>
-          <h1 style={est.titulo}>Estudos de tempos</h1>
-          <p style={est.subtitulo}>Cronoanalise · Patrimar Moveis</p>
+        <div style={est.marcaBloco}>
+          {/* Logo embutida em base64: sem requisicao, funciona offline. */}
+          <img src={LOGO_PATRIMAR_CLARO} alt="Patrimar Móveis" style={est.logo} />
+          <div>
+            <h1 style={est.titulo}>RitmoPatrimar</h1>
+            <p style={est.subtitulo}>Cronoanálise e estudo de tempos</p>
+          </div>
         </div>
         <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
           + Novo estudo
@@ -186,7 +191,10 @@ const est = {
     display: 'flex', flexDirection: 'column', gap: espaco.lg,
   },
   cabecalho: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: espaco.md, flexWrap: 'wrap' },
-  titulo: { margin: 0, fontSize: tamanho.destaque, fontWeight: 700 },
+  marcaBloco: { display: 'flex', alignItems: 'center', gap: espaco.lg, flexWrap: 'wrap' },
+  // Altura fixa e width auto preservam a proporcao sem reflow ao carregar.
+  logo: { height: 38, width: 'auto', display: 'block' },
+  titulo: { margin: 0, fontSize: tamanho.destaque, fontWeight: 700, letterSpacing: -0.3 },
   subtitulo: { margin: '4px 0 0', fontSize: tamanho.legenda, color: cores.textoFraco },
   lista: { listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: espaco.sm },
   cartao: {

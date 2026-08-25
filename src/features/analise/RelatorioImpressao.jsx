@@ -1,6 +1,7 @@
 import { claro } from '../../theme/tokensAnalise.js';
 import { formatarSegundos } from '../../domain/cronoanalise.js';
 import { CartaControle, GraficoYamazumi } from './graficos.jsx';
+import { LOGO_PATRIMAR } from '../../theme/logo.js';
 
 /**
  * RELATORIO IMPRESSO — A4 retrato.
@@ -23,11 +24,13 @@ export default function RelatorioImpressao({ estudo, analise }) {
     <div className="somente-impressao" style={est.folha}>
       <header style={est.cabecalho}>
         <div>
-          <div style={est.marca}>PATRIMAR MÓVEIS</div>
+          {/* Base64: o relatorio nunca sai sem a marca por causa de uma
+              requisicao que falhou justamente na hora de imprimir. */}
+          <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={est.logo} />
           <h1 style={est.titulo}>Estudo de Tempos — Folha de Análise</h1>
         </div>
         <div style={est.emissao}>
-          Emitido em {hoje}
+          RitmoPatrimar · emitido em {hoje}
         </div>
       </header>
 
@@ -191,7 +194,7 @@ export default function RelatorioImpressao({ estudo, analise }) {
 const est = {
   folha: { background: '#fff', color: '#000', fontSize: 10.5, lineHeight: 1.45 },
   cabecalho: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `2.5px solid ${claro.vermelho}`, paddingBottom: 8, marginBottom: 14 },
-  marca: { fontSize: 9, fontWeight: 700, letterSpacing: 2, color: claro.vermelho },
+  logo: { height: 26, width: 'auto', display: 'block', marginBottom: 4 },
   titulo: { margin: '2px 0 0', fontSize: 16, fontWeight: 700 },
   emissao: { fontSize: 9, color: '#555' },
   identificacao: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 14px', marginBottom: 14 },

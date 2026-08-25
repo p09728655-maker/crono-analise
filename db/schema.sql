@@ -1,4 +1,4 @@
--- RitmoProd — schema Postgres
+-- RitmoPatrimar — schema Postgres
 -- Convencao: tempos em MILISSEGUNDOS (bigint), datas em timestamptz (UTC).
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

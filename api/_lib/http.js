@@ -30,7 +30,7 @@ export function handler(fn) {
         json(res, err.status, { erro: err.message, detalhes: err.detalhes });
         return;
       }
-      console.error('[ritmoprod] erro nao tratado:', err);
+      console.error('[ritmopatrimar] erro nao tratado:', err);
       json(res, 500, { erro: 'Erro interno' });
     }
   };
