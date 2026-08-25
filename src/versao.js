@@ -13,6 +13,14 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.9.2',
+    data: '2026-08-25',
+    titulo: 'Coleta sem conta de variação',
+    itens: [
+      'A tela de coleta não mostra mais "Alta variação · referência Nievel: N obs" — a conta lia como pedido de aumentar ciclos sem fim. Quem decide quantos ciclos bastam é a meta do estudo. O CV% continua nos números do topo e no relatório impresso.',
+    ],
+  },
+  {
     versao: '2.9.1',
     data: '2026-08-25',
     titulo: 'Selo verde na hora',

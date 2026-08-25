@@ -239,12 +239,6 @@ function Metricas({ resultado, metaObs, progresso }) {
       <div style={est.trilha} role="progressbar" aria-valuenow={Math.round(progresso)} aria-valuemin={0} aria-valuemax={100}>
         <div style={{ ...est.preenchimento, width: `${progresso}%` }} />
       </div>
-      {resultado && (
-        <div style={est.estabilidade}>
-          <span style={{ ...est.pontoEstado, background: corDoNivel(resultado.estabilidade.nivel) }} />
-          {resultado.estabilidade.rotulo} · referência Nievel: {resultado.obsMinimas} obs
-        </div>
-      )}
     </section>
   );
 }
@@ -400,9 +394,6 @@ function Faixa({ tipo, icone, titulo, texto, acao }) {
   );
 }
 
-const corDoNivel = (nivel) =>
-  ({ estavel: cores.ok, atencao: cores.atencao, critico: cores.critico }[nivel] || cores.neutro);
-
 /* ------------------------------------------------------------------ estilos */
 
 const est = {
@@ -464,11 +455,6 @@ const est = {
   metricaSufixo: { fontSize: tamanho.legenda, color: cores.textoFraco, marginLeft: 3, fontWeight: 400 },
   trilha: { height: 6, background: cores.superficieAlta, borderRadius: raio.pill, marginTop: espaco.md, overflow: 'hidden' },
   preenchimento: { height: '100%', background: cores.ok, borderRadius: raio.pill, transition: transicao.normal },
-  estabilidade: {
-    display: 'flex', alignItems: 'center', gap: espaco.sm,
-    fontSize: tamanho.legenda, color: cores.textoFraco, marginTop: espaco.sm,
-  },
-  pontoEstado: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
 
   // A acao principal ocupa todo o espaco livre. Alvo enorme e' requisito
   // funcional aqui, nao escolha estetica.
