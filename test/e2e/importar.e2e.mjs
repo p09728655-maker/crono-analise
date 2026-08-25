@@ -53,11 +53,17 @@ for (const modo of ['analise', 'coleta']) {
   checar(/VOL 1\/1/.test(await dialogo.innerText()),
     `${modo}: pecas sem processo aparecem, nao somem`);
 
-  // Nada pode estourar a largura no celular.
-  const larguras = await p.evaluate(() => ({
-    doc: document.documentElement.scrollWidth, tela: window.innerWidth,
-  }));
+  // Nada pode estourar a largura — nem a pagina, nem DENTRO do modal
+  // (o pano de fundo corta estouro horizontal e esconde o problema).
+  const larguras = await p.evaluate(() => {
+    const caixa = document.querySelector('[aria-label="Importar roteiro do ERP"] > div');
+    const estourados = [...caixa.querySelectorAll('*')]
+      .filter((el) => !['INPUT', 'TEXTAREA'].includes(el.tagName)
+        && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== 'auto').length;
+    return { doc: document.documentElement.scrollWidth, tela: window.innerWidth, estourados };
+  });
   checar(larguras.doc <= larguras.tela, `${modo}: sem rolagem horizontal (${larguras.doc}/${larguras.tela}px)`);
+  checar(larguras.estourados === 0, `${modo}: nada estourado dentro do modal (${larguras.estourados})`);
 
   await dialogo.locator('button', { hasText: 'Criar estudo' }).click();
   await p.waitForFunction(() => window.__aberto !== null, { timeout: 8000 });

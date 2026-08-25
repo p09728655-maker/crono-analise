@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores as escuro } from '../../theme/tokens.js';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
-import { formatarSegundos, taktTime } from '../../domain/cronoanalise.js';
+import { taktTime } from '../../domain/cronoanalise.js';
 import { agruparPorProduto, produtosConhecidos } from '../../domain/agrupamento.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
@@ -60,7 +60,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
       <Cabecalho
         modo={modo}
         titulo="RitmoPatrimar"
-        subtitulo="Cronoanálise e estudo de tempos"
+        subtitulo="Estudo de Tempos"
         aoTrocarModo={aoTrocarModo}
         /* O botao principal so' aparece aqui quando ja' ha' lista. No estado
            vazio ele vive no proprio bloco vazio — dois botoes identicos na
@@ -103,7 +103,40 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
           />
         )}
 
-        {estado === 'pronto' && !estudos.length && (
+        {estado === 'pronto' && !estudos.length && (analise ? (
+          /* No PC ha' espaco para o vazio APRESENTAR o sistema: o cartao
+             central chama para a acao e a faixa abaixo explica, em tres
+             passos, o que acontece depois de criar o estudo. */
+          <div style={est.vazioArea}>
+            <div style={est.vazioCartao}>
+              <Simbolo tipo="cronometro" cor={t.fraco} />
+              <h2 style={est.vazioTitulo}>Nenhum estudo cadastrado</h2>
+              <p style={est.vazioTexto}>
+                Crie seu primeiro estudo para começar a coletar ciclos e calcular
+                o tempo padrão.
+              </p>
+              <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
+                + Novo estudo
+              </button>
+            </div>
+
+            <div style={est.vazioFaixa}>
+              {[
+                { icone: 'cronometro', titulo: 'Coleta', texto: 'Cronometre os ciclos das operações.' },
+                { icone: 'grafico', titulo: 'Análise', texto: 'Calcule o tempo padrão e a performance.' },
+                { icone: 'pessoas', titulo: 'Capacidade', texto: 'Dimensione o posto e a produção.' },
+              ].map((bloco, i) => (
+                <div key={bloco.titulo} style={{ ...est.vazioBloco, ...(i > 0 ? est.vazioBlocoDivisa : {}) }}>
+                  <Simbolo tipo={bloco.icone} cor={t.vermelho} tamanho={26} />
+                  <div>
+                    <div style={est.vazioBlocoTitulo}>{bloco.titulo}</div>
+                    <div style={est.vazioBlocoTexto}>{bloco.texto}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
           <EstadoVazio
             modo={modo}
             marca={<Simbolo tipo="cronometro" cor={t.fraco} />}
@@ -114,9 +147,8 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
                 + Criar primeiro estudo
               </button>
             )}
-            secundaria={analise ? 'Você cadastra aqui no PC e cronometra no celular.' : null}
           />
-        )}
+        ))}
 
         {temEstudos && (
           <>
@@ -159,6 +191,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
       {criando && (
         <FormularioEstudo
           est={est}
+          analise={analise}
           produtos={produtosConhecidos(estudos)}
           aoSalvar={criar}
           aoCancelar={() => setCriando(false)}
@@ -215,19 +248,37 @@ function FiltroProduto({ grupos, filtro, aoFiltrar, est }) {
   );
 }
 
-/** Marca grafica sobria para os estados vazios. Sem ilustracao decorativa. */
-function Simbolo({ tipo: qual, cor }) {
+/** Marca grafica sobria, linear, sem ilustracao decorativa. */
+function Simbolo({ tipo: qual, cor, tamanho = 36 }) {
+  const base = { width: tamanho, height: tamanho, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': true };
   if (qual === 'alerta') {
     return (
-      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <svg {...base}>
         <circle cx="12" cy="12" r="9.25" stroke={cor} strokeWidth="1.5" />
         <path d="M12 7.5v5.5" stroke={cor} strokeWidth="1.75" strokeLinecap="round" />
         <circle cx="12" cy="16.25" r="1" fill={cor} />
       </svg>
     );
   }
+  if (qual === 'grafico') {
+    return (
+      <svg {...base}>
+        <path d="M5 19.5v-6M12 19.5V6.5M19 19.5v-9" stroke={cor} strokeWidth="1.75" strokeLinecap="round" />
+        <path d="M3.5 21.5h17" stroke={cor} strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (qual === 'pessoas') {
+    return (
+      <svg {...base}>
+        <circle cx="9" cy="8.5" r="3.25" stroke={cor} strokeWidth="1.5" />
+        <path d="M3.5 19.5c0-3 2.4-5 5.5-5s5.5 2 5.5 5" stroke={cor} strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M15.5 5.7a3.25 3.25 0 1 1 0 5.7M17 14.7c2.1.5 3.5 2.2 3.5 4.8" stroke={cor} strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
   return (
-    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg {...base}>
       <circle cx="12" cy="13.5" r="8" stroke={cor} strokeWidth="1.5" />
       <path d="M12 9.5v4l2.5 1.8" stroke={cor} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M9.5 3h5" stroke={cor} strokeWidth="1.75" strokeLinecap="round" />
@@ -365,118 +416,152 @@ function ConfirmarRemocao({ est, estudo, aoConfirmar, aoCancelar }) {
   );
 }
 
-function FormularioEstudo({ est, produtos = [], aoSalvar, aoCancelar }) {
+/**
+ * Novo estudo em tres etapas visuais: quem e' (identificacao), como coletar
+ * (meta e tolerancia) e que ritmo a demanda exige (Takt).
+ *
+ * As etapas nao sao paginas de assistente — tudo fica visivel de uma vez,
+ * e o indicador no topo acompanha onde o usuario esta digitando. Esconder
+ * campos atras de "proximo" so' faria o analista clicar mais para conferir
+ * o que ja' preencheu.
+ *
+ * O Takt NAO e' campo editavel: e' resultado. Quase ninguem sabe o Takt de
+ * cabeca, mas todo mundo sabe quanto precisa produzir e em quanto tempo —
+ * entao o formulario pede esses dois numeros e mostra o ritmo calculado.
+ * (Quem souber o Takt direto ajusta depois, em Ajustes do estudo.)
+ */
+function FormularioEstudo({ est, analise, produtos = [], aoSalvar, aoCancelar }) {
   const [dados, setDados] = useState({
     nome: '', recurso: '', produto: '', analista: '', toleranciaPct: 15, metaObs: 12,
-    taktSeg: '',
   });
-  // Calculadora: quase ninguem sabe o Takt de cabeca, mas todo mundo sabe
-  // quanto precisa produzir e quanto tempo tem para isso.
   const [calc, setCalc] = useState({ quantidade: '', horas: '' });
+  const [etapa, setEtapa] = useState(1);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState(null);
+
+  const refNome = useRef(null);
+  const refMeta = useRef(null);
+  const refQtd = useRef(null);
 
   const campo = (k) => ({
     value: dados[k],
     onChange: (ev) => setDados((d) => ({ ...d, [k]: ev.target.value })),
   });
 
-  /** Recalcula o Takt sempre que quantidade ou horas mudam. */
-  function aplicarCalculo(novo) {
-    setCalc(novo);
-    const qtd = Number(novo.quantidade);
-    const horas = Number(novo.horas);
-    if (qtd > 0 && horas > 0) {
-      const ms = taktTime(horas * 3600, qtd);
-      setDados((d) => ({ ...d, taktSeg: formatarSegundos(ms, 1) }));
-    }
+  const qtd = Number(calc.quantidade);
+  const horas = Number(String(calc.horas).replace(',', '.'));
+  const taktMs = qtd > 0 && horas > 0 ? taktTime(horas * 3600, qtd) : 0;
+
+  function irParaEtapa(n) {
+    setEtapa(n);
+    ({ 1: refNome, 2: refMeta, 3: refQtd })[n]?.current?.focus();
   }
 
   async function enviar(ev) {
     ev.preventDefault();
-    if (!dados.nome.trim()) { setErro('Informe o nome do estudo.'); return; }
+    if (!dados.nome.trim()) { setErro('Informe o nome do estudo.'); irParaEtapa(1); return; }
     setSalvando(true);
     setErro(null);
-    const taktMs = dados.taktSeg ? Math.round(Number(dados.taktSeg) * 1000) : null;
-    try { await aoSalvar({ ...dados, taktTimeMs: taktMs && taktMs > 0 ? taktMs : null }); }
+    try { await aoSalvar({ ...dados, taktTimeMs: taktMs > 0 ? Math.round(taktMs) : null }); }
     catch (e) { setErro(e.message); setSalvando(false); }
   }
 
   return (
     <div style={est.modal} role="dialog" aria-label="Novo estudo">
-      <form style={est.formulario} onSubmit={enviar}>
-        <h2 style={est.formTitulo}>Novo estudo</h2>
-
-        <Campo est={est} label="Nome do estudo" obrigatorio dica="Ex: Furação lateral — linha 2">
-          <input style={est.input} {...campo('nome')} autoFocus />
-        </Campo>
-
-        <div style={est.duasColunas}>
-          <Campo est={est} label="Recurso / posto" dica="Ex: Furadeira 03">
-            <input style={est.input} {...campo('recurso')} />
-          </Campo>
-          <Campo est={est} label="Produto ou referência"
-                 dica={produtos.length ? 'Escolha um já usado para agrupar corretamente.' : null}>
-            {/* datalist sugere sem impedir texto novo: o analista continua
-                livre para cadastrar produto inedito, mas nao cria "SLEEP
-                BASE" ao lado de "Sleep Base" por descuido. */}
-            <input style={est.input} list="produtos-conhecidos" {...campo('produto')} />
-            <datalist id="produtos-conhecidos">
-              {produtos.map((nome) => <option key={nome} value={nome} />)}
-            </datalist>
-          </Campo>
+      <form
+        style={{ ...est.formulario, ...(analise ? est.formularioLargo : {}) }}
+        onSubmit={enviar}
+      >
+        <div style={est.formCabecalho}>
+          <h2 style={est.formTitulo}>Novo estudo</h2>
+          <Etapas etapa={etapa} aoIr={irParaEtapa} est={est} compacto={!analise} />
         </div>
 
-        <Campo est={est} label="Analista">
-          <input style={est.input} {...campo('analista')} />
-        </Campo>
+        <div style={analise ? est.formCorpoDuplo : est.formCorpo}>
+          <div style={est.formEsquerda}>
+            <section style={est.secao} onFocusCapture={() => setEtapa(1)}>
+              <div style={est.secaoRotulo}>Identificação</div>
+              <div style={analise ? est.duasColunas : est.umaColuna}>
+                <Campo est={est} label="Nome do estudo" obrigatorio dica="Ex: Furação lateral — linha 2">
+                  <input ref={refNome} style={est.input} {...campo('nome')} autoFocus />
+                </Campo>
+                <Campo est={est} label="Recurso / Posto" dica="Ex: Furadeira 03">
+                  <input style={est.input} {...campo('recurso')} />
+                </Campo>
+                <Campo est={est} label="Produto / Referência"
+                       dica={produtos.length ? 'Escolha um já usado para agrupar corretamente.' : 'Ex: Mesa Cabeceira Sleep'}>
+                  {/* datalist sugere sem impedir texto novo: o analista continua
+                      livre para cadastrar produto inedito, mas nao cria "SLEEP
+                      BASE" ao lado de "Sleep Base" por descuido. */}
+                  <input style={est.input} list="produtos-conhecidos" {...campo('produto')} />
+                  <datalist id="produtos-conhecidos">
+                    {produtos.map((nome) => <option key={nome} value={nome} />)}
+                  </datalist>
+                </Campo>
+                <Campo est={est} label="Analista" dica="Quem conduz o estudo.">
+                  <input style={est.input} {...campo('analista')} />
+                </Campo>
+              </div>
+            </section>
 
-        <div style={est.duasColunas}>
-          <Campo est={est} label="Tolerância (%)" dica="Fadiga e necessidades. Típica: 10 a 15.">
-            <input type="number" min="0" max="100" style={est.input} {...campo('toleranciaPct')} />
-          </Campo>
-          <Campo est={est} label="Meta de ciclos" dica="Recomendado: 12 ou mais.">
-            <input type="number" min="1" max="999" style={est.input} {...campo('metaObs')} />
-          </Campo>
-        </div>
-
-        <fieldset style={est.bloco}>
-          <legend style={est.rotuloCampo}>Takt Time</legend>
-          <p style={est.dica}>
-            Ritmo que a demanda exige. Sem ele o sistema calcula tempo padrão e
-            capacidade, mas <strong>não dimensiona mão de obra</strong> nem desenha
-            a linha de referência no Yamazumi.
-          </p>
-
-          <div style={est.duasColunas}>
-            <Campo est={est} label="Quantidade por dia" dica="Peças que precisam sair.">
-              <input
-                type="number" min="1" style={est.input}
-                value={calc.quantidade}
-                onChange={(e) => aplicarCalculo({ ...calc, quantidade: e.target.value })}
-              />
-            </Campo>
-            <Campo est={est} label="Horas disponíveis" dica="Tempo produtivo, já sem paradas planejadas.">
-              <input
-                type="number" min="0.1" step="0.1" style={est.input}
-                value={calc.horas}
-                onChange={(e) => aplicarCalculo({ ...calc, horas: e.target.value })}
-              />
-            </Campo>
+            <section style={est.secaoSeparada} onFocusCapture={() => setEtapa(2)}>
+              <div style={est.secaoRotulo}>Configuração da coleta</div>
+              <div style={est.duasColunas}>
+                <Campo est={est} label="Meta de ciclos" dica="Recomendado: 12 ciclos ou mais.">
+                  <input ref={refMeta} type="number" min="1" max="999" style={est.input} {...campo('metaObs')} />
+                </Campo>
+                <Campo est={est} label="Tolerância (%)" dica="Fadiga e necessidades. Faixa típica: 10 a 15%.">
+                  <input type="number" min="0" max="100" style={est.input} {...campo('toleranciaPct')} />
+                </Campo>
+              </div>
+            </section>
           </div>
 
-          <Campo est={est} label="Takt Time (segundos por peça)"
-                 dica="Preenchido pela conta acima, ou digite direto se já souber.">
-            <input type="number" min="0" step="0.1" style={est.input} {...campo('taktSeg')} />
-          </Campo>
+          <aside style={est.painelRitmo} onFocusCapture={() => setEtapa(3)}>
+            <div style={est.secaoRotulo}>Ritmo / Demanda</div>
+            <div style={est.duasColunas}>
+              <Campo est={est} label="Quantidade por dia" dica="Peças que precisam sair.">
+                <input
+                  ref={refQtd} type="number" min="1" style={est.input}
+                  value={calc.quantidade}
+                  onChange={(ev) => setCalc((c) => ({ ...c, quantidade: ev.target.value }))}
+                />
+              </Campo>
+              <Campo est={est} label="Horas disponíveis" dica="Tempo produtivo do dia, sem paradas planejadas.">
+                <input
+                  type="number" min="0.1" step="0.1" style={est.input}
+                  value={calc.horas}
+                  onChange={(ev) => setCalc((c) => ({ ...c, horas: ev.target.value }))}
+                />
+              </Campo>
+            </div>
 
-          {dados.taktSeg > 0 && (
-            <p style={est.resultadoCalc}>
-              Uma peça a cada <strong>{Number(dados.taktSeg).toFixed(1)} s</strong> para
-              atender a demanda.
-            </p>
-          )}
-        </fieldset>
+            {/* Takt como RESULTADO, nao como campo: numero grande, calculado. */}
+            <div style={est.taktCartao}>
+              <span style={est.taktRotulo}>Takt Time</span>
+              <div style={est.taktValorLinha}>
+                <span style={est.taktValor}>{taktMs > 0 ? formatarTakt(taktMs) : '--:--'}</span>
+                <span style={est.taktUnidade}>s/peça</span>
+              </div>
+              <span style={est.taktTexto}>
+                {taktMs > 0
+                  ? 'Tempo disponível por peça para atender a meta diária.'
+                  : 'Preencha quantidade e horas para calcular o ritmo.'}
+              </span>
+            </div>
+
+            <div style={est.taktTiles}>
+              <div style={est.taktTile}>
+                <span style={est.taktTileRotulo}>Demanda diária</span>
+                <span style={est.taktTileValor}>{qtd > 0 ? `${qtd} peças` : '—'}</span>
+              </div>
+              <div style={est.taktTile}>
+                <span style={est.taktTileRotulo}>Tempo disponível</span>
+                <span style={est.taktTileValor}>{horas > 0 ? formatarHorasMin(horas) : '—'}</span>
+              </div>
+            </div>
+          </aside>
+        </div>
 
         {erro && <div style={est.erroForm}>{erro}</div>}
 
@@ -485,12 +570,57 @@ function FormularioEstudo({ est, produtos = [], aoSalvar, aoCancelar }) {
             Cancelar
           </button>
           <button type="submit" style={{ ...est.botaoPrimario, flex: 1 }} disabled={salvando}>
-            {salvando ? 'Salvando...' : 'Criar estudo'}
+            {salvando ? 'Salvando...' : 'Criar e iniciar coleta →'}
           </button>
         </div>
       </form>
     </div>
   );
+}
+
+/**
+ * Indicador 1 → 2 → 3 do topo do formulario. Clique leva ao primeiro campo.
+ * No celular so a etapa ativa carrega rotulo — tres rotulos completos
+ * quebram em duas linhas com um traco orfao no comeco da segunda.
+ */
+function Etapas({ etapa, aoIr, est, compacto = false }) {
+  return (
+    <ol style={est.etapas}>
+      {['Identificação', 'Coleta', 'Ritmo / Demanda'].map((nome, i) => {
+        const n = i + 1;
+        const ativa = etapa === n;
+        return (
+          <li key={nome} style={est.etapaItem}>
+            {i > 0 && <span style={est.etapaTraco} aria-hidden="true" />}
+            <button
+              type="button"
+              onClick={() => aoIr(n)}
+              aria-current={ativa ? 'step' : undefined}
+              aria-label={nome}
+              style={est.etapaBotao}
+            >
+              <span style={{ ...est.etapaNumero, ...(ativa ? est.etapaNumeroAtivo : {}) }}>{n}</span>
+              {(!compacto || ativa) && (
+                <span style={{ ...est.etapaRotulo, ...(ativa ? est.etapaRotuloAtivo : {}) }}>{nome}</span>
+              )}
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** 42000ms -> "00:42". O Takt e' lido como relogio, nao como decimal. */
+function formatarTakt(ms) {
+  const s = Math.round(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** 5.6 horas -> "5h36min". Confirma que "5,60" nao significa 5h60. */
+function formatarHorasMin(horas) {
+  const min = Math.round(horas * 60);
+  return `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}min`;
 }
 
 function Campo({ est, label, obrigatorio, dica, children }) {
@@ -649,6 +779,32 @@ function estilos(t, analise) {
       color: t.fraco, fontSize: 20, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit',
     },
 
+    /* ---- estado vazio estruturado (PC) ---- */
+    vazioArea: {
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: espaco.xl,
+      paddingTop: espaco.xxxl,
+    },
+    vazioCartao: {
+      width: '100%', maxWidth: 560,
+      padding: `${espaco.xxxl}px ${espaco.xxl}px`,
+      background: t.superficie, borderRadius: raio.lg, boxShadow: t.sombra,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      gap: espaco.md, textAlign: 'center',
+    },
+    vazioTitulo: { ...tipo('titulo'), margin: 0 },
+    vazioTexto: { ...tipo('corpo'), margin: 0, color: t.medio, maxWidth: 400 },
+    vazioFaixa: {
+      width: '100%', maxWidth: 1080, marginTop: espaco.lg,
+      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+      background: t.superficie, borderRadius: raio.lg,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    },
+    vazioBloco: { display: 'flex', alignItems: 'center', gap: espaco.md, padding: espaco.xl },
+    vazioBlocoDivisa: { borderLeftWidth: 1, borderLeftStyle: 'solid', borderLeftColor: t.borda },
+    vazioBlocoTitulo: { ...tipo('corpoF') },
+    vazioBlocoTexto: { ...tipo('legenda'), color: t.fraco, marginTop: 2 },
+
     /* ---- modal ---- */
     modal: {
       position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(15, 18, 22, 0.55)',
@@ -660,26 +816,90 @@ function estilos(t, analise) {
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.lg,
       padding: espaco.xxl, boxShadow: elevacao.alta,
       display: 'flex', flexDirection: 'column', gap: espaco.lg,
+      maxHeight: '92dvh', overflowY: 'auto',
     },
+    formularioLargo: { maxWidth: 960 },
     formTitulo: { ...tipo('titulo'), margin: 0 },
     textoModal: { ...tipo('corpo'), margin: 0, color: t.medio },
     acoesModal: { display: 'flex', gap: espaco.md, marginTop: espaco.xs },
-    duasColunas: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg },
-    bloco: {
-      border: 'none', padding: 0, margin: 0,
+    // minmax(0, 1fr): input tem largura minima intrinseca e, sem o 0, a
+    // coluna recusa encolher e estoura o painel no celular.
+    duasColunas: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: espaco.lg },
+    umaColuna: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: espaco.lg },
+
+    /* ---- novo estudo em etapas ---- */
+    formCabecalho: {
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      gap: espaco.lg, flexWrap: 'wrap',
+    },
+    formCorpo: { display: 'flex', flexDirection: 'column', gap: espaco.xl },
+    formCorpoDuplo: {
+      display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: espaco.xl,
+      alignItems: 'start',
+    },
+    formEsquerda: { display: 'flex', flexDirection: 'column', gap: espaco.xl, minWidth: 0 },
+    secao: { display: 'flex', flexDirection: 'column', gap: espaco.md },
+    secaoSeparada: {
       display: 'flex', flexDirection: 'column', gap: espaco.md,
-      paddingTop: espaco.md, borderTop: `1px solid ${t.borda}`,
+      paddingTop: espaco.lg,
+      borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
     },
-    resultadoCalc: {
-      margin: 0, padding: espaco.md, borderRadius: raio.sm,
-      background: t.realce, ...tipo('legenda'), color: t.medio,
+    secaoRotulo: rotulo(t.fraco),
+
+    etapas: {
+      display: 'flex', alignItems: 'center', gap: espaco.sm,
+      listStyle: 'none', margin: 0, padding: 0, flexWrap: 'wrap',
     },
+    etapaItem: { display: 'flex', alignItems: 'center', gap: espaco.sm },
+    etapaTraco: { width: 18, height: 1, background: t.borda },
+    etapaBotao: {
+      display: 'inline-flex', alignItems: 'center', gap: espaco.xs,
+      background: 'transparent', border: 'none', padding: 2,
+      cursor: 'pointer', fontFamily: 'inherit',
+    },
+    etapaNumero: {
+      width: 22, height: 22, borderRadius: raio.pill,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      background: t.realce, borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+      color: t.fraco, ...tipo('micro'), fontWeight: 700,
+    },
+    etapaNumeroAtivo: { background: t.vermelho, borderColor: t.vermelho, color: '#fff' },
+    etapaRotulo: { ...tipo('legenda'), fontWeight: 600, color: t.fraco },
+    etapaRotuloAtivo: { color: t.texto },
+
+    /* O painel de ritmo e' a etapa em destaque: superficie propria. */
+    painelRitmo: {
+      display: 'flex', flexDirection: 'column', gap: espaco.lg,
+      padding: espaco.lg, background: t.realce,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
+    },
+    taktCartao: {
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: espaco.xs,
+      padding: `${espaco.lg}px ${espaco.md}px`,
+      background: t.superficie,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
+      textAlign: 'center',
+    },
+    taktRotulo: rotulo(t.fraco),
+    taktValorLinha: { display: 'flex', alignItems: 'baseline', gap: espaco.sm },
+    taktValor: { ...tipo('display'), ...numeros, color: t.texto },
+    taktUnidade: { ...tipo('corpoF'), color: t.fraco },
+    taktTexto: { ...tipo('legenda'), color: t.fraco, maxWidth: 300 },
+    taktTiles: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.md },
+    taktTile: {
+      display: 'flex', flexDirection: 'column', gap: 2, padding: espaco.md,
+      background: t.superficie,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    },
+    taktTileRotulo: rotulo(t.fraco),
+    taktTileValor: { ...tipo('corpoF'), ...numeros, color: t.texto },
+
     campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
     rotuloCampo: rotulo(t.fraco),
     obrigatorio: { color: t.critico },
     dica: { ...tipo('legenda'), color: t.fraco, fontStyle: 'italic' },
     input: {
-      minHeight: 44, padding: `0 ${espaco.md}px`, background: t.fundo,
+      width: '100%', minHeight: 44, padding: `0 ${espaco.md}px`, background: t.fundo,
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
       color: t.texto, ...tipo('corpo'), fontFamily: 'inherit', outline: 'none',
       transition: `border-color ${transicao.rapida}`,

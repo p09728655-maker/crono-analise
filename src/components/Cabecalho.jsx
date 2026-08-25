@@ -45,15 +45,16 @@ export default function Cabecalho({ modo, titulo, subtitulo, acoes, aoTrocarModo
 }
 
 /**
- * Alternador de modo em controle segmentado.
+ * Alternador de modo em abas sublinhadas.
  *
- * Antes eram duas coisas soltas: um selo que parecia botao mas nao era, e um
- * botao de texto ao lado. Duas formas para uma escolha binaria. Segmentado
- * mostra as duas opcoes e qual esta ativa, numa peca so.
+ * Duas opcoes de navegacao no topo, com a ativa marcada pelo sublinhado
+ * vermelho da marca — o mesmo padrao das abas internas do painel. A inativa
+ * carrega um sublinhado transparente da mesma espessura, para o texto nao
+ * pular quando a marcacao muda de lugar.
  */
 function TrocaModo({ modo, aoTrocar, est }) {
   return (
-    <div style={est.segmentado} role="group" aria-label="Modo de uso">
+    <nav style={est.abas} aria-label="Modo de uso">
       {[
         { id: 'coleta', rotulo: 'Coleta', dica: 'Celular, no posto' },
         { id: 'analise', rotulo: 'Análise', dica: 'PC, com impressão' },
@@ -65,24 +66,24 @@ function TrocaModo({ modo, aoTrocar, est }) {
             type="button"
             onClick={() => { if (!ativo) aoTrocar(); }}
             title={opcao.dica}
-            aria-pressed={ativo}
-            style={{ ...est.segmento, ...(ativo ? est.segmentoAtivo : {}) }}
+            aria-current={ativo ? 'page' : undefined}
+            style={{ ...est.aba, ...(ativo ? est.abaAtiva : {}) }}
           >
             {opcao.rotulo}
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 }
 
 const paleta = (analise) => (analise
   ? { superficie: claro.papel, borda: claro.borda, texto: claro.texto,
       fraco: claro.textoFraco, medio: claro.textoMedio, sombra: elevacao.baixa,
-      trilho: claro.fundo }
+      vermelho: claro.vermelho }
   : { superficie: escuro.superficie, borda: escuro.borda, texto: escuro.texto,
       fraco: escuro.textoFraco, medio: escuro.textoFraco, sombra: elevacao.escuraMedia,
-      trilho: escuro.fundo });
+      vermelho: escuro.vermelho });
 
 function estilos(t, analise) {
   return {
@@ -120,21 +121,18 @@ function estilos(t, analise) {
     },
     acoes: { display: 'flex', alignItems: 'center', gap: espaco.md, flexWrap: 'wrap' },
 
-    segmentado: {
-      display: 'inline-flex', padding: 3, gap: 2,
-      background: t.trilho, borderRadius: raio.md,
-      border: `1px solid ${t.borda}`,
-    },
-    segmento: {
-      minHeight: 32, padding: `0 ${espaco.md}px`,
-      background: 'transparent', border: 'none', borderRadius: raio.sm,
-      color: t.fraco, ...tipo('legenda'), fontWeight: 600,
+    abas: { display: 'inline-flex', gap: espaco.lg },
+    aba: {
+      minHeight: 38, padding: `0 ${espaco.xs}px`,
+      background: 'transparent', borderWidth: 0,
+      borderBottomWidth: 2, borderBottomStyle: 'solid', borderBottomColor: 'transparent',
+      color: t.fraco, ...tipo('corpo'), fontWeight: 600,
       cursor: 'pointer', fontFamily: 'inherit',
-      transition: `background ${transicao.rapida}, color ${transicao.rapida}`,
+      transition: `color ${transicao.rapida}, border-color ${transicao.rapida}`,
     },
-    segmentoAtivo: {
-      background: t.superficie, color: t.texto,
-      boxShadow: analise ? elevacao.baixa : 'none',
+    abaAtiva: {
+      color: t.texto,
+      borderBottomColor: t.vermelho,
     },
     rotuloMicro: rotulo(t.fraco),
   };

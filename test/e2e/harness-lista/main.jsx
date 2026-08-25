@@ -16,12 +16,26 @@ const RESPOSTA = {
       produto: '', analista: 'EU', total_operacoes: 1, total_observacoes: 0 },
   ],
 };
-window.fetch = async () => new Response(JSON.stringify(RESPOSTA), {
-  status: 200, headers: { 'Content-Type': 'application/json' },
-});
+// ?vazio=1 simula banco sem estudo nenhum; POSTs ficam em window.__posts.
+const params = new URLSearchParams(location.search);
+const vazio = params.get('vazio') === '1';
+window.__posts = [];
+window.__aberto = null;
+window.fetch = async (url, opts = {}) => {
+  if ((opts.method || 'GET') === 'POST') {
+    const corpo = JSON.parse(opts.body);
+    window.__posts.push({ url: String(url), corpo });
+    return new Response(JSON.stringify({ estudo: { id: 'novo-1' }, operacoes: [] }), {
+      status: 201, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  return new Response(JSON.stringify(vazio ? { estudos: [] } : RESPOSTA), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  });
+};
 
 // ?modo=analise no harness para inspecionar as duas variantes.
-const modo = new URLSearchParams(location.search).get('modo') || 'coleta';
+const modo = params.get('modo') || 'coleta';
 createRoot(document.getElementById('raiz')).render(
-  <ListaEstudos aoAbrir={() => {}} modo={modo} aoTrocarModo={() => {}} />,
+  <ListaEstudos aoAbrir={(id) => { window.__aberto = id; }} modo={modo} aoTrocarModo={() => {}} />,
 );

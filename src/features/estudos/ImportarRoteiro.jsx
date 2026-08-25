@@ -136,6 +136,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], a
                     {grupo.pecas.length} peça(s) · ERP prevê {segundos(somaErp(grupo.pecas))} s por produto
                   </span>
                 </div>
+                <div style={est.tabelaCaixa}>
                 <table style={est.tabela}>
                   <thead>
                     <tr>
@@ -154,6 +155,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], a
                     ))}
                   </tbody>
                 </table>
+                </div>
               </section>
             ))}
 
@@ -172,7 +174,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], a
             )}
 
             <div style={est.tresColunas}>
-              <label style={est.campo}>
+              <label style={{ ...est.campo, ...(analise ? {} : est.campoLargo) }}>
                 <span style={est.rotuloCampo}>Analista</span>
                 <input
                   style={est.input}
@@ -295,6 +297,7 @@ function estilos(t, analise) {
     },
     maquina: { ...tipo('corpoF') },
 
+    tabelaCaixa: { overflowX: 'auto' },
     tabela: { width: '100%', borderCollapse: 'collapse' },
     th: {
       textAlign: 'left', padding: `${espaco.sm}px ${espaco.md}px`,
@@ -303,7 +306,7 @@ function estilos(t, analise) {
     },
     thNum: {
       textAlign: 'right', padding: `${espaco.sm}px ${espaco.md}px`,
-      ...rotulo(t.fraco), background: t.realce, whiteSpace: 'nowrap',
+      ...rotulo(t.fraco), background: t.realce,
       borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: t.borda,
     },
     td: {
@@ -321,11 +324,17 @@ function estilos(t, analise) {
     campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
     rotuloCampo: rotulo(t.fraco),
     dica: { ...tipo('legenda'), color: t.fraco, fontStyle: 'italic', margin: 0 },
+    // No PC o analista divide a linha com os numeros; no celular ele ocupa
+    // a linha inteira (campoLargo) e os numeros dividem a de baixo.
     tresColunas: {
-      display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: espaco.md,
+      display: 'grid', gap: espaco.md,
+      gridTemplateColumns: analise
+        ? 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)'
+        : 'minmax(0, 1fr) minmax(0, 1fr)',
     },
+    campoLargo: { gridColumn: '1 / -1' },
     input: {
-      minHeight: 44, padding: `0 ${espaco.md}px`, background: t.fundo,
+      width: '100%', minHeight: 44, padding: `0 ${espaco.md}px`, background: t.fundo,
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
       color: t.texto, ...tipo('corpo'), fontFamily: 'inherit', outline: 'none',
     },
