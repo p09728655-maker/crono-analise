@@ -2,7 +2,6 @@
 -- Convencao: tempos em MILISSEGUNDOS (bigint), datas em timestamptz (UTC).
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS citext;
 
 -- ---------------------------------------------------------------- empresas
 CREATE TABLE IF NOT EXISTS empresas (
@@ -17,13 +16,15 @@ CREATE TABLE IF NOT EXISTS usuarios (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   empresa_id  uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
   nome        text NOT NULL,
-  email       citext,
+  email       text,
   papel       text NOT NULL DEFAULT 'analista'
               CHECK (papel IN ('admin', 'analista', 'leitor')),
   ativo       boolean NOT NULL DEFAULT true,
   criado_em   timestamptz NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS usuarios_email_unq ON usuarios (email) WHERE email IS NOT NULL;
+-- Indice funcional em lower(email): unicidade sem diferenciar caixa, sem
+-- depender da extensao citext (que o linter do Supabase sinaliza no schema public).
+CREATE UNIQUE INDEX IF NOT EXISTS usuarios_email_unq ON usuarios (lower(email)) WHERE email IS NOT NULL;
 
 -- ---------------------------------------------------------------- estudos
 CREATE TABLE IF NOT EXISTS estudos (
@@ -98,8 +99,30 @@ BEGIN
   NEW.atualizado_em = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = '';
 
 DROP TRIGGER IF EXISTS estudos_touch ON estudos;
 CREATE TRIGGER estudos_touch BEFORE UPDATE ON estudos
   FOR EACH ROW EXECUTE FUNCTION toca_atualizado_em();
+
+-- ------------------------------------------------------------------- RLS
+-- O schema `public` e exposto pelo PostgREST com a chave anonima, que vive
+-- no navegador. Sem RLS, qualquer pessoa com essa chave leria e escreveria
+-- todos os estudos.
+--
+-- Habilitamos RLS SEM policy nenhuma: nega 100% do acesso anonimo. O backend
+-- do app nao passa pelo PostgREST — conecta direto no Postgres com o papel
+-- `postgres`, que ignora RLS por definicao. A API segue funcionando.
+--
+-- Verificado: `SET ROLE anon; SELECT * FROM estudos` retorna
+-- "permission denied for table estudos".
+ALTER TABLE empresas    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usuarios    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE estudos     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operacoes   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE observacoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE paradas     ENABLE ROW LEVEL SECURITY;
+
+-- Defesa em camadas: remove tambem os grants diretos dos papeis expostos.
+REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas
+  FROM anon, authenticated;

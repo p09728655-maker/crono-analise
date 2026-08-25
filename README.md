@@ -21,6 +21,38 @@ funcionamento offline.
 
 ---
 
+## Duas experiências separadas
+
+Coleta e análise são tarefas diferentes, em posturas diferentes. Misturar as
+duas produz uma tela ruim para ambas.
+
+| | `/coleta` | `/analise` |
+|---|---|---|
+| Onde | celular/tablet, no posto | PC, no escritório |
+| Postura | em pé, às vezes de luva | sentado |
+| Tarefa | cronometrar ciclo | ler, decidir, imprimir |
+| Tema | escuro (luz irregular na fábrica) | claro (igual ao papel) |
+| Tela | um botão gigante, sem distração | densidade, tabela e gráficos |
+
+A raiz `/` manda para a experiência certa conforme o aparelho. As duas rotas
+seguem acessíveis de qualquer lugar — bloquear criaria beco sem saída quando
+o analista quiser conferir um número no chão de fábrica.
+
+## Relatório impresso
+
+O botão **Imprimir relatório** gera uma folha A4 retrato. Não é a tela levada
+ao papel: é um documento próprio, com a informação na ordem que um relatório
+técnico exige — identificação, base estatística, resultado, evidência
+gráfica, fórmulas e assinaturas.
+
+O relatório declara a própria confiabilidade. Se a amostra não fecha Nievel,
+isso vai **impresso e antes dos números**, não escondido: o documento circula
+em reunião, e número sem contexto vira decisão errada.
+
+Os gráficos são SVG inline — imprimem com nitidez de vetor. A série de
+tolerância leva textura hachurada, então continua distinguível em impressão
+preto e branco e para quem tem daltonismo.
+
 ## Rodando localmente
 
 ```bash
@@ -33,7 +65,8 @@ npm run dev               # front em http://localhost:5173
 
 ```bash
 npm test                  # domínio (puro, sem dependências)
-npm run test:e2e          # navegador — exige `npm run dev` na porta 5199
+npm run test:e2e          # navegador: coleta + análise + impressão
+                          # exige `npm run dev` na porta 5199
 
 # Integração da API (exige um Postgres com o schema aplicado)
 TEST_DATABASE_URL=postgres://... npx vitest run test/api.integracao.test.js
@@ -43,18 +76,31 @@ TEST_DATABASE_URL=postgres://... npx vitest run test/api.integracao.test.js
 
 ## Banco (Supabase)
 
-1. Crie o projeto em [supabase.com](https://supabase.com).
-2. Aplique o schema em **SQL Editor**:
+Projeto **`crono-analise`** (`meqjsdrgwnupvreghxgm`, região `sa-east-1`) já
+provisionado, com o schema aplicado e a empresa criada.
 
-   ```bash
-   psql "$DATABASE_URL" -f db/schema.sql
-   ```
+Para recriar do zero em outro ambiente:
 
-3. Crie a empresa e guarde o UUID — ele vai em `EMPRESA_ID`:
+```bash
+psql "$DATABASE_URL" -f db/schema.sql
+```
 
-   ```sql
-   INSERT INTO empresas (nome) VALUES ('Patrimar Móveis') RETURNING id;
-   ```
+```sql
+INSERT INTO empresas (nome) VALUES ('Patrimar Móveis') RETURNING id;
+```
+
+### RLS: a porta anônima fica fechada
+
+O schema `public` é exposto pelo PostgREST com a chave anônima, que vive no
+navegador. Sem RLS, qualquer pessoa com essa chave leria e escreveria todos
+os estudos.
+
+Habilitamos RLS **sem policy nenhuma** — isso nega 100% do acesso anônimo. O
+backend não passa pelo PostgREST: conecta direto no Postgres com o papel
+`postgres`, que ignora RLS por definição.
+
+Verificado, não presumido: `SET ROLE anon; SELECT * FROM estudos` retorna
+`permission denied for table estudos`.
 
 > **Use a Transaction Pooler (porta 6543)**, não a conexão direta (5432).
 > Cada requisição serverless abre e fecha conexão; pela porta direta o limite
@@ -91,7 +137,8 @@ src/
   lib/           fila offline (IndexedDB), cliente HTTP, hooks
   theme/         tokens de design (paleta Patrimar)
   features/
-    coleta/      tela de cronometragem no posto
+    coleta/      tela de cronometragem no posto (celular)
+    analise/     painel, gráficos SVG e relatório A4 (PC)
     estudos/     lista e detalhe de estudo
 api/
   _lib/          db, auth, validação, helpers HTTP
@@ -144,7 +191,7 @@ dá tempo de descartar o ciclo.
 
 ## Ainda não portado do app antigo
 
-- Gráfico Yamazumi e balanceamento de linha
+- Balanceamento automático entre estações
 - Painel de OEE (a fórmula existe em `src/domain/`, falta a tela)
-- Exportação para Excel e relatórios de impressão
+- Exportação para Excel
 - Cadastro de usuários e papéis

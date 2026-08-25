@@ -51,7 +51,7 @@ export default function BarraSincronizacao() {
   const { cor, texto } = descrever({ online, pendentes, estado, erro });
 
   return (
-    <div style={{ ...est.barra, borderColor: cor, color: cor }} role="status">
+    <div style={{ ...est.barra, borderBottomColor: cor, color: cor }} role="status">
       <span style={{ ...est.ponto, background: cor }} />
       <span style={est.texto}>{texto}</span>
       {pendentes > 0 && online && estado !== 'enviando' && (
@@ -80,7 +80,9 @@ const est = {
   barra: {
     display: 'flex', alignItems: 'center', gap: espaco.sm,
     padding: `${espaco.sm}px ${espaco.lg}px`,
-    background: cores.superficie, borderBottom: '1px solid',
+    background: cores.superficie,
+    // borderColor vem do estado; longhand evita conflito com a shorthand.
+    borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: cores.borda,
     fontFamily: fonte.familia, fontSize: tamanho.legenda,
   },
   ponto: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },

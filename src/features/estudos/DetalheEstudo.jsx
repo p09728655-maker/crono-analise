@@ -205,7 +205,8 @@ const est = {
   cartaoSub: { fontSize: tamanho.legenda, color: cores.textoFraco, marginTop: 2 },
   selo: {
     display: 'inline-block', marginTop: espaco.sm, padding: '3px 8px',
-    borderRadius: raio.sm, fontSize: 10, fontWeight: 700, border: '1px solid',
+    borderRadius: raio.sm, fontSize: 10, fontWeight: 700,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
   },
   seloOk: { color: cores.ok, borderColor: cores.ok, background: cores.okFundo },
   seloAtencao: { color: cores.atencao, borderColor: cores.atencao, background: cores.atencaoFundo },
@@ -249,7 +250,8 @@ const est = {
   grupoFr: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(84px, 1fr))', gap: espaco.sm },
   botaoFr: {
     minHeight: 56, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    background: cores.fundo, border: `1px solid ${cores.borda}`, borderRadius: raio.sm,
+    background: cores.fundo, borderRadius: raio.sm,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
     color: cores.textoFraco, cursor: 'pointer', fontFamily: 'inherit', fontSize: tamanho.pequeno,
   },
   botaoFrAtivo: { borderColor: cores.vermelho, color: cores.texto, background: 'rgba(219,33,38,0.12)' },

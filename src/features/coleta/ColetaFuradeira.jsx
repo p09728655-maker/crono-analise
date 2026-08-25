@@ -444,7 +444,10 @@ const est = {
   },
   selo: {
     fontSize: 10, fontWeight: 700, letterSpacing: 0.6, padding: '4px 8px',
-    borderRadius: raio.sm, border: `1px solid ${cores.borda}`, color: cores.textoFraco,
+    borderRadius: raio.sm, color: cores.textoFraco,
+    // Longhand de proposito: `seloOk`/`seloAtencao` sobrescrevem borderColor.
+    // Misturar com a shorthand `border` quebra o estilo em rerender.
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
   },
   seloOk: { color: cores.ok, borderColor: cores.ok, background: cores.okFundo },
   seloAtencao: { color: cores.atencao, borderColor: cores.atencao, background: cores.atencaoFundo },
@@ -504,7 +507,8 @@ const est = {
   botaoBarra: {
     minHeight: ALVO_MINIMO,
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-    background: cores.superficie, border: `1px solid ${cores.borda}`, borderRadius: raio.md,
+    background: cores.superficie, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
     color: cores.texto, fontSize: tamanho.legenda, fontWeight: 600,
     cursor: 'pointer', fontFamily: 'inherit',
   },
@@ -532,7 +536,9 @@ const est = {
   faixa: {
     flexShrink: 0,
     display: 'flex', alignItems: 'center', gap: espaco.md,
-    padding: espaco.md, border: '1px solid', borderRadius: raio.md,
+    padding: espaco.md, borderRadius: raio.md,
+    // borderColor vem do tipo da faixa; longhand evita conflito com shorthand.
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
   },
   faixaIcone: {
     width: 24, height: 24, flexShrink: 0, borderRadius: '50%', color: '#fff',

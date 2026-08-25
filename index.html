@@ -35,6 +35,38 @@
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation: none !important; transition: none !important; }
       }
+
+      /* --------------------------------------------------------------
+         IMPRESSÃO — A4 retrato.
+
+         O relatório impresso é um documento próprio, não a tela levada ao
+         papel: só ele aparece na impressão, e a interface some inteira.
+         -------------------------------------------------------------- */
+      .somente-impressao { display: none; }
+
+      @media print {
+        @page { size: A4 portrait; margin: 12mm; }
+
+        html, body {
+          background: #fff !important;
+          color: #000 !important;
+          height: auto;
+          /* Fundos e cores das barras do gráfico precisam sair impressos. */
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .somente-tela { display: none !important; }
+        .somente-impressao { display: block !important; }
+
+        /* Nada de sombra ou canto arredondado no papel. */
+        * { box-shadow: none !important; }
+
+        /* Evita quebrar tabela, figura ou bloco de assinatura ao meio. */
+        table, figure, thead { break-inside: avoid; page-break-inside: avoid; }
+        thead { display: table-header-group; }
+        h1, h2 { break-after: avoid; page-break-after: avoid; }
+      }
     </style>
   </head>
   <body>
