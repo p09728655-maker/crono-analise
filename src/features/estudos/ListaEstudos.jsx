@@ -608,7 +608,10 @@ function estilos(t, analise) {
     itemLista: { position: 'relative' },
     cartao: {
       width: '100%', minHeight: 76, display: 'flex', alignItems: 'center', gap: espaco.md,
-      padding: espaco.lg, background: t.superficie,
+      // Faixa reservada a direita para o botao de remover. Sem ela o × cai
+      // em cima da contagem de ciclos — o absolute nao empurra conteudo.
+      padding: espaco.lg, paddingRight: 56,
+      background: t.superficie,
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
       color: t.texto, cursor: 'pointer', fontFamily: 'inherit',
     },
@@ -618,7 +621,10 @@ function estilos(t, analise) {
     cartaoNumero: { ...tipo('destaque'), ...numeros },
     cartaoRotulo: rotulo(t.fraco),
     botaoRemoverCartao: {
-      position: 'absolute', top: 6, right: 6, width: 36, height: 36,
+      // Centralizado na faixa reservada, nao no canto: no canto ele disputa
+      // espaco com o numero e fica menor que o dedo precisa.
+      position: 'absolute', top: '50%', right: espaco.sm, transform: 'translateY(-50%)',
+      width: 40, height: 40,
       background: 'transparent', border: 'none', borderRadius: raio.sm,
       color: t.fraco, fontSize: 20, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit',
     },

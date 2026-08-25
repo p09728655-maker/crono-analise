@@ -53,6 +53,52 @@ for (const modo of ['analise', 'coleta']) {
   await ctx.close();
 }
 
+/* ------------------------------------------------ sobreposicao no cartao */
+/**
+ * Elemento posicionado com `absolute` nao empurra conteudo: ele fica POR
+ * CIMA. Foi assim que o botao de remover cobriu a contagem de ciclos no
+ * cartao do celular — nao quebra teste, nao aparece no console, so' quem
+ * olha a tela percebe.
+ */
+{
+  const ctx = await b.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}/test/e2e/harness-lista/index.html?modo=coleta`);
+  await p.waitForSelector('li', { timeout: 8000 });
+  await p.waitForTimeout(400);
+
+  const colisoes = await p.evaluate(() => {
+    const sobrepoe = (a, b) => !(a.right <= b.left || a.left >= b.right
+      || a.bottom <= b.top || a.top >= b.bottom);
+
+    const achados = [];
+    for (const item of document.querySelectorAll('li')) {
+      const remover = item.querySelector('button[aria-label^="Remover"]');
+      if (!remover) continue;
+      const rRem = remover.getBoundingClientRect();
+
+      // Qualquer texto do cartao que o botao esteja cobrindo.
+      for (const el of item.querySelectorAll('span, div')) {
+        if (el.contains(remover) || !el.textContent.trim() || el.children.length) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width && sobrepoe(rRem, r)) achados.push(el.textContent.trim().slice(0, 20));
+      }
+    }
+    return achados;
+  });
+
+  checar(colisoes.length === 0,
+    colisoes.length
+      ? `botao remover cobre: ${colisoes.join(', ')}`
+      : 'botao remover nao cobre nenhum texto do cartao');
+
+  const alvo = await p.locator('button[aria-label^="Remover"]').first().boundingBox();
+  checar(alvo && alvo.width >= 40 && alvo.height >= 40,
+    `botao remover com alvo de ${Math.round(alvo?.width || 0)}x${Math.round(alvo?.height || 0)}px`);
+
+  await ctx.close();
+}
+
 await b.close();
 console.log(falhas ? `\n${falhas} verificacao(oes) falharam` : '\nTodas as verificacoes passaram');
 process.exit(falhas ? 1 : 0);
