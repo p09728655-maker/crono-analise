@@ -4,6 +4,7 @@ import { extrairTextoPdf } from '../../lib/pdfTexto.js';
 import { interpretarRoteiro } from '../../domain/roteiroErp.js';
 import { chaveProduto } from '../../domain/agrupamento.js';
 import { criarEstudo } from '../../lib/api.js';
+import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
 
 /**
  * Importa o roteiro de producao do ERP (PDF "Processos de Producao") e cria
@@ -24,6 +25,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
   const [nomeArquivo, setNomeArquivo] = useState('');
   const [nome, setNome] = useState('');
   const [campos, setCampos] = useState({ setor: '', analista: '', toleranciaPct: 15, metaObs: 12 });
+  const [calc, setCalc] = useState({ ...CALC_PADRAO });
   const [criando, setCriando] = useState(false);
 
   async function aoEscolher(ev) {
@@ -70,6 +72,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
           analista: campos.analista,
           toleranciaPct: Number(campos.toleranciaPct) || 15,
           metaObs: Number(campos.metaObs) || 12,
+          taktTimeMs: taktMsDoCalculo(calc),
           operacoes: grupo.pecas.map((p, i) => ({
             nome: p.descricao,
             descricao: descricaoErp(p),
@@ -167,55 +170,74 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
               </p>
             )}
 
-            {grupos.length === 1 && (
-              <label style={est.campo}>
-                <span style={est.rotuloCampo}>Nome do estudo</span>
-                <input style={est.input} value={nome} onChange={(ev) => setNome(ev.target.value)} />
-              </label>
-            )}
+            {/* Daqui para baixo, as MESMAS informacoes do cadastro manual:
+                Identificacao, Configuracao da coleta e Ritmo/Demanda. O que o
+                PDF ja responde (produto, maquina, pecas) veio acima. */}
+            <div style={analise ? est.corpoDuplo : est.corpoSimples}>
+              <div style={est.colunaEsquerda}>
+                <section style={est.secao}>
+                  <div style={est.secaoRotulo}>Identificação</div>
+                  {grupos.length === 1 && (
+                    <label style={est.campo}>
+                      <span style={est.rotuloCampo}>Nome do estudo</span>
+                      <input style={est.input} value={nome} onChange={(ev) => setNome(ev.target.value)} />
+                    </label>
+                  )}
+                  <div style={est.grade}>
+                    <label style={est.campo}>
+                      <span style={est.rotuloCampo}>Setor</span>
+                      <input
+                        style={est.input} list="setores-conhecidos-importar"
+                        value={campos.setor}
+                        onChange={(ev) => setCampos((c) => ({ ...c, setor: ev.target.value }))}
+                      />
+                      <datalist id="setores-conhecidos-importar">
+                        {setoresConhecidos.map((nomeSetor) => <option key={nomeSetor} value={nomeSetor} />)}
+                      </datalist>
+                    </label>
+                    <label style={est.campo}>
+                      <span style={est.rotuloCampo}>Analista</span>
+                      <input
+                        style={est.input}
+                        value={campos.analista}
+                        onChange={(ev) => setCampos((c) => ({ ...c, analista: ev.target.value }))}
+                      />
+                    </label>
+                  </div>
+                </section>
 
-            <div style={est.grade}>
-              <label style={est.campo}>
-                <span style={est.rotuloCampo}>Setor</span>
-                <input
-                  style={est.input} list="setores-conhecidos-importar"
-                  value={campos.setor}
-                  onChange={(ev) => setCampos((c) => ({ ...c, setor: ev.target.value }))}
-                />
-                <datalist id="setores-conhecidos-importar">
-                  {setoresConhecidos.map((nome) => <option key={nome} value={nome} />)}
-                </datalist>
-              </label>
-              <label style={est.campo}>
-                <span style={est.rotuloCampo}>Analista</span>
-                <input
-                  style={est.input}
-                  value={campos.analista}
-                  onChange={(ev) => setCampos((c) => ({ ...c, analista: ev.target.value }))}
-                />
-              </label>
-              <label style={est.campo}>
-                <span style={est.rotuloCampo}>Tolerância (%)</span>
-                <input
-                  type="number" min="0" max="100" style={est.input}
-                  value={campos.toleranciaPct}
-                  onChange={(ev) => setCampos((c) => ({ ...c, toleranciaPct: ev.target.value }))}
-                />
-              </label>
-              <label style={est.campo}>
-                <span style={est.rotuloCampo}>Meta de ciclos</span>
-                <input
-                  type="number" min="1" max="999" style={est.input}
-                  value={campos.metaObs}
-                  onChange={(ev) => setCampos((c) => ({ ...c, metaObs: ev.target.value }))}
-                />
-              </label>
+                <section style={est.secaoSeparada}>
+                  <div style={est.secaoRotulo}>Configuração da coleta</div>
+                  <div style={est.grade}>
+                    <label style={est.campo}>
+                      <span style={est.rotuloCampo}>Meta de ciclos</span>
+                      <input
+                        type="number" min="1" max="999" style={est.input}
+                        value={campos.metaObs}
+                        onChange={(ev) => setCampos((c) => ({ ...c, metaObs: ev.target.value }))}
+                      />
+                      <span style={est.dica}>Recomendado: 12 ciclos ou mais.</span>
+                    </label>
+                    <label style={est.campo}>
+                      <span style={est.rotuloCampo}>Tolerância (%)</span>
+                      <input
+                        type="number" min="0" max="100" style={est.input}
+                        value={campos.toleranciaPct}
+                        onChange={(ev) => setCampos((c) => ({ ...c, toleranciaPct: ev.target.value }))}
+                      />
+                      <span style={est.dica}>Fadiga e necessidades. Faixa típica: 10 a 15%.</span>
+                    </label>
+                  </div>
+                </section>
+
+                <p style={est.dica}>
+                  O tempo do ERP é a previsão de engenharia — a cronoanálise vai medir o real
+                  no posto e mostrar a diferença.
+                </p>
+              </div>
+
+              <RitmoDemanda t={t} analise={analise} calc={calc} aoMudar={setCalc} />
             </div>
-
-            <p style={est.dica}>
-              O tempo do ERP é a previsão de engenharia — a cronoanálise vai medir o real
-              no posto e mostrar a diferença.
-            </p>
           </>
         )}
 
@@ -268,7 +290,7 @@ function estilos(t, analise) {
       padding: espaco.lg, overflowY: 'auto',
     },
     caixa: {
-      width: '100%', maxWidth: 620, background: t.superficie,
+      width: '100%', maxWidth: analise ? 960 : 620, background: t.superficie,
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.lg,
       padding: espaco.xxl, boxShadow: elevacao.alta, margin: `${espaco.xl}px 0`,
       display: 'flex', flexDirection: 'column', gap: espaco.lg,
@@ -336,8 +358,24 @@ function estilos(t, analise) {
     campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
     rotuloCampo: rotulo(t.fraco),
     dica: { ...tipo('legenda'), color: t.fraco, fontStyle: 'italic', margin: 0 },
-    // Duas colunas nos dois modos: Setor+Analista, Tolerancia+Meta.
+    // Duas colunas nos dois modos: Setor+Analista, Meta+Tolerancia.
     grade: { display: 'grid', gap: espaco.md, gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' },
+    corpoDuplo: {
+      display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: espaco.xl,
+      alignItems: 'start', paddingTop: espaco.md,
+      borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
+    },
+    corpoSimples: {
+      display: 'flex', flexDirection: 'column', gap: espaco.xl, paddingTop: espaco.md,
+      borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
+    },
+    colunaEsquerda: { display: 'flex', flexDirection: 'column', gap: espaco.xl, minWidth: 0 },
+    secao: { display: 'flex', flexDirection: 'column', gap: espaco.md },
+    secaoSeparada: {
+      display: 'flex', flexDirection: 'column', gap: espaco.md, paddingTop: espaco.lg,
+      borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
+    },
+    secaoRotulo: rotulo(t.fraco),
     input: {
       width: '100%', minHeight: 44, padding: `0 ${espaco.md}px`, background: t.fundo,
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,

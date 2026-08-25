@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.7.0',
+    data: '2026-08-25',
+    titulo: 'Importação com o formulário completo',
+    itens: [
+      'A importação do roteiro agora pede as mesmas informações do cadastro manual: Identificação, Configuração da coleta e Ritmo/Demanda com o Takt calculado — acabou a "versão simples".',
+      'Horas disponíveis já vêm preenchidas com a jornada de 8,8 h/dia (8h48min); só digitar a quantidade do dia.',
+      'O painel de ritmo é um componente único: o que mudar no cadastro manual muda junto na importação.',
+    ],
+  },
+  {
     versao: '2.6.0',
     data: '2026-08-25',
     titulo: 'Cadastro de Setor',

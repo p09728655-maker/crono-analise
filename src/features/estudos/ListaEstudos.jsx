@@ -3,10 +3,10 @@ import { ALVO_MINIMO, cores as escuro } from '../../theme/tokens.js';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
-import { taktTime } from '../../domain/cronoanalise.js';
 import { agruparPorProduto, produtosConhecidos, setoresConhecidos } from '../../domain/agrupamento.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
+import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import ImportarRoteiro from './ImportarRoteiro.jsx';
 import { VERSAO } from '../../versao.js';
@@ -204,6 +204,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
       {criando && (
         <FormularioEstudo
           est={est}
+          t={t}
           analise={analise}
           produtos={produtosConhecidos(estudos)}
           setores={setoresConhecidos(estudos)}
@@ -444,11 +445,11 @@ function ConfirmarRemocao({ est, estudo, aoConfirmar, aoCancelar }) {
  * entao o formulario pede esses dois numeros e mostra o ritmo calculado.
  * (Quem souber o Takt direto ajusta depois, em Ajustes do estudo.)
  */
-function FormularioEstudo({ est, analise, produtos = [], setores = [], aoSalvar, aoCancelar }) {
+function FormularioEstudo({ est, t, analise, produtos = [], setores = [], aoSalvar, aoCancelar }) {
   const [dados, setDados] = useState({
     nome: '', setor: '', recurso: '', produto: '', analista: '', toleranciaPct: 15, metaObs: 12,
   });
-  const [calc, setCalc] = useState({ quantidade: '', horas: '' });
+  const [calc, setCalc] = useState({ ...CALC_PADRAO });
   const [etapa, setEtapa] = useState(1);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState(null);
@@ -462,10 +463,6 @@ function FormularioEstudo({ est, analise, produtos = [], setores = [], aoSalvar,
     onChange: (ev) => setDados((d) => ({ ...d, [k]: ev.target.value })),
   });
 
-  const qtd = Number(calc.quantidade);
-  const horas = Number(String(calc.horas).replace(',', '.'));
-  const taktMs = qtd > 0 && horas > 0 ? taktTime(horas * 3600, qtd) : 0;
-
   function irParaEtapa(n) {
     setEtapa(n);
     ({ 1: refNome, 2: refMeta, 3: refQtd })[n]?.current?.focus();
@@ -476,7 +473,7 @@ function FormularioEstudo({ est, analise, produtos = [], setores = [], aoSalvar,
     if (!dados.nome.trim()) { setErro('Informe o nome do estudo.'); irParaEtapa(1); return; }
     setSalvando(true);
     setErro(null);
-    try { await aoSalvar({ ...dados, taktTimeMs: taktMs > 0 ? Math.round(taktMs) : null }); }
+    try { await aoSalvar({ ...dados, taktTimeMs: taktMsDoCalculo(calc) }); }
     catch (e) { setErro(e.message); setSalvando(false); }
   }
 
@@ -541,50 +538,14 @@ function FormularioEstudo({ est, analise, produtos = [], setores = [], aoSalvar,
             </section>
           </div>
 
-          <aside style={est.painelRitmo} onFocusCapture={() => setEtapa(3)}>
-            <div style={est.secaoRotulo}>Ritmo / Demanda</div>
-            <div style={est.duasColunas}>
-              <Campo est={est} label="Quantidade por dia" dica="Peças que precisam sair.">
-                <input
-                  ref={refQtd} type="number" min="1" style={est.input}
-                  value={calc.quantidade}
-                  onChange={(ev) => setCalc((c) => ({ ...c, quantidade: ev.target.value }))}
-                />
-              </Campo>
-              <Campo est={est} label="Horas disponíveis" dica="Tempo produtivo do dia, sem paradas planejadas.">
-                <input
-                  type="number" min="0.1" step="0.1" style={est.input}
-                  value={calc.horas}
-                  onChange={(ev) => setCalc((c) => ({ ...c, horas: ev.target.value }))}
-                />
-              </Campo>
-            </div>
-
-            {/* Takt como RESULTADO, nao como campo: numero grande, calculado. */}
-            <div style={est.taktCartao}>
-              <span style={est.taktRotulo}>Takt Time</span>
-              <div style={est.taktValorLinha}>
-                <span style={est.taktValor}>{taktMs > 0 ? formatarTakt(taktMs) : '--:--'}</span>
-                <span style={est.taktUnidade}>s/peça</span>
-              </div>
-              <span style={est.taktTexto}>
-                {taktMs > 0
-                  ? 'Tempo disponível por peça para atender a meta diária.'
-                  : 'Preencha quantidade e horas para calcular o ritmo.'}
-              </span>
-            </div>
-
-            <div style={est.taktTiles}>
-              <div style={est.taktTile}>
-                <span style={est.taktTileRotulo}>Demanda diária</span>
-                <span style={est.taktTileValor}>{qtd > 0 ? `${qtd} peças` : '—'}</span>
-              </div>
-              <div style={est.taktTile}>
-                <span style={est.taktTileRotulo}>Tempo disponível</span>
-                <span style={est.taktTileValor}>{horas > 0 ? formatarHorasMin(horas) : '—'}</span>
-              </div>
-            </div>
-          </aside>
+          <RitmoDemanda
+            t={t}
+            analise={analise}
+            calc={calc}
+            aoMudar={setCalc}
+            refQuantidade={refQtd}
+            aoFocar={() => setEtapa(3)}
+          />
         </div>
 
         {erro && <div style={est.erroForm}>{erro}</div>}
@@ -633,18 +594,6 @@ function Etapas({ etapa, aoIr, est, compacto = false }) {
       })}
     </ol>
   );
-}
-
-/** 42000ms -> "00:42". O Takt e' lido como relogio, nao como decimal. */
-function formatarTakt(ms) {
-  const s = Math.round(ms / 1000);
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-}
-
-/** 5.6 horas -> "5h36min". Confirma que "5,60" nao significa 5h60. */
-function formatarHorasMin(horas) {
-  const min = Math.round(horas * 60);
-  return `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}min`;
 }
 
 function Campo({ est, label, obrigatorio, dica, children }) {
@@ -891,33 +840,6 @@ function estilos(t, analise) {
     etapaNumeroAtivo: { background: t.vermelho, borderColor: t.vermelho, color: '#fff' },
     etapaRotulo: { ...tipo('legenda'), fontWeight: 600, color: t.fraco },
     etapaRotuloAtivo: { color: t.texto },
-
-    /* O painel de ritmo e' a etapa em destaque: superficie propria. */
-    painelRitmo: {
-      display: 'flex', flexDirection: 'column', gap: espaco.lg,
-      padding: espaco.lg, background: t.realce,
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
-    },
-    taktCartao: {
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: espaco.xs,
-      padding: `${espaco.lg}px ${espaco.md}px`,
-      background: t.superficie,
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
-      textAlign: 'center',
-    },
-    taktRotulo: rotulo(t.fraco),
-    taktValorLinha: { display: 'flex', alignItems: 'baseline', gap: espaco.sm },
-    taktValor: { ...tipo('display'), ...numeros, color: t.texto },
-    taktUnidade: { ...tipo('corpoF'), color: t.fraco },
-    taktTexto: { ...tipo('legenda'), color: t.fraco, maxWidth: 300 },
-    taktTiles: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.md },
-    taktTile: {
-      display: 'flex', flexDirection: 'column', gap: 2, padding: espaco.md,
-      background: t.superficie,
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
-    },
-    taktTileRotulo: rotulo(t.fraco),
-    taktTileValor: { ...tipo('corpoF'), ...numeros, color: t.texto },
 
     campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
     rotuloCampo: rotulo(t.fraco),

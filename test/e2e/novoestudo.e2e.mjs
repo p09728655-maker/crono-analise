@@ -41,8 +41,11 @@ const b = await chromium.launch({ executablePath: EXEC });
     checar(await form.locator(`text=${etapa}`).count() >= 1, `form: etapa "${etapa}" no indicador`);
   }
 
-  // Takt e' resultado: comeca vazio e calcula com quantidade x horas.
+  // Takt e' resultado: sem quantidade ainda nao ha ritmo, mas a jornada
+  // padrao de 8,8h ja vem preenchida.
   checar(await form.locator('text=--:--').count() === 1, 'form: Takt vazio mostra --:--');
+  checar(await form.locator('label', { hasText: 'Horas disponíveis' }).locator('input').inputValue() === '8.8',
+    'form: jornada padrao 8,8h ja preenchida');
 
   await form.locator('label', { hasText: 'Nome do estudo' }).locator('input').fill('Furação lateral — Linha 2');
   await form.locator('label', { hasText: 'Setor' }).locator('input').fill('Usinagem');

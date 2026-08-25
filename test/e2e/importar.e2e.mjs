@@ -77,6 +77,14 @@ for (const modo of ['analise']) {
   checar(larguras.estourados === 0, `${modo}: nada estourado dentro do modal (${larguras.estourados})`);
 
   await dialogo.locator('label', { hasText: 'Setor' }).locator('input').fill('Usinagem');
+
+  // Mesmas informacoes do cadastro manual: Ritmo/Demanda com jornada 8,8h.
+  const horasImp = dialogo.locator('label', { hasText: 'Horas disponíveis' }).locator('input');
+  checar(await horasImp.inputValue() === '8.8', `${modo}: jornada padrao 8,8h ja preenchida`);
+  await dialogo.locator('label', { hasText: 'Quantidade por dia' }).locator('input').fill('480');
+  checar(await dialogo.locator('text=01:06').count() === 1, `${modo}: takt 480pc/8,8h = 01:06`);
+  checar(await dialogo.locator('text=8h48min').count() === 1, `${modo}: 8,8h viram 8h48min`);
+
   await dialogo.locator('button', { hasText: 'Criar estudo' }).click();
   await p.waitForFunction(() => window.__aberto !== null, { timeout: 8000 });
 
@@ -84,6 +92,7 @@ for (const modo of ['analise']) {
   checar(post.corpo.produto === 'MESA CABECEIRA SLEEP BRANCO', `${modo}: produto vem do PDF`);
   checar(post.corpo.recurso === 'FUR16', `${modo}: recurso e' a maquina do roteiro`);
   checar(post.corpo.setor === 'Usinagem', `${modo}: setor vai junto na importacao`);
+  checar(post.corpo.taktTimeMs === 66000, `${modo}: takt calculado no POST (${post.corpo.taktTimeMs})`);
   checar(post.corpo.operacoes.length === 6, `${modo}: 6 operacoes aninhadas no POST`);
   checar(post.corpo.operacoes.map((o) => o.ciclosPorPeca).join(',') === '1,2,1,1,1,1',
     `${modo}: ciclos por peca [${post.corpo.operacoes.map((o) => o.ciclosPorPeca)}]`);
