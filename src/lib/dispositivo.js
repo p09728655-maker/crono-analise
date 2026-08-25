@@ -1,18 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
- * Decide qual experiencia abrir por padrao.
+ * Roteamento por URL.
  *
- * Coleta e analise sao tarefas diferentes, em posturas diferentes: a coleta
- * acontece de pe' na maquina, a analise sentado no escritorio. Por isso as
- * duas telas sao separadas.
+ * Antes, so' o modo (coleta/analise) vivia na URL e o resto — qual estudo
+ * estava aberto, qual operacao — vivia em memoria. O custo disso aparecia
+ * no uso: o botao Voltar do navegador nao funcionava, recarregar jogava o
+ * usuario para o inicio, e nao dava para guardar o link de um estudo. Num
+ * app instalado, onde Voltar e' o gesto natural, isso e' pior ainda.
  *
- * O que NAO fazemos: bloquear a analise no celular. Se o analista quiser
- * conferir um numero no chao de fabrica, ele consegue — so' nao e' o padrao.
- * Bloqueio criaria beco sem saida; padrao inteligente, nao.
+ * Agora o caminho descreve o estado inteiro:
+ *
+ *   /                                    raiz — decide pelo aparelho
+ *   /coleta                              lista (celular)
+ *   /coleta/estudo/<id>                  operacoes do estudo
+ *   /coleta/estudo/<id>/operacao/<opId>  cronometro no posto
+ *   /analise                             lista (PC)
+ *   /analise/estudo/<id>                 painel de analise
+ *
+ * Voltar, avancar, recarregar e link direto passam a funcionar de graca,
+ * porque quem guarda o estado e' o historico do navegador.
  */
+
 const LARGURA_DESKTOP = 1024;
 
+/**
+ * Decide a experiencia inicial.
+ *
+ * Exige tela larga E ponteiro preciso: tablet grande com toque continua indo
+ * para a coleta, que e' onde ele costuma ser usado. A escolha e' so' o
+ * padrao — as duas rotas seguem acessiveis de qualquer aparelho.
+ */
 export function ehDesktop() {
   if (typeof window === 'undefined') return true;
   const largura = window.innerWidth >= LARGURA_DESKTOP;
@@ -20,28 +38,58 @@ export function ehDesktop() {
   return largura && temMouse;
 }
 
-/** Rota atual, derivada do pathname. */
+const RE_ESTUDO = /^\/(coleta|analise)\/estudo\/([0-9a-f-]{36})(?:\/operacao\/([0-9a-f-]{36}))?\/?$/i;
+
+export function analisarCaminho(caminho) {
+  const p = (caminho || '/').replace(/\/+$/, '') || '/';
+
+  const m = RE_ESTUDO.exec(p);
+  if (m) {
+    return {
+      modo: m[1].toLowerCase(),
+      estudoId: m[2],
+      operacaoId: m[3] || null,
+      tela: m[3] ? 'coleta' : 'estudo',
+    };
+  }
+
+  if (/^\/coleta\/?$/i.test(p)) return { modo: 'coleta', tela: 'lista', estudoId: null, operacaoId: null };
+  if (/^\/analise\/?$/i.test(p)) return { modo: 'analise', tela: 'lista', estudoId: null, operacaoId: null };
+
+  // Raiz (ou caminho desconhecido): manda para a experiencia do aparelho.
+  return {
+    modo: ehDesktop() ? 'analise' : 'coleta',
+    tela: 'lista',
+    estudoId: null,
+    operacaoId: null,
+    padrao: true,
+  };
+}
+
 export function useRota() {
-  const [rota, setRota] = useState(() => lerRota());
+  const [rota, setRota] = useState(() => analisarCaminho(window.location.pathname));
 
   useEffect(() => {
-    const aoVoltar = () => setRota(lerRota());
-    window.addEventListener('popstate', aoVoltar);
-    return () => window.removeEventListener('popstate', aoVoltar);
+    const aoNavegar = () => setRota(analisarCaminho(window.location.pathname));
+    window.addEventListener('popstate', aoNavegar);
+    return () => window.removeEventListener('popstate', aoNavegar);
   }, []);
 
-  const navegar = (caminho) => {
-    window.history.pushState({}, '', caminho);
-    setRota(lerRota());
-  };
+  const navegar = useCallback((caminho, { substituir = false } = {}) => {
+    if (caminho === window.location.pathname) return;
+    if (substituir) window.history.replaceState({}, '', caminho);
+    else window.history.pushState({}, '', caminho);
+    setRota(analisarCaminho(caminho));
+  }, []);
 
-  return [rota, navegar];
+  const voltar = useCallback(() => window.history.back(), []);
+
+  return [rota, navegar, voltar];
 }
 
-function lerRota() {
-  const p = window.location.pathname.replace(/\/+$/, '') || '/';
-  if (p.startsWith('/coleta')) return { modo: 'coleta', caminho: p };
-  if (p.startsWith('/analise')) return { modo: 'analise', caminho: p };
-  // Raiz: manda para a experiencia que faz sentido no aparelho.
-  return { modo: ehDesktop() ? 'analise' : 'coleta', caminho: p, padrao: true };
-}
+/** Monta caminhos num lugar so', para nao espalhar string pelo codigo. */
+export const caminhos = {
+  lista: (modo) => `/${modo}`,
+  estudo: (modo, estudoId) => `/${modo}/estudo/${estudoId}`,
+  coletar: (estudoId, operacaoId) => `/coleta/estudo/${estudoId}/operacao/${operacaoId}`,
+};

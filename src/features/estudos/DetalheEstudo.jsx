@@ -32,7 +32,7 @@ export default function DetalheEstudo({ estudoId, aoColetar, aoVoltar }) {
   return (
     <div style={est.tela}>
       <header style={est.cabecalho}>
-        <button type="button" onClick={aoVoltar} style={est.botaoVoltar} aria-label="Voltar">←</button>
+        {/* A trilha de navegacao no topo ja' oferece o voltar. */}
         <div style={{ minWidth: 0, flex: 1 }}>
           <h1 style={est.titulo}>{estudo.nome}</h1>
           <p style={est.subtitulo}>

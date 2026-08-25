@@ -4,77 +4,166 @@ import DetalheEstudo from './features/estudos/DetalheEstudo.jsx';
 import ColetaFuradeira from './features/coleta/ColetaFuradeira.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import BarraSincronizacao from './components/BarraSincronizacao.jsx';
-import { useRota } from './lib/dispositivo.js';
+import { caminhos, useRota } from './lib/dispositivo.js';
+import { obterEstudo } from './lib/api.js';
+import { claro } from './theme/tokensAnalise.js';
+import { cores as escuro } from './theme/tokens.js';
 
 /**
- * Duas experiencias separadas, uma base de codigo.
+ * Toda a navegacao vem da URL — ver src/lib/dispositivo.js.
  *
- *   /coleta  — celular/tablet, no posto. Cronometrar e' a unica tarefa.
- *   /analise — PC, no escritorio. Ler resultado, decidir e imprimir.
- *
- * Sao tarefas diferentes, em posturas diferentes, com necessidades opostas:
- * a coleta quer um alvo gigante e nenhuma distracao; a analise quer densidade
- * de informacao e tabela. Misturar as duas produz uma tela ruim para ambas.
- *
- * A raiz "/" manda para a experiencia certa conforme o aparelho, mas as duas
- * rotas continuam acessiveis de qualquer lugar — bloquear criaria beco sem
- * saida quando o analista quiser conferir um numero no chao de fabrica.
+ * Isso e' o que faz Voltar, recarregar e link direto funcionarem. O estado
+ * de tela nao mora mais em useState: e' derivado do caminho, entao o
+ * historico do navegador e a interface nunca discordam.
  */
 export default function App() {
-  const [rota, navegar] = useRota();
-  const [tela, setTela] = useState({ nome: 'lista' });
+  const [rota, navegar, voltar] = useRota();
+  const { modo, tela, estudoId, operacaoId } = rota;
 
-  const modo = rota.modo;
+  const irParaLista = useCallback(() => navegar(caminhos.lista(modo)), [navegar, modo]);
+  const abrirEstudo = useCallback((id) => navegar(caminhos.estudo(modo, id)), [navegar, modo]);
+  const coletar = useCallback(
+    (estudo, operacao) => navegar(caminhos.coletar(estudo.id, operacao.id)),
+    [navegar],
+  );
+  const trocarModo = useCallback(() => {
+    const outro = modo === 'analise' ? 'coleta' : 'analise';
+    // Mantem o estudo aberto ao trocar de modo, em vez de jogar para a lista.
+    navegar(estudoId ? caminhos.estudo(outro, estudoId) : caminhos.lista(outro));
+  }, [navegar, modo, estudoId]);
 
-  const abrirEstudo = useCallback((estudoId) => setTela({ nome: 'estudo', estudoId }), []);
-  const voltarParaLista = useCallback(() => setTela({ nome: 'lista' }), []);
-
-  const coletar = useCallback((estudo, operacao) => {
-    // Cronometrar sempre entra no modo coleta, venha de onde vier.
-    if (modo !== 'coleta') navegar('/coleta');
-    setTela({ nome: 'coleta', estudo, operacao });
-  }, [modo, navegar]);
+  const emColeta = tela === 'coleta';
 
   // Recarregar no meio da coleta perderia o ciclo em andamento.
   useEffect(() => {
-    if (tela.nome !== 'coleta') return undefined;
+    if (!emColeta) return undefined;
     const aoSair = (ev) => { ev.preventDefault(); ev.returnValue = ''; };
     window.addEventListener('beforeunload', aoSair);
     return () => window.removeEventListener('beforeunload', aoSair);
-  }, [tela.nome]);
+  }, [emColeta]);
 
-  // A tela de coleta ocupa tudo: sem barra de sincronizacao competindo.
-  const emColeta = tela.nome === 'coleta';
+  // A URL canonica evita que "/" fique no historico e confunda o Voltar.
+  useEffect(() => {
+    if (rota.padrao) navegar(caminhos.lista(modo), { substituir: true });
+  }, [rota.padrao, modo, navegar]);
 
   return (
     <>
       {!emColeta && (
         <div className="somente-tela">
           <BarraSincronizacao />
+          {tela === 'estudo' && (
+            <Trilha modo={modo} aoVoltar={voltar} aoIrParaLista={irParaLista} />
+          )}
         </div>
       )}
 
-      {tela.nome === 'lista' && (
-        <ListaEstudos
-          aoAbrir={abrirEstudo}
-          modo={modo}
-          aoTrocarModo={() => navegar(modo === 'analise' ? '/coleta' : '/analise')}
-        />
+      {tela === 'lista' && (
+        <ListaEstudos aoAbrir={abrirEstudo} modo={modo} aoTrocarModo={trocarModo} />
       )}
 
-      {tela.nome === 'estudo' && (
+      {tela === 'estudo' && (
         modo === 'analise'
-          ? <PainelAnalise estudoId={tela.estudoId} aoVoltar={voltarParaLista} aoColetar={coletar} />
-          : <DetalheEstudo estudoId={tela.estudoId} aoColetar={coletar} aoVoltar={voltarParaLista} />
+          ? <PainelAnalise estudoId={estudoId} aoVoltar={irParaLista} aoColetar={coletar} />
+          : <DetalheEstudo estudoId={estudoId} aoColetar={coletar} aoVoltar={irParaLista} />
       )}
 
       {emColeta && (
-        <ColetaFuradeira
-          estudo={tela.estudo}
-          operacao={tela.operacao}
-          aoSair={() => abrirEstudo(tela.estudo.id)}
-        />
+        <CarregarColeta estudoId={estudoId} operacaoId={operacaoId} aoSair={() => abrirEstudo(estudoId)} />
       )}
     </>
   );
+}
+
+/**
+ * Trilha de navegacao.
+ *
+ * Um botao "voltar" solto nao diz onde voce esta nem para onde vai. A trilha
+ * mostra o caminho e oferece as duas saidas: o passo anterior do historico
+ * (que respeita de onde a pessoa veio) e o atalho direto para a lista.
+ */
+function Trilha({ modo, aoVoltar, aoIrParaLista }) {
+  const analise = modo === 'analise';
+  const t = analise ? claro : escuro;
+
+  const est = {
+    barra: {
+      display: 'flex', alignItems: 'center', gap: 8, padding: '8px 24px',
+      background: analise ? claro.papel : escuro.superficie,
+      borderBottom: `1px solid ${t.borda}`,
+      fontSize: 13, color: analise ? claro.textoFraco : escuro.textoFraco,
+    },
+    botao: {
+      minHeight: 32, padding: '0 10px', background: 'transparent', border: 'none',
+      borderRadius: 6, color: 'inherit', fontSize: 13, cursor: 'pointer',
+      fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6,
+    },
+    separador: { opacity: 0.5 },
+    atual: { color: analise ? claro.texto : escuro.texto, fontWeight: 600 },
+  };
+
+  return (
+    <nav style={est.barra} aria-label="Você está aqui">
+      <button type="button" style={est.botao} onClick={aoVoltar}>← Voltar</button>
+      <span style={est.separador}>·</span>
+      <button type="button" style={est.botao} onClick={aoIrParaLista}>Estudos</button>
+      <span style={est.separador}>›</span>
+      <span style={est.atual}>{analise ? 'Análise' : 'Operações'}</span>
+    </nav>
+  );
+}
+
+/**
+ * Carrega estudo e operacao a partir do ID da URL.
+ *
+ * A tela de coleta precisa dos objetos, nao so' dos ids. Com a navegacao na
+ * URL, abrir o link direto (ou recarregar no meio da coleta) precisa
+ * funcionar sem depender de estado que ficou para tras.
+ */
+function CarregarColeta({ estudoId, operacaoId, aoSair }) {
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    obterEstudo(estudoId)
+      .then((r) => {
+        if (cancelado) return;
+        const operacao = r.operacoes.find((o) => o.id === operacaoId);
+        if (!operacao) { setErro('Operação não encontrada neste estudo.'); return; }
+        setDados({ estudo: r.estudo, operacao: { ...operacao, fr: Number(operacao.fr_pct) } });
+      })
+      .catch((e) => { if (!cancelado) setErro(e.message); });
+    return () => { cancelado = true; };
+  }, [estudoId, operacaoId]);
+
+  const centro = {
+    minHeight: '100dvh', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24,
+    background: escuro.fundo, color: escuro.textoFraco, textAlign: 'center',
+    fontFamily: "'Calibri', 'Carlito', 'Segoe UI', system-ui, sans-serif",
+  };
+
+  if (erro) {
+    return (
+      <div style={centro}>
+        <p style={{ margin: 0 }}>{erro}</p>
+        <button
+          type="button"
+          onClick={aoSair}
+          style={{
+            minHeight: 56, padding: '0 24px', background: escuro.vermelho, border: 'none',
+            borderRadius: 10, color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Voltar ao estudo
+        </button>
+      </div>
+    );
+  }
+
+  if (!dados) return <div style={centro}>Carregando operação...</div>;
+
+  return <ColetaFuradeira estudo={dados.estudo} operacao={dados.operacao} aoSair={aoSair} />;
 }
