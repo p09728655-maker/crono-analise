@@ -103,14 +103,19 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           </button>
         </header>
 
+        {/* Ressalva importante, mas e' ressalva — nao pode competir com o
+            resultado. Uma linha, com o detalhe sob demanda. */}
         {analise.pendencias.length > 0 && (
-          <div style={est.avisoAmostra}>
-            <strong>⚠ {analise.pendencias.length} operação(ões) sem amostra suficiente.</strong>
-            <span> Os números abaixo já servem para orientar, mas não para fechar dimensionamento:</span>
+          <details style={est.avisoAmostra}>
+            <summary style={est.avisoResumo}>
+              <span style={est.avisoIcone} aria-hidden="true">!</span>
+              {analise.pendencias.length} operação(ões) ainda sem amostra suficiente —
+              os números orientam, mas não fecham dimensionamento
+            </summary>
             <ul style={est.listaPendencias}>
-              {analise.pendencias.map(({ op, s }) => (
-                <li key={op.id}>
-                  <strong>{op.nome}</strong> — {s.motivo}
+              {analise.pendencias.map(({ op, s: suf }) => (
+                <li key={op.id} style={est.itemPendencia}>
+                  <strong>{op.nome}</strong> — {suf.motivo}
                   {aoColetar && (
                     <button type="button" style={est.linkColeta} onClick={() => aoColetar(estudo, op)}>
                       cronometrar
@@ -119,7 +124,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
                 </li>
               ))}
             </ul>
-          </div>
+          </details>
         )}
 
         {!analise.operacoes.length ? (
@@ -136,23 +141,26 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           </div>
         ) : (
           <>
-        <section style={est.indicadores}>
-          <Indicador rotulo="Operações" valor={analise.operacoes.length} />
-          <Indicador rotulo="Ciclos coletados" valor={analise.totalCiclos} />
-          <Indicador rotulo="Σ Tempo padrão" valor={formatarSegundos(analise.somaTp)} sufixo="s" />
-          <Indicador
-            rotulo="Capacidade da linha"
-            valor={analise.capacidadeLinha || '—'}
-            sufixo="pç/h"
-            nota={analise.gargalo ? `limitada por ${analise.gargalo.nome}` : null}
-          />
-          <Indicador
-            rotulo="Operadores necessários"
-            valor={analise.operadores !== null ? analise.operadores.toFixed(2) : '—'}
-            nota={analise.operadores !== null
-              ? `arredondar para ${Math.ceil(analise.operadores)}`
-              : 'informe o Takt Time'}
-          />
+        {/* A RESPOSTA vem primeiro e sozinha.
+            Antes havia cinco cartoes de peso identico: dois eram contexto
+            (quantas operacoes, quantos ciclos) e dois eram a decisao
+            (capacidade e dimensionamento). Com tudo no mesmo tamanho, nada
+            se destacava — e o gargalo, que e' o achado mais importante do
+            estudo, era um chip minusculo dentro da tabela. */}
+        <Resposta analise={analise} />
+
+        <section style={est.contexto} aria-label="Números de apoio">
+          {[
+            ['Operações', analise.operacoes.length, ''],
+            ['Ciclos coletados', analise.totalCiclos, ''],
+            ['Σ Tempo padrão', formatarSegundos(analise.somaTp), ' s'],
+            ['Takt Time', analise.taktMs ? formatarSegundos(analise.taktMs) : '—', analise.taktMs ? ' s' : ''],
+          ].map(([rotulo, valor, sufixo]) => (
+            <div key={rotulo} style={est.contextoItem}>
+              <span style={est.contextoRotulo}>{rotulo}</span>
+              <span style={est.contextoValor}>{valor}{sufixo}</span>
+            </div>
+          ))}
         </section>
 
         <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} />
@@ -282,6 +290,76 @@ function FormularioOperacao({ aoSalvar, aoCancelar }) {
   );
 }
 
+/**
+ * O que o analista veio saber.
+ *
+ * Um estudo de tempos existe para responder duas perguntas: quanto a linha
+ * produz por hora, e quantos operadores ela precisa. Tudo o mais — media,
+ * CV, carta de controle — e' o caminho ate' essas duas respostas, nao a
+ * resposta.
+ *
+ * A capacidade e' ditada pelo GARGALO, nao pela media das operacoes. Por
+ * isso o gargalo aparece nomeado aqui em cima, e nao escondido numa celula.
+ */
+function Resposta({ analise }) {
+  const { capacidadeLinha, gargalo, operadores, taktMs } = analise;
+  const semDados = !gargalo;
+
+  if (semDados) {
+    return (
+      <section style={est.resposta}>
+        <p style={est.respostaVazia}>
+          Ainda não há ciclos suficientes para calcular capacidade.
+          Cronometre as operações para obter o resultado.
+        </p>
+      </section>
+    );
+  }
+
+  const ocupacao = taktMs > 0 ? (gargalo.resultado.tpVal / taktMs) * 100 : null;
+
+  return (
+    <section style={est.resposta} aria-label="Resultado do estudo">
+      <div style={est.respostaBloco}>
+        <span style={est.respostaRotulo}>Capacidade da linha</span>
+        <div style={est.respostaNumeroLinha}>
+          <span style={est.respostaNumero}>{capacidadeLinha}</span>
+          <span style={est.respostaUnidade}>peças/hora</span>
+        </div>
+        <p style={est.respostaExplica}>
+          Limitada por <strong>{gargalo.nome}</strong>, com tempo padrão de{' '}
+          {formatarSegundos(gargalo.resultado.tpVal)} s.
+          {ocupacao !== null && ocupacao > 100 && (
+            <> Esta operação está <strong>{(ocupacao - 100).toFixed(0)}% acima do Takt</strong>.</>
+          )}
+        </p>
+      </div>
+
+      <div style={est.respostaDivisor} />
+
+      <div style={est.respostaBloco}>
+        <span style={est.respostaRotulo}>Operadores necessários</span>
+        {operadores !== null ? (
+          <>
+            <div style={est.respostaNumeroLinha}>
+              <span style={est.respostaNumero}>{Math.ceil(operadores)}</span>
+              <span style={est.respostaUnidade}>operadores</span>
+            </div>
+            <p style={est.respostaExplica}>
+              Cálculo exato: {operadores.toFixed(2)}. Arredondar para cima —
+              meio operador não existe no chão de fábrica.
+            </p>
+          </>
+        ) : (
+          <p style={est.respostaExplica}>
+            Informe o <strong>Takt Time</strong> do estudo para dimensionar a mão de obra.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, estudo }) {
   return (
     <section style={est.blocoTabela}>
@@ -338,6 +416,10 @@ function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, 
                     ) : '—'}
                   </td>
                   <td style={{ ...est.td, whiteSpace: 'nowrap' }}>
+                    {/* Cronometrar e a acao frequente; Remover e destrutiva.
+                        Com o mesmo peso visual, o clique errado fica barato
+                        demais — por isso o Remover e' so' um icone discreto,
+                        com rotulo acessivel e confirmacao. */}
                     {aoColetar && (
                       <button type="button" style={est.botaoAcaoLinha}
                               onClick={() => aoColetar(estudo, op)}>
@@ -345,9 +427,11 @@ function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, 
                       </button>
                     )}
                     {aoRemover && (
-                      <button type="button" style={est.botaoAcaoLinha}
-                              onClick={() => aoRemover(op)} aria-label={`Remover ${op.nome}`}>
-                        Remover
+                      <button type="button" style={est.botaoRemoverOp}
+                              onClick={() => aoRemover(op)}
+                              title={`Remover ${op.nome}`}
+                              aria-label={`Remover operação ${op.nome}`}>
+                        ×
                       </button>
                     )}
                   </td>
@@ -394,19 +478,63 @@ const est = {
   logo: { height: 36, width: 'auto', display: 'block', flexShrink: 0 },
   titulo: { margin: 0, fontSize: 22, fontWeight: 700 },
   subtitulo: { margin: '2px 0 0', fontSize: 13, color: claro.textoFraco },
+  botaoSecundario: {
+    minHeight: 40, padding: '0 16px', background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: 8,
+    color: claro.textoMedio, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+  },
   botaoImprimir: {
     minHeight: 40, padding: '0 20px', background: claro.vermelho, border: 'none',
     borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
   },
   avisoAmostra: {
-    maxWidth: 1280, margin: '0 auto 20px', padding: 16, fontSize: 13, lineHeight: 1.6,
-    background: claro.atencaoFundo, border: `1px solid ${claro.atencao}`, borderRadius: 8,
+    maxWidth: 1280, margin: '0 auto 16px', padding: '10px 16px', fontSize: 13, lineHeight: 1.6,
+    background: claro.atencaoFundo, borderWidth: 1, borderStyle: 'solid',
+    borderColor: claro.atencao, borderRadius: 8, color: claro.texto,
   },
-  listaPendencias: { margin: '8px 0 0', paddingLeft: 20 },
+  avisoResumo: {
+    display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+    listStyle: 'none', fontWeight: 600,
+  },
+  avisoIcone: {
+    width: 18, height: 18, flexShrink: 0, borderRadius: '50%',
+    background: claro.atencao, color: '#fff', fontSize: 12, fontWeight: 700,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  },
+  itemPendencia: { marginTop: 4 },
+  listaPendencias: { margin: '8px 0 0', paddingLeft: 28 },
   linkColeta: {
     marginLeft: 8, padding: '2px 8px', background: 'transparent', border: `1px solid ${claro.bordaForte}`,
     borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', color: claro.textoMedio,
   },
+  resposta: {
+    maxWidth: 1280, margin: '0 auto 16px', padding: 24,
+    background: claro.papel, borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda,
+    borderLeftWidth: 4, borderLeftColor: claro.vermelho, borderRadius: 10,
+    display: 'flex', gap: 32, flexWrap: 'wrap',
+  },
+  respostaBloco: { flex: '1 1 280px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 },
+  respostaDivisor: { width: 1, alignSelf: 'stretch', background: claro.borda },
+  respostaRotulo: {
+    fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase',
+    color: claro.textoFraco,
+  },
+  respostaNumeroLinha: { display: 'flex', alignItems: 'baseline', gap: 8 },
+  respostaNumero: { fontSize: 44, fontWeight: 700, fontFamily: fonteAnalise.numero, lineHeight: 1.05 },
+  respostaUnidade: { fontSize: 14, color: claro.textoMedio },
+  respostaExplica: { margin: '4px 0 0', fontSize: 13, lineHeight: 1.55, color: claro.textoMedio },
+  respostaVazia: { margin: 0, fontSize: 14, color: claro.textoFraco, lineHeight: 1.6 },
+
+  // Numeros de apoio: presentes, mas claramente secundarios.
+  contexto: {
+    maxWidth: 1280, margin: '0 auto 20px', padding: '12px 24px',
+    display: 'flex', gap: 32, flexWrap: 'wrap',
+    borderTop: `1px solid ${claro.borda}`, borderBottom: `1px solid ${claro.borda}`,
+  },
+  contextoItem: { display: 'flex', alignItems: 'baseline', gap: 8 },
+  contextoRotulo: { fontSize: 12, color: claro.textoFraco },
+  contextoValor: { fontSize: 14, fontWeight: 700, fontFamily: fonteAnalise.numero },
+
   indicadores: {
     maxWidth: 1280, margin: '0 auto 20px',
     display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12,
@@ -448,6 +576,11 @@ const est = {
   primeiroPassoTitulo: { margin: 0, fontSize: 20, fontWeight: 700 },
   primeiroPassoTexto: { margin: 0, fontSize: 14, lineHeight: 1.6, color: claro.textoMedio, maxWidth: 720 },
   cabecalhoSecao: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 },
+  botaoRemoverOp: {
+    width: 32, height: 32, marginLeft: 4, background: 'transparent', border: 'none',
+    borderRadius: 6, color: claro.textoFraco, fontSize: 18, lineHeight: 1,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
   botaoAcaoLinha: {
     minHeight: 32, marginRight: 6, padding: '0 10px', background: 'transparent',
     borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: 6,

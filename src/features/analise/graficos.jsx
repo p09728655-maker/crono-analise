@@ -197,11 +197,18 @@ export function GraficoYamazumi({ operacoes, taktMs, altura = 340 }) {
                 <rect x={x} y={yDe(r.tnMed) - 1} width={larguraBarra} height="2" fill={claro.papel} />
 
                 {/* Valor direto no topo — sem obrigar leitura no eixo */}
+                {/* Truncar por medida, nao por numero fixo: com o grafico
+                    ocupando a largura toda ha' espaco de sobra, e cortar
+                    "Furar later..." sem necessidade so' atrapalha a leitura.
+                    ~6,2px por caractere a 11px nesta familia. */}
                 <text
                   x={x + larguraBarra / 2} y={altura - EIXO.base + 16}
                   textAnchor="middle" style={est.rotuloCategoria}
                 >
-                  {op.nome.length > 12 ? `${op.nome.slice(0, 11)}…` : op.nome}
+                  {(() => {
+                    const cabem = Math.floor((larguraBanda - 8) / 6.2);
+                    return op.nome.length <= cabem ? op.nome : `${op.nome.slice(0, cabem - 1)}…`;
+                  })()}
                 </text>
               </g>
             );
@@ -287,7 +294,7 @@ function Tooltip({ operacao, taktMs }) {
  * porque max|x-media|/sigma <= (n-1)/raiz(n), que vale 2,85 para n=10. O
  * componente avisa isso na tela em vez de dar falsa sensacao de controle.
  */
-export function CartaControle({ operacao, altura = 260 }) {
+export function CartaControle({ operacao, altura = 200 }) {
   const id = useId().replace(/:/g, '');
   const [refContainer, larguraContainer] = useLarguraContainer(360);
   const r = operacao?.resultado;
@@ -324,6 +331,22 @@ export function CartaControle({ operacao, altura = 260 }) {
           Colete ao menos 11 ciclos para que ela passe a funcionar.
         </p>
       )}
+
+      {/* O grafico mostra; a frase conclui. Sem isto, a carta exige que o
+          leitor traduza pontos e linhas em veredito — e' trabalho que o
+          sistema pode fazer por ele. */}
+      <p style={est.veredito}>
+        <span style={{ ...est.pontoVeredito, background: corDoVeredito(r, outliers) }} />
+        <span>
+          <strong>{r.n} ciclos</strong>
+          {outliers.length === 0
+            ? ' · nenhum ponto fora de controle'
+            : ` · ${outliers.length} ponto(s) fora de controle`}
+          {' · '}CV {r.cvPct.toFixed(1)}% — {r.estabilidade.rotulo.toLowerCase()}
+          {r.tendencia.direcao === 'aprendizado' && ' · tempos caindo ao longo da coleta (curva de aprendizado)'}
+          {r.tendencia.direcao === 'degradacao' && ' · tempos subindo ao longo da coleta (verificar fadiga ou ferramenta)'}
+        </span>
+      </p>
 
       <div style={est.rolagem} ref={refContainer}>
         <svg viewBox={`0 0 ${largura} ${altura}`} width={largura} height={altura}
@@ -373,6 +396,23 @@ export function CartaControle({ operacao, altura = 260 }) {
   );
 }
 
+/** Cor do nivel de estabilidade. Nunca vai sozinha: sempre acompanha texto. */
+function corDoNivel(nivel) {
+  return { estavel: claro.ok, atencao: claro.atencao, critico: claro.critico }[nivel] || claro.neutro;
+}
+
+/**
+ * Veredito da carta.
+ *
+ * Ponto fora de controle domina o julgamento: um processo pode ter CV baixo
+ * e ainda assim ter um ciclo absurdo no meio, e essa e' a informacao que
+ * importa. Por isso o outlier decide antes da estabilidade.
+ */
+function corDoVeredito(resultado, outliers) {
+  if (outliers.length > 0) return claro.critico;
+  return corDoNivel(resultado.estabilidade.nivel);
+}
+
 function VazioGrafico({ texto }) {
   return <div style={est.vazio}>{texto}</div>;
 }
@@ -397,6 +437,11 @@ const est = {
     border: `1px solid ${claro.borda}`, borderRadius: 6,
     display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: claro.textoMedio,
   },
+  veredito: {
+    display: 'flex', alignItems: 'flex-start', gap: 8, margin: '10px 0 4px',
+    fontSize: 13, lineHeight: 1.5, color: claro.textoMedio,
+  },
+  pontoVeredito: { width: 9, height: 9, borderRadius: '50%', flexShrink: 0, marginTop: 5 },
   alerta: {
     margin: '12px 0', padding: '10px 14px', fontSize: 12, lineHeight: 1.5,
     background: claro.atencaoFundo, border: `1px solid ${claro.atencao}`,

@@ -18,14 +18,14 @@ import {
 /** Motivos de parada padronizados. Codigo estavel; rotulo pode mudar sem quebrar dado. */
 export const MOTIVOS_PARADA = [
   { codigo: 'setup', rotulo: 'Setup / Troca', acao: 'Aplicar SMED e padronizar o plano de troca.' },
-  { codigo: 'manutencao', rotulo: 'Manutencao corretiva', acao: 'Implantar TPM e analisar historico de falhas.' },
+  { codigo: 'manutencao', rotulo: 'Manutenção corretiva', acao: 'Implantar TPM e analisar histórico de falhas.' },
   { codigo: 'falta_material', rotulo: 'Falta de material', acao: 'Revisar kanban, ponto de pedido e lead time.' },
-  { codigo: 'qualidade', rotulo: 'Problema de qualidade', acao: 'Reforcar CEP e inspecao de inicio de lote.' },
-  { codigo: 'ferramenta', rotulo: 'Troca de broca / ferramenta', acao: 'Monitorar vida util da broca e criar plano de troca programada.' },
-  { codigo: 'ajuste_maquina', rotulo: 'Ajuste de maquina', acao: 'Padronizar gabarito e batente para eliminar ajuste manual.' },
-  { codigo: 'reuniao', rotulo: 'Reuniao / Treinamento', acao: 'Agendar fora do horario produtivo.' },
-  { codigo: 'pessoal', rotulo: 'Necessidade pessoal', acao: 'Ja coberto pela tolerancia; nao tratar como perda.' },
-  { codigo: 'outro', rotulo: 'Outro', acao: 'Detalhar na observacao para permitir classificacao posterior.' },
+  { codigo: 'qualidade', rotulo: 'Problema de qualidade', acao: 'Reforçar CEP e inspeção de início de lote.' },
+  { codigo: 'ferramenta', rotulo: 'Troca de broca / ferramenta', acao: 'Monitorar vida útil da broca e criar plano de troca programada.' },
+  { codigo: 'ajuste_maquina', rotulo: 'Ajuste de máquina', acao: 'Padronizar gabarito e batente para eliminar ajuste manual.' },
+  { codigo: 'reuniao', rotulo: 'Reunião / Treinamento', acao: 'Agendar fora do horário produtivo.' },
+  { codigo: 'pessoal', rotulo: 'Necessidade pessoal', acao: 'Já coberto pela tolerância; não tratar como perda.' },
+  { codigo: 'outro', rotulo: 'Outro', acao: 'Detalhar na observação para permitir classificação posterior.' },
 ];
 
 export const FR_PRESETS = [
@@ -33,7 +33,7 @@ export const FR_PRESETS = [
   { valor: 95, rotulo: 'Abaixo do normal' },
   { valor: 100, rotulo: 'Normal' },
   { valor: 110, rotulo: 'Acima do normal' },
-  { valor: 120, rotulo: 'Muito rapido' },
+  { valor: 120, rotulo: 'Muito rápido' },
 ];
 
 /**
@@ -81,15 +81,15 @@ export function calcularOperacao(operacao, toleranciaPct = 0) {
  * estatistico de Nievel. Atingir so a meta manual nao garante validade.
  */
 export function amostraSuficiente(resultado, metaObs) {
-  if (!resultado) return { ok: false, motivo: 'Sem observacoes' };
+  if (!resultado) return { ok: false, motivo: 'Sem observações' };
   const meta = Number(metaObs) || 0;
   if (meta > 0 && resultado.n < meta) {
-    return { ok: false, motivo: `Faltam ${meta - resultado.n} observacoes para a meta` };
+    return { ok: false, motivo: `Faltam ${meta - resultado.n} observações para a meta` };
   }
   if (resultado.n < resultado.obsMinimas) {
     return { ok: false, motivo: `Nievel exige ${resultado.obsMinimas} obs para CV ${resultado.cvPct.toFixed(1)}%` };
   }
-  return { ok: true, motivo: 'Amostra estatisticamente valida' };
+  return { ok: true, motivo: 'Amostra estatisticamente válida' };
 }
 
 /** Takt Time em ms. Ritmo que a demanda exige. */

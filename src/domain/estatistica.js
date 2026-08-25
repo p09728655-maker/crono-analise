@@ -60,9 +60,9 @@ export function observacoesMinimas(cvPct, { z = Z_95, erroPct = ERRO_PADRAO_PCT 
 
 /** Classificacao de estabilidade a partir do CV%. Cor NUNCA vem sozinha. */
 export function classificarEstabilidade(cvPct) {
-  if (cvPct <= 10) return { nivel: 'estavel', rotulo: 'Estavel', descricao: 'Processo consistente' };
-  if (cvPct <= 20) return { nivel: 'atencao', rotulo: 'Variacao moderada', descricao: 'Investigar causas de dispersao' };
-  return { nivel: 'critico', rotulo: 'Alta variacao', descricao: 'Processo instavel — padronizar antes de cronometrar' };
+  if (cvPct <= 10) return { nivel: 'estavel', rotulo: 'Estável', descricao: 'Processo consistente' };
+  if (cvPct <= 20) return { nivel: 'atencao', rotulo: 'Variação moderada', descricao: 'Investigar causas de dispersão' };
+  return { nivel: 'critico', rotulo: 'Alta variação', descricao: 'Processo instável — padronizar antes de cronometrar' };
 }
 
 /**
