@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.6.0',
+    data: '2026-08-25',
+    titulo: 'Cadastro de Setor',
+    itens: [
+      'Setor agora tem onde ser preenchido: no novo estudo, na importação do roteiro e nos Ajustes do estudo já criado — e sai no relatório impresso.',
+      'Analista também editável nos Ajustes, para corrigir estudo criado sem ele.',
+      'Sugestão de setores já usados no cadastro, para não criar "USINAGEM" ao lado de "Usinagem".',
+      'Importar roteiro só aparece na Análise — na Coleta não se importa nada, só se cronometra.',
+    ],
+  },
+  {
     versao: '2.5.0',
     data: '2026-08-25',
     titulo: 'Painel inicial e novo estudo em etapas',

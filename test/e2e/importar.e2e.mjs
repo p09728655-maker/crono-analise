@@ -19,7 +19,18 @@ const checar = (ok, msg) => { console.log(`${ok ? 'OK  ' : 'FALHA'} ${msg}`); if
 
 const b = await chromium.launch({ executablePath: EXEC });
 
-for (const modo of ['analise', 'coleta']) {
+/* Na COLETA nao se importa nada — o botao nem aparece no chao de fabrica. */
+{
+  const ctx = await b.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}/test/e2e/harness-importar/index.html?modo=coleta`);
+  await p.waitForSelector('li', { timeout: 8000 });
+  checar(await p.locator('text=Importar roteiro').count() === 0,
+    'coleta: botao de importar NAO existe (tarefa de escritorio)');
+  await ctx.close();
+}
+
+for (const modo of ['analise']) {
   const ctx = await b.newContext({
     viewport: modo === 'analise' ? { width: 1440, height: 900 } : { width: 400, height: 860 },
     hasTouch: modo === 'coleta',
@@ -65,12 +76,14 @@ for (const modo of ['analise', 'coleta']) {
   checar(larguras.doc <= larguras.tela, `${modo}: sem rolagem horizontal (${larguras.doc}/${larguras.tela}px)`);
   checar(larguras.estourados === 0, `${modo}: nada estourado dentro do modal (${larguras.estourados})`);
 
+  await dialogo.locator('label', { hasText: 'Setor' }).locator('input').fill('Usinagem');
   await dialogo.locator('button', { hasText: 'Criar estudo' }).click();
   await p.waitForFunction(() => window.__aberto !== null, { timeout: 8000 });
 
   const post = await p.evaluate(() => window.__posts[0]);
   checar(post.corpo.produto === 'MESA CABECEIRA SLEEP BRANCO', `${modo}: produto vem do PDF`);
   checar(post.corpo.recurso === 'FUR16', `${modo}: recurso e' a maquina do roteiro`);
+  checar(post.corpo.setor === 'Usinagem', `${modo}: setor vai junto na importacao`);
   checar(post.corpo.operacoes.length === 6, `${modo}: 6 operacoes aninhadas no POST`);
   checar(post.corpo.operacoes.map((o) => o.ciclosPorPeca).join(',') === '1,2,1,1,1,1',
     `${modo}: ciclos por peca [${post.corpo.operacoes.map((o) => o.ciclosPorPeca)}]`);

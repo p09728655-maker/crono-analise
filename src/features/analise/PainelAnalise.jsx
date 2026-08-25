@@ -279,6 +279,8 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
  * desses campos exigiria recriar o estudo e perder os ciclos ja coletados.
  */
 function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
+  const [setor, setSetor] = useState(estudo.setor || '');
+  const [analista, setAnalista] = useState(estudo.analista || '');
   const [tolerancia, setTolerancia] = useState(Number(estudo.tolerancia_pct) || 15);
   const [metaObs, setMetaObs] = useState(Number(estudo.meta_obs) || 12);
   const [taktSeg, setTaktSeg] = useState(
@@ -302,6 +304,8 @@ function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
     const ms = taktSeg ? Math.round(Number(taktSeg) * 1000) : null;
     try {
       await aoSalvar({
+        setor: setor.trim() || null,
+        analista: analista.trim() || null,
         toleranciaPct: Number(tolerancia),
         metaObs: Number(metaObs),
         taktTimeMs: ms && ms > 0 ? ms : null,
@@ -316,6 +320,23 @@ function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
         <p style={est.dica}>
           Estes valores recalculam os indicadores. Os ciclos já coletados não são afetados.
         </p>
+
+        {/* Setor e analista saem impressos na folha de análise — um estudo
+            criado sem eles imprimia "—" e não havia onde corrigir. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg }}>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Setor</span>
+            <input style={est.input} value={setor}
+                   onChange={(e) => setSetor(e.target.value)} />
+            <span style={est.dica}>Ex: Usinagem. Sai no relatório impresso.</span>
+          </label>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Analista</span>
+            <input style={est.input} value={analista}
+                   onChange={(e) => setAnalista(e.target.value)} />
+            <span style={est.dica}>Assina a folha de análise.</span>
+          </label>
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg }}>
           <label style={est.campo}>

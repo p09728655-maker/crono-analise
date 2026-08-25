@@ -45,6 +45,7 @@ const b = await chromium.launch({ executablePath: EXEC });
   checar(await form.locator('text=--:--').count() === 1, 'form: Takt vazio mostra --:--');
 
   await form.locator('label', { hasText: 'Nome do estudo' }).locator('input').fill('Furação lateral — Linha 2');
+  await form.locator('label', { hasText: 'Setor' }).locator('input').fill('Usinagem');
   await form.locator('label', { hasText: 'Quantidade por dia' }).locator('input').fill('480');
   await form.locator('label', { hasText: 'Horas disponíveis' }).locator('input').fill('5.6');
 
@@ -61,6 +62,7 @@ const b = await chromium.launch({ executablePath: EXEC });
 
   const post = await p.evaluate(() => window.__posts[0]);
   checar(post.corpo.nome === 'Furação lateral — Linha 2', 'POST: nome do estudo');
+  checar(post.corpo.setor === 'Usinagem', `POST: setor cadastrado (${post.corpo.setor})`);
   checar(post.corpo.taktTimeMs === 42000, `POST: taktTimeMs calculado = ${post.corpo.taktTimeMs}`);
   await ctx.close();
 }

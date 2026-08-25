@@ -14,7 +14,7 @@ import { criarEstudo } from '../../lib/api.js';
  * compridos, seis quantidades — e um erro de digitacao na quantidade
  * distorce a capacidade calculada. O ERP ja' sabe tudo isso.
  */
-export default function ImportarRoteiro({ t, analise, produtosExistentes = [], aoConcluir, aoCancelar }) {
+export default function ImportarRoteiro({ t, analise, produtosExistentes = [], setoresConhecidos = [], aoConcluir, aoCancelar }) {
   const est = estilos(t, analise);
   const inputRef = useRef(null);
 
@@ -23,7 +23,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], a
   const [roteiro, setRoteiro] = useState(null);
   const [nomeArquivo, setNomeArquivo] = useState('');
   const [nome, setNome] = useState('');
-  const [campos, setCampos] = useState({ analista: '', toleranciaPct: 15, metaObs: 12 });
+  const [campos, setCampos] = useState({ setor: '', analista: '', toleranciaPct: 15, metaObs: 12 });
   const [criando, setCriando] = useState(false);
 
   async function aoEscolher(ev) {
@@ -66,6 +66,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], a
           nome: grupos.length === 1 ? nome.trim() || nomePadrao(roteiro, grupo) : nomePadrao(roteiro, grupo),
           produto: roteiro.produtoPai.descricao,
           recurso: grupo.maquina,
+          setor: campos.setor,
           analista: campos.analista,
           toleranciaPct: Number(campos.toleranciaPct) || 15,
           metaObs: Number(campos.metaObs) || 12,
@@ -173,8 +174,19 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], a
               </label>
             )}
 
-            <div style={est.tresColunas}>
-              <label style={{ ...est.campo, ...(analise ? {} : est.campoLargo) }}>
+            <div style={est.grade}>
+              <label style={est.campo}>
+                <span style={est.rotuloCampo}>Setor</span>
+                <input
+                  style={est.input} list="setores-conhecidos-importar"
+                  value={campos.setor}
+                  onChange={(ev) => setCampos((c) => ({ ...c, setor: ev.target.value }))}
+                />
+                <datalist id="setores-conhecidos-importar">
+                  {setoresConhecidos.map((nome) => <option key={nome} value={nome} />)}
+                </datalist>
+              </label>
+              <label style={est.campo}>
                 <span style={est.rotuloCampo}>Analista</span>
                 <input
                   style={est.input}
@@ -324,15 +336,8 @@ function estilos(t, analise) {
     campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
     rotuloCampo: rotulo(t.fraco),
     dica: { ...tipo('legenda'), color: t.fraco, fontStyle: 'italic', margin: 0 },
-    // No PC o analista divide a linha com os numeros; no celular ele ocupa
-    // a linha inteira (campoLargo) e os numeros dividem a de baixo.
-    tresColunas: {
-      display: 'grid', gap: espaco.md,
-      gridTemplateColumns: analise
-        ? 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)'
-        : 'minmax(0, 1fr) minmax(0, 1fr)',
-    },
-    campoLargo: { gridColumn: '1 / -1' },
+    // Duas colunas nos dois modos: Setor+Analista, Tolerancia+Meta.
+    grade: { display: 'grid', gap: espaco.md, gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' },
     input: {
       width: '100%', minHeight: 44, padding: `0 ${espaco.md}px`, background: t.fundo,
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,

@@ -4,7 +4,7 @@ import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
 import { taktTime } from '../../domain/cronoanalise.js';
-import { agruparPorProduto, produtosConhecidos } from '../../domain/agrupamento.js';
+import { agruparPorProduto, produtosConhecidos, setoresConhecidos } from '../../domain/agrupamento.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
@@ -69,13 +69,16 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
         aoTrocarModo={aoTrocarModo}
         /* O botao principal so' aparece aqui quando ja' ha' lista. No estado
            vazio ele vive no proprio bloco vazio — dois botoes identicos na
-           mesma tela e' duplicacao, nao reforco. A importacao nao tem par no
-           bloco vazio, entao fica sempre que a lista carregou. */
+           mesma tela e' duplicacao, nao reforco. Importar roteiro e' tarefa
+           de escritorio: so' existe na Analise — na Coleta nao se importa
+           nada, so' se cronometra. */
         acoes={estado === 'pronto' && (
           <>
-            <button type="button" style={est.botaoSecundario} onClick={() => setImportando(true)}>
-              Importar roteiro
-            </button>
+            {analise && (
+              <button type="button" style={est.botaoSecundario} onClick={() => setImportando(true)}>
+                Importar roteiro
+              </button>
+            )}
             {temEstudos && (
               <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
                 + Novo estudo
@@ -192,6 +195,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
           t={t}
           analise={analise}
           produtosExistentes={produtosConhecidos(estudos)}
+          setoresConhecidos={setoresConhecidos(estudos)}
           aoConcluir={async (id) => { setImportando(false); await carregar(); aoAbrir?.(id); }}
           aoCancelar={() => setImportando(false)}
         />
@@ -202,6 +206,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
           est={est}
           analise={analise}
           produtos={produtosConhecidos(estudos)}
+          setores={setoresConhecidos(estudos)}
           aoSalvar={criar}
           aoCancelar={() => setCriando(false)}
         />
@@ -439,9 +444,9 @@ function ConfirmarRemocao({ est, estudo, aoConfirmar, aoCancelar }) {
  * entao o formulario pede esses dois numeros e mostra o ritmo calculado.
  * (Quem souber o Takt direto ajusta depois, em Ajustes do estudo.)
  */
-function FormularioEstudo({ est, analise, produtos = [], aoSalvar, aoCancelar }) {
+function FormularioEstudo({ est, analise, produtos = [], setores = [], aoSalvar, aoCancelar }) {
   const [dados, setDados] = useState({
-    nome: '', recurso: '', produto: '', analista: '', toleranciaPct: 15, metaObs: 12,
+    nome: '', setor: '', recurso: '', produto: '', analista: '', toleranciaPct: 15, metaObs: 12,
   });
   const [calc, setCalc] = useState({ quantidade: '', horas: '' });
   const [etapa, setEtapa] = useState(1);
@@ -491,8 +496,18 @@ function FormularioEstudo({ est, analise, produtos = [], aoSalvar, aoCancelar })
             <section style={est.secao} onFocusCapture={() => setEtapa(1)}>
               <div style={est.secaoRotulo}>Identificação</div>
               <div style={analise ? est.duasColunas : est.umaColuna}>
-                <Campo est={est} label="Nome do estudo" obrigatorio dica="Ex: Furação lateral — linha 2">
-                  <input ref={refNome} style={est.input} {...campo('nome')} autoFocus />
+                <div style={analise ? est.campoLargo : undefined}>
+                  <Campo est={est} label="Nome do estudo" obrigatorio dica="Ex: Furação lateral — linha 2">
+                    <input ref={refNome} style={est.input} {...campo('nome')} autoFocus />
+                  </Campo>
+                </div>
+                <Campo est={est} label="Setor" dica="Ex: Usinagem">
+                  {/* Sugere setores ja usados: "USINAGEM" ao lado de
+                      "Usinagem" fragmentaria filtro e relatorio. */}
+                  <input style={est.input} list="setores-conhecidos" {...campo('setor')} />
+                  <datalist id="setores-conhecidos">
+                    {setores.map((nome) => <option key={nome} value={nome} />)}
+                  </datalist>
                 </Campo>
                 <Campo est={est} label="Recurso / Posto" dica="Ex: Furadeira 03">
                   <input style={est.input} {...campo('recurso')} />
@@ -848,6 +863,7 @@ function estilos(t, analise) {
     },
     formEsquerda: { display: 'flex', flexDirection: 'column', gap: espaco.xl, minWidth: 0 },
     secao: { display: 'flex', flexDirection: 'column', gap: espaco.md },
+    campoLargo: { gridColumn: '1 / -1' },
     secaoSeparada: {
       display: 'flex', flexDirection: 'column', gap: espaco.md,
       paddingTop: espaco.lg,

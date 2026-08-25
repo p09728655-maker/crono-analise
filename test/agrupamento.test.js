@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { agruparPorProduto, chaveProduto, produtosConhecidos } from '../src/domain/agrupamento.js';
+import { setoresConhecidos } from '../src/domain/agrupamento.js';
 
 const estudo = (nome, produto, ciclos = 0) => ({ id: nome, nome, produto, total_observacoes: ciclos });
 
@@ -94,5 +95,29 @@ describe('produtosConhecidos', () => {
       estudo('a', 'Sleep Base'), estudo('b', 'SLEEP BASE'), estudo('c', 'Painel'), estudo('d', ''),
     ]);
     expect(p).toEqual(['Sleep Base', 'Painel']);
+  });
+});
+
+describe('setoresConhecidos', () => {
+  it('funde grafias do mesmo setor e devolve a mais usada', () => {
+    const setores = setoresConhecidos([
+      { setor: 'USINAGEM' }, { setor: 'Usinagem' }, { setor: 'Usinagem' },
+      { setor: ' embalagem ' },
+      { setor: '' }, { setor: null }, {},
+    ]);
+    expect(setores).toEqual(['Usinagem', 'embalagem']);
+  });
+
+  it('ordena por frequencia — onde mais se estuda vem primeiro', () => {
+    const setores = setoresConhecidos([
+      { setor: 'Embalagem' },
+      { setor: 'Usinagem' }, { setor: 'Usinagem' },
+    ]);
+    expect(setores[0]).toBe('Usinagem');
+  });
+
+  it('sem setor nenhum devolve lista vazia', () => {
+    expect(setoresConhecidos([])).toEqual([]);
+    expect(setoresConhecidos(undefined)).toEqual([]);
   });
 });

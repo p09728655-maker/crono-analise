@@ -96,3 +96,25 @@ export function produtosConhecidos(estudos) {
     .filter((g) => !g.semProduto)
     .map((g) => g.rotulo);
 }
+
+/**
+ * Setores ja usados, para sugerir no cadastro — mesma normalizacao do
+ * produto: "USINAGEM", "Usinagem" e " usinagem " sao um setor so, e a
+ * grafia exibida e' a mais usada. Ordenado por frequencia: o setor onde
+ * mais se estuda aparece primeiro na sugestao.
+ */
+export function setoresConhecidos(estudos) {
+  const grupos = new Map();
+  for (const estudo of estudos || []) {
+    const chave = chaveProduto(estudo?.setor);
+    if (ehSemProduto(chave)) continue;
+    if (!grupos.has(chave)) grupos.set(chave, { rotulos: new Map(), n: 0 });
+    const g = grupos.get(chave);
+    g.n += 1;
+    const grafia = String(estudo.setor).trim();
+    g.rotulos.set(grafia, (g.rotulos.get(grafia) || 0) + 1);
+  }
+  return [...grupos.values()]
+    .sort((a, b) => b.n - a.n)
+    .map((g) => grafiaMaisUsada(g.rotulos));
+}
