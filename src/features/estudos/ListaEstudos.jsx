@@ -4,6 +4,7 @@ import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
 import { formatarSegundos, taktTime } from '../../domain/cronoanalise.js';
+import { agruparPorProduto, produtosConhecidos } from '../../domain/agrupamento.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 
@@ -19,6 +20,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
   const [erro, setErro] = useState(null);
   const [criando, setCriando] = useState(false);
   const [removendo, setRemovendo] = useState(null);
+  const [filtro, setFiltro] = useState(null);
 
   const analise = modo === 'analise';
   const t = tema(analise);
@@ -46,6 +48,10 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
   }
 
   const temEstudos = estado === 'pronto' && estudos.length > 0;
+
+  // Um estudo pertence a um produto; a lista plana misturava tudo.
+  const grupos = agruparPorProduto(estudos);
+  const visiveis = filtro ? grupos.filter((g) => g.chave === filtro) : grupos;
 
   return (
     <div style={est.tela}>
@@ -103,13 +109,41 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
         )}
 
         {temEstudos && (
-          analise
-            ? <TabelaEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
-            : <CartoesEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
+          <>
+            {/* Filtro so' aparece quando ha' mais de um produto: com um so',
+                ele seria um controle que nao controla nada. */}
+            {grupos.length > 1 && (
+              <FiltroProduto grupos={grupos} filtro={filtro} aoFiltrar={setFiltro} est={est} />
+            )}
+
+            {visiveis.map((grupo) => (
+              <section key={grupo.chave} style={est.grupo}>
+                <div style={est.grupoCabecalho}>
+                  <h2 style={{ ...est.grupoTitulo, ...(grupo.semProduto ? est.grupoTituloVazio : {}) }}>
+                    {grupo.rotulo}
+                  </h2>
+                  <span style={est.grupoResumo}>
+                    {grupo.estudos.length} estudo(s) · {grupo.totalCiclos} ciclo(s)
+                  </span>
+                </div>
+
+                {analise
+                  ? <TabelaEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
+                  : <CartoesEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />}
+              </section>
+            ))}
+          </>
         )}
       </main>
 
-      {criando && <FormularioEstudo est={est} aoSalvar={criar} aoCancelar={() => setCriando(false)} />}
+      {criando && (
+        <FormularioEstudo
+          est={est}
+          produtos={produtosConhecidos(estudos)}
+          aoSalvar={criar}
+          aoCancelar={() => setCriando(false)}
+        />
+      )}
 
       {removendo && (
         <ConfirmarRemocao
@@ -119,6 +153,44 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
           aoCancelar={() => setRemovendo(null)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Filtro por produto.
+ *
+ * Uma linha de opcoes, nao um menu: com poucos produtos, esconder a lista
+ * atras de um clique custa mais que mostra-la. Acima de um limite ela vira
+ * rolagem horizontal em vez de crescer para baixo e empurrar o conteudo.
+ */
+function FiltroProduto({ grupos, filtro, aoFiltrar, est }) {
+  const total = grupos.reduce((acc, g) => acc + g.estudos.length, 0);
+
+  return (
+    <div style={est.filtro} role="group" aria-label="Filtrar por produto">
+      <button
+        type="button"
+        onClick={() => aoFiltrar(null)}
+        aria-pressed={filtro === null}
+        style={{ ...est.filtroItem, ...(filtro === null ? est.filtroAtivo : {}) }}
+      >
+        Todos
+        <span style={est.filtroContagem}>{total}</span>
+      </button>
+
+      {grupos.map((g) => (
+        <button
+          key={g.chave}
+          type="button"
+          onClick={() => aoFiltrar(g.chave === filtro ? null : g.chave)}
+          aria-pressed={g.chave === filtro}
+          style={{ ...est.filtroItem, ...(g.chave === filtro ? est.filtroAtivo : {}) }}
+        >
+          {g.rotulo}
+          <span style={est.filtroContagem}>{g.estudos.length}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -153,7 +225,6 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoRemover }) {
           <tr>
             <th style={est.th}>Estudo</th>
             <th style={est.th}>Recurso</th>
-            <th style={est.th}>Produto</th>
             <th style={est.th}>Analista</th>
             <th style={est.thNum}>Operações</th>
             <th style={est.thNum}>Ciclos</th>
@@ -171,7 +242,6 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoRemover }) {
             >
               <td style={est.tdNome}>{e.nome}</td>
               <td style={est.td}>{e.recurso || '—'}</td>
-              <td style={est.td}>{e.produto || '—'}</td>
               <td style={est.td}>{e.analista || '—'}</td>
               <td style={est.tdNum}>{e.total_operacoes}</td>
               <td style={est.tdNum}>{e.total_observacoes}</td>
@@ -207,7 +277,8 @@ function CartoesEstudos({ estudos, est, aoAbrir, aoRemover }) {
             <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
               <div style={est.cartaoTitulo}>{e.nome}</div>
               <div style={est.cartaoSub}>
-                {[e.recurso, e.produto, e.analista].filter(Boolean).join(' · ') || 'Sem detalhes'}
+                {/* Sem o produto: ele ja' nomeia o grupo logo acima. */}
+                {[e.recurso, e.analista].filter(Boolean).join(' · ') || 'Sem detalhes'}
               </div>
             </div>
             <div style={est.cartaoNumeros}>
@@ -274,7 +345,7 @@ function ConfirmarRemocao({ est, estudo, aoConfirmar, aoCancelar }) {
   );
 }
 
-function FormularioEstudo({ est, aoSalvar, aoCancelar }) {
+function FormularioEstudo({ est, produtos = [], aoSalvar, aoCancelar }) {
   const [dados, setDados] = useState({
     nome: '', recurso: '', produto: '', analista: '', toleranciaPct: 15, metaObs: 12,
     taktSeg: '',
@@ -324,8 +395,15 @@ function FormularioEstudo({ est, aoSalvar, aoCancelar }) {
           <Campo est={est} label="Recurso / posto" dica="Ex: Furadeira 03">
             <input style={est.input} {...campo('recurso')} />
           </Campo>
-          <Campo est={est} label="Produto ou referência">
-            <input style={est.input} {...campo('produto')} />
+          <Campo est={est} label="Produto ou referência"
+                 dica={produtos.length ? 'Escolha um já usado para agrupar corretamente.' : null}>
+            {/* datalist sugere sem impedir texto novo: o analista continua
+                livre para cadastrar produto inedito, mas nao cria "SLEEP
+                BASE" ao lado de "Sleep Base" por descuido. */}
+            <input style={est.input} list="produtos-conhecidos" {...campo('produto')} />
+            <datalist id="produtos-conhecidos">
+              {produtos.map((nome) => <option key={nome} value={nome} />)}
+            </datalist>
           </Campo>
         </div>
 
@@ -455,6 +533,35 @@ function estilos(t, analise) {
       border: 'none', borderRadius: raio.md, color: '#fff',
       ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
     },
+
+    /* ---- agrupamento por produto ---- */
+    filtro: {
+      display: 'flex', gap: espaco.sm, marginBottom: espaco.xl,
+      overflowX: 'auto', paddingBottom: espaco.xs,
+    },
+    filtroItem: {
+      display: 'inline-flex', alignItems: 'center', gap: espaco.sm, flexShrink: 0,
+      minHeight: analise ? 34 : 44, padding: `0 ${espaco.md}px`,
+      background: t.superficie, borderRadius: raio.pill,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+      color: t.medio, ...tipo('legenda'), fontWeight: 600,
+      cursor: 'pointer', fontFamily: 'inherit',
+      transition: `border-color ${transicao.rapida}, color ${transicao.rapida}`,
+    },
+    filtroAtivo: { borderColor: t.vermelho, color: t.texto },
+    filtroContagem: {
+      minWidth: 18, padding: '0 5px', borderRadius: raio.pill,
+      background: t.realce, color: t.fraco, ...tipo('micro'),
+      textTransform: 'none', letterSpacing: 0,
+    },
+    grupo: { marginBottom: espaco.xxl },
+    grupoCabecalho: {
+      display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+      gap: espaco.md, flexWrap: 'wrap', marginBottom: espaco.md,
+    },
+    grupoTitulo: { ...tipo('destaque'), margin: 0, color: t.texto },
+    grupoTituloVazio: { color: t.fraco, fontStyle: 'italic' },
+    grupoResumo: { ...tipo('legenda'), color: t.fraco },
 
     /* ---- tabela (analise) ---- */
     painel: {
