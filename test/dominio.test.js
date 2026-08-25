@@ -125,9 +125,37 @@ describe('calcularOperacao', () => {
     expect(r.tpVal).toBeCloseTo(11500, 6);
   });
 
-  it('capacidade/hora = 3.600.000 / TP, arredondado para baixo', () => {
+  it('capacidade/hora = 3.600.000 / TP da PECA, arredondado para baixo', () => {
     // TP = 11500ms -> 3600000/11500 = 313.04 -> 313
     expect(calcularOperacao(op, 15).cap).toBe(313);
+  });
+
+  it('sem ciclosPorPeca informado, assume 1 ciclo por peca', () => {
+    const r = calcularOperacao(op, 0);
+    expect(r.ciclosPorPeca).toBe(1);
+    expect(r.tpPorPeca).toBe(r.tpVal);
+  });
+
+  it('MULTIPLICA o tempo da peca pelos ciclos que ela exige', () => {
+    // O cronometro mede um ciclo da maquina; a peca pode exigir varios.
+    const r = calcularOperacao({ ...op, ciclosPorPeca: 3 }, 0);
+    expect(r.tpVal).toBe(10000);
+    expect(r.tpPorPeca).toBe(30000);
+  });
+
+  it('capacidade CAI na proporcao dos ciclos por peca', () => {
+    // Este era o bug: 1 ciclo = 1 peca superestimava a capacidade em 3x.
+    const um = calcularOperacao({ ...op, ciclosPorPeca: 1 }, 0);
+    const tres = calcularOperacao({ ...op, ciclosPorPeca: 3 }, 0);
+    expect(um.cap).toBe(360);
+    expect(tres.cap).toBe(120);
+  });
+
+  it('valor invalido de ciclosPorPeca cai para 1, nunca para zero', () => {
+    // Zero ou negativo zeraria o tempo da peca e daria capacidade infinita.
+    for (const v of [0, -2, null, undefined, NaN, 'abc']) {
+      expect(calcularOperacao({ ...op, ciclosPorPeca: v }, 0).ciclosPorPeca).toBe(1);
+    }
   });
 
   it('soma a duracao das paradas', () => {

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { claro, fonteAnalise } from '../../theme/tokensAnalise.js';
+import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
+import Cabecalho from '../../components/Cabecalho.jsx';
 import {
   amostraSuficiente, calcularOperacao, formatarSegundos, FR_PRESETS, operadoresNecessarios,
 } from '../../domain/cronoanalise.js';
 import { criarOperacao, obterEstudo, removerOperacao } from '../../lib/api.js';
 import { CartaControle, GraficoYamazumi } from './graficos.jsx';
-import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import RelatorioImpressao from './RelatorioImpressao.jsx';
 
 /**
@@ -47,12 +48,19 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
 
     const operacoes = dados.operacoes.map((op) => ({
       ...op,
-      resultado: calcularOperacao({ ...op, fr: Number(op.fr_pct) }, tolerancia),
+      resultado: calcularOperacao(
+        { ...op, fr: Number(op.fr_pct), ciclosPorPeca: Number(op.ciclos_por_peca) || 1 },
+        tolerancia,
+      ),
     }));
 
     const comDados = operacoes.filter((o) => o.resultado);
-    const somaTp = comDados.reduce((acc, o) => acc + o.resultado.tpVal, 0);
-    const gargalo = comDados.reduce((pior, o) => (!pior || o.resultado.tpVal > pior.resultado.tpVal ? o : pior), null);
+    // Tudo que se compara com o Takt usa o tempo POR PECA: o Takt e' o ritmo
+    // que a demanda exige em pecas, nao em ciclos de maquina.
+    const somaTp = comDados.reduce((acc, o) => acc + o.resultado.tpPorPeca, 0);
+    const gargalo = comDados.reduce(
+      (pior, o) => (!pior || o.resultado.tpPorPeca > pior.resultado.tpPorPeca ? o : pior), null,
+    );
 
     return {
       tolerancia,
@@ -86,22 +94,19 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
       {/* Versao de impressao: escondida na tela, e' a unica coisa visivel no papel. */}
       <RelatorioImpressao estudo={estudo} analise={analise} />
 
-      <div className="somente-tela">
-        <header style={est.cabecalho}>
-          {/* Sem botao de voltar aqui: a trilha de navegacao no topo ja' o
-              oferece, e duas saidas para o mesmo lugar so' poluem. */}
-          <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={est.logo} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={est.titulo}>{estudo.nome}</h1>
-            <p style={est.subtitulo}>
-              {[estudo.recurso, estudo.produto, estudo.analista].filter(Boolean).join(' · ')}
-              {' · '}Tolerância {analise.tolerancia}%
-            </p>
-          </div>
-          <button type="button" onClick={() => window.print()} style={est.botaoImprimir}>
-            Imprimir relatório
-          </button>
-        </header>
+      <div className="somente-tela" style={est.envoltorio}>
+        <Cabecalho
+          modo="analise"
+          aoVoltar={aoVoltar}
+          titulo={estudo.nome}
+          subtitulo={[estudo.recurso, estudo.produto, estudo.analista]
+            .filter(Boolean).join(' · ') + ` · Tolerância ${analise.tolerancia}%`}
+          acoes={(
+            <button type="button" onClick={() => window.print()} style={est.botaoImprimir}>
+              Imprimir relatório
+            </button>
+          )}
+        />
 
         {/* Ressalva importante, mas e' ressalva — nao pode competir com o
             resultado. Uma linha, com o detalhe sob demanda. */}
@@ -153,7 +158,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           {[
             ['Operações', analise.operacoes.length, ''],
             ['Ciclos coletados', analise.totalCiclos, ''],
-            ['Σ Tempo padrão', formatarSegundos(analise.somaTp), ' s'],
+            ['Σ TP por peça', formatarSegundos(analise.somaTp), ' s'],
             ['Takt Time', analise.taktMs ? formatarSegundos(analise.taktMs) : '—', analise.taktMs ? ' s' : ''],
           ].map(([rotulo, valor, sufixo]) => (
             <div key={rotulo} style={est.contextoItem}>
@@ -225,6 +230,7 @@ function FormularioOperacao({ aoSalvar, aoCancelar }) {
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [frPct, setFrPct] = useState(100);
+  const [ciclosPorPeca, setCiclosPorPeca] = useState(1);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState(null);
 
@@ -233,7 +239,7 @@ function FormularioOperacao({ aoSalvar, aoCancelar }) {
     if (!nome.trim()) { setErro('Informe o nome da operação.'); return; }
     setSalvando(true);
     setErro(null);
-    try { await aoSalvar({ nome, descricao, frPct }); }
+    try { await aoSalvar({ nome, descricao, frPct, ciclosPorPeca: Number(ciclosPorPeca) || 1 }); }
     catch (e) { setErro(e.message); setSalvando(false); }
   }
 
@@ -252,6 +258,20 @@ function FormularioOperacao({ aoSalvar, aoCancelar }) {
           <span style={est.rotuloCampo}>Descrição</span>
           <input style={est.input} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
           <span style={est.dica}>Onde começa e onde termina o ciclo. Evita medir coisas diferentes.</span>
+        </label>
+
+        <label style={est.campo}>
+          <span style={est.rotuloCampo}>Ciclos por peça</span>
+          <input
+            type="number" min="1" max="999" style={est.input}
+            value={ciclosPorPeca}
+            onChange={(e) => setCiclosPorPeca(e.target.value)}
+          />
+          <span style={est.dica}>
+            Quantas vezes esta operação se repete para produzir <strong>uma peça</strong>.
+            Uma peça com 3 furações leva 3× o tempo de uma com 1 — sem isso a
+            capacidade sai superestimada.
+          </span>
         </label>
 
         <fieldset style={est.fieldset}>
@@ -316,7 +336,7 @@ function Resposta({ analise }) {
     );
   }
 
-  const ocupacao = taktMs > 0 ? (gargalo.resultado.tpVal / taktMs) * 100 : null;
+  const ocupacao = taktMs > 0 ? (gargalo.resultado.tpPorPeca / taktMs) * 100 : null;
 
   return (
     <section style={est.resposta} aria-label="Resultado do estudo">
@@ -327,8 +347,11 @@ function Resposta({ analise }) {
           <span style={est.respostaUnidade}>peças/hora</span>
         </div>
         <p style={est.respostaExplica}>
-          Limitada por <strong>{gargalo.nome}</strong>, com tempo padrão de{' '}
-          {formatarSegundos(gargalo.resultado.tpVal)} s.
+          Limitada por <strong>{gargalo.nome}</strong>, com{' '}
+          {formatarSegundos(gargalo.resultado.tpPorPeca)} s por peça
+          {gargalo.resultado.ciclosPorPeca > 1 && (
+            <> ({formatarSegundos(gargalo.resultado.tpVal)} s × {gargalo.resultado.ciclosPorPeca} ciclos)</>
+          )}.
           {ocupacao !== null && ocupacao > 100 && (
             <> Esta operação está <strong>{(ocupacao - 100).toFixed(0)}% acima do Takt</strong>.</>
           )}
@@ -380,7 +403,9 @@ function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, 
               <th style={est.thNum}>FR</th>
               <th style={est.thNum}>TO (s)</th>
               <th style={est.thNum}>TN (s)</th>
-              <th style={est.thNum}>TP (s)</th>
+              <th style={est.thNum} title="Quantas vezes a operação roda por peça">Cic/pç</th>
+              <th style={est.thNum}>TP ciclo (s)</th>
+              <th style={est.thNum}>TP peça (s)</th>
               <th style={est.thNum}>CV%</th>
               <th style={est.thNum}>Cap/h</th>
               <th style={est.th}>Estabilidade</th>
@@ -404,7 +429,9 @@ function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, 
                   <td style={est.tdNum}>{Number(op.fr_pct)}%</td>
                   <td style={est.tdNum}>{r ? formatarSegundos(r.toMed) : '—'}</td>
                   <td style={est.tdNum}>{r ? formatarSegundos(r.tnMed) : '—'}</td>
-                  <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpVal) : '—'}</td>
+                  <td style={est.tdNum}>{r ? r.ciclosPorPeca : Number(op.ciclos_por_peca) || 1}</td>
+                  <td style={est.tdNum}>{r ? formatarSegundos(r.tpVal) : '—'}</td>
+                  <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpPorPeca) : '—'}</td>
                   <td style={est.tdNum}>{r ? r.cvPct.toFixed(1) : '—'}</td>
                   <td style={est.tdNum}>{r ? r.cap : '—'}</td>
                   <td style={est.td}>
@@ -445,18 +472,6 @@ function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, 
   );
 }
 
-function Indicador({ rotulo, valor, sufixo, nota }) {
-  return (
-    <div style={est.indicador}>
-      <span style={est.indicadorRotulo}>{rotulo}</span>
-      <span style={est.indicadorValor}>
-        {valor}{sufixo && <span style={est.indicadorSufixo}>{sufixo}</span>}
-      </span>
-      {nota && <span style={est.indicadorNota}>{nota}</span>}
-    </div>
-  );
-}
-
 function Estado({ texto, acao }) {
   return (
     <div style={est.estadoVazio}>
@@ -468,153 +483,183 @@ function Estado({ texto, acao }) {
 
 const corNivel = (n) => ({ estavel: claro.ok, atencao: claro.atencao, critico: claro.critico }[n] || claro.neutro);
 
+
+
 const est = {
-  tela: { minHeight: '100vh', background: claro.fundo, color: claro.texto, fontFamily: fonteAnalise.familia, padding: 24 },
-  cabecalho: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, maxWidth: 1280, margin: '0 auto 24px' },
-  botaoVoltar: {
-    minHeight: 40, padding: '0 16px', background: claro.papel, border: `1px solid ${claro.borda}`,
-    borderRadius: 8, color: claro.textoMedio, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-  },
-  logo: { height: 36, width: 'auto', display: 'block', flexShrink: 0 },
-  titulo: { margin: 0, fontSize: 22, fontWeight: 700 },
-  subtitulo: { margin: '2px 0 0', fontSize: 13, color: claro.textoFraco },
-  botaoSecundario: {
-    minHeight: 40, padding: '0 16px', background: 'transparent',
-    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: 8,
-    color: claro.textoMedio, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-  },
+  tela: { minHeight: '100vh', background: claro.fundo, color: claro.texto, fontFamily: fonteAnalise.familia },
+  envoltorio: { paddingBottom: espaco.gigante },
+  conteudo: { maxWidth: 1400, margin: '0 auto', padding: `${espaco.xl}px` },
+
   botaoImprimir: {
-    minHeight: 40, padding: '0 20px', background: claro.vermelho, border: 'none',
-    borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+    minHeight: 40, padding: `0 ${espaco.lg}px`, background: claro.vermelho, border: 'none',
+    borderRadius: raio.md, color: '#fff', ...tipo('corpoF'),
+    cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa,
   },
+  botaoSecundario: {
+    minHeight: 36, padding: `0 ${espaco.md}px`, background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.md,
+    color: claro.textoMedio, ...tipo('legenda'), fontWeight: 600,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+
+  /* --- ressalva de amostra: uma linha, detalhe sob demanda --- */
   avisoAmostra: {
-    maxWidth: 1280, margin: '0 auto 16px', padding: '10px 16px', fontSize: 13, lineHeight: 1.6,
-    background: claro.atencaoFundo, borderWidth: 1, borderStyle: 'solid',
-    borderColor: claro.atencao, borderRadius: 8, color: claro.texto,
+    maxWidth: 1400, margin: `0 auto ${espaco.lg}px`, padding: `${espaco.md}px ${espaco.lg}px`,
+    ...tipo('corpo'), background: claro.atencaoFundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.atencao,
+    borderRadius: raio.md, color: claro.texto,
   },
   avisoResumo: {
-    display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: espaco.sm, cursor: 'pointer',
     listStyle: 'none', fontWeight: 600,
   },
   avisoIcone: {
-    width: 18, height: 18, flexShrink: 0, borderRadius: '50%',
-    background: claro.atencao, color: '#fff', fontSize: 12, fontWeight: 700,
+    width: 20, height: 20, flexShrink: 0, borderRadius: '50%',
+    background: claro.atencao, color: '#fff', fontSize: 13, fontWeight: 700,
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   },
-  itemPendencia: { marginTop: 4 },
-  listaPendencias: { margin: '8px 0 0', paddingLeft: 28 },
+  listaPendencias: { margin: `${espaco.sm}px 0 0`, paddingLeft: espaco.xxl },
+  itemPendencia: { marginTop: espaco.xs },
   linkColeta: {
-    marginLeft: 8, padding: '2px 8px', background: 'transparent', border: `1px solid ${claro.bordaForte}`,
-    borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', color: claro.textoMedio,
+    marginLeft: espaco.sm, padding: '2px 8px', background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.bordaForte, borderRadius: raio.sm,
+    ...tipo('micro'), textTransform: 'none', cursor: 'pointer',
+    fontFamily: 'inherit', color: claro.textoMedio,
   },
-  resposta: {
-    maxWidth: 1280, margin: '0 auto 16px', padding: 24,
-    background: claro.papel, borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda,
-    borderLeftWidth: 4, borderLeftColor: claro.vermelho, borderRadius: 10,
-    display: 'flex', gap: 32, flexWrap: 'wrap',
-  },
-  respostaBloco: { flex: '1 1 280px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 },
-  respostaDivisor: { width: 1, alignSelf: 'stretch', background: claro.borda },
-  respostaRotulo: {
-    fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase',
-    color: claro.textoFraco,
-  },
-  respostaNumeroLinha: { display: 'flex', alignItems: 'baseline', gap: 8 },
-  respostaNumero: { fontSize: 44, fontWeight: 700, fontFamily: fonteAnalise.numero, lineHeight: 1.05 },
-  respostaUnidade: { fontSize: 14, color: claro.textoMedio },
-  respostaExplica: { margin: '4px 0 0', fontSize: 13, lineHeight: 1.55, color: claro.textoMedio },
-  respostaVazia: { margin: 0, fontSize: 14, color: claro.textoFraco, lineHeight: 1.6 },
 
-  // Numeros de apoio: presentes, mas claramente secundarios.
+  /* --- a resposta --- */
+  resposta: {
+    maxWidth: 1400, margin: `0 auto ${espaco.lg}px`, padding: espaco.xl,
+    background: claro.papel, borderRadius: raio.lg, boxShadow: elevacao.media,
+    borderLeft: `4px solid ${claro.vermelho}`,
+    display: 'flex', gap: espaco.xxl, flexWrap: 'wrap',
+  },
+  respostaBloco: { flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  respostaDivisor: { width: 1, alignSelf: 'stretch', background: claro.borda },
+  respostaRotulo: rotulo(claro.textoFraco),
+  respostaNumeroLinha: { display: 'flex', alignItems: 'baseline', gap: espaco.sm },
+  respostaNumero: { ...tipo('display'), ...numeros, fontFamily: fonteAnalise.numero },
+  respostaUnidade: { ...tipo('corpo'), color: claro.textoMedio },
+  respostaExplica: { ...tipo('corpo'), margin: `${espaco.xs}px 0 0`, color: claro.textoMedio },
+  respostaVazia: { ...tipo('corpo'), margin: 0, color: claro.textoFraco },
+
+  /* --- numeros de apoio --- */
   contexto: {
-    maxWidth: 1280, margin: '0 auto 20px', padding: '12px 24px',
-    display: 'flex', gap: 32, flexWrap: 'wrap',
+    maxWidth: 1400, margin: `0 auto ${espaco.xl}px`, padding: `${espaco.md}px ${espaco.xl}px`,
+    display: 'flex', gap: espaco.xxl, flexWrap: 'wrap',
     borderTop: `1px solid ${claro.borda}`, borderBottom: `1px solid ${claro.borda}`,
   },
-  contextoItem: { display: 'flex', alignItems: 'baseline', gap: 8 },
-  contextoRotulo: { fontSize: 12, color: claro.textoFraco },
-  contextoValor: { fontSize: 14, fontWeight: 700, fontFamily: fonteAnalise.numero },
+  contextoItem: { display: 'flex', alignItems: 'baseline', gap: espaco.sm },
+  contextoRotulo: { ...tipo('legenda'), color: claro.textoFraco },
+  contextoValor: { ...tipo('corpoF'), ...numeros, fontFamily: fonteAnalise.numero },
 
-  indicadores: {
-    maxWidth: 1280, margin: '0 auto 20px',
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12,
-  },
-  indicador: {
-    background: claro.papel, border: `1px solid ${claro.borda}`, borderRadius: 10, padding: 16,
-    display: 'flex', flexDirection: 'column', gap: 2,
-  },
-  indicadorRotulo: { fontSize: 11, letterSpacing: 0.6, color: claro.textoFraco, textTransform: 'uppercase', fontWeight: 600 },
-  indicadorValor: { fontSize: 28, fontWeight: 700, fontFamily: fonteAnalise.numero, lineHeight: 1.2 },
-  indicadorSufixo: { fontSize: 13, color: claro.textoFraco, marginLeft: 4, fontWeight: 400 },
-  indicadorNota: { fontSize: 11, color: claro.textoFraco, fontStyle: 'italic' },
-  blocoTabela: { maxWidth: 1280, margin: '20px auto', background: claro.papel, border: `1px solid ${claro.borda}`, borderRadius: 10, padding: 20 },
-  tituloSecao: { margin: '0 0 12px', fontSize: 15, fontWeight: 700 },
-  tabela: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
-  th: { textAlign: 'left', padding: '8px 10px', borderBottom: `2px solid ${claro.bordaForte}`, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: claro.textoFraco },
-  thNum: { textAlign: 'right', padding: '8px 10px', borderBottom: `2px solid ${claro.bordaForte}`, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: claro.textoFraco },
-  td: { padding: '10px', borderBottom: `1px solid ${claro.borda}` },
-  tdNum: { padding: '10px', borderBottom: `1px solid ${claro.borda}`, textAlign: 'right', fontFamily: fonteAnalise.numero },
-  linhaGargalo: { background: 'rgba(194,65,12,0.06)' },
-  selo: { marginLeft: 8, padding: '2px 6px', background: claro.critico, color: '#fff', borderRadius: 3, fontSize: 9, fontWeight: 700, letterSpacing: 0.5 },
-  meta: { color: claro.textoFraco, fontSize: 11 },
-  estabilidade: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 },
-  ponto: { width: 8, height: 8, borderRadius: '50%' },
-  seletor: { maxWidth: 1280, margin: '20px auto 12px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
-  seletorRotulo: { fontSize: 12, color: claro.textoFraco, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 },
-  aba: {
-    minHeight: 34, padding: '0 14px', background: claro.papel,
-    // Longhand: `abaAtiva` troca so' o borderColor.
-    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda,
-    borderRadius: 6, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', color: claro.textoMedio,
-  },
-  abaAtiva: { borderColor: claro.vermelho, color: claro.texto, fontWeight: 700 },
+  /* --- primeiro passo --- */
   primeiroPasso: {
-    maxWidth: 1280, margin: '0 auto 24px', padding: 32,
-    background: claro.papel, border: `1px dashed ${claro.bordaForte}`, borderRadius: 12,
-    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12,
+    maxWidth: 640, margin: `${espaco.xxl}px auto`, padding: espaco.xxl,
+    background: claro.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
+    border: `1px solid ${claro.borda}`,
+    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: espaco.md,
   },
-  primeiroPassoTitulo: { margin: 0, fontSize: 20, fontWeight: 700 },
-  primeiroPassoTexto: { margin: 0, fontSize: 14, lineHeight: 1.6, color: claro.textoMedio, maxWidth: 720 },
-  cabecalhoSecao: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 },
+  primeiroPassoTitulo: { ...tipo('titulo'), margin: 0 },
+  primeiroPassoTexto: { ...tipo('corpo'), margin: 0, color: claro.textoMedio },
+
+  /* --- tabela de operacoes --- */
+  blocoTabela: {
+    maxWidth: 1400, margin: `${espaco.xl}px auto`, background: claro.papel,
+    borderRadius: raio.lg, boxShadow: elevacao.baixa, border: `1px solid ${claro.borda}`,
+    overflow: 'hidden',
+  },
+  cabecalhoSecao: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: espaco.md, padding: `${espaco.lg}px ${espaco.xl}px`,
+    borderBottom: `1px solid ${claro.borda}`,
+  },
+  tituloSecao: { ...tipo('destaque'), margin: 0 },
+  tabela: { width: '100%', borderCollapse: 'collapse' },
+  th: {
+    textAlign: 'left', padding: `${espaco.md}px ${espaco.lg}px`, ...rotulo(claro.textoFraco),
+    background: '#F8F9FB', borderBottom: `1px solid ${claro.borda}`, whiteSpace: 'nowrap',
+  },
+  thNum: {
+    textAlign: 'right', padding: `${espaco.md}px ${espaco.lg}px`, ...rotulo(claro.textoFraco),
+    background: '#F8F9FB', borderBottom: `1px solid ${claro.borda}`, whiteSpace: 'nowrap',
+  },
+  td: { padding: `${espaco.lg}px`, ...tipo('corpo'), color: claro.textoMedio, borderBottom: `1px solid ${claro.borda}` },
+  tdNum: {
+    padding: `${espaco.lg}px`, textAlign: 'right', ...tipo('corpo'), ...numeros,
+    fontFamily: fonteAnalise.numero, color: claro.texto, borderBottom: `1px solid ${claro.borda}`,
+  },
+  linhaGargalo: { background: 'rgba(194, 65, 12, 0.05)' },
+  selo: {
+    marginLeft: espaco.sm, padding: '2px 7px', background: claro.critico, color: '#fff',
+    borderRadius: raio.sm, ...tipo('micro'), fontSize: 10,
+  },
+  meta: { color: claro.textoFraco, ...tipo('legenda') },
+  estabilidade: { display: 'inline-flex', alignItems: 'center', gap: espaco.sm, ...tipo('corpo') },
+  ponto: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
+  botaoAcaoLinha: {
+    minHeight: 34, padding: `0 ${espaco.md}px`, background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.sm,
+    color: claro.texto, ...tipo('legenda'), fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+  },
   botaoRemoverOp: {
-    width: 32, height: 32, marginLeft: 4, background: 'transparent', border: 'none',
-    borderRadius: 6, color: claro.textoFraco, fontSize: 18, lineHeight: 1,
+    width: 32, height: 32, marginLeft: espaco.xs, background: 'transparent', border: 'none',
+    borderRadius: raio.sm, color: claro.textoFraco, fontSize: 18, lineHeight: 1,
     cursor: 'pointer', fontFamily: 'inherit',
   },
-  botaoAcaoLinha: {
-    minHeight: 32, marginRight: 6, padding: '0 10px', background: 'transparent',
-    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: 6,
-    color: claro.textoMedio, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+
+  /* --- seletor da carta --- */
+  seletor: {
+    maxWidth: 1400, margin: `${espaco.xl}px auto ${espaco.md}px`,
+    display: 'flex', gap: espaco.sm, alignItems: 'center', flexWrap: 'wrap',
   },
+  seletorRotulo: rotulo(claro.textoFraco),
+  aba: {
+    minHeight: 34, padding: `0 ${espaco.md}px`, background: claro.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.md,
+    ...tipo('legenda'), cursor: 'pointer', fontFamily: 'inherit', color: claro.textoMedio,
+    transition: `border-color ${transicao.rapida}, color ${transicao.rapida}`,
+  },
+  abaAtiva: { borderColor: claro.vermelho, color: claro.texto, fontWeight: 700 },
+
+  /* --- modal de operacao --- */
   modal: {
-    position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(10,12,14,0.55)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, overflowY: 'auto',
+    position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(15, 18, 22, 0.55)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: espaco.lg, overflowY: 'auto',
   },
   formulario: {
-    width: '100%', maxWidth: 520, background: claro.papel,
-    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: 12,
-    padding: 28, display: 'flex', flexDirection: 'column', gap: 14,
+    width: '100%', maxWidth: 540, background: claro.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.lg,
+    padding: espaco.xxl, boxShadow: elevacao.alta,
+    display: 'flex', flexDirection: 'column', gap: espaco.lg,
   },
-  campo: { display: 'flex', flexDirection: 'column', gap: 4 },
-  fieldset: { border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 },
-  rotuloCampo: { fontSize: 11, fontWeight: 600, color: claro.textoFraco, textTransform: 'uppercase', letterSpacing: 0.5 },
-  dica: { fontSize: 11, color: claro.textoFraco, fontStyle: 'italic', lineHeight: 1.5 },
+  campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  fieldset: { border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: espaco.sm },
+  rotuloCampo: rotulo(claro.textoFraco),
+  dica: { ...tipo('legenda'), color: claro.textoFraco, fontStyle: 'italic' },
   input: {
-    minHeight: 44, padding: '0 12px', background: claro.fundo,
-    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: 6,
-    color: claro.texto, fontSize: 14, fontFamily: 'inherit', outline: 'none',
+    minHeight: 44, padding: `0 ${espaco.md}px`, background: claro.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.sm,
+    color: claro.texto, ...tipo('corpo'), fontFamily: 'inherit', outline: 'none',
   },
-  grupoFr: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(88px, 1fr))', gap: 8 },
+  grupoFr: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(92px, 1fr))', gap: espaco.sm },
   botaoFr: {
-    minHeight: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    minHeight: 54, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
     background: claro.fundo, borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda,
-    borderRadius: 6, color: claro.textoMedio, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+    borderRadius: raio.sm, color: claro.textoMedio, cursor: 'pointer', fontFamily: 'inherit',
+    ...tipo('legenda'),
+    transition: `border-color ${transicao.rapida}, background ${transicao.rapida}`,
   },
-  botaoFrAtivo: { borderColor: claro.vermelho, color: claro.texto, background: 'rgba(219,33,38,0.08)' },
+  botaoFrAtivo: { borderColor: claro.vermelho, color: claro.texto, background: 'rgba(219, 33, 38, 0.07)' },
   erroForm: {
-    padding: 12, background: claro.criticoFundo,
+    padding: espaco.md, background: claro.criticoFundo,
     borderWidth: 1, borderStyle: 'solid', borderColor: claro.critico,
-    borderRadius: 6, fontSize: 13, lineHeight: 1.5,
+    borderRadius: raio.sm, ...tipo('legenda'),
   },
-  estadoVazio: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: claro.fundo, color: claro.textoMedio, fontFamily: fonteAnalise.familia },
+  estadoVazio: {
+    minHeight: '60vh', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', gap: espaco.lg,
+    background: claro.fundo, color: claro.textoMedio, fontFamily: fonteAnalise.familia,
+  },
 };

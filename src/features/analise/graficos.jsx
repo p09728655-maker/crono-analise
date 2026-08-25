@@ -108,7 +108,7 @@ export function GraficoYamazumi({ operacoes, taktMs, altura = 340 }) {
     return <VazioGrafico texto="Colete ciclos para gerar o Yamazumi." />;
   }
 
-  const maiorTp = Math.max(...dados.map((o) => o.resultado.tpVal));
+  const maiorTp = Math.max(...dados.map((o) => o.resultado.tpPorPeca));
   const maxDominio = Math.max(maiorTp, taktMs || 0) * 1.12;
   const passo = passoAgradavel(maxDominio / 1000);
 
@@ -172,8 +172,10 @@ export function GraficoYamazumi({ operacoes, taktMs, altura = 340 }) {
           {dados.map((op, i) => {
             const r = op.resultado;
             const x = EIXO.esq + i * larguraBanda + (larguraBanda - larguraBarra) / 2;
-            const alturaTn = escala(r.tnMed, maxDominio, alturaPlot);
-            const alturaTol = escala(r.tpVal - r.tnMed, maxDominio, alturaPlot);
+            // As barras mostram o tempo POR PECA: e' o que se compara ao Takt.
+            const tnPeca = r.tnMed * r.ciclosPorPeca;
+            const alturaTn = escala(tnPeca, maxDominio, alturaPlot);
+            const alturaTol = escala(r.tpPorPeca - tnPeca, maxDominio, alturaPlot);
             const destaque = ativo === i;
 
             return (
@@ -184,17 +186,17 @@ export function GraficoYamazumi({ operacoes, taktMs, altura = 340 }) {
 
                 {/* Tolerancia (topo da pilha, cantos arredondados) */}
                 <rect
-                  x={x} y={yDe(r.tpVal)} width={larguraBarra} height={Math.max(0, alturaTol)}
+                  x={x} y={yDe(r.tpPorPeca)} width={larguraBarra} height={Math.max(0, alturaTol)}
                   fill={`url(#${id}-hachura)`} rx="4"
                   opacity={destaque ? 1 : 0.94}
                 />
                 {/* Gap de 2px entre segmentos empilhados */}
                 <rect
-                  x={x} y={yDe(r.tnMed)} width={larguraBarra} height={Math.max(0, alturaTn)}
+                  x={x} y={yDe(tnPeca)} width={larguraBarra} height={Math.max(0, alturaTn)}
                   fill={serie.tn} rx="4"
                   opacity={destaque ? 1 : 0.94}
                 />
-                <rect x={x} y={yDe(r.tnMed) - 1} width={larguraBarra} height="2" fill={claro.papel} />
+                <rect x={x} y={yDe(tnPeca) - 1} width={larguraBarra} height="2" fill={claro.papel} />
 
                 {/* Valor direto no topo — sem obrigar leitura no eixo */}
                 {/* Truncar por medida, nao por numero fixo: com o grafico
@@ -234,20 +236,20 @@ export function GraficoYamazumi({ operacoes, taktMs, altura = 340 }) {
             const r = op.resultado;
             const x = EIXO.esq + i * larguraBanda + (larguraBanda - larguraBarra) / 2;
             const cx = x + larguraBarra / 2;
-            const gargalo = taktMs > 0 && r.tpVal > taktMs;
+            const gargalo = taktMs > 0 && r.tpPorPeca > taktMs;
             return (
               <g key={`rotulo-${op.id}`} pointerEvents="none">
                 <text
-                  x={cx} y={yDe(r.tpVal) - 8} textAnchor="middle" style={est.valorBarra}
+                  x={cx} y={yDe(r.tpPorPeca) - 8} textAnchor="middle" style={est.valorBarra}
                   stroke={claro.papel} strokeWidth="3.5" paintOrder="stroke"
                 >
-                  {formatarSegundos(r.tpVal)}s
+                  {formatarSegundos(r.tpPorPeca)}s
                 </text>
                 {/* Gargalo marcado por FORMA, nao so' por cor. */}
                 {gargalo && (
                   <g>
                     <polygon
-                      points={`${cx},${yDe(r.tpVal) - 26} ${cx - 6},${yDe(r.tpVal) - 16} ${cx + 6},${yDe(r.tpVal) - 16}`}
+                      points={`${cx},${yDe(r.tpPorPeca) - 26} ${cx - 6},${yDe(r.tpPorPeca) - 16} ${cx + 6},${yDe(r.tpPorPeca) - 16}`}
                       fill={claro.critico} stroke={claro.papel} strokeWidth="1.5"
                     />
                     <title>Acima do Takt Time — gargalo</title>
@@ -269,12 +271,12 @@ export function GraficoYamazumi({ operacoes, taktMs, altura = 340 }) {
 
 function Tooltip({ operacao, taktMs }) {
   const r = operacao.resultado;
-  const ocupacao = taktMs > 0 ? (r.tpVal / taktMs) * 100 : null;
+  const ocupacao = taktMs > 0 ? (r.tpPorPeca / taktMs) * 100 : null;
   return (
     <div style={est.tooltip} role="status">
       <strong>{operacao.nome}</strong>
-      <span>TN {formatarSegundos(r.tnMed)}s · Tolerância {formatarSegundos(r.tpVal - r.tnMed)}s</span>
-      <span>TP {formatarSegundos(r.tpVal)}s · {r.cap} pç/h · {r.n} ciclos</span>
+      <span>TP por ciclo {formatarSegundos(r.tpVal)}s · {r.ciclosPorPeca} ciclo(s) por peça</span>
+      <span>TP por peça {formatarSegundos(r.tpPorPeca)}s · {r.cap} pç/h · {r.n} ciclos coletados</span>
       {ocupacao !== null && (
         <span>
           Ocupação {ocupacao.toFixed(0)}% do Takt

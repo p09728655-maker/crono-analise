@@ -54,6 +54,11 @@ CREATE TABLE IF NOT EXISTS operacoes (
   nome        text NOT NULL,
   descricao   text,
   fr_pct      numeric(5,2) NOT NULL DEFAULT 100 CHECK (fr_pct > 0 AND fr_pct <= 200),
+  -- Quantas vezes a operacao roda por peca. O cronometro mede UM ciclo da
+  -- maquina, mas a peca pode exigir varios: na furadeira, uma peca com 3
+  -- furacoes leva 3x o tempo de uma com 1. Sem isto a capacidade sai
+  -- superestimada pelo fator de ciclos.
+  ciclos_por_peca integer NOT NULL DEFAULT 1 CHECK (ciclos_por_peca > 0 AND ciclos_por_peca <= 999),
   ordem       integer NOT NULL DEFAULT 0,
   criado_em   timestamptz NOT NULL DEFAULT now()
 );

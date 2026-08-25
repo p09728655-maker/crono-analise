@@ -96,8 +96,9 @@ checar(p.url().includes(`/analise/estudo/${ID_A}`), 'recarregar mantem o estudo 
 // Link direto.
 await p.goto(`http://localhost:5199/analise/estudo/${ID_A}`);
 await p.waitForTimeout(600);
-const trilha = await p.locator('[aria-label="Você está aqui"]').count();
-checar(trilha > 0, 'link direto abre o estudo com trilha de navegacao');
+// A trilha separada virou acao de voltar dentro da barra de topo.
+const voltar = await p.locator('[aria-label="Voltar para a lista de estudos"]').count();
+checar(voltar > 0, 'link direto abre o estudo com saida para a lista no cabecalho');
 
 await b.close();
 console.log(falhas ? `\n${falhas} verificacao(oes) falharam` : '\nTodas as verificacoes passaram');

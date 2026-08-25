@@ -50,6 +50,17 @@ export function calcularOperacao(operacao, toleranciaPct = 0) {
   const tnMed = toMed * (fr / 100);
   const tpVal = tnMed * (1 + toleranciaPct / 100);
 
+  /**
+   * Quantas vezes a operacao se repete por peca.
+   *
+   * O cronometro mede UM ciclo da maquina, mas a peca pode exigir varios:
+   * na furadeira, uma peca com 3 furacoes leva 3x o tempo de uma com 1.
+   * Sem isto o sistema assumiria 1 ciclo = 1 peca e superestimaria a
+   * capacidade — justamente o numero que sustenta o dimensionamento.
+   */
+  const ciclosPorPeca = Math.max(1, Number(operacao.ciclosPorPeca) || 1);
+  const tpPorPeca = tpVal * ciclosPorPeca;
+
   const paradas = operacao.paradas || [];
   const totalParada = paradas.reduce((acc, p) => acc + (p.duracao || 0), 0);
   const cvPct = coeficienteVariacao(validos);
@@ -59,12 +70,14 @@ export function calcularOperacao(operacao, toleranciaPct = 0) {
     toMed,
     tnMed,
     tpVal,
+    ciclosPorPeca,
+    tpPorPeca,
     cvPct,
     sd: desvioPadrao(validos),
     min: Math.min(...validos),
     max: Math.max(...validos),
-    // Capacidade teorica por hora, ja com tolerancia embutida no TP.
-    cap: tpVal > 0 ? Math.floor(MS_POR_HORA / tpVal) : 0,
+    // Capacidade em PECAS por hora — usa o tempo da peca, nao o do ciclo.
+    cap: tpPorPeca > 0 ? Math.floor(MS_POR_HORA / tpPorPeca) : 0,
     estabilidade: classificarEstabilidade(cvPct),
     obsMinimas: observacoesMinimas(cvPct),
     carta: cartaDeControle(validos),

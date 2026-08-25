@@ -12,11 +12,12 @@ export default handler(async (req, res) => {
     const estudoId = uuid(c.estudoId, 'estudoId');
     await garantirEstudoDaEmpresa(estudoId, empresaId);
     const [operacao] = await sql`
-      INSERT INTO operacoes (estudo_id, nome, descricao, fr_pct, ordem)
+      INSERT INTO operacoes (estudo_id, nome, descricao, fr_pct, ciclos_por_peca, ordem)
       VALUES (${estudoId},
               ${texto(c.nome, 'nome', { obrigatorio: true, max: 200 })},
               ${texto(c.descricao, 'descricao', { max: 1000 })},
               ${decimal(c.frPct, 'frPct', { min: 1, max: 200, padrao: 100 })},
+              ${inteiro(c.ciclosPorPeca, 'ciclosPorPeca', { min: 1, max: 999, padrao: 1 })},
               ${inteiro(c.ordem, 'ordem', { min: 0, max: 9999, padrao: 0 })})
       RETURNING *`;
     return json(res, 201, { operacao });
@@ -32,6 +33,7 @@ export default handler(async (req, res) => {
         nome      = COALESCE(${texto(c.nome, 'nome', { max: 200 })}, nome),
         descricao = COALESCE(${texto(c.descricao, 'descricao', { max: 1000 })}, descricao),
         fr_pct    = COALESCE(${decimal(c.frPct, 'frPct', { min: 1, max: 200 })}, fr_pct),
+        ciclos_por_peca = COALESCE(${inteiro(c.ciclosPorPeca, 'ciclosPorPeca', { min: 1, max: 999 })}, ciclos_por_peca),
         ordem     = COALESCE(${inteiro(c.ordem, 'ordem', { min: 0, max: 9999 })}, ordem)
       WHERE id = ${operacaoId}
       RETURNING *`;

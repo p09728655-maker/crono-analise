@@ -6,7 +6,6 @@ import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import BarraSincronizacao from './components/BarraSincronizacao.jsx';
 import { caminhos, useRota } from './lib/dispositivo.js';
 import { obterEstudo } from './lib/api.js';
-import { claro } from './theme/tokensAnalise.js';
 import { cores as escuro } from './theme/tokens.js';
 
 /**
@@ -17,7 +16,7 @@ import { cores as escuro } from './theme/tokens.js';
  * historico do navegador e a interface nunca discordam.
  */
 export default function App() {
-  const [rota, navegar, voltar] = useRota();
+  const [rota, navegar] = useRota();
   const { modo, tela, estudoId, operacaoId } = rota;
 
   const irParaLista = useCallback(() => navegar(caminhos.lista(modo)), [navegar, modo]);
@@ -52,9 +51,6 @@ export default function App() {
       {!emColeta && (
         <div className="somente-tela">
           <BarraSincronizacao />
-          {tela === 'estudo' && (
-            <Trilha modo={modo} aoVoltar={voltar} aoIrParaLista={irParaLista} />
-          )}
         </div>
       )}
 
@@ -72,44 +68,6 @@ export default function App() {
         <CarregarColeta estudoId={estudoId} operacaoId={operacaoId} aoSair={() => abrirEstudo(estudoId)} />
       )}
     </>
-  );
-}
-
-/**
- * Trilha de navegacao.
- *
- * Um botao "voltar" solto nao diz onde voce esta nem para onde vai. A trilha
- * mostra o caminho e oferece as duas saidas: o passo anterior do historico
- * (que respeita de onde a pessoa veio) e o atalho direto para a lista.
- */
-function Trilha({ modo, aoVoltar, aoIrParaLista }) {
-  const analise = modo === 'analise';
-  const t = analise ? claro : escuro;
-
-  const est = {
-    barra: {
-      display: 'flex', alignItems: 'center', gap: 8, padding: '8px 24px',
-      background: analise ? claro.papel : escuro.superficie,
-      borderBottom: `1px solid ${t.borda}`,
-      fontSize: 13, color: analise ? claro.textoFraco : escuro.textoFraco,
-    },
-    botao: {
-      minHeight: 32, padding: '0 10px', background: 'transparent', border: 'none',
-      borderRadius: 6, color: 'inherit', fontSize: 13, cursor: 'pointer',
-      fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6,
-    },
-    separador: { opacity: 0.5 },
-    atual: { color: analise ? claro.texto : escuro.texto, fontWeight: 600 },
-  };
-
-  return (
-    <nav style={est.barra} aria-label="Você está aqui">
-      <button type="button" style={est.botao} onClick={aoVoltar}>← Voltar</button>
-      <span style={est.separador}>·</span>
-      <button type="button" style={est.botao} onClick={aoIrParaLista}>Estudos</button>
-      <span style={est.separador}>›</span>
-      <span style={est.atual}>{analise ? 'Análise' : 'Operações'}</span>
-    </nav>
   );
 }
 

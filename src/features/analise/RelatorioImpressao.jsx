@@ -85,7 +85,7 @@ export default function RelatorioImpressao({ estudo, analise }) {
         {[
           ['Operações', analise.operacoes.length, ''],
           ['Ciclos coletados', analise.totalCiclos, ''],
-          ['Σ Tempo padrão', formatarSegundos(analise.somaTp), 's'],
+          ['Σ TP por peça', formatarSegundos(analise.somaTp), 's'],
           ['Capacidade da linha', analise.capacidadeLinha || '—', 'pç/h'],
           ['Operadores', analise.operadores !== null ? analise.operadores.toFixed(2) : '—', ''],
         ].map(([k, v, s]) => (
@@ -98,8 +98,10 @@ export default function RelatorioImpressao({ estudo, analise }) {
 
       {analise.gargalo && (
         <p style={est.gargalo}>
-          <strong>Gargalo:</strong> {analise.gargalo.nome}, com tempo padrão de{' '}
-          {formatarSegundos(analise.gargalo.resultado.tpVal)} s. A capacidade da linha é
+          <strong>Gargalo:</strong> {analise.gargalo.nome}, com{' '}
+          {formatarSegundos(analise.gargalo.resultado.tpPorPeca)} s por peça
+          {analise.gargalo.resultado.ciclosPorPeca > 1
+            && ` (${formatarSegundos(analise.gargalo.resultado.tpVal)} s por ciclo × ${analise.gargalo.resultado.ciclosPorPeca} ciclos)`}. A capacidade da linha é
           limitada por esta operação — {analise.gargalo.resultado.cap} peças/hora.
           {analise.operadores !== null && (
             <> O dimensionamento indica {analise.operadores.toFixed(2)} operadores
@@ -117,7 +119,8 @@ export default function RelatorioImpressao({ estudo, analise }) {
             <th style={est.thNum}>FR</th>
             <th style={est.thNum}>TO (s)</th>
             <th style={est.thNum}>TN (s)</th>
-            <th style={est.thNum}>TP (s)</th>
+            <th style={est.thNum}>Cic/pç</th>
+            <th style={est.thNum}>TP peça (s)</th>
             <th style={est.thNum}>CV%</th>
             <th style={est.thNum}>Nievel</th>
             <th style={est.thNum}>Cap/h</th>
@@ -133,7 +136,8 @@ export default function RelatorioImpressao({ estudo, analise }) {
                 <td style={est.tdNum}>{Number(op.fr_pct)}%</td>
                 <td style={est.tdNum}>{r ? formatarSegundos(r.toMed) : '—'}</td>
                 <td style={est.tdNum}>{r ? formatarSegundos(r.tnMed) : '—'}</td>
-                <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpVal) : '—'}</td>
+                <td style={est.tdNum}>{r ? r.ciclosPorPeca : 1}</td>
+                <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpPorPeca) : '—'}</td>
                 <td style={est.tdNum}>{r ? r.cvPct.toFixed(1) : '—'}</td>
                 <td style={est.tdNum}>{r ? r.obsMinimas : '—'}</td>
                 <td style={est.tdNum}>{r ? r.cap : '—'}</td>
@@ -160,11 +164,12 @@ export default function RelatorioImpressao({ estudo, analise }) {
         <div style={est.gradeFormulas}>
           {[
             ['TN', 'TO × FR / 100'],
-            ['TP', 'TN × (1 + Tolerância/100)'],
-            ['Capacidade/h', '3.600 ÷ TP(s)'],
+            ['TP por ciclo', 'TN × (1 + Tolerância/100)'],
+            ['TP por peça', 'TP ciclo × ciclos/peça'],
+            ['Capacidade/h', '3.600 ÷ TP peça(s)'],
             ['CV%', '(Desvio padrão ÷ Média) × 100'],
             ['Nievel', 'n = (1,96 × CV% / 5)²'],
-            ['Nº operadores', 'Σ TP ÷ Takt Time'],
+            ['Nº operadores', 'Σ TP peça ÷ Takt'],
           ].map(([k, v]) => (
             <div key={k} style={est.formula}>
               <span style={est.formulaRotulo}>{k}</span>

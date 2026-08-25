@@ -1,22 +1,16 @@
 import { useEffect, useState } from 'react';
-import { ALVO_MINIMO, cores as escuro, espaco, fonte, raio, tamanho } from '../../theme/tokens.js';
+import { ALVO_MINIMO, cores as escuro } from '../../theme/tokens.js';
 import { claro } from '../../theme/tokensAnalise.js';
-import { LOGO_PATRIMAR, LOGO_PATRIMAR_CLARO } from '../../theme/logo.js';
+import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
+import Cabecalho from '../../components/Cabecalho.jsx';
+import EstadoVazio from '../../components/EstadoVazio.jsx';
 
 /**
- * Lista de estudos — porta de entrada das DUAS experiencias.
+ * Lista de estudos — porta de entrada das duas experiencias.
  *
- * A tela muda de acordo com o modo, e isso e' proposital:
- *
- *  coleta  (celular, no posto) — tema escuro, alvos grandes, pouca coisa na
- *          tela. O analista esta em pe, com as maos ocupadas.
- *  analise (PC, no escritorio) — tema claro igual ao do relatorio impresso,
- *          em tabela densa com analista, data e progresso da amostra.
- *
- * Antes as duas eram identicas aqui. O resultado e' que no PC nao dava para
- * saber em qual experiencia voce estava ate' abrir um estudo — e se nao
- * houvesse estudo nenhum, nunca dava.
+ *   coleta  (celular, no posto) — tema escuro, alvos grandes, cartoes.
+ *   analise (PC, no escritorio) — tema claro igual ao do relatorio, tabela.
  */
 export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo }) {
   const [estudos, setEstudos] = useState([]);
@@ -50,75 +44,109 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
     aoAbrir?.(r.estudo.id);
   }
 
-  async function confirmarRemocao(estudo) {
-    await removerEstudo(estudo.id);
-    setRemovendo(null);
-    await carregar();
-  }
+  const temEstudos = estado === 'pronto' && estudos.length > 0;
 
   return (
     <div style={est.tela}>
-      <header style={est.cabecalho}>
-        <div style={est.marcaBloco}>
-          <img src={analise ? LOGO_PATRIMAR : LOGO_PATRIMAR_CLARO} alt="Patrimar Móveis" style={est.logo} />
-          <div>
-            <h1 style={est.titulo}>RitmoPatrimar</h1>
-            <p style={est.subtitulo}>Cronoanálise e estudo de tempos</p>
-          </div>
-        </div>
-
-        <div style={est.acoesCabecalho}>
-          {/* O modo agora e' visivel e trocavel, nao um estado invisivel. */}
-          <span style={est.selo}>
-            {analise ? 'Modo análise · PC' : 'Modo coleta · celular'}
-          </span>
-          {aoTrocarModo && (
-            <button type="button" style={est.botaoTrocar} onClick={aoTrocarModo}>
-              {analise ? 'Ir para coleta' : 'Ir para análise'}
-            </button>
-          )}
+      <Cabecalho
+        modo={modo}
+        titulo="RitmoPatrimar"
+        subtitulo="Cronoanálise e estudo de tempos"
+        aoTrocarModo={aoTrocarModo}
+        /* O botao principal so' aparece aqui quando ja' ha' lista. No estado
+           vazio ele vive no proprio bloco vazio — dois botoes identicos na
+           mesma tela e' duplicacao, nao reforco. */
+        acoes={temEstudos && (
           <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
             + Novo estudo
           </button>
-        </div>
-      </header>
+        )}
+      />
 
-      {estado === 'carregando' && <Estado est={est} texto="Carregando estudos..." />}
+      <main style={est.conteudo}>
+        {estado === 'carregando' && (
+          <EstadoVazio
+            modo={modo}
+            titulo="Carregando estudos"
+            texto="Buscando os estudos cadastrados no servidor."
+          />
+        )}
 
-      {estado === 'erro' && (
-        <Estado est={est} texto={`Não foi possível carregar: ${erro}`}
-                acao={{ rotulo: 'Tentar de novo', aoClicar: carregar }} />
-      )}
+        {estado === 'erro' && (
+          <EstadoVazio
+            modo={modo}
+            marca={<Simbolo tipo="alerta" cor={t.critico} />}
+            titulo="Não foi possível carregar"
+            texto={erro}
+            acao={(
+              <button type="button" style={est.botaoPrimario} onClick={carregar}>
+                Tentar de novo
+              </button>
+            )}
+          />
+        )}
 
-      {estado === 'pronto' && !estudos.length && (
-        <Estado est={est} texto="Nenhum estudo cadastrado. Crie o primeiro para começar a cronometrar."
-                acao={{ rotulo: '+ Novo estudo', aoClicar: () => setCriando(true) }} />
-      )}
+        {estado === 'pronto' && !estudos.length && (
+          <EstadoVazio
+            modo={modo}
+            marca={<Simbolo tipo="cronometro" cor={t.fraco} />}
+            titulo="Nenhum estudo ainda"
+            texto="Um estudo reúne as operações de um posto e os ciclos cronometrados nele. Depois de coletar, ele vira tempo padrão, capacidade e dimensionamento."
+            acao={(
+              <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
+                + Criar primeiro estudo
+              </button>
+            )}
+            secundaria={analise ? 'Você cadastra aqui no PC e cronometra no celular.' : null}
+          />
+        )}
 
-      {estado === 'pronto' && estudos.length > 0 && (
-        analise
-          ? <TabelaEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
-          : <CartoesEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
-      )}
+        {temEstudos && (
+          analise
+            ? <TabelaEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
+            : <CartoesEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
+        )}
+      </main>
+
+      {criando && <FormularioEstudo est={est} aoSalvar={criar} aoCancelar={() => setCriando(false)} />}
 
       {removendo && (
         <ConfirmarRemocao
           est={est}
           estudo={removendo}
-          aoConfirmar={() => confirmarRemocao(removendo)}
+          aoConfirmar={async () => { await removerEstudo(removendo.id); setRemovendo(null); await carregar(); }}
           aoCancelar={() => setRemovendo(null)}
         />
       )}
-
-      {criando && <FormularioEstudo est={est} aoSalvar={criar} aoCancelar={() => setCriando(false)} />}
     </div>
   );
 }
 
-/** Densidade e colunas extras: no PC ha' espaco e o analista quer comparar. */
-function TabelaEstudos({ estudos, est, aoAbrir, aoRemover }) {
+/** Marca grafica sobria para os estados vazios. Sem ilustracao decorativa. */
+function Simbolo({ tipo: qual, cor }) {
+  if (qual === 'alerta') {
+    return (
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.25" stroke={cor} strokeWidth="1.5" />
+        <path d="M12 7.5v5.5" stroke={cor} strokeWidth="1.75" strokeLinecap="round" />
+        <circle cx="12" cy="16.25" r="1" fill={cor} />
+      </svg>
+    );
+  }
   return (
-    <div style={est.blocoTabela}>
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="13.5" r="8" stroke={cor} strokeWidth="1.5" />
+      <path d="M12 9.5v4l2.5 1.8" stroke={cor} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.5 3h5" stroke={cor} strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TabelaEstudos({ estudos, est, aoAbrir, aoRemover }) {
+  const [sobre, setSobre] = useState(null);
+
+  return (
+    <div style={est.painel}>
       <table style={est.tabela}>
         <thead>
           <tr>
@@ -134,26 +162,31 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoRemover }) {
         </thead>
         <tbody>
           {estudos.map((e) => (
-            <tr key={e.id} style={est.linha}>
-              <td style={{ ...est.td, fontWeight: 700 }}>{e.nome}</td>
+            <tr
+              key={e.id}
+              style={{ ...est.linha, ...(sobre === e.id ? est.linhaSobre : {}) }}
+              onMouseEnter={() => setSobre(e.id)}
+              onMouseLeave={() => setSobre(null)}
+            >
+              <td style={est.tdNome}>{e.nome}</td>
               <td style={est.td}>{e.recurso || '—'}</td>
               <td style={est.td}>{e.produto || '—'}</td>
               <td style={est.td}>{e.analista || '—'}</td>
               <td style={est.tdNum}>{e.total_operacoes}</td>
               <td style={est.tdNum}>{e.total_observacoes}</td>
-              <td style={est.td}>{formatarData(e.atualizado_em)}</td>
-              <td style={{ ...est.td, whiteSpace: 'nowrap' }}>
+              <td style={est.tdFraco}>{formatarData(e.atualizado_em)}</td>
+              <td style={est.tdAcoes}>
                 <button type="button" style={est.botaoLinha} onClick={() => aoAbrir?.(e.id)}>
                   Analisar
                 </button>
                 <button
                   type="button"
-                  style={est.botaoRemoverLinha}
+                  style={est.botaoRemover}
                   onClick={() => aoRemover?.(e)}
                   title={Number(e.total_observacoes) > 0 ? 'Arquivar estudo' : 'Excluir estudo'}
                   aria-label={`Remover ${e.nome}`}
                 >
-                  {Number(e.total_observacoes) > 0 ? 'Arquivar' : 'Excluir'}
+                  ×
                 </button>
               </td>
             </tr>
@@ -164,7 +197,6 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoRemover }) {
   );
 }
 
-/** No celular, cartao com alvo grande: o dedo nao acerta linha de tabela. */
 function CartoesEstudos({ estudos, est, aoAbrir, aoRemover }) {
   return (
     <ul style={est.lista}>
@@ -182,7 +214,7 @@ function CartoesEstudos({ estudos, est, aoAbrir, aoRemover }) {
               <span style={est.cartaoRotulo}>ciclos</span>
             </div>
           </button>
-          {/* Fora do cartao: encostar no alvo principal removeria por engano. */}
+          {/* Fora do cartao: encostado no alvo principal, o dedo removeria por engano. */}
           <button
             type="button"
             style={est.botaoRemoverCartao}
@@ -197,13 +229,6 @@ function CartoesEstudos({ estudos, est, aoAbrir, aoRemover }) {
   );
 }
 
-/**
- * Confirmacao proporcional ao que se perde.
- *
- * Estudo sem ciclo e' rascunho: some e pronto. Estudo COM ciclos coletados
- * representa horas de cronometragem que ninguem vai refazer — a confirmacao
- * diz quantos ciclos estao em jogo e deixa claro que fica recuperavel.
- */
 function ConfirmarRemocao({ est, estudo, aoConfirmar, aoCancelar }) {
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState(null);
@@ -218,32 +243,24 @@ function ConfirmarRemocao({ est, estudo, aoConfirmar, aoCancelar }) {
   }
 
   return (
-    <div style={est.modal} role="dialog" aria-label="Confirmar remocao">
+    <div style={est.modal} role="dialog" aria-label="Confirmar remoção">
       <div style={est.formulario}>
-        <h2 style={est.formTitulo}>
-          {temDados ? 'Arquivar estudo?' : 'Excluir estudo?'}
-        </h2>
-
-        <p style={est.textoConfirma}>
-          <strong>{estudo.nome}</strong>
+        <h2 style={est.formTitulo}>{temDados ? 'Arquivar estudo?' : 'Excluir estudo?'}</h2>
+        <p style={est.textoModal}><strong>{estudo.nome}</strong></p>
+        <p style={est.textoModal}>
+          {temDados ? (
+            <>
+              Este estudo tem <strong>{ciclos} ciclo(s) cronometrado(s)</strong>. Ele sai da
+              lista mas <strong>não é apagado</strong> — os dados continuam no banco.
+              Tempo de cronometragem não se refaz.
+            </>
+          ) : (
+            <>Nenhum ciclo foi coletado, então não há nada a preservar. O estudo
+            será <strong>apagado definitivamente</strong>.</>
+          )}
         </p>
-
-        {temDados ? (
-          <p style={est.textoConfirma}>
-            Este estudo tem <strong>{ciclos} ciclo(s) cronometrado(s)</strong>. Ele sai
-            da lista mas <strong>não é apagado</strong> — os dados continuam no banco e
-            podem ser recuperados. Tempo de cronometragem não se refaz.
-          </p>
-        ) : (
-          <p style={est.textoConfirma}>
-            Nenhum ciclo foi coletado, então não há nada a preservar.
-            O estudo será <strong>apagado definitivamente</strong>.
-          </p>
-        )}
-
         {erro && <div style={est.erroForm}>{erro}</div>}
-
-        <div style={{ display: 'flex', gap: espaco.md, marginTop: espaco.md }}>
+        <div style={est.acoesModal}>
           <button type="button" style={est.botaoSecundario} onClick={aoCancelar} disabled={processando}>
             Cancelar
           </button>
@@ -273,12 +290,8 @@ function FormularioEstudo({ est, aoSalvar, aoCancelar }) {
     if (!dados.nome.trim()) { setErro('Informe o nome do estudo.'); return; }
     setSalvando(true);
     setErro(null);
-    try {
-      await aoSalvar(dados);
-    } catch (e) {
-      setErro(e.message);
-      setSalvando(false);
-    }
+    try { await aoSalvar(dados); }
+    catch (e) { setErro(e.message); setSalvando(false); }
   }
 
   return (
@@ -286,34 +299,35 @@ function FormularioEstudo({ est, aoSalvar, aoCancelar }) {
       <form style={est.formulario} onSubmit={enviar}>
         <h2 style={est.formTitulo}>Novo estudo</h2>
 
-        <Campo est={est} rotulo="Nome do estudo" obrigatorio dica="Ex: Furação lateral — linha 2">
+        <Campo est={est} label="Nome do estudo" obrigatorio dica="Ex: Furação lateral — linha 2">
           <input style={est.input} {...campo('nome')} autoFocus />
         </Campo>
 
-        <Campo est={est} rotulo="Recurso / posto" dica="Ex: Furadeira 03">
-          <input style={est.input} {...campo('recurso')} />
-        </Campo>
+        <div style={est.duasColunas}>
+          <Campo est={est} label="Recurso / posto" dica="Ex: Furadeira 03">
+            <input style={est.input} {...campo('recurso')} />
+          </Campo>
+          <Campo est={est} label="Produto ou referência">
+            <input style={est.input} {...campo('produto')} />
+          </Campo>
+        </div>
 
-        <Campo est={est} rotulo="Produto ou referência">
-          <input style={est.input} {...campo('produto')} />
-        </Campo>
-
-        <Campo est={est} rotulo="Analista">
+        <Campo est={est} label="Analista">
           <input style={est.input} {...campo('analista')} />
         </Campo>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.md }}>
-          <Campo est={est} rotulo="Tolerância (%)" dica="Fadiga e necessidades. Típica: 10 a 15.">
+        <div style={est.duasColunas}>
+          <Campo est={est} label="Tolerância (%)" dica="Fadiga e necessidades. Típica: 10 a 15.">
             <input type="number" min="0" max="100" style={est.input} {...campo('toleranciaPct')} />
           </Campo>
-          <Campo est={est} rotulo="Meta de ciclos" dica="Recomendado: 12 ou mais.">
+          <Campo est={est} label="Meta de ciclos" dica="Recomendado: 12 ou mais.">
             <input type="number" min="1" max="999" style={est.input} {...campo('metaObs')} />
           </Campo>
         </div>
 
         {erro && <div style={est.erroForm}>{erro}</div>}
 
-        <div style={{ display: 'flex', gap: espaco.md, marginTop: espaco.md }}>
+        <div style={est.acoesModal}>
           <button type="button" style={est.botaoSecundario} onClick={aoCancelar} disabled={salvando}>
             Cancelar
           </button>
@@ -326,29 +340,16 @@ function FormularioEstudo({ est, aoSalvar, aoCancelar }) {
   );
 }
 
-function Campo({ est, rotulo, obrigatorio, dica, children }) {
+function Campo({ est, label, obrigatorio, dica, children }) {
   return (
     <label style={est.campo}>
-      <span style={est.rotulo}>
-        {rotulo}
-        {obrigatorio && <span style={{ color: est.corObrigatorio, marginLeft: 4 }}>*</span>}
+      <span style={est.rotuloCampo}>
+        {label}
+        {obrigatorio && <span style={est.obrigatorio}> *</span>}
       </span>
       {children}
       {dica && <span style={est.dica}>{dica}</span>}
     </label>
-  );
-}
-
-function Estado({ est, texto, acao }) {
-  return (
-    <div style={est.estado}>
-      <p style={{ margin: 0, lineHeight: 1.5, maxWidth: 520 }}>{texto}</p>
-      {acao && (
-        <button type="button" style={est.botaoPrimario} onClick={acao.aoClicar}>
-          {acao.rotulo}
-        </button>
-      )}
-    </div>
   );
 }
 
@@ -362,142 +363,134 @@ const formatarData = (iso) => {
 
 function tema(analise) {
   return analise
-    ? { fundo: claro.fundo, superficie: claro.papel, borda: claro.borda,
-        texto: claro.texto, fraco: claro.textoFraco, medio: claro.textoMedio,
-        vermelho: claro.vermelho, critico: claro.critico, criticoFundo: claro.criticoFundo }
-    : { fundo: escuro.fundo, superficie: escuro.superficie, borda: escuro.borda,
-        texto: escuro.texto, fraco: escuro.textoFraco, medio: escuro.textoFraco,
-        vermelho: escuro.vermelho, critico: escuro.critico, criticoFundo: escuro.criticoFundo };
+    ? { fundo: claro.fundo, superficie: claro.papel, borda: claro.borda, realce: '#F8F9FB',
+        texto: claro.texto, medio: claro.textoMedio, fraco: claro.textoFraco,
+        vermelho: claro.vermelho, critico: claro.critico, criticoFundo: claro.criticoFundo,
+        sombra: elevacao.baixa }
+    : { fundo: escuro.fundo, superficie: escuro.superficie, borda: escuro.borda, realce: escuro.superficieAlta,
+        texto: escuro.texto, medio: escuro.textoFraco, fraco: escuro.textoFraco,
+        vermelho: escuro.vermelho, critico: escuro.critico, criticoFundo: escuro.criticoFundo,
+        sombra: elevacao.escuraMedia };
 }
 
 function estilos(t, analise) {
-  // No PC o alvo pode ser menor; no celular o dedo (as vezes de luva) manda.
   const alvo = analise ? 40 : ALVO_MINIMO;
 
   return {
-    corObrigatorio: t.critico,
-    tela: {
-      minHeight: '100dvh', background: t.fundo, color: t.texto,
-      fontFamily: fonte.familia, padding: analise ? espaco.xl : espaco.lg,
-      display: 'flex', flexDirection: 'column', gap: espaco.lg,
-    },
-    cabecalho: {
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-      gap: espaco.md, flexWrap: 'wrap',
-      maxWidth: analise ? 1400 : 'none', width: '100%', margin: analise ? '0 auto' : 0,
-    },
-    marcaBloco: { display: 'flex', alignItems: 'center', gap: espaco.lg, flexWrap: 'wrap' },
-    logo: { height: 38, width: 'auto', display: 'block' },
-    titulo: { margin: 0, fontSize: tamanho.destaque, fontWeight: 700, letterSpacing: -0.3 },
-    subtitulo: { margin: '4px 0 0', fontSize: tamanho.legenda, color: t.fraco },
-    acoesCabecalho: { display: 'flex', alignItems: 'center', gap: espaco.md, flexWrap: 'wrap' },
-    selo: {
-      fontSize: 11, fontWeight: 700, letterSpacing: 0.5, padding: '5px 10px',
-      borderRadius: raio.pill, color: t.medio,
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-    },
-    botaoTrocar: {
-      minHeight: alvo, padding: `0 ${espaco.md}px`, background: 'transparent',
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
-      color: t.medio, fontSize: tamanho.pequeno, cursor: 'pointer', fontFamily: 'inherit',
-    },
-    botaoPrimario: {
-      minHeight: analise ? 44 : ALVO_MINIMO, padding: `0 ${espaco.xl}px`,
-      background: t.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
-      fontSize: tamanho.corpo, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-    },
-    botaoSecundario: {
-      minHeight: analise ? 44 : ALVO_MINIMO, padding: `0 ${espaco.xl}px`, background: 'transparent',
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
-      color: t.fraco, fontSize: tamanho.corpo, cursor: 'pointer', fontFamily: 'inherit',
+    tela: { minHeight: '100dvh', background: t.fundo, color: t.texto },
+    conteudo: {
+      maxWidth: 1400, margin: '0 auto',
+      padding: analise ? `${espaco.xl}px ${espaco.xl}px ${espaco.gigante}px` : espaco.lg,
     },
 
-    // --- tabela (analise) ---
-    blocoTabela: {
-      maxWidth: 1400, width: '100%', margin: '0 auto', background: t.superficie,
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-      borderRadius: raio.lg, padding: espaco.lg, overflowX: 'auto',
+    botaoPrimario: {
+      minHeight: analise ? 40 : ALVO_MINIMO, padding: `0 ${espaco.lg}px`,
+      background: t.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
+      ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
+      boxShadow: analise ? elevacao.baixa : 'none',
+      transition: `filter ${transicao.rapida}`,
     },
-    tabela: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
+    botaoSecundario: {
+      minHeight: alvo, padding: `0 ${espaco.lg}px`, background: 'transparent',
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
+      color: t.medio, ...tipo('corpo'), cursor: 'pointer', fontFamily: 'inherit',
+    },
+    botaoPerigo: {
+      minHeight: alvo, padding: `0 ${espaco.lg}px`, background: t.critico,
+      border: 'none', borderRadius: raio.md, color: '#fff',
+      ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
+    },
+
+    /* ---- tabela (analise) ---- */
+    painel: {
+      background: t.superficie, borderRadius: raio.lg, boxShadow: t.sombra,
+      border: `1px solid ${t.borda}`, overflow: 'hidden',
+    },
+    tabela: { width: '100%', borderCollapse: 'collapse' },
     th: {
-      textAlign: 'left', padding: '8px 10px', fontSize: 11, textTransform: 'uppercase',
-      letterSpacing: 0.5, color: t.fraco, borderBottom: `2px solid ${t.borda}`,
+      textAlign: 'left', padding: `${espaco.md}px ${espaco.lg}px`,
+      ...rotulo(t.fraco), background: t.realce,
+      borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
     },
     thNum: {
-      textAlign: 'right', padding: '8px 10px', fontSize: 11, textTransform: 'uppercase',
-      letterSpacing: 0.5, color: t.fraco, borderBottom: `2px solid ${t.borda}`,
+      textAlign: 'right', padding: `${espaco.md}px ${espaco.lg}px`,
+      ...rotulo(t.fraco), background: t.realce,
+      borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
     },
-    linha: {},
-    td: { padding: '10px', borderBottom: `1px solid ${t.borda}` },
-    tdNum: { padding: '10px', borderBottom: `1px solid ${t.borda}`, textAlign: 'right', fontFamily: fonte.numero },
+    linha: { transition: `background ${transicao.rapida}` },
+    linhaSobre: { background: t.realce },
+    td: { padding: `${espaco.lg}px`, ...tipo('corpo'), color: t.medio, borderBottom: `1px solid ${t.borda}` },
+    tdNome: { padding: `${espaco.lg}px`, ...tipo('corpoF'), color: t.texto, borderBottom: `1px solid ${t.borda}` },
+    tdFraco: { padding: `${espaco.lg}px`, ...tipo('legenda'), color: t.fraco, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap' },
+    tdNum: {
+      padding: `${espaco.lg}px`, textAlign: 'right', ...tipo('corpoF'), ...numeros,
+      color: t.texto, borderBottom: `1px solid ${t.borda}`,
+    },
+    tdAcoes: {
+      padding: `${espaco.sm}px ${espaco.lg}px`, textAlign: 'right', whiteSpace: 'nowrap',
+      borderBottom: `1px solid ${t.borda}`,
+    },
+    botaoLinha: {
+      minHeight: 34, padding: `0 ${espaco.md}px`, background: 'transparent',
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+      color: t.texto, ...tipo('legenda'), fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+    },
+    botaoRemover: {
+      width: 32, height: 32, marginLeft: espaco.xs, background: 'transparent', border: 'none',
+      borderRadius: raio.sm, color: t.fraco, fontSize: 18, lineHeight: 1,
+      cursor: 'pointer', fontFamily: 'inherit',
+    },
+
+    /* ---- cartoes (coleta) ---- */
+    lista: { listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: espaco.sm },
     itemLista: { position: 'relative' },
+    cartao: {
+      width: '100%', minHeight: 76, display: 'flex', alignItems: 'center', gap: espaco.md,
+      padding: espaco.lg, background: t.superficie,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
+      color: t.texto, cursor: 'pointer', fontFamily: 'inherit',
+    },
+    cartaoTitulo: { ...tipo('corpoF'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+    cartaoSub: { ...tipo('legenda'), color: t.fraco, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+    cartaoNumeros: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 },
+    cartaoNumero: { ...tipo('destaque'), ...numeros },
+    cartaoRotulo: rotulo(t.fraco),
     botaoRemoverCartao: {
       position: 'absolute', top: 6, right: 6, width: 36, height: 36,
       background: 'transparent', border: 'none', borderRadius: raio.sm,
       color: t.fraco, fontSize: 20, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit',
     },
-    botaoRemoverLinha: {
-      minHeight: 34, marginLeft: espaco.sm, padding: `0 ${espaco.md}px`,
-      background: 'transparent',
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
-      color: t.fraco, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-    },
-    botaoPerigo: {
-      minHeight: analise ? 44 : ALVO_MINIMO, padding: `0 ${espaco.xl}px`,
-      background: t.critico, border: 'none', borderRadius: raio.md, color: '#fff',
-      fontSize: tamanho.corpo, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-    },
-    textoConfirma: { margin: 0, fontSize: tamanho.pequeno, lineHeight: 1.6, color: t.medio },
-    botaoLinha: {
-      minHeight: 34, padding: `0 ${espaco.md}px`, background: 'transparent',
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
-      color: t.texto, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-    },
 
-    // --- cartoes (coleta) ---
-    lista: { listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: espaco.sm },
-    cartao: {
-      width: '100%', minHeight: 72, display: 'flex', alignItems: 'center', gap: espaco.md,
-      padding: espaco.md, background: t.superficie,
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-      borderRadius: raio.md, color: t.texto, cursor: 'pointer', fontFamily: 'inherit',
-    },
-    cartaoTitulo: { fontSize: tamanho.corpo, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-    cartaoSub: { fontSize: tamanho.legenda, color: t.fraco, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-    cartaoNumeros: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 },
-    cartaoNumero: { fontSize: tamanho.titulo, fontWeight: 700, fontFamily: fonte.numero },
-    cartaoRotulo: { fontSize: 10, color: t.fraco, textTransform: 'uppercase', letterSpacing: 0.6 },
-
-    estado: {
-      maxWidth: analise ? 1400 : 'none', width: '100%', margin: analise ? '0 auto' : 0,
-      padding: espaco.xxxl, textAlign: 'center', color: t.fraco, fontSize: tamanho.pequeno,
-      background: t.superficie, border: `1px dashed ${t.borda}`, borderRadius: raio.lg,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: espaco.lg,
-    },
+    /* ---- modal ---- */
     modal: {
-      position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(10,12,14,0.9)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: espaco.lg, overflowY: 'auto',
+      position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(15, 18, 22, 0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: espaco.lg, overflowY: 'auto',
     },
     formulario: {
-      width: '100%', maxWidth: 480, background: t.superficie,
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-      borderRadius: raio.lg, padding: espaco.xl,
-      display: 'flex', flexDirection: 'column', gap: espaco.md,
+      width: '100%', maxWidth: 520, background: t.superficie,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.lg,
+      padding: espaco.xxl, boxShadow: elevacao.alta,
+      display: 'flex', flexDirection: 'column', gap: espaco.lg,
     },
-    formTitulo: { margin: 0, fontSize: tamanho.titulo, fontWeight: 700 },
-    campo: { display: 'flex', flexDirection: 'column', gap: 4 },
-    rotulo: { fontSize: tamanho.legenda, fontWeight: 600, color: t.fraco, textTransform: 'uppercase', letterSpacing: 0.5 },
-    dica: { fontSize: 11, color: t.fraco, fontStyle: 'italic' },
+    formTitulo: { ...tipo('titulo'), margin: 0 },
+    textoModal: { ...tipo('corpo'), margin: 0, color: t.medio },
+    acoesModal: { display: 'flex', gap: espaco.md, marginTop: espaco.xs },
+    duasColunas: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg },
+    campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
+    rotuloCampo: rotulo(t.fraco),
+    obrigatorio: { color: t.critico },
+    dica: { ...tipo('legenda'), color: t.fraco, fontStyle: 'italic' },
     input: {
-      minHeight: 48, padding: `0 ${espaco.md}px`, background: t.fundo,
-      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-      borderRadius: raio.sm, color: t.texto,
-      fontSize: tamanho.corpo, fontFamily: 'inherit', outline: 'none',
+      minHeight: 44, padding: `0 ${espaco.md}px`, background: t.fundo,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+      color: t.texto, ...tipo('corpo'), fontFamily: 'inherit', outline: 'none',
+      transition: `border-color ${transicao.rapida}`,
     },
     erroForm: {
       padding: espaco.md, background: t.criticoFundo,
       borderWidth: 1, borderStyle: 'solid', borderColor: t.critico,
-      borderRadius: raio.sm, fontSize: tamanho.pequeno, color: t.texto, lineHeight: 1.5,
+      borderRadius: raio.sm, ...tipo('legenda'), color: t.texto,
     },
   };
 }
