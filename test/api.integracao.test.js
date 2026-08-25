@@ -213,14 +213,65 @@ rodar('API — integracao com Postgres', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('DELETE arquiva em vez de apagar o dado', async () => {
+  it('DELETE ARQUIVA o estudo que tem ciclos — dado de cronometragem nao se refaz', async () => {
+    const { estudoId, operacaoId } = await criarEstudoComOperacao();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: { observacoes: [ciclo(operacaoId, crypto.randomUUID())] },
+    }), fingirRes());
+
+    const res = fingirRes();
+    await estudos(fingirReq({ metodo: 'DELETE', query: { id: estudoId } }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.corpo.acao).toBe('arquivado');
+    expect(res.corpo.ciclos).toBe(1);
+
+    // Continua no banco, recuperavel.
+    const linhas = await sql`SELECT status FROM estudos WHERE id = ${estudoId}`;
+    expect(linhas[0].status).toBe('arquivado');
+    const obs = await sql`
+      SELECT count(*)::int AS n FROM observacoes o
+        JOIN operacoes op ON op.id = o.operacao_id
+       WHERE op.estudo_id = ${estudoId}`;
+    expect(obs[0].n).toBe(1);
+  });
+
+  it('DELETE APAGA de vez o estudo sem nenhum ciclo — nao ha o que preservar', async () => {
     const { estudoId } = await criarEstudoComOperacao();
     const res = fingirRes();
     await estudos(fingirReq({ metodo: 'DELETE', query: { id: estudoId } }), res);
 
     expect(res.statusCode).toBe(200);
-    const linhas = await sql`SELECT status FROM estudos WHERE id = ${estudoId}`;
-    expect(linhas[0].status).toBe('arquivado');
+    expect(res.corpo.acao).toBe('excluido');
+
+    const linhas = await sql`SELECT id FROM estudos WHERE id = ${estudoId}`;
+    expect(linhas).toHaveLength(0);
+    // CASCADE levou as operacoes junto.
+    const ops = await sql`SELECT count(*)::int AS n FROM operacoes WHERE estudo_id = ${estudoId}`;
+    expect(ops[0].n).toBe(0);
+  });
+
+  it('estudo arquivado some da listagem', async () => {
+    const { estudoId, operacaoId } = await criarEstudoComOperacao();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: { observacoes: [ciclo(operacaoId, crypto.randomUUID())] },
+    }), fingirRes());
+    await estudos(fingirReq({ metodo: 'DELETE', query: { id: estudoId } }), fingirRes());
+
+    const res = fingirRes();
+    await estudos(fingirReq(), res);
+    expect(res.corpo.estudos.map((e) => e.id)).not.toContain(estudoId);
+  });
+
+  it('nao remove estudo de outra empresa', async () => {
+    const alheia = await criarEstudoComOperacao(OUTRA_EMPRESA);
+    const res = fingirRes();
+    await estudos(fingirReq({ metodo: 'DELETE', query: { id: alheia.estudoId } }), res);
+    expect(res.statusCode).toBe(404);
+    const linhas = await sql`SELECT id FROM estudos WHERE id = ${alheia.estudoId}`;
+    expect(linhas).toHaveLength(1);
   });
 
   it('rejeita FR fora da faixa com 400, nao 500', async () => {

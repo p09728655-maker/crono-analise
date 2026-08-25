@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ALVO_MINIMO, cores as escuro, espaco, fonte, raio, tamanho } from '../../theme/tokens.js';
 import { claro } from '../../theme/tokensAnalise.js';
 import { LOGO_PATRIMAR, LOGO_PATRIMAR_CLARO } from '../../theme/logo.js';
-import { criarEstudo, listarEstudos } from '../../lib/api.js';
+import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
 
 /**
  * Lista de estudos — porta de entrada das DUAS experiencias.
@@ -23,6 +23,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
   const [estado, setEstado] = useState('carregando');
   const [erro, setErro] = useState(null);
   const [criando, setCriando] = useState(false);
+  const [removendo, setRemovendo] = useState(null);
 
   const analise = modo === 'analise';
   const t = tema(analise);
@@ -47,6 +48,12 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
     setCriando(false);
     await carregar();
     aoAbrir?.(r.estudo.id);
+  }
+
+  async function confirmarRemocao(estudo) {
+    await removerEstudo(estudo.id);
+    setRemovendo(null);
+    await carregar();
   }
 
   return (
@@ -90,8 +97,17 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
 
       {estado === 'pronto' && estudos.length > 0 && (
         analise
-          ? <TabelaEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} />
-          : <CartoesEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} />
+          ? <TabelaEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
+          : <CartoesEstudos estudos={estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
+      )}
+
+      {removendo && (
+        <ConfirmarRemocao
+          est={est}
+          estudo={removendo}
+          aoConfirmar={() => confirmarRemocao(removendo)}
+          aoCancelar={() => setRemovendo(null)}
+        />
       )}
 
       {criando && <FormularioEstudo est={est} aoSalvar={criar} aoCancelar={() => setCriando(false)} />}
@@ -100,7 +116,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
 }
 
 /** Densidade e colunas extras: no PC ha' espaco e o analista quer comparar. */
-function TabelaEstudos({ estudos, est, aoAbrir }) {
+function TabelaEstudos({ estudos, est, aoAbrir, aoRemover }) {
   return (
     <div style={est.blocoTabela}>
       <table style={est.tabela}>
@@ -126,9 +142,18 @@ function TabelaEstudos({ estudos, est, aoAbrir }) {
               <td style={est.tdNum}>{e.total_operacoes}</td>
               <td style={est.tdNum}>{e.total_observacoes}</td>
               <td style={est.td}>{formatarData(e.atualizado_em)}</td>
-              <td style={est.td}>
+              <td style={{ ...est.td, whiteSpace: 'nowrap' }}>
                 <button type="button" style={est.botaoLinha} onClick={() => aoAbrir?.(e.id)}>
                   Analisar
+                </button>
+                <button
+                  type="button"
+                  style={est.botaoRemoverLinha}
+                  onClick={() => aoRemover?.(e)}
+                  title={Number(e.total_observacoes) > 0 ? 'Arquivar estudo' : 'Excluir estudo'}
+                  aria-label={`Remover ${e.nome}`}
+                >
+                  {Number(e.total_observacoes) > 0 ? 'Arquivar' : 'Excluir'}
                 </button>
               </td>
             </tr>
@@ -140,11 +165,11 @@ function TabelaEstudos({ estudos, est, aoAbrir }) {
 }
 
 /** No celular, cartao com alvo grande: o dedo nao acerta linha de tabela. */
-function CartoesEstudos({ estudos, est, aoAbrir }) {
+function CartoesEstudos({ estudos, est, aoAbrir, aoRemover }) {
   return (
     <ul style={est.lista}>
       {estudos.map((e) => (
-        <li key={e.id}>
+        <li key={e.id} style={est.itemLista}>
           <button type="button" style={est.cartao} onClick={() => aoAbrir?.(e.id)}>
             <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
               <div style={est.cartaoTitulo}>{e.nome}</div>
@@ -157,9 +182,77 @@ function CartoesEstudos({ estudos, est, aoAbrir }) {
               <span style={est.cartaoRotulo}>ciclos</span>
             </div>
           </button>
+          {/* Fora do cartao: encostar no alvo principal removeria por engano. */}
+          <button
+            type="button"
+            style={est.botaoRemoverCartao}
+            onClick={() => aoRemover?.(e)}
+            aria-label={`Remover ${e.nome}`}
+          >
+            ×
+          </button>
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Confirmacao proporcional ao que se perde.
+ *
+ * Estudo sem ciclo e' rascunho: some e pronto. Estudo COM ciclos coletados
+ * representa horas de cronometragem que ninguem vai refazer — a confirmacao
+ * diz quantos ciclos estao em jogo e deixa claro que fica recuperavel.
+ */
+function ConfirmarRemocao({ est, estudo, aoConfirmar, aoCancelar }) {
+  const [processando, setProcessando] = useState(false);
+  const [erro, setErro] = useState(null);
+  const ciclos = Number(estudo.total_observacoes) || 0;
+  const temDados = ciclos > 0;
+
+  async function executar() {
+    setProcessando(true);
+    setErro(null);
+    try { await aoConfirmar(); }
+    catch (e) { setErro(e.message); setProcessando(false); }
+  }
+
+  return (
+    <div style={est.modal} role="dialog" aria-label="Confirmar remocao">
+      <div style={est.formulario}>
+        <h2 style={est.formTitulo}>
+          {temDados ? 'Arquivar estudo?' : 'Excluir estudo?'}
+        </h2>
+
+        <p style={est.textoConfirma}>
+          <strong>{estudo.nome}</strong>
+        </p>
+
+        {temDados ? (
+          <p style={est.textoConfirma}>
+            Este estudo tem <strong>{ciclos} ciclo(s) cronometrado(s)</strong>. Ele sai
+            da lista mas <strong>não é apagado</strong> — os dados continuam no banco e
+            podem ser recuperados. Tempo de cronometragem não se refaz.
+          </p>
+        ) : (
+          <p style={est.textoConfirma}>
+            Nenhum ciclo foi coletado, então não há nada a preservar.
+            O estudo será <strong>apagado definitivamente</strong>.
+          </p>
+        )}
+
+        {erro && <div style={est.erroForm}>{erro}</div>}
+
+        <div style={{ display: 'flex', gap: espaco.md, marginTop: espaco.md }}>
+          <button type="button" style={est.botaoSecundario} onClick={aoCancelar} disabled={processando}>
+            Cancelar
+          </button>
+          <button type="button" style={{ ...est.botaoPerigo, flex: 1 }} onClick={executar} disabled={processando}>
+            {processando ? 'Removendo...' : (temDados ? 'Arquivar' : 'Excluir')}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -337,6 +430,24 @@ function estilos(t, analise) {
     linha: {},
     td: { padding: '10px', borderBottom: `1px solid ${t.borda}` },
     tdNum: { padding: '10px', borderBottom: `1px solid ${t.borda}`, textAlign: 'right', fontFamily: fonte.numero },
+    itemLista: { position: 'relative' },
+    botaoRemoverCartao: {
+      position: 'absolute', top: 6, right: 6, width: 36, height: 36,
+      background: 'transparent', border: 'none', borderRadius: raio.sm,
+      color: t.fraco, fontSize: 20, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit',
+    },
+    botaoRemoverLinha: {
+      minHeight: 34, marginLeft: espaco.sm, padding: `0 ${espaco.md}px`,
+      background: 'transparent',
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+      color: t.fraco, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+    },
+    botaoPerigo: {
+      minHeight: analise ? 44 : ALVO_MINIMO, padding: `0 ${espaco.xl}px`,
+      background: t.critico, border: 'none', borderRadius: raio.md, color: '#fff',
+      fontSize: tamanho.corpo, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+    },
+    textoConfirma: { margin: 0, fontSize: tamanho.pequeno, lineHeight: 1.6, color: t.medio },
     botaoLinha: {
       minHeight: 34, padding: `0 ${espaco.md}px`, background: 'transparent',
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,

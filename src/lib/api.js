@@ -38,6 +38,8 @@ export const obterEstudo = (id) => requisitar(`/estudos?id=${encodeURIComponent(
 export const criarEstudo = (dados) => requisitar('/estudos', { metodo: 'POST', corpo: dados });
 export const atualizarEstudo = (id, dados) =>
   requisitar(`/estudos?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados });
+export const removerEstudo = (id) =>
+  requisitar(`/estudos?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 export const criarOperacao = (dados) => requisitar('/operacoes', { metodo: 'POST', corpo: dados });
 export const atualizarOperacao = (id, dados) =>
   requisitar(`/operacoes?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados });

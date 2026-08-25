@@ -63,12 +63,34 @@ export default handler(async (req, res) => {
     return json(res, 200, { estudo });
   }
 
-  // DELETE arquiva em vez de apagar: dado de cronoanalise sustenta decisao de
-  // dimensionamento e nao deve sumir por um toque errado no tablet.
+  // DELETE se comporta de dois jeitos, conforme o que ha' a perder.
+  //
+  // Estudo COM ciclos coletados e' arquivado, nunca apagado: aquele dado
+  // sustenta decisao de dimensionamento de mao de obra e ninguem vai
+  // cronometrar as pecas de novo. Um toque errado no tablet nao pode
+  // destruir isso.
+  //
+  // Estudo SEM nenhum ciclo e' apagado de verdade. Nao ha' nada a preservar,
+  // e deixar rascunho e teste acumulando na lista atrapalha quem trabalha.
   const estudoId = uuid(id, 'id');
   await garantirEstudo(estudoId, empresaId);
-  await sql`UPDATE estudos SET status = 'arquivado' WHERE id = ${estudoId} AND empresa_id = ${empresaId}`;
-  return json(res, 200, { arquivado: true });
+
+  const [{ n: ciclos }] = await sql`
+    SELECT count(*)::int AS n
+      FROM observacoes o
+      JOIN operacoes op ON op.id = o.operacao_id
+     WHERE op.estudo_id = ${estudoId}`;
+
+  if (ciclos > 0) {
+    await sql`
+      UPDATE estudos SET status = 'arquivado'
+       WHERE id = ${estudoId} AND empresa_id = ${empresaId}`;
+    return json(res, 200, { acao: 'arquivado', ciclos });
+  }
+
+  // ON DELETE CASCADE cuida de operacoes e paradas.
+  await sql`DELETE FROM estudos WHERE id = ${estudoId} AND empresa_id = ${empresaId}`;
+  return json(res, 200, { acao: 'excluido', ciclos: 0 });
 });
 
 async function garantirEstudo(estudoId, empresaId) {
