@@ -12,7 +12,7 @@ import { LOGO_PATRIMAR, LOGO_PATRIMAR_CLARO } from '../theme/logo.js';
  * nenhum. Uma barra com superficie propria e elevacao ancora o topo e
  * separa navegacao de conteudo.
  */
-export default function Cabecalho({ modo, titulo, subtitulo, acoes, aoTrocarModo, aoVoltar }) {
+export default function Cabecalho({ modo, titulo, subtitulo, versao, aoVerVersao, acoes, aoTrocarModo, aoVoltar }) {
   const analise = modo === 'analise';
   const t = paleta(analise);
   const est = estilos(t, analise);
@@ -31,7 +31,23 @@ export default function Cabecalho({ modo, titulo, subtitulo, acoes, aoTrocarModo
           <span style={est.divisorMarca} />
           <div style={{ minWidth: 0 }}>
             <div style={est.titulo}>{titulo}</div>
-            {subtitulo && <div style={est.subtitulo}>{subtitulo}</div>}
+            {subtitulo && (
+              <div style={est.subtitulo}>
+                {subtitulo}
+                {/* O numero abre o historico: quem estranha a tela nova
+                    descobre "o que mudou?" sem perguntar a ninguem. */}
+                {versao && (
+                  <button
+                    type="button"
+                    onClick={aoVerVersao}
+                    style={est.versao}
+                    title="Ver histórico de versões"
+                  >
+                    v{versao}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -118,6 +134,13 @@ function estilos(t, analise) {
     subtitulo: {
       ...tipo('legenda'), color: t.fraco, marginTop: 1,
       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    },
+    versao: {
+      marginLeft: espaco.sm, padding: '1px 6px',
+      background: 'transparent',
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.pill,
+      color: t.fraco, ...tipo('micro'), fontWeight: 600,
+      cursor: 'pointer', fontFamily: 'inherit',
     },
     acoes: { display: 'flex', alignItems: 'center', gap: espaco.md, flexWrap: 'wrap' },
 

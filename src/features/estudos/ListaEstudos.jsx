@@ -6,8 +6,10 @@ import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
 import { taktTime } from '../../domain/cronoanalise.js';
 import { agruparPorProduto, produtosConhecidos } from '../../domain/agrupamento.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
+import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import ImportarRoteiro from './ImportarRoteiro.jsx';
+import { VERSAO } from '../../versao.js';
 
 /**
  * Lista de estudos — porta de entrada das duas experiencias.
@@ -23,6 +25,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
   const [importando, setImportando] = useState(false);
   const [removendo, setRemovendo] = useState(null);
   const [filtro, setFiltro] = useState(null);
+  const [verVersoes, setVerVersoes] = useState(false);
 
   const analise = modo === 'analise';
   const t = tema(analise);
@@ -61,6 +64,8 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
         modo={modo}
         titulo="RitmoPatrimar"
         subtitulo="Estudo de Tempos"
+        versao={VERSAO}
+        aoVerVersao={() => setVerVersoes(true)}
         aoTrocarModo={aoTrocarModo}
         /* O botao principal so' aparece aqui quando ja' ha' lista. No estado
            vazio ele vive no proprio bloco vazio — dois botoes identicos na
@@ -177,6 +182,10 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
           </>
         )}
       </main>
+
+      {verVersoes && (
+        <HistoricoVersoes modo={modo} aoFechar={() => setVerVersoes(false)} />
+      )}
 
       {importando && (
         <ImportarRoteiro

@@ -9,6 +9,7 @@
  *
  * Uso: npm run dev (porta 5199) e depois node test/e2e/novoestudo.e2e.mjs
  */
+import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const BASE = process.env.E2E_BASE || 'http://localhost:5199';
@@ -101,6 +102,23 @@ const b = await chromium.launch({ executablePath: EXEC });
   await p.waitForSelector('section h2', { timeout: 8000 });
   checar(await p.locator('text=Nenhum estudo cadastrado').count() === 0,
     'lista cheia: estado vazio nao vaza para quem tem estudo');
+
+  // Historico de versoes: o numero no cabecalho abre o modal, e o que o
+  // usuario le como "atual" precisa ser a versao publicada de fato.
+  const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url)));
+  const chip = p.locator(`text=v${version}`).first();
+  checar(await chip.count() === 1, `versao v${version} visivel no cabecalho`);
+  await chip.click();
+  const historico = p.locator('[aria-label="Histórico de versões"]');
+  checar(await historico.count() === 1, 'chip abre o historico de versoes');
+  const primeira = await historico.locator('ol > li').first().innerText();
+  checar(primeira.includes(`v${version}`) && /atual/i.test(primeira),
+    'entrada mais recente e marcada como atual');
+  checar(await historico.locator('ol > li').count() >= 6,
+    `historico conta a evolucao (${await historico.locator('ol > li').count()} versoes)`);
+  await historico.locator('button', { hasText: 'Fechar' }).click();
+  checar(await p.locator('[aria-label="Histórico de versões"]').count() === 0,
+    'historico fecha');
   await ctx.close();
 }
 

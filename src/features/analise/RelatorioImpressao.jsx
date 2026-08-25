@@ -2,6 +2,7 @@ import { claro } from '../../theme/tokensAnalise.js';
 import { formatarSegundos } from '../../domain/cronoanalise.js';
 import { CartaControle, GraficoYamazumi } from './graficos.jsx';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
+import { VERSAO } from '../../versao.js';
 
 /**
  * RELATORIO IMPRESSO — A4 retrato.
@@ -30,7 +31,7 @@ export default function RelatorioImpressao({ estudo, analise }) {
           <h1 style={est.titulo}>Estudo de Tempos — Folha de Análise</h1>
         </div>
         <div style={est.emissao}>
-          RitmoPatrimar · emitido em {hoje}
+          RitmoPatrimar v{VERSAO} · emitido em {hoje}
         </div>
       </header>
 
