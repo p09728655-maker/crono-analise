@@ -1,7 +1,7 @@
 import { sql } from './_lib/db.js';
 import { autenticar } from './_lib/auth.js';
 import { handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
-import { dataIso, decimal, inteiro, texto, uuid } from './_lib/validar.js';
+import { dataIso, decimal, inteiro, lista, texto, uuid } from './_lib/validar.js';
 
 export default handler(async (req, res) => {
   permitir(req, ['GET', 'POST', 'PATCH', 'DELETE']);
@@ -26,21 +26,53 @@ export default handler(async (req, res) => {
 
   if (req.method === 'POST') {
     const c = await lerCorpo(req);
-    const [estudo] = await sql`
-      INSERT INTO estudos (empresa_id, nome, produto, analista, setor, recurso,
-                           data_estudo, tolerancia_pct, meta_obs, takt_time_ms)
-      VALUES (${empresaId},
-              ${texto(c.nome, 'nome', { obrigatorio: true, max: 200 })},
-              ${texto(c.produto, 'produto', { max: 200 })},
-              ${texto(c.analista, 'analista', { max: 200 })},
-              ${texto(c.setor, 'setor', { max: 120 })},
-              ${texto(c.recurso, 'recurso', { max: 120 })},
-              ${dataIso(c.dataEstudo, 'dataEstudo', { padrao: new Date().toISOString() })},
-              ${decimal(c.toleranciaPct, 'toleranciaPct', { min: 0, max: 100, padrao: 15 })},
-              ${inteiro(c.metaObs, 'metaObs', { min: 0, max: 10000, padrao: 10 })},
-              ${inteiro(c.taktTimeMs, 'taktTimeMs', { min: 1, max: 86400000, padrao: null })})
-      RETURNING *`;
-    return json(res, 201, { estudo });
+
+    // Operacoes aninhadas (importacao de roteiro do ERP): validadas ANTES
+    // da transacao, para nao abrir transacao que vai dar rollback.
+    const operacoes = lista(c.operacoes || [], 'operacoes', { max: 100 }).map((op, i) => ({
+      nome: texto(op.nome, `operacoes[${i}].nome`, { obrigatorio: true, max: 200 }),
+      descricao: texto(op.descricao, `operacoes[${i}].descricao`, { max: 1000 }),
+      frPct: decimal(op.frPct, `operacoes[${i}].frPct`, { min: 1, max: 200, padrao: 100 }),
+      ciclosPorPeca: inteiro(op.ciclosPorPeca, `operacoes[${i}].ciclosPorPeca`, { min: 1, max: 999, padrao: 1 }),
+      ordem: inteiro(op.ordem, `operacoes[${i}].ordem`, { min: 0, max: 9999, padrao: i }),
+    }));
+
+    const valores = {
+      nome: texto(c.nome, 'nome', { obrigatorio: true, max: 200 }),
+      produto: texto(c.produto, 'produto', { max: 200 }),
+      analista: texto(c.analista, 'analista', { max: 200 }),
+      setor: texto(c.setor, 'setor', { max: 120 }),
+      recurso: texto(c.recurso, 'recurso', { max: 120 }),
+      dataEstudo: dataIso(c.dataEstudo, 'dataEstudo', { padrao: new Date().toISOString() }),
+      toleranciaPct: decimal(c.toleranciaPct, 'toleranciaPct', { min: 0, max: 100, padrao: 15 }),
+      metaObs: inteiro(c.metaObs, 'metaObs', { min: 0, max: 10000, padrao: 10 }),
+      taktTimeMs: inteiro(c.taktTimeMs, 'taktTimeMs', { min: 1, max: 86400000, padrao: null }),
+    };
+
+    // Estudo e operacoes gravam na MESMA transacao: importar um roteiro pela
+    // metade deixaria um estudo capenga que o usuario teria de apagar a mao.
+    const resultado = await sql.begin(async (tx) => {
+      const [estudo] = await tx`
+        INSERT INTO estudos (empresa_id, nome, produto, analista, setor, recurso,
+                             data_estudo, tolerancia_pct, meta_obs, takt_time_ms)
+        VALUES (${empresaId}, ${valores.nome}, ${valores.produto}, ${valores.analista},
+                ${valores.setor}, ${valores.recurso}, ${valores.dataEstudo},
+                ${valores.toleranciaPct}, ${valores.metaObs}, ${valores.taktTimeMs})
+        RETURNING *`;
+
+      const criadas = [];
+      for (const op of operacoes) {
+        const [criada] = await tx`
+          INSERT INTO operacoes (estudo_id, nome, descricao, fr_pct, ciclos_por_peca, ordem)
+          VALUES (${estudo.id}, ${op.nome}, ${op.descricao}, ${op.frPct},
+                  ${op.ciclosPorPeca}, ${op.ordem})
+          RETURNING *`;
+        criadas.push(criada);
+      }
+      return { estudo, operacoes: criadas };
+    });
+
+    return json(res, 201, resultado);
   }
 
   if (req.method === 'PATCH') {

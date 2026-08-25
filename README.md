@@ -141,7 +141,11 @@ Em **Settings → Environment Variables**:
 ```
 src/
   domain/        fórmulas puras e testáveis (sem React, sem rede)
+                 inclui roteiroErp.js: leitura do PDF "Processos de
+                 Produção" do ERP → estudo com uma operação por peça
   lib/           fila offline (IndexedDB), cliente HTTP, hooks
+                 inclui pdfTexto.js: extração de texto de PDF no
+                 navegador, sem biblioteca (DecompressionStream)
   theme/         tokens de design (paleta Patrimar)
   features/
     coleta/      tela de cronometragem no posto (celular)

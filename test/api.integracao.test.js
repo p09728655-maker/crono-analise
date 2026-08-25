@@ -206,6 +206,49 @@ rodar('API — integracao com Postgres', () => {
     expect(res.corpo.operacoes[0].tempos).toEqual([10000, 10400]);
   });
 
+  it('POST cria estudo com operacoes aninhadas em uma transacao — importacao do ERP', async () => {
+    const res = fingirRes();
+    await estudos(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        nome: 'MESA CABECEIRA SLEEP BRANCO — FUR16',
+        produto: 'MESA CABECEIRA SLEEP BRANCO',
+        recurso: 'FUR16',
+        operacoes: [
+          { nome: 'SLEEP BASE 380X330X15 MDP 1 BCO', ciclosPorPeca: 1, ordem: 0 },
+          { nome: 'SLEEP LAT DIR/ESQ 328X215X15 MDP 2 BCO', ciclosPorPeca: 2, ordem: 1 },
+        ],
+      },
+    }), res);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.corpo.operacoes).toHaveLength(2);
+    expect(res.corpo.operacoes[1].ciclos_por_peca).toBe(2);
+
+    const linhas = await sql`
+      SELECT count(*)::int AS n FROM operacoes WHERE estudo_id = ${res.corpo.estudo.id}`;
+    expect(linhas[0].n).toBe(2);
+  });
+
+  it('operacao aninhada invalida NAO deixa estudo pela metade', async () => {
+    const antes = await sql`SELECT count(*)::int AS n FROM estudos WHERE empresa_id = ${EMPRESA}`;
+    const res = fingirRes();
+    await estudos(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        nome: 'Importacao quebrada',
+        operacoes: [
+          { nome: 'Peca boa', ciclosPorPeca: 1 },
+          { nome: '', ciclosPorPeca: 1 }, // nome obrigatorio -> 400
+        ],
+      },
+    }), res);
+
+    expect(res.statusCode).toBe(400);
+    const depois = await sql`SELECT count(*)::int AS n FROM estudos WHERE empresa_id = ${EMPRESA}`;
+    expect(depois[0].n).toBe(antes[0].n);
+  });
+
   it('nao entrega estudo de outra empresa', async () => {
     const alheia = await criarEstudoComOperacao(OUTRA_EMPRESA);
     const res = fingirRes();

@@ -7,6 +7,7 @@ import { formatarSegundos, taktTime } from '../../domain/cronoanalise.js';
 import { agruparPorProduto, produtosConhecidos } from '../../domain/agrupamento.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
+import ImportarRoteiro from './ImportarRoteiro.jsx';
 
 /**
  * Lista de estudos — porta de entrada das duas experiencias.
@@ -19,6 +20,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
   const [estado, setEstado] = useState('carregando');
   const [erro, setErro] = useState(null);
   const [criando, setCriando] = useState(false);
+  const [importando, setImportando] = useState(false);
   const [removendo, setRemovendo] = useState(null);
   const [filtro, setFiltro] = useState(null);
 
@@ -62,11 +64,19 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
         aoTrocarModo={aoTrocarModo}
         /* O botao principal so' aparece aqui quando ja' ha' lista. No estado
            vazio ele vive no proprio bloco vazio — dois botoes identicos na
-           mesma tela e' duplicacao, nao reforco. */
-        acoes={temEstudos && (
-          <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
-            + Novo estudo
-          </button>
+           mesma tela e' duplicacao, nao reforco. A importacao nao tem par no
+           bloco vazio, entao fica sempre que a lista carregou. */
+        acoes={estado === 'pronto' && (
+          <>
+            <button type="button" style={est.botaoSecundario} onClick={() => setImportando(true)}>
+              Importar roteiro
+            </button>
+            {temEstudos && (
+              <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
+                + Novo estudo
+              </button>
+            )}
+          </>
         )}
       />
 
@@ -135,6 +145,16 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
           </>
         )}
       </main>
+
+      {importando && (
+        <ImportarRoteiro
+          t={t}
+          analise={analise}
+          produtosExistentes={produtosConhecidos(estudos)}
+          aoConcluir={async (id) => { setImportando(false); await carregar(); aoAbrir?.(id); }}
+          aoCancelar={() => setImportando(false)}
+        />
+      )}
 
       {criando && (
         <FormularioEstudo

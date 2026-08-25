@@ -1,0 +1,82 @@
+/**
+ * Importacao do roteiro do ERP, de ponta a ponta com o PDF REAL.
+ *
+ * O que este teste prova e' a cadeia inteira no navegador de verdade:
+ * escolher o arquivo -> extrair o texto (DecompressionStream) -> interpretar
+ * -> conferir na tela -> criar o estudo com as operacoes aninhadas. Qualquer
+ * elo pode quebrar sozinho sem aparecer em teste de unidade.
+ *
+ * Uso: npm run dev (porta 5199) e depois node test/e2e/importar.e2e.mjs
+ */
+import { chromium } from 'playwright';
+
+const BASE = process.env.E2E_BASE || 'http://localhost:5199';
+const EXEC = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const PDF = new URL('../fixtures/roteiro-mesa-cabeceira-sleep.pdf', import.meta.url).pathname;
+
+let falhas = 0;
+const checar = (ok, msg) => { console.log(`${ok ? 'OK  ' : 'FALHA'} ${msg}`); if (!ok) falhas++; };
+
+const b = await chromium.launch({ executablePath: EXEC });
+
+for (const modo of ['analise', 'coleta']) {
+  const ctx = await b.newContext({
+    viewport: modo === 'analise' ? { width: 1440, height: 900 } : { width: 400, height: 860 },
+    hasTouch: modo === 'coleta',
+  });
+  const p = await ctx.newPage();
+  const errosConsole = [];
+  p.on('pageerror', (e) => errosConsole.push(e.message));
+
+  await p.goto(`${BASE}/test/e2e/harness-importar/index.html?modo=${modo}`);
+  await p.waitForSelector('text=Importar roteiro', { timeout: 8000 });
+
+  await p.click('text=Importar roteiro');
+  const dialogo = p.locator('[aria-label="Importar roteiro do ERP"]');
+  checar(await dialogo.count() === 1, `${modo}: modal de importacao abre`);
+
+  await p.setInputFiles('input[type=file]', PDF);
+  await dialogo.locator('text=MESA CABECEIRA SLEEP BRANCO').first()
+    .waitFor({ timeout: 8000 });
+
+  const linhas = dialogo.locator('tbody tr');
+  checar(await linhas.count() === 6, `${modo}: 6 pecas na conferencia`);
+
+  const lateral = dialogo.locator('tr', { hasText: 'LAT DIR/ESQ' });
+  checar(/MDP 2 BCO/.test(await lateral.innerText()),
+    `${modo}: descricao cortada pelo ERP foi emendada`);
+  checar((await lateral.locator('td').nth(1).innerText()).trim() === '2',
+    `${modo}: lateral entra com 2 ciclos por peca`);
+
+  checar(await dialogo.locator('text=Já existe estudo deste produto').count() === 1,
+    `${modo}: avisa que o produto ja tem estudo (grafia diferente)`);
+  checar(/VOL 1\/1/.test(await dialogo.innerText()),
+    `${modo}: pecas sem processo aparecem, nao somem`);
+
+  // Nada pode estourar a largura no celular.
+  const larguras = await p.evaluate(() => ({
+    doc: document.documentElement.scrollWidth, tela: window.innerWidth,
+  }));
+  checar(larguras.doc <= larguras.tela, `${modo}: sem rolagem horizontal (${larguras.doc}/${larguras.tela}px)`);
+
+  await dialogo.locator('button', { hasText: 'Criar estudo' }).click();
+  await p.waitForFunction(() => window.__aberto !== null, { timeout: 8000 });
+
+  const post = await p.evaluate(() => window.__posts[0]);
+  checar(post.corpo.produto === 'MESA CABECEIRA SLEEP BRANCO', `${modo}: produto vem do PDF`);
+  checar(post.corpo.recurso === 'FUR16', `${modo}: recurso e' a maquina do roteiro`);
+  checar(post.corpo.operacoes.length === 6, `${modo}: 6 operacoes aninhadas no POST`);
+  checar(post.corpo.operacoes.map((o) => o.ciclosPorPeca).join(',') === '1,2,1,1,1,1',
+    `${modo}: ciclos por peca [${post.corpo.operacoes.map((o) => o.ciclosPorPeca)}]`);
+  checar(post.corpo.operacoes[1].descricao.includes('cód. 778.002.001'),
+    `${modo}: proveniencia do ERP gravada na operacao`);
+  checar(await p.evaluate(() => window.__aberto) === 'novo-1',
+    `${modo}: abre o estudo recem-criado`);
+
+  checar(errosConsole.length === 0,
+    `${modo}: sem erro de pagina (${errosConsole.join('; ') || 'nenhum'})`);
+  await ctx.close();
+}
+
+await b.close();
+process.exit(falhas ? 1 : 0);
