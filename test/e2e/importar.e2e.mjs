@@ -76,6 +76,9 @@ for (const modo of ['analise']) {
   checar(larguras.doc <= larguras.tela, `${modo}: sem rolagem horizontal (${larguras.doc}/${larguras.tela}px)`);
   checar(larguras.estourados === 0, `${modo}: nada estourado dentro do modal (${larguras.estourados})`);
 
+  const nomeImp = dialogo.locator('label', { hasText: 'Nome do estudo' }).locator('input');
+  checar(await nomeImp.inputValue() === 'MESA CABECEIRA SLEEP BRANCO',
+    `${modo}: nome vem so com o produto, sem a maquina grudada`);
   const recursoImp = dialogo.locator('label', { hasText: 'Recurso / Posto' }).locator('input');
   checar(await recursoImp.inputValue() === 'FUR16', `${modo}: maquina do roteiro sugerida (FUR16)`);
   await recursoImp.fill('FUR03');

@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.9.1',
+    data: '2026-08-25',
+    titulo: 'Selo verde na hora',
+    itens: [
+      'Ao terminar a cronometragem, a tela do estudo já mostra a contagem certa e o selo verde — sem sair e abrir de novo. A tela passou a somar os ciclos que ainda estão no aparelho aguardando envio ("N a enviar").',
+      'O envio automático agora dispara assim que há ciclo na fila com rede boa — antes ele só reagia à rede cair e voltar.',
+      'Nome do estudo importado vem só com o produto — a máquina tem campo próprio (Recurso/Posto).',
+    ],
+  },
+  {
     versao: '2.9.0',
     data: '2026-08-25',
     titulo: 'Meta de ciclos manda',

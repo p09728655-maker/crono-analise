@@ -3,6 +3,8 @@ import { ALVO_MINIMO, cores, espaco, fonte, raio, tamanho } from '../../theme/to
 import { calcularOperacao, formatarSegundos, FR_PRESETS } from '../../domain/cronoanalise.js';
 import { amostraSuficiente } from '../../domain/cronoanalise.js';
 import { criarOperacao, obterEstudo, removerOperacao } from '../../lib/api.js';
+import { listarFila } from '../../lib/filaOffline.js';
+import { mesclarColetaLocal } from '../../domain/mesclarColeta.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
 
 export default function DetalheEstudo({ estudoId, aoColetar, aoVoltar }) {
@@ -14,7 +16,11 @@ export default function DetalheEstudo({ estudoId, aoColetar, aoVoltar }) {
   const carregar = useCallback(async () => {
     setEstado('carregando');
     try {
-      setDados(await obterEstudo(estudoId));
+      // Fila ANTES do servidor: se a sincronizacao correr no meio, o ciclo
+      // esta nos dois lados e o clientId deduplica. Na ordem inversa ele
+      // poderia sumir dos dois.
+      const fila = await listarFila().catch(() => []);
+      setDados(mesclarColetaLocal(await obterEstudo(estudoId), fila));
       setEstado('pronto');
     } catch (e) {
       setErro(e.message);
@@ -100,6 +106,7 @@ function LinhaOperacao({ operacao, tolerancia, metaObs, aoColetar, aoRemover }) 
         <div style={est.cartaoSub}>
           FR {Number(operacao.fr_pct)}% ·{' '}
           {r ? `${r.n} ciclos · TP ${formatarSegundos(r.tpVal)}s · ${r.cap} pc/h` : 'Sem ciclos coletados'}
+          {operacao.pendentesLocais > 0 && ` · ${operacao.pendentesLocais} a enviar`}
         </div>
         <div style={{ ...est.selo, ...(suficiencia.ok ? est.seloOk : est.seloAtencao) }}>
           {suficiencia.ok ? '✓' : '!'} {suficiencia.motivo}

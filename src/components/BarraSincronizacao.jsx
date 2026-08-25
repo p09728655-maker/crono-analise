@@ -43,8 +43,15 @@ export default function BarraSincronizacao() {
     return () => clearInterval(id);
   }, [atualizarContagem]);
 
-  // Assim que a rede volta, tenta esvaziar a fila sem pedir nada ao usuario.
-  useEffect(() => { if (online && pendentes > 0) enviar(); }, [online]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Esvazia a fila sozinha assim que ha' o que enviar E rede para isso —
+  // seja a rede voltando, seja a fila aparecendo com a rede ja' boa. A
+  // versao anterior so' reagia a rede mudar: com wifi estavel, o ciclo
+  // ficava pendente ate' alguem clicar em "Enviar agora".
+  // Depois de um erro, o proximo gatilho e' manual ou a rede oscilar —
+  // sem retentar em loop contra um servidor que acabou de falhar.
+  useEffect(() => {
+    if (online && pendentes > 0 && estado === 'ocioso' && !erro) enviar();
+  }, [online, pendentes, estado, erro, enviar]);
 
   if (pendentes === 0 && estado === 'ocioso' && online) return null;
 

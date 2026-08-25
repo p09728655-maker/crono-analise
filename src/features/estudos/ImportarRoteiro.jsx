@@ -45,7 +45,9 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
       }
       setRoteiro(r);
       setNomeArquivo(arquivo.name);
-      setNome(`${r.produtoPai.descricao} — ${r.maquinas.join(' / ')}`);
+      // So o produto: a maquina tem campo proprio, e grudada ao nome ela
+      // ainda ficava errada quando o usuario trocava o recurso.
+      setNome(r.produtoPai.descricao);
       // O roteiro SUGERE a maquina; o estudo pode rodar em outra.
       setRecurso(r.maquinas.length === 1 ? r.maquinas[0] : '');
     } catch (e) {
