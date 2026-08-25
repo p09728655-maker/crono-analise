@@ -12,7 +12,7 @@ import { VERSAO } from '../../versao.js';
  * estatistica, resultado, evidencia grafica, assinatura.
  *
  * O relatorio sai da fabrica e circula em reuniao. Por isso ele declara a
- * propria confiabilidade: se a amostra nao fecha Nievel, isso vai impresso,
+ * propria confiabilidade: se a amostra nao fecha a meta, isso vai impresso,
  * nao escondido. Um numero sem contexto vira decisao errada.
  */
 export default function RelatorioImpressao({ estudo, analise }) {
@@ -59,14 +59,14 @@ export default function RelatorioImpressao({ estudo, analise }) {
         <strong>
           {analise.pendencias.length
             ? '⚠ Estudo com amostra incompleta'
-            : '✓ Amostra estatisticamente válida'}
+            : '✓ Meta de observações atingida'}
         </strong>
         {analise.pendencias.length ? (
           <>
             <p style={est.ressalvaTexto}>
-              As operações abaixo não atingiram o número mínimo de observações. Os tempos
-              padrão apresentados servem como orientação, mas não devem embasar
-              dimensionamento definitivo de mão de obra.
+              As operações abaixo não atingiram a meta de observações definida para o
+              estudo. Os tempos padrão apresentados servem como orientação, mas não devem
+              embasar dimensionamento definitivo de mão de obra.
             </p>
             <ul style={est.ressalvaLista}>
               {analise.pendencias.map(({ op, s }) => (
@@ -76,8 +76,9 @@ export default function RelatorioImpressao({ estudo, analise }) {
           </>
         ) : (
           <p style={est.ressalvaTexto}>
-            Todas as operações atingiram a meta de observações e o mínimo da fórmula
-            de Nievel (95% de confiança, ±5% de erro).
+            Todas as operações atingiram a meta de observações definida para o estudo.
+            O mínimo de Nievel (95% de confiança, ±5% de erro) segue impresso na tabela
+            como referência de confiabilidade, sem travar o resultado.
           </p>
         )}
       </section>

@@ -90,8 +90,13 @@ export function calcularOperacao(operacao, toleranciaPct = 0) {
 
 /**
  * A operacao ja tem observacoes suficientes?
- * Exige as duas condicoes: a meta definida pelo analista E o minimo
- * estatistico de Nievel. Atingir so a meta manual nao garante validade.
+ *
+ * O criterio e' a META definida pelo analista — e so' ela. O minimo de
+ * Nievel chegou a travar a amostra aqui, mas em posto de ciclo curto ele
+ * virava exigencia sem fim: CV alto pedia mais ciclos, e o app parecia
+ * nunca se dar por satisfeito. Decisao de processo (ago/2026): Nievel e
+ * CV% continuam calculados e visiveis como REFERENCIA de confiabilidade
+ * (na tela e no relatorio impresso), mas nao seguram mais o estudo.
  */
 export function amostraSuficiente(resultado, metaObs) {
   if (!resultado) return { ok: false, motivo: 'Sem observações' };
@@ -99,10 +104,7 @@ export function amostraSuficiente(resultado, metaObs) {
   if (meta > 0 && resultado.n < meta) {
     return { ok: false, motivo: `Faltam ${meta - resultado.n} observações para a meta` };
   }
-  if (resultado.n < resultado.obsMinimas) {
-    return { ok: false, motivo: `Nievel exige ${resultado.obsMinimas} obs para CV ${resultado.cvPct.toFixed(1)}%` };
-  }
-  return { ok: true, motivo: 'Amostra estatisticamente válida' };
+  return { ok: true, motivo: 'Meta de ciclos atingida' };
 }
 
 /** Takt Time em ms. Ritmo que a demanda exige. */

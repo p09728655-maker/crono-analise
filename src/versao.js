@@ -13,6 +13,14 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.9.0',
+    data: '2026-08-25',
+    titulo: 'Meta de ciclos manda',
+    itens: [
+      'Fim da exigência de aumentar ciclos: atingiu a meta definida no estudo, a amostra fecha. O mínimo de Nievel e o CV% continuam visíveis na tela e no relatório como referência de confiabilidade — mas não seguram mais o estudo.',
+    ],
+  },
+  {
     versao: '2.8.0',
     data: '2026-08-25',
     titulo: 'Celular é coleta',

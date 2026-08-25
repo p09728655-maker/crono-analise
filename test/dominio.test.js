@@ -175,18 +175,20 @@ describe('amostraSuficiente', () => {
   it('reprova quando abaixo da meta do analista', () => {
     expect(amostraSuficiente(estavel, 20).ok).toBe(false);
   });
-  it('aprova quando atinge meta e minimo de Nievel', () => {
+  it('aprova quando atinge a meta do analista', () => {
     expect(amostraSuficiente(estavel, 10).ok).toBe(true);
   });
   it('reprova amostra inexistente', () => {
     expect(amostraSuficiente(null, 10).ok).toBe(false);
   });
-  it('reprova quando a meta foi batida mas Nievel nao', () => {
-    // CV alto exige muito mais que as 4 observacoes coletadas
+  it('meta batida aprova MESMO com CV alto — Nievel e referencia, nao trava', () => {
+    // Decisao de processo (ago/2026): a exigencia de Nievel virava pedido
+    // sem fim de mais ciclos. Ele segue calculado (obsMinimas) e impresso,
+    // mas quem fecha a amostra e' a meta do analista.
     const instavel = calcularOperacao({ fr: 100, tempos: [1000, 9000, 2000, 8000] }, 0);
     const r = amostraSuficiente(instavel, 4);
-    expect(r.ok).toBe(false);
-    expect(r.motivo).toMatch(/Nievel/);
+    expect(r.ok).toBe(true);
+    expect(instavel.obsMinimas).toBeGreaterThan(4); // referencia continua disponivel
   });
 });
 

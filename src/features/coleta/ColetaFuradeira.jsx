@@ -242,7 +242,7 @@ function Metricas({ resultado, metaObs, progresso }) {
       {resultado && (
         <div style={est.estabilidade}>
           <span style={{ ...est.pontoEstado, background: corDoNivel(resultado.estabilidade.nivel) }} />
-          {resultado.estabilidade.rotulo} · Nievel pede {resultado.obsMinimas} obs
+          {resultado.estabilidade.rotulo} · referência Nievel: {resultado.obsMinimas} obs
         </div>
       )}
     </section>
