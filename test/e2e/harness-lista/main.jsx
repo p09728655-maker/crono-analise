@@ -13,4 +13,8 @@ window.fetch = async () => new Response(JSON.stringify(RESPOSTA), {
   status: 200, headers: { 'Content-Type': 'application/json' },
 });
 
-createRoot(document.getElementById('raiz')).render(<ListaEstudos aoAbrir={() => {}} />);
+// ?modo=analise no harness para inspecionar as duas variantes.
+const modo = new URLSearchParams(location.search).get('modo') || 'coleta';
+createRoot(document.getElementById('raiz')).render(
+  <ListaEstudos aoAbrir={() => {}} modo={modo} aoTrocarModo={() => {}} />,
+);
