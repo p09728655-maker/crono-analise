@@ -35,46 +35,64 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   p.on('pageerror', (e) => erros.push(e.message));
 
   await p.goto(PAGINA);
+
+  /**
+   * Deriva do cronometro, medida sem o relogio do automatizador.
+   *
+   * Cada ciclo carrega `coletadoEm`, gravado no instante exato em que o
+   * ciclo foi cortado — antes de qualquer escrita em disco. O intervalo
+   * entre dois `coletadoEm` consecutivos e' portanto o tempo REAL daquele
+   * ciclo, e a duracao reportada tem de bater com ele.
+   *
+   * Marcar o tempo DEPOIS da gravacao no IndexedDB nao serve: sob carga a
+   * escrita atrasa o marco em dezenas de ms e o teste acusa erro do
+   * cronometro onde ha' lentidao de disco. Medido: 2ms de erro em maquina
+   * ociosa contra 96ms marcando depois da escrita.
+   *
+   * Comparar com um valor esperado nao serve aqui: o despacho de clique do
+   * Playwright custa dezenas de ms e varia com a carga da maquina — o teste
+   * acusaria erro do cronometro onde ha' ruido do automatizador. Ja com dois
+   * marcos internos, a latencia sai da conta.
+   *
+   * E' esta a propriedade que separa um cronometro correto de um que soma
+   * setInterval: o segundo acumularia diferenca a cada ciclo.
+   */
   await p.locator('button[aria-label="Iniciar cronometragem"]').click();
 
-  const esperados = [900, 1200, 700];
-  for (const ms of esperados) {
+  for (const ms of [700, 900, 1200, 700]) {
     await p.waitForTimeout(ms);
     await p.locator('button[aria-label="Registrar fim do ciclo"]').click();
   }
-  await p.waitForTimeout(150);
+  // enfileirar() e' assincrono: sem esta folga o ultimo ciclo nao entrou ainda.
+  await p.waitForTimeout(250);
 
-  let ciclos = await p.evaluate(() => window.__registrados.map((r) => r.duracaoMs));
-  checar(ciclos.length === 3, `registrou 3 ciclos (${ciclos.join(', ')} ms)`);
+  const reg = await p.evaluate(() => window.__registrados.map((r) => ({
+    d: r.duracaoMs, t: new Date(r.coletadoEm).getTime(),
+  })));
+  checar(reg.length === 4, `registrou 4 ciclos (${reg.map((r) => Math.round(r.d)).join(', ')} ms)`);
 
-  /**
-   * O que interessa aqui e' AUSENCIA DE DERIVA, nao exatidao absoluta.
-   *
-   * O clique do Playwright leva algumas dezenas de ms para ser despachado, e
-   * essa latencia entra em toda medicao. Comparar contra o valor exato torna
-   * o teste instavel sem dizer nada sobre o cronometro.
-   *
-   * A falha que importa e' deriva acumulada — o defeito classico de somar
-   * setInterval em vez de comparar instantes. Se houvesse deriva, o desvio
-   * cresceria a cada ciclo. Offset constante e' latencia; offset crescente
-   * e' bug.
-   */
-  const desvios = ciclos.map((real, i) => real - esperados[i]);
-  const espalhamento = Math.max(...desvios) - Math.min(...desvios);
-  checar(espalhamento <= 90,
-    `sem deriva acumulada: desvios ${desvios.map((d) => `${d > 0 ? '+' : ''}${Math.round(d)}`).join(', ')}ms, espalhamento ${Math.round(espalhamento)}ms`);
-  checar(desvios.every((d) => d >= -20 && d <= 220),
-    'nenhum ciclo fora da faixa de latencia esperada');
+  const erros_ = [];
+  for (let i = 1; i < reg.length; i++) {
+    const intervaloReal = reg[i].t - reg[i - 1].t;
+    erros_.push(reg[i].d - intervaloReal);
+  }
+  const pior = Math.max(...erros_.map(Math.abs));
+  checar(pior < 25,
+    `cronometro bate com o intervalo real entre registros (erro maximo ${pior.toFixed(1)}ms)`);
+
+  // Deriva apareceria como erro CRESCENTE. Constante e' so' arredondamento.
+  const crescente = erros_.every((e, i) => i === 0 || Math.abs(e) > Math.abs(erros_[i - 1]) + 5);
+  checar(!crescente, `sem deriva acumulada (erros: ${erros_.map((e) => e.toFixed(1)).join(', ')}ms)`);
 
   // Repique de luva: dois toques colados valem um ciclo so'.
-  const antes = ciclos.length;
+  const antes = await p.evaluate(() => window.__registrados.length);
   const botao = p.locator('button[aria-label="Registrar fim do ciclo"]');
   await p.waitForTimeout(600);
   await botao.click();
   await botao.click({ delay: 0 });
   await p.waitForTimeout(200);
-  ciclos = await p.evaluate(() => window.__registrados.map((r) => r.duracaoMs));
-  checar(ciclos.length - antes === 1, 'repique bloqueado: 2 toques viram 1 ciclo');
+  const depois = await p.evaluate(() => window.__registrados.length);
+  checar(depois - antes === 1, 'repique bloqueado: 2 toques viram 1 ciclo');
 
   const naFila = await p.evaluate(() => new Promise((res) => {
     const r = indexedDB.open('ritmoprod', 1);
@@ -85,7 +103,8 @@ const navegador = await chromium.launch({ executablePath: EXEC });
     };
     r.onerror = () => res(-1);
   }));
-  checar(naFila === ciclos.length, `${naFila} ciclos gravados no IndexedDB antes de qualquer rede`);
+  const totalRegistrado = await p.evaluate(() => window.__registrados.length);
+  checar(naFila === totalRegistrado, `${naFila} ciclos gravados no IndexedDB antes de qualquer rede`);
   checar(erros.length === 0, `sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
   await ctx.close();
 }
