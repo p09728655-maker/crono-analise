@@ -7,7 +7,10 @@ import {
   amostraSuficiente, calcularOperacao, formatarSegundos, FR_PRESETS,
   operadoresNecessarios, taktTime,
 } from '../../domain/cronoanalise.js';
-import { atualizarEstudo, criarOperacao, obterEstudo, removerOperacao } from '../../lib/api.js';
+import {
+  analisarComIa, atualizarEstudo, criarOperacao, obterConfigIa, obterEstudo,
+  removerOperacao, salvarChaveIa,
+} from '../../lib/api.js';
 import { CartaControle, GraficoYamazumi } from './graficos.jsx';
 import RelatorioImpressao from './RelatorioImpressao.jsx';
 
@@ -240,6 +243,8 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             </p>
           )
         )}
+
+        <AnaliseIa estudo={estudo} analise={analise} />
           </>
         )}
 
@@ -496,6 +501,150 @@ function FormularioOperacao({ aoSalvar, aoCancelar }) {
  * A capacidade e' ditada pelo GARGALO, nao pela media das operacoes. Por
  * isso o gargalo aparece nomeado aqui em cima, e nao escondido numa celula.
  */
+/**
+ * Analise com IA.
+ *
+ * A chave da API e' salva UMA vez aqui e vive no servidor — o navegador
+ * nunca a le de volta (o GET devolve so' os 4 ultimos caracteres). No app
+ * antigo a chave morava no localStorage do chao de fabrica e vazou; este
+ * fluxo existe para isso nao se repetir.
+ */
+function AnaliseIa({ estudo, analise }) {
+  const [config, setConfig] = useState(null);
+  const [chave, setChave] = useState('');
+  const [trocando, setTrocando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [rodando, setRodando] = useState(false);
+  const [resposta, setResposta] = useState(null);
+  const [erro, setErro] = useState(null);
+
+  useEffect(() => {
+    obterConfigIa()
+      .then((c) => setConfig(c || { configurada: false }))
+      .catch(() => setConfig({ configurada: false }));
+  }, []);
+
+  const configurada = Boolean(config?.configurada);
+  const mostrarForm = config && (!configurada || trocando);
+  const temDados = analise.comDados.length > 0;
+
+  async function salvar(ev) {
+    ev.preventDefault();
+    setSalvando(true);
+    setErro(null);
+    try {
+      setConfig(await salvarChaveIa(chave.trim()));
+      setChave('');
+      setTrocando(false);
+    } catch (e) { setErro(e.message); }
+    setSalvando(false);
+  }
+
+  async function analisar() {
+    setRodando(true);
+    setErro(null);
+    try {
+      setResposta(await analisarComIa({
+        estudo: estudo.nome,
+        produto: estudo.produto,
+        recurso: estudo.recurso,
+        toleranciaPct: Number(estudo.tolerancia_pct) || 0,
+        taktTimeSeg: analise.taktMs ? analise.taktMs / 1000 : null,
+        operacoes: analise.comDados.map((op) => {
+          const r = op.resultado;
+          return {
+            nome: op.nome,
+            n: r.n,
+            toSeg: +(r.toMed / 1000).toFixed(2),
+            tnSeg: +(r.tnMed / 1000).toFixed(2),
+            tpSeg: +(r.tpPorPeca / 1000).toFixed(2),
+            cvPct: +r.cvPct.toFixed(1),
+            cap: r.cap,
+            frPct: Number(op.fr_pct) || 100,
+            paradasSeg: Math.round((r.totalParada || 0) / 1000),
+          };
+        }),
+      }));
+    } catch (e) { setErro(e.message); }
+    setRodando(false);
+  }
+
+  return (
+    <section style={est.ia} aria-label="Análise com IA">
+      <div style={est.iaTopo}>
+        <div style={{ minWidth: 0 }}>
+          <h2 style={est.iaTitulo}>Análise com IA</h2>
+          <p style={est.iaTexto}>
+            Diagnóstico, gargalo e ações recomendadas a partir dos números deste estudo.
+          </p>
+        </div>
+        {configurada && !trocando && (
+          <div style={est.iaAcoes}>
+            {config.resumo && <span style={est.iaChave}>chave {config.resumo}</span>}
+            {config.origem === 'banco' && (
+              <button type="button" style={est.iaBotaoTexto} onClick={() => setTrocando(true)}>
+                Trocar chave
+              </button>
+            )}
+            <button
+              type="button"
+              style={est.iaBotao}
+              onClick={analisar}
+              disabled={rodando || !temDados}
+              title={temDados ? undefined : 'Colete ciclos antes de analisar'}
+            >
+              {rodando ? 'Analisando...' : 'Analisar com IA'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {mostrarForm && (
+        <form style={est.iaForm} onSubmit={salvar}>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Chave da API Anthropic</span>
+            <input
+              type="password"
+              placeholder="sk-ant-..."
+              style={est.input}
+              value={chave}
+              onChange={(ev) => setChave(ev.target.value)}
+              autoComplete="off"
+            />
+            <span style={est.dica}>
+              Gere em console.anthropic.com. A chave fica guardada no servidor — não
+              neste computador — e não aparece de volta depois de salva.
+            </span>
+          </label>
+          <div style={est.iaFormAcoes}>
+            {trocando && (
+              <button type="button" style={est.iaBotaoTexto} onClick={() => { setTrocando(false); setChave(''); }}>
+                Cancelar
+              </button>
+            )}
+            <button type="submit" style={est.iaBotao} disabled={salvando || !chave.trim()}>
+              {salvando ? 'Salvando...' : 'Salvar chave'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {erro && <div style={est.iaErro}>{erro}</div>}
+
+      {resposta && (
+        <div style={est.iaResposta}>
+          <div style={est.iaRespostaTexto}>{resposta.analise}</div>
+          <div style={est.iaMeta}>
+            Gerada por {resposta.modelo}
+            {resposta.uso?.saida ? ` · ${resposta.uso.saida} tokens` : ''} — confira antes de decidir:
+            a IA lê os números, não o posto.
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function Resposta({ analise }) {
   const { capacidadeLinha, gargalo, operadores, taktMs } = analise;
   const semDados = !gargalo;
@@ -810,6 +959,52 @@ const est = {
     padding: espaco.xxl, boxShadow: elevacao.alta,
     display: 'flex', flexDirection: 'column', gap: espaco.lg,
   },
+  /* ---- analise com IA ---- */
+  ia: {
+    marginTop: espaco.xxl, padding: espaco.xl,
+    background: claro.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda,
+    display: 'flex', flexDirection: 'column', gap: espaco.lg,
+  },
+  iaTopo: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: espaco.lg, flexWrap: 'wrap',
+  },
+  iaTitulo: { ...tipo('destaque'), margin: 0 },
+  iaTexto: { ...tipo('legenda'), color: claro.textoFraco, margin: '2px 0 0' },
+  iaAcoes: { display: 'flex', alignItems: 'center', gap: espaco.md, flexWrap: 'wrap' },
+  iaChave: { ...tipo('legenda'), ...numeros, color: claro.textoFraco },
+  iaBotao: {
+    minHeight: 40, padding: `0 ${espaco.xl}px`,
+    background: claro.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
+    ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
+  },
+  iaBotaoTexto: {
+    minHeight: 40, padding: `0 ${espaco.md}px`, background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.md,
+    color: claro.textoMedio, ...tipo('legenda'), fontWeight: 600,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  iaForm: {
+    display: 'flex', flexDirection: 'column', gap: espaco.md,
+    padding: espaco.lg, background: '#F8F9FB',
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.md,
+    maxWidth: 560,
+  },
+  iaFormAcoes: { display: 'flex', justifyContent: 'flex-end', gap: espaco.md },
+  iaErro: {
+    padding: espaco.md, background: claro.criticoFundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.critico,
+    borderRadius: raio.sm, ...tipo('legenda'), color: claro.texto,
+  },
+  iaResposta: {
+    padding: espaco.lg, background: '#F8F9FB',
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.md,
+    display: 'flex', flexDirection: 'column', gap: espaco.md,
+  },
+  iaRespostaTexto: { ...tipo('corpo'), whiteSpace: 'pre-wrap', lineHeight: 1.55 },
+  iaMeta: { ...tipo('micro'), color: claro.textoFraco },
+
   campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
   fieldset: { border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: espaco.sm },
   rotuloCampo: rotulo(claro.textoFraco),

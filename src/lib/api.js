@@ -46,6 +46,9 @@ export const atualizarOperacao = (id, dados) =>
 export const removerOperacao = (id) =>
   requisitar(`/operacoes?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 export const analisarComIa = (dados) => requisitar('/ai/analisar', { metodo: 'POST', corpo: dados });
+export const obterConfigIa = () => requisitar('/config').then((r) => r.chaveIa);
+export const salvarChaveIa = (chaveIa) =>
+  requisitar('/config', { metodo: 'POST', corpo: { chaveIa } }).then((r) => r.chaveIa);
 
 const LOTE = 200;
 const TENTATIVAS = 4;

@@ -94,6 +94,8 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   // O relatorio impresso NAO depende de aba: ele traz tudo, sempre.
   await p.waitForSelector('[role="tablist"]');
   await p.waitForTimeout(400);
+  checar(await p.locator('[aria-label="Análise com IA"]').count() === 1,
+    'secao Analise com IA presente no painel');
   await p.emulateMedia({ media: 'print' });
   await p.waitForTimeout(600);
 
@@ -106,7 +108,9 @@ const navegador = await chromium.launch({ executablePath: EXEC });
       relatorioVisivel: vis(rel) === true,
       estoura: rel.scrollWidth > document.documentElement.clientWidth + 1,
       temAssinatura: /Analista respons/.test(rel.innerText),
-      temFormulas: /Nievel/.test(rel.innerText),
+      semNievel: !/Nievel/.test(rel.innerText),
+      temLegenda: /Legenda/.test(rel.innerText) && /Tempo Observado/.test(rel.innerText)
+        && /Fator de Ritmo/.test(rel.innerText),
     };
   });
 
@@ -114,7 +118,8 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(m.relatorioVisivel, 'relatorio aparece na impressao');
   checar(!m.estoura, 'relatorio cabe na largura util do A4');
   checar(m.temAssinatura, 'bloco de assinaturas presente');
-  checar(m.temFormulas, 'formulas aplicadas documentadas no papel');
+  checar(m.semNievel, 'Nievel saiu do relatorio — nao cobra mais ciclo de ninguem');
+  checar(m.temLegenda, 'legenda por extenso das abreviacoes (Obs., FR, TO...)');
 }
 
 await navegador.close();

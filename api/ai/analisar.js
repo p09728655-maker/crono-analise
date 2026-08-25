@@ -13,6 +13,7 @@
  * tivesse o token do app.
  */
 import Anthropic from '@anthropic-ai/sdk';
+import { sql } from '../_lib/db.js';
 import { autenticar } from '../_lib/auth.js';
 import { ErroHttp, handler, json, lerCorpo, permitir } from '../_lib/http.js';
 import { decimal, inteiro, lista, texto } from '../_lib/validar.js';
@@ -40,10 +41,14 @@ Estruture a resposta em:
 
 export default handler(async (req, res) => {
   permitir(req, ['POST']);
-  await autenticar(req);
+  const { empresaId } = await autenticar(req);
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new ErroHttp(503, 'Analise por IA nao configurada neste ambiente');
+  // Ambiente primeiro (configuracao do administrador); senao, a chave que o
+  // usuario salvou pelo painel (tabela configuracoes).
+  const chaveIa = process.env.ANTHROPIC_API_KEY || await chaveSalva(empresaId);
+  if (!chaveIa) {
+    throw new ErroHttp(503,
+      'Análise por IA não configurada. Salve a chave da API na seção "Análise com IA" do painel.');
   }
 
   const corpo = await lerCorpo(req);
@@ -73,7 +78,7 @@ export default handler(async (req, res) => {
     operacoes: resumo,
   };
 
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey: chaveIa });
 
   try {
     const resposta = await client.messages.create({
@@ -114,8 +119,9 @@ export default handler(async (req, res) => {
       throw new ErroHttp(429, 'Limite de uso da IA atingido. Tente em alguns minutos.');
     }
     if (err instanceof Anthropic.AuthenticationError) {
-      console.error('[ritmopatrimar] ANTHROPIC_API_KEY invalida.');
-      throw new ErroHttp(503, 'Analise por IA indisponivel');
+      console.error('[ritmopatrimar] chave da API de IA invalida ou revogada.');
+      throw new ErroHttp(503,
+        'A chave da IA foi recusada pela Anthropic. Troque a chave na seção "Análise com IA".');
     }
     if (err instanceof Anthropic.APIError) {
       console.error('[ritmopatrimar] erro da API Anthropic:', err.status, err.message);
@@ -124,3 +130,11 @@ export default handler(async (req, res) => {
     throw err;
   }
 });
+
+/** Chave salva pelo painel. Nunca sai daqui para o navegador. */
+async function chaveSalva(empresaId) {
+  const [linha] = await sql`
+    SELECT valor FROM configuracoes
+     WHERE empresa_id = ${empresaId} AND chave = 'anthropic_api_key'`;
+  return linha?.valor || null;
+}

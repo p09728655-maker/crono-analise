@@ -77,8 +77,7 @@ export default function RelatorioImpressao({ estudo, analise }) {
         ) : (
           <p style={est.ressalvaTexto}>
             Todas as operações atingiram a meta de observações definida para o estudo.
-            O mínimo de Nievel (95% de confiança, ±5% de erro) segue impresso na tabela
-            como referência de confiabilidade, sem travar o resultado.
+            O CV% de cada operação está na tabela como referência de estabilidade.
           </p>
         )}
       </section>
@@ -124,7 +123,6 @@ export default function RelatorioImpressao({ estudo, analise }) {
             <th style={est.thNum}>Cic/pç</th>
             <th style={est.thNum}>TP peça (s)</th>
             <th style={est.thNum}>CV%</th>
-            <th style={est.thNum}>Nievel</th>
             <th style={est.thNum}>Cap/h</th>
           </tr>
         </thead>
@@ -141,7 +139,6 @@ export default function RelatorioImpressao({ estudo, analise }) {
                 <td style={est.tdNum}>{r ? r.ciclosPorPeca : 1}</td>
                 <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpPorPeca) : '—'}</td>
                 <td style={est.tdNum}>{r ? r.cvPct.toFixed(1) : '—'}</td>
-                <td style={est.tdNum}>{r ? r.obsMinimas : '—'}</td>
                 <td style={est.tdNum}>{r ? r.cap : '—'}</td>
               </tr>
             );
@@ -161,21 +158,28 @@ export default function RelatorioImpressao({ estudo, analise }) {
         </div>
       )}
 
+      {/* Legenda em PALAVRAS, nao so formula: o relatorio circula em reuniao
+          com gente que nao vive de cronoanalise — "TO (s)" precisa dizer o
+          que e' sem ninguem perguntar. A formula vai junto, entre parenteses,
+          para quem quiser conferir a conta. */}
       <section style={est.formulas}>
-        <strong>Fórmulas aplicadas</strong>
-        <div style={est.gradeFormulas}>
+        <strong>Legenda</strong>
+        <div style={est.gradeLegenda}>
           {[
-            ['TN', 'TO × FR / 100'],
-            ['TP por ciclo', 'TN × (1 + Tolerância/100)'],
-            ['TP por peça', 'TP ciclo × ciclos/peça'],
-            ['Capacidade/h', '3.600 ÷ TP peça(s)'],
-            ['CV%', '(Desvio padrão ÷ Média) × 100'],
-            ['Nievel', 'n = (1,96 × CV% / 5)²'],
-            ['Nº operadores', 'Σ TP peça ÷ Takt'],
-          ].map(([k, v]) => (
-            <div key={k} style={est.formula}>
-              <span style={est.formulaRotulo}>{k}</span>
-              <span style={est.formulaValor}>{v}</span>
+            ['Obs.', 'Observações', 'ciclos cronometrados válidos da operação.'],
+            ['FR', 'Fator de Ritmo', 'avaliação do ritmo do operador; 100% é o ritmo normal.'],
+            ['TO (s)', 'Tempo Observado', 'média dos ciclos cronometrados, em segundos.'],
+            ['TN (s)', 'Tempo Normal', 'tempo observado corrigido pelo ritmo (TN = TO × FR ÷ 100).'],
+            ['Cic/pç', 'Ciclos por peça', 'quantas vezes a operação se repete em cada peça — peça com 2 furações conta 2.'],
+            ['TP peça (s)', 'Tempo Padrão da peça', 'tempo normal com tolerância, vezes os ciclos por peça (TN × (1 + Tolerância) × ciclos). É o tempo que vale para o planejamento.'],
+            ['CV%', 'Coeficiente de Variação', 'quanto os ciclos variaram entre si (desvio ÷ média × 100); menor = mais estável.'],
+            ['Cap/h', 'Capacidade por hora', 'peças por hora no tempo padrão (3.600 ÷ TP da peça).'],
+            ['Σ TP', 'Soma dos tempos padrão', 'tempo padrão total do produto neste posto, somando as operações.'],
+            ['Takt Time', 'Ritmo da demanda', 'tempo disponível por peça para atender a produção do dia (tempo ÷ quantidade). Operadores = Σ TP ÷ Takt.'],
+          ].map(([sigla, nome, texto]) => (
+            <div key={sigla} style={est.itemLegenda}>
+              <span style={est.legendaSigla}>{sigla}</span>
+              <span style={est.legendaTexto}><strong>{nome}</strong> — {texto}</span>
             </div>
           ))}
         </div>
@@ -227,10 +231,10 @@ const est = {
   quebraPagina: { breakBefore: 'page', pageBreakBefore: 'always' },
   grafico: { marginBottom: 12, breakInside: 'avoid', pageBreakInside: 'avoid' },
   formulas: { border: '1px solid #ccc', padding: 9, marginBottom: 16, breakInside: 'avoid' },
-  gradeFormulas: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 12px', marginTop: 6 },
-  formula: { display: 'flex', justifyContent: 'space-between', gap: 8, borderBottom: '1px dotted #ccc', fontSize: 9 },
-  formulaRotulo: { color: '#555' },
-  formulaValor: { fontFamily: "'Consolas', monospace", fontWeight: 600 },
+  gradeLegenda: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 16px', marginTop: 6 },
+  itemLegenda: { display: 'flex', gap: 6, fontSize: 9, lineHeight: 1.45, breakInside: 'avoid' },
+  legendaSigla: { flexShrink: 0, width: 58, fontWeight: 700, color: '#1F2328' },
+  legendaTexto: { color: '#444' },
   nota: { margin: '8px 0 0', fontSize: 8.5, color: '#555', lineHeight: 1.5 },
   assinaturas: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, marginTop: 32, breakInside: 'avoid' },
   assinatura: { textAlign: 'center' },

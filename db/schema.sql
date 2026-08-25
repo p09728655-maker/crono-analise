@@ -98,6 +98,18 @@ CREATE TABLE IF NOT EXISTS paradas (
 CREATE UNIQUE INDEX IF NOT EXISTS paradas_client_unq ON paradas (client_id);
 CREATE INDEX IF NOT EXISTS paradas_operacao_idx ON paradas (operacao_id);
 
+-- ------------------------------------------------------------ configuracoes
+-- Par chave/valor por empresa. Hoje guarda a chave da API de IA salva pelo
+-- app (quando nao ha ANTHROPIC_API_KEY no ambiente). O valor NUNCA volta
+-- inteiro para o navegador — a API devolve so' os 4 ultimos caracteres.
+CREATE TABLE IF NOT EXISTS configuracoes (
+  empresa_id    uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  chave         text NOT NULL,
+  valor         text NOT NULL,
+  atualizado_em timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (empresa_id, chave)
+);
+
 -- ------------------------------------------------------------------ gatilho
 CREATE OR REPLACE FUNCTION toca_atualizado_em() RETURNS trigger AS $$
 BEGIN
@@ -127,7 +139,8 @@ ALTER TABLE estudos     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE operacoes   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE observacoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE paradas     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE configuracoes ENABLE ROW LEVEL SECURITY;
 
 -- Defesa em camadas: remove tambem os grants diretos dos papeis expostos.
-REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas
+REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas, configuracoes
   FROM anon, authenticated;

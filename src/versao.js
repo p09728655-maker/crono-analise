@@ -13,6 +13,24 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.10.0',
+    data: '2026-08-25',
+    titulo: 'Análise com IA',
+    itens: [
+      'Nova seção "Análise com IA" no painel do PC: diagnóstico, gargalo e ações recomendadas a partir dos números do estudo.',
+      'A chave da API tem lugar no próprio app — salva uma vez, fica guardada no servidor e nunca volta para o navegador (só os 4 últimos caracteres aparecem, para reconhecer qual chave está ativa).',
+      'A coluna Nievel saiu do relatório impresso — o CV% segue na tabela como referência de estabilidade.',
+    ],
+  },
+  {
+    versao: '2.9.3',
+    data: '2026-08-25',
+    titulo: 'Legenda no relatório',
+    itens: [
+      'O relatório impresso ganhou uma Legenda por extenso: Obs., FR, TO, TN, Cic/pç, TP, CV%, Nievel, Cap/h, Σ TP e Takt explicados em palavras, com a fórmula entre parênteses — para o documento circular em reunião sem precisar de tradutor.',
+    ],
+  },
+  {
     versao: '2.9.2',
     data: '2026-08-25',
     titulo: 'Coleta sem conta de variação',

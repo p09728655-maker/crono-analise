@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const URL_TESTE = process.env.TEST_DATABASE_URL;
 const rodar = URL_TESTE ? describe : describe.skip;
 
-let sql, sync, estudos, operacoes;
+let sql, sync, estudos, operacoes, config;
 const EMPRESA = '11111111-1111-1111-1111-111111111111';
 const OUTRA_EMPRESA = '99999999-9999-9999-9999-999999999999';
 const TOKEN = 'token-de-teste';
@@ -42,6 +42,9 @@ rodar('API — integracao com Postgres', () => {
     sync = (await import('../api/sync.js')).default;
     estudos = (await import('../api/estudos.js')).default;
     operacoes = (await import('../api/operacoes.js')).default;
+    config = (await import('../api/config.js')).default;
+    // O teste cobre o caminho SEM chave no ambiente (a do banco).
+    delete process.env.ANTHROPIC_API_KEY;
 
     await sql`DELETE FROM empresas WHERE id IN (${EMPRESA}, ${OUTRA_EMPRESA})`;
     await sql`INSERT INTO empresas (id, nome) VALUES (${EMPRESA}, 'Patrimar Teste')`;
@@ -247,6 +250,34 @@ rodar('API — integracao com Postgres', () => {
     expect(res.statusCode).toBe(400);
     const depois = await sql`SELECT count(*)::int AS n FROM estudos WHERE empresa_id = ${EMPRESA}`;
     expect(depois[0].n).toBe(antes[0].n);
+  });
+
+  it('chave de IA: salva, resume sem expor e remove', async () => {
+    const chave = 'sk-ant-teste-abcdefghijklmnop1234';
+
+    // formato errado -> 400, nada gravado
+    const ruim = fingirRes();
+    await config(fingirReq({ metodo: 'POST', corpo: { chaveIa: 'minha-senha' } }), ruim);
+    expect(ruim.statusCode).toBe(400);
+
+    const salva = fingirRes();
+    await config(fingirReq({ metodo: 'POST', corpo: { chaveIa: chave } }), salva);
+    expect(salva.statusCode).toBe(200);
+    expect(salva.corpo.chaveIa.configurada).toBe(true);
+
+    // GET nunca devolve a chave inteira — so' os 4 ultimos caracteres.
+    const lida = fingirRes();
+    await config(fingirReq({}), lida);
+    expect(lida.corpo.chaveIa.configurada).toBe(true);
+    expect(lida.corpo.chaveIa.origem).toBe('banco');
+    expect(lida.corpo.chaveIa.resumo).toBe('•••1234');
+    expect(JSON.stringify(lida.corpo)).not.toContain(chave);
+
+    const removida = fingirRes();
+    await config(fingirReq({ metodo: 'DELETE' }), removida);
+    const depois = fingirRes();
+    await config(fingirReq({}), depois);
+    expect(depois.corpo.chaveIa.configurada).toBe(false);
   });
 
   it('nao entrega estudo de outra empresa', async () => {
