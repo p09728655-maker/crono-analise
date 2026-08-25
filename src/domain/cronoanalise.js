@@ -1,0 +1,134 @@
+/**
+ * Nucleo da cronoanalise: TO -> TN -> TP -> capacidade.
+ * Funcoes puras. Toda a matematica do sistema mora aqui.
+ */
+import {
+  MS_POR_HORA,
+  cartaDeControle,
+  classificarEstabilidade,
+  coeficienteVariacao,
+  desvioPadrao,
+  foraDeControle,
+  media,
+  observacoesMinimas,
+  temposValidos,
+  tendencia,
+} from './estatistica.js';
+
+/** Motivos de parada padronizados. Codigo estavel; rotulo pode mudar sem quebrar dado. */
+export const MOTIVOS_PARADA = [
+  { codigo: 'setup', rotulo: 'Setup / Troca', acao: 'Aplicar SMED e padronizar o plano de troca.' },
+  { codigo: 'manutencao', rotulo: 'Manutencao corretiva', acao: 'Implantar TPM e analisar historico de falhas.' },
+  { codigo: 'falta_material', rotulo: 'Falta de material', acao: 'Revisar kanban, ponto de pedido e lead time.' },
+  { codigo: 'qualidade', rotulo: 'Problema de qualidade', acao: 'Reforcar CEP e inspecao de inicio de lote.' },
+  { codigo: 'ferramenta', rotulo: 'Troca de broca / ferramenta', acao: 'Monitorar vida util da broca e criar plano de troca programada.' },
+  { codigo: 'ajuste_maquina', rotulo: 'Ajuste de maquina', acao: 'Padronizar gabarito e batente para eliminar ajuste manual.' },
+  { codigo: 'reuniao', rotulo: 'Reuniao / Treinamento', acao: 'Agendar fora do horario produtivo.' },
+  { codigo: 'pessoal', rotulo: 'Necessidade pessoal', acao: 'Ja coberto pela tolerancia; nao tratar como perda.' },
+  { codigo: 'outro', rotulo: 'Outro', acao: 'Detalhar na observacao para permitir classificacao posterior.' },
+];
+
+export const FR_PRESETS = [
+  { valor: 85, rotulo: 'Muito lento' },
+  { valor: 95, rotulo: 'Abaixo do normal' },
+  { valor: 100, rotulo: 'Normal' },
+  { valor: 110, rotulo: 'Acima do normal' },
+  { valor: 120, rotulo: 'Muito rapido' },
+];
+
+/**
+ * Calcula todos os indicadores de uma operacao.
+ * Retorna null quando ainda nao ha observacao valida — o chamador decide
+ * como renderizar o estado vazio, em vez de receber zeros enganosos.
+ */
+export function calcularOperacao(operacao, toleranciaPct = 0) {
+  const validos = temposValidos(operacao?.tempos);
+  if (!validos.length) return null;
+
+  const fr = Number(operacao.fr) || 100;
+  const toMed = media(validos);
+  const tnMed = toMed * (fr / 100);
+  const tpVal = tnMed * (1 + toleranciaPct / 100);
+
+  const paradas = operacao.paradas || [];
+  const totalParada = paradas.reduce((acc, p) => acc + (p.duracao || 0), 0);
+  const cvPct = coeficienteVariacao(validos);
+
+  return {
+    n: validos.length,
+    toMed,
+    tnMed,
+    tpVal,
+    cvPct,
+    sd: desvioPadrao(validos),
+    min: Math.min(...validos),
+    max: Math.max(...validos),
+    // Capacidade teorica por hora, ja com tolerancia embutida no TP.
+    cap: tpVal > 0 ? Math.floor(MS_POR_HORA / tpVal) : 0,
+    estabilidade: classificarEstabilidade(cvPct),
+    obsMinimas: observacoesMinimas(cvPct),
+    carta: cartaDeControle(validos),
+    outliers: foraDeControle(validos),
+    tendencia: tendencia(validos),
+    totalParada,
+    nParadas: paradas.length,
+  };
+}
+
+/**
+ * A operacao ja tem observacoes suficientes?
+ * Exige as duas condicoes: a meta definida pelo analista E o minimo
+ * estatistico de Nievel. Atingir so a meta manual nao garante validade.
+ */
+export function amostraSuficiente(resultado, metaObs) {
+  if (!resultado) return { ok: false, motivo: 'Sem observacoes' };
+  const meta = Number(metaObs) || 0;
+  if (meta > 0 && resultado.n < meta) {
+    return { ok: false, motivo: `Faltam ${meta - resultado.n} observacoes para a meta` };
+  }
+  if (resultado.n < resultado.obsMinimas) {
+    return { ok: false, motivo: `Nievel exige ${resultado.obsMinimas} obs para CV ${resultado.cvPct.toFixed(1)}%` };
+  }
+  return { ok: true, motivo: 'Amostra estatisticamente valida' };
+}
+
+/** Takt Time em ms. Ritmo que a demanda exige. */
+export function taktTime(tempoDisponivelSeg, quantidade) {
+  const qtd = Number(quantidade) || 0;
+  if (qtd <= 0) return 0;
+  return ((Number(tempoDisponivelSeg) || 0) * 1000) / qtd;
+}
+
+/** Numero de operadores necessarios = soma dos TP / Takt. */
+export function operadoresNecessarios(somaTpMs, taktMs) {
+  if (!taktMs || taktMs <= 0) return 0;
+  return somaTpMs / taktMs;
+}
+
+/**
+ * OEE = Disponibilidade x Desempenho x Qualidade.
+ * Recebe e devolve fracoes 0..1 para evitar confusao de escala.
+ */
+export function oee({ disponibilidade, desempenho, qualidade }) {
+  const d = Number(disponibilidade) || 0;
+  const p = Number(desempenho) || 0;
+  const q = Number(qualidade) || 0;
+  return { disponibilidade: d, desempenho: p, qualidade: q, oee: d * p * q };
+}
+
+/** Formata ms como segundos com casas decimais — uso exclusivo de apresentacao. */
+export function formatarSegundos(ms, casas = 1) {
+  if (!Number.isFinite(ms)) return '—';
+  return (ms / 1000).toFixed(casas);
+}
+
+/** Formata ms como cronometro mm:ss.d para leitura a distancia. */
+export function formatarCronometro(ms) {
+  if (!Number.isFinite(ms) || ms < 0) ms = 0;
+  const totalDecimos = Math.floor(ms / 100);
+  const decimos = totalDecimos % 10;
+  const totalSeg = Math.floor(totalDecimos / 10);
+  const seg = totalSeg % 60;
+  const min = Math.floor(totalSeg / 60);
+  return `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}.${decimos}`;
+}

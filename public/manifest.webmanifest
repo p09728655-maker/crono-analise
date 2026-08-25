@@ -1,0 +1,12 @@
+{
+  "name": "RitmoProd — Estudo de Tempos",
+  "short_name": "RitmoProd",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#14171A",
+  "theme_color": "#14171A",
+  "orientation": "any",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
