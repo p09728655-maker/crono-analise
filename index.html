@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#14171A" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="RitmoProd" />
+    <meta name="description" content="Cronoanalise e estudo de tempos — Patrimar Moveis" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>RitmoProd — Estudo de Tempos</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body, #raiz { height: 100%; margin: 0; }
+      body {
+        background: #14171A;
+        color: #F5F7FA;
+        font-family: 'Calibri', 'Carlito', 'Segoe UI', system-ui, -apple-system, sans-serif;
+        /* Sem seleção acidental de texto ao tocar rápido no botão de registro. */
+        -webkit-user-select: none;
+        user-select: none;
+        overscroll-behavior: none;
+      }
+      /* Campos de formulário voltam a permitir seleção. */
+      input, textarea { -webkit-user-select: text; user-select: text; }
+      button { font-family: inherit; }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+        outline: 3px solid #F7ECC0;
+        outline-offset: 2px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="raiz"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
