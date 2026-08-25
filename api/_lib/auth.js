@@ -76,7 +76,13 @@ export async function autenticar(req) {
   const esperado = process.env.API_TOKEN;
   if (!esperado) {
     console.error('[ritmopatrimar] API_TOKEN nao configurado — recusando tudo.');
-    throw naoAutorizado('Servidor sem API_TOKEN configurado');
+    // A mensagem diz o que fazer, nao apenas o que falta: quem le esta
+    // travado no painel da Vercel, nao lendo codigo.
+    throw naoAutorizado(
+      'Servidor sem API_TOKEN. Configure a variavel na Vercel e publique um '
+      + 'deploy novo — variavel nao entra em deploy que ja existe. '
+      + 'Abra /api/status para ver o que falta.',
+    );
   }
 
   const token = tokenDaRequisicao(req);
