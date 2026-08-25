@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.8.0',
+    data: '2026-08-25',
+    titulo: 'Celular é coleta',
+    itens: [
+      'No celular e no tablet o app só abre a Coleta: sem abas de modo, e link de Análise cai na Coleta equivalente. Análise é trabalho de PC.',
+      'Na importação, o Recurso/Posto ficou editável: o roteiro sugere a máquina (ex.: FUR16), você escolhe em qual o estudo vai rodar.',
+      'Criar ou importar estudo no PC volta para a lista — cair no painel de análise vazio, cheio de avisos, estranhava. No celular segue direto para a coleta.',
+    ],
+  },
+  {
     versao: '2.7.0',
     data: '2026-08-25',
     titulo: 'Importação com o formulário completo',

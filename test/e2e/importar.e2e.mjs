@@ -76,6 +76,9 @@ for (const modo of ['analise']) {
   checar(larguras.doc <= larguras.tela, `${modo}: sem rolagem horizontal (${larguras.doc}/${larguras.tela}px)`);
   checar(larguras.estourados === 0, `${modo}: nada estourado dentro do modal (${larguras.estourados})`);
 
+  const recursoImp = dialogo.locator('label', { hasText: 'Recurso / Posto' }).locator('input');
+  checar(await recursoImp.inputValue() === 'FUR16', `${modo}: maquina do roteiro sugerida (FUR16)`);
+  await recursoImp.fill('FUR03');
   await dialogo.locator('label', { hasText: 'Setor' }).locator('input').fill('Usinagem');
 
   // Mesmas informacoes do cadastro manual: Ritmo/Demanda com jornada 8,8h.
@@ -86,11 +89,12 @@ for (const modo of ['analise']) {
   checar(await dialogo.locator('text=8h48min').count() === 1, `${modo}: 8,8h viram 8h48min`);
 
   await dialogo.locator('button', { hasText: 'Criar estudo' }).click();
-  await p.waitForFunction(() => window.__aberto !== null, { timeout: 8000 });
+  await p.waitForFunction(() => window.__posts.length > 0, { timeout: 8000 });
+  await dialogo.waitFor({ state: 'detached', timeout: 8000 });
 
   const post = await p.evaluate(() => window.__posts[0]);
   checar(post.corpo.produto === 'MESA CABECEIRA SLEEP BRANCO', `${modo}: produto vem do PDF`);
-  checar(post.corpo.recurso === 'FUR16', `${modo}: recurso e' a maquina do roteiro`);
+  checar(post.corpo.recurso === 'FUR03', `${modo}: maquina escolhida vence a do roteiro (${post.corpo.recurso})`);
   checar(post.corpo.setor === 'Usinagem', `${modo}: setor vai junto na importacao`);
   checar(post.corpo.taktTimeMs === 66000, `${modo}: takt calculado no POST (${post.corpo.taktTimeMs})`);
   checar(post.corpo.operacoes.length === 6, `${modo}: 6 operacoes aninhadas no POST`);
@@ -98,8 +102,8 @@ for (const modo of ['analise']) {
     `${modo}: ciclos por peca [${post.corpo.operacoes.map((o) => o.ciclosPorPeca)}]`);
   checar(post.corpo.operacoes[1].descricao.includes('cód. 778.002.001'),
     `${modo}: proveniencia do ERP gravada na operacao`);
-  checar(await p.evaluate(() => window.__aberto) === 'novo-1',
-    `${modo}: abre o estudo recem-criado`);
+  checar(await p.evaluate(() => window.__aberto) === null,
+    `${modo}: importar no PC fica na lista, nao cai na analise vazia`);
 
   checar(errosConsole.length === 0,
     `${modo}: sem erro de pagina (${errosConsole.join('; ') || 'nenhum'})`);

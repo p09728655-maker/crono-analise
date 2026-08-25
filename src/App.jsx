@@ -4,7 +4,7 @@ import DetalheEstudo from './features/estudos/DetalheEstudo.jsx';
 import ColetaFuradeira from './features/coleta/ColetaFuradeira.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import BarraSincronizacao from './components/BarraSincronizacao.jsx';
-import { caminhos, useRota } from './lib/dispositivo.js';
+import { caminhos, ehDesktop, useRota } from './lib/dispositivo.js';
 import { obterEstudo } from './lib/api.js';
 import { cores as escuro } from './theme/tokens.js';
 
@@ -18,6 +18,7 @@ import { cores as escuro } from './theme/tokens.js';
 export default function App() {
   const [rota, navegar] = useRota();
   const { modo, tela, estudoId, operacaoId } = rota;
+  const desktop = ehDesktop();
 
   const irParaLista = useCallback(() => navegar(caminhos.lista(modo)), [navegar, modo]);
   const abrirEstudo = useCallback((id) => navegar(caminhos.estudo(modo, id)), [navegar, modo]);
@@ -46,6 +47,18 @@ export default function App() {
     if (rota.padrao) navegar(caminhos.lista(modo), { substituir: true });
   }, [rota.padrao, modo, navegar]);
 
+  // Celular e tablet SO abrem a coleta. Analise e' trabalho de PC — no
+  // chao de fabrica ela so' atrapalha e abre porta para toque errado.
+  // Um link /analise aberto no celular cai na coleta equivalente.
+  useEffect(() => {
+    if (desktop || modo !== 'analise') return;
+    navegar(estudoId ? caminhos.estudo('coleta', estudoId) : caminhos.lista('coleta'), { substituir: true });
+  }, [desktop, modo, estudoId, navegar]);
+
+  // Enquanto o redirecionamento acima nao aplica, nao renderiza a analise
+  // no aparelho de toque — nem por um quadro.
+  if (!desktop && modo === 'analise') return null;
+
   return (
     <>
       {!emColeta && (
@@ -54,8 +67,9 @@ export default function App() {
         </div>
       )}
 
+      {/* Sem alternador de modo no aparelho de toque: coleta e' o unico modo la. */}
       {tela === 'lista' && (
-        <ListaEstudos aoAbrir={abrirEstudo} modo={modo} aoTrocarModo={trocarModo} />
+        <ListaEstudos aoAbrir={abrirEstudo} modo={modo} aoTrocarModo={desktop ? trocarModo : undefined} />
       )}
 
       {tela === 'estudo' && (

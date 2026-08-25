@@ -1,6 +1,6 @@
 {
   "name": "ritmopatrimar",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "private": true,
   "type": "module",
   "description": "RitmoPatrimar — Estudo de Tempos e Cronoanalise (Patrimar Moveis)",
@@ -11,7 +11,7 @@
     "test": "node test/checar-estilos.mjs && vitest run",
     "test:watch": "vitest",
     "lint": "eslint src api --ext .js,.jsx",
-    "test:e2e": "node test/e2e/coleta.e2e.mjs && node test/e2e/analise.e2e.mjs && node test/e2e/navegacao.e2e.mjs && node test/e2e/saidas.e2e.mjs && node test/e2e/agrupamento.e2e.mjs && node test/e2e/importar.e2e.mjs && node test/e2e/novoestudo.e2e.mjs",
+    "test:e2e": "node test/e2e/coleta.e2e.mjs && node test/e2e/analise.e2e.mjs && node test/e2e/navegacao.e2e.mjs && node test/e2e/saidas.e2e.mjs && node test/e2e/agrupamento.e2e.mjs && node test/e2e/importar.e2e.mjs && node test/e2e/novoestudo.e2e.mjs && node test/e2e/dispositivo.e2e.mjs",
     "check:estilos": "node test/checar-estilos.mjs"
   },
   "dependencies": {

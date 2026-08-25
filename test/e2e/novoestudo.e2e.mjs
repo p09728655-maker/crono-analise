@@ -60,13 +60,16 @@ const b = await chromium.launch({ executablePath: EXEC });
   const etapa3 = form.locator('[aria-current="step"]');
   checar(/Ritmo/.test(await etapa3.innerText()), 'form: etapa ativa segue o foco (Ritmo / Demanda)');
 
-  await form.locator('button', { hasText: 'Criar e iniciar coleta' }).click();
-  await p.waitForFunction(() => window.__aberto !== null, { timeout: 4000 });
+  await form.locator('button', { hasText: 'Criar estudo' }).click();
+  await p.waitForFunction(() => window.__posts.length > 0, { timeout: 4000 });
+  await p.locator('[aria-label="Novo estudo"]').waitFor({ state: 'detached', timeout: 4000 });
 
   const post = await p.evaluate(() => window.__posts[0]);
   checar(post.corpo.nome === 'Furação lateral — Linha 2', 'POST: nome do estudo');
   checar(post.corpo.setor === 'Usinagem', `POST: setor cadastrado (${post.corpo.setor})`);
   checar(post.corpo.taktTimeMs === 42000, `POST: taktTimeMs calculado = ${post.corpo.taktTimeMs}`);
+  checar(await p.evaluate(() => window.__aberto) === null,
+    'PC: criar NAO cai na analise vazia — fica na lista');
   await ctx.close();
 }
 

@@ -24,6 +24,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
   const [roteiro, setRoteiro] = useState(null);
   const [nomeArquivo, setNomeArquivo] = useState('');
   const [nome, setNome] = useState('');
+  const [recurso, setRecurso] = useState('');
   const [campos, setCampos] = useState({ setor: '', analista: '', toleranciaPct: 15, metaObs: 12 });
   const [calc, setCalc] = useState({ ...CALC_PADRAO });
   const [criando, setCriando] = useState(false);
@@ -45,6 +46,8 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
       setRoteiro(r);
       setNomeArquivo(arquivo.name);
       setNome(`${r.produtoPai.descricao} — ${r.maquinas.join(' / ')}`);
+      // O roteiro SUGERE a maquina; o estudo pode rodar em outra.
+      setRecurso(r.maquinas.length === 1 ? r.maquinas[0] : '');
     } catch (e) {
       setErro(e.message);
       // Permite escolher o mesmo arquivo de novo depois de corrigi-lo.
@@ -67,7 +70,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
         const r = await criarEstudo({
           nome: grupos.length === 1 ? nome.trim() || nomePadrao(roteiro, grupo) : nomePadrao(roteiro, grupo),
           produto: roteiro.produtoPai.descricao,
-          recurso: grupo.maquina,
+          recurso: grupos.length === 1 ? (recurso.trim() || grupo.maquina) : grupo.maquina,
           setor: campos.setor,
           analista: campos.analista,
           toleranciaPct: Number(campos.toleranciaPct) || 15,
@@ -184,6 +187,20 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
                     </label>
                   )}
                   <div style={est.grade}>
+                    {grupos.length === 1 && (
+                      <label style={est.campo}>
+                        <span style={est.rotuloCampo}>Recurso / Posto</span>
+                        <input
+                          style={est.input}
+                          value={recurso}
+                          onChange={(ev) => setRecurso(ev.target.value)}
+                        />
+                        <span style={est.dica}>
+                          O roteiro indica {grupos[0].maquina} — troque se o estudo
+                          for rodar em outra máquina.
+                        </span>
+                      </label>
+                    )}
                     <label style={est.campo}>
                       <span style={est.rotuloCampo}>Setor</span>
                       <input

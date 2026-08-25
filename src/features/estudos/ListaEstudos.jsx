@@ -49,7 +49,11 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
     const r = await criarEstudo(dados);
     setCriando(false);
     await carregar();
-    aoAbrir?.(r.estudo.id);
+    // No celular, criar e' o primeiro passo da coleta: segue para o estudo.
+    // No PC, um estudo recem-criado nao tem o que analisar — cair no painel
+    // cheio de avisos de amostra vazia so' estranha. Fica na lista, com o
+    // estudo aparecendo no grupo do produto.
+    if (!analise) aoAbrir?.(r.estudo.id);
   }
 
   const temEstudos = estado === 'pronto' && estudos.length > 0;
@@ -196,7 +200,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
           analise={analise}
           produtosExistentes={produtosConhecidos(estudos)}
           setoresConhecidos={setoresConhecidos(estudos)}
-          aoConcluir={async (id) => { setImportando(false); await carregar(); aoAbrir?.(id); }}
+          aoConcluir={async (id) => { setImportando(false); await carregar(); if (!analise) aoAbrir?.(id); }}
           aoCancelar={() => setImportando(false)}
         />
       )}
@@ -555,7 +559,7 @@ function FormularioEstudo({ est, t, analise, produtos = [], setores = [], aoSalv
             Cancelar
           </button>
           <button type="submit" style={{ ...est.botaoPrimario, flex: 1 }} disabled={salvando}>
-            {salvando ? 'Salvando...' : 'Criar e iniciar coleta →'}
+            {salvando ? 'Salvando...' : (analise ? 'Criar estudo' : 'Criar e iniciar coleta →')}
           </button>
         </div>
       </form>
