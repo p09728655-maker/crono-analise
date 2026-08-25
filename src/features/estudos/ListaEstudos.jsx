@@ -3,6 +3,7 @@ import { ALVO_MINIMO, cores as escuro } from '../../theme/tokens.js';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
+import { formatarSegundos, taktTime } from '../../domain/cronoanalise.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 
@@ -276,7 +277,11 @@ function ConfirmarRemocao({ est, estudo, aoConfirmar, aoCancelar }) {
 function FormularioEstudo({ est, aoSalvar, aoCancelar }) {
   const [dados, setDados] = useState({
     nome: '', recurso: '', produto: '', analista: '', toleranciaPct: 15, metaObs: 12,
+    taktSeg: '',
   });
+  // Calculadora: quase ninguem sabe o Takt de cabeca, mas todo mundo sabe
+  // quanto precisa produzir e quanto tempo tem para isso.
+  const [calc, setCalc] = useState({ quantidade: '', horas: '' });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState(null);
 
@@ -285,12 +290,24 @@ function FormularioEstudo({ est, aoSalvar, aoCancelar }) {
     onChange: (ev) => setDados((d) => ({ ...d, [k]: ev.target.value })),
   });
 
+  /** Recalcula o Takt sempre que quantidade ou horas mudam. */
+  function aplicarCalculo(novo) {
+    setCalc(novo);
+    const qtd = Number(novo.quantidade);
+    const horas = Number(novo.horas);
+    if (qtd > 0 && horas > 0) {
+      const ms = taktTime(horas * 3600, qtd);
+      setDados((d) => ({ ...d, taktSeg: formatarSegundos(ms, 1) }));
+    }
+  }
+
   async function enviar(ev) {
     ev.preventDefault();
     if (!dados.nome.trim()) { setErro('Informe o nome do estudo.'); return; }
     setSalvando(true);
     setErro(null);
-    try { await aoSalvar(dados); }
+    const taktMs = dados.taktSeg ? Math.round(Number(dados.taktSeg) * 1000) : null;
+    try { await aoSalvar({ ...dados, taktTimeMs: taktMs && taktMs > 0 ? taktMs : null }); }
     catch (e) { setErro(e.message); setSalvando(false); }
   }
 
@@ -324,6 +341,44 @@ function FormularioEstudo({ est, aoSalvar, aoCancelar }) {
             <input type="number" min="1" max="999" style={est.input} {...campo('metaObs')} />
           </Campo>
         </div>
+
+        <fieldset style={est.bloco}>
+          <legend style={est.rotuloCampo}>Takt Time</legend>
+          <p style={est.dica}>
+            Ritmo que a demanda exige. Sem ele o sistema calcula tempo padrão e
+            capacidade, mas <strong>não dimensiona mão de obra</strong> nem desenha
+            a linha de referência no Yamazumi.
+          </p>
+
+          <div style={est.duasColunas}>
+            <Campo est={est} label="Quantidade por dia" dica="Peças que precisam sair.">
+              <input
+                type="number" min="1" style={est.input}
+                value={calc.quantidade}
+                onChange={(e) => aplicarCalculo({ ...calc, quantidade: e.target.value })}
+              />
+            </Campo>
+            <Campo est={est} label="Horas disponíveis" dica="Tempo produtivo, já sem paradas planejadas.">
+              <input
+                type="number" min="0.1" step="0.1" style={est.input}
+                value={calc.horas}
+                onChange={(e) => aplicarCalculo({ ...calc, horas: e.target.value })}
+              />
+            </Campo>
+          </div>
+
+          <Campo est={est} label="Takt Time (segundos por peça)"
+                 dica="Preenchido pela conta acima, ou digite direto se já souber.">
+            <input type="number" min="0" step="0.1" style={est.input} {...campo('taktSeg')} />
+          </Campo>
+
+          {dados.taktSeg > 0 && (
+            <p style={est.resultadoCalc}>
+              Uma peça a cada <strong>{Number(dados.taktSeg).toFixed(1)} s</strong> para
+              atender a demanda.
+            </p>
+          )}
+        </fieldset>
 
         {erro && <div style={est.erroForm}>{erro}</div>}
 
@@ -477,6 +532,15 @@ function estilos(t, analise) {
     textoModal: { ...tipo('corpo'), margin: 0, color: t.medio },
     acoesModal: { display: 'flex', gap: espaco.md, marginTop: espaco.xs },
     duasColunas: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg },
+    bloco: {
+      border: 'none', padding: 0, margin: 0,
+      display: 'flex', flexDirection: 'column', gap: espaco.md,
+      paddingTop: espaco.md, borderTop: `1px solid ${t.borda}`,
+    },
+    resultadoCalc: {
+      margin: 0, padding: espaco.md, borderRadius: raio.sm,
+      background: t.realce, ...tipo('legenda'), color: t.medio,
+    },
     campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
     rotuloCampo: rotulo(t.fraco),
     obrigatorio: { color: t.critico },

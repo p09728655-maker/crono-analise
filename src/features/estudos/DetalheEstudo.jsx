@@ -3,6 +3,7 @@ import { ALVO_MINIMO, cores, espaco, fonte, raio, tamanho } from '../../theme/to
 import { calcularOperacao, formatarSegundos, FR_PRESETS } from '../../domain/cronoanalise.js';
 import { amostraSuficiente } from '../../domain/cronoanalise.js';
 import { criarOperacao, obterEstudo, removerOperacao } from '../../lib/api.js';
+import Cabecalho from '../../components/Cabecalho.jsx';
 
 export default function DetalheEstudo({ estudoId, aoColetar, aoVoltar }) {
   const [dados, setDados] = useState(null);
@@ -31,16 +32,17 @@ export default function DetalheEstudo({ estudoId, aoColetar, aoVoltar }) {
 
   return (
     <div style={est.tela}>
-      <header style={est.cabecalho}>
-        {/* A trilha de navegacao no topo ja' oferece o voltar. */}
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <h1 style={est.titulo}>{estudo.nome}</h1>
-          <p style={est.subtitulo}>
-            {[estudo.recurso, estudo.produto].filter(Boolean).join(' · ')} · Tolerancia {tolerancia}% · Meta {estudo.meta_obs} ciclos
-          </p>
-        </div>
-      </header>
+      {/* Barra ancorada, com a saida para a lista. Sem ela esta tela virava
+          beco sem saida: era possivel entrar no estudo e nao voltar. */}
+      <Cabecalho
+        modo="coleta"
+        aoVoltar={aoVoltar}
+        titulo={estudo.nome}
+        subtitulo={[estudo.recurso, estudo.produto].filter(Boolean).join(' · ')
+          + ` · Tolerância ${tolerancia}% · Meta ${estudo.meta_obs} ciclos`}
+      />
 
+      <div style={est.conteudo}>
       {!operacoes.length ? (
         <Aviso
           texto="Cadastre a primeira operacao para comecar a cronometrar."
@@ -70,6 +72,8 @@ export default function DetalheEstudo({ estudoId, aoColetar, aoVoltar }) {
           + Adicionar operacao
         </button>
       )}
+
+      </div>
 
       {adicionando && (
         <FormularioOperacao
@@ -185,7 +189,10 @@ function Aviso({ texto, acao }) {
 const est = {
   tela: {
     minHeight: '100dvh', background: cores.fundo, color: cores.texto,
-    fontFamily: fonte.familia, padding: espaco.lg,
+    fontFamily: fonte.familia,
+  },
+  conteudo: {
+    padding: espaco.lg,
     display: 'flex', flexDirection: 'column', gap: espaco.lg,
   },
   cabecalho: { display: 'flex', alignItems: 'center', gap: espaco.md },

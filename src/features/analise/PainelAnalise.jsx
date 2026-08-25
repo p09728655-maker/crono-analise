@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { claro, fonteAnalise } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
+import Abas from '../../components/Abas.jsx';
 import {
-  amostraSuficiente, calcularOperacao, formatarSegundos, FR_PRESETS, operadoresNecessarios,
+  amostraSuficiente, calcularOperacao, formatarSegundos, FR_PRESETS,
+  operadoresNecessarios, taktTime,
 } from '../../domain/cronoanalise.js';
-import { criarOperacao, obterEstudo, removerOperacao } from '../../lib/api.js';
+import { atualizarEstudo, criarOperacao, obterEstudo, removerOperacao } from '../../lib/api.js';
 import { CartaControle, GraficoYamazumi } from './graficos.jsx';
 import RelatorioImpressao from './RelatorioImpressao.jsx';
 
@@ -27,6 +29,20 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
   const [erro, setErro] = useState(null);
   const [opSelecionada, setOpSelecionada] = useState(null);
   const [adicionandoOp, setAdicionandoOp] = useState(false);
+  const [editandoEstudo, setEditandoEstudo] = useState(false);
+  // Aba na URL: recarregar e compartilhar link preservam a vista.
+  const [aba, setAba] = useState(() => {
+    const q = new URLSearchParams(window.location.search).get('aba');
+    return ['yamazumi', 'operacoes', 'carta'].includes(q) ? q : 'yamazumi';
+  });
+
+  const trocarAba = useCallback((id) => {
+    setAba(id);
+    const url = new URL(window.location.href);
+    url.searchParams.set('aba', id);
+    // replaceState: aba e' vista do mesmo estudo, nao lugar por onde se passou.
+    window.history.replaceState({}, '', url);
+  }, []);
 
   const carregar = useCallback(async () => {
     setEstado('carregando');
@@ -102,9 +118,14 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           subtitulo={[estudo.recurso, estudo.produto, estudo.analista]
             .filter(Boolean).join(' · ') + ` · Tolerância ${analise.tolerancia}%`}
           acoes={(
-            <button type="button" onClick={() => window.print()} style={est.botaoImprimir}>
-              Imprimir relatório
-            </button>
+            <>
+              <button type="button" onClick={() => setEditandoEstudo(true)} style={est.botaoSecundario}>
+                Ajustes do estudo
+              </button>
+              <button type="button" onClick={() => window.print()} style={est.botaoImprimir}>
+                Imprimir relatório
+              </button>
+            </>
           )}
         />
 
@@ -146,12 +167,6 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           </div>
         ) : (
           <>
-        {/* A RESPOSTA vem primeiro e sozinha.
-            Antes havia cinco cartoes de peso identico: dois eram contexto
-            (quantas operacoes, quantos ciclos) e dois eram a decisao
-            (capacidade e dimensionamento). Com tudo no mesmo tamanho, nada
-            se destacava — e o gargalo, que e' o achado mais importante do
-            estudo, era um chip minusculo dentro da tabela. */}
         <Resposta analise={analise} />
 
         <section style={est.contexto} aria-label="Números de apoio">
@@ -160,48 +175,84 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             ['Ciclos coletados', analise.totalCiclos, ''],
             ['Σ TP por peça', formatarSegundos(analise.somaTp), ' s'],
             ['Takt Time', analise.taktMs ? formatarSegundos(analise.taktMs) : '—', analise.taktMs ? ' s' : ''],
-          ].map(([rotulo, valor, sufixo]) => (
-            <div key={rotulo} style={est.contextoItem}>
-              <span style={est.contextoRotulo}>{rotulo}</span>
+          ].map(([rot, valor, sufixo]) => (
+            <div key={rot} style={est.contextoItem}>
+              <span style={est.contextoRotulo}>{rot}</span>
               <span style={est.contextoValor}>{valor}{sufixo}</span>
             </div>
           ))}
         </section>
 
-        <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} />
-
-        <TabelaOperacoes
-          analise={analise}
-          metaObs={estudo.meta_obs}
-          estudo={estudo}
-          aoAdicionar={() => setAdicionandoOp(true)}
-          aoColetar={aoColetar}
-          aoRemover={async (op) => {
-            if (!window.confirm(`Remover a operação "${op.nome}" e todos os seus ciclos?`)) return;
-            await removerOperacao(op.id);
-            carregar();
-          }}
+        {/* A resposta fica ACIMA das abas, nunca dentro de uma.
+            Se ela sumisse enquanto o analista olha o Yamazumi, ele perderia
+            a conclusao justo ao examinar a evidencia dela. */}
+        <Abas
+          ativa={aba}
+          aoTrocar={trocarAba}
+          abas={[
+            { id: 'yamazumi', rotulo: 'Yamazumi' },
+            { id: 'operacoes', rotulo: 'Operações', contador: analise.operacoes.length },
+            { id: 'carta', rotulo: 'Carta de controle' },
+          ]}
         />
 
-        {analise.comDados.length > 0 && (
-          <section>
-            <div style={est.seletor}>
-              <span style={est.seletorRotulo}>Carta de controle:</span>
-              {analise.comDados.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => setOpSelecionada(o.id)}
-                  style={{ ...est.aba, ...(o.id === opCarta?.id ? est.abaAtiva : {}) }}
-                >
-                  {o.nome}
-                </button>
-              ))}
-            </div>
-            {opCarta && <CartaControle operacao={opCarta} />}
-          </section>
+        {aba === 'yamazumi' && (
+          <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} />
+        )}
+
+        {aba === 'operacoes' && (
+          <TabelaOperacoes
+            analise={analise}
+            metaObs={estudo.meta_obs}
+            estudo={estudo}
+            aoAdicionar={() => setAdicionandoOp(true)}
+            aoColetar={aoColetar}
+            aoRemover={async (op) => {
+              if (!window.confirm(`Remover a operação "${op.nome}" e todos os seus ciclos?`)) return;
+              await removerOperacao(op.id);
+              carregar();
+            }}
+          />
+        )}
+
+        {aba === 'carta' && (
+          analise.comDados.length > 0 ? (
+            <section>
+              <div style={est.seletor}>
+                <span style={est.seletorRotulo}>Operação:</span>
+                {analise.comDados.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => setOpSelecionada(o.id)}
+                    style={{ ...est.aba, ...(o.id === opCarta?.id ? est.abaAtiva : {}) }}
+                  >
+                    {o.nome}
+                  </button>
+                ))}
+              </div>
+              {opCarta && <CartaControle operacao={opCarta} />}
+            </section>
+          ) : (
+            <p style={est.semDados}>
+              Nenhuma operação tem ciclos coletados ainda. A carta de controle
+              aparece quando houver pelo menos dois.
+            </p>
+          )
         )}
           </>
+        )}
+
+        {editandoEstudo && (
+          <AjustesDoEstudo
+            estudo={estudo}
+            aoCancelar={() => setEditandoEstudo(false)}
+            aoSalvar={async (dados) => {
+              await atualizarEstudo(estudoId, dados);
+              setEditandoEstudo(false);
+              carregar();
+            }}
+          />
         )}
 
         {adicionandoOp && (
@@ -215,6 +266,109 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Ajustes do estudo.
+ *
+ * Existe porque tolerancia, meta de observacoes e Takt Time sao decisoes que
+ * mudam DEPOIS de comecar a coletar: o analista descobre a demanda real, ou
+ * revisa a tolerancia ao ver as condicoes do posto. Sem isto, corrigir um
+ * desses campos exigiria recriar o estudo e perder os ciclos ja coletados.
+ */
+function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
+  const [tolerancia, setTolerancia] = useState(Number(estudo.tolerancia_pct) || 15);
+  const [metaObs, setMetaObs] = useState(Number(estudo.meta_obs) || 12);
+  const [taktSeg, setTaktSeg] = useState(
+    estudo.takt_time_ms ? formatarSegundos(Number(estudo.takt_time_ms), 1) : '',
+  );
+  const [calc, setCalc] = useState({ quantidade: '', horas: '' });
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState(null);
+
+  function aplicarCalculo(novo) {
+    setCalc(novo);
+    const qtd = Number(novo.quantidade);
+    const horas = Number(novo.horas);
+    if (qtd > 0 && horas > 0) setTaktSeg(formatarSegundos(taktTime(horas * 3600, qtd), 1));
+  }
+
+  async function enviar(ev) {
+    ev.preventDefault();
+    setSalvando(true);
+    setErro(null);
+    const ms = taktSeg ? Math.round(Number(taktSeg) * 1000) : null;
+    try {
+      await aoSalvar({
+        toleranciaPct: Number(tolerancia),
+        metaObs: Number(metaObs),
+        taktTimeMs: ms && ms > 0 ? ms : null,
+      });
+    } catch (e) { setErro(e.message); setSalvando(false); }
+  }
+
+  return (
+    <div style={est.modal} role="dialog" aria-label="Ajustes do estudo">
+      <form style={est.formulario} onSubmit={enviar}>
+        <h2 style={{ margin: 0, ...tipo('titulo') }}>Ajustes do estudo</h2>
+        <p style={est.dica}>
+          Estes valores recalculam os indicadores. Os ciclos já coletados não são afetados.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg }}>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Tolerância (%)</span>
+            <input type="number" min="0" max="100" style={est.input}
+                   value={tolerancia} onChange={(e) => setTolerancia(e.target.value)} />
+            <span style={est.dica}>Fadiga e necessidades. Típica: 10 a 15.</span>
+          </label>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Meta de ciclos</span>
+            <input type="number" min="1" max="999" style={est.input}
+                   value={metaObs} onChange={(e) => setMetaObs(e.target.value)} />
+            <span style={est.dica}>Recomendado: 12 ou mais.</span>
+          </label>
+        </div>
+
+        <fieldset style={est.fieldset}>
+          <legend style={est.rotuloCampo}>Takt Time</legend>
+          <p style={est.dica}>
+            Ritmo que a demanda exige. É o que permite dimensionar mão de obra
+            e desenhar a linha de referência no Yamazumi.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg }}>
+            <label style={est.campo}>
+              <span style={est.rotuloCampo}>Quantidade por dia</span>
+              <input type="number" min="1" style={est.input} value={calc.quantidade}
+                     onChange={(e) => aplicarCalculo({ ...calc, quantidade: e.target.value })} />
+            </label>
+            <label style={est.campo}>
+              <span style={est.rotuloCampo}>Horas disponíveis</span>
+              <input type="number" min="0.1" step="0.1" style={est.input} value={calc.horas}
+                     onChange={(e) => aplicarCalculo({ ...calc, horas: e.target.value })} />
+            </label>
+          </div>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Takt Time (segundos por peça)</span>
+            <input type="number" min="0" step="0.1" style={est.input}
+                   value={taktSeg} onChange={(e) => setTaktSeg(e.target.value)} />
+            <span style={est.dica}>Preenchido pela conta acima, ou digite direto.</span>
+          </label>
+        </fieldset>
+
+        {erro && <div style={est.erroForm}>{erro}</div>}
+
+        <div style={{ display: 'flex', gap: espaco.md }}>
+          <button type="button" style={est.botaoSecundario} onClick={aoCancelar} disabled={salvando}>
+            Cancelar
+          </button>
+          <button type="submit" style={{ ...est.botaoImprimir, flex: 1 }} disabled={salvando}>
+            {salvando ? 'Salvando...' : 'Salvar ajustes'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -375,7 +529,8 @@ function Resposta({ analise }) {
           </>
         ) : (
           <p style={est.respostaExplica}>
-            Informe o <strong>Takt Time</strong> do estudo para dimensionar a mão de obra.
+            Informe o <strong>Takt Time</strong> em <em>Ajustes do estudo</em> para
+            dimensionar a mão de obra e ver a linha de referência no Yamazumi.
           </p>
         )}
       </div>
@@ -656,6 +811,11 @@ const est = {
     padding: espaco.md, background: claro.criticoFundo,
     borderWidth: 1, borderStyle: 'solid', borderColor: claro.critico,
     borderRadius: raio.sm, ...tipo('legenda'),
+  },
+  semDados: {
+    maxWidth: 1400, margin: `${espaco.xxl}px auto`, padding: espaco.xxl,
+    textAlign: 'center', ...tipo('corpo'), color: claro.textoFraco,
+    background: claro.papel, border: `1px dashed ${claro.borda}`, borderRadius: raio.lg,
   },
   estadoVazio: {
     minHeight: '60vh', display: 'flex', flexDirection: 'column',

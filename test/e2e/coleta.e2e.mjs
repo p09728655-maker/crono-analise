@@ -46,8 +46,25 @@ const navegador = await chromium.launch({ executablePath: EXEC });
 
   let ciclos = await p.evaluate(() => window.__registrados.map((r) => r.duracaoMs));
   checar(ciclos.length === 3, `registrou 3 ciclos (${ciclos.join(', ')} ms)`);
-  // Tolerancia cobre a latencia de despacho de clique do Playwright.
-  checar(ciclos.every((real, i) => Math.abs(real - esperados[i]) <= 150), 'cronometro preciso dentro de 150ms');
+
+  /**
+   * O que interessa aqui e' AUSENCIA DE DERIVA, nao exatidao absoluta.
+   *
+   * O clique do Playwright leva algumas dezenas de ms para ser despachado, e
+   * essa latencia entra em toda medicao. Comparar contra o valor exato torna
+   * o teste instavel sem dizer nada sobre o cronometro.
+   *
+   * A falha que importa e' deriva acumulada — o defeito classico de somar
+   * setInterval em vez de comparar instantes. Se houvesse deriva, o desvio
+   * cresceria a cada ciclo. Offset constante e' latencia; offset crescente
+   * e' bug.
+   */
+  const desvios = ciclos.map((real, i) => real - esperados[i]);
+  const espalhamento = Math.max(...desvios) - Math.min(...desvios);
+  checar(espalhamento <= 90,
+    `sem deriva acumulada: desvios ${desvios.map((d) => `${d > 0 ? '+' : ''}${Math.round(d)}`).join(', ')}ms, espalhamento ${Math.round(espalhamento)}ms`);
+  checar(desvios.every((d) => d >= -20 && d <= 220),
+    'nenhum ciclo fora da faixa de latencia esperada');
 
   // Repique de luva: dois toques colados valem um ciclo so'.
   const antes = ciclos.length;
