@@ -134,6 +134,15 @@ Estudos de tempo** (ciclo a ciclo, com FR e tolerância) na lista abaixo. A
 pergunta no chão de fábrica vem sempre nessa ordem — "vim medir a
 furadeira" —, então é o posto que abre a linha.
 
+**Sair do sistema** fica no cabeçalho, e só existe no aparelho de toque: no
+PC quem fecha é o navegador, mas no tablet o app roda instalado, em tela
+cheia, sem barra de endereço — não havia por onde sair ao fim do turno. A
+confirmação conta os registros que ainda não subiram (eles estão gravados no
+aparelho e não se perdem ao sair, mas só chegam ao PC no próximo acesso com
+rede) e oferece enviar antes. Confirmado, o app mostra **Sistema encerrado**
+e tenta fechar a janela; `window.close()` nem sempre é permitido, então a
+tela é a saída de verdade e o fechamento é um bônus.
+
 ### Primeira tela: hierarquia pelo fluxo
 
 A tela inicial responde, nesta ordem: **onde estou** (identidade), **o que
@@ -143,13 +152,25 @@ arquivados), e **qual é o caminho** — os três pilares como sequência
 numerada, ① Coleta → ② Análise → ③ Capacidade, e não como três botões
 concorrentes.
 
-Busca, Importar e Chave da IA vivem no bloco **Ferramentas**, no fim do
-menu: existem, mas não disputam a atenção. "Ir para a Coleta" fica discreto
-no rodapé — a coleta é a primeira etapa de um estudo, não uma quarta ação.
+Busca, Importar, Motivos de parada e Chave da IA vivem no bloco
+**Ferramentas**, no fim do menu: existem, mas não disputam a atenção. "Ir
+para a Coleta" fica discreto no rodapé — a coleta é a primeira etapa de um
+estudo, não uma quarta ação.
 
 A navegação vive numa **lateral fixa**; a barra horizontal não crescia — a
 partir de sete botões ela empurrava o título e quebrava a hierarquia. A
 coleta (celular) não tem lateral: lá a tela é pequena e a tarefa é uma só.
+
+**A mesma lateral em toda tela de PC.** O estudo aberto e o relatório das
+furadeiras tinham outro modelo — cabeçalho no topo com voltar, título e três
+botões, mais uma fileira de abas horizontais logo abaixo. Eram duas faixas
+de navegação empilhadas, nenhuma delas igual à tela anterior, obrigando a
+reaprender onde clicar a cada estudo aberto. Agora o que muda é o
+**conteúdo** da lateral, não o lugar dela: no estudo ela traz voltar, o nome
+do estudo, `Imprimir relatório` e as seções (Yamazumi, Operações,
+Operadores, Paradas, Sugestões); no relatório das furadeiras, o filtro por
+máquina. A seção continua na URL (`?aba=`), então recarregar e compartilhar
+link preservam a vista.
 
 ### Sugestões, operadores e capacidade
 
@@ -271,6 +292,36 @@ O motivo é gravado pelo **código** (`setup`), não pelo rótulo: revisar o
 texto na tela não pode quebrar o agrupamento de relatório antigo — e o
 rótulo antigo continua sendo reconhecido.
 
+### Cadastro dos motivos de parada (Ferramentas, no PC)
+
+A lista de motivos era do **código**: incluir "falta de energia" ou corrigir
+a ação recomendada de um motivo exigia deploy, e quem conhece o processo não
+tinha caminho nenhum até ela. Agora ela se cadastra em **Ferramentas →
+Motivos de parada**, no menu lateral do PC — criar, renomear, escrever a
+ação, reordenar, desativar.
+
+Duas regras protegem o histórico, e a tela as expõe em vez de escondê-las:
+
+- **O código não muda.** Ele aparece ao lado do nome, desabilitado, porque é
+  ele que está gravado em cada parada já registrada. Trocá-lo transformaria
+  o passado em órfão; o `PATCH` recusa `codigo` com 400. Renomear é seguro e
+  vale para trás: o histórico inteiro passa a ler o nome novo.
+- **Motivo em uso se desativa, não se exclui.** Desativado some da coleta e
+  continua nomeando as paradas antigas. O `DELETE` só passa quando nada no
+  banco aponta para aquele código — é o caso do motivo criado errado.
+
+No tablet a lista vem do cache do próprio aparelho e se atualiza sozinha
+quando há rede; sem cadastro e sem cache, valem os nove motivos que sempre
+vieram no app (`MOTIVOS_PARADA`, em `src/domain/cronoanalise.js`). Nunca há
+estado de "carregando": esperar o servidor para oferecer um botão de parada
+seria trocar uma lista desatualizada por alguns segundos por um operador
+diante da máquina parada, sem onde tocar. Os mesmos nove são o **fallback de
+nome**: código que saiu do cadastro ainda encontra rótulo e ação ali, em vez
+de aparecer cru no relatório.
+
+O cadastro começa vazio, e a tela oferece trazer os nove de uma vez em vez
+de pedir que sejam redigitados.
+
 ## Relatório impresso
 
 O botão **Imprimir relatório** gera uma folha A4 retrato. Não é a tela levada
@@ -321,6 +372,10 @@ Para recriar do zero em outro ambiente:
 ```bash
 psql "$DATABASE_URL" -f db/schema.sql
 ```
+
+O arquivo é idempotente (`CREATE TABLE IF NOT EXISTS`), então **rodá-lo de
+novo é também a migração** de um banco que já existe — é assim que a tabela
+`motivos_parada` entra numa instalação antiga.
 
 ```sql
 INSERT INTO empresas (nome) VALUES ('Patrimar Móveis') RETURNING id;

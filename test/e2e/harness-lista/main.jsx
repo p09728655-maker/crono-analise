@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import ListaEstudos from '/src/features/estudos/ListaEstudos.jsx';
+import { enfileirar } from '/src/lib/filaOffline.js';
 
 // Grafias diferentes do MESMO produto, para exercitar o agrupamento.
 const RESPOSTA = {
@@ -30,14 +31,29 @@ const ARQUIVADOS = {
 const params = new URLSearchParams(location.search);
 const vazio = params.get('vazio') === '1';
 const comArquivados = params.get('arq') === '1';
+// ?sair=1 liga o botao "Sair" — ele so' existe no aparelho de toque, e e' o
+// App quem decide isso. O harness renderiza a lista sozinha, entao a decisao
+// vem pela URL.
+const comSair = params.get('sair') === '1';
 window.__posts = [];
 window.__patches = [];
 window.__deletes = [];
 window.__aberto = null;
+window.__saiu = false;
+// A fila offline vive no IndexedDB do navegador: o teste precisa poder
+// colocar registro nela para exercitar o aviso de "ainda nao enviados".
+window.__enfileirar = enfileirar;
 // Restaurar tira o estudo da lista de arquivados, como o servidor faria.
 let arquivados = comArquivados ? { estudos: [...ARQUIVADOS.estudos] } : { estudos: [] };
 let restaurados = [];
 let chaveIa = { configurada: false, origem: null, resumo: null };
+// Cadastro de motivos de parada — comeca VAZIO de proposito: e' o estado de
+// uma instalacao nova, e o que a tela precisa saber tratar.
+let motivos = [];
+let proximoMotivo = 1;
+const codigoDe = (v) => String(v || '').trim().toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
 window.fetch = async (url, opts = {}) => {
   const metodo = opts.method || 'GET';
@@ -62,6 +78,60 @@ window.fetch = async (url, opts = {}) => {
       });
     }
     return new Response(JSON.stringify({ chaveIa }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (alvo.includes('/motivos-parada')) {
+    const id = new URL(alvo, location.origin).searchParams.get('id');
+    const corpo = opts.body ? JSON.parse(opts.body) : {};
+    if (metodo === 'POST') {
+      window.__posts.push({ url: alvo, corpo });
+      const entrando = Array.isArray(corpo.motivos) ? corpo.motivos : [corpo];
+      for (const m of entrando) {
+        const codigo = codigoDe(m.codigo || m.rotulo);
+        if (motivos.some((x) => x.codigo === codigo)) continue;
+        motivos.push({
+          id: `m${proximoMotivo++}`, codigo, rotulo: m.rotulo,
+          acao: m.acao || null, ordem: motivos.length, ativo: true,
+        });
+      }
+      const ultimo = motivos[motivos.length - 1];
+      return new Response(JSON.stringify({ motivos, motivo: ultimo }), {
+        status: 201, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (metodo === 'PATCH') {
+      window.__patches.push({ url: alvo, corpo });
+      if (!id && Array.isArray(corpo.ordem)) {
+        motivos = corpo.ordem.map((mid) => motivos.find((m) => m.id === mid)).filter(Boolean);
+      } else if (corpo.codigo) {
+        return new Response(JSON.stringify({ erro: 'O codigo de um motivo nao muda' }), {
+          status: 400, headers: { 'Content-Type': 'application/json' },
+        });
+      } else {
+        const alvoMotivo = motivos.find((m) => m.id === id);
+        if (alvoMotivo) Object.assign(alvoMotivo, corpo);
+      }
+      return new Response(JSON.stringify({ motivos, motivo: motivos.find((m) => m.id === id) }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (metodo === 'DELETE') {
+      window.__deletes.push(alvo);
+      // "usado" no nome simula o motivo que ja' tem parada registrada: o
+      // servidor recusa a exclusao e manda desativar.
+      if (motivos.find((m) => m.id === id)?.codigo.includes('usado')) {
+        return new Response(JSON.stringify({ erro: 'ja foi usado em paradas registradas. Desative-o em vez de excluir' }), {
+          status: 400, headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      motivos = motivos.filter((m) => m.id !== id);
+      return new Response(JSON.stringify({ acao: 'excluido' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ motivos }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     });
   }
@@ -103,5 +173,10 @@ window.fetch = async (url, opts = {}) => {
 // ?modo=analise no harness para inspecionar as duas variantes.
 const modo = params.get('modo') || 'coleta';
 createRoot(document.getElementById('raiz')).render(
-  <ListaEstudos aoAbrir={(id) => { window.__aberto = id; }} modo={modo} aoTrocarModo={() => {}} />,
+  <ListaEstudos
+    aoAbrir={(id) => { window.__aberto = id; }}
+    modo={modo}
+    aoTrocarModo={() => {}}
+    aoSairDoSistema={comSair ? () => { window.__saiu = true; } : undefined}
+  />,
 );

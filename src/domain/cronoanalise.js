@@ -15,7 +15,18 @@ import {
   tendencia,
 } from './estatistica.js';
 
-/** Motivos de parada padronizados. Codigo estavel; rotulo pode mudar sem quebrar dado. */
+/**
+ * Motivos de parada de FABRICA — o ponto de partida.
+ *
+ * Esta lista deixou de ser a verdade e virou o padrao: a fabrica cadastra a
+ * dela em Ferramentas > Motivos de parada, e o app passa a usar aquela. Os
+ * nove daqui continuam existindo por dois motivos concretos:
+ *
+ *  - Enquanto nada foi cadastrado (instalacao nova) e sempre que o tablet
+ *    esta' sem rede e sem cache, a coleta precisa de algo para oferecer.
+ *  - Parada gravada com um codigo que depois saiu do cadastro ainda precisa
+ *    de nome no relatorio. Codigo daqui sempre resolve.
+ */
 export const MOTIVOS_PARADA = [
   { codigo: 'setup', rotulo: 'Setup / Troca', acao: 'Aplicar SMED e padronizar o plano de troca.' },
   { codigo: 'manutencao', rotulo: 'Manutenção corretiva', acao: 'Implantar TPM e analisar histórico de falhas.' },
@@ -29,6 +40,33 @@ export const MOTIVOS_PARADA = [
 ];
 
 /**
+ * Catalogo em vigor.
+ *
+ * Comeca nos motivos de fabrica e e' trocado por src/lib/motivosParada.js
+ * assim que o cadastro da empresa chega (do cache do aparelho ou do
+ * servidor). Mora aqui, e nao no React, porque quem precisa do nome de um
+ * motivo e' o CALCULO — resumirParadas, sugerirMelhorias, o relatorio
+ * impresso — e nenhum deles recebe props.
+ */
+let catalogo = MOTIVOS_PARADA;
+
+/** Troca o catalogo em vigor. Lista vazia volta para os motivos de fabrica. */
+export function definirCatalogoParadas(motivos) {
+  catalogo = Array.isArray(motivos) && motivos.length ? motivos : MOTIVOS_PARADA;
+}
+
+/**
+ * Procura primeiro no cadastro da empresa, depois nos motivos de fabrica.
+ *
+ * A segunda busca e' o que impede parada antiga de virar codigo cru na tela
+ * quando um motivo padrao e' removido do cadastro.
+ */
+function acharMotivo(valor) {
+  const casa = (m) => m.codigo === valor || m.rotulo === valor;
+  return catalogo.find(casa) || MOTIVOS_PARADA.find(casa) || null;
+}
+
+/**
  * Rotulo legivel de um motivo de parada. Codigo desconhecido volta como veio.
  *
  * Aceita tambem o proprio rotulo: a coleta de ciclos gravou o texto ("Setup
@@ -36,19 +74,19 @@ export const MOTIVOS_PARADA = [
  * pode virar "Parada" generica so' porque a convencao mudou.
  */
 export function rotuloMotivo(codigo) {
-  const achado = MOTIVOS_PARADA.find((m) => m.codigo === codigo || m.rotulo === codigo);
+  const achado = acharMotivo(codigo);
   return achado ? achado.rotulo : String(codigo || 'Parada');
 }
 
 /** A acao que o motivo pede. Sai no relatorio: motivo sem acao nao vira melhoria. */
 export function acaoDoMotivo(codigo) {
-  const achado = MOTIVOS_PARADA.find((m) => m.codigo === codigo || m.rotulo === codigo);
-  return achado ? achado.acao : 'Detalhar na observação para permitir classificação posterior.';
+  const achado = acharMotivo(codigo);
+  return achado?.acao || 'Detalhar na observação para permitir classificação posterior.';
 }
 
 /** Codigo canonico do motivo — aceita codigo ou rotulo (dado antigo). */
 function codigoMotivo(valor) {
-  const achado = MOTIVOS_PARADA.find((m) => m.codigo === valor || m.rotulo === valor);
+  const achado = acharMotivo(valor);
   return achado ? achado.codigo : String(valor || 'outro');
 }
 

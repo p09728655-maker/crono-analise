@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
-import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
+import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
-  CRITERIOS_CONFERENCIA, MOTIVOS_PARADA, conferenciaRapida, formatarDuracao, formatarSegundos,
+  CRITERIOS_CONFERENCIA, conferenciaRapida, formatarDuracao, formatarSegundos,
   resumirConferencias, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
+import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import {
   analisarConferenciasComIa, arquivarConferencia, excluirConferencia, listarConferenciasServidor,
   salvarParadasConferencia,
 } from '../../lib/api.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
-import Cabecalho from '../../components/Cabecalho.jsx';
+import MenuLateral from '../../components/MenuLateral.jsx';
+import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import { GraficoRitmoMaquinas } from './graficos.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 
@@ -43,6 +45,10 @@ import EstadoVazio from '../../components/EstadoVazio.jsx';
  * A impressao NAO e' a tela no papel: e' um documento proprio (A4), com
  * identificacao, criterios, resumo e o dado bruto — ver ImpressaoConferencias.
  */
+/* Id do item "Todas" na lateral. Filtro nenhum e' `null` no estado; a
+   lateral precisa de um id de verdade para marcar o ativo. */
+const TODAS = '__todas';
+
 export default function RelatorioConferencias({ aoVoltar }) {
   const [linhas, setLinhas] = useState([]);
   const [outras, setOutras] = useState(0);
@@ -50,6 +56,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
   const [erro, setErro] = useState(null);
   const [filtro, setFiltro] = useState(null);
   const [verArquivadas, setVerArquivadas] = useState(false);
+  const [verVersoes, setVerVersoes] = useState(false);
   const [confirmando, setConfirmando] = useState(null);
   const [editandoParadas, setEditandoParadas] = useState(null);
   const [ocupado, setOcupado] = useState(null);
@@ -102,35 +109,44 @@ export default function RelatorioConferencias({ aoVoltar }) {
     [linhas, filtro],
   );
 
+  /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
+     dentro dela pelo mesmo motivo que os produtos foram na lista: e'
+     navegacao, nao um controle do conteudo. */
+  const secoes = resumo.length > 1
+    ? [{ id: TODAS, rotulo: 'Todas', contador: linhas.length },
+       ...resumo.map((g) => ({ id: g.maquina, rotulo: g.maquina, contador: g.n }))]
+    : [];
+
   return (
     <div style={est.tela}>
-      <div className="somente-tela">
-        <Cabecalho
-          modo="analise"
-          titulo="Furadeiras"
-          subtitulo="Ritmo por máquina · peças/hora do posto"
+      <div className="somente-tela" style={est.telaComLateral}>
+        <MenuLateral
+          versao={VERSAO}
+          aoVerVersao={() => setVerVersoes(true)}
           aoVoltar={aoVoltar}
-          acoes={estado === 'pronto' && (
-            <>
-              {(verArquivadas || outras > 0) && (
-                <button
-                  type="button"
-                  style={est.botaoSecundario}
-                  onClick={() => { setFiltro(null); setVerArquivadas((v) => !v); }}
-                >
-                  {verArquivadas ? 'Ver ativas' : `Arquivadas ${outras}`}
-                </button>
-              )}
-              {linhas.length > 0 && !verArquivadas && (
-                <button type="button" style={est.botaoImprimir} onClick={() => window.print()}>
-                  Imprimir
-                </button>
-              )}
-            </>
-          )}
+          voltarRotulo="Estudos"
+          contexto={{
+            rotulo: 'Relatório',
+            titulo: 'Furadeiras',
+            subtitulo: 'Ritmo por máquina · peças/hora do posto',
+          }}
+          acaoPrimaria={estado === 'pronto' && linhas.length > 0 && !verArquivadas
+            ? { rotulo: 'Imprimir', aoClicar: () => window.print() }
+            : undefined}
+          secoes={secoes}
+          secoesRotulo="Máquinas"
+          secaoAtiva={filtro ?? TODAS}
+          aoTrocarSecao={(id) => setFiltro(id === TODAS ? null : id)}
+          acoes={estado === 'pronto' && (verArquivadas || outras > 0)
+            ? [{
+                rotulo: verArquivadas ? 'Ver ativas' : `Arquivadas ${outras}`,
+                aoClicar: () => { setFiltro(null); setVerArquivadas((v) => !v); },
+              }]
+            : []}
+          acoesRotulo="Este relatório"
         />
 
-        <main style={est.conteudo}>
+        <main style={est.conteudoLateral}>
           {estado === 'carregando' && (
             <EstadoVazio modo="analise" titulo="Carregando conferências" texto="Buscando as conferências sincronizadas." />
           )}
@@ -170,32 +186,6 @@ export default function RelatorioConferencias({ aoVoltar }) {
 
           {estado === 'pronto' && linhas.length > 0 && (
             <>
-              {/* Filtro por maquina — so' aparece com mais de uma. */}
-              {resumo.length > 1 && (
-                <div style={est.filtro} role="group" aria-label="Filtrar por máquina">
-                  <button
-                    type="button"
-                    onClick={() => setFiltro(null)}
-                    aria-pressed={filtro === null}
-                    style={{ ...est.filtroItem, ...(filtro === null ? est.filtroAtivo : {}) }}
-                  >
-                    Todas
-                  </button>
-                  {resumo.map((g) => (
-                    <button
-                      key={g.maquina}
-                      type="button"
-                      onClick={() => setFiltro(g.maquina === filtro ? null : g.maquina)}
-                      aria-pressed={g.maquina === filtro}
-                      style={{ ...est.filtroItem, ...(g.maquina === filtro ? est.filtroAtivo : {}) }}
-                    >
-                      {g.maquina}
-                      <span style={est.filtroContagem}>{g.n}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
               <section style={est.resumoGrade} aria-label="Resumo por máquina">
                 {(filtro ? resumo.filter((g) => g.maquina === filtro) : resumo).map((g) => (
                   <div key={g.maquina} style={est.cartaoMaquina}>
@@ -326,6 +316,10 @@ export default function RelatorioConferencias({ aoVoltar }) {
           )}
         </main>
 
+        {verVersoes && (
+          <HistoricoVersoes modo="analise" aoFechar={() => setVerVersoes(false)} />
+        )}
+
         {editandoParadas && (
           <EditorParadas
             conferencia={editandoParadas}
@@ -396,6 +390,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
  * pior que errar antes dele.
  */
 function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
+  const motivos = useMotivosParada();
   const duracaoMs = Number(conferencia.duracao_ms) || 0;
   const [linhas, setLinhas] = useState(() => (conferencia.paradas || []).map((p, i) => ({
     chave: `p${i}`,
@@ -443,10 +438,16 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
         </p>
 
         <div style={est.linhaBotoesParada}>
-          <button type="button" style={est.botaoSetup} onClick={() => adicionar('setup')}>
+          <button
+            type="button" style={est.botaoSetup}
+            onClick={() => adicionar(codigoPreferido(motivos, 'setup'))}
+          >
             + Setup / troca
           </button>
-          <button type="button" style={est.botaoSecundario} onClick={() => adicionar('falta_material')}>
+          <button
+            type="button" style={est.botaoSecundario}
+            onClick={() => adicionar(codigoPreferido(motivos, 'falta_material'))}
+          >
             + Outra parada
           </button>
         </div>
@@ -465,7 +466,7 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
                   style={est.selectMotivo}
                   aria-label="Motivo da parada"
                 >
-                  {MOTIVOS_PARADA.map((m) => (
+                  {motivos.map((m) => (
                     <option key={m.codigo} value={m.codigo}>{m.rotulo}</option>
                   ))}
                 </select>
@@ -810,8 +811,9 @@ const t = claro;
 
 const est = {
   tela: { minHeight: '100dvh', background: t.fundo, color: t.texto },
-  conteudo: {
-    maxWidth: 1400, margin: '0 auto',
+  telaComLateral: { minHeight: '100dvh', display: 'flex', alignItems: 'flex-start' },
+  conteudoLateral: {
+    flex: 1, minWidth: 0, maxWidth: 1400,
     padding: `${espaco.xl}px ${espaco.xl}px ${espaco.gigante}px`,
   },
 
@@ -819,25 +821,6 @@ const est = {
     minHeight: 40, padding: `0 ${espaco.lg}px`,
     background: t.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
     ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa,
-  },
-
-  filtro: {
-    display: 'flex', gap: espaco.sm, marginBottom: espaco.xl,
-    overflowX: 'auto', paddingBottom: espaco.xs,
-  },
-  filtroItem: {
-    display: 'inline-flex', alignItems: 'center', gap: espaco.sm, flexShrink: 0,
-    minHeight: 34, padding: `0 ${espaco.md}px`,
-    background: t.papel, borderRadius: raio.pill,
-    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-    color: t.textoMedio, ...tipo('legenda'), fontWeight: 600,
-    cursor: 'pointer', fontFamily: 'inherit',
-    transition: `border-color ${transicao.rapida}, color ${transicao.rapida}`,
-  },
-  filtroAtivo: { borderColor: t.vermelho, color: t.texto },
-  filtroContagem: {
-    minWidth: 18, padding: '0 5px', borderRadius: raio.pill,
-    background: t.fundo, color: t.textoFraco, ...tipo('micro'),
   },
 
   resumoGrade: {

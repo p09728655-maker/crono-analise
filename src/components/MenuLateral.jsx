@@ -15,15 +15,33 @@ import { LOGO_PATRIMAR } from '../theme/logo.js';
  * uma fila de pilulas. Sobra largura para o conteudo, que e' onde o analista
  * de fato trabalha.
  *
+ * MESMO MENU EM TODA TELA DE PC. Ele nasceu so' na lista, e o estudo aberto
+ * ficou com outro modelo — cabecalho no topo mais abas horizontais. Duas
+ * navegacoes diferentes no mesmo app obrigam o analista a reaprender onde
+ * clicar cada vez que abre um estudo, e as abas competiam com os botoes do
+ * topo pela mesma tarefa. Agora a lateral e' a navegacao das duas telas: o
+ * que muda e' o CONTEUDO dela, nao o lugar onde ela fica.
+ *
+ * Os blocos sao opcionais e aparecem conforme as props que chegam:
+ *   lista   — busca, produtos, arquivados, ferramentas.
+ *   estudo  — voltar, nome do estudo, secoes da analise, acoes do estudo.
+ *
  * A coleta (celular) NAO tem lateral: la a tela e' pequena e a tarefa e'
  * uma so'.
  */
 export default function MenuLateral({
-  versao, aoVerVersao, busca, aoBuscar, grupos = [], filtro, aoFiltrar,
+  versao, aoVerVersao,
+  // --- contexto de um objeto aberto (estudo, relatorio) ---
+  aoVoltar, voltarRotulo = 'Estudos', contexto,
+  acaoPrimaria, secoes, secaoAtiva, aoTrocarSecao, secoesRotulo = 'Análise',
+  acoes = [], acoesRotulo = 'Este estudo',
+  // --- lista de estudos ---
+  busca, aoBuscar, grupos = [], filtro, aoFiltrar,
   aoNovoEstudo, aoImportar, aoVerConferencias, aoVerArquivados, arquivados = 0,
-  aoVerChaveIa, aoTrocarModo,
+  aoVerChaveIa, aoVerMotivos, aoTrocarModo,
 }) {
   const total = grupos.reduce((acc, g) => acc + g.estudos.length, 0);
+  const temFerramentas = aoBuscar || aoImportar || aoVerChaveIa || aoVerMotivos;
 
   return (
     <nav style={est.lateral} aria-label="Navegação">
@@ -41,59 +59,124 @@ export default function MenuLateral({
         </div>
       </div>
 
-      {/* 2. O que devo fazer — a acao principal vem antes de tudo, e e' a
-             unica coisa vermelha do menu. */}
-      <div style={est.bloco}>
-        <button type="button" style={est.botaoPrimario} onClick={aoNovoEstudo}>
-          + Novo estudo
+      {/* 2. A saida para tras vem antes do conteudo: e' o unico jeito de
+             deixar o estudo, e no topo ela fica onde o olho ja' esta'. */}
+      {aoVoltar && (
+        <button
+          type="button"
+          style={est.voltar}
+          onClick={aoVoltar}
+          aria-label="Voltar para a lista de estudos"
+        >
+          <span aria-hidden="true" style={est.seta}>←</span>
+          <span style={est.itemTexto}>{voltarRotulo}</span>
         </button>
-      </div>
+      )}
 
-      {/* 3. Quais estudos ja existem */}
-      <div style={est.bloco}>
-        {/* Os dois blocos sao nomeados pelo POSTO, nao pelo metodo: no chao
-            de fabrica a pergunta e' "vim medir a embalagem" ou "vim medir a
-            furadeira", nunca "vim fazer uma conferencia rapida". O metodo
-            vem embaixo, como explicacao. */}
-        <div style={est.grupoRotulo}>Embalagem e demais postos</div>
-        <div style={est.grupoDica}>Estudos de tempo — ciclo a ciclo, com tempo padrão</div>
-        {/* O grupo de filtro cobre SO' os produtos: arquivados nao filtra
-            nada, abre outra tela. */}
-        {grupos.length > 0 && (
-          <div style={est.bloco} role="group" aria-label="Filtrar por produto">
-            <button
-              type="button"
-              onClick={() => aoFiltrar(null)}
-              aria-current={filtro === null ? 'true' : undefined}
-              style={{ ...est.item, ...(filtro === null ? est.itemAtivo : {}) }}
-            >
-              <span style={est.itemTexto}>Todos</span>
-              <span style={est.contagem}>{total}</span>
-            </button>
-            {grupos.map((g) => (
-              <button
-                key={g.chave}
-                type="button"
-                onClick={() => aoFiltrar(g.chave === filtro ? null : g.chave)}
-                aria-current={g.chave === filtro ? 'true' : undefined}
-                style={{ ...est.item, ...(g.chave === filtro ? est.itemAtivo : {}) }}
-                title={g.rotulo}
-              >
-                <span style={est.itemTexto}>{g.rotulo}</span>
-                <span style={est.contagem}>{g.estudos.length}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {arquivados > 0 && (
-          <button type="button" style={est.item} onClick={aoVerArquivados}>
-            <span style={est.itemTexto}>Estudos arquivados</span>
-            <span style={est.contagem}>{arquivados}</span>
+      {/* 3. O que esta' aberto. O nome inteiro no title: 248px cortam
+             "SIRIUS 1.6 PRAT 768X358X15 MDP 4" bem no meio. */}
+      {contexto && (
+        <div style={est.contexto}>
+          <div style={est.contextoRotulo}>{contexto.rotulo || 'Estudo'}</div>
+          <div style={est.contextoTitulo} title={contexto.titulo}>{contexto.titulo}</div>
+          {contexto.subtitulo && (
+            <div style={est.contextoTexto} title={contexto.subtitulo}>{contexto.subtitulo}</div>
+          )}
+        </div>
+      )}
+
+      {/* 4. O que devo fazer — a acao principal vem antes de tudo, e e' a
+             unica coisa vermelha do menu. */}
+      {(acaoPrimaria || aoNovoEstudo) && (
+        <div style={est.bloco}>
+          <button
+            type="button"
+            style={est.botaoPrimario}
+            onClick={acaoPrimaria ? acaoPrimaria.aoClicar : aoNovoEstudo}
+          >
+            {acaoPrimaria ? acaoPrimaria.rotulo : '+ Novo estudo'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* 4. A outra natureza de medicao, com peso menor */}
+      {/* 5. Secoes do estudo aberto — o que antes eram abas horizontais. */}
+      {secoes?.length > 0 && (
+        <div style={est.bloco} role="group" aria-label={secoesRotulo}>
+          <div style={est.grupoRotulo}>{secoesRotulo}</div>
+          {secoes.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => aoTrocarSecao(s.id)}
+              aria-current={s.id === secaoAtiva ? 'page' : undefined}
+              style={{ ...est.item, ...(s.id === secaoAtiva ? est.itemAtivo : {}) }}
+            >
+              <span style={est.itemTexto}>{s.rotulo}</span>
+              {s.contador != null && <span style={est.contagem}>{s.contador}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 6. Acoes do objeto aberto: existem, mas nao disputam com a analise. */}
+      {acoes.length > 0 && (
+        <div style={est.bloco}>
+          <div style={est.grupoRotulo}>{acoesRotulo}</div>
+          {acoes.map((a) => (
+            <button key={a.rotulo} type="button" style={est.item} onClick={a.aoClicar}>
+              <span style={est.itemTexto}>{a.rotulo}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 7. Quais estudos ja existem */}
+      {aoNovoEstudo && (
+        <div style={est.bloco}>
+          {/* Os dois blocos sao nomeados pelo POSTO, nao pelo metodo: no chao
+              de fabrica a pergunta e' "vim medir a embalagem" ou "vim medir a
+              furadeira", nunca "vim fazer uma conferencia rapida". O metodo
+              vem embaixo, como explicacao. */}
+          <div style={est.grupoRotulo}>Embalagem e demais postos</div>
+          <div style={est.grupoDica}>Estudos de tempo — ciclo a ciclo, com tempo padrão</div>
+          {/* O grupo de filtro cobre SO' os produtos: arquivados nao filtra
+              nada, abre outra tela. */}
+          {grupos.length > 0 && (
+            <div style={est.bloco} role="group" aria-label="Filtrar por produto">
+              <button
+                type="button"
+                onClick={() => aoFiltrar(null)}
+                aria-current={filtro === null ? 'true' : undefined}
+                style={{ ...est.item, ...(filtro === null ? est.itemAtivo : {}) }}
+              >
+                <span style={est.itemTexto}>Todos</span>
+                <span style={est.contagem}>{total}</span>
+              </button>
+              {grupos.map((g) => (
+                <button
+                  key={g.chave}
+                  type="button"
+                  onClick={() => aoFiltrar(g.chave === filtro ? null : g.chave)}
+                  aria-current={g.chave === filtro ? 'true' : undefined}
+                  style={{ ...est.item, ...(g.chave === filtro ? est.itemAtivo : {}) }}
+                  title={g.rotulo}
+                >
+                  <span style={est.itemTexto}>{g.rotulo}</span>
+                  <span style={est.contagem}>{g.estudos.length}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {arquivados > 0 && (
+            <button type="button" style={est.item} onClick={aoVerArquivados}>
+              <span style={est.itemTexto}>Estudos arquivados</span>
+              <span style={est.contagem}>{arquivados}</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 8. A outra natureza de medicao, com peso menor */}
       {aoVerConferencias && (
         <div style={est.bloco}>
           <div style={est.grupoRotulo}>Furadeiras</div>
@@ -104,27 +187,40 @@ export default function MenuLateral({
         </div>
       )}
 
-      {/* 5. Ferramentas: existem, mas nao disputam a atencao. A busca vive
+      {/* 9. Ferramentas: existem, mas nao disputam a atencao. A busca vive
              aqui — util quando ha muitos estudos, nunca a primeira coisa
              que a tela oferece. */}
-      <div style={est.blocoFerramentas}>
-        <div style={est.grupoRotulo}>Ferramentas</div>
-        <input
-          id="busca-estudos"
-          type="search"
-          value={busca}
-          onChange={(ev) => aoBuscar(ev.target.value)}
-          placeholder="Buscar produto, peça, máquina..."
-          style={est.busca}
-          aria-label="Buscar estudo por produto, máquina ou analista"
-        />
-        <button type="button" style={est.item} onClick={aoImportar}>
-          <span style={est.itemTexto}>Importar PDF ou planilha</span>
-        </button>
-        <button type="button" style={est.item} onClick={aoVerChaveIa}>
-          <span style={est.itemTexto}>Chave da IA</span>
-        </button>
-      </div>
+      {temFerramentas && (
+        <div style={est.blocoFerramentas}>
+          <div style={est.grupoRotulo}>Ferramentas</div>
+          {aoBuscar && (
+            <input
+              id="busca-estudos"
+              type="search"
+              value={busca}
+              onChange={(ev) => aoBuscar(ev.target.value)}
+              placeholder="Buscar produto, peça, máquina..."
+              style={est.busca}
+              aria-label="Buscar estudo por produto, máquina ou analista"
+            />
+          )}
+          {aoImportar && (
+            <button type="button" style={est.item} onClick={aoImportar}>
+              <span style={est.itemTexto}>Importar PDF ou planilha</span>
+            </button>
+          )}
+          {aoVerMotivos && (
+            <button type="button" style={est.item} onClick={aoVerMotivos}>
+              <span style={est.itemTexto}>Motivos de parada</span>
+            </button>
+          )}
+          {aoVerChaveIa && (
+            <button type="button" style={est.item} onClick={aoVerChaveIa}>
+              <span style={est.itemTexto}>Chave da IA</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* A coleta e' a primeira ETAPA de um estudo, nao uma quarta acao:
           fica no rodape, discreta, para quem ja sabe o que quer. */}
@@ -165,6 +261,37 @@ const est = {
     padding: '1px 6px', background: 'transparent',
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.pill,
     color: t.textoFraco, ...tipo('micro'), fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+  },
+
+  voltar: {
+    width: '100%', minHeight: 36, padding: `0 ${espaco.md}px`,
+    display: 'flex', alignItems: 'center', gap: espaco.sm,
+    background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
+    color: t.textoMedio, ...tipo('corpo'), fontWeight: 600, textAlign: 'left',
+    cursor: 'pointer', fontFamily: 'inherit',
+    transition: `background ${transicao.rapida}`,
+  },
+
+  contexto: {
+    display: 'flex', flexDirection: 'column', gap: 2,
+    paddingLeft: espaco.md,
+    // Barra vermelha a esquerda: marca o que esta' aberto sem gastar uma
+    // linha divisoria a mais numa lateral estreita.
+    borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: t.vermelho,
+  },
+  contextoRotulo: rotulo(t.textoFraco),
+  // O nome do estudo tem o mesmo peso que "RitmoPatrimar" tem na lista: e'
+  // a identidade da tela. Duas linhas no maximo — nome de peca importada do
+  // roteiro tem 40 caracteres e encheria a lateral inteira.
+  contextoTitulo: {
+    ...tipo('destaque'), color: t.texto, overflowWrap: 'anywhere',
+    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+  },
+  contextoTexto: {
+    ...tipo('micro'), color: t.textoFraco, fontWeight: 400,
+    textTransform: 'none', letterSpacing: 0, overflowWrap: 'anywhere',
+    display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
   },
 
   bloco: { display: 'flex', flexDirection: 'column', gap: espaco.xs },

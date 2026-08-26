@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } from '../../theme/tokens.js';
-import { calcularOperacao, formatarCronometro, formatarSegundos, MOTIVOS_PARADA, rotuloMotivo } from '../../domain/cronoanalise.js';
+import { calcularOperacao, formatarCronometro, formatarSegundos, rotuloMotivo } from '../../domain/cronoanalise.js';
+import { useMotivosParada } from '../../lib/motivosParada.js';
 import { TOQUE_MINIMO_MS, ultimaObservacaoAtipica } from '../../domain/estatistica.js';
 import { enfileirar, novoId } from '../../lib/filaOffline.js';
 import { useCronometro, useOnline, useWakeLock, vibrar } from '../../lib/hooks.js';
@@ -325,6 +326,7 @@ function PainelPausa({ pausa, aoEncerrar }) {
 }
 
 function BarraInferior({ rodando, pausado, temTempos, rodada, aoPausar, aoDesfazer, aoTrocarRodada, aoEncerrar }) {
+  const motivos = useMotivosParada();
   const [menuAberto, setMenuAberto] = useState(false);
 
   return (
@@ -333,7 +335,7 @@ function BarraInferior({ rodando, pausado, temTempos, rodada, aoPausar, aoDesfaz
         <div style={est.menuMotivos} role="dialog" aria-label="Motivo da parada">
           <div style={est.menuTitulo}>Por que a producao parou?</div>
           <div style={est.listaMotivos}>
-            {MOTIVOS_PARADA.map((m) => (
+            {motivos.map((m) => (
               <button
                 key={m.codigo}
                 type="button"

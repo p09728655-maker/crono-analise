@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } from '../../theme/tokens.js';
 import {
-  MOTIVOS_PARADA, conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao,
+  conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao,
   formatarSegundos, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
+import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import { TOQUE_MINIMO_MS } from '../../domain/estatistica.js';
 import { sincronizar } from '../../lib/api.js';
 import { listarConferencias, marcarEnviadas, removerConferencia, salvarConferencia } from '../../lib/conferencias.js';
@@ -41,6 +42,9 @@ import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
  *    tela acesa enquanto cronometra.
  */
 export default function ConferenciaRapida({ aoSair }) {
+  // A lista vem do cadastro da fabrica (Ferramentas > Motivos de parada) e
+  // cai nos motivos de fabrica quando ainda nao ha cadastro nem cache.
+  const motivosParada = useMotivosParada();
   const [fase, setFase] = useState('pronto'); // pronto | rodando | resultado
   const [pecas, setPecas] = useState(0);
   const [duracaoFinal, setDuracaoFinal] = useState(0);
@@ -421,6 +425,7 @@ export default function ConferenciaRapida({ aoSair }) {
             </label>
 
             <Paradas
+              motivos={motivosParada}
               paradas={paradas}
               resumo={totalParada}
               duracaoMs={duracaoHoras}
@@ -587,7 +592,7 @@ export default function ConferenciaRapida({ aoSair }) {
               <div style={est.folhaCaixa}>
                 <div style={est.folhaTitulo}>Por que parou?</div>
                 <div style={est.gradeMotivos}>
-                  {MOTIVOS_PARADA.map((m) => (
+                  {motivosParada.map((m) => (
                     <button
                       key={m.codigo}
                       type="button"
@@ -613,6 +618,7 @@ export default function ConferenciaRapida({ aoSair }) {
           cronometrado tem {formatarDuracao(duracaoFinal)} — não sobra tempo de
           máquina rodando. Ajuste os minutos de parada abaixo.
           <Paradas
+            motivos={motivosParada}
             paradas={paradas}
             resumo={totalParada}
             duracaoMs={duracaoFinal}
@@ -693,6 +699,7 @@ export default function ConferenciaRapida({ aoSair }) {
             {/* Editavel tambem aqui: parada esquecida no calor da coleta se
                 corrige antes de salvar, sem refazer a conferencia. */}
             <Paradas
+              motivos={motivosParada}
               paradas={paradas}
               resumo={totalParada}
               duracaoMs={duracaoFinal}
@@ -742,7 +749,7 @@ export default function ConferenciaRapida({ aoSair }) {
  *
  * O campo e' em MINUTOS: ninguem no chao de fabrica pensa em milissegundos.
  */
-function Paradas({ paradas, resumo, duracaoMs, aoAdicionar, aoAlterar, aoRemover }) {
+function Paradas({ motivos, paradas, resumo, duracaoMs, aoAdicionar, aoAlterar, aoRemover }) {
   const produtivoMs = duracaoMs > 0 ? duracaoMs - Math.min(resumo.totalMs, duracaoMs) : 0;
 
   return (
@@ -750,10 +757,16 @@ function Paradas({ paradas, resumo, duracaoMs, aoAdicionar, aoAlterar, aoRemover
       <span style={est.rotuloCampo}>PARADAS NO PERÍODO</span>
 
       <div style={est.linhaBotoesParada}>
-        <button type="button" style={est.botaoSetup} onClick={() => aoAdicionar('setup')}>
+        <button
+          type="button" style={est.botaoSetup}
+          onClick={() => aoAdicionar(codigoPreferido(motivos, 'setup'))}
+        >
           + SETUP / TROCA
         </button>
-        <button type="button" style={est.botaoParada} onClick={() => aoAdicionar('falta_material')}>
+        <button
+          type="button" style={est.botaoParada}
+          onClick={() => aoAdicionar(codigoPreferido(motivos, 'falta_material'))}
+        >
           + OUTRA PARADA
         </button>
       </div>
@@ -772,7 +785,7 @@ function Paradas({ paradas, resumo, duracaoMs, aoAdicionar, aoAlterar, aoRemover
                 style={est.selectMotivo}
                 aria-label="Motivo da parada"
               >
-                {MOTIVOS_PARADA.map((m) => (
+                {motivos.map((m) => (
                   <option key={m.codigo} value={m.codigo}>{m.rotulo}</option>
                 ))}
               </select>

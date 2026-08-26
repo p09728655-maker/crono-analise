@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.30.0',
+    data: '2026-08-26',
+    titulo: 'Sair do sistema, motivos de parada e a mesma navegação em toda tela',
+    itens: [
+      'O tablet ganhou o botão SAIR, no alto da tela inicial. Instalado, o app roda em tela cheia e sem barra de endereço: não havia por onde encerrar o turno. Antes de sair, a confirmação diz quantos registros ainda não subiram — eles ficam gravados no aparelho e não se perdem, mas só chegam ao PC no próximo acesso com rede — e oferece enviar na hora. Confirmado, aparece "Sistema encerrado", e quem chega no turno seguinte toca em Entrar.',
+      'Novo CADASTRO DE MOTIVOS DE PARADA, em Ferramentas, no PC. A lista que o tablet oferece quando a máquina para era do código: incluir "falta de energia" ou corrigir a ação recomendada do setup dependia de uma nova versão do app. Agora você cria, renomeia, escreve a ação, reordena e desativa. O cadastro começa vazio e traz os 9 motivos atuais num clique, para você ajustar em cima deles.',
+      'Renomear um motivo vale para trás: o histórico inteiro passa a ler o nome novo. O CÓDIGO aparece ao lado, travado — é ele que está gravado em cada parada já registrada, e trocá-lo deixaria o passado sem nome. Motivo que já foi usado não se exclui: desativa. Ele some da coleta e continua nomeando as paradas antigas.',
+      'O estudo aberto e o relatório das furadeiras passaram a usar o MESMO menu lateral da primeira tela. Eram duas faixas de navegação empilhadas — cabeçalho no topo com voltar, título e três botões, mais a fileira de abas logo abaixo —, e nenhuma delas parecida com a tela anterior. Agora Yamazumi, Operações, Operadores, Paradas e Sugestões são itens da lateral, junto de Imprimir relatório, Editar estudo e Resumo executivo. O link com ?aba= continua abrindo na seção certa.',
+      'No relatório das furadeiras, o filtro por máquina saiu das pílulas acima da tabela e virou lista na lateral, como os produtos na primeira tela.',
+    ],
+  },
+  {
     versao: '2.29.0',
     data: '2026-08-26',
     titulo: 'Dá para remover a chave da IA',

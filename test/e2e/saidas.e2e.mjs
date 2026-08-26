@@ -38,7 +38,16 @@ for (const tela of TELAS) {
     // Alvo confortavel: no celular o dedo, no PC o mouse.
     const minimo = tela.toque ? 32 : 30;
     checar(r && r.height >= minimo, `${tela.nome}: saida com ${Math.round(r?.height || 0)}px de altura`);
-    checar(r && r.y < 120, `${tela.nome}: saida visivel sem rolar (topo em ${Math.round(r?.y || 0)}px)`);
+    /**
+     * O que importa e' chegar na saida SEM ROLAR — nao um pixel exato.
+     * No PC ela mora na lateral, logo abaixo da marca, entao o antigo
+     * limite de 120px (feito para barra de topo) media o lugar errado. O
+     * teto largo abaixo continua barrando a regressao de verdade: a saida
+     * descer para o meio da pagina.
+     */
+    const dentroDaTela = r && r.y >= 0 && r.y + r.height <= 800;
+    checar(await saida.first().isVisible() && dentroDaTela && r.y < 200,
+      `${tela.nome}: saida visivel sem rolar (topo em ${Math.round(r?.y || 0)}px)`);
   }
   await ctx.close();
 }
