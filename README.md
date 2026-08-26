@@ -312,6 +312,11 @@ com a conferência, pela mesma fila offline — e por isso `/api/sync` grava a
 mãe e as filhas na **mesma transação**, e só insere filhas quando a mãe foi
 de fato criada. Reenvio da fila não duplica o tempo parado do posto.
 
+A coluna `jsonb` **não existe mais**: a migração aconteceu em três passos —
+criar e preencher, publicar o código que lê a estrutura nova, e só então
+derrubar o formato antigo. Rodar `db/schema.sql` executa os três em ordem,
+e é idempotente.
+
 **O que o aparelho manda não mudou.** O tablet continua enviando `"HH:MM"` e
 a lista de paradas embutida; quem converte e quem quebra em linhas é o
 servidor. A fila offline é o caminho mais crítico do sistema, e um tablet
@@ -324,7 +329,12 @@ duração tinha de vir gravada à parte, o banco não validava a ordem e um
 período que atravessa a meia-noite não tinha representação. Agora há
 `iniciado_em`/`finalizado_em` (`timestamptz`), compostos no servidor a
 partir da data de `salvo_em` lida no fuso da fábrica — `"07:00"` é 07:00 no
-chão de fábrica, não em UTC.
+chão de fábrica, não em UTC. As colunas de texto **não existem mais**, e o
+banco exige os dois instantes (`NOT NULL` + `CHECK` de ordem).
+
+Um período que atravessa a meia-noite passa a fechar certo: `23:40`–`00:10`
+são 30 minutos, com o fim no dia seguinte. Era o caso que o formato de texto
+não conseguia representar de jeito nenhum.
 
 A conferência do **cronômetro ao vivo** também ganhou período: o fim é o
 próprio `salvo_em` e o início sai dele menos a duração cronometrada. Antes

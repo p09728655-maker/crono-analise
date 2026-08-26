@@ -78,9 +78,10 @@ describe('conferencias salvas no aparelho', () => {
 
 describe('faixa horaria da conferencia', () => {
   /**
-   * A tela le o periodo dos INSTANTES desde a refatoracao. Mas o passo 3 da
-   * migracao ainda nao derrubou hora_inicial/hora_final, e um app publicado
-   * pode encontrar as duas formas no mesmo banco — inclusive na mesma tela.
+   * A tela le o periodo dos INSTANTES. O texto antigo continua sendo aceito
+   * como ultimo recurso: um servidor revertido para antes da migracao
+   * voltaria a devolver so' ele, e um travessao no lugar do periodo seria
+   * pior do que a hora sem o dia.
    */
   it('prefere os instantes', () => {
     const faixa = faixaHoraria({

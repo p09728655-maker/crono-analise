@@ -62,19 +62,7 @@ async function estaEmUso(empresaId, codigo, rotulo) {
      WHERE p.motivo IN (${codigo}, ${rotulo})
        AND (e.empresa_id = ${empresaId} OR c.empresa_id = ${empresaId})
      LIMIT 1`;
-  if (usada) return true;
-
-  // Ate' o passo 3 da migracao a coluna jsonb ainda existe, e um deploy
-  // antigo rodando em paralelo pode ter escrito nela. Enquanto ela estiver
-  // de pe', desativar continua sendo a resposta certa para o que houver la'.
-  const [noJsonb] = await sql`
-    SELECT 1 AS usado
-      FROM conferencias
-     WHERE empresa_id = ${empresaId}
-       AND (paradas @> ${JSON.stringify([{ motivo: codigo }])}::jsonb
-         OR paradas @> ${JSON.stringify([{ motivo: rotulo }])}::jsonb)
-     LIMIT 1`;
-  return Boolean(noJsonb);
+  return Boolean(usada);
 }
 
 const listar = (empresaId) => sql`

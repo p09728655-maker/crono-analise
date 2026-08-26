@@ -166,28 +166,18 @@ CREATE TABLE IF NOT EXISTS conferencias (
   empresa_id   uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
   maquina      text,                      -- posto conferido (ex.: "Furadeira 03")
   peca         text,
-  -- TRANSICAO: hora_inicial/hora_final sao o formato antigo (texto "HH:MM")
-  -- e saem no passo 3 da migracao, depois que todo app publicado estiver
-  -- lendo os instantes. Ate' la' os dois convivem, e o servidor grava ambos.
-  hora_inicial text CHECK (hora_inicial IS NULL OR hora_inicial ~ '^\d{2}:\d{2}$'),
-  hora_final   text CHECK (hora_final   IS NULL OR hora_final   ~ '^\d{2}:\d{2}$'),
-  -- O periodo como INSTANTE. Texto nao subtrai: com "HH:MM" a duracao tinha
-  -- de vir gravada a parte, o banco nao conseguia validar a ordem e um
-  -- periodo que atravessa a meia-noite nao tinha representacao possivel.
+  -- O periodo como INSTANTE. Texto nao subtrai: com "HH:MM" (o formato
+  -- antigo, hora_inicial/hora_final) a duracao tinha de vir gravada a parte,
+  -- o banco nao conseguia validar a ordem e um periodo que atravessa a
+  -- meia-noite nao tinha representacao possivel.
+  --
+  -- O APARELHO CONTINUA MANDANDO "HH:MM" — e' o que ele sabe dizer, e mexer
+  -- nisso obrigaria o tablet que passou dias sem rede a falar uma lingua
+  -- nova. Quem compoe o instante e' o servidor, em /api/sync.
   iniciado_em   timestamptz,
   finalizado_em timestamptz,
   duracao_ms   bigint  NOT NULL CHECK (duracao_ms > 0),
   pecas        integer NOT NULL CHECK (pecas > 0),
-  -- TRANSICAO: as paradas da conferencia moravam AQUI, num jsonb. Duas
-  -- fontes para o mesmo conceito (esta coluna e a tabela `paradas`) custavam
-  -- dois caminhos de leitura, dois de escrita, e um Pareto de perdas que
-  -- precisava unir as duas antes de somar. A fonte oficial agora e a tabela
-  -- `paradas`, via paradas.conferencia_id; a coluna sai no passo 3.
-  --
-  -- O argumento original — "nascem e sobem no mesmo INSERT idempotente" —
-  -- continua valendo, e por isso o /api/sync insere a mae e as filhas na
-  -- MESMA transacao, e so' insere filhas quando a mae foi de fato criada.
-  paradas      jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(paradas) = 'array'),
   salvo_em     timestamptz NOT NULL,      -- horario real do aparelho
   -- Medicao atipica (turno interrompido, lote de teste) sai dos calculos sem
   -- sumir do banco. Registro ERRADO — hora digitada errada — e' excluido de
@@ -204,6 +194,11 @@ CREATE INDEX IF NOT EXISTS conferencias_ativas_idx ON conferencias (empresa_id, 
 -- migracao falha no indice logo abaixo.
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS iniciado_em   timestamptz;
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS finalizado_em timestamptz;
+-- As colunas do formato antigo, para o UPDATE de conversao logo abaixo
+-- encontrar o que converter num banco que ainda nao passou pelo passo 1.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS hora_inicial text;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS hora_final   text;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS paradas jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 -- Converte o horario de texto para instante. A data vem de salvo_em lida no
 -- fuso da fabrica — "07:00" e' 07:00 no chao de fabrica, nao em UTC. Roda uma
@@ -274,6 +269,31 @@ CREATE TABLE IF NOT EXISTS motivos_parada (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS motivos_parada_codigo_unq ON motivos_parada (empresa_id, codigo);
 CREATE INDEX IF NOT EXISTS motivos_parada_empresa_idx ON motivos_parada (empresa_id, ordem, criado_em);
+
+-- ------------------------------------------------- passo 3 da migracao
+-- Derruba o formato antigo, DEPOIS de a conversao acima ter rodado e de as
+-- paradas terem virado linha. E' a ultima etapa da refatoracao do periodo:
+-- ate' aqui as duas formas conviviam para um deploy poder voltar atras.
+--
+-- Nao ha' o que perder: iniciado_em/finalizado_em carregam o mesmo periodo
+-- com mais precisao, e a parada da conferencia agora e' linha na tabela
+-- `paradas`, alcancada por conferencia_id.
+ALTER TABLE conferencias DROP COLUMN IF EXISTS hora_inicial;
+ALTER TABLE conferencias DROP COLUMN IF EXISTS hora_final;
+ALTER TABLE conferencias DROP COLUMN IF EXISTS paradas;
+
+-- A partir daqui todo periodo tem os dois instantes. O DO guarda o caso de
+-- um banco com linha antiga sem conversao: melhor deixar a coluna aceitando
+-- nulo do que a migracao inteira falhar.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM conferencias WHERE iniciado_em IS NULL OR finalizado_em IS NULL
+  ) THEN
+    ALTER TABLE conferencias ALTER COLUMN iniciado_em   SET NOT NULL;
+    ALTER TABLE conferencias ALTER COLUMN finalizado_em SET NOT NULL;
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------ configuracoes
 -- Par chave/valor por empresa. Hoje guarda a chave da API de IA salva pelo

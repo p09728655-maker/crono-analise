@@ -251,8 +251,10 @@ rodar('API — integracao com Postgres', () => {
     }), fingirRes());
     // Conferencia de outra empresa nao pode vazar para o relatorio.
     await sql`
-      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas, salvo_em)
-      VALUES (${crypto.randomUUID()}, ${OUTRA_EMPRESA}, 'Alheia', 60000, 10, now())`;
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em)
+      VALUES (${crypto.randomUUID()}, ${OUTRA_EMPRESA}, 'Alheia', 60000, 10,
+              now() - interval '1 minute', now(), now())`;
 
     const res = fingirRes();
     await conferenciasApi(fingirReq({}), res);
@@ -419,8 +421,18 @@ rodar('API — integracao com Postgres', () => {
         }],
       },
     }), fingirRes());
-    const [linha] = await sql`SELECT paradas FROM conferencias WHERE client_id = ${clientId}`;
-    expect(linha.paradas).toEqual([]);
+    // Sem parada nenhuma, a conferencia entra e o relatorio a le com lista
+    // vazia — e' o caso do aparelho que so' mede vazao, sem marcar setup.
+    const [{ n }] = await sql`
+      SELECT count(*)::int AS n FROM paradas p
+        JOIN conferencias c ON c.id = p.conferencia_id
+       WHERE c.client_id = ${clientId}`;
+    expect(n).toBe(0);
+
+    const leitura = fingirRes();
+    await conferenciasApi(fingirReq(), leitura);
+    const daApi = leitura.corpo.conferencias.find((c) => c.maquina === 'Furadeira 03');
+    expect(daApi.paradas).toEqual([]);
   });
 
   it('PATCH cadastra paradas no PC, e recusa quando elas comem o periodo inteiro', async () => {
@@ -471,8 +483,10 @@ rodar('API — integracao com Postgres', () => {
   it('nao arquiva nem exclui conferencia de OUTRA empresa', async () => {
     const alheia = crypto.randomUUID();
     await sql`
-      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas, salvo_em)
-      VALUES (${alheia}, ${OUTRA_EMPRESA}, 'Alheia', 60000, 10, now())`;
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em)
+      VALUES (${alheia}, ${OUTRA_EMPRESA}, 'Alheia', 60000, 10,
+              now() - interval '1 minute', now(), now())`;
     const [linha] = await sql`SELECT id FROM conferencias WHERE client_id = ${alheia}`;
 
     const patch = fingirRes();

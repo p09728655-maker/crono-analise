@@ -42,10 +42,11 @@ export const MOTIVOS_PARADA = [
 /**
  * Periodo conferido, como "10:16–10:36".
  *
- * Le os INSTANTES (iniciado_em/finalizado_em). Cai para o texto "HH:MM" das
- * colunas antigas enquanto o passo 3 da migracao nao as derruba — e' o que
- * mantem a tela de pe' durante a transicao, com o app novo lendo um banco
- * que ainda tem as duas formas.
+ * Le os INSTANTES (iniciado_em/finalizado_em). O texto "HH:MM" das colunas
+ * antigas segue como ultimo recurso: elas ja' foram derrubadas do banco, mas
+ * um servidor REVERTIDO para antes da migracao voltaria a devolver so' o
+ * texto — e ai' a tela mostraria um travessao no lugar do periodo, que e'
+ * pior do que a hora sem o dia.
  *
  * A hora sai no fuso do computador que esta' olhando, que e' o da fabrica.
  */
