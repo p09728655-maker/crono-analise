@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const URL_TESTE = process.env.TEST_DATABASE_URL;
 const rodar = URL_TESTE ? describe : describe.skip;
 
-let sql, sync, estudos, operacoes, config;
+let sql, sync, estudos, operacoes, config, conferenciasApi;
 const EMPRESA = '11111111-1111-1111-1111-111111111111';
 const OUTRA_EMPRESA = '99999999-9999-9999-9999-999999999999';
 const TOKEN = 'token-de-teste';
@@ -43,6 +43,7 @@ rodar('API — integracao com Postgres', () => {
     estudos = (await import('../api/estudos.js')).default;
     operacoes = (await import('../api/operacoes.js')).default;
     config = (await import('../api/config.js')).default;
+    conferenciasApi = (await import('../api/conferencias.js')).default;
     // O teste cobre o caminho SEM chave no ambiente (a do banco).
     delete process.env.ANTHROPIC_API_KEY;
 
@@ -188,6 +189,75 @@ rodar('API — integracao com Postgres', () => {
       },
     }), res);
     expect(res.corpo.novos).toBe(2);
+  });
+
+  it('conferencia rapida grava pelo sync, sem estudo, e reenvio nao duplica', async () => {
+    const clientId = crypto.randomUUID();
+    const corpo = {
+      conferencias: [{
+        clientId, maquina: 'Furadeira 03', peca: 'Lateral Mesa Sleep',
+        horaInicial: '07:00', horaFinal: '07:10',
+        duracaoMs: 600000, pecas: 150, salvoEm: new Date().toISOString(),
+      }],
+    };
+
+    const r1 = fingirRes();
+    await sync(fingirReq({ metodo: 'POST', corpo }), r1);
+    const r2 = fingirRes();
+    await sync(fingirReq({ metodo: 'POST', corpo }), r2);
+
+    expect(r1.corpo.novos).toBe(1);
+    expect(r2.corpo.novos).toBe(0);
+    expect(r2.corpo.clientIds).toContain(clientId); // confirmada: o app limpa a fila
+
+    const [linha] = await sql`SELECT * FROM conferencias WHERE client_id = ${clientId}`;
+    expect(linha.empresa_id).toBe(EMPRESA);
+    expect(linha.maquina).toBe('Furadeira 03');
+    expect(Number(linha.duracao_ms)).toBe(600000);
+  });
+
+  it('conferencia com horario invalido leva 400 antes de tocar o banco', async () => {
+    const res = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId: crypto.randomUUID(), horaInicial: '25:00',
+          duracaoMs: 600000, pecas: 150,
+        }],
+      },
+    }), res);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('GET /conferencias lista da empresa autenticada, mais recente primeiro', async () => {
+    await sql`DELETE FROM conferencias WHERE empresa_id IN (${EMPRESA}, ${OUTRA_EMPRESA})`;
+    const antiga = new Date(Date.now() - 3600_000).toISOString();
+    const recente = new Date().toISOString();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          { clientId: crypto.randomUUID(), maquina: 'Furadeira 03', duracaoMs: 600000, pecas: 150, salvoEm: antiga },
+          { clientId: crypto.randomUUID(), maquina: 'Seccionadora', duracaoMs: 300000, pecas: 40, salvoEm: recente },
+        ],
+      },
+    }), fingirRes());
+    // Conferencia de outra empresa nao pode vazar para o relatorio.
+    await sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas, salvo_em)
+      VALUES (${crypto.randomUUID()}, ${OUTRA_EMPRESA}, 'Alheia', 60000, 10, now())`;
+
+    const res = fingirRes();
+    await conferenciasApi(fingirReq({}), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.corpo.conferencias.length).toBe(2);
+    expect(res.corpo.conferencias[0].maquina).toBe('Seccionadora');
+    expect(res.corpo.conferencias.map((c) => c.maquina)).not.toContain('Alheia');
+
+    const filtrada = fingirRes();
+    await conferenciasApi(fingirReq({ query: { maquina: 'Furadeira 03' } }), filtrada);
+    expect(filtrada.corpo.conferencias.length).toBe(1);
   });
 
   it('estudo carregado devolve tempos no formato do dominio', async () => {

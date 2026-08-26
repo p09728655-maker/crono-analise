@@ -4,7 +4,9 @@ import {
   conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao, formatarSegundos,
 } from '../../domain/cronoanalise.js';
 import { TOQUE_MINIMO_MS } from '../../domain/estatistica.js';
-import { listarConferencias, removerConferencia, salvarConferencia } from '../../lib/conferencias.js';
+import { sincronizar } from '../../lib/api.js';
+import { listarConferencias, marcarEnviadas, removerConferencia, salvarConferencia } from '../../lib/conferencias.js';
+import { enfileirar } from '../../lib/filaOffline.js';
 import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
 
 /**
@@ -44,7 +46,8 @@ export default function ConferenciaRapida({ aoSair }) {
   const [horaFinal, setHoraFinal] = useState('');
   const [pecasPeriodo, setPecasPeriodo] = useState('');
 
-  // Nome da peca e memoria deste aparelho.
+  // Maquina, peca e memoria deste aparelho.
+  const [maquina, setMaquina] = useState('');
   const [peca, setPeca] = useState('');
   const [historico, setHistorico] = useState(() => listarConferencias());
   const [salvo, setSalvo] = useState(null); // null | 'ok' | 'erro'
@@ -53,7 +56,36 @@ export default function ConferenciaRapida({ aoSair }) {
   // de novo em vez de fingir que a alteracao tambem esta' guardada.
   useEffect(() => {
     setSalvo(null);
-  }, [peca, horaInicial, horaFinal, pecasPeriodo, pecasFinais, fase]);
+  }, [maquina, peca, horaInicial, horaFinal, pecasPeriodo, pecasFinais, fase]);
+
+  // BACKFILL: conferencias salvas antes da sincronizacao existir (ou num
+  // navegador em que a fila falhou) nao tem a marca `enviada`. Ao abrir a
+  // tela elas entram na fila — o client_id torna qualquer repeticao
+  // inofensiva no servidor — e passam a aparecer no relatorio do PC.
+  useEffect(() => {
+    const pendentes = listarConferencias()
+      .filter((c) => !c.enviada && Number(c.duracaoMs) > 0 && Number(c.pecas) > 0);
+    if (!pendentes.length) return;
+    (async () => {
+      try {
+        for (const c of pendentes) {
+          await enfileirar({
+            tipo: 'conferencia',
+            clientId: c.id,
+            maquina: c.maquina || null,
+            peca: c.peca || null,
+            horaInicial: c.horaInicial || null,
+            horaFinal: c.horaFinal || null,
+            duracaoMs: Math.round(c.duracaoMs),
+            pecas: c.pecas,
+            salvoEm: c.salvoEm,
+          });
+        }
+        setHistorico(marcarEnviadas(pendentes.map((c) => c.id)));
+        sincronizar().catch(() => {});
+      } catch { /* sem fila neste navegador: tenta de novo na proxima abertura */ }
+    })();
+  }, []);
 
   const rodando = fase === 'rodando';
   useWakeLock(rodando);
@@ -139,8 +171,9 @@ export default function ConferenciaRapida({ aoSair }) {
     return `${dois(d.getHours())}:${dois(d.getMinutes())}`;
   };
 
-  const salvar = useCallback((calculado, horarios) => {
+  const salvar = useCallback(async (calculado, horarios) => {
     const registro = salvarConferencia({
+      maquina: maquina.trim(),
       peca: peca.trim(),
       horaInicial: horarios ? horaInicial : null,
       horaFinal: horarios ? horaFinal : null,
@@ -149,14 +182,31 @@ export default function ConferenciaRapida({ aoSair }) {
       pecasPorHora: calculado.pecasPorHora,
       cicloMedioMs: calculado.cicloMedioMs,
     });
-    if (registro) {
-      setHistorico(listarConferencias());
-      setSalvo('ok');
-      vibrar(45);
-    } else {
-      setSalvo('erro');
-    }
-  }, [peca, horaInicial, horaFinal]);
+    if (!registro) { setSalvo('erro'); return; }
+
+    setHistorico(listarConferencias());
+    setSalvo('ok');
+    vibrar(45);
+
+    // Mesmo padrao da coleta: disco primeiro, rede depois. O id local vira
+    // clientId — reenvio nao duplica no servidor. Sem rede, fica na fila e a
+    // sincronizacao automatica leva quando der; salvar nunca depende disso.
+    try {
+      await enfileirar({
+        tipo: 'conferencia',
+        clientId: registro.id,
+        maquina: registro.maquina || null,
+        peca: registro.peca || null,
+        horaInicial: registro.horaInicial,
+        horaFinal: registro.horaFinal,
+        duracaoMs: Math.round(registro.duracaoMs),
+        pecas: registro.pecas,
+        salvoEm: registro.salvoEm,
+      });
+      setHistorico(marcarEnviadas([registro.id]));
+      sincronizar().catch(() => {});
+    } catch { /* sem fila neste navegador: o backfill tenta na proxima abertura */ }
+  }, [maquina, peca, horaInicial, horaFinal]);
 
   const remover = useCallback((id) => {
     setHistorico(removerConferencia(id));
@@ -179,17 +229,30 @@ export default function ConferenciaRapida({ aoSair }) {
       {fase === 'pronto' && (
         <>
           <section style={est.formHoras} aria-label="Conferência por horários">
-            <label style={est.campoHora}>
-              <span style={est.rotuloCampo}>PEÇA</span>
-              <input
-                type="text"
-                placeholder="Ex: Lateral Mesa Sleep"
-                value={peca}
-                onChange={(ev) => setPeca(ev.target.value)}
-                style={est.inputTexto}
-                aria-label="Nome da peça"
-              />
-            </label>
+            <div style={est.linhaHoras}>
+              <label style={est.campoHora}>
+                <span style={est.rotuloCampo}>MÁQUINA</span>
+                <input
+                  type="text"
+                  placeholder="Ex: Furadeira 03"
+                  value={maquina}
+                  onChange={(ev) => setMaquina(ev.target.value)}
+                  style={est.inputTexto}
+                  aria-label="Nome da máquina"
+                />
+              </label>
+              <label style={est.campoHora}>
+                <span style={est.rotuloCampo}>PEÇA</span>
+                <input
+                  type="text"
+                  placeholder="Ex: Lateral Mesa"
+                  value={peca}
+                  onChange={(ev) => setPeca(ev.target.value)}
+                  style={est.inputTexto}
+                  aria-label="Nome da peça"
+                />
+              </label>
+            </div>
 
             <div style={est.linhaHoras}>
               <div style={est.campoHora}>
@@ -289,7 +352,9 @@ export default function ConferenciaRapida({ aoSair }) {
               {historico.map((c) => (
                 <div key={c.id} style={est.itemHistorico}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={est.itemPeca}>{c.peca || 'Sem nome da peça'}</div>
+                    <div style={est.itemPeca}>
+                      {[c.maquina, c.peca].filter(Boolean).join(' · ') || 'Sem identificação'}
+                    </div>
                     <div style={est.itemDetalhe}>
                       {[
                         c.horaInicial && c.horaFinal ? `${c.horaInicial}–${c.horaFinal}` : null,
@@ -359,17 +424,30 @@ export default function ConferenciaRapida({ aoSair }) {
       {fase === 'resultado' && resultado && (
         <>
           <section style={est.painelResultado} aria-label="Resultado da conferência">
-            <label style={est.campoHora}>
-              <span style={est.rotuloCampo}>PEÇA</span>
-              <input
-                type="text"
-                placeholder="Ex: Lateral Mesa Sleep"
-                value={peca}
-                onChange={(ev) => setPeca(ev.target.value)}
-                style={est.inputTexto}
-                aria-label="Nome da peça"
-              />
-            </label>
+            <div style={est.linhaResultado}>
+              <label style={est.campoHora}>
+                <span style={est.rotuloCampo}>MÁQUINA</span>
+                <input
+                  type="text"
+                  placeholder="Ex: Furadeira 03"
+                  value={maquina}
+                  onChange={(ev) => setMaquina(ev.target.value)}
+                  style={est.inputTexto}
+                  aria-label="Nome da máquina"
+                />
+              </label>
+              <label style={est.campoHora}>
+                <span style={est.rotuloCampo}>PEÇA</span>
+                <input
+                  type="text"
+                  placeholder="Ex: Lateral Mesa"
+                  value={peca}
+                  onChange={(ev) => setPeca(ev.target.value)}
+                  style={est.inputTexto}
+                  aria-label="Nome da peça"
+                />
+              </label>
+            </div>
 
             <div style={est.linhaResultado}>
               <div style={est.blocoResultado}>

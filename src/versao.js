@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.14.0',
+    data: '2026-08-26',
+    titulo: 'Conferências no banco + estudo por máquina',
+    itens: [
+      'Conferência salva agora sobe para o banco pelo mesmo caminho da coleta: grava no aparelho primeiro e sincroniza quando há rede — reenviar não duplica.',
+      'Novo campo Máquina na conferência (ex: Furadeira 03), ao lado da Peça, para o relatório saber de qual posto veio cada medição.',
+      'Novo relatório "Conferências" no PC (botão no topo da Análise): resumo por máquina — medições, ritmo médio ponderado, melhor e pior registro com a peça — mais a tabela completa, com filtro por máquina e impressão.',
+    ],
+  },
+  {
     versao: '2.13.0',
     data: '2026-08-26',
     titulo: 'Salvar conferência com a peça',

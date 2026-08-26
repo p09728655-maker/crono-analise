@@ -131,6 +131,52 @@ export function conferenciaRapida({ duracaoMs, pecas }) {
 }
 
 /**
+ * Resumo das conferencias por maquina — o "estudo das furadeiras".
+ *
+ * Agrupa as conferencias salvas pelo posto conferido e responde o que o
+ * gestor pergunta diante do relatorio: quantas medicoes, qual o ritmo
+ * MEDIO real, qual o melhor e o pior registro (e com qual peca).
+ *
+ * O ritmo medio e' PONDERADO pelo tempo (soma de pecas / soma de duracao),
+ * nao a media das taxas: uma conferencia de 2h vale mais que uma de 5min,
+ * e a media simples deixaria a medicao curta distorcer o numero que vai
+ * sustentar decisao de capacidade.
+ *
+ * Aceita linhas do servidor (snake_case) e do aparelho (camelCase).
+ */
+export function resumirConferencias(conferencias) {
+  const grupos = new Map();
+
+  for (const c of conferencias || []) {
+    const duracao = Number(c.duracaoMs ?? c.duracao_ms) || 0;
+    const pecas = Number(c.pecas) || 0;
+    if (duracao <= 0 || pecas <= 0) continue;
+
+    const chave = String(c.maquina || '').trim() || 'Sem máquina';
+    if (!grupos.has(chave)) {
+      grupos.set(chave, { maquina: chave, n: 0, totalPecas: 0, totalMs: 0, melhor: null, pior: null });
+    }
+    const g = grupos.get(chave);
+    const ritmo = (pecas * MS_POR_HORA) / duracao;
+    const peca = String(c.peca || '').trim() || null;
+
+    g.n += 1;
+    g.totalPecas += pecas;
+    g.totalMs += duracao;
+    if (!g.melhor || ritmo > g.melhor.ritmo) g.melhor = { ritmo, peca };
+    if (!g.pior || ritmo < g.pior.ritmo) g.pior = { ritmo, peca };
+  }
+
+  return [...grupos.values()]
+    .map((g) => ({
+      ...g,
+      ritmoMedio: (g.totalPecas * MS_POR_HORA) / g.totalMs,
+      cicloMedioMs: g.totalMs / g.totalPecas,
+    }))
+    .sort((a, b) => b.n - a.n || a.maquina.localeCompare(b.maquina));
+}
+
+/**
  * Duracao entre dois horarios de relogio ("HH:MM"), em ms.
  *
  * E' assim que a conferencia acontece de verdade: o analista passa pela

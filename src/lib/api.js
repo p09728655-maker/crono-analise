@@ -45,6 +45,10 @@ export const atualizarOperacao = (id, dados) =>
   requisitar(`/operacoes?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados });
 export const removerOperacao = (id) =>
   requisitar(`/operacoes?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
+// "Servidor" no nome de proposito: lib/conferencias.js tem o listar LOCAL
+// (a memoria do aparelho) e os dois convivem no mesmo app.
+export const listarConferenciasServidor = (maquina) =>
+  requisitar(`/conferencias${maquina ? `?maquina=${encodeURIComponent(maquina)}` : ''}`);
 export const analisarComIa = (dados) => requisitar('/ai/analisar', { metodo: 'POST', corpo: dados });
 export const obterConfigIa = () => requisitar('/config').then((r) => r.chaveIa);
 export const salvarChaveIa = (chaveIa) =>
@@ -77,6 +81,7 @@ export async function sincronizar({ aoProgresso } = {}) {
     const corpo = {
       observacoes: fatia.filter((x) => x.tipo === 'observacao').map(paraObservacao),
       paradas: fatia.filter((x) => x.tipo === 'parada').map(paraParada),
+      conferencias: fatia.filter((x) => x.tipo === 'conferencia').map(paraConferencia),
     };
 
     let ultimoErro = null;
@@ -117,4 +122,15 @@ const paraParada = (x) => ({
   observacao: x.observacao ?? null,
   duracaoMs: x.duracaoMs,
   iniciadoEm: x.iniciadoEm,
+});
+
+const paraConferencia = (x) => ({
+  clientId: x.clientId,
+  maquina: x.maquina ?? null,
+  peca: x.peca ?? null,
+  horaInicial: x.horaInicial ?? null,
+  horaFinal: x.horaFinal ?? null,
+  duracaoMs: x.duracaoMs,
+  pecas: x.pecas,
+  salvoEm: x.salvoEm,
 });

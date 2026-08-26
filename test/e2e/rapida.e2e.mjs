@@ -46,7 +46,8 @@ const textoHoras = await painelHoras.innerText();
 checar(textoHoras.includes('10 min'), 'periodo formatado como 10 min');
 checar(textoHoras.includes('4.0'), 'ciclo medio 4.0 s/pc');
 
-/* ------------------------------------- salvar com o nome da peca */
+/* ------------------------------- salvar com maquina e nome da peca */
+await p.locator('input[aria-label="Nome da máquina"]').fill('Furadeira 03');
 await p.locator('input[aria-label="Nome da peça"]').fill('Lateral Mesa Sleep');
 await p.getByRole('button', { name: 'SALVAR CONFERÊNCIA' }).tap();
 await p.getByRole('button', { name: /SALVA NESTE APARELHO/ }).waitFor({ timeout: 4000 });
@@ -54,8 +55,10 @@ checar(true, 'salvar vira "salva" e trava contra toque duplo');
 
 const salvas = p.locator('[aria-label="Conferências salvas neste aparelho"]');
 let textoSalvas = await salvas.innerText();
-checar(textoSalvas.includes('Lateral Mesa Sleep') && textoSalvas.includes('900'),
-  'conferencia salva aparece na lista com peca e ritmo');
+checar(
+  textoSalvas.includes('Furadeira 03') && textoSalvas.includes('Lateral Mesa Sleep') && textoSalvas.includes('900'),
+  'conferencia salva aparece na lista com maquina, peca e ritmo',
+);
 
 await p.reload();
 await salvas.waitFor({ timeout: 8000 });
