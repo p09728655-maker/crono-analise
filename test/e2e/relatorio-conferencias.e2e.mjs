@@ -58,11 +58,16 @@ await movel.close();
   const ctx2 = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
   const p2 = await ctx2.newPage();
   const hoje = new Date().toISOString();
+  // c1 vem no formato de hoje (instantes). c2 vem no formato ANTIGO, so' com
+  // o texto: e' o que um servidor revertido devolveria, e a tela precisa
+  // continuar mostrando o periodo em vez de um travessao.
+  const inicio = new Date(Date.now() - 180000).toISOString();
   let lista = [
-    { id: 'c1', maquina: 'Furadeira14', peca: 'Sleep lateral', hora_inicial: '08:21', hora_final: '08:24',
-      duracao_ms: 180000, pecas: 20, salvo_em: hoje, arquivada: false },
+    { id: 'c1', maquina: 'Furadeira14', peca: 'Sleep lateral',
+      iniciado_em: inicio, finalizado_em: hoje,
+      duracao_ms: 180000, pecas: 20, salvo_em: hoje, arquivada: false, paradas: [] },
     { id: 'c2', maquina: 'Furadeira 03', peca: 'Lateral Mesa', hora_inicial: '07:00', hora_final: '07:30',
-      duracao_ms: 1800000, pecas: 420, salvo_em: hoje, arquivada: false },
+      duracao_ms: 1800000, pecas: 420, salvo_em: hoje, arquivada: false, paradas: [] },
   ];
   let recusar = true;
   const chamadas = [];

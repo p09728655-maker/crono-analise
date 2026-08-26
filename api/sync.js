@@ -131,13 +131,12 @@ export default handler(async (req, res) => {
        * inicio sai dele menos a duracao cronometrada: e' literalmente o que
        * aconteceu, e antes essa conferencia ficava sem periodo nenhum.
        *
-       * hora_inicial/hora_final continuam sendo gravados ate' o passo 3 da
-       * migracao: se este deploy voltar atras, nada se perde.
-       *
-       * A coluna `paradas` (jsonb) NAO e' mais escrita — fica no DEFAULT '[]'
-       * ate' o passo 3 derruba-la. Escrever nas duas fontes so' recriaria o
-       * problema que esta mudanca veio resolver, e nao havia o que preservar:
-       * a coluna estava com zero paradas em todo o banco.
+       * O aparelho continua MANDANDO "HH:MM" — e' o que ele sabe dizer, e
+       * mexer nisso obrigaria o tablet que passou dias sem rede a falar uma
+       * lingua nova. O que muda e' que o servidor nao GUARDA mais o texto:
+       * ele compoe o instante e grava so' isso. hora_inicial/hora_final e
+       * `paradas` (jsonb) deixam de ser escritas aqui — e' o que libera o
+       * passo 3 da migracao a derruba-las sem quebrar a sincronizacao.
        */
       const [linha] = await tx`
         WITH periodo AS (
@@ -154,10 +153,9 @@ export default handler(async (req, res) => {
             END AS fim
         )
         INSERT INTO conferencias
-          (client_id, empresa_id, maquina, peca, hora_inicial, hora_final,
+          (client_id, empresa_id, maquina, peca,
            iniciado_em, finalizado_em, duracao_ms, pecas, salvo_em)
         SELECT ${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca},
-               ${c.horaInicial}, ${c.horaFinal},
                p.ini,
                -- Periodo que atravessa a meia-noite: o fim caiu no dia seguinte.
                CASE WHEN p.fim < p.ini THEN p.fim + interval '1 day' ELSE p.fim END,

@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.33.0',
+    data: '2026-08-26',
+    titulo: 'O período da conferência agora é um instante, e só',
+    itens: [
+      'Última etapa da refatoração do período. O horário da conferência era guardado como texto ("07:00") ao lado do instante; agora é só o instante. Texto não subtrai — era por isso que a duração precisava vir gravada à parte e um período que virasse a meia-noite não tinha como ser representado.',
+      'Um período que atravessa a meia-noite agora fecha certo: 23:40 às 00:10 são 30 minutos, no dia seguinte. Antes o app não tinha como saber que o fim era do outro dia.',
+      'A parada da conferência deixou de existir em dois lugares. Agora mora só na tabela de paradas, e o banco garante que toda parada tem exatamente uma origem — ou uma operação do estudo, ou uma conferência de furadeira.',
+      'Nada mudou no tablet. Ele continua mandando o horário do mesmo jeito; quem monta o instante é o servidor.',
+    ],
+  },
+  {
     versao: '2.32.0',
     data: '2026-08-26',
     titulo: 'O analista deixa de ser texto livre',
