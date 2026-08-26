@@ -17,7 +17,7 @@ import { VERSAO } from '../../versao.js';
  *   coleta  (celular, no posto) — tema escuro, alvos grandes, cartoes.
  *   analise (PC, no escritorio) — tema claro igual ao do relatorio, tabela.
  */
-export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo }) {
+export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, aoConferirRapido }) {
   const [estudos, setEstudos] = useState([]);
   const [estado, setEstado] = useState('carregando');
   const [erro, setErro] = useState(null);
@@ -93,6 +93,23 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo })
       />
 
       <main style={est.conteudo}>
+        {/* Atalho da conferencia rapida — SEMPRE visivel na coleta, mesmo com
+            a lista carregando ou com erro: ela nao depende do servidor, e o
+            analista que so' quer conferir um ritmo nao pode ficar refem da
+            rede nem de cadastro. */}
+        {!analise && aoConferirRapido && (
+          <button type="button" style={est.atalhoRapida} onClick={aoConferirRapido}>
+            <Simbolo tipo="cronometro" cor={t.vermelho} tamanho={28} />
+            <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+              <div style={est.atalhoTitulo}>Conferência rápida</div>
+              <div style={est.atalhoTexto}>
+                Cronometrar sem cadastro — peças/hora e ciclo médio na hora.
+              </div>
+            </div>
+            <span style={est.atalhoSeta} aria-hidden="true">→</span>
+          </button>
+        )}
+
         {estado === 'carregando' && (
           <EstadoVazio
             modo={modo}
@@ -660,6 +677,22 @@ function estilos(t, analise) {
       border: 'none', borderRadius: raio.md, color: '#fff',
       ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
     },
+
+    /* ---- atalho da conferencia rapida (so' coleta) ---- */
+    atalhoRapida: {
+      width: '100%', minHeight: ALVO_MINIMO,
+      display: 'flex', alignItems: 'center', gap: espaco.md,
+      padding: espaco.lg, marginBottom: espaco.xl,
+      background: t.superficie,
+      // Borda na cor da marca para destacar do resto da lista sem gritar:
+      // e' a unica acao da tela que funciona sem rede e sem cadastro.
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.vermelho,
+      borderRadius: raio.md,
+      color: t.texto, cursor: 'pointer', fontFamily: 'inherit',
+    },
+    atalhoTitulo: { ...tipo('corpoF'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+    atalhoTexto: { ...tipo('legenda'), color: t.fraco, marginTop: 2 },
+    atalhoSeta: { fontSize: 20, color: t.vermelho, flexShrink: 0 },
 
     /* ---- agrupamento por produto ---- */
     filtro: {

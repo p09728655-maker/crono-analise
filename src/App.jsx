@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import ListaEstudos from './features/estudos/ListaEstudos.jsx';
 import DetalheEstudo from './features/estudos/DetalheEstudo.jsx';
 import ColetaFuradeira from './features/coleta/ColetaFuradeira.jsx';
+import ConferenciaRapida from './features/coleta/ConferenciaRapida.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import BarraSincronizacao from './components/BarraSincronizacao.jsx';
 import { caminhos, ehDesktop, useRota } from './lib/dispositivo.js';
@@ -33,6 +34,9 @@ export default function App() {
   }, [navegar, modo, estudoId]);
 
   const emColeta = tela === 'coleta';
+  // A conferencia rapida tambem e' tela cheia de cronometro: sem barra de
+  // sincronizacao (ela nao fala com o servidor) e sem distracao.
+  const telaCheia = emColeta || tela === 'rapida';
 
   // Recarregar no meio da coleta perderia o ciclo em andamento.
   useEffect(() => {
@@ -61,7 +65,7 @@ export default function App() {
 
   return (
     <>
-      {!emColeta && (
+      {!telaCheia && (
         <div className="somente-tela">
           <BarraSincronizacao />
         </div>
@@ -69,7 +73,16 @@ export default function App() {
 
       {/* Sem alternador de modo no aparelho de toque: coleta e' o unico modo la. */}
       {tela === 'lista' && (
-        <ListaEstudos aoAbrir={abrirEstudo} modo={modo} aoTrocarModo={desktop ? trocarModo : undefined} />
+        <ListaEstudos
+          aoAbrir={abrirEstudo}
+          modo={modo}
+          aoTrocarModo={desktop ? trocarModo : undefined}
+          aoConferirRapido={() => navegar(caminhos.rapida())}
+        />
+      )}
+
+      {tela === 'rapida' && (
+        <ConferenciaRapida aoSair={() => navegar(caminhos.lista('coleta'))} />
       )}
 
       {tela === 'estudo' && (

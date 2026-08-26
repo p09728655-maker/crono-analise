@@ -107,6 +107,29 @@ export function amostraSuficiente(resultado, metaObs) {
   return { ok: true, motivo: 'Meta de ciclos atingida' };
 }
 
+/**
+ * Conferencia rapida: ritmo observado num periodo, sem estudo cadastrado.
+ *
+ * O analista passa pelo posto, cronometra um intervalo (ex: 7:00 as 7:10)
+ * e informa quantas pecas sairam (150). Nao ha' FR, tolerancia nem amostra
+ * por ciclo — e' uma medicao de vazao, nao um estudo de tempos. Por isso o
+ * resultado fala em pecas/hora e ciclo MEDIO, nunca em TO/TN/TP.
+ */
+export function conferenciaRapida({ duracaoMs, pecas }) {
+  const dur = Number(duracaoMs) || 0;
+  if (dur <= 0) return null;
+  const qtd = Math.max(0, Math.floor(Number(pecas) || 0));
+  const pecasPorHora = (qtd * MS_POR_HORA) / dur;
+  return {
+    duracaoMs: dur,
+    pecas: qtd,
+    pecasPorHora,
+    pecasPorMinuto: pecasPorHora / 60,
+    // Sem peca nao ha ciclo: null obriga o chamador a mostrar vazio, nao 0.
+    cicloMedioMs: qtd > 0 ? dur / qtd : null,
+  };
+}
+
 /** Takt Time em ms. Ritmo que a demanda exige. */
 export function taktTime(tempoDisponivelSeg, quantidade) {
   const qtd = Number(quantidade) || 0;
