@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.17.0',
+    data: '2026-08-26',
+    titulo: 'Chave da IA no lugar certo',
+    itens: [
+      'A chave da API agora tem botão próprio no topo da Análise ("Chave da IA"). Antes ela só existia dentro de um estudo aberto — com a lista vazia, não havia como chegar nela.',
+      'O comportamento é o mesmo: a chave vai para o servidor, nunca volta para o navegador, e só os 4 últimos caracteres aparecem para você reconhecer qual está ativa.',
+    ],
+  },
+  {
     versao: '2.16.0',
     data: '2026-08-26',
     titulo: 'Estudos arquivados voltam',

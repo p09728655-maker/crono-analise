@@ -5,6 +5,7 @@ import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../
 import { criarEstudo, listarArquivados, listarEstudos, removerEstudo, restaurarEstudo } from '../../lib/api.js';
 import { agruparPorProduto, produtosConhecidos, setoresConhecidos } from '../../domain/agrupamento.js';
 import AvisoAtualizacao from '../../components/AvisoAtualizacao.jsx';
+import ChaveIa from '../../components/ChaveIa.jsx';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
@@ -29,6 +30,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
   const [verVersoes, setVerVersoes] = useState(false);
   const [arquivados, setArquivados] = useState([]);
   const [verArquivados, setVerArquivados] = useState(false);
+  const [verChaveIa, setVerChaveIa] = useState(false);
 
   const analise = modo === 'analise';
   const t = tema(analise);
@@ -97,6 +99,11 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
             {analise && (
               <button type="button" style={est.botaoSecundario} onClick={() => setImportando(true)}>
                 Importar
+              </button>
+            )}
+            {analise && (
+              <button type="button" style={est.botaoSecundario} onClick={() => setVerChaveIa(true)}>
+                Chave da IA
               </button>
             )}
             {temEstudos && (
@@ -230,6 +237,10 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
 
       {verVersoes && (
         <HistoricoVersoes modo={modo} aoFechar={() => setVerVersoes(false)} />
+      )}
+
+      {verChaveIa && (
+        <ChaveIa modo={modo} aoFechar={() => setVerChaveIa(false)} />
       )}
 
       {verArquivados && (

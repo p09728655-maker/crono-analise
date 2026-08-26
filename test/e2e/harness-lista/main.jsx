@@ -36,10 +36,27 @@ window.__aberto = null;
 // Restaurar tira o estudo da lista de arquivados, como o servidor faria.
 let arquivados = comArquivados ? { estudos: [...ARQUIVADOS.estudos] } : { estudos: [] };
 let restaurados = [];
+let chaveIa = { configurada: false, origem: null, resumo: null };
 
 window.fetch = async (url, opts = {}) => {
   const metodo = opts.method || 'GET';
   const alvo = String(url);
+
+  // Chave da IA: estado proprio, como no servidor — o navegador nunca
+  // recebe a chave de volta, so' os 4 ultimos caracteres.
+  if (alvo.includes('/config')) {
+    if (metodo === 'POST') {
+      const corpo = JSON.parse(opts.body);
+      window.__posts.push({ url: alvo, corpo });
+      chaveIa = { configurada: true, origem: 'banco', resumo: `•••${String(corpo.chaveIa).slice(-4)}` };
+      return new Response(JSON.stringify({ chaveIa }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ chaveIa }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   if (metodo === 'POST') {
     const corpo = JSON.parse(opts.body);
