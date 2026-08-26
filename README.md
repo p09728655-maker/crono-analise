@@ -45,6 +45,18 @@ A raiz `/` manda para a experiência certa conforme o aparelho. As duas rotas
 seguem acessíveis de qualquer lugar — bloquear criaria beco sem saída quando
 o analista quiser conferir um número no chão de fábrica.
 
+### Conferência rápida (`/coleta/rapida`)
+
+Cronômetro avulso, **sem cadastro e sem servidor**, para o analista que está
+passando pelo posto e só quer conferir o ritmo: cronometra um período (7:00
+às 7:10), conta as peças — tocando a cada peça ou digitando o total no fim,
+lendo o contador da máquina — e sai com peças/hora e ciclo médio na hora.
+
+Nada é gravado, de propósito: conferência é descartável por definição, e a
+tela avisa isso com todas as letras. Registro e tempo padrão continuam sendo
+papel do estudo. Por não depender de rede, o atalho na lista de coleta fica
+visível mesmo com a API fora do ar.
+
 ## Relatório impresso
 
 O botão **Imprimir relatório** gera uma folha A4 retrato. Não é a tela levada

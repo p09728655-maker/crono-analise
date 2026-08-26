@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.11.0',
+    data: '2026-08-26',
+    titulo: 'Conferência rápida',
+    itens: [
+      'Nova opção "Conferência rápida" na tela de coleta: cronometre um período diante da máquina sem cadastrar estudo — ex: das 7:00 às 7:10 saíram 150 peças — e veja peças/hora e ciclo médio na hora.',
+      'Dá para contar tocando a cada peça ou só cronometrar e digitar o total no fim (lendo o contador da máquina) — o resultado recalcula ao editar.',
+      'Funciona sem rede e sem servidor: nada é gravado. Para registrar ciclos e calcular tempo padrão, o caminho continua sendo o estudo.',
+    ],
+  },
+  {
     versao: '2.10.0',
     data: '2026-08-25',
     titulo: 'Análise com IA',

@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
  *
  *   /                                    raiz — decide pelo aparelho
  *   /coleta                              lista (celular)
+ *   /coleta/rapida                       conferencia rapida, sem cadastro
  *   /coleta/estudo/<id>                  operacoes do estudo
  *   /coleta/estudo/<id>/operacao/<opId>  cronometro no posto
  *   /analise                             lista (PC)
@@ -53,6 +54,9 @@ export function analisarCaminho(caminho) {
     };
   }
 
+  // Conferencia rapida: cronometro avulso, sem estudo — nao carrega nada.
+  if (/^\/coleta\/rapida\/?$/i.test(p)) return { modo: 'coleta', tela: 'rapida', estudoId: null, operacaoId: null };
+
   if (/^\/coleta\/?$/i.test(p)) return { modo: 'coleta', tela: 'lista', estudoId: null, operacaoId: null };
   if (/^\/analise\/?$/i.test(p)) return { modo: 'analise', tela: 'lista', estudoId: null, operacaoId: null };
 
@@ -90,6 +94,7 @@ export function useRota() {
 /** Monta caminhos num lugar so', para nao espalhar string pelo codigo. */
 export const caminhos = {
   lista: (modo) => `/${modo}`,
+  rapida: () => '/coleta/rapida',
   estudo: (modo, estudoId) => `/${modo}/estudo/${estudoId}`,
   coletar: (estudoId, operacaoId) => `/coleta/estudo/${estudoId}/operacao/${operacaoId}`,
 };

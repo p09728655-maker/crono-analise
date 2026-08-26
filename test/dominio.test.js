@@ -5,8 +5,8 @@ import {
   temposValidos, tendencia, ultimaObservacaoAtipica,
 } from '../src/domain/estatistica.js';
 import {
-  amostraSuficiente, calcularOperacao, formatarCronometro, oee,
-  operadoresNecessarios, taktTime,
+  amostraSuficiente, calcularOperacao, conferenciaRapida, formatarCronometro,
+  oee, operadoresNecessarios, taktTime,
 } from '../src/domain/cronoanalise.js';
 
 describe('temposValidos', () => {
@@ -189,6 +189,29 @@ describe('amostraSuficiente', () => {
     const r = amostraSuficiente(instavel, 4);
     expect(r.ok).toBe(true);
     expect(instavel.obsMinimas).toBeGreaterThan(4); // referencia continua disponivel
+  });
+});
+
+describe('conferenciaRapida', () => {
+  it('exemplo real: 150 pecas em 10 minutos -> 900 pc/h, ciclo medio 4s', () => {
+    const r = conferenciaRapida({ duracaoMs: 10 * 60 * 1000, pecas: 150 });
+    expect(r.pecasPorHora).toBe(900);
+    expect(r.pecasPorMinuto).toBe(15);
+    expect(r.cicloMedioMs).toBe(4000);
+  });
+  it('sem peca nao ha ciclo: ritmo zero e ciclo null, nunca zero enganoso', () => {
+    const r = conferenciaRapida({ duracaoMs: 60000, pecas: 0 });
+    expect(r.pecasPorHora).toBe(0);
+    expect(r.cicloMedioMs).toBeNull();
+  });
+  it('duracao zero ou invalida nao produz resultado', () => {
+    expect(conferenciaRapida({ duracaoMs: 0, pecas: 10 })).toBeNull();
+    expect(conferenciaRapida({ duracaoMs: NaN, pecas: 10 })).toBeNull();
+  });
+  it('quantidade vem de input de texto: trunca fracao e ignora lixo', () => {
+    expect(conferenciaRapida({ duracaoMs: 60000, pecas: '30.9' }).pecas).toBe(30);
+    expect(conferenciaRapida({ duracaoMs: 60000, pecas: '' }).pecas).toBe(0);
+    expect(conferenciaRapida({ duracaoMs: 60000, pecas: -5 }).pecas).toBe(0);
   });
 });
 
