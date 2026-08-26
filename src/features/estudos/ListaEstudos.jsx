@@ -20,7 +20,7 @@ import { VERSAO } from '../../versao.js';
  *   coleta  (celular, no posto) — tema escuro, alvos grandes, cartoes.
  *   analise (PC, no escritorio) — tema claro igual ao do relatorio, tabela.
  */
-export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias }) {
+export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias }) {
   const [estudos, setEstudos] = useState([]);
   const [estado, setEstado] = useState('carregando');
   const [erro, setErro] = useState(null);
@@ -249,7 +249,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
                   </div>
 
                   {analise
-                    ? <TabelaEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
+                    ? <TabelaEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoEditar={aoEditar} aoRemover={setRemovendo} />
                     : <CartoesEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />}
                 </section>
               ))}
@@ -388,7 +388,7 @@ function Simbolo({ tipo: qual, cor, tamanho = 36 }) {
   );
 }
 
-function TabelaEstudos({ estudos, est, aoAbrir, aoRemover }) {
+function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover }) {
   const [sobre, setSobre] = useState(null);
 
   return (
@@ -420,7 +420,12 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoRemover }) {
               <td style={est.tdNum}>{e.total_observacoes}</td>
               <td style={est.tdFraco}>{formatarData(e.atualizado_em)}</td>
               <td style={est.tdAcoes}>
-                <button type="button" style={est.botaoLinha} onClick={() => aoAbrir?.(e.id)}>
+                {/* Editar leva ao mesmo painel com a edicao ja aberta: nome
+                    digitado errado tinha de ser descoberto la dentro. */}
+                <button type="button" style={est.botaoLinha} onClick={() => aoEditar?.(e.id)}>
+                  Editar
+                </button>
+                <button type="button" style={{ ...est.botaoLinha, marginLeft: espaco.xs }} onClick={() => aoAbrir?.(e.id)}>
                   Analisar
                 </button>
                 <button

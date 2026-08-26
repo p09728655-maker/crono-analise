@@ -43,7 +43,11 @@ export function ehDesktop() {
 const RE_ESTUDO = /^\/(coleta|analise)\/estudo\/([0-9a-f-]{36})(?:\/operacao\/([0-9a-f-]{36}))?\/?$/i;
 
 export function analisarCaminho(caminho) {
-  const p = (caminho || '/').replace(/\/+$/, '') || '/';
+  // Corta query e ancora antes de casar: a rota e' o CAMINHO. Sem isto um
+  // link com "?editar=1" (ou um utm colado pelo usuario) nao casaria com
+  // nada e cairia no padrao — o app voltava para a lista sozinho.
+  const semQuery = String(caminho || '/').split(/[?#]/)[0];
+  const p = semQuery.replace(/\/+$/, '') || '/';
 
   const m = RE_ESTUDO.exec(p);
   if (m) {
@@ -83,7 +87,9 @@ export function useRota() {
   }, []);
 
   const navegar = useCallback((caminho, { substituir = false } = {}) => {
-    if (caminho === window.location.pathname) return;
+    // Compara com caminho + query: ir de /x para /x?editar=1 e' navegacao,
+    // nao repeticao.
+    if (caminho === `${window.location.pathname}${window.location.search}`) return;
     if (substituir) window.history.replaceState({}, '', caminho);
     else window.history.pushState({}, '', caminho);
     setRota(analisarCaminho(caminho));

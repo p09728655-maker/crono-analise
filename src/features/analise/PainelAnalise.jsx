@@ -32,7 +32,11 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
   const [erro, setErro] = useState(null);
   const [opSelecionada, setOpSelecionada] = useState(null);
   const [adicionandoOp, setAdicionandoOp] = useState(false);
-  const [editandoEstudo, setEditandoEstudo] = useState(false);
+  // ?editar=1 abre a edicao direto: e' como a lista manda o analista
+  // consertar um nome errado sem precisar descobrir onde fica o botao.
+  const [editandoEstudo, setEditandoEstudo] = useState(
+    () => new URLSearchParams(window.location.search).get('editar') === '1',
+  );
   // Aba na URL: recarregar e compartilhar link preservam a vista.
   const [aba, setAba] = useState(() => {
     const q = new URLSearchParams(window.location.search).get('aba');
@@ -123,7 +127,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           acoes={(
             <>
               <button type="button" onClick={() => setEditandoEstudo(true)} style={est.botaoSecundario}>
-                Ajustes do estudo
+                Editar estudo
               </button>
               <button type="button" onClick={() => window.print()} style={est.botaoImprimir}>
                 Imprimir relatório
@@ -284,6 +288,9 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
  * desses campos exigiria recriar o estudo e perder os ciclos ja coletados.
  */
 function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
+  const [nome, setNome] = useState(estudo.nome || '');
+  const [produto, setProduto] = useState(estudo.produto || '');
+  const [recurso, setRecurso] = useState(estudo.recurso || '');
   const [setor, setSetor] = useState(estudo.setor || '');
   const [analista, setAnalista] = useState(estudo.analista || '');
   const [tolerancia, setTolerancia] = useState(Number(estudo.tolerancia_pct) || 15);
@@ -307,8 +314,12 @@ function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
     setSalvando(true);
     setErro(null);
     const ms = taktSeg ? Math.round(Number(taktSeg) * 1000) : null;
+    if (!nome.trim()) { setErro('O estudo precisa de um nome.'); setSalvando(false); return; }
     try {
       await aoSalvar({
+        nome: nome.trim(),
+        produto: produto.trim() || null,
+        recurso: recurso.trim() || null,
         setor: setor.trim() || null,
         analista: analista.trim() || null,
         toleranciaPct: Number(tolerancia),
@@ -321,10 +332,32 @@ function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
   return (
     <div style={est.modal} role="dialog" aria-label="Ajustes do estudo">
       <form style={est.formulario} onSubmit={enviar}>
-        <h2 style={{ margin: 0, ...tipo('titulo') }}>Ajustes do estudo</h2>
+        <h2 style={{ margin: 0, ...tipo('titulo') }}>Editar estudo</h2>
         <p style={est.dica}>
-          Estes valores recalculam os indicadores. Os ciclos já coletados não são afetados.
+          Corrija a identificação ou os parâmetros. Os ciclos já coletados não são
+          afetados — nome digitado errado se conserta aqui, sem refazer nada.
         </p>
+
+        {/* Nome, produto e recurso: um erro de digitação na criação ficava
+            para sempre no relatório impresso, e recriar o estudo custaria
+            os ciclos já cronometrados. */}
+        <label style={est.campo}>
+          <span style={est.rotuloCampo}>Nome do estudo</span>
+          <input style={est.input} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
+        </label>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg }}>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Produto / Referência</span>
+            <input style={est.input} value={produto} onChange={(e) => setProduto(e.target.value)} />
+            <span style={est.dica}>Agrupa os estudos na lista.</span>
+          </label>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Recurso / Posto</span>
+            <input style={est.input} value={recurso} onChange={(e) => setRecurso(e.target.value)} />
+            <span style={est.dica}>Ex: Furadeira 03. Sai no relatório impresso.</span>
+          </label>
+        </div>
 
         {/* Setor e analista saem impressos na folha de análise — um estudo
             criado sem eles imprimia "—" e não havia onde corrigir. */}

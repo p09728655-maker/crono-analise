@@ -96,6 +96,34 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   await p.waitForTimeout(400);
   checar(await p.locator('[aria-label="Análise com IA"]').count() === 1,
     'secao Analise com IA presente no painel');
+
+  /* ------------------------------------------------ tela que nao treme */
+  /**
+   * O detalhe da operacao aparecia SO' no hover, no meio do fluxo: passar
+   * o mouse crescia a pagina, a barra de rolagem surgia, a viewport
+   * estreitava, o grafico se remedia — e a barra saia de baixo do cursor,
+   * escondendo o detalhe e recomecando tudo. Na tela: tremor.
+   *
+   * O detalhe agora ocupa lugar fixo. Este teste guarda a propriedade que
+   * importa: passar o mouse NAO muda a altura da pagina.
+   */
+  {
+    const grafico = p.locator('svg[aria-label*="Yamazumi"]').first();
+    const alturaAntes = await p.evaluate(() => document.documentElement.scrollHeight);
+    const caixa = await grafico.locator('rect[rx="4"]').first().boundingBox();
+    if (caixa) {
+      await p.mouse.move(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2);
+      await p.waitForTimeout(250);
+    }
+    const alturaHover = await p.evaluate(() => document.documentElement.scrollHeight);
+    checar(alturaAntes === alturaHover,
+      `hover no grafico nao muda a altura da pagina (${alturaAntes} -> ${alturaHover})`);
+
+    await p.mouse.move(5, 5);
+    await p.waitForTimeout(250);
+    const alturaFora = await p.evaluate(() => document.documentElement.scrollHeight);
+    checar(alturaAntes === alturaFora, 'tirar o mouse tambem nao muda a altura');
+  }
   await p.emulateMedia({ media: 'print' });
   await p.waitForTimeout(600);
 

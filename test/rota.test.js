@@ -26,6 +26,17 @@ describe('conferencia rapida na URL', () => {
     expect(caminhos.conferencias()).toBe('/analise/conferencias');
   });
 
+  it('query string nao quebra a rota — o "?editar=1" da lista precisa chegar', () => {
+    const id = 'b17e849c-da3f-4d8c-a262-81e8748c589b';
+    const r = analisarCaminho(`/analise/estudo/${id}?editar=1`);
+    expect(r.tela).toBe('estudo');
+    expect(r.estudoId).toBe(id);
+    expect(r.padrao).toBeUndefined();
+    // Ancora tambem nao pode derrubar a rota.
+    expect(analisarCaminho('/coleta/rapida#topo').tela).toBe('rapida');
+    expect(analisarCaminho('/analise?utm=x').tela).toBe('lista');
+  });
+
   it('nao engole a lista nem a rota de estudo', () => {
     expect(analisarCaminho('/coleta').tela).toBe('lista');
     const id = 'b17e849c-da3f-4d8c-a262-81e8748c589b';

@@ -32,7 +32,11 @@ function useLarguraContainer(minimo = 320) {
 
   const medir = useCallback(() => {
     const l = ref.current?.clientWidth ?? 0;
-    if (l > 0) setLargura(Math.max(minimo, l));
+    if (l <= 0) return;
+    const nova = Math.max(minimo, l);
+    // Diferenca de 1px vira ruido: arredondamento de subpixel podia
+    // realimentar o ResizeObserver e redesenhar o grafico sem parar.
+    setLargura((atual) => (Math.abs(atual - nova) > 1 ? nova : atual));
   }, [minimo]);
 
   useEffect(() => {
@@ -264,7 +268,13 @@ export function GraficoYamazumi({ operacoes, taktMs, altura = 340 }) {
         </svg>
       </div>
 
-      {ativo !== null && dados[ativo] && <Tooltip operacao={dados[ativo]} taktMs={taktMs} />}
+      {/* A area do detalhe existe SEMPRE, com ou sem barra sob o cursor.
+          Aparecer e sumir mudava a altura da pagina a cada passada de
+          mouse — e era isso que fazia a tela tremer quando o conteudo
+          estava no limite da rolagem. Vazia ela ainda ensina o gesto. */}
+      {ativo !== null && dados[ativo]
+        ? <Tooltip operacao={dados[ativo]} taktMs={taktMs} />
+        : <div style={est.tooltipVazio} aria-hidden="true">Passe o mouse sobre uma barra para ver o detalhe da operação.</div>}
     </figure>
   );
 }
@@ -438,6 +448,15 @@ const est = {
     marginTop: 12, padding: '10px 14px', background: claro.fundo,
     border: `1px solid ${claro.borda}`, borderRadius: 6,
     display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: claro.textoMedio,
+    // Quatro linhas de 2px de gap: a altura nao pode depender do conteudo,
+    // senao o layout volta a pular entre ter e nao ter detalhe.
+    minHeight: 86, boxSizing: 'border-box',
+  },
+  tooltipVazio: {
+    marginTop: 12, padding: '10px 14px', background: claro.fundo,
+    border: `1px dashed ${claro.borda}`, borderRadius: 6,
+    display: 'flex', alignItems: 'center', fontSize: 12, color: claro.textoFraco,
+    minHeight: 86, boxSizing: 'border-box',
   },
   veredito: {
     display: 'flex', alignItems: 'flex-start', gap: 8, margin: '10px 0 4px',

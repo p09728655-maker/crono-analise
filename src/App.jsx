@@ -24,6 +24,10 @@ export default function App() {
 
   const irParaLista = useCallback(() => navegar(caminhos.lista(modo)), [navegar, modo]);
   const abrirEstudo = useCallback((id) => navegar(caminhos.estudo(modo, id)), [navegar, modo]);
+  const editarEstudo = useCallback(
+    (id) => navegar(`${caminhos.estudo('analise', id)}?editar=1`),
+    [navegar],
+  );
   const coletar = useCallback(
     (estudo, operacao) => navegar(caminhos.coletar(estudo.id, operacao.id)),
     [navegar],
@@ -76,6 +80,7 @@ export default function App() {
       {tela === 'lista' && (
         <ListaEstudos
           aoAbrir={abrirEstudo}
+          aoEditar={editarEstudo}
           modo={modo}
           aoTrocarModo={desktop ? trocarModo : undefined}
           aoConferirRapido={() => navegar(caminhos.rapida())}
