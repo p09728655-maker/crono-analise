@@ -331,7 +331,7 @@ export default function ConferenciaRapida({ aoSair }) {
         <div style={{ minWidth: 0, flex: 1 }}>
           {/* O posto vem no selo a direita, nao no titulo: "Conferência
               rápida · Furadeiras" nao cabe em tela de celular e sai cortado. */}
-          <div style={est.titulo}>Conferência rápida</div>
+          <div style={est.titulo}>Ritmo da furadeira</div>
           <div style={est.subtitulo}>Peças/hora por posto · sem cadastro</div>
         </div>
         <span style={est.selo}>FURADEIRA</span>

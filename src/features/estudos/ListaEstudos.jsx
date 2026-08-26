@@ -149,7 +149,7 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
             <Simbolo tipo="cronometro" cor={t.vermelho} tamanho={28} />
             <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
               <span style={est.atalhoRotulo}>Furadeiras</span>
-              <div style={est.atalhoTitulo}>Conferência rápida</div>
+              <div style={est.atalhoTitulo}>Ritmo da furadeira</div>
               <div style={est.atalhoTexto}>
                 Peças/hora do posto: horários, peças e as paradas (setup, falta de peça). Sem cadastro.
               </div>
@@ -267,6 +267,12 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
                 <FiltroProduto grupos={grupos} filtro={filtro} aoFiltrar={setFiltro} est={est} />
               )}
 
+              {/* Todos os grupos dentro de UM container de rolagem, com uma
+                  largura minima so'. Se cada tabela rolasse por conta propria,
+                  rolar uma desalinharia as outras — que e' justamente o que
+                  esta grade veio consertar. */}
+              <div style={analise ? est.areaRolagem : undefined}>
+              <div style={analise ? est.grade : undefined}>
               {visiveis.map((grupo) => (
                 <section key={grupo.chave} style={est.grupo}>
                   <div style={est.grupoCabecalho}>
@@ -283,6 +289,8 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
                     : <CartoesEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />}
                 </section>
               ))}
+              </div>
+              </div>
             </div>
 
             {analise && <PainelResumo estudos={encontrados} est={est} />}
@@ -446,6 +454,22 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover }) {
   return (
     <div style={est.painel}>
       <table style={est.tabela}>
+        {/* Cada produto e' uma tabela sua, e com largura automatica cada uma
+            media as proprias colunas: "EMBALGEM" empurrava Recurso num grupo
+            e "FUR16" encolhia no outro, e as colunas de dois grupos vizinhos
+            nao se alinhavam. Com colgroup + table-layout fixo, a grade e' a
+            mesma em toda a lista — o olho desce a coluna sem tropecar. */}
+        <colgroup>
+          {/* O nome do estudo fica com o que sobra: e' o unico texto que
+              cresce de verdade, e as demais colunas tem tamanho conhecido. */}
+          <col />
+          <col style={{ width: 140 }} />
+          <col style={{ width: 112 }} />
+          <col style={{ width: 100 }} />
+          <col style={{ width: 84 }} />
+          <col style={{ width: 112 }} />
+          <col style={{ width: 192 }} />
+        </colgroup>
         <thead>
           <tr>
             <th style={est.th}>Estudo</th>
@@ -465,9 +489,11 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover }) {
               onMouseEnter={() => setSobre(e.id)}
               onMouseLeave={() => setSobre(null)}
             >
-              <td style={est.tdNome}>{e.nome}</td>
-              <td style={est.td}>{e.recurso || '—'}</td>
-              <td style={est.td}>{e.analista || '—'}</td>
+              {/* title: com largura fixa o nome longo corta com reticencias,
+                  e o texto inteiro tem de continuar alcancavel. */}
+              <td style={est.tdNome} title={e.nome}>{e.nome}</td>
+              <td style={est.td} title={e.recurso || ''}>{e.recurso || '—'}</td>
+              <td style={est.td} title={e.analista || ''}>{e.analista || '—'}</td>
               <td style={est.tdNum}>{e.total_operacoes}</td>
               <td style={est.tdNum}>{e.total_observacoes}</td>
               <td style={est.tdFraco}>{formatarData(e.atualizado_em)}</td>
@@ -1051,7 +1077,15 @@ function estilos(t, analise) {
       background: t.superficie, borderRadius: raio.lg, boxShadow: t.sombra,
       border: `1px solid ${t.borda}`, overflow: 'hidden',
     },
-    tabela: { width: '100%', borderCollapse: 'collapse' },
+    areaRolagem: { overflowX: 'auto' },
+    // A largura minima mora AQUI, uma vez so': abaixo dela a lista inteira
+    // rola junto e a grade continua sendo a mesma para todos os grupos.
+    // 980: abaixo disto o nome do estudo — a coluna que mais importa — ficaria
+    // menor que o proprio nome. Melhor rolar a lista inteira que espremer.
+    grade: { minWidth: 980 },
+    // tableLayout fixo: a grade vem do colgroup, nao do conteudo de cada
+    // grupo — e' o que mantem os grupos alinhados entre si.
+    tabela: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
     th: {
       textAlign: 'left', padding: `${espaco.md}px ${espaco.lg}px`,
       ...rotulo(t.fraco), background: t.realce,
@@ -1064,8 +1098,16 @@ function estilos(t, analise) {
     },
     linha: { transition: `background ${transicao.rapida}` },
     linhaSobre: { background: t.realce },
-    td: { padding: `${espaco.lg}px`, ...tipo('corpo'), color: t.medio, borderBottom: `1px solid ${t.borda}` },
-    tdNome: { padding: `${espaco.lg}px`, ...tipo('corpoF'), color: t.texto, borderBottom: `1px solid ${t.borda}` },
+    td: {
+      padding: `${espaco.lg}px`, ...tipo('corpo'), color: t.medio,
+      borderBottom: `1px solid ${t.borda}`,
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    },
+    tdNome: {
+      padding: `${espaco.lg}px`, ...tipo('corpoF'), color: t.texto,
+      borderBottom: `1px solid ${t.borda}`,
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    },
     tdFraco: { padding: `${espaco.lg}px`, ...tipo('legenda'), color: t.fraco, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap' },
     tdNum: {
       padding: `${espaco.lg}px`, textAlign: 'right', ...tipo('corpoF'), ...numeros,

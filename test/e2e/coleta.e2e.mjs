@@ -109,6 +109,48 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   await ctx.close();
 }
 
+/* --------------------------------------------------------- meta batida */
+/**
+ * Chegar em 10/10 e nao saber que chegou: a meta so' existia como fracao
+ * pequena no topo, no meio de outros tres numeros, e o analista seguia
+ * cronometrando "mais um pouco" sem precisar.
+ */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 360, height: 640 }, hasTouch: true });
+  const p = await ctx.newPage();
+  await p.goto(`${PAGINA}?meta=3`);
+  await p.locator('button[aria-label="Iniciar cronometragem"]').click();
+  for (let i = 0; i < 3; i++) {
+    await p.waitForTimeout(420);
+    await p.locator('button[aria-label="Registrar fim do ciclo"]').click();
+  }
+  await p.waitForTimeout(300);
+
+  const faixaMeta = p.locator('[role="status"]').filter({ hasText: 'Meta atingida' });
+  checar(await faixaMeta.count() === 1, 'ao bater a meta a tela avisa que ja da para encerrar');
+  const textoMeta = await faixaMeta.innerText();
+  checar(/3\/3/.test(textoMeta), 'a faixa mostra a contagem que fechou a meta');
+  checar(/Rodada/.test(textoMeta), 'e aponta a outra rodada para quem quiser medir mais');
+
+  // A tela do posto nao pode ganhar rolagem por causa do aviso.
+  checar(!(await p.evaluate(() => document.documentElement.scrollHeight > document.documentElement.clientHeight)),
+    'com a faixa da meta a tela continua sem rolagem no celular pequeno');
+
+  // Dispensar tira o aviso do caminho sem encerrar nada.
+  await faixaMeta.getByRole('button', { name: 'Dispensar aviso' }).click();
+  checar(await faixaMeta.count() === 0, 'o × dispensa o aviso sem encerrar a coleta');
+  checar(await p.evaluate(() => window.__saiu !== true), 'dispensar nao encerra');
+
+  // Outra rodada: a meta volta a valer, e o aviso reaparece.
+  await p.locator('button', { hasText: 'Rodada' }).click();
+  await p.waitForTimeout(200);
+  checar(await faixaMeta.count() === 1, 'nova rodada faz o aviso da meta valer de novo');
+
+  await faixaMeta.getByRole('button', { name: 'Encerrar' }).click();
+  checar(await p.evaluate(() => window.__saiu === true), 'o botao Encerrar da faixa encerra a coleta');
+  await ctx.close();
+}
+
 /* -------------------------------------------------------------- layout */
 for (const t of TELAS) {
   const ctx = await navegador.newContext({ viewport: { width: t.width, height: t.height }, hasTouch: true });

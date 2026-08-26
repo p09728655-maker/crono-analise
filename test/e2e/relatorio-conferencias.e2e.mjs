@@ -24,12 +24,12 @@ const erros = [];
 p.on('pageerror', (e) => erros.push(e.message));
 
 await p.goto(`${BASE}/analise/conferencias`);
-await p.getByText('Conferências rápidas').first().waitFor({ timeout: 8000 });
+await p.getByText('Furadeiras').first().waitFor({ timeout: 8000 });
 checar(true, 'PC: /analise/conferencias abre o relatorio');
 // O subtitulo precisa dizer PARA QUE serve: era a duvida do usuario —
 // onde fica a parte das furadeiras e onde fica a da embalagem.
-checar(await p.getByText(/Furadeiras e demais postos/).count() > 0,
-  'subtitulo diz que esta e a tela das furadeiras');
+checar(await p.getByText(/Ritmo por máquina/).count() > 0,
+  'subtitulo diz o que a tela mede — e o titulo, de qual posto');
 
 await p.getByText('Não foi possível carregar').waitFor({ timeout: 8000 });
 checar(await p.getByRole('button', { name: 'Tentar de novo' }).count() === 1,

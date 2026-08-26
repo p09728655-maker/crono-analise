@@ -51,8 +51,12 @@ export default function MenuLateral({
 
       {/* 3. Quais estudos ja existem */}
       <div style={est.bloco}>
-        <div style={est.grupoRotulo}>Estudos de tempo</div>
-        <div style={est.grupoDica}>Ciclo a ciclo, com tempo padrão — ex: embalagem</div>
+        {/* Os dois blocos sao nomeados pelo POSTO, nao pelo metodo: no chao
+            de fabrica a pergunta e' "vim medir a embalagem" ou "vim medir a
+            furadeira", nunca "vim fazer uma conferencia rapida". O metodo
+            vem embaixo, como explicacao. */}
+        <div style={est.grupoRotulo}>Embalagem e demais postos</div>
+        <div style={est.grupoDica}>Estudos de tempo — ciclo a ciclo, com tempo padrão</div>
         {/* O grupo de filtro cobre SO' os produtos: arquivados nao filtra
             nada, abre outra tela. */}
         {grupos.length > 0 && (
@@ -92,8 +96,8 @@ export default function MenuLateral({
       {/* 4. A outra natureza de medicao, com peso menor */}
       {aoVerConferencias && (
         <div style={est.bloco}>
-          <div style={est.grupoRotulo}>Conferências rápidas</div>
-          <div style={est.grupoDica}>Peças/hora por posto — ex: furadeiras</div>
+          <div style={est.grupoRotulo}>Furadeiras</div>
+          <div style={est.grupoDica}>Ritmo do posto — peças/hora, sem cadastro</div>
           <button type="button" style={est.item} onClick={aoVerConferencias}>
             <span style={est.itemTexto}>Ritmo por máquina</span>
           </button>
