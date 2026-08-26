@@ -55,7 +55,8 @@ export default function MenuLateral({
 
       {grupos.length > 0 && (
         <div style={est.bloco} role="group" aria-label="Filtrar por produto">
-          <div style={est.grupoRotulo}>Produtos</div>
+          <div style={est.grupoRotulo}>Estudos de tempo</div>
+          <div style={est.grupoDica}>Ciclo a ciclo, com tempo padrão — ex: embalagem</div>
           <button
             type="button"
             onClick={() => aoFiltrar(null)}
@@ -81,20 +82,27 @@ export default function MenuLateral({
         </div>
       )}
 
-      <div style={est.bloco}>
-        <div style={est.grupoRotulo}>Relatórios</div>
-        {aoVerConferencias && (
-          <button type="button" style={est.item} onClick={aoVerConferencias}>
-            <span style={est.itemTexto}>Conferências rápidas</span>
-          </button>
-        )}
-        {arquivados > 0 && (
+      {/* Arquivados sao ESTUDOS: ficam com os estudos, nao com as
+          conferencias — agrupar pelo tipo de medicao e' o que faz o menu
+          responder "onde fica a embalagem" e "onde fica a furadeira". */}
+      {arquivados > 0 && (
+        <div style={est.bloco}>
           <button type="button" style={est.item} onClick={aoVerArquivados}>
             <span style={est.itemTexto}>Estudos arquivados</span>
             <span style={est.contagem}>{arquivados}</span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
+
+      {aoVerConferencias && (
+        <div style={est.bloco}>
+          <div style={est.grupoRotulo}>Conferências rápidas</div>
+          <div style={est.grupoDica}>Peças/hora por posto — ex: furadeiras</div>
+          <button type="button" style={est.item} onClick={aoVerConferencias}>
+            <span style={est.itemTexto}>Ritmo por máquina</span>
+          </button>
+        </div>
+      )}
 
       <div style={est.bloco}>
         <div style={est.grupoRotulo}>Ações</div>
@@ -133,7 +141,13 @@ const est = {
   },
 
   marca: { display: 'flex', flexDirection: 'column', gap: 2 },
-  logo: { height: 30, width: 'auto', display: 'block', marginBottom: espaco.sm },
+  // alignSelf flex-start e' o que impede a distorcao: num flex em COLUNA o
+  // padrao e' stretch, que estica a imagem na largura do bloco e anula o
+  // width:auto — a marca sai achatada.
+  logo: {
+    height: 30, width: 'auto', maxWidth: '100%', alignSelf: 'flex-start',
+    display: 'block', marginBottom: espaco.sm,
+  },
   titulo: { ...tipo('destaque'), color: t.texto },
   subtitulo: { ...tipo('legenda'), color: t.textoFraco, display: 'flex', alignItems: 'center', gap: espaco.sm },
   versao: {
@@ -143,7 +157,10 @@ const est = {
   },
 
   bloco: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
-  grupoRotulo: { ...rotulo(t.textoFraco), marginBottom: espaco.xs },
+  grupoRotulo: { ...rotulo(t.textoFraco) },
+  // A dica separa as duas naturezas de medicao: estudo mede ciclo, a
+  // conferencia mede vazao. Sem isso o analista precisa abrir para saber.
+  grupoDica: { ...tipo('micro'), color: t.textoFraco, marginBottom: espaco.xs, textTransform: 'none', letterSpacing: 0, fontWeight: 400 },
   rotuloBusca: { ...rotulo(t.textoFraco), marginBottom: espaco.xs },
   busca: {
     width: '100%', minHeight: 38, padding: `0 ${espaco.md}px`,
