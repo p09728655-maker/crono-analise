@@ -93,6 +93,10 @@ export const analisarComIa = (dados) => requisitar('/ai/analisar', { metodo: 'PO
 export const obterConfigIa = () => requisitar('/config').then((r) => r.chaveIa);
 export const salvarChaveIa = (chaveIa) =>
   requisitar('/config', { metodo: 'POST', corpo: { chaveIa } }).then((r) => r.chaveIa);
+// Apaga a chave salva no servidor. Se houver ANTHROPIC_API_KEY no ambiente,
+// ela reassume — e' a configuracao do administrador, e o app nao a remove.
+export const removerChaveIa = () =>
+  requisitar('/config', { metodo: 'DELETE' }).then((r) => r.chaveIa);
 
 const LOTE = 200;
 const TENTATIVAS = 4;

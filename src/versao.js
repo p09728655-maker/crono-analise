@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.29.0',
+    data: '2026-08-26',
+    titulo: 'Dá para remover a chave da IA',
+    itens: [
+      'Novo botão "Remover chave", em Ferramentas → Chave da IA e também dentro do estudo, ao lado de "Trocar chave". Antes só dava para SUBSTITUIR: para tirar a chave do ar — analista que saiu, chave vazada, conta trocada — não havia caminho na tela.',
+      'A confirmação diz o que se perde antes de apagar: a Análise com IA para de funcionar até salvar outra, e nenhum estudo é afetado. Chave definida pelo administrador na Vercel (ANTHROPIC_API_KEY) continua sem botão — essa se remove lá, não aqui.',
+    ],
+  },
+  {
     versao: '2.28.0',
     data: '2026-08-26',
     titulo: 'Sugestões, operadores, capacidade e resumo executivo',

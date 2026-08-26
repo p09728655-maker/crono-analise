@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { claro } from '../theme/tokensAnalise.js';
 import { cores as escuro } from '../theme/tokens.js';
 import { elevacao, espaco, raio, rotulo, tipo } from '../theme/escala.js';
-import { obterConfigIa, salvarChaveIa } from '../lib/api.js';
+import { obterConfigIa, removerChaveIa, salvarChaveIa } from '../lib/api.js';
 
 /**
  * Chave da API de IA — configuracao do APP, nao de um estudo.
@@ -21,6 +21,7 @@ export default function ChaveIa({ modo = 'analise', aoFechar }) {
   const [config, setConfig] = useState(null);
   const [chave, setChave] = useState('');
   const [trocando, setTrocando] = useState(false);
+  const [removendo, setRemovendo] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState(null);
 
@@ -48,6 +49,23 @@ export default function ChaveIa({ modo = 'analise', aoFechar }) {
     setSalvando(false);
   }
 
+  /**
+   * Remover e' diferente de trocar: sem chave a Analise com IA para de
+   * funcionar. Por isso a confirmacao acontece no proprio bloco, dizendo o
+   * que se perde — e nao num alerta que se fecha no reflexo.
+   */
+  async function remover() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      setConfig(await removerChaveIa());
+      setRemovendo(false);
+      setTrocando(false);
+      setChave('');
+    } catch (e) { setErro(e.message); }
+    setSalvando(false);
+  }
+
   return (
     <div style={est.modal} role="dialog" aria-label="Chave da IA">
       <div style={est.caixa}>
@@ -67,10 +85,32 @@ export default function ChaveIa({ modo = 'analise', aoFechar }) {
                 ? 'Definida pelo administrador na Vercel (ANTHROPIC_API_KEY) — não dá para trocar por aqui.'
                 : 'Salva no servidor. Nunca volta para o navegador.'}
             </span>
-            {!doAmbiente && (
-              <button type="button" style={est.botaoTexto} onClick={() => setTrocando(true)}>
-                Trocar chave
-              </button>
+            {!doAmbiente && !removendo && (
+              <div style={est.linhaAcoes}>
+                <button type="button" style={est.botaoTexto} onClick={() => setTrocando(true)}>
+                  Trocar chave
+                </button>
+                <button type="button" style={est.botaoTexto} onClick={() => setRemovendo(true)}>
+                  Remover chave
+                </button>
+              </div>
+            )}
+            {removendo && (
+              <div style={est.confirmar} role="alert">
+                <span style={est.textoFraco}>
+                  Remover apaga a chave do servidor. A <strong>Análise com IA</strong> para
+                  de funcionar até você salvar outra — o resto do app continua igual,
+                  e nenhum estudo é afetado.
+                </span>
+                <div style={est.linhaAcoes}>
+                  <button type="button" style={est.botaoTexto} onClick={() => setRemovendo(false)}>
+                    Cancelar
+                  </button>
+                  <button type="button" style={est.botaoPerigo} onClick={remover} disabled={salvando}>
+                    {salvando ? 'Removendo...' : 'Remover chave'}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -149,6 +189,17 @@ function estilos(analise) {
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
     },
     selo: { ...tipo('corpoF'), color: t.texto },
+    linhaAcoes: { display: 'flex', gap: espaco.lg, alignItems: 'center', flexWrap: 'wrap' },
+    confirmar: {
+      display: 'flex', flexDirection: 'column', gap: espaco.sm, width: '100%',
+      paddingTop: espaco.sm,
+      borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
+    },
+    botaoPerigo: {
+      minHeight: analise ? 34 : 44, padding: `0 ${espaco.md}px`,
+      background: t.critico, border: 'none', borderRadius: raio.sm, color: '#fff',
+      ...tipo('legenda'), fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+    },
 
     form: { display: 'flex', flexDirection: 'column', gap: espaco.md },
     campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },

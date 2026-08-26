@@ -32,6 +32,7 @@ const vazio = params.get('vazio') === '1';
 const comArquivados = params.get('arq') === '1';
 window.__posts = [];
 window.__patches = [];
+window.__deletes = [];
 window.__aberto = null;
 // Restaurar tira o estudo da lista de arquivados, como o servidor faria.
 let arquivados = comArquivados ? { estudos: [...ARQUIVADOS.estudos] } : { estudos: [] };
@@ -49,6 +50,13 @@ window.fetch = async (url, opts = {}) => {
       const corpo = JSON.parse(opts.body);
       window.__posts.push({ url: alvo, corpo });
       chaveIa = { configurada: true, origem: 'banco', resumo: `•••${String(corpo.chaveIa).slice(-4)}` };
+      return new Response(JSON.stringify({ chaveIa }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (metodo === 'DELETE') {
+      window.__deletes.push(alvo);
+      chaveIa = { configurada: false, origem: null, resumo: null };
       return new Response(JSON.stringify({ chaveIa }), {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
