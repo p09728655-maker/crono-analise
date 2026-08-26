@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.24.0',
+    data: '2026-08-26',
+    titulo: 'Furadeira e embalagem separadas pelo nome',
+    itens: [
+      'Saiu o nome "Conferências rápidas". As duas partes passam a ser chamadas pelo posto: no menu do PC, "Embalagem e demais postos — estudos de tempo, ciclo a ciclo" e "Furadeiras — ritmo do posto, peças/hora". No celular o atalho virou "Ritmo da furadeira", e o relatório do PC, "Furadeiras — ritmo por máquina".',
+      'A folha impressa acompanhou: "Ritmo das Furadeiras — Folha por Máquina".',
+      'As colunas da lista de estudos pararam de desalinhar entre um produto e outro. Cada produto é uma tabela sua e cada uma media as próprias colunas — "EMBALGEM" empurrava a coluna Recurso num grupo e "FUR16" encolhia no outro. Agora a grade é a mesma para a lista inteira, e o olho desce a coluna sem tropeçar.',
+      'Nome de estudo comprido corta com reticências e mostra o texto inteiro ao passar o mouse, em vez de esticar a coluna.',
+      'Na cronometragem, ao fechar a meta (10 de 10, por exemplo) aparece a faixa "Meta atingida" com o botão Encerrar do lado, e o aparelho vibra na virada. Antes a meta era só uma fração pequena no topo e o analista seguia medindo "mais um pouco" sem precisar. Para medir mais, a faixa aponta o caminho certo: abrir outra Rodada, para a análise comparar as duas em vez de misturar.',
+    ],
+  },
+  {
     versao: '2.23.0',
     data: '2026-08-26',
     titulo: 'As paradas do estudo aparecem',

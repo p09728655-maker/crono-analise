@@ -45,9 +45,9 @@ A raiz `/` manda para a experiência certa conforme o aparelho. As duas rotas
 seguem acessíveis de qualquer lugar — bloquear criaria beco sem saída quando
 o analista quiser conferir um número no chão de fábrica.
 
-### Conferência rápida (`/coleta/rapida`)
+### Furadeiras — ritmo do posto (`/coleta/rapida`)
 
-Conferência de ritmo **sem cadastro e sem servidor**, do jeito que ela
+Medição de ritmo **sem cadastro e sem servidor**, do jeito que ela
 acontece de verdade: o analista passa pela máquina às 7:00 e toca **Agora**;
 volta às 7:10, toca **Agora** de novo, digita as peças que o contador marca
 (150) — e a conta sai na hora: 900 pç/h, ciclo médio 4 s. Os horários também
@@ -119,8 +119,16 @@ com FR, tolerância e tempo padrão, continua sendo papel do estudo. Por não
 depender de rede, o atalho na lista de coleta fica visível mesmo com a API
 fora do ar.
 
+As duas naturezas de coleta são nomeadas pelo **posto**, nunca pelo método:
+no menu do PC, **Embalagem e demais postos** (estudos de tempo, ciclo a
+ciclo) e **Furadeiras** (ritmo por máquina, peças/hora). A pergunta no chão
+de fábrica é "vim medir a embalagem" ou "vim medir a furadeira" — nunca "vim
+fazer uma conferência rápida". No código o termo `conferencia` continua: é o
+nome da tabela, da rota e do endpoint, e renomear isso órfãozaria dado e
+fila offline sem ganho nenhum para quem usa.
+
 No tablet as duas naturezas de coleta convivem na mesma tela e são
-rotuladas pelo posto, não pelo método: **Furadeiras — Conferência rápida**
+rotuladas pelo posto, não pelo método: **Furadeiras — Ritmo da furadeira**
 (peças/hora do período) no atalho do topo, e **Embalagem e demais postos —
 Estudos de tempo** (ciclo a ciclo, com FR e tolerância) na lista abaixo. A
 pergunta no chão de fábrica vem sempre nessa ordem — "vim medir a
@@ -142,6 +150,20 @@ no rodapé — a coleta é a primeira etapa de um estudo, não uma quarta ação
 A navegação vive numa **lateral fixa**; a barra horizontal não crescia — a
 partir de sete botões ela empurrava o título e quebrava a hierarquia. A
 coleta (celular) não tem lateral: lá a tela é pequena e a tarefa é uma só.
+
+### Meta de ciclos: quando parar
+
+A tela de coleta mostra a meta como fração (`7 / 10`) e barra de progresso.
+Ao **fechar a meta**, o aparelho vibra e aparece a faixa "Meta atingida" com
+o botão **Encerrar** do lado — antes a fração era o único sinal, no meio de
+outros três números, e o analista seguia cronometrando "mais um pouco" sem
+precisar.
+
+A faixa aponta o caminho de quem quer mais evidência: **outra rodada**, não
+esticar a mesma. Rodadas separadas deixam a análise comparar as duas em vez
+de misturar. Nada encerra sozinho: quem decide que a coleta acabou é quem
+está no posto, e um encerramento automático no meio de um ciclo perderia o
+ciclo.
 
 ### Arquivar e restaurar
 

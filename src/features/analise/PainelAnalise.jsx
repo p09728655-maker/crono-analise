@@ -783,9 +783,9 @@ function PainelParadas({ resumo }) {
           Nenhuma parada registrada neste estudo. Durante a coleta, no celular,
           o botão <strong>Parada</strong> pergunta o motivo e cronometra o tempo
           parado — ele sai do ciclo (não infla o tempo observado) e aparece aqui,
-          por motivo, com a ação que cada um pede. Para conferência de furadeira,
-          onde não se cronometra ciclo a ciclo, as paradas ficam em
-          <strong> Conferências rápidas</strong>.
+          por motivo, com a ação que cada um pede. Nas furadeiras, onde não se
+          cronometra ciclo a ciclo, as paradas ficam em
+          <strong> Furadeiras → Ritmo por máquina</strong>.
         </p>
       </section>
     );

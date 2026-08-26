@@ -107,8 +107,8 @@ export default function RelatorioConferencias({ aoVoltar }) {
       <div className="somente-tela">
         <Cabecalho
           modo="analise"
-          titulo="Conferências rápidas"
-          subtitulo="Furadeiras e demais postos · vazão em peças/hora"
+          titulo="Furadeiras"
+          subtitulo="Ritmo por máquina · peças/hora do posto"
           aoVoltar={aoVoltar}
           acoes={estado === 'pronto' && (
             <>
@@ -152,7 +152,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
             <EstadoVazio
               modo="analise"
               titulo="Nenhuma conferência sincronizada"
-              texto="Esta é a tela das furadeiras: no celular, abra Conferência rápida, informe máquina, peça e horários, e a medição aparece aqui assim que o aparelho sincroniza. Para embalagem — ciclo a ciclo, com tempo padrão — use um estudo."
+              texto="Esta é a tela das furadeiras: no celular, abra Ritmo da furadeira, informe máquina, peça e horários, e a medição aparece aqui assim que o aparelho sincroniza. Para embalagem — ciclo a ciclo, com tempo padrão — use um estudo de tempos."
             />
           )}
 
@@ -632,14 +632,14 @@ function ImpressaoConferencias({ linhas, resumo }) {
       <header style={imp.cabecalho}>
         <div>
           <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={imp.logo} />
-          <h1 style={imp.titulo}>Conferência de Ritmo — Folha por Máquina</h1>
+          <h1 style={imp.titulo}>Ritmo das Furadeiras — Folha por Máquina</h1>
         </div>
         <div style={imp.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
       </header>
 
       <section style={imp.identificacao}>
         {[
-          ['Tipo de medição', 'Conferência rápida (vazão)'],
+          ['Tipo de medição', 'Ritmo do posto (vazão)'],
           ['Período coberto', periodo],
           ['Máquinas', String(resumo.length)],
           ['Conferências', String(linhas.length)],
@@ -780,7 +780,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
           ))}
         </div>
         <p style={imp.nota}>
-          Conferência rápida mede <strong>vazão de posto</strong> (peças/hora). Não substitui o
+          A medição de ritmo do posto mede <strong>vazão</strong> (peças/hora). Não substitui o
           estudo de tempos, que mede ciclo a ciclo com fator de ritmo e tolerância e produz o
           tempo padrão.
         </p>

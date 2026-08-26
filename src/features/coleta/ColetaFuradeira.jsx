@@ -45,6 +45,29 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar 
   const atipico = useMemo(() => ultimaObservacaoAtipica(tempos), [tempos]);
   const progresso = metaObs > 0 ? Math.min(100, ((resultado?.n ?? 0) / metaObs) * 100) : 0;
 
+  /**
+   * Meta batida — 10 de 10.
+   *
+   * Sem este aviso o analista ficava cronometrando "mais um pouco" sem saber
+   * que ja' tinha o que precisava: a meta so' aparecia como fracao pequena
+   * no topo, no meio de outros tres numeros. Aqui ela vira uma faixa com o
+   * botao de encerrar do lado — e diz que, para medir mais, o caminho e'
+   * abrir outra RODADA, nao esticar a mesma.
+   *
+   * Nao encerra sozinho: quem decide que a coleta acabou e' quem esta' no
+   * posto, e um encerramento automatico no meio de um ciclo perderia o ciclo.
+   */
+  const metaAtingida = metaObs > 0 && (resultado?.n ?? 0) >= metaObs;
+  const [metaDispensada, setMetaDispensada] = useState(false);
+  const metaAnteriorRef = useRef(false);
+
+  useEffect(() => {
+    // Vibra so' na virada: o analista sente a meta fechar sem tirar o olho
+    // da peca. Repetir a cada ciclo depois disso viraria ruido.
+    if (metaAtingida && !metaAnteriorRef.current) vibrar([60, 90, 60]);
+    metaAnteriorRef.current = metaAtingida;
+  }, [metaAtingida]);
+
   // Aviso some sozinho: no chao de fabrica ninguem para para fechar alerta.
   useEffect(() => {
     if (!aviso) return undefined;
@@ -158,6 +181,17 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar 
 
       {aviso && <Faixa tipo={aviso.tipo} icone={aviso.tipo === 'critico' ? '×' : '!'} texto={aviso.texto} />}
 
+      {metaAtingida && !metaDispensada && !pausa && (
+        <Faixa
+          tipo="ok"
+          icone="✓"
+          titulo={`Meta atingida — ${resultado.n}/${metaObs} ciclos`}
+          texto="Já dá para encerrar. Se quiser medir mais, toque em Rodada e comece outra — assim a análise compara as duas em vez de misturar."
+          acao={{ rotulo: 'Encerrar', aoClicar: () => { parar(); aoSair?.(); } }}
+          aoDispensar={() => setMetaDispensada(true)}
+        />
+      )}
+
       {pausa ? (
         <PainelPausa pausa={pausa} aoEncerrar={encerrarPausa} />
       ) : (
@@ -177,7 +211,12 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar 
         rodada={rodada}
         aoPausar={iniciarPausa}
         aoDesfazer={desfazerUltimo}
-        aoTrocarRodada={() => { setRodada((r) => r + 1); setAviso({ tipo: 'ok', texto: `Rodada ${rodada + 1} iniciada` }); }}
+        aoTrocarRodada={() => {
+          setRodada((r) => r + 1);
+          // Rodada nova e' outra medicao: a faixa da meta volta a valer.
+          setMetaDispensada(false);
+          setAviso({ tipo: 'ok', texto: `Rodada ${rodada + 1} iniciada` });
+        }}
         aoEncerrar={() => { parar(); aoSair?.(); }}
       />
 
@@ -373,7 +412,7 @@ function UltimosCiclos({ tempos, resultado }) {
   );
 }
 
-function Faixa({ tipo, icone, titulo, texto, acao }) {
+function Faixa({ tipo, icone, titulo, texto, acao, aoDispensar }) {
   const paleta = {
     ok: { borda: cores.ok, fundo: cores.okFundo },
     atencao: { borda: cores.atencao, fundo: cores.atencaoFundo },
@@ -390,6 +429,16 @@ function Faixa({ tipo, icone, titulo, texto, acao }) {
       {acao && (
         <button type="button" style={est.faixaAcao} onClick={acao.aoClicar}>
           {acao.rotulo}
+        </button>
+      )}
+      {aoDispensar && (
+        <button
+          type="button"
+          style={est.faixaFechar}
+          onClick={aoDispensar}
+          aria-label="Dispensar aviso"
+        >
+          ×
         </button>
       )}
     </div>
@@ -538,6 +587,12 @@ const est = {
     flexShrink: 0, minHeight: 44, padding: `0 ${espaco.md}px`,
     background: 'transparent', border: `1px solid ${cores.borda}`, borderRadius: raio.sm,
     color: cores.texto, fontSize: tamanho.legenda, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+  },
+
+  faixaFechar: {
+    flexShrink: 0, width: 44, height: 44,
+    background: 'transparent', border: 'none', borderRadius: raio.sm,
+    color: cores.textoFraco, fontSize: 20, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit',
   },
 
   ultimos: { display: 'flex', gap: espaco.sm, overflowX: 'auto', paddingBottom: espaco.xs, flexShrink: 0 },

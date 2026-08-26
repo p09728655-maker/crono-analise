@@ -30,7 +30,7 @@ const ritmo = async () => parseInt((await p.locator('[aria-label="Ritmo do perí
 
 /* ------------------------------------------ atalho independe do servidor */
 await p.goto(`${BASE}/coleta`);
-const atalho = p.getByRole('button', { name: /Conferência rápida/ });
+const atalho = p.getByRole('button', { name: /Ritmo da furadeira/ });
 await atalho.waitFor({ timeout: 8000 });
 checar(true, 'atalho visivel na lista de coleta mesmo com a API fora');
 
