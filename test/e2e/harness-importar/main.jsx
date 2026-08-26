@@ -25,6 +25,12 @@ window.fetch = async (url, opts = {}) => {
       operacoes: (corpo.operacoes || []).map((o, i) => ({ id: `op${i}`, ...o })),
     }), { status: 201, headers: { 'Content-Type': 'application/json' } });
   }
+  // A lista de arquivados e' outra chamada; aqui nao ha nenhum.
+  if (String(url).includes('arquivados=1')) {
+    return new Response(JSON.stringify({ estudos: [] }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  }
   return new Response(JSON.stringify(LISTA), {
     status: 200, headers: { 'Content-Type': 'application/json' },
   });

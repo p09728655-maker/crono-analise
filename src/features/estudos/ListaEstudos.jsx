@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores as escuro } from '../../theme/tokens.js';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
-import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
+import { criarEstudo, listarArquivados, listarEstudos, removerEstudo, restaurarEstudo } from '../../lib/api.js';
 import { agruparPorProduto, produtosConhecidos, setoresConhecidos } from '../../domain/agrupamento.js';
 import AvisoAtualizacao from '../../components/AvisoAtualizacao.jsx';
 import Cabecalho from '../../components/Cabecalho.jsx';
@@ -27,6 +27,8 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
   const [removendo, setRemovendo] = useState(null);
   const [filtro, setFiltro] = useState(null);
   const [verVersoes, setVerVersoes] = useState(false);
+  const [arquivados, setArquivados] = useState([]);
+  const [verArquivados, setVerArquivados] = useState(false);
 
   const analise = modo === 'analise';
   const t = tema(analise);
@@ -37,8 +39,11 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
   async function carregar() {
     setEstado('carregando');
     try {
-      const r = await listarEstudos();
+      // As duas listas na mesma ida: assim a contagem de arquivados existe
+      // antes do clique, e o botao so' aparece quando ha' o que restaurar.
+      const [r, a] = await Promise.all([listarEstudos(), listarArquivados()]);
       setEstudos(r.estudos || []);
+      setArquivados(a.estudos || []);
       setEstado('pronto');
     } catch (e) {
       setErro(e.message);
@@ -79,6 +84,11 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
            nada, so' se cronometra. */
         acoes={estado === 'pronto' && (
           <>
+            {arquivados.length > 0 && (
+              <button type="button" style={est.botaoSecundario} onClick={() => setVerArquivados(true)}>
+                Arquivados {arquivados.length}
+              </button>
+            )}
             {analise && aoVerConferencias && (
               <button type="button" style={est.botaoSecundario} onClick={aoVerConferencias}>
                 Conferências
@@ -151,8 +161,9 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
               <Simbolo tipo="cronometro" cor={t.fraco} />
               <h2 style={est.vazioTitulo}>Nenhum estudo cadastrado</h2>
               <p style={est.vazioTexto}>
-                Crie seu primeiro estudo para começar a coletar ciclos e calcular
-                o tempo padrão.
+                {arquivados.length > 0
+                  ? `Crie um estudo novo — ou abra "Arquivados ${arquivados.length}" no topo para restaurar um que saiu da lista. Nenhum ciclo foi perdido.`
+                  : 'Crie seu primeiro estudo para começar a coletar ciclos e calcular o tempo padrão.'}
               </p>
               <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
                 + Novo estudo
@@ -219,6 +230,15 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
 
       {verVersoes && (
         <HistoricoVersoes modo={modo} aoFechar={() => setVerVersoes(false)} />
+      )}
+
+      {verArquivados && (
+        <EstudosArquivados
+          est={est}
+          arquivados={arquivados}
+          aoRestaurar={async (id) => { await restaurarEstudo(id); await carregar(); }}
+          aoFechar={() => setVerArquivados(false)}
+        />
       )}
 
       {importando && (
@@ -415,6 +435,68 @@ function CartoesEstudos({ estudos, est, aoAbrir, aoRemover }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Estudos arquivados — a volta do caminho que so' tinha ida.
+ *
+ * Arquivar preserva o dado (ciclo cronometrado nao se refaz), mas o estudo
+ * sumia da lista sem nenhum lugar onde reve-lo: quem arquivou por engano
+ * ficava sem saida dentro do app. Aqui ele reaparece com a contagem de
+ * ciclos intacta e volta para a lista num clique.
+ */
+function EstudosArquivados({ est, arquivados, aoRestaurar, aoFechar }) {
+  const [restaurando, setRestaurando] = useState(null);
+  const [erro, setErro] = useState(null);
+
+  async function restaurar(id) {
+    setRestaurando(id);
+    setErro(null);
+    try { await aoRestaurar(id); }
+    catch (e) { setErro(e.message); setRestaurando(null); }
+  }
+
+  return (
+    <div style={est.modal} role="dialog" aria-label="Estudos arquivados">
+      <div style={est.formulario}>
+        <h2 style={est.formTitulo}>Estudos arquivados</h2>
+        <p style={est.textoModal}>
+          Arquivar tira o estudo da lista, mas <strong>não apaga nada</strong> —
+          os ciclos continuam no banco. Restaurar traz o estudo de volta.
+        </p>
+
+        <ul style={est.listaArquivados}>
+          {arquivados.map((e) => (
+            <li key={e.id} style={est.itemArquivado}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={est.arquivadoNome}>{e.nome}</div>
+                <div style={est.arquivadoSub}>
+                  {[e.recurso, e.analista].filter(Boolean).join(' · ') || 'Sem detalhes'}
+                  {' · '}{e.total_observacoes} ciclo(s)
+                </div>
+              </div>
+              <button
+                type="button"
+                style={est.botaoLinha}
+                onClick={() => restaurar(e.id)}
+                disabled={restaurando === e.id}
+              >
+                {restaurando === e.id ? 'Restaurando...' : 'Restaurar'}
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {erro && <div style={est.erroForm}>{erro}</div>}
+
+        <div style={est.acoesModal}>
+          <button type="button" style={{ ...est.botaoSecundario, flex: 1 }} onClick={aoFechar}>
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -824,6 +906,22 @@ function estilos(t, analise) {
     vazioBlocoDivisa: { borderLeftWidth: 1, borderLeftStyle: 'solid', borderLeftColor: t.borda },
     vazioBlocoTitulo: { ...tipo('corpoF') },
     vazioBlocoTexto: { ...tipo('legenda'), color: t.fraco, marginTop: 2 },
+
+    /* ---- estudos arquivados ---- */
+    listaArquivados: {
+      listStyle: 'none', margin: 0, padding: 0,
+      display: 'flex', flexDirection: 'column', gap: espaco.sm,
+      maxHeight: '50vh', overflowY: 'auto',
+    },
+    itemArquivado: {
+      display: 'flex', alignItems: 'center', gap: espaco.md,
+      padding: espaco.md, background: t.realce, borderRadius: raio.md,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    },
+    arquivadoNome: {
+      ...tipo('corpoF'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    },
+    arquivadoSub: { ...tipo('legenda'), color: t.fraco, marginTop: 2 },
 
     /* ---- modal ---- */
     modal: {

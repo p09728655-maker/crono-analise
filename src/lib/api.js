@@ -34,6 +34,9 @@ async function requisitar(caminho, { metodo = 'GET', corpo, sinal } = {}) {
 }
 
 export const listarEstudos = () => requisitar('/estudos');
+export const listarArquivados = () => requisitar('/estudos?arquivados=1');
+export const restaurarEstudo = (id) =>
+  requisitar(`/estudos?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { status: 'coletando' } });
 export const obterEstudo = (id) => requisitar(`/estudos?id=${encodeURIComponent(id)}`);
 export const criarEstudo = (dados) => requisitar('/estudos', { metodo: 'POST', corpo: dados });
 export const atualizarEstudo = (id, dados) =>

@@ -1,7 +1,24 @@
 import { sql } from './_lib/db.js';
 import { autenticar } from './_lib/auth.js';
-import { handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
+import { erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
 import { dataIso, decimal, inteiro, lista, texto, uuid } from './_lib/validar.js';
+
+/**
+ * Status do estudo, espelhando o CHECK do schema.
+ *
+ * Sem esta checagem um status invalido so' explodia no Postgres, e o
+ * usuario recebia 500 sem saber o que fazer.
+ */
+const STATUS = ['coletando', 'concluido', 'arquivado'];
+
+function statusEstudo(valor) {
+  const s = texto(valor, 'status', { max: 20 });
+  if (s == null) return null;
+  if (!STATUS.includes(s)) {
+    throw erroValidacao(`Campo "status" deve ser um de: ${STATUS.join(', ')}`);
+  }
+  return s;
+}
 
 export default handler(async (req, res) => {
   permitir(req, ['GET', 'POST', 'PATCH', 'DELETE']);
@@ -10,6 +27,9 @@ export default handler(async (req, res) => {
 
   if (req.method === 'GET') {
     if (id) return json(res, 200, await carregarEstudo(uuid(id, 'id'), empresaId));
+    // ?arquivados=1 inverte o filtro. Sem isso, arquivar era via de mao
+    // unica: o estudo sumia da lista e nao havia como reve-lo pelo app.
+    const soArquivados = String(req.query?.arquivados ?? '') === '1';
     const estudos = await sql`
       SELECT e.id, e.nome, e.produto, e.analista, e.setor, e.recurso, e.data_estudo,
              e.tolerancia_pct, e.meta_obs, e.takt_time_ms, e.status, e.atualizado_em,
@@ -18,7 +38,8 @@ export default handler(async (req, res) => {
                 JOIN operacoes o2 ON o2.id = ob.operacao_id
                WHERE o2.estudo_id = e.id AND NOT ob.descartada) AS total_observacoes
         FROM estudos e
-       WHERE e.empresa_id = ${empresaId} AND e.status <> 'arquivado'
+       WHERE e.empresa_id = ${empresaId}
+         ${soArquivados ? sql`AND e.status = 'arquivado'` : sql`AND e.status <> 'arquivado'`}
        ORDER BY e.atualizado_em DESC
        LIMIT 200`;
     return json(res, 200, { estudos });
@@ -89,7 +110,7 @@ export default handler(async (req, res) => {
         tolerancia_pct = COALESCE(${decimal(c.toleranciaPct, 'toleranciaPct', { min: 0, max: 100 })}, tolerancia_pct),
         meta_obs       = COALESCE(${inteiro(c.metaObs, 'metaObs', { min: 0, max: 10000 })}, meta_obs),
         takt_time_ms   = COALESCE(${inteiro(c.taktTimeMs, 'taktTimeMs', { min: 1, max: 86400000 })}, takt_time_ms),
-        status         = COALESCE(${texto(c.status, 'status', { max: 20 })}, status)
+        status         = COALESCE(${statusEstudo(c.status)}, status)
       WHERE id = ${estudoId} AND empresa_id = ${empresaId}
       RETURNING *`;
     return json(res, 200, { estudo });
