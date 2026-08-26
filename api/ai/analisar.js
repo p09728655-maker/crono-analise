@@ -17,9 +17,26 @@ import { sql } from '../_lib/db.js';
 import { autenticar } from '../_lib/auth.js';
 import { ErroHttp, handler, json, lerCorpo, permitir } from '../_lib/http.js';
 import { decimal, inteiro, lista, texto } from '../_lib/validar.js';
+import { comPrazo } from '../_lib/prazo.js';
 
 const MODELO = 'claude-opus-5';
 const MAX_OPERACOES = 60;
+
+/**
+ * Esforco BAIXO de proposito.
+ *
+ * Isto e' um diagnostico sobre poucas dezenas de numeros ja' calculados —
+ * nao um problema de raciocinio profundo. Com esforco medio o Opus pensava
+ * tempo demais e a funcao estourava o teto: o analista via um erro em vez
+ * da analise. Uma analise boa que chega vale mais que uma otima que morre
+ * no timeout.
+ *
+ * max_tokens e' teto, nao alvo: nao acelera nada baixa-lo, so' arrisca
+ * cortar a resposta no meio. Fica folgado, e se ainda assim bater no teto
+ * a resposta sai com a ressalva em vez de terminar no meio de uma frase.
+ */
+const ESFORCO = 'low';
+const MAX_TOKENS = 8000;
 
 const SISTEMA = `Voce e um engenheiro industrial senior especializado em cronoanalise e
 balanceamento de linha em industria de moveis.
@@ -73,6 +90,18 @@ Estruture a resposta em:
 2. Diferencas entre maquinas e entre pecas
 3. Acoes recomendadas (maximo 5, ordenadas por impacto)
 4. O que falta medir para virar referencia`;
+
+/**
+ * Resposta cortada no teto de tokens sai com a ressalva.
+ *
+ * Sem isto o texto simplesmente terminava no meio de uma frase e parecia
+ * conclusao. Relatorio incompleto que se anuncia e' util; o que se disfarca
+ * de completo, nao.
+ */
+function comRessalvaDeCorte(texto, stopReason) {
+  if (stopReason !== 'max_tokens') return texto;
+  return `${texto}\n\n[Análise interrompida no limite de tamanho — os itens acima estão completos, mas pode faltar o final.]`;
+}
 
 export default handler(async (req, res) => {
   permitir(req, ['POST']);
@@ -131,23 +160,22 @@ export default handler(async (req, res) => {
 
   const client = new Anthropic({ apiKey: chaveIa });
 
+  const prazo = comPrazo();
+
   try {
     // Streaming, nao create(): requisicao longa sem streaming bate no timeout
-    // de HTTP do SDK. E effort medio de proposito — a funcao serverless tem
-    // 60s de teto, e este e' um diagnostico sobre poucos numeros, nao um
-    // problema de raciocinio profundo. Estourar o tempo devolve pagina de
-    // erro em texto, que e' pior que uma analise um pouco mais curta.
+    // de HTTP do SDK.
     const fluxo = client.messages.stream({
       model: MODELO,
-      max_tokens: 8000,
+      max_tokens: MAX_TOKENS,
       system: SISTEMA,
       thinking: { type: 'adaptive' },
-      output_config: { effort: 'medium' },
+      output_config: { effort: ESFORCO },
       messages: [{
         role: 'user',
         content: `Dados do estudo de tempos:\n\n${JSON.stringify(contexto, null, 2)}`,
       }],
-    });
+    }, { signal: prazo.sinal });
     const resposta = await fluxo.finalMessage();
 
     // Fable/Opus podem recusar por politica: 200 com stop_reason "refusal".
@@ -164,7 +192,7 @@ export default handler(async (req, res) => {
       .trim();
 
     return json(res, 200, {
-      analise: texto_,
+      analise: comRessalvaDeCorte(texto_, resposta.stop_reason),
       modelo: resposta.model,
       uso: {
         entrada: resposta.usage?.input_tokens ?? null,
@@ -173,6 +201,11 @@ export default handler(async (req, res) => {
     });
   } catch (err) {
     if (err instanceof ErroHttp) throw err;
+    if (err instanceof Anthropic.APIUserAbortError) {
+      throw new ErroHttp(504,
+        'A IA passou do tempo do servidor e foi interrompida. Tente de novo — '
+        + 'se repetir, analise um estudo com menos operações.');
+    }
     if (err instanceof Anthropic.RateLimitError) {
       throw new ErroHttp(429, 'Limite de uso da IA atingido. Tente em alguns minutos.');
     }
@@ -186,6 +219,8 @@ export default handler(async (req, res) => {
       throw new ErroHttp(502, 'Falha ao consultar a IA');
     }
     throw err;
+  } finally {
+    prazo.encerrar();
   }
 });
 
@@ -230,18 +265,20 @@ async function analisarConferencias(res, corpo, chaveIa) {
 
   const client = new Anthropic({ apiKey: chaveIa });
 
+  const prazo = comPrazo();
+
   try {
     const fluxo = client.messages.stream({
       model: MODELO,
-      max_tokens: 8000,
+      max_tokens: MAX_TOKENS,
       system: SISTEMA_CONFERENCIA,
       thinking: { type: 'adaptive' },
-      output_config: { effort: 'medium' },
+      output_config: { effort: ESFORCO },
       messages: [{
         role: 'user',
         content: `Conferencias rapidas por maquina:\n\n${JSON.stringify(contexto, null, 2)}`,
       }],
-    });
+    }, { signal: prazo.sinal });
     const resposta = await fluxo.finalMessage();
 
     if (resposta.stop_reason === 'refusal') {
@@ -251,7 +288,10 @@ async function analisarConferencias(res, corpo, chaveIa) {
     }
 
     return json(res, 200, {
-      analise: resposta.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim(),
+      analise: comRessalvaDeCorte(
+        resposta.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim(),
+        resposta.stop_reason,
+      ),
       modelo: resposta.model,
       uso: {
         entrada: resposta.usage?.input_tokens ?? null,
@@ -260,6 +300,11 @@ async function analisarConferencias(res, corpo, chaveIa) {
     });
   } catch (err) {
     if (err instanceof ErroHttp) throw err;
+    if (err instanceof Anthropic.APIUserAbortError) {
+      throw new ErroHttp(504,
+        'A IA passou do tempo do servidor e foi interrompida. Tente de novo — '
+        + 'se repetir, filtre uma máquina antes de analisar.');
+    }
     if (err instanceof Anthropic.RateLimitError) {
       throw new ErroHttp(429, 'Limite de uso da IA atingido. Tente em alguns minutos.');
     }
@@ -271,6 +316,8 @@ async function analisarConferencias(res, corpo, chaveIa) {
       throw new ErroHttp(502, 'Falha ao consultar a IA');
     }
     throw err;
+  } finally {
+    prazo.encerrar();
   }
 }
 

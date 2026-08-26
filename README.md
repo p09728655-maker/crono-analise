@@ -328,6 +328,25 @@ Em **Settings → Environment Variables**:
 > internet, trocar por login por usuário (a fronteira já está isolada em
 > `api/_lib/auth.js`, então a troca não espalha pelo resto do código).
 
+### Tempo da análise com IA
+
+`vercel.json` dá 60 s às funções (`functions["api/**/*.js"].maxDuration`) e
+`api/_lib/prazo.js` corta a chamada 8 s antes disso. O corte precisa ser
+**nosso**: quando é a Vercel que corta, quem responde é ela — com uma página
+de erro em texto, não em JSON —, e o app mostrava "O servidor demorou demais
+para responder" sem dizer o que fazer. Cortando antes, a resposta é um 504
+com a saída prática ("tente de novo; se repetir, analise um estudo com menos
+operações"). Os dois números precisam concordar, e um teste falha se
+divergirem.
+
+A análise roda com `effort: 'low'` de propósito: é um diagnóstico sobre
+algumas dezenas de números já calculados, não um problema de raciocínio
+profundo. Com esforço médio o modelo pensava tempo demais e a função
+estourava — uma boa análise que chega vale mais que uma ótima que morre no
+timeout. `max_tokens` fica folgado (é teto, não alvo: baixá-lo não acelera
+nada, só arrisca cortar no meio), e resposta que bate no teto sai com a
+ressalva no fim.
+
 ---
 
 ## Arquitetura
