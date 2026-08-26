@@ -69,9 +69,32 @@ No PC, o botão **Conferências** no topo da Análise abre o relatório
 (`/analise/conferencias`): resumo por máquina — medições, ritmo médio
 **ponderado pelo tempo** (Σ peças / Σ duração, não média de taxas), melhor
 e pior registro com a peça — mais a tabela completa, filtro por máquina e
-impressão. Registro oficial, com FR, tolerância e tempo padrão, continua
-sendo papel do estudo. Por não depender de rede, o atalho na lista de
-coleta fica visível mesmo com a API fora do ar.
+impressão em **documento A4 próprio** (não a tela no papel).
+
+O relatório **se autoavalia** pelos `CRITERIOS_CONFERENCIA`, declarados
+antes dos números, na tela e impressos: mínimo de 3 conferências por
+máquina, 30 min de tempo total observado, nenhum período menor que 5 min.
+Fora do critério, a máquina aparece carimbada de "amostra insuficiente" —
+o número continua visível, nunca passa por referência. Registro oficial,
+com FR, tolerância e tempo padrão, continua sendo papel do estudo. Por não
+depender de rede, o atalho na lista de coleta fica visível mesmo com a API
+fora do ar.
+
+### Importar (PDF do ERP ou template .xlsx)
+
+O botão **Importar** da Análise aceita dois formatos, ambos lidos no
+navegador sem biblioteca (PDF via `lib/pdfTexto.js`; planilha via
+`lib/xlsxTexto.js`, um leitor de .xlsx de ~150 linhas sobre
+`DecompressionStream('deflate-raw')`):
+
+- **PDF "Processos de Produção"** do ERP — um estudo por máquina, uma
+  operação por peça, ciclos por peça vindos da estrutura.
+- **Template de tempos** (.xlsx, abas Config/Tempos/Paradas — o molde da
+  embalagem): as operações viram o estudo (FR, tolerância e meta vêm da
+  planilha); tempo zero é molde e não vira dado; tempos preenchidos entram
+  como ciclos pela mesma fila offline da coleta (client_id idempotente),
+  junto com as paradas. Parada de operação desconhecida vira aviso, não
+  some em silêncio.
 
 ### Aviso de atualização
 

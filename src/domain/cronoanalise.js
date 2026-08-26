@@ -131,11 +131,29 @@ export function conferenciaRapida({ duracaoMs, pecas }) {
 }
 
 /**
+ * Criterios de confiabilidade do estudo por maquina.
+ *
+ * Mesma filosofia da meta/Nievel no estudo de ciclos: o criterio nao
+ * esconde numero nenhum, mas e' DECLARADO antes dos numeros — na tela e
+ * impresso — porque o relatorio circula em reuniao, e "12000 pc/h" vindo
+ * de uma unica conferencia de 1 minuto nao pode passar por referencia.
+ */
+export const CRITERIOS_CONFERENCIA = {
+  // Uma medicao so' descreve um instante; tres começam a descrever o posto.
+  minConferencias: 3,
+  // Menos de meia hora observada nao sustenta decisao de capacidade.
+  minTempoTotalMs: 30 * 60000,
+  // Conferencia mais curta que isto mede rajada, nao ritmo.
+  minPeriodoMs: 5 * 60000,
+};
+
+/**
  * Resumo das conferencias por maquina — o "estudo das furadeiras".
  *
  * Agrupa as conferencias salvas pelo posto conferido e responde o que o
  * gestor pergunta diante do relatorio: quantas medicoes, qual o ritmo
- * MEDIO real, qual o melhor e o pior registro (e com qual peca).
+ * MEDIO real, qual o melhor e o pior registro (e com qual peca) — e se a
+ * amostra passa nos CRITERIOS_CONFERENCIA para valer como referencia.
  *
  * O ritmo medio e' PONDERADO pelo tempo (soma de pecas / soma de duracao),
  * nao a media das taxas: uma conferencia de 2h vale mais que uma de 5min,
@@ -154,7 +172,10 @@ export function resumirConferencias(conferencias) {
 
     const chave = String(c.maquina || '').trim() || 'Sem máquina';
     if (!grupos.has(chave)) {
-      grupos.set(chave, { maquina: chave, n: 0, totalPecas: 0, totalMs: 0, melhor: null, pior: null });
+      grupos.set(chave, {
+        maquina: chave, n: 0, totalPecas: 0, totalMs: 0,
+        curtas: 0, ritmos: [], melhor: null, pior: null,
+      });
     }
     const g = grupos.get(chave);
     const ritmo = (pecas * MS_POR_HORA) / duracao;
@@ -163,16 +184,35 @@ export function resumirConferencias(conferencias) {
     g.n += 1;
     g.totalPecas += pecas;
     g.totalMs += duracao;
+    g.ritmos.push(ritmo);
+    if (duracao < CRITERIOS_CONFERENCIA.minPeriodoMs) g.curtas += 1;
     if (!g.melhor || ritmo > g.melhor.ritmo) g.melhor = { ritmo, peca };
     if (!g.pior || ritmo < g.pior.ritmo) g.pior = { ritmo, peca };
   }
 
+  const c = CRITERIOS_CONFERENCIA;
   return [...grupos.values()]
-    .map((g) => ({
-      ...g,
-      ritmoMedio: (g.totalPecas * MS_POR_HORA) / g.totalMs,
-      cicloMedioMs: g.totalMs / g.totalPecas,
-    }))
+    .map((g) => {
+      const motivos = [];
+      if (g.n < c.minConferencias) {
+        motivos.push(`${g.n} conferência(s) — mínimo de ${c.minConferencias} para servir de referência`);
+      }
+      if (g.totalMs < c.minTempoTotalMs) {
+        motivos.push(`tempo total observado de ${formatarDuracao(g.totalMs)} — mínimo de ${formatarDuracao(c.minTempoTotalMs)}`);
+      }
+      if (g.curtas > 0) {
+        motivos.push(`${g.curtas} conferência(s) com menos de ${formatarDuracao(c.minPeriodoMs)} — período curto mede rajada, não ritmo`);
+      }
+      return {
+        ...g,
+        ritmoMedio: (g.totalPecas * MS_POR_HORA) / g.totalMs,
+        cicloMedioMs: g.totalMs / g.totalPecas,
+        // CV entre conferencias: referencia de estabilidade do posto.
+        cvPct: g.ritmos.length >= 2 ? coeficienteVariacao(g.ritmos) : null,
+        confiavel: motivos.length === 0,
+        motivos,
+      };
+    })
     .sort((a, b) => b.n - a.n || a.maquina.localeCompare(b.maquina));
 }
 

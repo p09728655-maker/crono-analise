@@ -1,19 +1,26 @@
 import { useRef, useState } from 'react';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import { extrairTextoPdf } from '../../lib/pdfTexto.js';
+import { lerPlanilhaXlsx } from '../../lib/xlsxTexto.js';
 import { interpretarRoteiro } from '../../domain/roteiroErp.js';
+import { interpretarTemplate } from '../../domain/templateTempos.js';
 import { chaveProduto } from '../../domain/agrupamento.js';
-import { criarEstudo } from '../../lib/api.js';
+import { criarEstudo, sincronizar } from '../../lib/api.js';
+import { enfileirar, novoId } from '../../lib/filaOffline.js';
 import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
 
 /**
- * Importa o roteiro de producao do ERP (PDF "Processos de Producao") e cria
- * o estudo pronto: um estudo por maquina, uma operacao por peca, com os
- * ciclos por peca vindos da quantidade na estrutura.
+ * Importa um estudo pronto a partir de arquivo — dois formatos:
  *
- * Digitar isso a mao e' o que o analista faz hoje: seis pecas, seis nomes
- * compridos, seis quantidades — e um erro de digitacao na quantidade
- * distorce a capacidade calculada. O ERP ja' sabe tudo isso.
+ *  - PDF "Processos de Producao" do ERP: um estudo por maquina, uma
+ *    operacao por peca, ciclos por peca vindos da estrutura.
+ *  - TEMPLATE DE TEMPOS (.xlsx, abas Config/Tempos/Paradas — o molde do
+ *    RitmoProd antigo, usado na embalagem): as operacoes viram o estudo, e
+ *    tempos ja' preenchidos entram como ciclos pela mesma fila offline da
+ *    coleta (reenvio idempotente, nada duplica).
+ *
+ * Digitar isso a mao e' o que o analista faz hoje — e um erro de digitacao
+ * na quantidade ou no tempo distorce a capacidade calculada.
  */
 export default function ImportarRoteiro({ t, analise, produtosExistentes = [], setoresConhecidos = [], aoConcluir, aoCancelar }) {
   const est = estilos(t, analise);
@@ -22,6 +29,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
   const [lendo, setLendo] = useState(false);
   const [erro, setErro] = useState(null);
   const [roteiro, setRoteiro] = useState(null);
+  const [planilha, setPlanilha] = useState(null);
   const [nomeArquivo, setNomeArquivo] = useState('');
   const [nome, setNome] = useState('');
   const [recurso, setRecurso] = useState('');
@@ -35,21 +43,36 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
     setLendo(true);
     setErro(null);
     try {
-      const texto = await extrairTextoPdf(await arquivo.arrayBuffer());
-      const r = interpretarRoteiro(texto);
-      if (!r.produtoPai || !r.operacoes.length) {
-        throw new Error(
-          'Não reconheci um roteiro de produção neste PDF. ' +
-          'Ele precisa ser o relatório "Processos de Produção" gerado pelo ERP.',
-        );
+      if (/\.(xlsx|xlsm)$/i.test(arquivo.name)) {
+        const abas = await lerPlanilhaXlsx(await arquivo.arrayBuffer());
+        const modelo = interpretarTemplate(abas);
+        setPlanilha(modelo);
+        setNomeArquivo(arquivo.name);
+        setNome(modelo.config.nome || arquivo.name.replace(/\.[^.]+$/, ''));
+        setRecurso('');
+        setCampos((c) => ({
+          ...c,
+          analista: modelo.config.analista || c.analista,
+          toleranciaPct: modelo.config.toleranciaPct ?? c.toleranciaPct,
+          metaObs: modelo.config.metaObs ?? c.metaObs,
+        }));
+      } else {
+        const texto = await extrairTextoPdf(await arquivo.arrayBuffer());
+        const r = interpretarRoteiro(texto);
+        if (!r.produtoPai || !r.operacoes.length) {
+          throw new Error(
+            'Não reconheci um roteiro de produção neste PDF. ' +
+            'Ele precisa ser o relatório "Processos de Produção" gerado pelo ERP.',
+          );
+        }
+        setRoteiro(r);
+        setNomeArquivo(arquivo.name);
+        // So o produto: a maquina tem campo proprio, e grudada ao nome ela
+        // ainda ficava errada quando o usuario trocava o recurso.
+        setNome(r.produtoPai.descricao);
+        // O roteiro SUGERE a maquina; o estudo pode rodar em outra.
+        setRecurso(r.maquinas.length === 1 ? r.maquinas[0] : '');
       }
-      setRoteiro(r);
-      setNomeArquivo(arquivo.name);
-      // So o produto: a maquina tem campo proprio, e grudada ao nome ela
-      // ainda ficava errada quando o usuario trocava o recurso.
-      setNome(r.produtoPai.descricao);
-      // O roteiro SUGERE a maquina; o estudo pode rodar em outra.
-      setRecurso(r.maquinas.length === 1 ? r.maquinas[0] : '');
     } catch (e) {
       setErro(e.message);
       // Permite escolher o mesmo arquivo de novo depois de corrigi-lo.
@@ -63,10 +86,59 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
   const jaExiste = roteiro && produtosExistentes
     .some((p) => chaveProduto(p) === chaveProduto(roteiro.produtoPai.descricao));
 
+  /**
+   * Cria o estudo do TEMPLATE e importa os ciclos/paradas ja' preenchidos.
+   *
+   * Os tempos entram pela MESMA fila offline da coleta: client_id novo por
+   * item, reenvio idempotente. Se a rede cair no meio, nada se perde — a
+   * barra de sincronizacao termina o envio depois.
+   */
+  async function criarDaPlanilha() {
+    const r = await criarEstudo({
+      nome: nome.trim() || 'Estudo importado',
+      produto: planilha.config.produto,
+      recurso: recurso.trim(),
+      setor: campos.setor,
+      analista: campos.analista,
+      toleranciaPct: Number(campos.toleranciaPct) || 15,
+      metaObs: Number(campos.metaObs) || 12,
+      taktTimeMs: taktMsDoCalculo(calc),
+      operacoes: planilha.operacoes.map((op) => ({ nome: op.nome, frPct: op.fr, ordem: op.ordem })),
+    });
+
+    const idPorNome = new Map((r.operacoes || []).map((op) => [op.nome.toLowerCase(), op.id]));
+    let enfileirados = 0;
+    for (const op of planilha.operacoes) {
+      const operacaoId = idPorNome.get(op.nome.toLowerCase());
+      if (!operacaoId) continue;
+      const agora = new Date().toISOString();
+      for (const duracaoMs of op.tempos) {
+        await enfileirar({ tipo: 'observacao', clientId: novoId(), operacaoId, duracaoMs, rodada: 1, coletadoEm: agora });
+        enfileirados += 1;
+      }
+      for (const parada of op.paradas) {
+        await enfileirar({
+          tipo: 'parada', clientId: novoId(), operacaoId,
+          motivo: parada.motivo, observacao: parada.observacao,
+          duracaoMs: parada.duracaoMs, iniciadoEm: agora,
+        });
+        enfileirados += 1;
+      }
+    }
+    // Melhor esforco: se falhar, os itens seguem na fila e sobem sozinhos.
+    if (enfileirados) await sincronizar().catch(() => {});
+    return r.estudo.id;
+  }
+
   async function criar() {
     setCriando(true);
     setErro(null);
     try {
+      if (planilha) {
+        const id = await criarDaPlanilha();
+        aoConcluir?.(id);
+        return;
+      }
       const ids = [];
       for (const grupo of grupos) {
         const r = await criarEstudo({
@@ -95,28 +167,80 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
   }
 
   return (
-    <div style={est.modal} role="dialog" aria-label="Importar roteiro do ERP">
+    <div style={est.modal} role="dialog" aria-label="Importar estudo">
       <div style={est.caixa}>
-        <h2 style={est.titulo}>Importar roteiro do ERP</h2>
+        <h2 style={est.titulo}>Importar estudo</h2>
 
-        {!roteiro && (
+        {!roteiro && !planilha && (
           <>
             <p style={est.texto}>
-              Escolha o PDF <strong>Processos de Produção</strong> gerado pelo ERP.
-              As peças, as máquinas e os ciclos por peça entram sem digitação.
+              Escolha o PDF <strong>Processos de Produção</strong> do ERP ou o{' '}
+              <strong>template de tempos</strong> (.xlsx, abas Config/Tempos/Paradas —
+              o da embalagem). Operações, FR e tempos já preenchidos entram sem digitação.
             </p>
             <label style={est.zonaArquivo}>
               <input
                 ref={inputRef}
                 type="file"
-                accept="application/pdf,.pdf"
+                accept="application/pdf,.pdf,.xlsx,.xlsm"
                 onChange={aoEscolher}
                 disabled={lendo}
                 style={est.inputArquivo}
               />
-              <span style={est.zonaTitulo}>{lendo ? 'Lendo o PDF...' : 'Escolher arquivo PDF'}</span>
+              <span style={est.zonaTitulo}>{lendo ? 'Lendo o arquivo...' : 'Escolher PDF ou planilha'}</span>
               <span style={est.zonaDica}>O arquivo é lido aqui no aparelho — nada é enviado até você confirmar.</span>
             </label>
+          </>
+        )}
+
+        {planilha && (
+          <>
+            <div style={est.resumoProduto}>
+              <span style={est.rotuloCampo}>Template de tempos</span>
+              <div style={est.produtoNome}>
+                {planilha.operacoes.length} operação(ões) reconhecida(s)
+              </div>
+              <div style={est.produtoCodigo}>{nomeArquivo}</div>
+            </div>
+
+            <div style={est.tabelaCaixa}>
+              <table style={est.tabela}>
+                <thead>
+                  <tr>
+                    <th style={est.th}>Operação</th>
+                    <th style={est.thNum}>FR%</th>
+                    <th style={est.thNum}>Ciclos na planilha</th>
+                    <th style={est.thNum}>Paradas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {planilha.operacoes.map((op) => (
+                    <tr key={op.nome}>
+                      <td style={est.td}>{op.nome}</td>
+                      <td style={est.tdNum}>{op.fr}</td>
+                      <td style={est.tdNum}>{op.tempos.length}</td>
+                      <td style={est.tdNum}>{op.paradas.length}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {planilha.operacoes.every((op) => !op.tempos.length) ? (
+              <p style={est.notaSem}>
+                Planilha ainda sem tempos (molde): o estudo é criado pronto para
+                cronometrar no celular, ciclo a ciclo.
+              </p>
+            ) : (
+              <p style={est.notaSem}>
+                Os tempos já preenchidos entram como ciclos do estudo — nada de
+                digitar de novo o que já foi medido.
+              </p>
+            )}
+
+            {planilha.avisos.map((aviso) => (
+              <div key={aviso} style={est.aviso}>{aviso}</div>
+            ))}
           </>
         )}
 
@@ -174,22 +298,26 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
                 {roteiro.semProcesso.map((p) => p.descricao).join(' · ')}
               </p>
             )}
+          </>
+        )}
 
+        {(roteiro || planilha) && (
+          <>
             {/* Daqui para baixo, as MESMAS informacoes do cadastro manual:
                 Identificacao, Configuracao da coleta e Ritmo/Demanda. O que o
-                PDF ja responde (produto, maquina, pecas) veio acima. */}
+                arquivo ja responde (produto, operacoes, tempos) veio acima. */}
             <div style={analise ? est.corpoDuplo : est.corpoSimples}>
               <div style={est.colunaEsquerda}>
                 <section style={est.secao}>
                   <div style={est.secaoRotulo}>Identificação</div>
-                  {grupos.length === 1 && (
+                  {(planilha || grupos.length === 1) && (
                     <label style={est.campo}>
                       <span style={est.rotuloCampo}>Nome do estudo</span>
                       <input style={est.input} value={nome} onChange={(ev) => setNome(ev.target.value)} />
                     </label>
                   )}
                   <div style={est.grade}>
-                    {grupos.length === 1 && (
+                    {(planilha || grupos.length === 1) && (
                       <label style={est.campo}>
                         <span style={est.rotuloCampo}>Recurso / Posto</span>
                         <input
@@ -198,8 +326,9 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
                           onChange={(ev) => setRecurso(ev.target.value)}
                         />
                         <span style={est.dica}>
-                          O roteiro indica {grupos[0].maquina} — troque se o estudo
-                          for rodar em outra máquina.
+                          {planilha
+                            ? 'Onde o estudo vai rodar. Ex: Embalagem — bancada 2.'
+                            : `O roteiro indica ${grupos[0]?.maquina} — troque se o estudo for rodar em outra máquina.`}
                         </span>
                       </label>
                     )}
@@ -249,10 +378,12 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
                   </div>
                 </section>
 
-                <p style={est.dica}>
-                  O tempo do ERP é a previsão de engenharia — a cronoanálise vai medir o real
-                  no posto e mostrar a diferença.
-                </p>
+                {roteiro && (
+                  <p style={est.dica}>
+                    O tempo do ERP é a previsão de engenharia — a cronoanálise vai medir o real
+                    no posto e mostrar a diferença.
+                  </p>
+                )}
               </div>
 
               <RitmoDemanda t={t} analise={analise} calc={calc} aoMudar={setCalc} />
@@ -266,11 +397,11 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
           <button type="button" style={est.botaoSecundario} onClick={aoCancelar} disabled={criando}>
             Cancelar
           </button>
-          {roteiro && (
+          {(roteiro || planilha) && (
             <button type="button" style={est.botaoPrimario} onClick={criar} disabled={criando}>
               {criando
                 ? 'Criando...'
-                : (grupos.length > 1 ? `Criar ${grupos.length} estudos` : 'Criar estudo')}
+                : (roteiro && grupos.length > 1 ? `Criar ${grupos.length} estudos` : 'Criar estudo')}
             </button>
           )}
         </div>

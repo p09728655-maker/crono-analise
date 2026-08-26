@@ -213,6 +213,20 @@ export default function ConferenciaRapida({ aoSair }) {
     vibrar([25, 40, 25]);
   }, []);
 
+  /**
+   * Proxima peca na MESMA maquina: emenda o periodo (a nova hora inicial
+   * e' a hora final da anterior — o analista continua parado no posto) e
+   * limpa peca e quantidade. A maquina fica: trocar de peca nao e' trocar
+   * de posto.
+   */
+  const outraPeca = useCallback(() => {
+    setPeca('');
+    setPecasPeriodo('');
+    setHoraInicial(horaFinal || '');
+    setHoraFinal('');
+    vibrar(30);
+  }, [horaFinal]);
+
   return (
     <div style={{ ...est.tela, ...(rodando ? {} : est.telaRolavel) }}>
       <header style={est.cabecalho}>
@@ -326,6 +340,9 @@ export default function ConferenciaRapida({ aoSair }) {
                 />
               </div>
               <BotaoSalvar salvo={salvo} aoSalvar={() => salvar(resultadoHoras, true)} />
+              <button type="button" style={est.botaoOutraPeca} onClick={outraPeca}>
+                ➜ COMEÇAR OUTRA PEÇA
+              </button>
             </section>
           ) : (
             <section style={est.explicacao}>
@@ -661,6 +678,13 @@ const est = {
     cursor: 'pointer', fontFamily: 'inherit',
   },
   botaoSalvarFeito: { background: cores.ok, cursor: 'default' },
+  botaoOutraPeca: {
+    width: '100%', minHeight: 56,
+    background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.md,
+    color: cores.texto, fontSize: tamanho.pequeno, fontWeight: 700, letterSpacing: 1,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
   erroSalvar: {
     padding: espaco.md, textAlign: 'center',
     fontSize: tamanho.legenda, color: cores.texto, lineHeight: 1.4,
