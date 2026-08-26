@@ -233,19 +233,11 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
         {aba === 'carta' && (
           analise.comDados.length > 0 ? (
             <section>
-              <div style={est.seletor}>
-                <span style={est.seletorRotulo}>Operação:</span>
-                {analise.comDados.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => setOpSelecionada(o.id)}
-                    style={{ ...est.aba, ...(o.id === opCarta?.id ? est.abaAtiva : {}) }}
-                  >
-                    {o.nome}
-                  </button>
-                ))}
-              </div>
+              <SeletorOperacao
+                operacoes={analise.comDados}
+                selecionada={opCarta}
+                aoSelecionar={setOpSelecionada}
+              />
               {opCarta && <CartaControle operacao={opCarta} />}
             </section>
           ) : (
@@ -757,6 +749,69 @@ function Resposta({ analise }) {
 }
 
 /**
+ * Escolha da operacao na carta de controle.
+ *
+ * Era uma fila de botoes com o nome inteiro dentro. Nome de operacao
+ * importada do roteiro nao e' um nome: e' a LISTA DE PECAS da caixa ("CX
+ * 1/1 TRIPLEX 1670X418X100 RACK SIRIUS 1.6, SIRIUS 1.6 TAMPO 1600X380X25
+ * MDP 1, ISOMANTA"). Oito desses viravam cinco linhas de blocos de larguras
+ * diferentes — impossivel de varrer com o olho e ocupando mais tela que o
+ * grafico que eles servem.
+ *
+ * Vira uma linha so': lista suspensa numerada (a numeracao e' o unico
+ * rotulo curto que existe aqui) mais anterior/proxima, para percorrer as
+ * operacoes sem abrir a lista a cada troca — comparar cartas e' justamente
+ * o que se faz nesta aba. O nome inteiro nao se perde: ele e' o titulo da
+ * carta, logo abaixo.
+ */
+function SeletorOperacao({ operacoes, selecionada, aoSelecionar }) {
+  const indice = operacoes.findIndex((o) => o.id === selecionada?.id);
+  const irPara = (i) => aoSelecionar(operacoes[(i + operacoes.length) % operacoes.length].id);
+
+  return (
+    <div style={est.seletor}>
+      <label style={est.seletorRotulo} htmlFor="carta-operacao">Operação</label>
+      <select
+        id="carta-operacao"
+        value={selecionada?.id ?? ''}
+        onChange={(ev) => aoSelecionar(ev.target.value)}
+        style={est.seletorCampo}
+      >
+        {operacoes.map((o, i) => (
+          <option key={o.id} value={o.id}>{`${i + 1}. ${o.nome}`}</option>
+        ))}
+      </select>
+
+      {operacoes.length > 1 && (
+        <>
+          <div style={est.seletorPasso}>
+            <button
+              type="button"
+              style={est.botaoPasso}
+              onClick={() => irPara(indice - 1)}
+              aria-label="Operação anterior"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              style={est.botaoPasso}
+              onClick={() => irPara(indice + 1)}
+              aria-label="Próxima operação"
+            >
+              ›
+            </button>
+          </div>
+          <span style={est.seletorContagem}>
+            {indice + 1} de {operacoes.length}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * PARADAS DO ESTUDO — a perda que a coleta ja' media e ninguem via.
  *
  * A tela de coleta registra a parada com motivo e desconta do ciclo, para o
@@ -1122,14 +1177,23 @@ const est = {
     maxWidth: 1400, margin: `${espaco.xl}px auto ${espaco.md}px`,
     display: 'flex', gap: espaco.sm, alignItems: 'center', flexWrap: 'wrap',
   },
-  seletorRotulo: rotulo(claro.textoFraco),
-  aba: {
-    minHeight: 34, padding: `0 ${espaco.md}px`, background: claro.papel,
+  seletorRotulo: { ...rotulo(claro.textoFraco), flexShrink: 0 },
+  // Cresce ate' um limite: nome de operacao aqui tem 100 caracteres, e um
+  // campo de 1400px seria uma regua vazia na maioria dos estudos.
+  seletorCampo: {
+    flex: '1 1 320px', minWidth: 0, maxWidth: 720, minHeight: 38,
+    padding: `0 ${espaco.sm}px`, background: claro.papel,
     borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.md,
-    ...tipo('legenda'), cursor: 'pointer', fontFamily: 'inherit', color: claro.textoMedio,
-    transition: `border-color ${transicao.rapida}, color ${transicao.rapida}`,
+    color: claro.texto, ...tipo('corpo'), fontFamily: 'inherit', cursor: 'pointer',
   },
-  abaAtiva: { borderColor: claro.vermelho, color: claro.texto, fontWeight: 700 },
+  seletorPasso: { display: 'flex', gap: 2, flexShrink: 0 },
+  botaoPasso: {
+    width: 38, height: 38, background: claro.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.md,
+    color: claro.textoMedio, fontSize: 18, lineHeight: 1,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  seletorContagem: { ...tipo('legenda'), color: claro.textoFraco, flexShrink: 0 },
 
   /* --- modal de operacao --- */
   modal: {
