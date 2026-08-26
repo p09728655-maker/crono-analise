@@ -330,6 +330,44 @@ A conferência do **cronômetro ao vivo** também ganhou período: o fim é o
 próprio `salvo_em` e o início sai dele menos a duração cronometrada. Antes
 essa medição ficava sem período nenhum.
 
+### Analistas: o campo que era texto livre
+
+Os estudos gravavam o analista como **texto digitado**, e o banco de produção
+mostrou o custo disso: a mesma pessoa aparecia como `ODERLI`,
+`ODERLI GARCIA` e `ODERLI SERGIO GARCIA`. Qualquer indicador por pessoa
+contava três.
+
+Agora há cadastro (**Ferramentas → Analistas**) e o campo Analista do estudo
+é uma lista. `estudos.analista_id` aponta para `usuarios`, com
+`ON DELETE SET NULL` — apagar um usuário não pode levar junto os estudos que
+ele mediu. A coluna `analista` (texto) continua existindo como registro
+histórico e como fonte enquanto o estudo não for ligado.
+
+Estudo antigo se liga a mão, em **Editar estudo**: a lista mostra o nome
+digitado ao lado da opção "sem vínculo", porque sem isso não daria para
+saber a quem o estudo se refere.
+
+### Identificação não é controle de acesso
+
+Está escrito no código (`api/_lib/senha.js`), na tela e aqui, porque é o
+tipo de coisa em que alguém confia por engano:
+
+**O token de serviço (`API_TOKEN`) vive embutido no bundle do navegador e
+abre a API sozinho.** Precisa continuar abrindo — o tablet entra sem senha,
+de luva, diante da máquina. Dizer quem você é no PC responde *"quem está
+usando este computador"*, e é isso que carimba autoria no estudo. Não barra
+ninguém, e o app funciona inteiro sem ninguém identificado.
+
+Isolar empresas de verdade (RLS com política por `empresa_id`) exige tirar o
+token do bundle — e aí o tablet passa a ter login também. É uma decisão de
+produto, não um ajuste de schema.
+
+O que existe hoje, e é real: senha em **scrypt com sal por usuário** (sem
+dependência nova — é do próprio Node), sessão guardada como **hash** do
+token (vazar a tabela não entrega sessão válida), mesma resposta para
+e-mail inexistente e senha errada (distinguir entregaria quais e-mails
+existem), e senha que nunca volta para o navegador.
+
 ### `client_id` não é o aparelho
 
 Já foi lido como identificador de dispositivo. Não é: é uma chave de

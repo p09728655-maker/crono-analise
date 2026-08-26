@@ -38,10 +38,10 @@ export default function MenuLateral({
   // --- lista de estudos ---
   busca, aoBuscar, grupos = [], filtro, aoFiltrar,
   aoNovoEstudo, aoImportar, aoVerConferencias, aoVerArquivados, arquivados = 0,
-  aoVerChaveIa, aoVerMotivos, aoTrocarModo,
+  aoVerChaveIa, aoVerMotivos, aoVerAnalistas, usuario, aoTrocarModo,
 }) {
   const total = grupos.reduce((acc, g) => acc + g.estudos.length, 0);
-  const temFerramentas = aoBuscar || aoImportar || aoVerChaveIa || aoVerMotivos;
+  const temFerramentas = aoBuscar || aoImportar || aoVerChaveIa || aoVerMotivos || aoVerAnalistas;
 
   return (
     <nav style={est.lateral} aria-label="Navegação">
@@ -217,6 +217,11 @@ export default function MenuLateral({
               <span style={est.itemTexto}>Importar PDF ou planilha</span>
             </button>
           )}
+          {aoVerAnalistas && (
+            <button type="button" style={est.item} onClick={aoVerAnalistas}>
+              <span style={est.itemTexto}>Analistas</span>
+            </button>
+          )}
           {aoVerMotivos && (
             <button type="button" style={est.item} onClick={aoVerMotivos}>
               <span style={est.itemTexto}>Motivos de parada</span>
@@ -232,12 +237,25 @@ export default function MenuLateral({
 
       {/* A coleta e' a primeira ETAPA de um estudo, nao uma quarta acao:
           fica no rodape, discreta, para quem ja sabe o que quer. */}
-      {aoTrocarModo && (
+      {(aoVerAnalistas || aoTrocarModo) && (
         <div style={est.rodape}>
-          <button type="button" style={est.itemDiscreto} onClick={aoTrocarModo} title="Tela de coleta (celular)">
-            <span style={est.itemTexto}>Ir para a Coleta</span>
-            <span aria-hidden="true" style={est.seta}>→</span>
-          </button>
+          {aoVerAnalistas && (
+            <button
+              type="button" style={est.itemDiscreto} onClick={aoVerAnalistas}
+              title={usuario ? 'Trocar quem está usando este computador' : 'Dizer quem está usando este computador'}
+            >
+              <span style={est.itemTexto}>
+                {usuario ? usuario.nome : 'Ninguém identificado'}
+              </span>
+              <span aria-hidden="true" style={est.seta}>{usuario ? '⇄' : '→'}</span>
+            </button>
+          )}
+          {aoTrocarModo && (
+            <button type="button" style={est.itemDiscreto} onClick={aoTrocarModo} title="Tela de coleta (celular)">
+              <span style={est.itemTexto}>Ir para a Coleta</span>
+              <span aria-hidden="true" style={est.seta}>→</span>
+            </button>
+          )}
         </div>
       )}
     </nav>

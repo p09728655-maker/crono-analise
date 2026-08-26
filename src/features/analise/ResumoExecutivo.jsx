@@ -42,7 +42,7 @@ export default function ResumoExecutivo({ estudo, analise, leitura }) {
           RitmoPatrimar v{VERSAO} · emitido em {hoje}
           <br />
           Estudo de {dataEstudo}
-          {estudo.analista ? ` · ${estudo.analista}` : ''}
+          {estudo.analista_nome || estudo.analista ? ` · ${estudo.analista_nome || estudo.analista}` : ''}
         </div>
       </header>
 

@@ -13,6 +13,27 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.32.0',
+    data: '2026-08-26',
+    titulo: 'O analista deixa de ser texto livre',
+    itens: [
+      'Novo CADASTRO DE ANALISTAS, em Ferramentas, no PC. O motivo é concreto: os estudos gravavam o analista como texto digitado, e a mesma pessoa apareceu como "ODERLI", "ODERLI GARCIA" e "ODERLI SERGIO GARCIA". Qualquer indicador por pessoa contava o Oderli como três. Agora o campo Analista do estudo é uma lista.',
+      'Dá para dizer quem está usando o computador — no rodapé do menu, ou dentro da tela de Analistas. Quem se identifica passa a ser o analista sugerido ao criar estudo, e o sistema registra quem criou cada um.',
+      'ISSO NÃO TRANCA NADA, e a tela diz isso com todas as letras. O app continua abrindo sem ninguém identificado, como sempre abriu, e o tablet continua entrando direto — de luva, diante da máquina, ninguém vai digitar senha. Serve para o estudo saber de quem ele é, não para barrar acesso.',
+      'Os estudos que já existem continuam com o nome digitado e não quebram nada. Para juntar as grafias, abra o estudo, use Editar estudo e escolha o analista na lista — o nome antigo fica à mostra até você ligar.',
+      'A senha é opcional: analista que só precisa ser escolhido num estudo não entra no sistema, e exigir senha de quem não usa só produz senha anotada no monitor. Quem tem senha nunca a vê de volta — nem na tela, nem na resposta do servidor.',
+    ],
+  },
+  {
+    versao: '2.31.1',
+    data: '2026-08-26',
+    titulo: 'Salvar diz para onde a conferência vai',
+    itens: [
+      'A tela do Ritmo da furadeira dizia "Salvar guarda a conferência só neste aparelho". Não era verdade: salvar envia para o relatório das Furadeiras, no PC — e uma medição que ficou no aparelho sem subir sobe sozinha na próxima vez que a tela abrir. Dava para fazer um teste rápido no posto achando que ficava ali, e encontrar o teste no relatório depois. Agora a frase diz o que acontece.',
+      'A lista SALVAS NESTE APARELHO passou a marcar cada linha com "no PC" ou "aguardando envio", e explica no topo que o que não subiu vai subir quando houver rede. Antes o aparelho parecia um caderno particular.',
+    ],
+  },
+  {
     versao: '2.31.0',
     data: '2026-08-26',
     titulo: 'Uma fonte só para parada, e período que o banco sabe contar',

@@ -26,6 +26,33 @@ CREATE TABLE IF NOT EXISTS usuarios (
 -- depender da extensao citext (que o linter do Supabase sinaliza no schema public).
 CREATE UNIQUE INDEX IF NOT EXISTS usuarios_email_unq ON usuarios (lower(email)) WHERE email IS NOT NULL;
 
+-- Senha em scrypt com sal por usuario, quando houver. E OPCIONAL: analista
+-- que so' precisa ser escolhido num estudo nao entra no sistema, e criar
+-- senha para quem nao usa so' produz senha anotada em post-it.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS senha_hash       text;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS senha_salt       text;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_acesso_em timestamptz;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS atualizado_em    timestamptz NOT NULL DEFAULT now();
+
+-- ----------------------------------------------------------------- sessoes
+-- Identificacao do analista no PC. NAO e controle de acesso: o token de
+-- servico embutido no bundle abre a API sozinho, porque o tablet entra sem
+-- senha, de luva, diante da maquina. Isto responde "quem esta usando este
+-- computador" — e e' o que carimba autoria no estudo.
+--
+-- Guardamos o HASH do token, nao o token: vazar a tabela nao pode entregar
+-- sessao valida a ninguem. Mesmo motivo pelo qual a senha tambem nao e
+-- guardada em claro.
+CREATE TABLE IF NOT EXISTS sessoes (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  token_hash text NOT NULL,
+  criado_em  timestamptz NOT NULL DEFAULT now(),
+  expira_em  timestamptz NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS sessoes_token_unq   ON sessoes (token_hash);
+CREATE INDEX        IF NOT EXISTS sessoes_usuario_idx ON sessoes (usuario_id, expira_em DESC);
+
 -- ---------------------------------------------------------------- estudos
 CREATE TABLE IF NOT EXISTS estudos (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -33,6 +60,10 @@ CREATE TABLE IF NOT EXISTS estudos (
   criado_por     uuid REFERENCES usuarios(id) ON DELETE SET NULL,
   nome           text NOT NULL,
   produto        text,
+  -- O nome como foi DIGITADO. Continua existindo como registro historico e
+  -- como fonte enquanto o estudo nao for ligado ao cadastro: foi este campo
+  -- que produziu tres grafias da mesma pessoa (ODERLI, ODERLI GARCIA,
+  -- ODERLI SERGIO GARCIA), e qualquer indicador por analista contava tres.
   analista       text,
   setor          text,
   recurso        text,                    -- posto/maquina (ex.: "Furadeira 03")
@@ -46,6 +77,13 @@ CREATE TABLE IF NOT EXISTS estudos (
   atualizado_em  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS estudos_empresa_idx ON estudos (empresa_id, atualizado_em DESC);
+
+-- O analista do cadastro. SET NULL, nao CASCADE: apagar um usuario nao pode
+-- levar junto os estudos que ele mediu — e o nome antigo sobrevive no texto.
+ALTER TABLE estudos ADD COLUMN IF NOT EXISTS analista_id uuid
+  REFERENCES usuarios(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS estudos_analista_idx ON estudos (analista_id)
+  WHERE analista_id IS NOT NULL;
 
 -- ---------------------------------------------------------------- operacoes
 CREATE TABLE IF NOT EXISTS operacoes (
@@ -273,6 +311,10 @@ DROP TRIGGER IF EXISTS estudos_touch ON estudos;
 CREATE TRIGGER estudos_touch BEFORE UPDATE ON estudos
   FOR EACH ROW EXECUTE FUNCTION toca_atualizado_em();
 
+DROP TRIGGER IF EXISTS usuarios_touch ON usuarios;
+CREATE TRIGGER usuarios_touch BEFORE UPDATE ON usuarios
+  FOR EACH ROW EXECUTE FUNCTION toca_atualizado_em();
+
 DROP TRIGGER IF EXISTS motivos_parada_touch ON motivos_parada;
 CREATE TRIGGER motivos_parada_touch BEFORE UPDATE ON motivos_parada
   FOR EACH ROW EXECUTE FUNCTION toca_atualizado_em();
@@ -297,8 +339,9 @@ ALTER TABLE paradas     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conferencias ENABLE ROW LEVEL SECURITY;
 ALTER TABLE configuracoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE motivos_parada ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessoes        ENABLE ROW LEVEL SECURITY;
 
 -- Defesa em camadas: remove tambem os grants diretos dos papeis expostos.
 REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas, conferencias,
-  configuracoes, motivos_parada
+  configuracoes, motivos_parada, sessoes
   FROM anon, authenticated;

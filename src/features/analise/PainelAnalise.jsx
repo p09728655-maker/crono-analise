@@ -11,7 +11,7 @@ import {
 } from '../../domain/cronoanalise.js';
 import { PRIORIDADES, contarPorPrioridade, sugerirMelhorias } from '../../domain/sugestoes.js';
 import {
-  analisarComIa, atualizarEstudo, criarOperacao, obterConfigIa, obterEstudo,
+  analisarComIa, atualizarEstudo, criarOperacao, listarUsuarios, obterConfigIa, obterEstudo,
   removerChaveIa, removerOperacao, salvarChaveIa,
 } from '../../lib/api.js';
 import { GraficoYamazumi } from './graficos.jsx';
@@ -52,6 +52,12 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
   const [documento, setDocumento] = useState('folha');
   const [imprimindo, setImprimindo] = useState(false);
   const [verVersoes, setVerVersoes] = useState(false);
+  // Cadastro de analistas, para a edicao do estudo poder LIGAR um estudo
+  // antigo — que e' como as tres grafias de uma pessoa so' se resolvem.
+  const [analistas, setAnalistas] = useState([]);
+  useEffect(() => {
+    listarUsuarios().then((l) => setAnalistas(l.filter((u) => u.ativo))).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!imprimindo) return;
@@ -181,7 +187,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           contexto={{
             rotulo: 'Estudo aberto',
             titulo: estudo.nome,
-            subtitulo: [estudo.recurso, estudo.produto, estudo.analista]
+            subtitulo: [estudo.recurso, estudo.produto, estudo.analista_nome || estudo.analista]
               .filter(Boolean).join(' · ') + ` · Tolerância ${analise.tolerancia}%`,
           }}
           acaoPrimaria={{ rotulo: 'Imprimir relatório', aoClicar: () => imprimir('folha') }}
@@ -307,6 +313,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
         {editandoEstudo && (
           <AjustesDoEstudo
             estudo={estudo}
+            analistas={analistas}
             aoCancelar={() => setEditandoEstudo(false)}
             aoSalvar={async (dados) => {
               await atualizarEstudo(estudoId, dados);
@@ -339,12 +346,13 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
  * revisa a tolerancia ao ver as condicoes do posto. Sem isto, corrigir um
  * desses campos exigiria recriar o estudo e perder os ciclos ja coletados.
  */
-function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
+function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCancelar }) {
   const [nome, setNome] = useState(estudo.nome || '');
   const [produto, setProduto] = useState(estudo.produto || '');
   const [recurso, setRecurso] = useState(estudo.recurso || '');
   const [setor, setSetor] = useState(estudo.setor || '');
   const [analista, setAnalista] = useState(estudo.analista || '');
+  const [analistaId, setAnalistaId] = useState(estudo.analista_id || '');
   const [tolerancia, setTolerancia] = useState(Number(estudo.tolerancia_pct) || 15);
   const [metaObs, setMetaObs] = useState(Number(estudo.meta_obs) || 12);
   const [taktSeg, setTaktSeg] = useState(
@@ -374,6 +382,7 @@ function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
         recurso: recurso.trim() || null,
         setor: setor.trim() || null,
         analista: analista.trim() || null,
+        analistaId: analistaId || null,
         toleranciaPct: Number(tolerancia),
         metaObs: Number(metaObs),
         taktTimeMs: ms && ms > 0 ? ms : null,
@@ -420,12 +429,37 @@ function AjustesDoEstudo({ estudo, aoSalvar, aoCancelar }) {
                    onChange={(e) => setSetor(e.target.value)} />
             <span style={est.dica}>Ex: Usinagem. Sai no relatório impresso.</span>
           </label>
-          <label style={est.campo}>
-            <span style={est.rotuloCampo}>Analista</span>
-            <input style={est.input} value={analista}
-                   onChange={(e) => setAnalista(e.target.value)} />
-            <span style={est.dica}>Assina a folha de análise.</span>
-          </label>
+          {/* Com cadastro, aqui e' onde um estudo ANTIGO se liga ao
+              analista de verdade — e' o caminho para desfazer as tres
+              grafias de uma pessoa so'. O nome digitado continua a mostra
+              embaixo enquanto o vinculo nao existir: sem ele nao daria para
+              saber a quem o estudo se refere. */}
+          {analistas.length > 0 ? (
+            <label style={est.campo}>
+              <span style={est.rotuloCampo}>Analista</span>
+              <select style={est.input} value={analistaId}
+                      onChange={(e) => setAnalistaId(e.target.value)}>
+                <option value="">
+                  {analista ? `Sem vínculo — digitado: ${analista}` : 'Escolha o analista'}
+                </option>
+                {analistas.map((u) => (
+                  <option key={u.id} value={u.id}>{u.nome}</option>
+                ))}
+              </select>
+              <span style={est.dica}>
+                {analistaId
+                  ? 'Assina a folha de análise.'
+                  : 'Escolher aqui liga este estudo ao cadastro — é o que junta as grafias diferentes da mesma pessoa.'}
+              </span>
+            </label>
+          ) : (
+            <label style={est.campo}>
+              <span style={est.rotuloCampo}>Analista</span>
+              <input style={est.input} value={analista}
+                     onChange={(e) => setAnalista(e.target.value)} />
+              <span style={est.dica}>Assina a folha de análise.</span>
+            </label>
+          )}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg }}>

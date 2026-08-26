@@ -492,6 +492,15 @@ export default function ConferenciaRapida({ aoSair }) {
           {historico.length > 0 && (
             <section style={est.historico} aria-label="Conferências salvas neste aparelho">
               <div style={est.historicoTitulo}>SALVAS NESTE APARELHO</div>
+              {/* Sem esta marca, o aparelho parecia um caderno particular: o
+                  analista nao tinha como saber que o que esta aqui ja' esta'
+                  no relatorio do PC — nem que o que ainda nao subiu vai
+                  subir sozinho na proxima abertura. */}
+              <div style={est.historicoDica}>
+                {historico.every((c) => c.enviada)
+                  ? 'Todas já estão no relatório do PC.'
+                  : 'As que ainda não subiram vão para o relatório do PC assim que houver rede.'}
+              </div>
               {historico.map((c) => (
                 <div key={c.id} style={est.itemHistorico}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -505,6 +514,7 @@ export default function ConferenciaRapida({ aoSair }) {
                         `${c.pecas} pç`,
                         c.paradaMs > 0 ? `${formatarDuracao(c.paradaMs)} parada` : null,
                         dataCurta(c.salvoEm),
+                        c.enviada ? 'no PC' : 'aguardando envio',
                       ].filter(Boolean).join(' · ')}
                     </div>
                   </div>
@@ -713,9 +723,16 @@ export default function ConferenciaRapida({ aoSair }) {
             )}
           </section>
 
+          {/* Esta frase dizia "guarda so' neste aparelho" — e era mentira
+              desde que a sincronizacao passou a existir. Salvar SOBE para o
+              relatorio do PC, e o que ficou no aparelho sem subir sobe na
+              proxima vez que esta tela abrir. Quem mede no posto precisa
+              saber disso antes de tocar em Salvar, nao depois de ver a
+              medicao de teste aparecer no relatorio da furadeira. */}
           <section style={est.aviso}>
-            Salvar guarda a conferência só neste aparelho. Para registrar
-            ciclos e calcular o tempo padrão, crie um estudo.
+            Salvar envia esta conferência para o relatório das Furadeiras, no PC,
+            e guarda uma cópia neste aparelho. Para registrar ciclos e calcular
+            o tempo padrão, crie um estudo.
           </section>
 
           <nav style={est.barraInferior} aria-label="Ações do resultado">
@@ -1007,6 +1024,10 @@ const est = {
   historico: {
     flexShrink: 0, display: 'flex', flexDirection: 'column', gap: espaco.sm,
     paddingTop: espaco.md,
+  },
+  historicoDica: {
+    fontSize: tamanho.legenda, color: cores.textoFraco,
+    marginBottom: espaco.sm, lineHeight: 1.4,
   },
   historicoTitulo: { fontSize: 10, letterSpacing: 0.8, color: cores.textoFraco, textTransform: 'uppercase' },
   itemHistorico: {

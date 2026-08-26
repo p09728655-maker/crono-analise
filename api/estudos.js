@@ -1,5 +1,5 @@
 import { sql } from './_lib/db.js';
-import { autenticar } from './_lib/auth.js';
+import { autenticar, usuarioDaSessao } from './_lib/auth.js';
 import { erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
 import { dataIso, decimal, inteiro, lista, texto, uuid } from './_lib/validar.js';
 
@@ -24,6 +24,9 @@ export default handler(async (req, res) => {
   permitir(req, ['GET', 'POST', 'PATCH', 'DELETE']);
   const { empresaId } = await autenticar(req);
   const id = req.query?.id;
+  // Quem esta no PC, quando da' para saber. Nunca barra ninguem — ver
+  // api/_lib/senha.js.
+  const eu = await usuarioDaSessao(req, empresaId);
 
   if (req.method === 'GET') {
     if (id) return json(res, 200, await carregarEstudo(uuid(id, 'id'), empresaId));
@@ -31,13 +34,16 @@ export default handler(async (req, res) => {
     // unica: o estudo sumia da lista e nao havia como reve-lo pelo app.
     const soArquivados = String(req.query?.arquivados ?? '') === '1';
     const estudos = await sql`
-      SELECT e.id, e.nome, e.produto, e.analista, e.setor, e.recurso, e.data_estudo,
+      SELECT e.id, e.nome, e.produto, e.analista, e.analista_id,
+             coalesce(u.nome, e.analista) AS analista_nome,
+             e.setor, e.recurso, e.data_estudo,
              e.tolerancia_pct, e.meta_obs, e.takt_time_ms, e.status, e.atualizado_em,
              (SELECT count(*) FROM operacoes o WHERE o.estudo_id = e.id) AS total_operacoes,
              (SELECT count(*) FROM observacoes ob
                 JOIN operacoes o2 ON o2.id = ob.operacao_id
                WHERE o2.estudo_id = e.id AND NOT ob.descartada) AS total_observacoes
         FROM estudos e
+        LEFT JOIN usuarios u ON u.id = e.analista_id
        WHERE e.empresa_id = ${empresaId}
          ${soArquivados ? sql`AND e.status = 'arquivado'` : sql`AND e.status <> 'arquivado'`}
        ORDER BY e.atualizado_em DESC
@@ -62,6 +68,10 @@ export default handler(async (req, res) => {
       nome: texto(c.nome, 'nome', { obrigatorio: true, max: 200 }),
       produto: texto(c.produto, 'produto', { max: 200 }),
       analista: texto(c.analista, 'analista', { max: 200 }),
+      // O vinculo com o cadastro. O texto continua indo junto: e' o que
+      // aparece no relatorio impresso de estudo antigo e o que sobra se o
+      // analista for excluido do cadastro um dia.
+      analistaId: c.analistaId ? uuid(c.analistaId, 'analistaId') : null,
       setor: texto(c.setor, 'setor', { max: 120 }),
       recurso: texto(c.recurso, 'recurso', { max: 120 }),
       dataEstudo: dataIso(c.dataEstudo, 'dataEstudo', { padrao: new Date().toISOString() }),
@@ -74,9 +84,10 @@ export default handler(async (req, res) => {
     // metade deixaria um estudo capenga que o usuario teria de apagar a mao.
     const resultado = await sql.begin(async (tx) => {
       const [estudo] = await tx`
-        INSERT INTO estudos (empresa_id, nome, produto, analista, setor, recurso,
-                             data_estudo, tolerancia_pct, meta_obs, takt_time_ms)
+        INSERT INTO estudos (empresa_id, nome, produto, analista, analista_id, criado_por,
+                             setor, recurso, data_estudo, tolerancia_pct, meta_obs, takt_time_ms)
         VALUES (${empresaId}, ${valores.nome}, ${valores.produto}, ${valores.analista},
+                ${valores.analistaId}, ${eu?.id ?? null},
                 ${valores.setor}, ${valores.recurso}, ${valores.dataEstudo},
                 ${valores.toleranciaPct}, ${valores.metaObs}, ${valores.taktTimeMs})
         RETURNING *`;
@@ -105,6 +116,7 @@ export default handler(async (req, res) => {
         nome           = COALESCE(${texto(c.nome, 'nome', { max: 200 })}, nome),
         produto        = COALESCE(${texto(c.produto, 'produto', { max: 200 })}, produto),
         analista       = COALESCE(${texto(c.analista, 'analista', { max: 200 })}, analista),
+        analista_id    = COALESCE(${c.analistaId ? uuid(c.analistaId, 'analistaId') : null}, analista_id),
         setor          = COALESCE(${texto(c.setor, 'setor', { max: 120 })}, setor),
         recurso        = COALESCE(${texto(c.recurso, 'recurso', { max: 120 })}, recurso),
         tolerancia_pct = COALESCE(${decimal(c.toleranciaPct, 'toleranciaPct', { min: 0, max: 100 })}, tolerancia_pct),
@@ -154,8 +166,13 @@ async function garantirEstudo(estudoId, empresaId) {
 
 /** Estudo completo com operacoes, ciclos e paradas — payload da tela de analise. */
 async function carregarEstudo(estudoId, empresaId) {
+  // analista_nome resolve o vinculo quando ha' um, e cai no texto digitado
+  // quando o estudo e' antigo — a tela e o relatorio impresso leem so' ele.
   const [estudo] = await sql`
-    SELECT * FROM estudos WHERE id = ${estudoId} AND empresa_id = ${empresaId}`;
+    SELECT e.*, coalesce(u.nome, e.analista) AS analista_nome
+      FROM estudos e
+      LEFT JOIN usuarios u ON u.id = e.analista_id
+     WHERE e.id = ${estudoId} AND e.empresa_id = ${empresaId}`;
   if (!estudo) throw naoEncontrado('Estudo nao encontrado');
 
   const operacoes = await sql`

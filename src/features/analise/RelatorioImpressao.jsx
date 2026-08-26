@@ -42,7 +42,7 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
           ['Produto / referência', estudo.produto || '—'],
           ['Recurso / posto', estudo.recurso || '—'],
           ['Setor', estudo.setor || '—'],
-          ['Analista', estudo.analista || '—'],
+          ['Analista', estudo.analista_nome || estudo.analista || '—'],
           ['Data do estudo', dataEstudo],
           ['Tolerância aplicada', `${analise.tolerancia}%`],
           ['Takt Time', analise.taktMs ? `${formatarSegundos(analise.taktMs)} s` : 'não informado'],

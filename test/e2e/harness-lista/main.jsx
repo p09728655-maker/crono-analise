@@ -52,6 +52,13 @@ let restaurados = [];
 let chaveIa = { configurada: false, origem: null, resumo: null };
 // Cadastro de motivos de parada — comeca VAZIO de proposito: e' o estado de
 // uma instalacao nova, e o que a tela precisa saber tratar.
+// Cadastro de analistas e quem esta neste PC. Comeca VAZIO: e o estado de
+// quem nunca abriu Ferramentas > Analistas, e e' o que a tela precisa saber
+// tratar sem travar a criacao de estudo.
+let usuarios = [];
+let proximoUsuario = 1;
+let sessao = null;
+
 let motivos = [];
 let proximoMotivo = 1;
 const codigoDe = (v) => String(v || '').trim().toLowerCase()
@@ -81,6 +88,68 @@ window.fetch = async (url, opts = {}) => {
       });
     }
     return new Response(JSON.stringify({ chaveIa }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (alvo.includes('/usuarios')) {
+    const id = new URL(alvo, location.origin).searchParams.get('id');
+    const corpo = opts.body ? JSON.parse(opts.body) : {};
+    if (metodo === 'POST') {
+      window.__posts.push({ url: alvo, corpo });
+      const u = {
+        id: `u${proximoUsuario++}`, nome: corpo.nome, email: corpo.email || null,
+        papel: corpo.papel || 'analista', ativo: true,
+        // O servidor NUNCA devolve a senha: so' se ha uma.
+        tem_senha: Boolean(corpo.senha), estudos: 0,
+      };
+      usuarios.push(u);
+      return new Response(JSON.stringify({ usuario: u }), {
+        status: 201, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (metodo === 'PATCH') {
+      window.__patches.push({ url: alvo, corpo });
+      const u = usuarios.find((x) => x.id === id);
+      if (u) Object.assign(u, corpo, { tem_senha: corpo.senha ? true : u.tem_senha });
+      delete u?.senha;
+      return new Response(JSON.stringify({ usuario: u }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (metodo === 'DELETE') {
+      window.__deletes.push(alvo);
+      usuarios = usuarios.filter((x) => x.id !== id);
+      return new Response(JSON.stringify({ acao: 'excluido' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ usuarios }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (alvo.includes('/sessao')) {
+    const corpo = opts.body ? JSON.parse(opts.body) : {};
+    if (metodo === 'POST') {
+      const u = usuarios.find((x) => x.email && x.email.toLowerCase() === String(corpo.email).toLowerCase());
+      if (!u || !u.tem_senha) {
+        return new Response(JSON.stringify({ erro: 'E-mail ou senha nao confere' }), {
+          status: 401, headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      sessao = u;
+      return new Response(JSON.stringify({ token: 'a'.repeat(64), usuario: u }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (metodo === 'DELETE') {
+      sessao = null;
+      return new Response(JSON.stringify({ acao: 'saiu' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ usuario: sessao }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     });
   }
