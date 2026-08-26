@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.23.0',
+    data: '2026-08-26',
+    titulo: 'As paradas do estudo aparecem',
+    itens: [
+      'A coleta já registrava a parada com o motivo — e já descontava do ciclo, para não inflar o tempo observado —, mas nenhuma tela mostrava: o dado morria no banco. Agora o painel de análise tem a aba PARADAS, com o tempo total, quanto representa do tempo observado, os motivos em ordem da maior perda para a menor e a ação que cada um pede (SMED no setup, kanban na falta de material, TPM na manutenção).',
+      'A tabela de operações ganhou a coluna "Parado", e a faixa de números do topo mostra o tempo parado do estudo.',
+      'A folha impressa saiu com a seção "Paradas registradas na coleta": motivo, ocorrências, tempo, % do parado e ação recomendada. Quando não há registro, o documento diz isso com todas as letras — ausência de registro não é ausência de parada.',
+      'A Análise com IA passou a receber as paradas por motivo e foi instruída a tratá-las como perda separada: máquina parada não é máquina lenta, e a ação de cada caso é diferente.',
+      'A parada passou a ser gravada pelo código do motivo, não pelo texto: revisar o rótulo na tela não quebra mais o agrupamento do relatório.',
+    ],
+  },
+  {
     versao: '2.22.0',
     data: '2026-08-26',
     titulo: 'Paradas e setup na conferência',

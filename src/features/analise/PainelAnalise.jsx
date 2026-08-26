@@ -4,7 +4,8 @@ import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../
 import Cabecalho from '../../components/Cabecalho.jsx';
 import Abas from '../../components/Abas.jsx';
 import {
-  amostraSuficiente, calcularOperacao, formatarSegundos, FR_PRESETS,
+  amostraSuficiente, calcularOperacao, formatarDuracao, formatarSegundos, FR_PRESETS,
+  resumirParadasDoEstudo,
   operadoresNecessarios, taktTime,
 } from '../../domain/cronoanalise.js';
 import {
@@ -96,6 +97,9 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
       capacidadeLinha: gargalo ? gargalo.resultado.cap : 0,
       operadores: taktMs > 0 ? operadoresNecessarios(somaTp, taktMs) : null,
       totalCiclos: comDados.reduce((acc, o) => acc + o.resultado.n, 0),
+      // Paradas registradas na coleta (botao Parada, com motivo). Ja' eram
+      // descontadas do ciclo para nao inflar o TO; faltava mostra-las.
+      paradas: resumirParadasDoEstudo(dados.operacoes),
       pendencias: operacoes
         .map((o) => ({ op: o, s: amostraSuficiente(o.resultado, dados.estudo.meta_obs) }))
         .filter((x) => !x.s.ok),
@@ -182,6 +186,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             ['Ciclos coletados', analise.totalCiclos, ''],
             ['Σ TP por peça', formatarSegundos(analise.somaTp), ' s'],
             ['Takt Time', analise.taktMs ? formatarSegundos(analise.taktMs) : '—', analise.taktMs ? ' s' : ''],
+            ['Tempo parado', analise.paradas.totalMs ? formatarDuracao(analise.paradas.totalMs) : '—', ''],
           ].map(([rot, valor, sufixo]) => (
             <div key={rot} style={est.contextoItem}>
               <span style={est.contextoRotulo}>{rot}</span>
@@ -200,6 +205,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             { id: 'yamazumi', rotulo: 'Yamazumi' },
             { id: 'operacoes', rotulo: 'Operações', contador: analise.operacoes.length },
             { id: 'carta', rotulo: 'Carta de controle' },
+            { id: 'paradas', rotulo: 'Paradas', contador: analise.paradas.n },
           ]}
         />
 
@@ -221,6 +227,8 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             }}
           />
         )}
+
+        {aba === 'paradas' && <PainelParadas resumo={analise.paradas} />}
 
         {aba === 'carta' && (
           analise.comDados.length > 0 ? (
@@ -583,6 +591,13 @@ function AnaliseIa({ estudo, analise }) {
         recurso: estudo.recurso,
         toleranciaPct: Number(estudo.tolerancia_pct) || 0,
         taktTimeSeg: analise.taktMs ? analise.taktMs / 1000 : null,
+        // Paradas por motivo: sem elas a IA so' ve o tempo do ciclo e nao
+        // tem como apontar a perda que esta' fora dele.
+        paradas: analise.paradas.porMotivo.map((m) => ({
+          motivo: m.rotulo,
+          minutos: +(m.ms / 60000).toFixed(1),
+          ocorrencias: m.n,
+        })),
         operacoes: analise.comDados.map((op) => {
           const r = op.resultado;
           return {
@@ -741,6 +756,106 @@ function Resposta({ analise }) {
   );
 }
 
+/**
+ * PARADAS DO ESTUDO — a perda que a coleta ja' media e ninguem via.
+ *
+ * A tela de coleta registra a parada com motivo e desconta do ciclo, para o
+ * tempo parado nao inflar o TO. Sem esta aba o dado morria no banco: o
+ * analista parava o cronometro, escolhia "Falta de material", e nunca mais
+ * reencontrava aquilo — a perda ficava sem dono e sem acao.
+ *
+ * A leitura e' de Pareto: motivo, quanto custou, quanto representa do
+ * parado, e A ACAO que ele pede. Motivo sem acao nao vira melhoria; e' por
+ * isso que a acao vem na mesma linha, e nao num anexo.
+ *
+ * O percentual e' sobre o tempo com o CRONOMETRO NA MAO (ciclos + paradas),
+ * nunca sobre o turno: o estudo nao observou o turno, e usar essa base
+ * daria um numero que parece OEE sem ser.
+ */
+function PainelParadas({ resumo }) {
+  if (!resumo.n) {
+    return (
+      <section style={est.blocoTabela}>
+        <div style={est.cabecalhoSecao}>
+          <h2 style={est.tituloSecao}>Paradas</h2>
+        </div>
+        <p style={est.vazioParadas}>
+          Nenhuma parada registrada neste estudo. Durante a coleta, no celular,
+          o botão <strong>Parada</strong> pergunta o motivo e cronometra o tempo
+          parado — ele sai do ciclo (não infla o tempo observado) e aparece aqui,
+          por motivo, com a ação que cada um pede. Para conferência de furadeira,
+          onde não se cronometra ciclo a ciclo, as paradas ficam em
+          <strong> Conferências rápidas</strong>.
+        </p>
+      </section>
+    );
+  }
+
+  const maior = resumo.porMotivo[0]?.ms || 1;
+
+  return (
+    <section style={est.blocoTabela}>
+      <div style={est.cabecalhoSecao}>
+        <h2 style={est.tituloSecao}>Paradas registradas na coleta</h2>
+        <span style={est.paradasResumo}>
+          {formatarDuracao(resumo.totalMs)} em {resumo.n} parada(s) ·{' '}
+          {resumo.pctDoObservado.toFixed(1)}% do tempo observado
+        </span>
+      </div>
+
+      <div style={est.listaMotivos}>
+        {resumo.porMotivo.map((m) => (
+          <div key={m.motivo} style={est.linhaMotivo}>
+            <div style={est.motivoTopo}>
+              <span style={est.motivoNome}>{m.rotulo}</span>
+              <span style={est.motivoNumero}>
+                {formatarDuracao(m.ms)}
+                <span style={est.meta}> · {m.n}× · {m.pct.toFixed(0)}%</span>
+              </span>
+            </div>
+            {/* Barra so' para ordenar a leitura: o numero ja' esta escrito ao
+                lado, entao ela nunca e' a unica portadora da informacao. */}
+            <div style={est.barraTrilho}>
+              <div style={{ ...est.barraValor, width: `${Math.max(2, (m.ms / maior) * 100)}%` }} />
+            </div>
+            <span style={est.motivoAcao}>{m.acao}</span>
+          </div>
+        ))}
+      </div>
+
+      {resumo.porOperacao.length > 1 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={est.tabela}>
+            <thead>
+              <tr>
+                <th style={est.th}>Operação</th>
+                <th style={est.thNum}>Paradas</th>
+                <th style={est.thNum}>Tempo parado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resumo.porOperacao.map((o) => (
+                <tr key={o.id}>
+                  <td style={est.td}>{o.nome}</td>
+                  <td style={est.tdNum}>{o.n}</td>
+                  <td style={est.tdNum}>{formatarDuracao(o.ms)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p style={est.notaParadas}>
+        O tempo parado <strong>não entra</strong> no tempo observado: ele é
+        descontado do ciclo na hora da coleta, para não virar lentidão da
+        operação. Ele é perda a tratar — por isso aparece separado, com a ação
+        de cada motivo.
+      </p>
+    </section>
+  );
+}
+
 function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, estudo }) {
   return (
     <section style={est.blocoTabela}>
@@ -766,6 +881,7 @@ function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, 
               <th style={est.thNum}>TP peça (s)</th>
               <th style={est.thNum}>CV%</th>
               <th style={est.thNum}>Cap/h</th>
+              <th style={est.thNum} title="Tempo parado registrado nesta operação — não entra no TO">Parado</th>
               <th style={est.th}>Estabilidade</th>
               <th style={est.th} aria-label="Ações" />
             </tr>
@@ -791,7 +907,14 @@ function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, 
                   <td style={est.tdNum}>{r ? formatarSegundos(r.tpVal) : '—'}</td>
                   <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpPorPeca) : '—'}</td>
                   <td style={est.tdNum}>{r ? r.cvPct.toFixed(1) : '—'}</td>
-                  <td style={est.tdNum}>{r ? r.cap : '—'}</td>
+                  <td style={est.tdNum}>
+                    {r && r.totalParada > 0 ? (
+                      <>
+                        {formatarDuracao(r.totalParada)}
+                        <span style={est.meta}> ({r.nParadas})</span>
+                      </>
+                    ) : '—'}
+                  </td>
                   <td style={est.td}>
                     {r ? (
                       <span style={est.estabilidade}>
@@ -953,6 +1076,34 @@ const est = {
     borderRadius: raio.sm, ...tipo('micro'), fontSize: 10,
   },
   meta: { color: claro.textoFraco, ...tipo('legenda') },
+
+  /* ---- paradas do estudo ---- */
+  paradasResumo: { ...tipo('legenda'), color: claro.textoMedio },
+  vazioParadas: {
+    margin: 0, padding: `${espaco.xl}px`, ...tipo('corpo'),
+    color: claro.textoMedio, lineHeight: 1.6, maxWidth: 720,
+  },
+  listaMotivos: {
+    display: 'flex', flexDirection: 'column', gap: espaco.lg,
+    padding: `${espaco.lg}px ${espaco.xl}px`,
+  },
+  linhaMotivo: { display: 'flex', flexDirection: 'column', gap: espaco.xs, minWidth: 0 },
+  motivoTopo: {
+    display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+    gap: espaco.md, minWidth: 0,
+  },
+  motivoNome: { ...tipo('corpoF'), color: claro.texto },
+  motivoNumero: { ...tipo('corpo'), ...numeros, color: claro.texto, whiteSpace: 'nowrap' },
+  barraTrilho: { height: 8, borderRadius: raio.pill, background: claro.fundo, overflow: 'hidden' },
+  // Laranja de atencao, nao o vermelho da marca: parada e' perda a tratar,
+  // e o vermelho aqui e' identidade, nunca status.
+  barraValor: { height: '100%', background: claro.atencao, borderRadius: raio.pill },
+  motivoAcao: { ...tipo('legenda'), color: claro.textoFraco, lineHeight: 1.45 },
+  notaParadas: {
+    margin: 0, padding: `${espaco.lg}px ${espaco.xl}px`,
+    borderTop: `1px solid ${claro.borda}`,
+    ...tipo('legenda'), color: claro.textoFraco, lineHeight: 1.5,
+  },
   estabilidade: { display: 'inline-flex', alignItems: 'center', gap: espaco.sm, ...tipo('corpo') },
   ponto: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
   botaoAcaoLinha: {

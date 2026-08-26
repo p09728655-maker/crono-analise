@@ -61,6 +61,29 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(await p.locator('text=/Leitura limitada/').count() > 0,
     'avisa o limite matematico da carta ao selecionar operacao com 6 ciclos');
 
+  /* ------------------------------------------------------------ paradas */
+  /**
+   * A coleta registrava a parada com motivo e descontava do ciclo, mas
+   * nenhuma tela mostrava: o dado morria no banco. Perda medida que ninguem
+   * le nao vira melhoria.
+   */
+  await p.locator('[role="tab"]', { hasText: 'Paradas' }).click();
+  await p.waitForTimeout(300);
+  const painelParadas = await p.locator('.somente-tela').innerText();
+  checar(/19 min/.test(painelParadas), 'soma o tempo parado do estudo inteiro (12 + 4 + 3 min)');
+  checar(/3 parada\(s\)/.test(painelParadas), 'conta as ocorrencias');
+  checar(painelParadas.indexOf('Falta de material') < painelParadas.indexOf('Setup / Troca'),
+    'motivos em ordem de Pareto — a maior perda primeiro');
+  checar(/kanban/i.test(painelParadas), 'cada motivo vem com a acao que ele pede');
+  checar(/% do tempo observado/.test(painelParadas), 'declara a base do percentual');
+  checar(/não entra/i.test(painelParadas), 'diz que o tempo parado nao infla o tempo observado');
+
+  // Tabela de operacoes mostra o parado por operacao.
+  await p.locator('[role="tab"]', { hasText: 'Operações' }).click();
+  await p.waitForTimeout(300);
+  checar(/16 min/.test(await p.locator('.somente-tela table').first().innerText()),
+    'a tabela de operacoes tambem mostra o parado de cada uma');
+
   // O grafico precisa preencher o container, nao ficar centralizado num vazio.
   await p.locator('[role="tab"]', { hasText: 'Yamazumi' }).click();
   await p.waitForTimeout(400);
@@ -96,6 +119,13 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   await p.waitForTimeout(400);
   checar(await p.locator('[aria-label="Análise com IA"]').count() === 1,
     'secao Analise com IA presente no painel');
+
+  // O papel leva as paradas mesmo com outra aba aberta: o relatorio traz tudo.
+  const folha = await p.locator('.somente-impressao').innerText();
+  checar(/Paradas registradas na coleta/.test(folha), 'folha impressa tem a secao de paradas');
+  checar(/Falta de material/.test(folha) && /kanban/i.test(folha),
+    'folha traz motivo e acao recomendada');
+  checar(/Ação recomendada/.test(folha), 'a coluna de acao esta na folha');
 
   /* ------------------------------------------------ tela que nao treme */
   /**

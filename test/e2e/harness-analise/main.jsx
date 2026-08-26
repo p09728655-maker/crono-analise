@@ -10,9 +10,19 @@ function ciclos(base, dispersao, n, semente = 1) {
 
 const OPERACOES = [
   { id: 'op-1', nome: 'Furar lateral', fr_pct: 100, tempos: ciclos(9800, 400, 14, 7), paradas: [] },
-  { id: 'op-2', nome: 'Furar fundo', fr_pct: 95, tempos: ciclos(7200, 900, 12, 21), paradas: [{ duracao: 45000 }] },
+  {
+    id: 'op-2', nome: 'Furar fundo', fr_pct: 95, tempos: ciclos(7200, 900, 12, 21),
+    // Como o servidor entrega: duracao_ms do banco e duracao ja' convertida.
+    paradas: [
+      { motivo: 'falta_material', duracao_ms: 720000, duracao: 720000 },
+      { motivo: 'setup', duracao_ms: 240000, duracao: 240000 },
+    ],
+  },
   // Peca com 3 furacoes: o ciclo e' rapido, mas a peca exige tres.
-  { id: 'op-3', nome: 'Trocar broca', fr_pct: 100, ciclos_por_peca: 3, tempos: ciclos(4700, 900, 13, 33), paradas: [] },
+  {
+    id: 'op-3', nome: 'Trocar broca', fr_pct: 100, ciclos_por_peca: 3, tempos: ciclos(4700, 900, 13, 33),
+    paradas: [{ motivo: 'ferramenta', duracao_ms: 180000, duracao: 180000 }],
+  },
   { id: 'op-4', nome: 'Conferir furo', fr_pct: 105, tempos: ciclos(4100, 300, 6, 44), paradas: [] },
 ];
 
