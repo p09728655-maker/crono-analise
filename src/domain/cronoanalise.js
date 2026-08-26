@@ -40,6 +40,26 @@ export const MOTIVOS_PARADA = [
 ];
 
 /**
+ * Periodo conferido, como "10:16–10:36".
+ *
+ * Le os INSTANTES (iniciado_em/finalizado_em). Cai para o texto "HH:MM" das
+ * colunas antigas enquanto o passo 3 da migracao nao as derruba — e' o que
+ * mantem a tela de pe' durante a transicao, com o app novo lendo um banco
+ * que ainda tem as duas formas.
+ *
+ * A hora sai no fuso do computador que esta' olhando, que e' o da fabrica.
+ */
+export function faixaHoraria(conferencia) {
+  const c = conferencia || {};
+  if (c.iniciado_em && c.finalizado_em) {
+    const hm = (v) => new Date(v).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return `${hm(c.iniciado_em)}–${hm(c.finalizado_em)}`;
+  }
+  if (c.hora_inicial && c.hora_final) return `${c.hora_inicial}–${c.hora_final}`;
+  return null;
+}
+
+/**
  * Catalogo em vigor.
  *
  * Comeca nos motivos de fabrica e e' trocado por src/lib/motivosParada.js

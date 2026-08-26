@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
-  CRITERIOS_CONFERENCIA, conferenciaRapida, formatarDuracao, formatarSegundos,
+  CRITERIOS_CONFERENCIA, conferenciaRapida, faixaHoraria, formatarDuracao, formatarSegundos,
   resumirConferencias, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
@@ -265,7 +265,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                           <td style={est.tdCurto}>{c.maquina || '—'}</td>
                           <td style={est.tdCurto}>{c.peca || '—'}</td>
                           <td style={est.tdFraco}>
-                            {c.hora_inicial && c.hora_final ? `${c.hora_inicial}–${c.hora_final}` : '—'}
+                            {faixaHoraria(c) || '—'}
                           </td>
                           <td style={est.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
                           <td style={est.tdNum} title={par.porMotivo.map((m) => `${m.rotulo}: ${formatarDuracao(m.ms)}`).join(' · ')}>
@@ -336,9 +336,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
               <h2 style={est.tituloModal}>Excluir conferência?</h2>
               <p style={est.textoModal}>
                 <strong>{[confirmando.maquina, confirmando.peca].filter(Boolean).join(' · ') || 'Sem identificação'}</strong>
-                {confirmando.hora_inicial && confirmando.hora_final
-                  ? ` · ${confirmando.hora_inicial}–${confirmando.hora_final}`
-                  : ''}
+                {faixaHoraria(confirmando) ? ` · ${faixaHoraria(confirmando)}` : ''}
                 {' · '}{confirmando.pecas} pç
               </p>
               <p style={est.textoModal}>
@@ -426,9 +424,7 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
         <h2 style={est.tituloModal}>Paradas do período</h2>
         <p style={est.textoModal}>
           <strong>{[conferencia.maquina, conferencia.peca].filter(Boolean).join(' · ') || 'Sem identificação'}</strong>
-          {conferencia.hora_inicial && conferencia.hora_final
-            ? ` · ${conferencia.hora_inicial}–${conferencia.hora_final}`
-            : ''}
+          {faixaHoraria(conferencia) ? ` · ${faixaHoraria(conferencia)}` : ''}
           {' · '}{formatarDuracao(duracaoMs)} · {conferencia.pecas} pç
         </p>
         <p style={est.textoModal}>
@@ -746,7 +742,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
                 <td style={imp.td}>{formatarDataHora(c.salvo_em)}</td>
                 <td style={imp.td}>{c.maquina || '—'}</td>
                 <td style={imp.td}>{c.peca || '—'}</td>
-                <td style={imp.td}>{c.hora_inicial && c.hora_final ? `${c.hora_inicial}–${c.hora_final}` : '—'}</td>
+                <td style={imp.td}>{faixaHoraria(c) || '—'}</td>
                 <td style={imp.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
                 <td style={imp.tdNum}>{par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}</td>
                 <td style={imp.tdNum}>{c.pecas}</td>

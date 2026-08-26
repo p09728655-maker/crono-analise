@@ -45,26 +45,36 @@ function codigoDe(valor) {
   return limpo;
 }
 
-/** Motivo ja' usado por alguma parada — de estudo ou de conferencia. */
+/**
+ * Motivo ja' usado por alguma parada — de estudo ou de conferencia.
+ *
+ * Uma consulta so': desde que a parada de conferencia virou linha, as duas
+ * origens moram na mesma tabela e se alcanca a empresa por qualquer uma
+ * delas (operacao -> estudo -> empresa, ou conferencia -> empresa).
+ */
 async function estaEmUso(empresaId, codigo, rotulo) {
-  const [daColeta] = await sql`
+  const [usada] = await sql`
     SELECT 1 AS usado
       FROM paradas p
-      JOIN operacoes o ON o.id = p.operacao_id
-      JOIN estudos e   ON e.id = o.estudo_id
-     WHERE e.empresa_id = ${empresaId} AND p.motivo IN (${codigo}, ${rotulo})
+      LEFT JOIN operacoes o    ON o.id = p.operacao_id
+      LEFT JOIN estudos e      ON e.id = o.estudo_id
+      LEFT JOIN conferencias c ON c.id = p.conferencia_id
+     WHERE p.motivo IN (${codigo}, ${rotulo})
+       AND (e.empresa_id = ${empresaId} OR c.empresa_id = ${empresaId})
      LIMIT 1`;
-  if (daColeta) return true;
+  if (usada) return true;
 
-  // A parada da conferencia mora no jsonb da propria linha.
-  const [daConferencia] = await sql`
+  // Ate' o passo 3 da migracao a coluna jsonb ainda existe, e um deploy
+  // antigo rodando em paralelo pode ter escrito nela. Enquanto ela estiver
+  // de pe', desativar continua sendo a resposta certa para o que houver la'.
+  const [noJsonb] = await sql`
     SELECT 1 AS usado
       FROM conferencias
      WHERE empresa_id = ${empresaId}
        AND (paradas @> ${JSON.stringify([{ motivo: codigo }])}::jsonb
          OR paradas @> ${JSON.stringify([{ motivo: rotulo }])}::jsonb)
      LIMIT 1`;
-  return Boolean(daConferencia);
+  return Boolean(noJsonb);
 }
 
 const listar = (empresaId) => sql`

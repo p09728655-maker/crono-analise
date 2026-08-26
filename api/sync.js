@@ -18,6 +18,16 @@ import { dataIso, hora, inteiro, lista, paradasDaConferencia, texto, uuid } from
 
 const MAX_ITENS = 500;
 
+/**
+ * Fuso da fabrica.
+ *
+ * O analista digita "10:16" querendo dizer 10:16 no chao de fabrica. Para
+ * virar instante, a data precisa ser lida no mesmo fuso — deixar isso a
+ * cargo do TimeZone da sessao faria o mesmo dado cair em horas diferentes
+ * conforme onde a funcao serverless subiu.
+ */
+const FUSO = 'America/Sao_Paulo';
+
 export default handler(async (req, res) => {
   permitir(req, ['POST']);
   const { empresaId } = await autenticar(req);
@@ -53,6 +63,12 @@ export default handler(async (req, res) => {
   // Vai para a mesma fila porque a garantia e' a mesma — o dado nasceu no
   // aparelho e nao pode se perder nem duplicar. Ate' 24h de periodo: e' o
   // maior turno concebivel; acima disso e' hora digitada errada.
+  //
+  // O QUE O APARELHO MANDA NAO MUDOU: ele continua enviando "HH:MM" e a
+  // lista de paradas embutida. Quem converte para instante e quem quebra as
+  // paradas em linhas e' o servidor. Isso e' de proposito — a fila offline e'
+  // o caminho mais critico do sistema, e mexer no formato dela obrigaria o
+  // tablet que passou dias sem rede a falar uma lingua que ele nao conhece.
   const confLimpas = conferencias.map((c, i) => ({
     clientId: uuid(c.clientId, `conferencias[${i}].clientId`),
     maquina: texto(c.maquina, `conferencias[${i}].maquina`, { max: 120 }),
@@ -104,12 +120,64 @@ export default handler(async (req, res) => {
     }
 
     for (const c of confLimpas) {
-      const r = await tx`
-        INSERT INTO conferencias (client_id, empresa_id, maquina, peca, hora_inicial, hora_final, duracao_ms, pecas, paradas, salvo_em)
-        VALUES (${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca}, ${c.horaInicial}, ${c.horaFinal}, ${c.duracaoMs}, ${c.pecas}, ${JSON.stringify(c.paradas)}::jsonb, ${c.salvoEm})
+      const temHorario = Boolean(c.horaInicial && c.horaFinal);
+
+      /**
+       * O periodo vira INSTANTE aqui dentro.
+       *
+       * Com horario digitado, a data sai de salvo_em lida no fuso da fabrica
+       * — "10:16" e' 10:16 no chao de fabrica, nao em UTC. Sem horario (o
+       * caminho do cronometro ao vivo), o fim e' o proprio salvo_em e o
+       * inicio sai dele menos a duracao cronometrada: e' literalmente o que
+       * aconteceu, e antes essa conferencia ficava sem periodo nenhum.
+       *
+       * hora_inicial/hora_final continuam sendo gravados ate' o passo 3 da
+       * migracao: se este deploy voltar atras, nada se perde.
+       *
+       * A coluna `paradas` (jsonb) NAO e' mais escrita — fica no DEFAULT '[]'
+       * ate' o passo 3 derruba-la. Escrever nas duas fontes so' recriaria o
+       * problema que esta mudanca veio resolver, e nao havia o que preservar:
+       * a coluna estava com zero paradas em todo o banco.
+       */
+      const [linha] = await tx`
+        WITH periodo AS (
+          SELECT
+            CASE WHEN ${temHorario}
+              THEN ((${c.salvoEm}::timestamptz AT TIME ZONE ${FUSO})::date
+                    + ${c.horaInicial || '00:00'}::time) AT TIME ZONE ${FUSO}
+              ELSE ${c.salvoEm}::timestamptz - make_interval(secs => ${c.duracaoMs} / 1000.0)
+            END AS ini,
+            CASE WHEN ${temHorario}
+              THEN ((${c.salvoEm}::timestamptz AT TIME ZONE ${FUSO})::date
+                    + ${c.horaFinal || '00:00'}::time) AT TIME ZONE ${FUSO}
+              ELSE ${c.salvoEm}::timestamptz
+            END AS fim
+        )
+        INSERT INTO conferencias
+          (client_id, empresa_id, maquina, peca, hora_inicial, hora_final,
+           iniciado_em, finalizado_em, duracao_ms, pecas, salvo_em)
+        SELECT ${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca},
+               ${c.horaInicial}, ${c.horaFinal},
+               p.ini,
+               -- Periodo que atravessa a meia-noite: o fim caiu no dia seguinte.
+               CASE WHEN p.fim < p.ini THEN p.fim + interval '1 day' ELSE p.fim END,
+               ${c.duracaoMs}, ${c.pecas}, ${c.salvoEm}
+          FROM periodo p
         ON CONFLICT (client_id) DO NOTHING
-        RETURNING client_id`;
-      inseridos += r.length;
+        RETURNING id`;
+
+      // Sem linha = a conferencia ja' estava la'. E' reenvio da fila, e as
+      // paradas dela ja' entraram junto na primeira vez: inserir de novo
+      // duplicaria o tempo parado do posto.
+      if (!linha) continue;
+      inseridos += 1;
+
+      for (const parada of c.paradas) {
+        await tx`
+          INSERT INTO paradas (client_id, conferencia_id, motivo, observacao, duracao_ms, iniciado_em)
+          VALUES (${crypto.randomUUID()}, ${linha.id}, ${parada.motivo},
+                  ${parada.observacao}, ${parada.duracaoMs}, ${c.salvoEm})`;
+      }
     }
 
     return inseridos;

@@ -85,18 +85,35 @@ CREATE UNIQUE INDEX IF NOT EXISTS observacoes_client_unq ON observacoes (client_
 CREATE INDEX IF NOT EXISTS observacoes_operacao_idx ON observacoes (operacao_id, coletado_em);
 
 -- ---------------------------------------------------------------- paradas
+-- FONTE OFICIAL de toda parada, das duas naturezas de medicao:
+--   operacao_id     -> parada do estudo ciclo a ciclo
+--   conferencia_id  -> parada do periodo conferido na furadeira
+-- Exatamente UMA das duas, nunca as duas, nunca nenhuma (paradas_origem_chk).
 CREATE TABLE IF NOT EXISTS paradas (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id    uuid NOT NULL,
-  operacao_id  uuid NOT NULL REFERENCES operacoes(id) ON DELETE CASCADE,
-  motivo       text NOT NULL,
-  observacao   text,
-  duracao_ms   bigint NOT NULL CHECK (duracao_ms > 0),
-  iniciado_em  timestamptz NOT NULL,
-  criado_em    timestamptz NOT NULL DEFAULT now()
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id      uuid NOT NULL,
+  operacao_id    uuid REFERENCES operacoes(id) ON DELETE CASCADE,
+  -- A FK para conferencias e' adicionada MAIS ABAIXO: aquela tabela ainda
+  -- nao existe neste ponto do arquivo.
+  conferencia_id uuid,
+  motivo         text NOT NULL,
+  observacao     text,
+  duracao_ms     bigint NOT NULL CHECK (duracao_ms > 0),
+  iniciado_em    timestamptz NOT NULL,
+  criado_em      timestamptz NOT NULL DEFAULT now()
+);
+-- Banco que ja existia: a coluna nasceu NOT NULL e a origem passa a ser dupla.
+ALTER TABLE paradas ADD COLUMN IF NOT EXISTS conferencia_id uuid;
+ALTER TABLE paradas ALTER COLUMN operacao_id DROP NOT NULL;
+ALTER TABLE paradas DROP CONSTRAINT IF EXISTS paradas_origem_chk;
+ALTER TABLE paradas ADD CONSTRAINT paradas_origem_chk CHECK (
+  (operacao_id IS NOT NULL AND conferencia_id IS NULL) OR
+  (operacao_id IS NULL     AND conferencia_id IS NOT NULL)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS paradas_client_unq ON paradas (client_id);
 CREATE INDEX IF NOT EXISTS paradas_operacao_idx ON paradas (operacao_id);
+CREATE INDEX IF NOT EXISTS paradas_conferencia_idx ON paradas (conferencia_id)
+  WHERE conferencia_id IS NOT NULL;
 
 -- ------------------------------------------------------------ conferencias
 -- Conferencia rapida sincronizada do aparelho: hora inicial, hora final e
@@ -111,17 +128,27 @@ CREATE TABLE IF NOT EXISTS conferencias (
   empresa_id   uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
   maquina      text,                      -- posto conferido (ex.: "Furadeira 03")
   peca         text,
+  -- TRANSICAO: hora_inicial/hora_final sao o formato antigo (texto "HH:MM")
+  -- e saem no passo 3 da migracao, depois que todo app publicado estiver
+  -- lendo os instantes. Ate' la' os dois convivem, e o servidor grava ambos.
   hora_inicial text CHECK (hora_inicial IS NULL OR hora_inicial ~ '^\d{2}:\d{2}$'),
   hora_final   text CHECK (hora_final   IS NULL OR hora_final   ~ '^\d{2}:\d{2}$'),
+  -- O periodo como INSTANTE. Texto nao subtrai: com "HH:MM" a duracao tinha
+  -- de vir gravada a parte, o banco nao conseguia validar a ordem e um
+  -- periodo que atravessa a meia-noite nao tinha representacao possivel.
+  iniciado_em   timestamptz,
+  finalizado_em timestamptz,
   duracao_ms   bigint  NOT NULL CHECK (duracao_ms > 0),
   pecas        integer NOT NULL CHECK (pecas > 0),
-  -- Paradas DENTRO do periodo conferido: [{motivo, duracaoMs, observacao}].
-  -- Setup, falta de material e manutencao nao sao lentidao da maquina — sem
-  -- separa-las, o mesmo posto parece lento no dia de troca de lote. Ficam na
-  -- propria linha (jsonb) e nao em tabela filha porque nascem e sobem junto
-  -- com a conferencia, pela mesma fila offline e no mesmo INSERT idempotente:
-  -- uma tabela a parte exigiria resolver o id da conferencia no meio do lote,
-  -- sem nenhum ganho de consulta (parada de conferencia so' se le com ela).
+  -- TRANSICAO: as paradas da conferencia moravam AQUI, num jsonb. Duas
+  -- fontes para o mesmo conceito (esta coluna e a tabela `paradas`) custavam
+  -- dois caminhos de leitura, dois de escrita, e um Pareto de perdas que
+  -- precisava unir as duas antes de somar. A fonte oficial agora e a tabela
+  -- `paradas`, via paradas.conferencia_id; a coluna sai no passo 3.
+  --
+  -- O argumento original — "nascem e sobem no mesmo INSERT idempotente" —
+  -- continua valendo, e por isso o /api/sync insere a mae e as filhas na
+  -- MESMA transacao, e so' insere filhas quando a mae foi de fato criada.
   paradas      jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(paradas) = 'array'),
   salvo_em     timestamptz NOT NULL,      -- horario real do aparelho
   -- Medicao atipica (turno interrompido, lote de teste) sai dos calculos sem
@@ -134,6 +161,49 @@ CREATE TABLE IF NOT EXISTS conferencias (
 CREATE UNIQUE INDEX IF NOT EXISTS conferencias_client_unq ON conferencias (client_id);
 CREATE INDEX IF NOT EXISTS conferencias_empresa_idx ON conferencias (empresa_id, salvo_em DESC);
 CREATE INDEX IF NOT EXISTS conferencias_ativas_idx ON conferencias (empresa_id, arquivada, salvo_em DESC);
+-- Banco que ja existia: `CREATE TABLE IF NOT EXISTS` acima e' no-op, entao as
+-- colunas novas precisam vir por ALTER. Sem isto, rodar este arquivo como
+-- migracao falha no indice logo abaixo.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS iniciado_em   timestamptz;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS finalizado_em timestamptz;
+
+-- Converte o horario de texto para instante. A data vem de salvo_em lida no
+-- fuso da fabrica — "07:00" e' 07:00 no chao de fabrica, nao em UTC. Roda uma
+-- vez: quem ja tem instante nao e' tocado.
+UPDATE conferencias SET
+  iniciado_em = ((salvo_em AT TIME ZONE 'America/Sao_Paulo')::date
+                 + hora_inicial::time) AT TIME ZONE 'America/Sao_Paulo',
+  finalizado_em = ((salvo_em AT TIME ZONE 'America/Sao_Paulo')::date
+                 + hora_final::time) AT TIME ZONE 'America/Sao_Paulo'
+ WHERE hora_inicial IS NOT NULL AND hora_final IS NOT NULL AND iniciado_em IS NULL;
+
+-- Periodo que atravessa a meia-noite: o fim caiu no dia seguinte.
+UPDATE conferencias SET finalizado_em = finalizado_em + interval '1 day'
+ WHERE finalizado_em IS NOT NULL AND finalizado_em < iniciado_em;
+
+CREATE INDEX IF NOT EXISTS conferencias_iniciado_idx ON conferencias (empresa_id, iniciado_em DESC);
+
+-- A FK que ficou pendente la em cima, agora que conferencias existe.
+ALTER TABLE paradas DROP CONSTRAINT IF EXISTS paradas_conferencia_id_fkey;
+ALTER TABLE paradas ADD CONSTRAINT paradas_conferencia_id_fkey
+  FOREIGN KEY (conferencia_id) REFERENCES conferencias(id) ON DELETE CASCADE;
+
+-- Traz para a tabela as paradas que ainda estiverem no jsonb da conferencia.
+-- Idempotente: conferencia que ja tem parada em linha nao e' tocada de novo.
+INSERT INTO paradas (client_id, conferencia_id, motivo, observacao, duracao_ms, iniciado_em)
+SELECT gen_random_uuid(), c.id,
+       p->>'motivo',
+       nullif(p->>'observacao', ''),
+       (p->>'duracaoMs')::bigint,
+       coalesce(c.iniciado_em, c.salvo_em)
+  FROM conferencias c
+  CROSS JOIN LATERAL jsonb_array_elements(c.paradas) AS p
+ WHERE jsonb_array_length(c.paradas) > 0
+   AND (p->>'duracaoMs')::bigint > 0
+   AND NOT EXISTS (SELECT 1 FROM paradas x WHERE x.conferencia_id = c.id);
+ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_periodo_chk;
+ALTER TABLE conferencias ADD CONSTRAINT conferencias_periodo_chk
+  CHECK (iniciado_em IS NULL OR finalizado_em IS NULL OR finalizado_em > iniciado_em);
 
 -- ------------------------------------------------------- motivos_parada
 -- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o
@@ -178,6 +248,18 @@ CREATE TABLE IF NOT EXISTS configuracoes (
   atualizado_em timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (empresa_id, chave)
 );
+
+-- ---------------------------------------------------------------- comentarios
+-- client_id ja foi lido como "identificador do aparelho". Nao e: e uma chave
+-- por LINHA, e o UNIQUE em cima dela e o que impede o ciclo de entrar duas
+-- vezes quando o wifi cai no meio do envio. Fica escrito no proprio banco,
+-- para quem abrir o schema sem ler o codigo.
+COMMENT ON COLUMN observacoes.client_id IS
+  'Chave de idempotencia da linha, gerada no aparelho ANTES de ir para a rede. Uma por registro — NAO identifica aparelho. E o que torna o reenvio da fila offline seguro: o indice UNIQUE recusa a repeticao.';
+COMMENT ON COLUMN paradas.client_id      IS 'Idem observacoes.client_id: chave de idempotencia por linha, nao identificador de aparelho.';
+COMMENT ON COLUMN conferencias.client_id IS 'Idem observacoes.client_id: chave de idempotencia por linha, nao identificador de aparelho.';
+COMMENT ON COLUMN paradas.conferencia_id IS
+  'Parada de uma conferencia rapida (ritmo da furadeira). Exclusiva com operacao_id: toda parada tem exatamente uma origem — ver paradas_origem_chk.';
 
 -- ------------------------------------------------------------------ gatilho
 CREATE OR REPLACE FUNCTION toca_atualizado_em() RETURNS trigger AS $$

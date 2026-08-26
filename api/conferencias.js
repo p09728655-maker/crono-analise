@@ -32,13 +32,25 @@ export default handler(async (req, res) => {
     // ?arquivadas=1 inverte o filtro, como na lista de estudos.
     const soArquivadas = String(req.query?.arquivadas ?? '') === '1';
 
+    // As paradas vem da TABELA, montadas no mesmo formato que o app sempre
+    // recebeu ({motivo, duracaoMs, observacao}). A tela nao precisa saber
+    // que elas deixaram de morar dentro da conferencia.
     const linhas = await sql`
-      SELECT id, maquina, peca, hora_inicial, hora_final, duracao_ms, pecas, paradas, salvo_em, arquivada
-        FROM conferencias
-       WHERE empresa_id = ${empresaId}
-         AND arquivada = ${soArquivadas}
-         ${maquina ? sql`AND maquina = ${maquina}` : sql``}
-       ORDER BY salvo_em DESC
+      SELECT c.id, c.maquina, c.peca, c.hora_inicial, c.hora_final,
+             c.iniciado_em, c.finalizado_em, c.duracao_ms, c.pecas, c.salvo_em, c.arquivada,
+             coalesce((
+               SELECT jsonb_agg(jsonb_build_object(
+                        'motivo', p.motivo,
+                        'duracaoMs', p.duracao_ms,
+                        'observacao', p.observacao
+                      ) ORDER BY p.iniciado_em, p.criado_em)
+                 FROM paradas p WHERE p.conferencia_id = c.id
+             ), '[]'::jsonb) AS paradas
+        FROM conferencias c
+       WHERE c.empresa_id = ${empresaId}
+         AND c.arquivada = ${soArquivadas}
+         ${maquina ? sql`AND c.maquina = ${maquina}` : sql``}
+       ORDER BY c.salvo_em DESC
        LIMIT ${MAX_LINHAS}`;
 
     // A contagem do outro lado vem junto: a tela precisa saber se existe
@@ -52,7 +64,8 @@ export default handler(async (req, res) => {
 
   const conferenciaId = uuid(id, 'id');
   const [existe] = await sql`
-    SELECT id, duracao_ms FROM conferencias WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}`;
+    SELECT id, duracao_ms, iniciado_em, salvo_em
+      FROM conferencias WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}`;
   if (!existe) throw naoEncontrado('Conferencia nao encontrada');
 
   if (req.method === 'PATCH') {
@@ -72,9 +85,25 @@ export default handler(async (req, res) => {
       if (somaMs >= Number(existe.duracao_ms)) {
         throw erroValidacao('As paradas somam o periodo inteiro da conferencia — sobraria zero de maquina rodando');
       }
-      await sql`
-        UPDATE conferencias SET paradas = ${JSON.stringify(paradas)}::jsonb
-         WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}`;
+      /**
+       * A lista vai INTEIRA: apaga e regrava, numa transacao so'. E' o
+       * estado final das paradas daquela conferencia, nao um acrescimo —
+       * assim corrigir e apagar usam o mesmo caminho, como sempre usaram
+       * quando isso era um jsonb.
+       *
+       * A coluna jsonb nao e' mais escrita: a tabela e a fonte oficial, e
+       * manter as duas em dia so' recriaria a duplicidade que esta mudanca
+       * veio resolver. A coluna sai no passo 3 da migracao.
+       */
+      await sql.begin(async (tx) => {
+        await tx`DELETE FROM paradas WHERE conferencia_id = ${conferenciaId}`;
+        for (const p of paradas) {
+          await tx`
+            INSERT INTO paradas (client_id, conferencia_id, motivo, observacao, duracao_ms, iniciado_em)
+            VALUES (${crypto.randomUUID()}, ${conferenciaId}, ${p.motivo},
+                    ${p.observacao}, ${p.duracaoMs}, ${existe.iniciado_em || existe.salvo_em})`;
+        }
+      });
     }
 
     if (tem('arquivada')) {
@@ -84,8 +113,17 @@ export default handler(async (req, res) => {
     }
 
     const [linha] = await sql`
-      SELECT id, arquivada, paradas FROM conferencias
-       WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}`;
+      SELECT c.id, c.arquivada,
+             coalesce((
+               SELECT jsonb_agg(jsonb_build_object(
+                        'motivo', p.motivo,
+                        'duracaoMs', p.duracao_ms,
+                        'observacao', p.observacao
+                      ) ORDER BY p.iniciado_em, p.criado_em)
+                 FROM paradas p WHERE p.conferencia_id = c.id
+             ), '[]'::jsonb) AS paradas
+        FROM conferencias c
+       WHERE c.id = ${conferenciaId} AND c.empresa_id = ${empresaId}`;
     return json(res, 200, { conferencia: linha });
   }
 

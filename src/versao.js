@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.31.0',
+    data: '2026-08-26',
+    titulo: 'Uma fonte só para parada, e período que o banco sabe contar',
+    itens: [
+      'A parada da conferência era guardada dentro da própria linha e a do estudo numa tabela — duas fontes para a mesma coisa. Agora é uma só, e o banco garante que toda parada tem exatamente uma origem: ou é de uma operação do estudo, ou de uma conferência de furadeira. O Pareto de perdas deixa de precisar juntar duas listas antes de somar.',
+      'A hora da conferência virou instante de verdade. Antes era texto ("07:00"), e texto não subtrai: a duração tinha de vir gravada à parte e um período que virasse a meia-noite não tinha como ser representado. Agora dá para o banco calcular, ordenar e validar que o fim vem depois do início.',
+      'Conferência feita no cronômetro ao vivo também passou a ter período: o fim é a hora em que você salvou, e o início sai dela menos o tempo cronometrado. Antes essas medições ficavam sem horário nenhum na tela e no relatório.',
+      'Nada mudou no tablet. Ele continua mandando o horário e as paradas do mesmo jeito — quem converte é o servidor. Isso é de propósito: um aparelho que passou dias sem rede não pode precisar aprender um formato novo para conseguir enviar o que coletou.',
+      'Consertado, no caminho: reenviar a mesma conferência podia duplicar as paradas dela, dobrando o tempo parado do posto no relatório. E seis testes de integração que falhavam há tempos — a lista de paradas estava sendo gravada com a codificação errada.',
+    ],
+  },
+  {
     versao: '2.30.1',
     data: '2026-08-26',
     titulo: 'Erro que explica, e o filtro que não filtrava nada',

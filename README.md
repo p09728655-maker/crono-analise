@@ -292,6 +292,53 @@ O motivo é gravado pelo **código** (`setup`), não pelo rótulo: revisar o
 texto na tela não pode quebrar o agrupamento de relatório antigo — e o
 rótulo antigo continua sendo reconhecido.
 
+### Uma fonte só para parada
+
+A parada da conferência morava dentro da própria linha, num `jsonb`, e a do
+estudo numa tabela. Duas fontes para o mesmo conceito custavam dois caminhos
+de leitura, dois de escrita, e um Pareto de perdas que precisava unir as
+duas antes de somar.
+
+A fonte oficial agora é a tabela `paradas`, para as duas naturezas de
+medição, com origem exclusiva garantida no banco:
+
+```sql
+CHECK ((operacao_id IS NOT NULL AND conferencia_id IS NULL) OR
+       (operacao_id IS NULL     AND conferencia_id IS NOT NULL))
+```
+
+O argumento que criou o `jsonb` continua de pé — parada nasce e sobe junto
+com a conferência, pela mesma fila offline — e por isso `/api/sync` grava a
+mãe e as filhas na **mesma transação**, e só insere filhas quando a mãe foi
+de fato criada. Reenvio da fila não duplica o tempo parado do posto.
+
+**O que o aparelho manda não mudou.** O tablet continua enviando `"HH:MM"` e
+a lista de paradas embutida; quem converte e quem quebra em linhas é o
+servidor. A fila offline é o caminho mais crítico do sistema, e um tablet
+que passou dias sem rede não pode precisar falar uma língua nova.
+
+### Período em instante, não em texto
+
+`hora_inicial`/`hora_final` eram texto `"HH:MM"`. Texto não subtrai: a
+duração tinha de vir gravada à parte, o banco não validava a ordem e um
+período que atravessa a meia-noite não tinha representação. Agora há
+`iniciado_em`/`finalizado_em` (`timestamptz`), compostos no servidor a
+partir da data de `salvo_em` lida no fuso da fábrica — `"07:00"` é 07:00 no
+chão de fábrica, não em UTC.
+
+A conferência do **cronômetro ao vivo** também ganhou período: o fim é o
+próprio `salvo_em` e o início sai dele menos a duração cronometrada. Antes
+essa medição ficava sem período nenhum.
+
+### `client_id` não é o aparelho
+
+Já foi lido como identificador de dispositivo. Não é: é uma chave de
+idempotência **por linha**, gerada no aparelho antes de ir para a rede — 296
+observações, 296 valores distintos, uma linha cada. O índice `UNIQUE` em
+cima dela é o que impede o ciclo de entrar duas vezes quando o wi-fi cai no
+meio do envio. Está escrito no próprio banco, em `COMMENT ON COLUMN`, para
+quem abrir o schema sem ler o código.
+
 ### Cadastro dos motivos de parada (Ferramentas, no PC)
 
 A lista de motivos era do **código**: incluir "falta de energia" ou corrigir

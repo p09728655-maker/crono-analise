@@ -4,6 +4,7 @@
  * storage corrompido ou indisponivel.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import { faixaHoraria } from '../src/domain/cronoanalise.js';
 
 const memoria = new Map();
 let negarEscrita = false;
@@ -72,5 +73,34 @@ describe('conferencias salvas no aparelho', () => {
   it('aparelho que nega escrita devolve null — a UI avisa em vez de fingir', () => {
     negarEscrita = true;
     expect(salvarConferencia(base)).toBeNull();
+  });
+});
+
+describe('faixa horaria da conferencia', () => {
+  /**
+   * A tela le o periodo dos INSTANTES desde a refatoracao. Mas o passo 3 da
+   * migracao ainda nao derrubou hora_inicial/hora_final, e um app publicado
+   * pode encontrar as duas formas no mesmo banco — inclusive na mesma tela.
+   */
+  it('prefere os instantes', () => {
+    const faixa = faixaHoraria({
+      iniciado_em: '2026-08-20T10:00:00.000Z',
+      finalizado_em: '2026-08-20T10:30:00.000Z',
+      hora_inicial: '99:99', hora_final: '99:99',
+    });
+    expect(faixa).toMatch(/^\d{2}:\d{2}–\d{2}:\d{2}$/);
+    expect(faixa).not.toContain('99');
+  });
+
+  it('cai no texto antigo enquanto o instante nao existir', () => {
+    expect(faixaHoraria({ hora_inicial: '07:00', hora_final: '07:30' })).toBe('07:00–07:30');
+  });
+
+  it('sem periodo nenhum devolve nulo, para a tela mostrar o travessao', () => {
+    expect(faixaHoraria({})).toBeNull();
+    expect(faixaHoraria(null)).toBeNull();
+    // Metade do par nao e periodo.
+    expect(faixaHoraria({ hora_inicial: '07:00' })).toBeNull();
+    expect(faixaHoraria({ iniciado_em: '2026-08-20T10:00:00.000Z' })).toBeNull();
   });
 });
