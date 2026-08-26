@@ -180,31 +180,43 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
           /* No PC ha' espaco para o vazio APRESENTAR o sistema: o cartao
              central chama para a acao e a faixa abaixo explica, em tres
              passos, o que acontece depois de criar o estudo. */
+          /* A tela vazia responde, em ordem: onde estou, o que faco agora,
+             e qual e' o caminho depois disso. A acao principal fica sozinha
+             no cartao; os tres pilares vem DEPOIS e numerados, como
+             sequencia do estudo — nao como tres botoes concorrentes. */
           <div style={est.vazioArea}>
             <div style={est.vazioCartao}>
               <Simbolo tipo="cronometro" cor={t.fraco} />
+              <div style={est.vazioRotulo}>Estudo de Tempos</div>
               <h2 style={est.vazioTitulo}>Nenhum estudo cadastrado</h2>
               <p style={est.vazioTexto}>
                 {arquivados.length > 0
                   ? `Crie um estudo novo — ou abra "Estudos arquivados" no menu ao lado para restaurar um dos ${arquivados.length} que saíram da lista. Nenhum ciclo foi perdido.`
-                  : 'Crie seu primeiro estudo para começar a coletar ciclos e calcular o tempo padrão.'}
+                  : 'Crie um estudo novo para começar. Ele reúne as operações de um posto e os ciclos cronometrados nele.'}
               </p>
-              <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
+              <button type="button" style={est.botaoGrande} onClick={() => setCriando(true)}>
                 + Novo estudo
               </button>
             </div>
 
+            <div style={est.fluxoRotulo}>Depois de criar, o caminho é este</div>
             <div style={est.vazioFaixa}>
               {[
                 { icone: 'cronometro', titulo: 'Coleta', texto: 'Cronometre os ciclos das operações.' },
                 { icone: 'grafico', titulo: 'Análise', texto: 'Calcule o tempo padrão e a performance.' },
                 { icone: 'pessoas', titulo: 'Capacidade', texto: 'Dimensione o posto e a produção.' },
               ].map((bloco, i) => (
-                <div key={bloco.titulo} style={{ ...est.vazioBloco, ...(i > 0 ? est.vazioBlocoDivisa : {}) }}>
-                  <Simbolo tipo={bloco.icone} cor={t.vermelho} tamanho={26} />
-                  <div>
-                    <div style={est.vazioBlocoTitulo}>{bloco.titulo}</div>
-                    <div style={est.vazioBlocoTexto}>{bloco.texto}</div>
+                <div key={bloco.titulo} style={est.fluxoEtapa}>
+                  {/* A seta ANTES da etapa, nao depois: assim a ultima nao
+                      fica apontando para lugar nenhum. */}
+                  {i > 0 && <span style={est.fluxoSeta} aria-hidden="true">→</span>}
+                  <div style={est.vazioBloco}>
+                    <span style={est.fluxoNumero}>{i + 1}</span>
+                    <Simbolo tipo={bloco.icone} cor={t.vermelho} tamanho={26} />
+                    <div>
+                      <div style={est.vazioBlocoTitulo}>{bloco.titulo}</div>
+                      <div style={est.vazioBlocoTexto}>{bloco.texto}</div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1062,14 +1074,36 @@ function estilos(t, analise) {
     },
     vazioTitulo: { ...tipo('titulo'), margin: 0 },
     vazioTexto: { ...tipo('corpo'), margin: 0, color: t.medio, maxWidth: 400 },
+    // Rotulo do sistema acima do titulo: responde "onde estou" antes de
+    // "o que faco".
+    vazioRotulo: rotulo(t.fraco),
+    // Acao principal: maior que os botoes de ferramenta, sozinha no cartao.
+    botaoGrande: {
+      minHeight: 52, padding: `0 ${espaco.xxl}px`, marginTop: espaco.sm,
+      background: t.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
+      ...tipo('destaque'), cursor: 'pointer', fontFamily: 'inherit',
+      boxShadow: elevacao.baixa,
+    },
+
+    fluxoRotulo: { ...rotulo(t.fraco), marginTop: espaco.xl },
     vazioFaixa: {
-      width: '100%', maxWidth: 1080, marginTop: espaco.lg,
-      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+      width: '100%', maxWidth: 1080, marginTop: espaco.sm,
+      display: 'flex', alignItems: 'stretch', justifyContent: 'center',
+    },
+    fluxoEtapa: { display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 },
+    fluxoSeta: { flexShrink: 0, padding: `0 ${espaco.sm}px`, color: t.fraco, fontSize: 18 },
+    fluxoNumero: {
+      flexShrink: 0, width: 22, height: 22, borderRadius: raio.pill,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      background: t.realce, borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+      color: t.medio, ...tipo('micro'), fontWeight: 700,
+    },
+    vazioBloco: {
+      flex: 1, minWidth: 0,
+      display: 'flex', alignItems: 'center', gap: espaco.md, padding: espaco.lg,
       background: t.superficie, borderRadius: raio.lg,
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
     },
-    vazioBloco: { display: 'flex', alignItems: 'center', gap: espaco.md, padding: espaco.xl },
-    vazioBlocoDivisa: { borderLeftWidth: 1, borderLeftStyle: 'solid', borderLeftColor: t.borda },
     vazioBlocoTitulo: { ...tipo('corpoF') },
     vazioBlocoTexto: { ...tipo('legenda'), color: t.fraco, marginTop: 2 },
 

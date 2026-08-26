@@ -91,14 +91,22 @@ com FR, tolerância e tempo padrão, continua sendo papel do estudo. Por não
 depender de rede, o atalho na lista de coleta fica visível mesmo com a API
 fora do ar.
 
-### Menu lateral no PC
+### Primeira tela: hierarquia pelo fluxo
 
-A navegação da Análise vive numa **lateral fixa**: busca (produto, peça,
-máquina ou analista), lista de produtos com contagem, relatórios
-(Conferências, Estudos arquivados) e ações (Novo estudo, Importar, Chave da
-IA). A barra horizontal não crescia — a partir de sete botões ela empurrava
-o título e quebrava a hierarquia. A coleta (celular) não tem lateral: lá a
-tela é pequena e a tarefa é uma só.
+A tela inicial responde, nesta ordem: **onde estou** (identidade), **o que
+fazer agora** (`+ Novo estudo`, a única coisa vermelha do menu e a única
+ação em destaque), **quais estudos existem** (produtos com contagem,
+arquivados), e **qual é o caminho** — os três pilares como sequência
+numerada, ① Coleta → ② Análise → ③ Capacidade, e não como três botões
+concorrentes.
+
+Busca, Importar e Chave da IA vivem no bloco **Ferramentas**, no fim do
+menu: existem, mas não disputam a atenção. "Ir para a Coleta" fica discreto
+no rodapé — a coleta é a primeira etapa de um estudo, não uma quarta ação.
+
+A navegação vive numa **lateral fixa**; a barra horizontal não crescia — a
+partir de sete botões ela empurrava o título e quebrava a hierarquia. A
+coleta (celular) não tem lateral: lá a tela é pequena e a tarefa é uma só.
 
 ### Arquivar e restaurar
 
