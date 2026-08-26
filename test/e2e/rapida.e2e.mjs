@@ -60,6 +60,15 @@ checar(
   'conferencia salva aparece na lista com maquina, peca e ritmo',
 );
 
+/* ------------------------------ proxima peca na mesma maquina, emendada */
+await p.getByRole('button', { name: /COMEÇAR OUTRA PEÇA/ }).tap();
+checar(await p.locator('input[aria-label="Hora inicial"]').inputValue() === '07:10',
+  'outra peca: hora inicial emenda na hora final da anterior');
+checar(await p.locator('input[aria-label="Nome da peça"]').inputValue() === '',
+  'outra peca: campo da peca limpa para a proxima');
+checar(await p.locator('input[aria-label="Nome da máquina"]').inputValue() === 'Furadeira 03',
+  'outra peca: maquina fica — trocar de peca nao e trocar de posto');
+
 await p.reload();
 await salvas.waitFor({ timeout: 8000 });
 textoSalvas = await salvas.innerText();

@@ -86,7 +86,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
             )}
             {analise && (
               <button type="button" style={est.botaoSecundario} onClick={() => setImportando(true)}>
-                Importar roteiro
+                Importar
               </button>
             )}
             {temEstudos && (

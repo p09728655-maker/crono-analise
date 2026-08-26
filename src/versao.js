@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.15.0',
+    data: '2026-08-26',
+    titulo: 'Template da embalagem + critérios no relatório',
+    itens: [
+      'O botão Importar (Análise, no PC) agora aceita também o template de tempos .xlsx da embalagem (abas Config/Tempos/Paradas): as operações viram estudo pronto para cronometrar, e tempos já preenchidos entram como ciclos — sem digitar de novo.',
+      'O relatório de Conferências passou a se autoavaliar, como o estudo: mínimo de 3 conferências por máquina, 30 min de tempo total observado e nenhum período menor que 5 min. Máquina fora do critério aparece carimbada de "amostra insuficiente" — na tela e impressa, antes dos números.',
+      'A impressão do relatório de Conferências virou documento A4 de verdade: identificação, critérios, resumo por máquina (com CV entre conferências) e o dado bruto — em vez da tela jogada no papel.',
+      'Novo botão "Começar outra peça" na conferência rápida: mantém a máquina, emenda a hora inicial na hora final da peça anterior e limpa peça e quantidade — para conferir a linha inteira sem redigitar.',
+    ],
+  },
+  {
     versao: '2.14.0',
     data: '2026-08-26',
     titulo: 'Conferências no banco + estudo por máquina',

@@ -241,6 +241,24 @@ describe('resumirConferencias', () => {
     expect(grupos.map((g) => g.maquina).sort()).toEqual(['Seccionadora', 'Sem máquina']);
   });
 
+  it('o caso do print horrivel: 1 conferencia de 1 min NAO passa nos criterios', () => {
+    const [g] = resumirConferencias([{ maquina: 'Furadeira', duracaoMs: MIN, pecas: 200 }]);
+    expect(g.ritmoMedio).toBe(12000); // o numero continua la...
+    expect(g.confiavel).toBe(false);  // ...mas carimbado de nao-referencia
+    expect(g.motivos.length).toBe(3); // poucas medicoes, pouco tempo, periodo curto
+  });
+
+  it('3 conferencias, 30min+ observados e nenhuma curta: referencia OK', () => {
+    const [g] = resumirConferencias([
+      { maquina: 'F', duracaoMs: 10 * MIN, pecas: 100 },
+      { maquina: 'F', duracaoMs: 10 * MIN, pecas: 110 },
+      { maquina: 'F', duracaoMs: 10 * MIN, pecas: 90 },
+    ]);
+    expect(g.confiavel).toBe(true);
+    expect(g.motivos).toEqual([]);
+    expect(g.cvPct).toBeGreaterThan(0); // estabilidade vira referencia visivel
+  });
+
   it('mais medicoes primeiro; linha invalida (sem peca ou tempo) e ignorada', () => {
     const grupos = resumirConferencias([
       { maquina: 'B', duracaoMs: MIN, pecas: 10 },
