@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.31.1',
+    data: '2026-08-26',
+    titulo: 'Salvar diz para onde a conferência vai',
+    itens: [
+      'A tela do Ritmo da furadeira dizia "Salvar guarda a conferência só neste aparelho". Não era verdade: salvar envia para o relatório das Furadeiras, no PC — e uma medição que ficou no aparelho sem subir sobe sozinha na próxima vez que a tela abrir. Dava para fazer um teste rápido no posto achando que ficava ali, e encontrar o teste no relatório depois. Agora a frase diz o que acontece.',
+      'A lista SALVAS NESTE APARELHO passou a marcar cada linha com "no PC" ou "aguardando envio", e explica no topo que o que não subiu vai subir quando houver rede. Antes o aparelho parecia um caderno particular.',
+    ],
+  },
+  {
     versao: '2.31.0',
     data: '2026-08-26',
     titulo: 'Uma fonte só para parada, e período que o banco sabe contar',
