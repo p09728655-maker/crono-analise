@@ -4,10 +4,13 @@ import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../
 import {
   CRITERIOS_CONFERENCIA, conferenciaRapida, formatarDuracao, formatarSegundos, resumirConferencias,
 } from '../../domain/cronoanalise.js';
-import { listarConferenciasServidor } from '../../lib/api.js';
+import {
+  analisarConferenciasComIa, arquivarConferencia, excluirConferencia, listarConferenciasServidor,
+} from '../../lib/api.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
 import Cabecalho from '../../components/Cabecalho.jsx';
+import { GraficoRitmoMaquinas } from './graficos.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 
 /**
@@ -33,22 +36,41 @@ import EstadoVazio from '../../components/EstadoVazio.jsx';
  */
 export default function RelatorioConferencias({ aoVoltar }) {
   const [linhas, setLinhas] = useState([]);
+  const [outras, setOutras] = useState(0);
   const [estado, setEstado] = useState('carregando');
   const [erro, setErro] = useState(null);
   const [filtro, setFiltro] = useState(null);
+  const [verArquivadas, setVerArquivadas] = useState(false);
+  const [confirmando, setConfirmando] = useState(null);
+  const [ocupado, setOcupado] = useState(null);
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => { carregar(verArquivadas); }, [verArquivadas]);
 
-  async function carregar() {
+  async function carregar(arquivadas = verArquivadas) {
     setEstado('carregando');
     try {
-      const r = await listarConferenciasServidor();
+      const r = await listarConferenciasServidor({ arquivadas });
       setLinhas(r.conferencias || []);
+      setOutras(r.outras || 0);
       setEstado('pronto');
     } catch (e) {
       setErro(e.message);
       setEstado('erro');
     }
+  }
+
+  async function alternarArquivo(c) {
+    setOcupado(c.id);
+    try { await arquivarConferencia(c.id, !c.arquivada); await carregar(); }
+    catch (e) { setErro(e.message); }
+    setOcupado(null);
+  }
+
+  async function excluir(c) {
+    setOcupado(c.id);
+    try { await excluirConferencia(c.id); setConfirmando(null); await carregar(); }
+    catch (e) { setErro(e.message); }
+    setOcupado(null);
   }
 
   const resumo = useMemo(() => resumirConferencias(linhas), [linhas]);
@@ -65,10 +87,23 @@ export default function RelatorioConferencias({ aoVoltar }) {
           titulo="Conferências rápidas"
           subtitulo="Estudo por máquina"
           aoVoltar={aoVoltar}
-          acoes={estado === 'pronto' && linhas.length > 0 && (
-            <button type="button" style={est.botaoImprimir} onClick={() => window.print()}>
-              Imprimir
-            </button>
+          acoes={estado === 'pronto' && (
+            <>
+              {(verArquivadas || outras > 0) && (
+                <button
+                  type="button"
+                  style={est.botaoSecundario}
+                  onClick={() => { setFiltro(null); setVerArquivadas((v) => !v); }}
+                >
+                  {verArquivadas ? 'Ver ativas' : `Arquivadas ${outras}`}
+                </button>
+              )}
+              {linhas.length > 0 && !verArquivadas && (
+                <button type="button" style={est.botaoImprimir} onClick={() => window.print()}>
+                  Imprimir
+                </button>
+              )}
+            </>
           )}
         />
 
@@ -83,7 +118,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
               titulo="Não foi possível carregar"
               texto={erro}
               acao={(
-                <button type="button" style={est.botaoImprimir} onClick={carregar}>
+                <button type="button" style={est.botaoImprimir} onClick={() => carregar()}>
                   Tentar de novo
                 </button>
               )}
@@ -161,7 +196,15 @@ export default function RelatorioConferencias({ aoVoltar }) {
                 ))}
               </section>
 
-              <section style={est.painel} aria-label="Todas as conferências">
+              {!verArquivadas && resumo.length > 0 && (
+                <section style={est.painelGrafico} aria-label="Ritmo por máquina">
+                  <GraficoRitmoMaquinas maquinas={filtro ? resumo.filter((g) => g.maquina === filtro) : resumo} />
+                </section>
+              )}
+
+              {!verArquivadas && <AnaliseIaConferencias resumo={resumo} />}
+
+              <section style={est.painel} aria-label={verArquivadas ? 'Conferências arquivadas' : 'Todas as conferências'}>
                 <table style={est.tabela}>
                   <thead>
                     <tr>
@@ -173,6 +216,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <th style={est.thNum}>Peças</th>
                       <th style={est.thNum}>Peças/h</th>
                       <th style={est.thNum}>Ciclo (s/pç)</th>
+                      <th style={est.th} aria-label="Ações" />
                     </tr>
                   </thead>
                   <tbody>
@@ -190,6 +234,29 @@ export default function RelatorioConferencias({ aoVoltar }) {
                           <td style={est.tdNum}>{c.pecas}</td>
                           <td style={est.tdNumForte}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
                           <td style={est.tdNum}>{calc?.cicloMedioMs ? formatarSegundos(calc.cicloMedioMs) : '—'}</td>
+                          <td style={est.tdAcoes}>
+                            <button
+                              type="button"
+                              style={est.botaoLinha}
+                              onClick={() => alternarArquivo(c)}
+                              disabled={ocupado === c.id}
+                              title={c.arquivada
+                                ? 'Voltar para os cálculos'
+                                : 'Tirar dos cálculos sem apagar (medição atípica)'}
+                            >
+                              {c.arquivada ? 'Restaurar' : 'Arquivar'}
+                            </button>
+                            <button
+                              type="button"
+                              style={est.botaoExcluir}
+                              onClick={() => setConfirmando(c)}
+                              disabled={ocupado === c.id}
+                              aria-label={`Excluir conferência de ${c.maquina || 'sem máquina'}`}
+                              title="Excluir de vez (registro errado)"
+                            >
+                              ×
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -199,12 +266,111 @@ export default function RelatorioConferencias({ aoVoltar }) {
             </>
           )}
         </main>
+
+        {confirmando && (
+          <div style={est.modal} role="dialog" aria-label="Excluir conferência">
+            <div style={est.caixaModal}>
+              <h2 style={est.tituloModal}>Excluir conferência?</h2>
+              <p style={est.textoModal}>
+                <strong>{[confirmando.maquina, confirmando.peca].filter(Boolean).join(' · ') || 'Sem identificação'}</strong>
+                {confirmando.hora_inicial && confirmando.hora_final
+                  ? ` · ${confirmando.hora_inicial}–${confirmando.hora_final}`
+                  : ''}
+                {' · '}{confirmando.pecas} pç
+              </p>
+              <p style={est.textoModal}>
+                A exclusão é <strong>definitiva</strong>. Se a medição é real mas atípica
+                (setup no meio do período, por exemplo), prefira <strong>Arquivar</strong>:
+                ela sai dos cálculos e continua guardada.
+              </p>
+              <div style={est.acoesModal}>
+                <button type="button" style={est.botaoSecundario} onClick={() => setConfirmando(null)}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  style={{ ...est.botaoPerigo, flex: 1 }}
+                  onClick={() => excluir(confirmando)}
+                  disabled={ocupado === confirmando.id}
+                >
+                  {ocupado === confirmando.id ? 'Excluindo...' : 'Excluir definitivamente'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {estado === 'pronto' && linhas.length > 0 && (
         <ImpressaoConferencias linhas={linhas} resumo={resumo} />
       )}
     </div>
+  );
+}
+
+/**
+ * Analise com IA das conferencias.
+ *
+ * Mesma secao do painel do estudo, com um contrato diferente: o que sobe e'
+ * o resumo POR MAQUINA — incluindo `confiavel` e os motivos —, entao a IA
+ * sabe quais numeros ainda nao servem de referencia e diz isso em vez de
+ * tirar conclusao de capacidade de uma medicao de um minuto.
+ */
+function AnaliseIaConferencias({ resumo }) {
+  const [rodando, setRodando] = useState(false);
+  const [resposta, setResposta] = useState(null);
+  const [erro, setErro] = useState(null);
+
+  async function analisar() {
+    setRodando(true);
+    setErro(null);
+    try {
+      setResposta(await analisarConferenciasComIa({
+        maquinas: resumo.map((g) => ({
+          maquina: g.maquina,
+          n: g.n,
+          pecas: g.totalPecas,
+          minutos: +(g.totalMs / 60000).toFixed(1),
+          ritmo: +g.ritmoMedio.toFixed(1),
+          cicloSeg: +(g.cicloMedioMs / 1000).toFixed(2),
+          cvPct: g.cvPct != null ? +g.cvPct.toFixed(1) : null,
+          melhor: g.melhor ? +g.melhor.ritmo.toFixed(1) : null,
+          pior: g.pior ? +g.pior.ritmo.toFixed(1) : null,
+          confiavel: g.confiavel,
+          motivos: g.motivos,
+        })),
+      }));
+    } catch (e) { setErro(e.message); }
+    setRodando(false);
+  }
+
+  return (
+    <section style={est.painelIa} aria-label="Análise com IA das conferências">
+      <div style={est.iaTopo}>
+        <div style={{ minWidth: 0 }}>
+          <h2 style={est.iaTitulo}>Análise com IA</h2>
+          <p style={est.iaTexto}>
+            Leitura dos ritmos, diferenças entre máquinas e o que falta medir.
+          </p>
+        </div>
+        <button type="button" style={est.botaoImprimir} onClick={analisar} disabled={rodando}>
+          {rodando ? 'Analisando...' : 'Analisar com IA'}
+        </button>
+      </div>
+
+      {erro && <div style={est.iaErro}>{erro}</div>}
+
+      {resposta && (
+        <div style={est.iaResposta}>
+          <div style={est.iaRespostaTexto}>{resposta.analise}</div>
+          <div style={est.iaMeta}>
+            Gerada por {resposta.modelo}
+            {resposta.uso?.saida ? ` · ${resposta.uso.saida} tokens` : ''} — confira antes de
+            decidir: a IA lê os números, não o posto.
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -393,6 +559,71 @@ const est = {
     display: 'flex', flexDirection: 'column', gap: 2,
   },
   motivo: { ...tipo('legenda'), color: t.atencao },
+
+  botaoSecundario: {
+    minHeight: 40, padding: `0 ${espaco.lg}px`, background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
+    color: t.textoMedio, ...tipo('corpo'), cursor: 'pointer', fontFamily: 'inherit',
+  },
+  botaoPerigo: {
+    minHeight: 40, padding: `0 ${espaco.lg}px`, background: t.critico,
+    border: 'none', borderRadius: raio.md, color: '#fff',
+    ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
+  },
+  botaoLinha: {
+    minHeight: 32, padding: `0 ${espaco.md}px`, background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.textoMedio, ...tipo('legenda'), fontWeight: 600,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  botaoExcluir: {
+    width: 32, height: 32, marginLeft: espaco.xs, background: 'transparent', border: 'none',
+    borderRadius: raio.sm, color: t.textoFraco, fontSize: 18, lineHeight: 1,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  tdAcoes: {
+    padding: `${espaco.sm}px ${espaco.lg}px`, textAlign: 'right', whiteSpace: 'nowrap',
+    borderBottom: `1px solid ${t.borda}`,
+  },
+
+  painelGrafico: {
+    background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
+    border: `1px solid ${t.borda}`, padding: espaco.xl, marginBottom: espaco.xl,
+  },
+
+  painelIa: {
+    background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
+    border: `1px solid ${t.borda}`, padding: espaco.xl, marginBottom: espaco.xl,
+    display: 'flex', flexDirection: 'column', gap: espaco.md,
+  },
+  iaTopo: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: espaco.lg, flexWrap: 'wrap',
+  },
+  iaTitulo: { ...tipo('destaque'), margin: 0 },
+  iaTexto: { ...tipo('legenda'), color: t.textoFraco, margin: '2px 0 0' },
+  iaErro: {
+    padding: espaco.md, background: t.criticoFundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.critico,
+    borderRadius: raio.sm, ...tipo('legenda'), color: t.texto,
+  },
+  iaResposta: { display: 'flex', flexDirection: 'column', gap: espaco.sm },
+  iaRespostaTexto: { ...tipo('corpo'), color: t.texto, whiteSpace: 'pre-wrap', lineHeight: 1.6 },
+  iaMeta: { ...tipo('legenda'), color: t.textoFraco },
+
+  modal: {
+    position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(15, 18, 22, 0.55)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: espaco.lg,
+  },
+  caixaModal: {
+    width: '100%', maxWidth: 520, background: t.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.lg,
+    padding: espaco.xxl, boxShadow: elevacao.alta,
+    display: 'flex', flexDirection: 'column', gap: espaco.md,
+  },
+  tituloModal: { ...tipo('titulo'), margin: 0 },
+  textoModal: { ...tipo('corpo'), margin: 0, color: t.textoMedio },
+  acoesModal: { display: 'flex', gap: espaco.md, marginTop: espaco.xs },
 
   painel: {
     background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,

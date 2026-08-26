@@ -454,3 +454,117 @@ const est = {
     background: claro.papel, border: `1px dashed ${claro.borda}`, borderRadius: 10,
   },
 };
+
+/**
+ * Ritmo por maquina — barras de pecas/hora das conferencias rapidas.
+ *
+ * O relatorio de conferencias precisava do mesmo tratamento do estudo: numero
+ * sozinho numa tabela nao mostra que uma maquina roda ao dobro da outra.
+ *
+ * Identidade nunca depende so' de cor: a barra de amostra insuficiente leva
+ * TEXTURA hachurada e o rotulo "amostra insuficiente" embaixo do valor —
+ * continua legivel em impressao P&B e para quem tem daltonismo. E' a mesma
+ * regra do Yamazumi, e aqui ela importa mais ainda: e' exatamente a barra
+ * que NAO pode ser lida como referencia.
+ */
+export function GraficoRitmoMaquinas({ maquinas, altura = 300 }) {
+  const id = useId().replace(/:/g, '');
+  const [refContainer, larguraContainer] = useLarguraContainer(360);
+
+  if (!maquinas?.length) return <VazioGrafico texto="Sem conferências para comparar." />;
+
+  const maxRitmo = Math.max(...maquinas.map((m) => m.ritmoMedio)) * 1.15;
+  const passo = passoAgradavel(maxRitmo);
+
+  const larguraMinima = maquinas.length * 120 + EIXO.esq + EIXO.dir;
+  const largura = Math.max(larguraMinima, larguraContainer || larguraMinima);
+  const alturaPlot = altura - EIXO.topo - EIXO.base;
+  const larguraBanda = (largura - EIXO.esq - EIXO.dir) / maquinas.length;
+  const larguraBarra = Math.min(72, larguraBanda * 0.6);
+
+  const grades = [];
+  for (let v = 0; v <= maxRitmo; v += passo) grades.push(v);
+
+  const yDe = (valor) => EIXO.topo + alturaPlot - (valor / maxRitmo) * alturaPlot;
+
+  return (
+    <figure style={est.figura}>
+      <figcaption style={est.titulo}>
+        Ritmo por máquina
+        <span style={est.subtitulo}>Peças/hora médias, ponderadas pelo tempo observado</span>
+      </figcaption>
+
+      <Legenda
+        itens={[
+          { rotulo: 'Referência OK', cor: serie.tn },
+          {
+            rotulo: 'Amostra insuficiente',
+            cor: serie.tolerancia,
+            hachura: `repeating-linear-gradient(45deg, ${serie.tolerancia} 0 3px, rgba(255,255,255,.55) 3px 5px)`,
+          },
+        ]}
+      />
+
+      <div style={est.rolagem} ref={refContainer}>
+        <svg
+          viewBox={`0 0 ${largura} ${altura}`}
+          width={largura}
+          height={altura}
+          style={{ maxWidth: '100%', height: altura, display: 'block' }}
+          role="img"
+          aria-label={`Ritmo de ${maquinas.length} máquina(s) em peças por hora`}
+        >
+          <Texturas id={id} />
+
+          {grades.map((v) => (
+            <g key={v}>
+              <line
+                x1={EIXO.esq} x2={largura - EIXO.dir} y1={yDe(v)} y2={yDe(v)}
+                stroke={claro.borda} strokeWidth="1"
+              />
+              <text x={EIXO.esq - 8} y={yDe(v) + 4} textAnchor="end" fontSize="11" fill={claro.textoFraco}>
+                {Math.round(v)}
+              </text>
+            </g>
+          ))}
+
+          {maquinas.map((m, i) => {
+            const centro = EIXO.esq + larguraBanda * (i + 0.5);
+            const x = centro - larguraBarra / 2;
+            const y = yDe(m.ritmoMedio);
+            const alturaBarra = Math.max(1, EIXO.topo + alturaPlot - y);
+            return (
+              <g key={m.maquina}>
+                <rect
+                  x={x} y={y} width={larguraBarra} height={alturaBarra}
+                  fill={m.confiavel ? serie.tn : serie.tolerancia}
+                  rx="3"
+                />
+                {!m.confiavel && (
+                  <rect x={x} y={y} width={larguraBarra} height={alturaBarra} fill={`url(#${id}-hachura)`} rx="3" />
+                )}
+                <text x={centro} y={y - 6} textAnchor="middle" fontSize="12" fontWeight="700" fill={claro.texto}>
+                  {Math.round(m.ritmoMedio)}
+                </text>
+                <text x={centro} y={altura - EIXO.base + 16} textAnchor="middle" fontSize="11" fill={claro.textoMedio}>
+                  {m.maquina.length > 16 ? `${m.maquina.slice(0, 15)}…` : m.maquina}
+                </text>
+                {!m.confiavel && (
+                  <text x={centro} y={altura - EIXO.base + 30} textAnchor="middle" fontSize="9" fill={claro.atencao}>
+                    amostra insuficiente
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
+          <line
+            x1={EIXO.esq} x2={largura - EIXO.dir}
+            y1={EIXO.topo + alturaPlot} y2={EIXO.topo + alturaPlot}
+            stroke={claro.textoFraco} strokeWidth="1.5"
+          />
+        </svg>
+      </div>
+    </figure>
+  );
+}

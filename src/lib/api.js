@@ -28,7 +28,28 @@ async function requisitar(caminho, { metodo = 'GET', corpo, sinal } = {}) {
   });
 
   const texto = await resposta.text();
-  const dados = texto ? JSON.parse(texto) : {};
+
+  // Nem toda resposta e' JSON: quando a funcao estoura o tempo, a Vercel
+  // devolve uma pagina de erro em TEXTO. Fazer JSON.parse nela produzia
+  // "Unexpected token 'A'..." na tela do analista — mensagem que nao diz
+  // nada sobre o que aconteceu nem sobre o que fazer.
+  let dados = {};
+  if (texto) {
+    try {
+      dados = JSON.parse(texto);
+    } catch {
+      if (resposta.status === 504 || /timeout|timed out/i.test(texto)) {
+        throw new ErroApi(504, 'O servidor demorou demais para responder. Tente de novo.');
+      }
+      throw new ErroApi(
+        resposta.status,
+        resposta.ok
+          ? 'Resposta inesperada do servidor.'
+          : `Falha no servidor (${resposta.status}). Tente de novo em alguns instantes.`,
+      );
+    }
+  }
+
   if (!resposta.ok) throw new ErroApi(resposta.status, dados.erro || 'Falha na requisicao', dados.detalhes);
   return dados;
 }
@@ -50,8 +71,19 @@ export const removerOperacao = (id) =>
   requisitar(`/operacoes?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 // "Servidor" no nome de proposito: lib/conferencias.js tem o listar LOCAL
 // (a memoria do aparelho) e os dois convivem no mesmo app.
-export const listarConferenciasServidor = (maquina) =>
-  requisitar(`/conferencias${maquina ? `?maquina=${encodeURIComponent(maquina)}` : ''}`);
+export const listarConferenciasServidor = ({ maquina, arquivadas = false } = {}) => {
+  const q = new URLSearchParams();
+  if (maquina) q.set('maquina', maquina);
+  if (arquivadas) q.set('arquivadas', '1');
+  const busca = q.toString();
+  return requisitar(`/conferencias${busca ? `?${busca}` : ''}`);
+};
+export const arquivarConferencia = (id, arquivada = true) =>
+  requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { arquivada } });
+export const excluirConferencia = (id) =>
+  requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
+export const analisarConferenciasComIa = (dados) =>
+  requisitar('/ai/analisar', { metodo: 'POST', corpo: dados });
 export const analisarComIa = (dados) => requisitar('/ai/analisar', { metodo: 'POST', corpo: dados });
 export const obterConfigIa = () => requisitar('/config').then((r) => r.chaveIa);
 export const salvarChaveIa = (chaveIa) =>

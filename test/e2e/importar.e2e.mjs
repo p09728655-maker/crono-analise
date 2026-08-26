@@ -26,7 +26,7 @@ const b = await chromium.launch({ executablePath: EXEC });
   const p = await ctx.newPage();
   await p.goto(`${BASE}/test/e2e/harness-importar/index.html?modo=coleta`);
   await p.waitForSelector('li', { timeout: 8000 });
-  checar(await p.getByRole('button', { name: 'Importar', exact: true }).count() === 0,
+  checar(await p.getByRole('button', { name: /^Importar/ }).count() === 0,
     'coleta: botao de importar NAO existe (tarefa de escritorio)');
   await ctx.close();
 }
@@ -41,9 +41,11 @@ for (const modo of ['analise']) {
   p.on('pageerror', (e) => errosConsole.push(e.message));
 
   await p.goto(`${BASE}/test/e2e/harness-importar/index.html?modo=${modo}`);
-  await p.getByRole('button', { name: 'Importar', exact: true }).waitFor({ timeout: 8000 });
+  // No PC a acao vive no menu lateral: "Importar PDF ou planilha".
+  const abrirImportar = p.getByRole('button', { name: /^Importar/ });
+  await abrirImportar.waitFor({ timeout: 8000 });
 
-  await p.getByRole('button', { name: 'Importar', exact: true }).click();
+  await abrirImportar.click();
   const dialogo = p.locator('[aria-label="Importar estudo"]');
   checar(await dialogo.count() === 1, `${modo}: modal de importacao abre`);
 
@@ -110,7 +112,7 @@ for (const modo of ['analise']) {
     `${modo}: importar no PC fica na lista, nao cai na analise vazia`);
 
   /* ------------------- template de tempos (.xlsx) da embalagem, preenchido */
-  await p.getByRole('button', { name: 'Importar', exact: true }).click();
+  await p.getByRole('button', { name: /^Importar/ }).click();
   const dialogoXlsx = p.locator('[aria-label="Importar estudo"]');
   await p.setInputFiles('input[type=file]', XLSX);
   await dialogoXlsx.locator('text=CAIXA, TAMPO, ISOMANTA').first().waitFor({ timeout: 8000 });

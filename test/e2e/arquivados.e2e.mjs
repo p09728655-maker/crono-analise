@@ -26,8 +26,8 @@ const b = await chromium.launch({ executablePath: EXEC });
   const p = await ctx.newPage();
   await p.goto(`${PAGINA}?modo=analise`);
   await p.getByText('Furação lateral').first().waitFor({ timeout: 8000 });
-  checar(await p.getByRole('button', { name: /Arquivados/ }).count() === 0,
-    'sem arquivados: o botao nem aparece');
+  checar(await p.getByRole('button', { name: /arquivados/i }).count() === 0,
+    'sem arquivados: o item nem aparece');
   await ctx.close();
 }
 
@@ -38,8 +38,9 @@ const b = await chromium.launch({ executablePath: EXEC });
   await p.goto(`${PAGINA}?modo=analise&vazio=1&arq=1`);
   await p.getByText('Nenhum estudo cadastrado').waitFor({ timeout: 8000 });
   const texto = await p.locator('body').innerText();
-  checar(/Arquivados 1/.test(texto), 'lista vazia com arquivados: botao mostra a contagem');
-  checar(/restaurar um que saiu da lista/i.test(texto),
+  checar(/Estudos arquivados/.test(texto) && /\b1\b/.test(texto),
+    'lista vazia com arquivados: menu lateral mostra a contagem');
+  checar(/restaurar um dos 1 que saíram da lista/i.test(texto),
     'estado vazio aponta os arquivados em vez de dizer que nao ha nada');
   checar(/Nenhum ciclo foi perdido/i.test(texto), 'estado vazio garante que nada se perdeu');
   await ctx.close();
@@ -56,9 +57,10 @@ for (const modo of ['analise', 'coleta']) {
   p.on('pageerror', (e) => erros.push(e.message));
 
   await p.goto(`${PAGINA}?modo=${modo}&arq=1`);
-  const botao = p.getByRole('button', { name: /Arquivados/ });
+  // PC: item no menu lateral. Celular: botao no topo.
+  const botao = p.getByRole('button', { name: /arquivados/i });
   await botao.waitFor({ timeout: 8000 });
-  checar(true, `${modo}: botao "Arquivados" presente`);
+  checar(true, `${modo}: acesso aos arquivados presente`);
 
   await botao.click();
   const dialogo = p.locator('[aria-label="Estudos arquivados"]');
@@ -78,10 +80,10 @@ for (const modo of ['analise', 'coleta']) {
   await p.getByText('MESA CABECEIRA SLEEP BRANCO').first().waitFor({ timeout: 8000 });
   checar(true, `${modo}: estudo restaurado aparece na lista`);
   await p.waitForFunction(
-    () => ![...document.querySelectorAll('button')].some((b) => /Arquivados/.test(b.textContent)),
+    () => ![...document.querySelectorAll('button')].some((b) => /arquivados/i.test(b.textContent)),
     { timeout: 8000 },
   );
-  checar(true, `${modo}: sem mais arquivados, o botao some sozinho`);
+  checar(true, `${modo}: sem mais arquivados, o acesso some sozinho`);
 
   checar(erros.length === 0, `${modo}: sem erro de pagina (${erros.join('; ') || 'nenhum'})`);
   await ctx.close();

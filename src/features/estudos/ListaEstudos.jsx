@@ -8,6 +8,7 @@ import AvisoAtualizacao from '../../components/AvisoAtualizacao.jsx';
 import ChaveIa from '../../components/ChaveIa.jsx';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
+import MenuLateral from '../../components/MenuLateral.jsx';
 import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import ImportarRoteiro from './ImportarRoteiro.jsx';
@@ -31,6 +32,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
   const [arquivados, setArquivados] = useState([]);
   const [verArquivados, setVerArquivados] = useState(false);
   const [verChaveIa, setVerChaveIa] = useState(false);
+  const [busca, setBusca] = useState('');
 
   const analise = modo === 'analise';
   const t = tema(analise);
@@ -66,12 +68,41 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
 
   const temEstudos = estado === 'pronto' && estudos.length > 0;
 
+  // Busca antes do agrupamento: quem procura "sleep" quer o produto, mas
+  // quem procura "FUR16" quer a maquina — os dois caem no mesmo campo.
+  const termo = busca.trim().toLowerCase();
+  const encontrados = termo
+    ? estudos.filter((e) => [e.nome, e.produto, e.recurso, e.setor, e.analista]
+        .some((campo) => String(campo || '').toLowerCase().includes(termo)))
+    : estudos;
+
   // Um estudo pertence a um produto; a lista plana misturava tudo.
-  const grupos = agruparPorProduto(estudos);
+  const grupos = agruparPorProduto(encontrados);
   const visiveis = filtro ? grupos.filter((g) => g.chave === filtro) : grupos;
 
+  const lateral = analise && (
+    <MenuLateral
+      versao={VERSAO}
+      aoVerVersao={() => setVerVersoes(true)}
+      busca={busca}
+      aoBuscar={setBusca}
+      grupos={grupos}
+      filtro={filtro}
+      aoFiltrar={setFiltro}
+      arquivados={arquivados.length}
+      aoNovoEstudo={() => setCriando(true)}
+      aoImportar={() => setImportando(true)}
+      aoVerConferencias={aoVerConferencias}
+      aoVerArquivados={() => setVerArquivados(true)}
+      aoVerChaveIa={() => setVerChaveIa(true)}
+      aoTrocarModo={aoTrocarModo}
+    />
+  );
+
   return (
-    <div style={est.tela}>
+    <div style={analise ? est.telaComLateral : est.tela}>
+      {lateral}
+      {!analise && (
       <Cabecalho
         modo={modo}
         titulo="RitmoPatrimar"
@@ -79,31 +110,16 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
         versao={VERSAO}
         aoVerVersao={() => setVerVersoes(true)}
         aoTrocarModo={aoTrocarModo}
-        /* O botao principal so' aparece aqui quando ja' ha' lista. No estado
-           vazio ele vive no proprio bloco vazio — dois botoes identicos na
-           mesma tela e' duplicacao, nao reforco. Importar roteiro e' tarefa
-           de escritorio: so' existe na Analise — na Coleta nao se importa
-           nada, so' se cronometra. */
+        /* Coleta so'. Importar, Conferencias e Chave da IA sao trabalho de
+           escritorio e vivem no menu lateral do PC — no posto so' se
+           cronometra. O botao principal so' aparece quando ja' ha' lista:
+           no estado vazio ele vive no proprio bloco vazio, e dois botoes
+           identicos na mesma tela e' duplicacao, nao reforco. */
         acoes={estado === 'pronto' && (
           <>
             {arquivados.length > 0 && (
               <button type="button" style={est.botaoSecundario} onClick={() => setVerArquivados(true)}>
                 Arquivados {arquivados.length}
-              </button>
-            )}
-            {analise && aoVerConferencias && (
-              <button type="button" style={est.botaoSecundario} onClick={aoVerConferencias}>
-                Conferências
-              </button>
-            )}
-            {analise && (
-              <button type="button" style={est.botaoSecundario} onClick={() => setImportando(true)}>
-                Importar
-              </button>
-            )}
-            {analise && (
-              <button type="button" style={est.botaoSecundario} onClick={() => setVerChaveIa(true)}>
-                Chave da IA
               </button>
             )}
             {temEstudos && (
@@ -114,8 +130,9 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
           </>
         )}
       />
+      )}
 
-      <main style={est.conteudo}>
+      <main style={analise ? est.conteudoLateral : est.conteudo}>
         {/* Acima de tudo: o aviso explica por que a tela amanheceu diferente,
             entao precisa vir antes do que mudou. Some ao ser visto. */}
         <AvisoAtualizacao modo={modo} aoVerNovidades={() => setVerVersoes(true)} />
@@ -169,7 +186,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
               <h2 style={est.vazioTitulo}>Nenhum estudo cadastrado</h2>
               <p style={est.vazioTexto}>
                 {arquivados.length > 0
-                  ? `Crie um estudo novo — ou abra "Arquivados ${arquivados.length}" no topo para restaurar um que saiu da lista. Nenhum ciclo foi perdido.`
+                  ? `Crie um estudo novo — ou abra "Estudos arquivados" no menu ao lado para restaurar um dos ${arquivados.length} que saíram da lista. Nenhum ciclo foi perdido.`
                   : 'Crie seu primeiro estudo para começar a coletar ciclos e calcular o tempo padrão.'}
               </p>
               <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
@@ -210,8 +227,9 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
         {temEstudos && (
           <>
             {/* Filtro so' aparece quando ha' mais de um produto: com um so',
-                ele seria um controle que nao controla nada. */}
-            {grupos.length > 1 && (
+                ele seria um controle que nao controla nada. No PC ele vive
+                no menu lateral, entao aqui e' so' na coleta. */}
+            {!analise && grupos.length > 1 && (
               <FiltroProduto grupos={grupos} filtro={filtro} aoFiltrar={setFiltro} est={est} />
             )}
 
@@ -758,6 +776,16 @@ function estilos(t, analise) {
 
   return {
     tela: { minHeight: '100dvh', background: t.fundo, color: t.texto },
+    // Lateral fixa + conteudo rolando: a navegacao nao sai da tela quando o
+    // analista desce numa lista longa.
+    telaComLateral: {
+      minHeight: '100dvh', background: t.fundo, color: t.texto,
+      display: 'flex', alignItems: 'flex-start',
+    },
+    conteudoLateral: {
+      flex: 1, minWidth: 0, maxWidth: 1400,
+      padding: `${espaco.xl}px ${espaco.xl}px ${espaco.gigante}px`,
+    },
     conteudo: {
       maxWidth: 1400, margin: '0 auto',
       padding: analise ? `${espaco.xl}px ${espaco.xl}px ${espaco.gigante}px` : espaco.lg,

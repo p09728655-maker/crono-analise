@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.18.0',
+    data: '2026-08-26',
+    titulo: 'PC com menu lateral e conferências completas',
+    itens: [
+      'No PC a navegação virou menu lateral, com busca por produto, peça, máquina ou analista — e os produtos viraram lista de verdade em vez de uma fileira de botões no topo.',
+      'A tela de Conferências ficou igual à do estudo: gráfico de ritmo por máquina (barra hachurada quando a amostra é insuficiente), Análise com IA e impressão em A4.',
+      'Cada conferência agora pode ser arquivada (sai dos cálculos, continua guardada — para medição atípica) ou excluída de vez (para registro errado, com confirmação). O botão "Arquivadas" mostra e restaura as que saíram.',
+      'Corrigida a falha "Unexpected token A..." na Análise com IA: a análise estourava o tempo do servidor e o app tentava ler a página de erro como resultado. Agora a chamada cabe no tempo e qualquer falha vem com mensagem clara.',
+    ],
+  },
+  {
     versao: '2.17.0',
     data: '2026-08-26',
     titulo: 'Chave da IA no lugar certo',
