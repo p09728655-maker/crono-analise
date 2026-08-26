@@ -116,10 +116,14 @@ CREATE TABLE IF NOT EXISTS conferencias (
   duracao_ms   bigint  NOT NULL CHECK (duracao_ms > 0),
   pecas        integer NOT NULL CHECK (pecas > 0),
   salvo_em     timestamptz NOT NULL,      -- horario real do aparelho
+  -- Medicao atipica (setup no meio do periodo) sai dos calculos sem sumir
+  -- do banco. Registro ERRADO — hora digitada errada — e' excluido de vez.
+  arquivada    boolean NOT NULL DEFAULT false,
   criado_em    timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS conferencias_client_unq ON conferencias (client_id);
 CREATE INDEX IF NOT EXISTS conferencias_empresa_idx ON conferencias (empresa_id, salvo_em DESC);
+CREATE INDEX IF NOT EXISTS conferencias_ativas_idx ON conferencias (empresa_id, arquivada, salvo_em DESC);
 
 -- ------------------------------------------------------------ configuracoes
 -- Par chave/valor por empresa. Hoje guarda a chave da API de IA salva pelo

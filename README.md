@@ -71,6 +71,17 @@ No PC, o botão **Conferências** no topo da Análise abre o relatório
 e pior registro com a peça — mais a tabela completa, filtro por máquina e
 impressão em **documento A4 próprio** (não a tela no papel).
 
+A tela traz o mesmo tratamento do painel do estudo: **gráfico de ritmo por
+máquina** (a barra de amostra insuficiente leva textura hachurada e rótulo,
+não só cor) e **Análise com IA** — que recebe o resumo por máquina *com* o
+resultado dos critérios, então diz o que ainda não serve de referência em
+vez de tirar conclusão de capacidade de uma medição de um minuto.
+
+Cada linha pode ser **arquivada** (sai dos cálculos, continua no banco — o
+caso da medição atípica, setup no meio do período) ou **excluída** com
+confirmação (o caso do registro errado, hora digitada errada). É a mesma
+distinção do estudo, pelo mesmo motivo.
+
 O relatório **se autoavalia** pelos `CRITERIOS_CONFERENCIA`, declarados
 antes dos números, na tela e impressos: mínimo de 3 conferências por
 máquina, 30 min de tempo total observado, nenhum período menor que 5 min.
@@ -79,6 +90,15 @@ o número continua visível, nunca passa por referência. Registro oficial,
 com FR, tolerância e tempo padrão, continua sendo papel do estudo. Por não
 depender de rede, o atalho na lista de coleta fica visível mesmo com a API
 fora do ar.
+
+### Menu lateral no PC
+
+A navegação da Análise vive numa **lateral fixa**: busca (produto, peça,
+máquina ou analista), lista de produtos com contagem, relatórios
+(Conferências, Estudos arquivados) e ações (Novo estudo, Importar, Chave da
+IA). A barra horizontal não crescia — a partir de sete botões ela empurrava
+o título e quebrava a hierarquia. A coleta (celular) não tem lateral: lá a
+tela é pequena e a tarefa é uma só.
 
 ### Arquivar e restaurar
 

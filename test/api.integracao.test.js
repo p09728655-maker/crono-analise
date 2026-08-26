@@ -260,6 +260,61 @@ rodar('API — integracao com Postgres', () => {
     expect(filtrada.corpo.conferencias.length).toBe(1);
   });
 
+  it('conferencia arquiva, sai da lista ativa, volta na de arquivadas e exclui', async () => {
+    await sql`DELETE FROM conferencias WHERE empresa_id = ${EMPRESA}`;
+    const clientId = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId, maquina: 'Furadeira 03', duracaoMs: 600000, pecas: 150,
+          salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+    const [criada] = await sql`SELECT id FROM conferencias WHERE client_id = ${clientId}`;
+
+    // Arquivar: sai dos calculos, continua no banco.
+    const patch = fingirRes();
+    await conferenciasApi(fingirReq({ metodo: 'PATCH', query: { id: criada.id }, corpo: { arquivada: true } }), patch);
+    expect(patch.corpo.conferencia.arquivada).toBe(true);
+
+    const ativas = fingirRes();
+    await conferenciasApi(fingirReq({}), ativas);
+    expect(ativas.corpo.conferencias.some((c) => c.id === criada.id)).toBe(false);
+    expect(ativas.corpo.outras).toBe(1); // a tela sabe que ha' arquivada
+
+    const arquivadas = fingirRes();
+    await conferenciasApi(fingirReq({ query: { arquivadas: '1' } }), arquivadas);
+    expect(arquivadas.corpo.conferencias.map((c) => c.id)).toContain(criada.id);
+
+    // Excluir: ai sim some de vez.
+    const del = fingirRes();
+    await conferenciasApi(fingirReq({ metodo: 'DELETE', query: { id: criada.id } }), del);
+    expect(del.corpo.acao).toBe('excluida');
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM conferencias WHERE id = ${criada.id}`;
+    expect(n).toBe(0);
+  });
+
+  it('nao arquiva nem exclui conferencia de OUTRA empresa', async () => {
+    const alheia = crypto.randomUUID();
+    await sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas, salvo_em)
+      VALUES (${alheia}, ${OUTRA_EMPRESA}, 'Alheia', 60000, 10, now())`;
+    const [linha] = await sql`SELECT id FROM conferencias WHERE client_id = ${alheia}`;
+
+    const patch = fingirRes();
+    await conferenciasApi(fingirReq({ metodo: 'PATCH', query: { id: linha.id }, corpo: { arquivada: true } }), patch);
+    expect(patch.statusCode).toBe(404);
+
+    const del = fingirRes();
+    await conferenciasApi(fingirReq({ metodo: 'DELETE', query: { id: linha.id } }), del);
+    expect(del.statusCode).toBe(404);
+
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM conferencias WHERE id = ${linha.id}`;
+    expect(n).toBe(1); // continua intacta
+  });
+
   it('estudo carregado devolve tempos no formato do dominio', async () => {
     const { estudoId, operacaoId } = await criarEstudoComOperacao();
     await sync(fingirReq({

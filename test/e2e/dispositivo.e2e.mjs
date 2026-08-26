@@ -47,7 +47,11 @@ const b = await chromium.launch({ executablePath: EXEC });
   await p.goto(`${BASE}/analise`);
   await p.waitForTimeout(800);
   checar(await p.evaluate(() => location.pathname) === '/analise', 'PC: /analise permanece analise');
-  checar(await p.locator('[aria-label="Modo de uso"]').count() === 1, 'PC: abas de modo presentes');
+  // A navegacao do PC virou menu lateral: mais espaco para o conteudo e
+  // lugar para busca, produtos e relatorios — que nao cabiam numa barra.
+  checar(await p.locator('nav[aria-label="Navegação"]').count() === 1, 'PC: menu lateral presente');
+  checar(await p.getByRole('button', { name: /Ir para a Coleta/ }).count() === 1,
+    'PC: caminho para a coleta continua a um clique');
   await ctx.close();
 }
 
