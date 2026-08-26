@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.26.0',
+    data: '2026-08-26',
+    titulo: 'Carta de controle sem a bagunça',
+    itens: [
+      'A escolha da operação na Carta de controle era uma fila de botões com o nome inteiro dentro. Como o nome de operação importada do roteiro é a lista de peças da caixa, oito delas viravam cinco linhas de blocos desalinhados — ocupando mais tela que o próprio gráfico.',
+      'Agora é uma linha só: lista suspensa numerada, com setas de anterior/próxima para percorrer as operações sem abrir a lista a cada troca, e a posição ("3 de 8") ao lado. O nome inteiro continua no título da carta, logo abaixo.',
+    ],
+  },
+  {
     versao: '2.25.0',
     data: '2026-08-26',
     titulo: 'Análise com IA para de estourar o tempo',
