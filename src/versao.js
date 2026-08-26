@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.22.0',
+    data: '2026-08-26',
+    titulo: 'Paradas e setup na conferência',
+    itens: [
+      'Agora dá para marcar as PARADAS do período conferido — setup/troca, falta de peça, manutenção, ajuste. O ritmo passa a sair do tempo em que a máquina rodou: 100 peças em 30 min com 10 min de setup são 300 pç/h, e não 200. O número do período inteiro continua ao lado, porque é ele que explica o que saiu do posto no turno.',
+      'No cronômetro ao vivo, o botão "Parou" pergunta o motivo e cronometra a parada; "Voltou" encerra. Enquanto a máquina está parada não dá para contar peça — o relógio do período continua correndo, porque a parada está dentro dele.',
+      'No PC, cada conferência tem o botão "Paradas": dá para cadastrar o setup depois, com o apontamento na mão, sem precisar arquivar a medição. O resumo por máquina passou a mostrar tempo parado, setup e disponibilidade, e a impressão saiu com as mesmas colunas.',
+      'No tablet ficou explícito onde é cada coisa: "Furadeiras — Conferência rápida" no atalho do topo e "Embalagem e demais postos — Estudos de tempo" na lista abaixo.',
+      'Conferência antiga, sem parada marcada, continua valendo exatamente como antes: sem parada, o ritmo do período e o da máquina rodando são o mesmo número.',
+    ],
+  },
+  {
     versao: '2.21.0',
     data: '2026-08-26',
     titulo: 'Primeira tela orientada pelo fluxo',

@@ -115,9 +115,19 @@ CREATE TABLE IF NOT EXISTS conferencias (
   hora_final   text CHECK (hora_final   IS NULL OR hora_final   ~ '^\d{2}:\d{2}$'),
   duracao_ms   bigint  NOT NULL CHECK (duracao_ms > 0),
   pecas        integer NOT NULL CHECK (pecas > 0),
+  -- Paradas DENTRO do periodo conferido: [{motivo, duracaoMs, observacao}].
+  -- Setup, falta de material e manutencao nao sao lentidao da maquina — sem
+  -- separa-las, o mesmo posto parece lento no dia de troca de lote. Ficam na
+  -- propria linha (jsonb) e nao em tabela filha porque nascem e sobem junto
+  -- com a conferencia, pela mesma fila offline e no mesmo INSERT idempotente:
+  -- uma tabela a parte exigiria resolver o id da conferencia no meio do lote,
+  -- sem nenhum ganho de consulta (parada de conferencia so' se le com ela).
+  paradas      jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(paradas) = 'array'),
   salvo_em     timestamptz NOT NULL,      -- horario real do aparelho
-  -- Medicao atipica (setup no meio do periodo) sai dos calculos sem sumir
-  -- do banco. Registro ERRADO — hora digitada errada — e' excluido de vez.
+  -- Medicao atipica (turno interrompido, lote de teste) sai dos calculos sem
+  -- sumir do banco. Registro ERRADO — hora digitada errada — e' excluido de
+  -- vez. Setup no meio do periodo nao e' motivo para arquivar desde que ha'
+  -- a coluna `paradas`: marca-se a parada e a medicao continua valendo.
   arquivada    boolean NOT NULL DEFAULT false,
   criado_em    timestamptz NOT NULL DEFAULT now()
 );

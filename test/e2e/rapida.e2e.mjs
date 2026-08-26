@@ -6,6 +6,10 @@
  * o atalho aparece mesmo com a lista em erro, e os dois fluxos (horarios
  * digitados e cronometro ao vivo) fecham sem uma requisicao sequer.
  *
+ * Cobre tambem as PARADAS do periodo — setup marcado no formulario e
+ * parada cronometrada ao vivo —, porque e' delas que sai a diferenca entre
+ * o ritmo da maquina e o que o posto entregou no turno.
+ *
  * Uso: npm run dev (porta 5199) e depois node test/e2e/rapida.e2e.mjs
  */
 import { chromium } from 'playwright';
@@ -86,6 +90,32 @@ await p.getByRole('button', { name: 'Agora' }).first().tap();
 const agora = await p.locator('input[aria-label="Hora inicial"]').inputValue();
 checar(/^\d{2}:\d{2}$/.test(agora), `"Agora" carimba a hora atual no campo (${agora})`);
 
+/* ------------------------------------------ paradas dentro do periodo */
+await p.locator('input[aria-label="Hora inicial"]').fill('07:00');
+await p.locator('input[aria-label="Hora final"]').fill('07:30');
+await p.locator('input[aria-label="Peças no período"]').fill('100');
+checar(await ritmo() === 200, '30 min com 100 pecas dao 200 pc/h antes de marcar parada');
+
+await p.getByRole('button', { name: '+ SETUP / TROCA' }).tap();
+const minutosSetup = p.locator('input[aria-label="Minutos parada — Setup / Troca"]');
+await minutosSetup.fill('10');
+checar(await ritmo() === 300, 'setup de 10 min: sobram 20 min rodando -> 300 pc/h');
+
+const comParada = await painelHoras.innerText();
+checar(/rodando/i.test(comParada), 'a tela diz que o numero grande e o da maquina rodando');
+checar(comParada.includes('200'), 'o ritmo do periodo inteiro continua visivel ao lado');
+checar(comParada.includes('10 min'), 'o tempo parado aparece no resultado');
+
+// Parada maior que o periodo: avisa, nao some com a conta nem divide por zero.
+await minutosSetup.fill('40');
+await painelHoras.waitFor({ state: 'detached', timeout: 4000 });
+checar(true, 'parada maior que o periodo troca o resultado por um aviso');
+
+await minutosSetup.fill('10');
+await painelHoras.waitFor({ timeout: 4000 });
+await p.getByRole('button', { name: 'Remover parada Setup / Troca' }).tap();
+checar(await ritmo() === 200, 'remover a parada devolve o ritmo do periodo inteiro');
+
 /* ------------------------------------------- alternativa: cronometro vivo */
 await p.getByRole('button', { name: /CRONOMETRAR AO VIVO/ }).tap();
 await p.waitForTimeout(1000);
@@ -114,6 +144,21 @@ checar((await contar.innerText()).includes('4'), 'toque em repique (<200ms) nao 
 checar(await p.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1),
   'ao vivo tudo cabe na viewport do celular, sem rolagem');
 
+/* ---------------------------------- parada cronometrada durante o ao vivo */
+await p.getByRole('button', { name: 'Parou' }).tap();
+await p.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
+await p.getByRole('button', { name: 'Setup / Troca' }).tap();
+
+const paradaViva = p.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
+await paradaViva.waitFor({ timeout: 4000 });
+checar(true, 'escolher o motivo comeca a parada e a tela vira o botao de voltar');
+checar(await contar.count() === 0, 'maquina parada nao oferece contar peca');
+
+await p.waitForTimeout(1200);
+await paradaViva.tap();
+await contar.waitFor({ timeout: 4000 });
+checar((await contar.innerText()).includes('4'), 'voltar a produzir devolve a contagem intacta');
+
 await p.getByRole('button', { name: /Encerrar/ }).tap();
 const inputPecas = p.locator('input[aria-label="Peças no período"]');
 await inputPecas.waitFor({ timeout: 4000 });
@@ -121,6 +166,10 @@ checar(await inputPecas.inputValue() === '4', 'resultado abre com as pecas conta
 
 const ritmoContado = await ritmo();
 checar(ritmoContado > 0, `ritmo calculado na hora (${ritmoContado} pc/h)`);
+
+const painelResultado = p.locator('[aria-label="Resultado da conferência"]');
+checar((await painelResultado.innerText()).includes('Setup / Troca'),
+  'a parada cronometrada ao vivo chega ao resultado, com o motivo escolhido');
 
 /* --------------------------- quem leu o contador da maquina digita o total */
 await inputPecas.fill('150');

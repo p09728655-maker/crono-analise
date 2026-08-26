@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } from '../../theme/tokens.js';
 import {
-  conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao, formatarSegundos,
+  MOTIVOS_PARADA, conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao,
+  formatarSegundos, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
 import { TOQUE_MINIMO_MS } from '../../domain/estatistica.js';
 import { sincronizar } from '../../lib/api.js';
 import { listarConferencias, marcarEnviadas, removerConferencia, salvarConferencia } from '../../lib/conferencias.js';
-import { enfileirar } from '../../lib/filaOffline.js';
+import { enfileirar, novoId } from '../../lib/filaOffline.js';
 import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
 
 /**
@@ -31,6 +32,11 @@ import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
  *    conta esta' na tela. Sem botao "calcular" — ele so' atrasaria.
  *  - A quantidade de pecas e' EDITAVEL tambem no resultado do cronometro,
  *    para quem cronometrou ao vivo mas contou pelo contador da maquina.
+ *  - PARADAS entram no periodo: setup, falta de peca, manutencao. Sem elas,
+ *    a mesma furadeira aparece lenta no dia de troca de lote e rapida no
+ *    dia de lote longo — e o ritmo nunca fecha com o que o posto entrega.
+ *    O ritmo sai do tempo em que a maquina RODOU; o do periodo inteiro
+ *    continua na tela, porque e' ele que explica o que saiu no turno.
  *  - Mesma ergonomia da coleta: alvo gigante, vibracao, tema escuro,
  *    tela acesa enquanto cronometra.
  */
@@ -46,6 +52,13 @@ export default function ConferenciaRapida({ aoSair }) {
   const [horaFinal, setHoraFinal] = useState('');
   const [pecasPeriodo, setPecasPeriodo] = useState('');
 
+  // Paradas DENTRO do periodo conferido. Uma lista so' para os dois
+  // caminhos (horarios e cronometro): a parada e' do PERIODO, nao do jeito
+  // como ele foi medido.
+  const [paradas, setParadas] = useState([]);
+  const [emParada, setEmParada] = useState(null);      // {motivo, inicio} no ao vivo
+  const [escolhendoMotivo, setEscolhendoMotivo] = useState(false);
+
   // Maquina, peca e memoria deste aparelho.
   const [maquina, setMaquina] = useState('');
   const [peca, setPeca] = useState('');
@@ -56,7 +69,7 @@ export default function ConferenciaRapida({ aoSair }) {
   // de novo em vez de fingir que a alteracao tambem esta' guardada.
   useEffect(() => {
     setSalvo(null);
-  }, [maquina, peca, horaInicial, horaFinal, pecasPeriodo, pecasFinais, fase]);
+  }, [maquina, peca, horaInicial, horaFinal, pecasPeriodo, pecasFinais, paradas, fase]);
 
   // BACKFILL: conferencias salvas antes da sincronizacao existir (ou num
   // navegador em que a fila falhou) nao tem a marca `enviada`. Ao abrir a
@@ -78,6 +91,7 @@ export default function ConferenciaRapida({ aoSair }) {
             horaFinal: c.horaFinal || null,
             duracaoMs: Math.round(c.duracaoMs),
             pecas: c.pecas,
+            paradas: c.paradas || [],
             salvoEm: c.salvoEm,
           });
         }
@@ -85,6 +99,35 @@ export default function ConferenciaRapida({ aoSair }) {
         sincronizar().catch(() => {});
       } catch { /* sem fila neste navegador: tenta de novo na proxima abertura */ }
     })();
+  }, []);
+
+  /**
+   * Paradas em milissegundos, prontas para o calculo.
+   *
+   * O campo guarda MINUTO (e' assim que o analista pensa: "ficou 8 minutos
+   * parada"), entao a conversao mora num lugar so'. Vazio e zero somem da
+   * lista: linha recem-criada nao pode virar parada de 0 min no relatorio.
+   */
+  const paradasEmMs = useMemo(() => paradas
+    .map((p) => ({
+      motivo: p.motivo,
+      duracaoMs: Math.round((Number(String(p.minutos).replace(',', '.')) || 0) * 60000),
+    }))
+    .filter((p) => p.duracaoMs > 0), [paradas]);
+  const totalParada = useMemo(() => somarParadas(paradasEmMs), [paradasEmMs]);
+
+  const adicionarParada = useCallback((motivo, minutos = '') => {
+    setParadas((lista) => [...lista, { id: novoId(), motivo, minutos: String(minutos) }]);
+    vibrar(30);
+  }, []);
+
+  const alterarParada = useCallback((id, campo, valor) => {
+    setParadas((lista) => lista.map((p) => (p.id === id ? { ...p, [campo]: valor } : p)));
+  }, []);
+
+  const removerParada = useCallback((id) => {
+    setParadas((lista) => lista.filter((p) => p.id !== id));
+    vibrar([25, 40, 25]);
   }, []);
 
   const rodando = fase === 'rodando';
@@ -102,6 +145,7 @@ export default function ConferenciaRapida({ aoSair }) {
 
   const comecar = useCallback(() => {
     setPecas(0);
+    setParadas([]);
     setFase('rodando');
     iniciar();
     vibrar(45);
@@ -109,6 +153,8 @@ export default function ConferenciaRapida({ aoSair }) {
 
   const contarPeca = useCallback(() => {
     if (!rodando) return;
+    // Maquina parada nao produz peca: o toque aqui seria engano de dedo.
+    if (emParada) return;
     // Mesma guarda de repique da coleta: dedo/luva encostando duas vezes.
     const agora = performance.now();
     if (agora - ultimoToqueRef.current < TOQUE_MINIMO_MS) return;
@@ -116,20 +162,51 @@ export default function ConferenciaRapida({ aoSair }) {
     vibrar(45);
     setPulso((p) => p + 1);
     setPecas((n) => n + 1);
-  }, [rodando]);
+  }, [rodando, emParada]);
 
   const desfazer = useCallback(() => {
     setPecas((n) => Math.max(0, n - 1));
     vibrar([25, 40, 25]);
   }, []);
 
+  /**
+   * Parada durante o cronometro ao vivo.
+   *
+   * O relogio do periodo NAO para — o periodo e' o que passou no relogio, e
+   * a parada esta' dentro dele. O que a pausa faz e' registrar quanto desse
+   * periodo a maquina passou parada, e por que.
+   */
+  const iniciarParada = useCallback((motivo) => {
+    setEscolhendoMotivo(false);
+    setEmParada({ motivo, inicio: performance.now() });
+    vibrar([40, 60, 40]);
+  }, []);
+
+  const encerrarParada = useCallback(() => {
+    if (!emParada) return;
+    const ms = performance.now() - emParada.inicio;
+    // Menos de 1s e' toque errado, nao parada. Duas casas no minuto: um
+    // setup de 45s precisa entrar como 0,75 — arredondar para 0,8 jogaria
+    // 3 segundos dentro do tempo de maquina rodando.
+    if (ms >= 1000) adicionarParada(emParada.motivo, (ms / 60000).toFixed(2));
+    setEmParada(null);
+    vibrar(45);
+  }, [emParada, adicionarParada]);
+
   const encerrar = useCallback(() => {
+    // Encerrar com parada em curso fecha a parada primeiro: o tempo dela
+    // ja' passou no relogio e nao pode virar tempo de maquina rodando.
+    if (emParada) {
+      const ms = performance.now() - emParada.inicio;
+      if (ms >= 1000) adicionarParada(emParada.motivo, (ms / 60000).toFixed(2));
+      setEmParada(null);
+    }
     const total = parar();
     setDuracaoFinal(total);
     setPecasFinais(String(pecas));
     setFase('resultado');
     vibrar([30, 40, 30]);
-  }, [parar, pecas]);
+  }, [parar, pecas, emParada, adicionarParada]);
 
   // Barra de espaco espelha o toque, como na coleta (teclado bluetooth).
   useEffect(() => {
@@ -138,21 +215,22 @@ export default function ConferenciaRapida({ aoSair }) {
       // Sem preventDefault com um input focado: espaco tambem e' digitacao.
       if (ev.target?.tagName === 'INPUT') return;
       ev.preventDefault();
+      if (escolhendoMotivo) return;
       if (rodando) contarPeca();
       else if (fase === 'pronto') comecar();
     };
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
-  }, [fase, rodando, contarPeca, comecar]);
+  }, [fase, rodando, contarPeca, comecar, escolhendoMotivo]);
 
   const parcial = useMemo(
-    () => conferenciaRapida({ duracaoMs: decorrido, pecas }),
-    [decorrido, pecas],
+    () => conferenciaRapida({ duracaoMs: decorrido, pecas, paradas: paradasEmMs }),
+    [decorrido, pecas, paradasEmMs],
   );
 
   const resultado = useMemo(
-    () => conferenciaRapida({ duracaoMs: duracaoFinal, pecas: pecasFinais }),
-    [duracaoFinal, pecasFinais],
+    () => conferenciaRapida({ duracaoMs: duracaoFinal, pecas: pecasFinais, paradas: paradasEmMs }),
+    [duracaoFinal, pecasFinais, paradasEmMs],
   );
 
   // A conta dos horarios sai a cada tecla: preencheu, apareceu.
@@ -161,9 +239,19 @@ export default function ConferenciaRapida({ aoSair }) {
     [horaInicial, horaFinal],
   );
   const resultadoHoras = useMemo(
-    () => (duracaoHoras > 0 ? conferenciaRapida({ duracaoMs: duracaoHoras, pecas: pecasPeriodo }) : null),
-    [duracaoHoras, pecasPeriodo],
+    () => (duracaoHoras > 0
+      ? conferenciaRapida({ duracaoMs: duracaoHoras, pecas: pecasPeriodo, paradas: paradasEmMs })
+      : null),
+    [duracaoHoras, pecasPeriodo, paradasEmMs],
   );
+  // Paradas maiores que o periodo: sobra zero de maquina rodando e nao ha
+  // ritmo a calcular. A tela diz isso em vez de sumir com o resultado.
+  const paradasExcedem = duracaoHoras > 0 && totalParada.totalMs >= duracaoHoras;
+  const paradasExcedemVivo = duracaoFinal > 0 && totalParada.totalMs >= duracaoFinal;
+  // Cronometro da parada em curso. Lido no render de proposito: quem faz a
+  // tela repintar e' o cronometro do periodo, que segue correndo durante a
+  // parada — nao ha' segundo temporizador para manter em sincronia.
+  const tempoParadaAtual = emParada ? performance.now() - emParada.inicio : 0;
 
   const agoraHM = () => {
     const d = new Date();
@@ -179,7 +267,11 @@ export default function ConferenciaRapida({ aoSair }) {
       horaFinal: horarios ? horaFinal : null,
       duracaoMs: calculado.duracaoMs,
       pecas: calculado.pecas,
+      paradas: paradasEmMs,
       pecasPorHora: calculado.pecasPorHora,
+      pecasPorHoraBruto: calculado.pecasPorHoraBruto,
+      paradaMs: calculado.paradaMs,
+      produtivoMs: calculado.produtivoMs,
       cicloMedioMs: calculado.cicloMedioMs,
     });
     if (!registro) { setSalvo('erro'); return; }
@@ -201,12 +293,13 @@ export default function ConferenciaRapida({ aoSair }) {
         horaFinal: registro.horaFinal,
         duracaoMs: Math.round(registro.duracaoMs),
         pecas: registro.pecas,
+        paradas: registro.paradas,
         salvoEm: registro.salvoEm,
       });
       setHistorico(marcarEnviadas([registro.id]));
       sincronizar().catch(() => {});
     } catch { /* sem fila neste navegador: o backfill tenta na proxima abertura */ }
-  }, [maquina, peca, horaInicial, horaFinal]);
+  }, [maquina, peca, horaInicial, horaFinal, paradasEmMs]);
 
   const remover = useCallback((id) => {
     setHistorico(removerConferencia(id));
@@ -224,6 +317,8 @@ export default function ConferenciaRapida({ aoSair }) {
     setPecasPeriodo('');
     setHoraInicial(horaFinal || '');
     setHoraFinal('');
+    // Parada e' do periodo que acabou: o proximo comeca sem nenhuma.
+    setParadas([]);
     vibrar(30);
   }, [horaFinal]);
 
@@ -234,10 +329,12 @@ export default function ConferenciaRapida({ aoSair }) {
           ←
         </button>
         <div style={{ minWidth: 0, flex: 1 }}>
+          {/* O posto vem no selo a direita, nao no titulo: "Conferência
+              rápida · Furadeiras" nao cabe em tela de celular e sai cortado. */}
           <div style={est.titulo}>Conferência rápida</div>
-          <div style={est.subtitulo}>Sem cadastro · salva só neste aparelho</div>
+          <div style={est.subtitulo}>Peças/hora por posto · sem cadastro</div>
         </div>
-        <span style={est.selo}>AVULSA</span>
+        <span style={est.selo}>FURADEIRA</span>
       </header>
 
       {fase === 'pronto' && (
@@ -322,13 +419,30 @@ export default function ConferenciaRapida({ aoSair }) {
                 aria-label="Peças no período"
               />
             </label>
+
+            <Paradas
+              paradas={paradas}
+              resumo={totalParada}
+              duracaoMs={duracaoHoras}
+              aoAdicionar={adicionarParada}
+              aoAlterar={alterarParada}
+              aoRemover={removerParada}
+            />
           </section>
 
-          {resultadoHoras && resultadoHoras.pecas > 0 ? (
+          {paradasExcedem ? (
+            <section style={est.avisoParada} role="alert">
+              As paradas somam {formatarDuracao(totalParada.totalMs)} e o período tem
+              {' '}{formatarDuracao(duracaoHoras)} — não sobra tempo de máquina rodando.
+              Confira os horários ou os minutos de parada.
+            </section>
+          ) : resultadoHoras && resultadoHoras.pecas > 0 ? (
             <section style={est.painelHoras} aria-label="Resultado dos horários">
               <div style={est.destaqueRitmo} aria-label="Ritmo do período">
                 <span style={est.valorRitmo}>{Math.round(resultadoHoras.pecasPorHora)}</span>
-                <span style={est.sufixoRitmo}>peças/hora</span>
+                <span style={est.sufixoRitmo}>
+                  {resultadoHoras.paradaMs > 0 ? 'peças/hora com a máquina rodando' : 'peças/hora'}
+                </span>
               </div>
               <div style={est.linhaParcial}>
                 <Parcial rotulo="Período" valor={formatarDuracao(duracaoHoras)} />
@@ -339,6 +453,7 @@ export default function ConferenciaRapida({ aoSair }) {
                   sufixo="s/pç"
                 />
               </div>
+              <ComParadas calculado={resultadoHoras} />
               <BotaoSalvar salvo={salvo} aoSalvar={() => salvar(resultadoHoras, true)} />
               <button type="button" style={est.botaoOutraPeca} onClick={outraPeca}>
                 ➜ COMEÇAR OUTRA PEÇA
@@ -349,7 +464,9 @@ export default function ConferenciaRapida({ aoSair }) {
               Passe pela máquina e toque <strong>Agora</strong> na chegada; na
               volta, toque <strong>Agora</strong> de novo, digite quantas peças
               saíram e a conta aparece aqui — peças/hora e ciclo médio. Também
-              dá para digitar os horários depois, de cabeça.
+              dá para digitar os horários depois, de cabeça. Se houve
+              <strong> setup</strong> ou outra parada no meio, marque acima:
+              o ritmo passa a sair do tempo em que a máquina rodou.
             </section>
           )}
 
@@ -359,7 +476,11 @@ export default function ConferenciaRapida({ aoSair }) {
             <span style={est.traco} />
           </div>
 
-          <button type="button" onPointerDown={comecar} style={{ ...est.botaoGrande, ...est.botaoIniciar, ...est.botaoVivo }}>
+          {/* onClick, nao onPointerDown: comecar troca a tela inteira, e o
+              toque que ainda nao terminou cairia no botao que aparecer
+              embaixo do dedo — "Parou" ou, pior, "Encerrar". Aqui uns
+              milissegundos a mais nao custam nada: o periodo tem minutos. */}
+          <button type="button" onClick={comecar} style={{ ...est.botaoGrande, ...est.botaoIniciar, ...est.botaoVivo }}>
             <span style={est.rotuloBotao}>▶ CRONOMETRAR AO VIVO</span>
           </button>
 
@@ -377,6 +498,7 @@ export default function ConferenciaRapida({ aoSair }) {
                         c.horaInicial && c.horaFinal ? `${c.horaInicial}–${c.horaFinal}` : null,
                         formatarDuracao(c.duracaoMs),
                         `${c.pecas} pç`,
+                        c.paradaMs > 0 ? `${formatarDuracao(c.paradaMs)} parada` : null,
                         dataCurta(c.salvoEm),
                       ].filter(Boolean).join(' · ')}
                     </div>
@@ -410,32 +532,95 @@ export default function ConferenciaRapida({ aoSair }) {
             <div style={est.linhaParcial}>
               <Parcial rotulo="Peças" valor={String(pecas)} />
               <Parcial rotulo="Ritmo" valor={parcial && pecas > 0 ? String(Math.round(parcial.pecasPorHora)) : '—'} sufixo="pç/h" />
-              <Parcial rotulo="Ciclo médio" valor={parcial?.cicloMedioMs ? formatarSegundos(parcial.cicloMedioMs) : '—'} sufixo="s" />
+              <Parcial rotulo="Parado" valor={totalParada.totalMs > 0 ? formatarDuracao(totalParada.totalMs) : '—'} />
             </div>
           </section>
 
-          <button
-            type="button"
-            onPointerDown={contarPeca}
-            style={{ ...est.botaoGrande, ...est.botaoContar }}
-            aria-label="Contar uma peça"
-          >
-            <span key={pulso} style={est.contagem}>{pecas}</span>
-            <span style={est.rotuloBotao}>TOQUE A CADA PEÇA</span>
-            <span style={est.dicaBotao}>ou só cronometre e digite o total no fim</span>
-          </button>
+          {emParada ? (
+            /* Maquina parada: o relogio do periodo segue correndo (a parada
+               esta' DENTRO dele), mas contar peca fica bloqueado e a tela
+               inteira vira o botao de voltar a produzir. */
+            <button
+              type="button"
+              onPointerDown={encerrarParada}
+              style={{ ...est.botaoGrande, ...est.botaoVoltarProduzir }}
+              aria-label="Encerrar a parada e voltar a produzir"
+            >
+              <span style={est.rotuloParadaAtiva}>PARADA · {rotuloMotivo(emParada.motivo)}</span>
+              <span style={est.contagem}>{formatarCronometro(Math.max(0, tempoParadaAtual))}</span>
+              <span style={est.rotuloBotao}>▶ VOLTOU A PRODUZIR</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onPointerDown={contarPeca}
+              style={{ ...est.botaoGrande, ...est.botaoContar }}
+              aria-label="Contar uma peça"
+            >
+              <span key={pulso} style={est.contagem}>{pecas}</span>
+              <span style={est.rotuloBotao}>TOQUE A CADA PEÇA</span>
+              <span style={est.dicaBotao}>ou só cronometre e digite o total no fim</span>
+            </button>
+          )}
 
-          <nav style={est.barraInferior} aria-label="Ações da conferência">
-            <button type="button" style={est.botaoBarra} onClick={desfazer} disabled={!pecas}>
+          <nav style={est.barraInferiorTres} aria-label="Ações da conferência">
+            <button type="button" style={est.botaoBarra} onClick={desfazer} disabled={!pecas || !!emParada}>
               <span style={est.iconeBarra}>↩</span>
               Desfazer
+            </button>
+            <button
+              type="button"
+              style={{ ...est.botaoBarra, ...est.botaoParou }}
+              onClick={() => (emParada ? encerrarParada() : setEscolhendoMotivo(true))}
+            >
+              <span style={est.iconeBarra}>{emParada ? '▶' : '⏸'}</span>
+              {emParada ? 'Voltou' : 'Parou'}
             </button>
             <button type="button" style={{ ...est.botaoBarra, ...est.botaoEncerrar }} onClick={encerrar}>
               <span style={est.iconeBarra}>■</span>
               Encerrar
             </button>
           </nav>
+
+          {escolhendoMotivo && (
+            <div style={est.folhaMotivos} role="dialog" aria-label="Por que a máquina parou">
+              <div style={est.folhaCaixa}>
+                <div style={est.folhaTitulo}>Por que parou?</div>
+                <div style={est.gradeMotivos}>
+                  {MOTIVOS_PARADA.map((m) => (
+                    <button
+                      key={m.codigo}
+                      type="button"
+                      style={{ ...est.chipMotivo, ...(m.codigo === 'setup' ? est.chipSetup : {}) }}
+                      onClick={() => iniciarParada(m.codigo)}
+                    >
+                      {m.rotulo}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" style={est.botaoOutraPeca} onClick={() => setEscolhendoMotivo(false)}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </>
+      )}
+
+      {fase === 'resultado' && !resultado && paradasExcedemVivo && (
+        <section style={est.avisoParada} role="alert">
+          As paradas somam {formatarDuracao(totalParada.totalMs)} e o período
+          cronometrado tem {formatarDuracao(duracaoFinal)} — não sobra tempo de
+          máquina rodando. Ajuste os minutos de parada abaixo.
+          <Paradas
+            paradas={paradas}
+            resumo={totalParada}
+            duracaoMs={duracaoFinal}
+            aoAdicionar={adicionarParada}
+            aoAlterar={alterarParada}
+            aoRemover={removerParada}
+          />
+        </section>
       )}
 
       {fase === 'resultado' && resultado && (
@@ -489,7 +674,9 @@ export default function ConferenciaRapida({ aoSair }) {
 
             <div style={est.destaqueRitmo} aria-label="Ritmo do período">
               <span style={est.valorRitmo}>{Math.round(resultado.pecasPorHora)}</span>
-              <span style={est.sufixoRitmo}>peças/hora</span>
+              <span style={est.sufixoRitmo}>
+                {resultado.paradaMs > 0 ? 'peças/hora com a máquina rodando' : 'peças/hora'}
+              </span>
             </div>
 
             <div style={est.linhaParcial}>
@@ -500,6 +687,19 @@ export default function ConferenciaRapida({ aoSair }) {
                 sufixo="s/pç"
               />
             </div>
+
+            <ComParadas calculado={resultado} />
+
+            {/* Editavel tambem aqui: parada esquecida no calor da coleta se
+                corrige antes de salvar, sem refazer a conferencia. */}
+            <Paradas
+              paradas={paradas}
+              resumo={totalParada}
+              duracaoMs={duracaoFinal}
+              aoAdicionar={adicionarParada}
+              aoAlterar={alterarParada}
+              aoRemover={removerParada}
+            />
 
             {resultado.pecas > 0 && (
               <BotaoSalvar salvo={salvo} aoSalvar={() => salvar(resultado, false)} />
@@ -519,7 +719,7 @@ export default function ConferenciaRapida({ aoSair }) {
             <button
               type="button"
               style={{ ...est.botaoBarra, ...est.botaoNova }}
-              onClick={() => setFase('pronto')}
+              onClick={() => { setParadas([]); setFase('pronto'); }}
             >
               <span style={est.iconeBarra}>▶</span>
               Nova conferência
@@ -527,6 +727,104 @@ export default function ConferenciaRapida({ aoSair }) {
           </nav>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Paradas do periodo — o painel que separa setup do resto.
+ *
+ * Fica junto dos campos do periodo porque e' isso que ele descreve: quanto
+ * daquele intervalo a maquina NAO estava produzindo. Setup ganha botao
+ * proprio porque e' a parada mais comum da furadeira (troca de gabarito,
+ * programa, broca) e a unica que o processo exige — as outras entram pelo
+ * segundo botao e viram escolha de motivo.
+ *
+ * O campo e' em MINUTOS: ninguem no chao de fabrica pensa em milissegundos.
+ */
+function Paradas({ paradas, resumo, duracaoMs, aoAdicionar, aoAlterar, aoRemover }) {
+  const produtivoMs = duracaoMs > 0 ? duracaoMs - Math.min(resumo.totalMs, duracaoMs) : 0;
+
+  return (
+    <div style={est.blocoParadas} aria-label="Paradas no período">
+      <span style={est.rotuloCampo}>PARADAS NO PERÍODO</span>
+
+      <div style={est.linhaBotoesParada}>
+        <button type="button" style={est.botaoSetup} onClick={() => aoAdicionar('setup')}>
+          + SETUP / TROCA
+        </button>
+        <button type="button" style={est.botaoParada} onClick={() => aoAdicionar('falta_material')}>
+          + OUTRA PARADA
+        </button>
+      </div>
+
+      {paradas.length === 0 ? (
+        <span style={est.dicaParada}>
+          Nenhuma marcada — o período inteiro conta como máquina rodando.
+        </span>
+      ) : (
+        <>
+          {paradas.map((p) => (
+            <div key={p.id} style={est.linhaParada}>
+              <select
+                value={p.motivo}
+                onChange={(ev) => aoAlterar(p.id, 'motivo', ev.target.value)}
+                style={est.selectMotivo}
+                aria-label="Motivo da parada"
+              >
+                {MOTIVOS_PARADA.map((m) => (
+                  <option key={m.codigo} value={m.codigo}>{m.rotulo}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                inputMode="decimal"
+                placeholder="min"
+                value={p.minutos}
+                onChange={(ev) => aoAlterar(p.id, 'minutos', ev.target.value)}
+                style={est.inputMinutos}
+                aria-label={`Minutos parada — ${rotuloMotivo(p.motivo)}`}
+              />
+              <button
+                type="button"
+                style={est.itemRemover}
+                onClick={() => aoRemover(p.id)}
+                aria-label={`Remover parada ${rotuloMotivo(p.motivo)}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+
+          {resumo.totalMs > 0 && (
+            <span style={est.dicaParada}>
+              Parado {formatarDuracao(resumo.totalMs)}
+              {resumo.setupMs > 0 && ` (setup ${formatarDuracao(resumo.setupMs)})`}
+              {duracaoMs > 0 && produtivoMs > 0 && ` · máquina rodando ${formatarDuracao(produtivoMs)}`}
+            </span>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A linha que so' existe quando ha' parada marcada.
+ *
+ * Mostra o outro numero — o do periodo inteiro — porque os dois respondem
+ * perguntas diferentes: o ritmo com a maquina rodando dimensiona capacidade;
+ * o do periodo explica o que de fato saiu do posto naquelas horas.
+ */
+function ComParadas({ calculado }) {
+  if (!calculado || !calculado.paradaMs) return null;
+  return (
+    <div style={est.linhaParcial}>
+      <Parcial rotulo="Parado" valor={formatarDuracao(calculado.paradaMs)} />
+      <Parcial rotulo="Rodando" valor={formatarDuracao(calculado.produtivoMs)} />
+      <Parcial rotulo="No período" valor={String(Math.round(calculado.pecasPorHoraBruto))} sufixo="pç/h" />
     </div>
   );
 }
@@ -811,6 +1109,80 @@ const est = {
     background: cores.atencaoFundo, borderRadius: raio.md,
     borderWidth: 1, borderStyle: 'solid', borderColor: cores.atencao,
   },
+
+  /* ---- paradas do periodo ---- */
+  blocoParadas: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm, minWidth: 0,
+    paddingTop: espaco.md,
+    borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: cores.borda,
+  },
+  linhaBotoesParada: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.sm },
+  // Setup ganha destaque proprio: e' a parada que o analista mais marca na
+  // furadeira, e procurar por ela num menu custaria mais que o toque.
+  botaoSetup: {
+    minHeight: 48, padding: `0 ${espaco.sm}px`,
+    background: cores.superficieAlta,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.atencao, borderRadius: raio.sm,
+    color: cores.texto, fontSize: tamanho.pequeno, fontWeight: 700, letterSpacing: 0.5,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  botaoParada: {
+    minHeight: 48, padding: `0 ${espaco.sm}px`,
+    background: cores.superficieAlta,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.sm,
+    color: cores.texto, fontSize: tamanho.pequeno, fontWeight: 700, letterSpacing: 0.5,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  dicaParada: { fontSize: tamanho.legenda, color: cores.textoFraco, lineHeight: 1.4 },
+  linhaParada: { display: 'flex', alignItems: 'center', gap: espaco.sm, minWidth: 0 },
+  selectMotivo: {
+    flex: 1, minWidth: 0, minHeight: 48, padding: `0 ${espaco.sm}px`,
+    background: cores.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.sm,
+    color: cores.texto, fontSize: tamanho.pequeno, fontWeight: 600,
+    fontFamily: 'inherit', outline: 'none', colorScheme: 'dark',
+  },
+  inputMinutos: {
+    width: 84, flexShrink: 0, minHeight: 48, textAlign: 'center',
+    background: cores.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.sm,
+    color: cores.texto, fontSize: tamanho.titulo, fontWeight: 700,
+    fontFamily: fonte.numero, outline: 'none',
+  },
+  avisoParada: {
+    flexShrink: 0, display: 'flex', flexDirection: 'column', gap: espaco.md,
+    padding: espaco.lg, fontSize: tamanho.corpo, color: cores.texto, lineHeight: 1.5,
+    background: cores.criticoFundo, borderRadius: raio.lg,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.critico,
+  },
+
+  /* ---- parada durante o cronometro ao vivo ---- */
+  barraInferiorTres: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: espaco.sm, flexShrink: 0 },
+  botaoParou: { borderColor: cores.atencao, color: cores.atencao },
+  botaoVoltarProduzir: { background: `linear-gradient(160deg, ${cores.atencao}, #7C3A06)` },
+  rotuloParadaAtiva: { fontSize: tamanho.pequeno, fontWeight: 700, letterSpacing: 1.5, opacity: 0.92 },
+  folhaMotivos: {
+    position: 'fixed', inset: 0, zIndex: 30,
+    display: 'flex', alignItems: 'flex-end',
+    background: 'rgba(0,0,0,0.6)', padding: espaco.md,
+  },
+  folhaCaixa: {
+    width: '100%', display: 'flex', flexDirection: 'column', gap: espaco.md,
+    background: cores.superficie,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.lg,
+    padding: espaco.lg, boxShadow: sombra.alta,
+    maxHeight: '86dvh', overflowY: 'auto',
+  },
+  folhaTitulo: { fontSize: tamanho.titulo, fontWeight: 700 },
+  gradeMotivos: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.sm },
+  chipMotivo: {
+    minHeight: 60, padding: `0 ${espaco.sm}px`,
+    background: cores.superficieAlta,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.md,
+    color: cores.texto, fontSize: tamanho.pequeno, fontWeight: 700, lineHeight: 1.25,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  chipSetup: { borderColor: cores.atencao },
 
   rodape: { flexShrink: 0, height: espaco.md },
 };

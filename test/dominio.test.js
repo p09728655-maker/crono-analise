@@ -7,7 +7,7 @@ import {
 import {
   amostraSuficiente, calcularOperacao, conferenciaRapida, duracaoEntreHoras,
   formatarCronometro, formatarDuracao, oee, operadoresNecessarios,
-  resumirConferencias, taktTime,
+  resumirConferencias, rotuloMotivo, somarParadas, taktTime,
 } from '../src/domain/cronoanalise.js';
 
 describe('temposValidos', () => {
@@ -216,6 +216,76 @@ describe('conferenciaRapida', () => {
   });
 });
 
+describe('somarParadas', () => {
+  const MIN = 60000;
+  it('separa setup do resto — sao decisoes diferentes (SMED x causa da perda)', () => {
+    const r = somarParadas([
+      { motivo: 'setup', duracaoMs: 6 * MIN },
+      { motivo: 'falta_material', duracaoMs: 4 * MIN },
+    ]);
+    expect(r.totalMs).toBe(10 * MIN);
+    expect(r.setupMs).toBe(6 * MIN);
+    expect(r.outrasMs).toBe(4 * MIN);
+  });
+
+  it('soma o mesmo motivo e devolve em ordem de Pareto', () => {
+    const r = somarParadas([
+      { motivo: 'setup', duracaoMs: 2 * MIN },
+      { motivo: 'manutencao', duracaoMs: 9 * MIN },
+      { motivo: 'setup', duracaoMs: 3 * MIN },
+    ]);
+    expect(r.porMotivo.map((m) => m.motivo)).toEqual(['manutencao', 'setup']);
+    expect(r.porMotivo[1].ms).toBe(5 * MIN);
+    expect(r.porMotivo[0].rotulo).toBe(rotuloMotivo('manutencao'));
+  });
+
+  it('linha zerada ou invalida nao vira parada; sem lista, zero', () => {
+    expect(somarParadas([{ motivo: 'setup', duracaoMs: 0 }, { motivo: 'setup' }]).totalMs).toBe(0);
+    expect(somarParadas(undefined).totalMs).toBe(0);
+    expect(somarParadas([]).porMotivo).toEqual([]);
+  });
+
+  it('aceita o formato do banco (snake_case) e motivo ausente vira "outro"', () => {
+    const r = somarParadas([{ duracao_ms: 5 * MIN }]);
+    expect(r.totalMs).toBe(5 * MIN);
+    expect(r.porMotivo[0].motivo).toBe('outro');
+  });
+});
+
+describe('conferenciaRapida com paradas', () => {
+  const MIN = 60000;
+
+  it('setup sai do ritmo: 100 pc em 30 min com 10 min de setup sao 20 min rodando', () => {
+    const r = conferenciaRapida({
+      duracaoMs: 30 * MIN, pecas: 100, paradas: [{ motivo: 'setup', duracaoMs: 10 * MIN }],
+    });
+    expect(r.produtivoMs).toBe(20 * MIN);
+    expect(r.paradaMs).toBe(10 * MIN);
+    expect(r.setupMs).toBe(10 * MIN);
+    expect(r.pecasPorHora).toBe(300);          // ritmo da maquina rodando
+    expect(r.pecasPorHoraBruto).toBe(200);     // o que saiu do posto na meia hora
+    expect(r.cicloMedioMs).toBe(12000);
+    expect(r.disponibilidadePct).toBeCloseTo(66.67, 2);
+  });
+
+  it('sem parada marcada nada muda: os dois ritmos sao o mesmo numero', () => {
+    const r = conferenciaRapida({ duracaoMs: 10 * MIN, pecas: 150 });
+    expect(r.pecasPorHora).toBe(900);
+    expect(r.pecasPorHoraBruto).toBe(900);
+    expect(r.paradaMs).toBe(0);
+    expect(r.disponibilidadePct).toBe(100);
+  });
+
+  it('parada maior que o periodo nao produz resultado — nao ha ritmo a medir', () => {
+    expect(conferenciaRapida({
+      duracaoMs: 10 * MIN, pecas: 50, paradas: [{ motivo: 'manutencao', duracaoMs: 10 * MIN }],
+    })).toBeNull();
+    expect(conferenciaRapida({
+      duracaoMs: 10 * MIN, pecas: 50, paradas: [{ motivo: 'manutencao', duracaoMs: 99 * MIN }],
+    })).toBeNull();
+  });
+});
+
 describe('resumirConferencias', () => {
   const MIN = 60000;
   it('agrupa por maquina e pondera o ritmo pelo tempo, nao pela media das taxas', () => {
@@ -257,6 +327,47 @@ describe('resumirConferencias', () => {
     expect(g.confiavel).toBe(true);
     expect(g.motivos).toEqual([]);
     expect(g.cvPct).toBeGreaterThan(0); // estabilidade vira referencia visivel
+  });
+
+  it('o ritmo por maquina sai do tempo RODANDO, e o do periodo fica ao lado', () => {
+    const [g] = resumirConferencias([
+      // 60 min de relogio, 20 de setup: 100 pc em 40 min rodando = 150 pc/h.
+      { maquina: 'Furadeira 16', duracaoMs: 30 * MIN, pecas: 50, paradas: [{ motivo: 'setup', duracaoMs: 10 * MIN }] },
+      { maquina: 'Furadeira 16', duracaoMs: 30 * MIN, pecas: 50, paradas: [{ motivo: 'setup', duracaoMs: 10 * MIN }] },
+    ]);
+    expect(g.totalMs).toBe(60 * MIN);
+    expect(g.totalProdutivoMs).toBe(40 * MIN);
+    expect(g.totalParadaMs).toBe(20 * MIN);
+    expect(g.totalSetupMs).toBe(20 * MIN);
+    expect(g.ritmoMedio).toBe(150);
+    expect(g.ritmoBruto).toBe(100);
+    expect(g.disponibilidadePct).toBeCloseTo(66.67, 2);
+    expect(g.paradasPorMotivo).toEqual([{ motivo: 'setup', rotulo: 'Setup / Troca', ms: 20 * MIN }]);
+  });
+
+  it('meia hora quase toda em setup nao vira referencia — sobra pouco ritmo medido', () => {
+    const [g] = resumirConferencias([
+      { maquina: 'F', duracaoMs: 30 * MIN, pecas: 20, paradas: [{ motivo: 'setup', duracaoMs: 27 * MIN }] },
+      { maquina: 'F', duracaoMs: 30 * MIN, pecas: 20, paradas: [{ motivo: 'setup', duracaoMs: 27 * MIN }] },
+      { maquina: 'F', duracaoMs: 30 * MIN, pecas: 20, paradas: [{ motivo: 'setup', duracaoMs: 27 * MIN }] },
+    ]);
+    expect(g.confiavel).toBe(false);
+    // Nao e' o numero de conferencias: sao 3. E' o tempo de maquina rodando.
+    expect(g.motivos.join(' ')).toContain('tempo produtivo');
+    expect(g.motivos.join(' ')).toContain('parados');
+    expect(g.motivos.join(' ')).toContain('máquina rodando');
+  });
+
+  it('sem parada, o motivo continua falando de tempo observado (nada mudou para quem nao marca)', () => {
+    const [g] = resumirConferencias([{ maquina: 'F', duracaoMs: 6 * MIN, pecas: 39 }]);
+    expect(g.motivos.some((m) => m.startsWith('tempo total observado'))).toBe(true);
+  });
+
+  it('conferencia parada o periodo inteiro sai do resumo em vez de virar divisao por zero', () => {
+    const grupos = resumirConferencias([
+      { maquina: 'F', duracaoMs: 10 * MIN, pecas: 10, paradas: [{ motivo: 'manutencao', duracaoMs: 10 * MIN }] },
+    ]);
+    expect(grupos).toEqual([]);
   });
 
   it('mais medicoes primeiro; linha invalida (sem peca ou tempo) e ignorada', () => {

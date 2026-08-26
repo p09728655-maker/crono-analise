@@ -43,7 +43,7 @@ const SISTEMA_CONFERENCIA = `Voce e um engenheiro industrial senior especializad
 capacidade e vazao de postos em industria de moveis.
 
 Os dados sao CONFERENCIAS RAPIDAS: periodos observados num posto (hora inicial,
-hora final, pecas produzidas). NAO sao estudo de tempos — nao ha fator de ritmo,
+hora final, pecas produzidas e as paradas do periodo). NAO sao estudo de tempos — nao ha fator de ritmo,
 tolerancia nem tempo padrao. Fale em pecas/hora e ciclo medio, nunca em TO/TN/TP.
 
 Regras:
@@ -53,6 +53,14 @@ Regras:
   Onde "confiavel" for falso, diga que o numero NAO serve de referencia ainda
   e o que falta medir — nao tire conclusao de capacidade dali.
 - CV% alto entre conferencias significa ritmo instavel: aponte isso.
+- "ritmoMedioPecasHora" e' o ritmo com a MAQUINA RODANDO: ja' desconta as
+  paradas marcadas (tempoParadoMin). Nao confunda com vazao do turno.
+- Trate parada e lentidao como problemas DIFERENTES: disponibilidade baixa
+  com ritmo alto pede atacar a parada (SMED no setup, kanban na falta de
+  material, TPM na manutencao); ritmo baixo com disponibilidade alta pede
+  olhar o metodo, o gabarito e a ferramenta. Diga qual dos dois e' o caso.
+- Onde tempoParadoMin for 0, nao afirme que nao houve parada: pode ser que
+  ninguem tenha marcado. Trate como dado ausente.
 - Priorize acoes praticas de chao de fabrica, nao teoria.
 - Seja direto. Sem preambulo.
 
@@ -190,6 +198,18 @@ async function analisarConferencias(res, corpo, chaveIa) {
       cvPct: decimal(m.cvPct, `maquinas[${i}].cvPct`, { min: 0, padrao: null }),
       melhorPecasHora: decimal(m.melhor, `maquinas[${i}].melhor`, { min: 0, padrao: null }),
       piorPecasHora: decimal(m.pior, `maquinas[${i}].pior`, { min: 0, padrao: null }),
+      // Parada marcada no periodo: e' o que separa "maquina lenta" de
+      // "maquina parada". Sem isto a IA leria queda de setup como perda de
+      // ritmo e recomendaria a acao errada.
+      tempoRodandoMin: decimal(m.minutosProdutivos, `maquinas[${i}].minutosProdutivos`, { min: 0, padrao: null }),
+      tempoParadoMin: decimal(m.minutosParados, `maquinas[${i}].minutosParados`, { min: 0, padrao: 0 }),
+      tempoSetupMin: decimal(m.minutosSetup, `maquinas[${i}].minutosSetup`, { min: 0, padrao: 0 }),
+      disponibilidadePct: decimal(m.disponibilidadePct, `maquinas[${i}].disponibilidadePct`, { min: 0, padrao: null }),
+      paradasPorMotivo: lista(m.paradas || [], `maquinas[${i}].paradas`, { max: 20 })
+        .map((par, j) => ({
+          motivo: texto(par?.motivo, `maquinas[${i}].paradas[${j}].motivo`, { max: 120 }),
+          minutos: decimal(par?.minutos, `maquinas[${i}].paradas[${j}].minutos`, { min: 0, padrao: 0 }),
+        })),
       confiavel: Boolean(m.confiavel),
       motivos: lista(m.motivos || [], `maquinas[${i}].motivos`, { max: 10 })
         .map((mot, j) => texto(mot, `maquinas[${i}].motivos[${j}]`, { max: 300 })),

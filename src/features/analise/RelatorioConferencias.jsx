@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import {
-  CRITERIOS_CONFERENCIA, conferenciaRapida, formatarDuracao, formatarSegundos, resumirConferencias,
+  CRITERIOS_CONFERENCIA, MOTIVOS_PARADA, conferenciaRapida, formatarDuracao, formatarSegundos,
+  resumirConferencias, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
 import {
   analisarConferenciasComIa, arquivarConferencia, excluirConferencia, listarConferenciasServidor,
+  salvarParadasConferencia,
 } from '../../lib/api.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
@@ -26,10 +28,17 @@ import EstadoVazio from '../../components/EstadoVazio.jsx';
  * visivel — mas carimbada de "amostra insuficiente", nunca de referencia.
  * (Mesma filosofia do estudo de ciclos: criterio declarado, nao trava.)
  *
- * O ritmo medio e' ponderado pelo tempo — soma de pecas sobre soma de
- * duracao — porque e' esse numero que aguenta decisao de capacidade;
- * media simples de taxas deixaria uma medicao de 5 minutos valer o mesmo
- * que uma de 2 horas.
+ * O ritmo medio e' ponderado pelo tempo — soma de pecas sobre soma do
+ * tempo PRODUTIVO — porque e' esse numero que aguenta decisao de
+ * capacidade; media simples de taxas deixaria uma medicao de 5 minutos
+ * valer o mesmo que uma de 2 horas.
+ *
+ * PARADAS (setup, falta de material, manutencao) saem do tempo produtivo.
+ * Elas chegam do aparelho junto com a conferencia, e tambem podem ser
+ * CADASTRADAS aqui: quem confere no corredor nem sempre marca o setup na
+ * hora, e reconstituir depois — olhando o apontamento — e' trabalho de
+ * escritorio. Marcar a parada e' melhor que arquivar a medicao: o ritmo
+ * fica certo e o dado continua contando.
  *
  * A impressao NAO e' a tela no papel: e' um documento proprio (A4), com
  * identificacao, criterios, resumo e o dado bruto — ver ImpressaoConferencias.
@@ -42,6 +51,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
   const [filtro, setFiltro] = useState(null);
   const [verArquivadas, setVerArquivadas] = useState(false);
   const [confirmando, setConfirmando] = useState(null);
+  const [editandoParadas, setEditandoParadas] = useState(null);
   const [ocupado, setOcupado] = useState(null);
 
   useEffect(() => { carregar(verArquivadas); }, [verArquivadas]);
@@ -64,6 +74,17 @@ export default function RelatorioConferencias({ aoVoltar }) {
     setErro(null);
     try { await arquivarConferencia(c.id, !c.arquivada); await carregar(); }
     catch (e) { setErro(e.message); }
+    setOcupado(null);
+  }
+
+  async function gravarParadas(c, paradas) {
+    setOcupado(c.id);
+    setErro(null);
+    try {
+      await salvarParadasConferencia(c.id, paradas);
+      setEditandoParadas(null);
+      await carregar();
+    } catch (e) { setErro(e.message); }
     setOcupado(null);
   }
 
@@ -194,6 +215,14 @@ export default function RelatorioConferencias({ aoVoltar }) {
                         Ciclo médio: {formatarSegundos(g.cicloMedioMs)} s/pç
                         {g.cvPct != null && ` · CV entre conferências: ${g.cvPct.toFixed(1)}%`}
                       </span>
+                      {g.totalParadaMs > 0 && (
+                        <span>
+                          Parado: {formatarDuracao(g.totalParadaMs)}
+                          {g.totalSetupMs > 0 && ` (setup ${formatarDuracao(g.totalSetupMs)})`}
+                          {' · '}Disponibilidade: {g.disponibilidadePct.toFixed(0)}%
+                          {' · '}No período: {Math.round(g.ritmoBruto)} pç/h
+                        </span>
+                      )}
                       {g.n >= 2 && g.melhor && (
                         <span>
                           Melhor: {Math.round(g.melhor.ritmo)} pç/h{g.melhor.peca ? ` (${g.melhor.peca})` : ''}
@@ -227,6 +256,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <th style={est.th}>Peça</th>
                       <th style={est.th}>Horários</th>
                       <th style={est.thNum}>Período</th>
+                      <th style={est.thNum}>Parado</th>
                       <th style={est.thNum}>Peças</th>
                       <th style={est.thNum}>Peças/h</th>
                       <th style={est.thNum}>Ciclo (s/pç)</th>
@@ -235,7 +265,10 @@ export default function RelatorioConferencias({ aoVoltar }) {
                   </thead>
                   <tbody>
                     {visiveis.map((c) => {
-                      const calc = conferenciaRapida({ duracaoMs: Number(c.duracao_ms), pecas: c.pecas });
+                      const calc = conferenciaRapida({
+                        duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas,
+                      });
+                      const par = somarParadas(c.paradas);
                       return (
                         <tr key={c.id}>
                           <td style={est.tdFraco}>{formatarDataHora(c.salvo_em)}</td>
@@ -245,10 +278,22 @@ export default function RelatorioConferencias({ aoVoltar }) {
                             {c.hora_inicial && c.hora_final ? `${c.hora_inicial}–${c.hora_final}` : '—'}
                           </td>
                           <td style={est.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
+                          <td style={est.tdNum} title={par.porMotivo.map((m) => `${m.rotulo}: ${formatarDuracao(m.ms)}`).join(' · ')}>
+                            {par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}
+                          </td>
                           <td style={est.tdNum}>{c.pecas}</td>
                           <td style={est.tdNumForte}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
                           <td style={est.tdNum}>{calc?.cicloMedioMs ? formatarSegundos(calc.cicloMedioMs) : '—'}</td>
                           <td style={est.tdAcoes}>
+                            <button
+                              type="button"
+                              style={est.botaoLinha}
+                              onClick={() => setEditandoParadas(c)}
+                              disabled={ocupado === c.id}
+                              title="Marcar setup e outras paradas deste período"
+                            >
+                              {par.porMotivo.length ? `Paradas (${par.porMotivo.length})` : 'Paradas'}
+                            </button>
                             <button
                               type="button"
                               style={est.botaoLinha}
@@ -280,6 +325,16 @@ export default function RelatorioConferencias({ aoVoltar }) {
             </>
           )}
         </main>
+
+        {editandoParadas && (
+          <EditorParadas
+            conferencia={editandoParadas}
+            erro={erro}
+            ocupado={ocupado === editandoParadas.id}
+            aoFechar={() => { setErro(null); setEditandoParadas(null); }}
+            aoGravar={(paradas) => gravarParadas(editandoParadas, paradas)}
+          />
+        )}
 
         {confirmando && (
           <div style={est.modal} role="dialog" aria-label="Excluir conferência">
@@ -325,6 +380,157 @@ export default function RelatorioConferencias({ aoVoltar }) {
 }
 
 /**
+ * CADASTRO DE PARADAS de uma conferencia — no PC.
+ *
+ * Quem confere no corredor raramente para para digitar o setup; quem monta
+ * o relatorio, sim. Aqui a parada e' reconstituida depois, com o
+ * apontamento na mao: motivo, minutos e uma observacao livre.
+ *
+ * A lista e' gravada INTEIRA (nao incremental): o que esta na tela vira o
+ * estado final das paradas daquela conferencia, entao corrigir um numero e
+ * apagar uma linha usam o mesmo caminho e o mesmo botao.
+ *
+ * A soma nao pode alcancar o periodo: sem tempo de maquina rodando nao ha
+ * ritmo, e a conferencia sairia dos calculos sem dizer por que. O aviso
+ * aparece antes de gravar — o servidor recusa igual, mas errar no botao e'
+ * pior que errar antes dele.
+ */
+function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
+  const duracaoMs = Number(conferencia.duracao_ms) || 0;
+  const [linhas, setLinhas] = useState(() => (conferencia.paradas || []).map((p, i) => ({
+    chave: `p${i}`,
+    motivo: p.motivo || 'outro',
+    minutos: String(+((Number(p.duracaoMs ?? p.duracao_ms) || 0) / 60000).toFixed(2)),
+    observacao: p.observacao || '',
+  })));
+  const [proxima, setProxima] = useState(0);
+
+  const limpas = linhas
+    .map((l) => ({
+      motivo: l.motivo,
+      duracaoMs: Math.round((Number(String(l.minutos).replace(',', '.')) || 0) * 60000),
+      observacao: l.observacao.trim() || null,
+    }))
+    .filter((l) => l.duracaoMs > 0);
+
+  const somaMs = limpas.reduce((acc, l) => acc + l.duracaoMs, 0);
+  const excede = somaMs >= duracaoMs;
+  const produtivoMs = Math.max(0, duracaoMs - somaMs);
+
+  const adicionar = (motivo) => {
+    setLinhas((l) => [...l, { chave: `n${proxima}`, motivo, minutos: '', observacao: '' }]);
+    setProxima((n) => n + 1);
+  };
+  const alterar = (chave, campo, valor) =>
+    setLinhas((l) => l.map((x) => (x.chave === chave ? { ...x, [campo]: valor } : x)));
+  const remover = (chave) => setLinhas((l) => l.filter((x) => x.chave !== chave));
+
+  return (
+    <div style={est.modal} role="dialog" aria-label="Paradas da conferência">
+      <div style={{ ...est.caixaModal, maxWidth: 620 }}>
+        <h2 style={est.tituloModal}>Paradas do período</h2>
+        <p style={est.textoModal}>
+          <strong>{[conferencia.maquina, conferencia.peca].filter(Boolean).join(' · ') || 'Sem identificação'}</strong>
+          {conferencia.hora_inicial && conferencia.hora_final
+            ? ` · ${conferencia.hora_inicial}–${conferencia.hora_final}`
+            : ''}
+          {' · '}{formatarDuracao(duracaoMs)} · {conferencia.pecas} pç
+        </p>
+        <p style={est.textoModal}>
+          Marque quanto tempo a máquina ficou parada dentro deste período. O ritmo
+          passa a ser calculado sobre o tempo em que ela <strong>rodou</strong> — e a
+          medição continua contando, em vez de ser arquivada.
+        </p>
+
+        <div style={est.linhaBotoesParada}>
+          <button type="button" style={est.botaoSetup} onClick={() => adicionar('setup')}>
+            + Setup / troca
+          </button>
+          <button type="button" style={est.botaoSecundario} onClick={() => adicionar('falta_material')}>
+            + Outra parada
+          </button>
+        </div>
+
+        {linhas.length === 0 ? (
+          <p style={est.textoModal}>
+            Nenhuma parada marcada — o período inteiro conta como máquina rodando.
+          </p>
+        ) : (
+          <div style={est.listaParadas}>
+            {linhas.map((l) => (
+              <div key={l.chave} style={est.linhaParada}>
+                <select
+                  value={l.motivo}
+                  onChange={(ev) => alterar(l.chave, 'motivo', ev.target.value)}
+                  style={est.selectMotivo}
+                  aria-label="Motivo da parada"
+                >
+                  {MOTIVOS_PARADA.map((m) => (
+                    <option key={m.codigo} value={m.codigo}>{m.rotulo}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={l.minutos}
+                  onChange={(ev) => alterar(l.chave, 'minutos', ev.target.value)}
+                  style={est.inputMinutos}
+                  aria-label={`Minutos parada — ${rotuloMotivo(l.motivo)}`}
+                />
+                <span style={est.sufixoMinutos}>min</span>
+                <input
+                  type="text"
+                  placeholder="Observação (opcional)"
+                  value={l.observacao}
+                  onChange={(ev) => alterar(l.chave, 'observacao', ev.target.value)}
+                  style={est.inputObs}
+                  aria-label="Observação da parada"
+                />
+                <button
+                  type="button"
+                  style={est.botaoExcluir}
+                  onClick={() => remover(l.chave)}
+                  aria-label={`Remover parada ${rotuloMotivo(l.motivo)}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p style={est.textoModal}>
+          Período {formatarDuracao(duracaoMs)} · parado {somaMs > 0 ? formatarDuracao(somaMs) : '—'}
+          {' · '}máquina rodando {produtivoMs > 0 ? formatarDuracao(produtivoMs) : '—'}
+        </p>
+
+        {excede && (
+          <div style={est.faixaErro} role="alert">
+            As paradas somam o período inteiro — não sobraria tempo de máquina rodando.
+          </div>
+        )}
+        {erro && <div style={est.faixaErro} role="alert">{erro}</div>}
+
+        <div style={est.acoesModal}>
+          <button type="button" style={est.botaoSecundario} onClick={aoFechar}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            style={{ ...est.botaoImprimir, flex: 1 }}
+            onClick={() => aoGravar(limpas)}
+            disabled={ocupado || excede}
+          >
+            {ocupado ? 'Gravando...' : 'Gravar paradas'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Analise com IA das conferencias.
  *
  * Mesma secao do painel do estudo, com um contrato diferente: o que sobe e'
@@ -347,6 +553,11 @@ function AnaliseIaConferencias({ resumo }) {
           n: g.n,
           pecas: g.totalPecas,
           minutos: +(g.totalMs / 60000).toFixed(1),
+          minutosProdutivos: +(g.totalProdutivoMs / 60000).toFixed(1),
+          minutosParados: +(g.totalParadaMs / 60000).toFixed(1),
+          minutosSetup: +(g.totalSetupMs / 60000).toFixed(1),
+          disponibilidadePct: +g.disponibilidadePct.toFixed(1),
+          paradas: g.paradasPorMotivo.map((m) => ({ motivo: m.rotulo, minutos: +(m.ms / 60000).toFixed(1) })),
           ritmo: +g.ritmoMedio.toFixed(1),
           cicloSeg: +(g.cicloMedioMs / 1000).toFixed(2),
           cvPct: g.cvPct != null ? +g.cvPct.toFixed(1) : null,
@@ -413,6 +624,8 @@ function ImpressaoConferencias({ linhas, resumo }) {
     : '—';
   const totalPecas = resumo.reduce((acc, g) => acc + g.totalPecas, 0);
   const totalMs = resumo.reduce((acc, g) => acc + g.totalMs, 0);
+  const totalParadaMs = resumo.reduce((acc, g) => acc + g.totalParadaMs, 0);
+  const totalSetupMs = resumo.reduce((acc, g) => acc + g.totalSetupMs, 0);
 
   return (
     <div className="somente-impressao" style={imp.folha}>
@@ -432,6 +645,9 @@ function ImpressaoConferencias({ linhas, resumo }) {
           ['Conferências', String(linhas.length)],
           ['Total de peças', String(totalPecas)],
           ['Tempo observado', formatarDuracao(totalMs)],
+          ['Tempo parado', totalParadaMs > 0
+            ? `${formatarDuracao(totalParadaMs)}${totalSetupMs > 0 ? ` (setup ${formatarDuracao(totalSetupMs)})` : ''}`
+            : 'Nenhuma parada marcada'],
           ['Critério mínimo', `${crit.minConferencias} conf. · ${formatarDuracao(crit.minTempoTotalMs)}`],
           ['Período mínimo', formatarDuracao(crit.minPeriodoMs)],
         ].map(([k, v]) => (
@@ -479,6 +695,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
             <th style={imp.thNum}>Conf.</th>
             <th style={imp.thNum}>Peças</th>
             <th style={imp.thNum}>Tempo obs.</th>
+            <th style={imp.thNum}>Parado</th>
             <th style={imp.thNum}>Ritmo (pç/h)</th>
             <th style={imp.thNum}>Ciclo (s/pç)</th>
             <th style={imp.thNum}>CV%</th>
@@ -492,6 +709,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
               <td style={imp.tdNum}>{g.n}</td>
               <td style={imp.tdNum}>{g.totalPecas}</td>
               <td style={imp.tdNum}>{formatarDuracao(g.totalMs)}</td>
+              <td style={imp.tdNum}>{g.totalParadaMs > 0 ? formatarDuracao(g.totalParadaMs) : '—'}</td>
               <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
               <td style={imp.tdNum}>{formatarSegundos(g.cicloMedioMs)}</td>
               <td style={imp.tdNum}>{g.cvPct != null ? g.cvPct.toFixed(1) : '—'}</td>
@@ -510,6 +728,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
             <th style={imp.th}>Peça</th>
             <th style={imp.th}>Horários</th>
             <th style={imp.thNum}>Período</th>
+            <th style={imp.thNum}>Parado</th>
             <th style={imp.thNum}>Peças</th>
             <th style={imp.thNum}>Peças/h</th>
             <th style={imp.thNum}>Ciclo (s/pç)</th>
@@ -517,7 +736,10 @@ function ImpressaoConferencias({ linhas, resumo }) {
         </thead>
         <tbody>
           {linhas.map((c) => {
-            const calc = conferenciaRapida({ duracaoMs: Number(c.duracao_ms), pecas: c.pecas });
+            const calc = conferenciaRapida({
+              duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas,
+            });
+            const par = somarParadas(c.paradas);
             return (
               <tr key={c.id}>
                 <td style={imp.td}>{formatarDataHora(c.salvo_em)}</td>
@@ -525,6 +747,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
                 <td style={imp.td}>{c.peca || '—'}</td>
                 <td style={imp.td}>{c.hora_inicial && c.hora_final ? `${c.hora_inicial}–${c.hora_final}` : '—'}</td>
                 <td style={imp.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
+                <td style={imp.tdNum}>{par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}</td>
                 <td style={imp.tdNum}>{c.pecas}</td>
                 <td style={{ ...imp.tdNum, fontWeight: 700 }}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
                 <td style={imp.tdNum}>{calc?.cicloMedioMs ? formatarSegundos(calc.cicloMedioMs) : '—'}</td>
@@ -542,8 +765,9 @@ function ImpressaoConferencias({ linhas, resumo }) {
           {[
             ['Conferência', 'um período observado no posto: hora inicial, hora final e peças produzidas.'],
             ['Período', 'tempo decorrido entre a hora inicial e a hora final.'],
-            ['Peças/h', 'ritmo do período (peças ÷ tempo × 3.600).'],
-            ['Ritmo médio', 'ponderado pelo tempo: Σ peças ÷ Σ tempo observado — não é a média das taxas.'],
+            ['Parado', 'tempo em que a máquina não produziu dentro do período: setup/troca, falta de material, manutenção, ajuste.'],
+            ['Peças/h', 'ritmo com a máquina rodando: peças ÷ (período − parado) × 3.600. Sem parada marcada, é o ritmo do período.'],
+            ['Ritmo médio', 'ponderado pelo tempo: Σ peças ÷ Σ tempo com a máquina rodando — não é a média das taxas.'],
             ['Ciclo (s/pç)', 'segundos por peça (tempo ÷ peças).'],
             ['CV%', 'variação do ritmo entre conferências da mesma máquina — quanto maior, mais instável.'],
             ['Referência', 'amostra atende aos critérios mínimos declarados acima.'],
@@ -724,6 +948,40 @@ const est = {
   tituloModal: { ...tipo('titulo'), margin: 0 },
   textoModal: { ...tipo('corpo'), margin: 0, color: t.textoMedio },
   acoesModal: { display: 'flex', gap: espaco.md, marginTop: espaco.xs },
+
+  /* ---- cadastro de paradas ---- */
+  linhaBotoesParada: { display: 'flex', gap: espaco.sm, flexWrap: 'wrap' },
+  // Setup com borda de atencao: e' a parada mais marcada e a unica que o
+  // processo exige. Cor sozinha nao identifica nada aqui — o rotulo diz.
+  botaoSetup: {
+    minHeight: 40, padding: `0 ${espaco.lg}px`, background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.atencao, borderRadius: raio.md,
+    color: t.texto, ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
+  },
+  listaParadas: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm,
+    maxHeight: '38vh', overflowY: 'auto',
+  },
+  linhaParada: { display: 'flex', alignItems: 'center', gap: espaco.sm, minWidth: 0 },
+  selectMotivo: {
+    flex: '0 0 200px', minHeight: 38, padding: `0 ${espaco.sm}px`,
+    background: t.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.texto, ...tipo('corpo'), fontFamily: 'inherit',
+  },
+  inputMinutos: {
+    width: 72, flexShrink: 0, minHeight: 38, textAlign: 'right',
+    padding: `0 ${espaco.sm}px`, background: t.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.texto, ...tipo('corpoF'), ...numeros, fontFamily: 'inherit',
+  },
+  sufixoMinutos: { flexShrink: 0, ...tipo('legenda'), color: t.textoFraco },
+  inputObs: {
+    flex: 1, minWidth: 0, minHeight: 38, padding: `0 ${espaco.sm}px`,
+    background: t.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.texto, ...tipo('corpo'), fontFamily: 'inherit',
+  },
 
   painel: {
     background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
