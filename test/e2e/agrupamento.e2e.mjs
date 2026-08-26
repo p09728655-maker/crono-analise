@@ -48,7 +48,19 @@ for (const modo of ['analise', 'coleta']) {
 
   await filtros.first().click();
   await p.waitForTimeout(300);
-  checar((await p.locator('section h2').count()) === 3, `${modo}: "Todos" restaura os grupos`);
+  checar((await p.locator('section h2').count()) === 3,
+    `${modo}: "Todos os produtos" restaura os grupos`);
+
+  /**
+   * Com UM produto so' o filtro nao filtra nada: "Todos os produtos 1" e o
+   * proprio produto embaixo, mesma contagem, duas linhas dizendo o mesmo.
+   * Pior quando o produto se chama "TODOS" — e chama, porque quem cadastra
+   * usa a palavra para dizer "vale para todos os modelos".
+   */
+  await p.goto(`${BASE}/test/e2e/harness-lista/index.html?modo=${modo}&umproduto=1`);
+  await p.waitForTimeout(900);
+  checar(await p.locator('[aria-label="Filtrar por produto"]').count() === 0,
+    `${modo}: com um produto so, o filtro nao aparece`);
 
   await ctx.close();
 }

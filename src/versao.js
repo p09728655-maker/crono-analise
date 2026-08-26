@@ -13,6 +13,29 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.31.0',
+    data: '2026-08-26',
+    titulo: 'Uma fonte só para parada, e período que o banco sabe contar',
+    itens: [
+      'A parada da conferência era guardada dentro da própria linha e a do estudo numa tabela — duas fontes para a mesma coisa. Agora é uma só, e o banco garante que toda parada tem exatamente uma origem: ou é de uma operação do estudo, ou de uma conferência de furadeira. O Pareto de perdas deixa de precisar juntar duas listas antes de somar.',
+      'A hora da conferência virou instante de verdade. Antes era texto ("07:00"), e texto não subtrai: a duração tinha de vir gravada à parte e um período que virasse a meia-noite não tinha como ser representado. Agora dá para o banco calcular, ordenar e validar que o fim vem depois do início.',
+      'Conferência feita no cronômetro ao vivo também passou a ter período: o fim é a hora em que você salvou, e o início sai dela menos o tempo cronometrado. Antes essas medições ficavam sem horário nenhum na tela e no relatório.',
+      'Nada mudou no tablet. Ele continua mandando o horário e as paradas do mesmo jeito — quem converte é o servidor. Isso é de propósito: um aparelho que passou dias sem rede não pode precisar aprender um formato novo para conseguir enviar o que coletou.',
+      'Consertado, no caminho: reenviar a mesma conferência podia duplicar as paradas dela, dobrando o tempo parado do posto no relatório. E seis testes de integração que falhavam há tempos — a lista de paradas estava sendo gravada com a codificação errada.',
+    ],
+  },
+  {
+    versao: '2.30.1',
+    data: '2026-08-26',
+    titulo: 'Erro que explica, e o filtro que não filtrava nada',
+    itens: [
+      'A tela de Motivos de parada abria com "Erro interno" quando o banco ainda não tinha a tabela nova — mensagem que não diz nem que o problema é de instalação nem o que fazer. Agora ela nomeia a tabela que falta e o comando que resolve, e o app inteiro passa a responder assim para qualquer tabela ausente.',
+      'A mesma tela mostrava "Nenhum motivo cadastrado" JUNTO com o erro: duas frases que se contradizem — uma diz que o cadastro está vazio, a outra que não deu para saber. E ainda oferecia gravar os 9 num banco que acabara de recusar a leitura. Agora, quando a leitura falha, aparece só o erro e um "Tentar de novo".',
+      'Com um produto só, o filtro por produto sumiu do menu lateral: "Todos 1" e o próprio produto logo abaixo, mesma contagem, eram duas linhas dizendo a mesma coisa. Ficava pior quando o produto se chama TODOS — e chama, porque quem cadastra usa a palavra para dizer "vale para todos os modelos". A tela de coleta já se comportava assim; o menu do PC é que não tinha herdado a regra.',
+      'O botão de não filtrar passou a se chamar "Todos os produtos", nas duas telas: o rótulo precisa se distinguir de um produto que por acaso tenha esse nome.',
+    ],
+  },
+  {
     versao: '2.30.0',
     data: '2026-08-26',
     titulo: 'Sair do sistema, motivos de parada e a mesma navegação em toda tela',

@@ -35,6 +35,9 @@ const comArquivados = params.get('arq') === '1';
 // App quem decide isso. O harness renderiza a lista sozinha, entao a decisao
 // vem pela URL.
 const comSair = params.get('sair') === '1';
+// ?umproduto=1 deixa so' um grupo — o caso em que o filtro por produto nao
+// filtra nada e por isso nao deve aparecer.
+const umProduto = params.get('umproduto') === '1';
 window.__posts = [];
 window.__patches = [];
 window.__deletes = [];
@@ -164,7 +167,9 @@ window.fetch = async (url, opts = {}) => {
     });
   }
 
-  const base = vazio ? { estudos: [] } : RESPOSTA;
+  const base = vazio ? { estudos: [] }
+    : umProduto ? { estudos: RESPOSTA.estudos.filter((e) => e.produto === 'Sleep Base') }
+    : RESPOSTA;
   return new Response(JSON.stringify({ estudos: [...base.estudos, ...restaurados] }), {
     status: 200, headers: { 'Content-Type': 'application/json' },
   });

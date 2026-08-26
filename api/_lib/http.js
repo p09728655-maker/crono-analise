@@ -18,6 +18,24 @@ export function json(res, status, corpo) {
 }
 
 /**
+ * Tabela que o codigo usa e o banco nao tem.
+ *
+ * E' o que acontece quando um deploy sobe antes de `db/schema.sql` ser
+ * aplicado — e o usuario recebia "Erro interno", que nao diz nem que o
+ * problema e' de instalacao nem o que fazer. Quem le esta' diante de uma
+ * tela quebrada em producao, nao lendo codigo: a mensagem precisa nomear a
+ * tabela e o comando.
+ *
+ * 42P01 e' o SQLSTATE `undefined_table`. O nome da tabela sai da mensagem
+ * do Postgres ('relation "motivos_parada" does not exist') porque o driver
+ * nao o entrega em campo proprio nesse erro.
+ */
+function tabelaQueFalta(err) {
+  if (err?.code !== '42P01') return null;
+  return /relation "([^"]+)" does not exist/.exec(err.message || '')?.[1] || 'desconhecida';
+}
+
+/**
  * Envolve um handler: normaliza erro, evita vazar stack para o cliente e
  * garante que toda falha inesperada vire 500 com log no servidor.
  */
@@ -30,6 +48,20 @@ export function handler(fn) {
         json(res, err.status, { erro: err.message, detalhes: err.detalhes });
         return;
       }
+
+      const tabela = tabelaQueFalta(err);
+      if (tabela) {
+        console.error(`[ritmopatrimar] tabela ausente no banco: ${tabela}`);
+        // 503, nao 500: o servico esta' de pe', falta um passo de instalacao.
+        json(res, 503, {
+          erro: `O banco ainda nao tem a tabela "${tabela}". Rode `
+            + '`psql "$DATABASE_URL" -f db/schema.sql` no banco desta instalacao — '
+            + 'o arquivo e idempotente, entao roda-lo de novo e a migracao. '
+            + 'O resto do app continua funcionando.',
+        });
+        return;
+      }
+
       console.error('[ritmopatrimar] erro nao tratado:', err);
       json(res, 500, { erro: 'Erro interno' });
     }

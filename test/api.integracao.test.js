@@ -313,10 +313,94 @@ rodar('API — integracao com Postgres', () => {
       },
     }), fingirRes());
 
-    const [linha] = await sql`SELECT paradas FROM conferencias WHERE client_id = ${clientId}`;
-    expect(linha.paradas.length).toBe(2);
-    expect(linha.paradas[0]).toEqual({ motivo: 'setup', duracaoMs: 600_000, observacao: 'troca de gabarito' });
-    expect(linha.paradas[1].observacao).toBeNull();
+    // A parada e LINHA na tabela `paradas`, ligada a conferencia — nao mais
+    // um jsonb dentro dela. E ela chega junto: mae e filhas na mesma
+    // transacao, porque o dado nasceu junto e nao pode entrar pela metade.
+    const linhas = await sql`
+      SELECT p.motivo, p.duracao_ms, p.observacao, p.operacao_id
+        FROM paradas p
+        JOIN conferencias c ON c.id = p.conferencia_id
+       WHERE c.client_id = ${clientId}
+       ORDER BY p.duracao_ms DESC`;
+    expect(linhas.length).toBe(2);
+    expect(linhas[0].motivo).toBe('setup');
+    expect(Number(linhas[0].duracao_ms)).toBe(600_000);
+    expect(linhas[0].observacao).toBe('troca de gabarito');
+    expect(linhas[1].observacao).toBeNull();
+    // Parada de conferencia nao tem operacao: e a outra natureza de medicao.
+    expect(linhas[0].operacao_id).toBeNull();
+
+    // E a leitura devolve o mesmo formato de sempre — a tela nao precisou
+    // saber que as paradas mudaram de lugar.
+    const leitura = fingirRes();
+    await conferenciasApi(fingirReq(), leitura);
+    const daApi = leitura.corpo.conferencias.find((c) => c.maquina === 'Furadeira 16');
+    expect(daApi.paradas).toHaveLength(2);
+    expect(daApi.paradas.map((x) => x.motivo).sort()).toEqual(['falta_material', 'setup']);
+  });
+
+  it('REENVIO da mesma conferencia nao duplica as paradas dela', async () => {
+    const clientId = crypto.randomUUID();
+    const lote = {
+      conferencias: [{
+        clientId, maquina: 'Furadeira 22', duracaoMs: 1_800_000, pecas: 90,
+        paradas: [{ motivo: 'setup', duracaoMs: 300_000 }],
+        salvoEm: new Date().toISOString(),
+      }],
+    };
+    // O tablet reenvia enquanto o servidor nao confirmar. Duplicar a parada
+    // dobraria o tempo parado do posto no relatorio.
+    await sync(fingirReq({ metodo: 'POST', corpo: lote }), fingirRes());
+    await sync(fingirReq({ metodo: 'POST', corpo: lote }), fingirRes());
+
+    const [{ n }] = await sql`
+      SELECT count(*)::int AS n FROM paradas p
+        JOIN conferencias c ON c.id = p.conferencia_id
+       WHERE c.client_id = ${clientId}`;
+    expect(n).toBe(1);
+  });
+
+  it('conferencia ganha periodo em instante, com e sem horario digitado', async () => {
+    const salvoEm = '2026-08-20T13:30:00.000Z';
+
+    // Caminho principal: o analista passou no posto e digitou os horarios.
+    const comHora = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId: comHora, maquina: 'Furadeira 03', horaInicial: '07:00', horaFinal: '07:30',
+          duracaoMs: 1_800_000, pecas: 150, salvoEm,
+        }],
+      },
+    }), fingirRes());
+
+    const [a] = await sql`
+      SELECT to_char(iniciado_em   AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD HH24:MI') AS ini,
+             to_char(finalizado_em AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI')            AS fim
+        FROM conferencias WHERE client_id = ${comHora}`;
+    // A data sai de salvo_em lido no fuso da fabrica; a hora, do que foi digitado.
+    expect(a.ini).toBe('2026-08-20 07:00');
+    expect(a.fim).toBe('07:30');
+
+    // Caminho do cronometro ao vivo: sem horario. O fim e o proprio salvo_em
+    // e o inicio sai dele menos a duracao — antes ficava sem periodo nenhum.
+    const semHora = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId: semHora, maquina: 'Furadeira 09', duracaoMs: 600_000, pecas: 40, salvoEm,
+        }],
+      },
+    }), fingirRes());
+
+    const [b] = await sql`
+      SELECT extract(epoch FROM (finalizado_em - iniciado_em)) * 1000 AS ms,
+             finalizado_em = ${salvoEm}::timestamptz AS fim_e_o_salvo_em
+        FROM conferencias WHERE client_id = ${semHora}`;
+    expect(Number(b.ms)).toBe(600_000);
+    expect(b.fim_e_o_salvo_em).toBe(true);
   });
 
   it('conferencia antiga, sem o campo, entra com lista vazia — nao quebra o relatorio', async () => {
@@ -364,8 +448,12 @@ rodar('API — integracao com Postgres', () => {
       corpo: { paradas: [{ motivo: 'manutencao', duracaoMs: 1_800_000 }] },
     }), demais);
     expect(demais.statusCode).toBe(400);
-    const [depois] = await sql`SELECT paradas FROM conferencias WHERE id = ${criada.id}`;
-    expect(depois.paradas[0].motivo).toBe('setup');
+    // A recusa nao pode ter levado junto o que ja estava gravado: o PATCH
+    // apaga e regrava numa transacao, e ela nao chegou a abrir.
+    const depois = await sql`
+      SELECT motivo FROM paradas WHERE conferencia_id = ${criada.id}`;
+    expect(depois).toHaveLength(1);
+    expect(depois[0].motivo).toBe('setup');
 
     // Lista vazia limpa as paradas — e' assim que se corrige um engano.
     const limpa = fingirRes();
