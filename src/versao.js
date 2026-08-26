@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.12.0',
+    data: '2026-08-26',
+    titulo: 'Conferência por horários',
+    itens: [
+      'A conferência rápida agora marca hora inicial e hora final: toque "Agora" ao passar pela máquina (ex: 7:00), toque de novo na volta (7:10), digite as peças (150) e a conta sai na hora — 900 pç/h, ciclo médio 4 s. Também dá para digitar os horários de cabeça, depois do fato.',
+      'O cronômetro ao vivo continua na mesma tela, para quem prefere ficar no posto contando peça a peça.',
+      'Nova faixa "App atualizado" no topo da lista: quando chega versão nova, ela avisa o que mudou — "Ver novidades" abre o histórico completo. Aparece uma vez por aparelho e some ao ser vista ou dispensada.',
+    ],
+  },
+  {
     versao: '2.11.0',
     data: '2026-08-26',
     titulo: 'Conferência rápida',

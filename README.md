@@ -47,15 +47,30 @@ o analista quiser conferir um número no chão de fábrica.
 
 ### Conferência rápida (`/coleta/rapida`)
 
-Cronômetro avulso, **sem cadastro e sem servidor**, para o analista que está
-passando pelo posto e só quer conferir o ritmo: cronometra um período (7:00
-às 7:10), conta as peças — tocando a cada peça ou digitando o total no fim,
-lendo o contador da máquina — e sai com peças/hora e ciclo médio na hora.
+Conferência de ritmo **sem cadastro e sem servidor**, do jeito que ela
+acontece de verdade: o analista passa pela máquina às 7:00 e toca **Agora**;
+volta às 7:10, toca **Agora** de novo, digita as peças que o contador marca
+(150) — e a conta sai na hora: 900 pç/h, ciclo médio 4 s. Os horários também
+podem ser digitados de cabeça, depois do fato, e a virada de meia-noite
+conta como dia seguinte (turno da noite também confere ritmo).
+
+Na mesma tela, o **cronômetro ao vivo** segue como alternativa para quem
+fica no posto contando peça a peça (alvo gigante, vibração, guarda de
+repique, tela acesa).
 
 Nada é gravado, de propósito: conferência é descartável por definição, e a
 tela avisa isso com todas as letras. Registro e tempo padrão continuam sendo
 papel do estudo. Por não depender de rede, o atalho na lista de coleta fica
 visível mesmo com a API fora do ar.
+
+### Aviso de atualização
+
+O deploy troca o app por baixo do usuário — a tela só "amanhece diferente".
+Ao abrir depois de uma atualização, uma faixa no topo da lista diz qual
+versão chegou e o que ela traz; "Ver novidades" abre o histórico completo.
+A última versão vista fica no `localStorage` por aparelho: o aviso aparece
+uma vez e some ao ser visto ou dispensado. Primeira visita não ganha faixa —
+usuário novo não tem passado para comparar.
 
 ## Relatório impresso
 

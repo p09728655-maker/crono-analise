@@ -4,6 +4,7 @@ import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { criarEstudo, listarEstudos, removerEstudo } from '../../lib/api.js';
 import { agruparPorProduto, produtosConhecidos, setoresConhecidos } from '../../domain/agrupamento.js';
+import AvisoAtualizacao from '../../components/AvisoAtualizacao.jsx';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
@@ -93,6 +94,10 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
       />
 
       <main style={est.conteudo}>
+        {/* Acima de tudo: o aviso explica por que a tela amanheceu diferente,
+            entao precisa vir antes do que mudou. Some ao ser visto. */}
+        <AvisoAtualizacao modo={modo} aoVerNovidades={() => setVerVersoes(true)} />
+
         {/* Atalho da conferencia rapida — SEMPRE visivel na coleta, mesmo com
             a lista carregando ou com erro: ela nao depende do servidor, e o
             analista que so' quer conferir um ritmo nao pode ficar refem da
@@ -103,7 +108,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
             <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
               <div style={est.atalhoTitulo}>Conferência rápida</div>
               <div style={est.atalhoTexto}>
-                Cronometrar sem cadastro — peças/hora e ciclo médio na hora.
+                Hora inicial, hora final e peças — o ritmo sai na hora, sem cadastro.
               </div>
             </div>
             <span style={est.atalhoSeta} aria-hidden="true">→</span>

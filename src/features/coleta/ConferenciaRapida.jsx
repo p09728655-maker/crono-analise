@@ -1,24 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } from '../../theme/tokens.js';
-import { conferenciaRapida, formatarCronometro, formatarSegundos } from '../../domain/cronoanalise.js';
+import {
+  conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao, formatarSegundos,
+} from '../../domain/cronoanalise.js';
 import { TOQUE_MINIMO_MS } from '../../domain/estatistica.js';
 import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
 
 /**
- * CONFERENCIA RAPIDA — cronometro avulso, sem cadastro.
+ * CONFERENCIA RAPIDA — hora inicial, hora final, pecas. Sem cadastro.
  *
- * Cenario: o analista esta PASSANDO pelo posto e quer conferir o ritmo
- * agora, sem criar estudo, sem escolher operacao, sem rede. Cronometra um
- * periodo (7:00 as 7:10), conta as pecas — tocando a cada peca OU lendo o
- * contador da maquina no fim — e sai com pecas/hora e ciclo medio.
+ * Cenario: o analista PASSA pelo posto as 7:00, marca a hora, segue o
+ * caminho dele, volta as 7:10, marca de novo, le o contador da maquina
+ * (150 pecas) e a conta sai — 900 pc/h, ciclo medio 4s. Ninguem fica
+ * parado segurando cronometro, entao o caminho principal e' o formulario
+ * de horarios, com botao "Agora" para carimbar a hora na passada e campos
+ * livres para digitar de cabeca depois do fato.
+ *
+ * O cronometro ao vivo continua na mesma tela, como alternativa, para
+ * quem quer ficar diante da maquina contando peca a peca.
  *
  * Decisoes que vem desse cenario:
  *  - Nada e' gravado. Nem fila offline, nem servidor. Conferencia e'
  *    descartavel por definicao; registro e' papel do estudo. A tela diz
  *    isso com todas as letras para ninguem descobrir depois.
- *  - A quantidade de pecas e' EDITAVEL no resultado. Quem contou pelo
- *    contador da maquina nao tocou 150 vezes na tela — digita o total e o
- *    resultado recalcula na hora.
+ *  - O resultado recalcula a cada tecla: preencheu os tres campos, a
+ *    conta esta' na tela. Sem botao "calcular" — ele so' atrasaria.
+ *  - A quantidade de pecas e' EDITAVEL tambem no resultado do cronometro,
+ *    para quem cronometrou ao vivo mas contou pelo contador da maquina.
  *  - Mesma ergonomia da coleta: alvo gigante, vibracao, tema escuro,
  *    tela acesa enquanto cronometra.
  */
@@ -28,6 +36,11 @@ export default function ConferenciaRapida({ aoSair }) {
   const [duracaoFinal, setDuracaoFinal] = useState(0);
   const [pecasFinais, setPecasFinais] = useState('0');
   const [pulso, setPulso] = useState(0);
+
+  // Formulario de horarios (caminho principal).
+  const [horaInicial, setHoraInicial] = useState('');
+  const [horaFinal, setHoraFinal] = useState('');
+  const [pecasPeriodo, setPecasPeriodo] = useState('');
 
   const rodando = fase === 'rodando';
   useWakeLock(rodando);
@@ -97,8 +110,24 @@ export default function ConferenciaRapida({ aoSair }) {
     [duracaoFinal, pecasFinais],
   );
 
+  // A conta dos horarios sai a cada tecla: preencheu, apareceu.
+  const duracaoHoras = useMemo(
+    () => duracaoEntreHoras(horaInicial, horaFinal),
+    [horaInicial, horaFinal],
+  );
+  const resultadoHoras = useMemo(
+    () => (duracaoHoras > 0 ? conferenciaRapida({ duracaoMs: duracaoHoras, pecas: pecasPeriodo }) : null),
+    [duracaoHoras, pecasPeriodo],
+  );
+
+  const agoraHM = () => {
+    const d = new Date();
+    const dois = (n) => String(n).padStart(2, '0');
+    return `${dois(d.getHours())}:${dois(d.getMinutes())}`;
+  };
+
   return (
-    <div style={est.tela}>
+    <div style={{ ...est.tela, ...(rodando ? {} : est.telaRolavel) }}>
       <header style={est.cabecalho}>
         <button type="button" onClick={aoSair} style={est.botaoVoltar} aria-label="Voltar para a lista">
           ←
@@ -112,14 +141,96 @@ export default function ConferenciaRapida({ aoSair }) {
 
       {fase === 'pronto' && (
         <>
-          <section style={est.explicacao}>
-            Cronometre um período diante da máquina e informe quantas peças
-            saíram — tocando a cada peça ou digitando o total no fim. O ritmo
-            (peças/hora) e o ciclo médio aparecem na hora.
+          <section style={est.formHoras} aria-label="Conferência por horários">
+            <div style={est.linhaHoras}>
+              <div style={est.campoHora}>
+                <span style={est.rotuloCampo}>HORA INICIAL</span>
+                <div style={est.horaComAgora}>
+                  <input
+                    type="time"
+                    value={horaInicial}
+                    onChange={(ev) => setHoraInicial(ev.target.value)}
+                    style={est.inputHora}
+                    aria-label="Hora inicial"
+                  />
+                  <button
+                    type="button"
+                    style={est.botaoAgora}
+                    onClick={() => { setHoraInicial(agoraHM()); vibrar(30); }}
+                  >
+                    Agora
+                  </button>
+                </div>
+              </div>
+              <div style={est.campoHora}>
+                <span style={est.rotuloCampo}>HORA FINAL</span>
+                <div style={est.horaComAgora}>
+                  <input
+                    type="time"
+                    value={horaFinal}
+                    onChange={(ev) => setHoraFinal(ev.target.value)}
+                    style={est.inputHora}
+                    aria-label="Hora final"
+                  />
+                  <button
+                    type="button"
+                    style={est.botaoAgora}
+                    onClick={() => { setHoraFinal(agoraHM()); vibrar(30); }}
+                  >
+                    Agora
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <label style={est.campoHora}>
+              <span style={est.rotuloCampo}>PEÇAS NO PERÍODO</span>
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                placeholder="Ex: 150"
+                value={pecasPeriodo}
+                onChange={(ev) => setPecasPeriodo(ev.target.value)}
+                style={est.inputPecasForm}
+                aria-label="Peças no período"
+              />
+            </label>
           </section>
-          <button type="button" onPointerDown={comecar} style={{ ...est.botaoGrande, ...est.botaoIniciar }}>
-            <span style={est.iconeIniciar}>▶</span>
-            <span style={est.rotuloBotao}>INICIAR CONFERÊNCIA</span>
+
+          {resultadoHoras && resultadoHoras.pecas > 0 ? (
+            <section style={est.painelHoras} aria-label="Resultado dos horários">
+              <div style={est.destaqueRitmo} aria-label="Ritmo do período">
+                <span style={est.valorRitmo}>{Math.round(resultadoHoras.pecasPorHora)}</span>
+                <span style={est.sufixoRitmo}>peças/hora</span>
+              </div>
+              <div style={est.linhaParcial}>
+                <Parcial rotulo="Período" valor={formatarDuracao(duracaoHoras)} />
+                <Parcial rotulo="Peças/min" valor={resultadoHoras.pecasPorMinuto.toFixed(1)} />
+                <Parcial
+                  rotulo="Ciclo médio"
+                  valor={resultadoHoras.cicloMedioMs ? formatarSegundos(resultadoHoras.cicloMedioMs) : '—'}
+                  sufixo="s/pç"
+                />
+              </div>
+            </section>
+          ) : (
+            <section style={est.explicacao}>
+              Passe pela máquina e toque <strong>Agora</strong> na chegada; na
+              volta, toque <strong>Agora</strong> de novo, digite quantas peças
+              saíram e a conta aparece aqui — peças/hora e ciclo médio. Também
+              dá para digitar os horários depois, de cabeça.
+            </section>
+          )}
+
+          <div style={est.divisorOu}>
+            <span style={est.traco} />
+            <span style={est.textoOu}>ou fique no posto e conte peça a peça</span>
+            <span style={est.traco} />
+          </div>
+
+          <button type="button" onPointerDown={comecar} style={{ ...est.botaoGrande, ...est.botaoIniciar, ...est.botaoVivo }}>
+            <span style={est.rotuloBotao}>▶ CRONOMETRAR AO VIVO</span>
           </button>
           <div style={est.rodape} />
         </>
@@ -276,11 +387,60 @@ const est = {
     borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
   },
 
+  // Fora da cronometragem ao vivo pode rolar: formulario com teclado aberto
+  // em tela baixa nao pode cortar campo. Durante o ao vivo segue travado.
+  telaRolavel: { overflowY: 'auto' },
+
   explicacao: {
     flexShrink: 0, padding: espaco.lg,
     background: cores.superficie, border: `1px solid ${cores.borda}`, borderRadius: raio.lg,
     fontSize: tamanho.corpo, color: cores.textoFraco, lineHeight: 1.5,
   },
+
+  /* ---- conferencia por horarios (caminho principal) ---- */
+  formHoras: {
+    flexShrink: 0, display: 'flex', flexDirection: 'column', gap: espaco.lg,
+    background: cores.superficie, border: `1px solid ${cores.borda}`,
+    borderRadius: raio.lg, padding: espaco.lg,
+  },
+  linhaHoras: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: espaco.md },
+  campoHora: { display: 'flex', flexDirection: 'column', gap: espaco.xs, minWidth: 0 },
+  rotuloCampo: { fontSize: 10, letterSpacing: 0.8, color: cores.textoFraco, textTransform: 'uppercase' },
+  // "Agora" embaixo do campo, nao ao lado: dividir 200px de coluna entre
+  // input de hora e botao corta o valor ("07:00 AM" some pela metade).
+  horaComAgora: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  inputHora: {
+    width: '100%', minHeight: 48, padding: `0 ${espaco.sm}px`,
+    background: cores.fundo, borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
+    borderRadius: raio.sm, color: cores.texto,
+    fontSize: tamanho.titulo, fontWeight: 700, fontFamily: fonte.numero,
+    fontVariantNumeric: 'tabular-nums', outline: 'none',
+    // Sem o esquema escuro o WebKit pinta o relogio interno preto no fundo
+    // escuro e o campo parece vazio.
+    colorScheme: 'dark',
+  },
+  botaoAgora: {
+    width: '100%', minHeight: 44, padding: `0 ${espaco.md}px`,
+    background: cores.superficieAlta,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.sm,
+    color: cores.texto, fontSize: tamanho.pequeno, fontWeight: 700,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  inputPecasForm: {
+    width: '100%', minHeight: 48, padding: `0 ${espaco.md}px`,
+    background: cores.fundo, borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
+    borderRadius: raio.sm, color: cores.texto,
+    fontSize: tamanho.titulo, fontWeight: 700, fontFamily: fonte.numero, outline: 'none',
+  },
+  painelHoras: {
+    flexShrink: 0, display: 'flex', flexDirection: 'column', gap: espaco.md,
+    background: cores.superficie, border: `1px solid ${cores.borda}`,
+    borderRadius: raio.lg, padding: espaco.lg,
+  },
+  divisorOu: { flexShrink: 0, display: 'flex', alignItems: 'center', gap: espaco.md, padding: `${espaco.xs}px 0` },
+  traco: { flex: 1, height: 1, background: cores.borda },
+  textoOu: { fontSize: tamanho.legenda, color: cores.textoFraco },
+  botaoVivo: { flex: '0 0 auto', minHeight: 72 },
 
   painelTempo: {
     flexShrink: 0,
