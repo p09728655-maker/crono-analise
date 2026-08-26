@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.19.0',
+    data: '2026-08-26',
+    titulo: 'Excluir funciona, impressão igual e caminhos claros',
+    itens: [
+      'Corrigido o "não consigo excluir": a exclusão sempre chamava o servidor, mas quando ele recusava a tela não dizia nada — o clique parecia não fazer efeito. Agora a falha aparece na tela e dentro da própria janela de confirmação.',
+      'A impressão das Conferências virou o mesmo documento da Folha de Análise do estudo: cabeçalho com a marca, identificação, ressalva de confiabilidade antes dos números, legenda em palavras e campos de assinatura.',
+      'Ficou claro onde é cada coisa: no menu do PC, "Estudos de tempo — ciclo a ciclo (ex: embalagem)" e "Conferências rápidas — peças/hora por posto (ex: furadeiras)". O relatório de conferências e o atalho do celular também dizem que servem às furadeiras.',
+      'No PC a tabela deixou de esticar até a borda: largura limitada e, ao lado, um painel com a visão geral — estudos, ciclos, ciclos por posto, o mais medido e os que ainda estão sem medição.',
+      'Logo do menu lateral não distorce mais.',
+    ],
+  },
+  {
     versao: '2.18.0',
     data: '2026-08-26',
     titulo: 'PC com menu lateral e conferências completas',

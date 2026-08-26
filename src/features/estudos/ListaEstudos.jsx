@@ -147,7 +147,7 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
             <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
               <div style={est.atalhoTitulo}>Conferência rápida</div>
               <div style={est.atalhoTexto}>
-                Hora inicial, hora final e peças — o ritmo sai na hora, sem cadastro.
+                Furadeiras: hora inicial, hora final e peças — ritmo na hora, sem cadastro.
               </div>
             </div>
             <span style={est.atalhoSeta} aria-hidden="true">→</span>
@@ -225,31 +225,38 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
         ))}
 
         {temEstudos && (
-          <>
-            {/* Filtro so' aparece quando ha' mais de um produto: com um so',
-                ele seria um controle que nao controla nada. No PC ele vive
-                no menu lateral, entao aqui e' so' na coleta. */}
-            {!analise && grupos.length > 1 && (
-              <FiltroProduto grupos={grupos} filtro={filtro} aoFiltrar={setFiltro} est={est} />
-            )}
+          /* No PC a tabela nao ocupa a largura toda: sobrava um vazio enorme
+             a direita, e linha comprida demais cansa de ler. A largura fica
+             limitada e o espaco que sobra vira painel de informacao. */
+          <div style={analise ? est.areaComPainel : undefined}>
+            <div style={analise ? est.colunaTabela : undefined}>
+              {/* Filtro so' aparece quando ha' mais de um produto: com um so',
+                  ele seria um controle que nao controla nada. No PC ele vive
+                  no menu lateral, entao aqui e' so' na coleta. */}
+              {!analise && grupos.length > 1 && (
+                <FiltroProduto grupos={grupos} filtro={filtro} aoFiltrar={setFiltro} est={est} />
+              )}
 
-            {visiveis.map((grupo) => (
-              <section key={grupo.chave} style={est.grupo}>
-                <div style={est.grupoCabecalho}>
-                  <h2 style={{ ...est.grupoTitulo, ...(grupo.semProduto ? est.grupoTituloVazio : {}) }}>
-                    {grupo.rotulo}
-                  </h2>
-                  <span style={est.grupoResumo}>
-                    {grupo.estudos.length} estudo(s) · {grupo.totalCiclos} ciclo(s)
-                  </span>
-                </div>
+              {visiveis.map((grupo) => (
+                <section key={grupo.chave} style={est.grupo}>
+                  <div style={est.grupoCabecalho}>
+                    <h2 style={{ ...est.grupoTitulo, ...(grupo.semProduto ? est.grupoTituloVazio : {}) }}>
+                      {grupo.rotulo}
+                    </h2>
+                    <span style={est.grupoResumo}>
+                      {grupo.estudos.length} estudo(s) · {grupo.totalCiclos} ciclo(s)
+                    </span>
+                  </div>
 
-                {analise
-                  ? <TabelaEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
-                  : <CartoesEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />}
-              </section>
-            ))}
-          </>
+                  {analise
+                    ? <TabelaEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />
+                    : <CartoesEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />}
+                </section>
+              ))}
+            </div>
+
+            {analise && <PainelResumo estudos={encontrados} est={est} />}
+          </div>
         )}
       </main>
 
@@ -526,6 +533,91 @@ function EstudosArquivados({ est, arquivados, aoRestaurar, aoFechar }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Painel de informacao ao lado da tabela.
+ *
+ * O espaco a direita estava vazio numa tela de 1440px. Em vez de esticar a
+ * tabela — linha comprida demais e' pior de ler — ele responde o que o
+ * analista pergunta antes de abrir estudo nenhum: quanto ja' foi medido,
+ * em quais postos, e o que ainda esta parado sem nenhum ciclo.
+ *
+ * Tudo sai dos estudos ja' carregados: nenhuma requisicao a mais.
+ */
+function PainelResumo({ estudos, est }) {
+  const totalCiclos = estudos.reduce((acc, e) => acc + (Number(e.total_observacoes) || 0), 0);
+  const totalOperacoes = estudos.reduce((acc, e) => acc + (Number(e.total_operacoes) || 0), 0);
+  const semCiclo = estudos.filter((e) => !Number(e.total_observacoes));
+
+  // Postos ordenados por ciclos: onde a medicao realmente aconteceu.
+  const porPosto = new Map();
+  for (const e of estudos) {
+    const chave = String(e.recurso || '').trim() || 'Sem posto';
+    porPosto.set(chave, (porPosto.get(chave) || 0) + (Number(e.total_observacoes) || 0));
+  }
+  const postos = [...porPosto.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  const maior = estudos.reduce(
+    (melhor, e) => (Number(e.total_observacoes) > Number(melhor?.total_observacoes ?? -1) ? e : melhor),
+    null,
+  );
+
+  return (
+    <aside style={est.painelInfo} aria-label="Visão geral">
+      <div style={est.painelBloco}>
+        <div style={est.painelRotulo}>Visão geral</div>
+        <div style={est.painelNumeros}>
+          {[
+            ['Estudos', estudos.length],
+            ['Ciclos', totalCiclos],
+            ['Operações', totalOperacoes],
+          ].map(([k, v]) => (
+            <div key={k} style={est.painelNumero}>
+              <span style={est.painelValor}>{v}</span>
+              <span style={est.painelChave}>{k}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {postos.length > 0 && (
+        <div style={est.painelBloco}>
+          <div style={est.painelRotulo}>Ciclos por posto</div>
+          {postos.map(([posto, n]) => (
+            <div key={posto} style={est.painelLinha}>
+              <span style={est.painelLinhaTexto}>{posto}</span>
+              <span style={est.painelLinhaNum}>{n}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {maior && Number(maior.total_observacoes) > 0 && (
+        <div style={est.painelBloco}>
+          <div style={est.painelRotulo}>Mais medido</div>
+          <div style={est.painelDestaque}>{maior.nome}</div>
+          <div style={est.painelNota}>
+            {maior.total_observacoes} ciclo(s){maior.recurso ? ` · ${maior.recurso}` : ''}
+          </div>
+        </div>
+      )}
+
+      {semCiclo.length > 0 && (
+        <div style={{ ...est.painelBloco, ...est.painelAtencao }}>
+          <div style={est.painelRotulo}>Ainda sem medição</div>
+          {semCiclo.slice(0, 5).map((e) => (
+            <div key={e.id} style={est.painelLinha}>
+              <span style={est.painelLinhaTexto}>{e.nome}</span>
+            </div>
+          ))}
+          {semCiclo.length > 5 && (
+            <div style={est.painelNota}>e mais {semCiclo.length - 5}</div>
+          )}
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -824,6 +916,36 @@ function estilos(t, analise) {
     atalhoTitulo: { ...tipo('corpoF'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     atalhoTexto: { ...tipo('legenda'), color: t.fraco, marginTop: 2 },
     atalhoSeta: { fontSize: 20, color: t.vermelho, flexShrink: 0 },
+
+    /* ---- tabela + painel de informacao (PC) ---- */
+    areaComPainel: { display: 'flex', alignItems: 'flex-start', gap: espaco.xl },
+    // A tabela para de crescer: linha larga demais obriga o olho a viajar
+    // do nome ate' o numero e perde a linha no caminho.
+    colunaTabela: { flex: 1, minWidth: 0, maxWidth: 1040 },
+    painelInfo: {
+      width: 280, flexShrink: 0, position: 'sticky', top: espaco.xl,
+      display: 'flex', flexDirection: 'column', gap: espaco.md,
+    },
+    painelBloco: {
+      background: t.superficie, borderRadius: raio.lg,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+      padding: espaco.lg, display: 'flex', flexDirection: 'column', gap: espaco.sm,
+      boxShadow: t.sombra,
+    },
+    painelAtencao: { borderColor: claro.atencao },
+    painelRotulo: rotulo(t.fraco),
+    painelNumeros: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: espaco.sm },
+    painelNumero: { display: 'flex', flexDirection: 'column', minWidth: 0 },
+    painelValor: { ...tipo('destaque'), ...numeros, color: t.texto },
+    painelChave: { ...tipo('legenda'), color: t.fraco },
+    painelLinha: {
+      display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+      gap: espaco.sm, ...tipo('legenda'), color: t.medio,
+    },
+    painelLinhaTexto: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+    painelLinhaNum: { flexShrink: 0, ...numeros, fontWeight: 700, color: t.texto },
+    painelDestaque: { ...tipo('corpoF'), color: t.texto },
+    painelNota: { ...tipo('legenda'), color: t.fraco },
 
     /* ---- agrupamento por produto ---- */
     filtro: {

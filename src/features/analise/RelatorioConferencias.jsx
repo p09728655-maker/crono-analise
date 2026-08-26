@@ -61,6 +61,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
 
   async function alternarArquivo(c) {
     setOcupado(c.id);
+    setErro(null);
     try { await arquivarConferencia(c.id, !c.arquivada); await carregar(); }
     catch (e) { setErro(e.message); }
     setOcupado(null);
@@ -68,6 +69,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
 
   async function excluir(c) {
     setOcupado(c.id);
+    setErro(null);
     try { await excluirConferencia(c.id); setConfirmando(null); await carregar(); }
     catch (e) { setErro(e.message); }
     setOcupado(null);
@@ -85,7 +87,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
         <Cabecalho
           modo="analise"
           titulo="Conferências rápidas"
-          subtitulo="Estudo por máquina"
+          subtitulo="Furadeiras e demais postos · vazão em peças/hora"
           aoVoltar={aoVoltar}
           acoes={estado === 'pronto' && (
             <>
@@ -129,8 +131,20 @@ export default function RelatorioConferencias({ aoVoltar }) {
             <EstadoVazio
               modo="analise"
               titulo="Nenhuma conferência sincronizada"
-              texto="Salve conferências rápidas no celular (máquina, peça, horários) e elas aparecem aqui assim que o aparelho sincroniza."
+              texto="Esta é a tela das furadeiras: no celular, abra Conferência rápida, informe máquina, peça e horários, e a medição aparece aqui assim que o aparelho sincroniza. Para embalagem — ciclo a ciclo, com tempo padrão — use um estudo."
             />
+          )}
+
+          {/* Falha de acao (arquivar, excluir) precisa APARECER: antes ela era
+              gravada no estado e nunca renderizada — o clique nao fazia nada
+              visivel, e o usuario concluia que o botao estava quebrado. */}
+          {erro && estado === 'pronto' && (
+            <div style={est.faixaErro} role="alert">
+              <span style={{ flex: 1, minWidth: 0 }}>{erro}</span>
+              <button type="button" style={est.botaoLinha} onClick={() => setErro(null)}>
+                Fechar
+              </button>
+            </div>
           )}
 
           {estado === 'pronto' && linhas.length > 0 && (
@@ -283,8 +297,10 @@ export default function RelatorioConferencias({ aoVoltar }) {
                 (setup no meio do período, por exemplo), prefira <strong>Arquivar</strong>:
                 ela sai dos cálculos e continua guardada.
               </p>
+              {erro && <div style={est.faixaErro} role="alert">{erro}</div>}
+
               <div style={est.acoesModal}>
-                <button type="button" style={est.botaoSecundario} onClick={() => setConfirmando(null)}>
+                <button type="button" style={est.botaoSecundario} onClick={() => { setErro(null); setConfirmando(null); }}>
                   Cancelar
                 </button>
                 <button
@@ -375,109 +391,185 @@ function AnaliseIaConferencias({ resumo }) {
 }
 
 /**
- * Documento impresso — A4, no padrao da Folha de Analise do estudo.
+ * FOLHA DE CONFERENCIAS — A4 retrato.
  *
- * Ordem de relatorio tecnico: identificacao, CRITERIOS (antes dos
- * numeros), resumo por maquina, dado bruto, formula. Nada de cartao de
- * tela nem cor de interface: papel e' preto sobre branco.
+ * Mesmo documento que a Folha de Analise do estudo, na mesma ordem que um
+ * relatorio tecnico exige: identificacao, confiabilidade ANTES do resultado,
+ * resumo, dado bruto, legenda em palavras e assinaturas. Nao e' a tela no
+ * papel — a tela tem filtro, botao e cor de interface; o papel tem contexto
+ * e responsavel.
+ *
+ * A confiabilidade vem antes dos numeros pelo mesmo motivo do estudo: o
+ * documento circula em reuniao, e numero sem contexto vira decisao errada.
  */
 function ImpressaoConferencias({ linhas, resumo }) {
   const hoje = new Date().toLocaleDateString('pt-BR');
   const crit = CRITERIOS_CONFERENCIA;
+  const semReferencia = resumo.filter((g) => !g.confiavel);
+
+  const datas = linhas.map((c) => new Date(c.salvo_em)).filter((d) => !Number.isNaN(d.getTime()));
+  const periodo = datas.length
+    ? `${new Date(Math.min(...datas)).toLocaleDateString('pt-BR')} a ${new Date(Math.max(...datas)).toLocaleDateString('pt-BR')}`
+    : '—';
+  const totalPecas = resumo.reduce((acc, g) => acc + g.totalPecas, 0);
+  const totalMs = resumo.reduce((acc, g) => acc + g.totalMs, 0);
 
   return (
     <div className="somente-impressao" style={imp.folha}>
       <header style={imp.cabecalho}>
         <div>
           <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={imp.logo} />
-          <h1 style={imp.titulo}>Conferências Rápidas — Estudo por Máquina</h1>
+          <h1 style={imp.titulo}>Conferência de Ritmo — Folha por Máquina</h1>
         </div>
         <div style={imp.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
       </header>
 
-      <section style={imp.secao}>
-        <h2 style={imp.secaoTitulo}>Critérios de confiabilidade</h2>
-        <p style={imp.texto}>
-          Para o ritmo médio de uma máquina valer como referência, a amostra precisa de:
-          no mínimo <strong>{crit.minConferencias} conferências</strong>, com
-          {' '}<strong>{formatarDuracao(crit.minTempoTotalMs)}</strong> ou mais de tempo total
-          observado, e nenhuma conferência com menos de
-          {' '}<strong>{formatarDuracao(crit.minPeriodoMs)}</strong> (período curto mede rajada,
-          não ritmo). Máquinas fora do critério aparecem mesmo assim — com a ressalva impressa,
-          porque número sem contexto vira decisão errada.
-        </p>
-        <ul style={imp.listaCriterios}>
+      <section style={imp.identificacao}>
+        {[
+          ['Tipo de medição', 'Conferência rápida (vazão)'],
+          ['Período coberto', periodo],
+          ['Máquinas', String(resumo.length)],
+          ['Conferências', String(linhas.length)],
+          ['Total de peças', String(totalPecas)],
+          ['Tempo observado', formatarDuracao(totalMs)],
+          ['Critério mínimo', `${crit.minConferencias} conf. · ${formatarDuracao(crit.minTempoTotalMs)}`],
+          ['Período mínimo', formatarDuracao(crit.minPeriodoMs)],
+        ].map(([k, v]) => (
+          <div key={k} style={imp.campo}>
+            <span style={imp.campoRotulo}>{k}</span>
+            <span style={imp.campoValor}>{v}</span>
+          </div>
+        ))}
+      </section>
+
+      {/* Confiabilidade ANTES do resultado — igual a folha do estudo. */}
+      <section style={semReferencia.length ? imp.ressalva : imp.validacao}>
+        <strong>
+          {semReferencia.length
+            ? '⚠ Máquinas com amostra insuficiente'
+            : '✓ Todas as máquinas atendem aos critérios'}
+        </strong>
+        {semReferencia.length ? (
+          <>
+            <p style={imp.ressalvaTexto}>
+              As máquinas abaixo não atingiram os critérios mínimos de amostra. Os ritmos
+              apresentados servem como indício, mas <strong>não devem embasar
+              dimensionamento de capacidade</strong> enquanto a amostra não fechar.
+            </p>
+            <ul style={imp.ressalvaLista}>
+              {semReferencia.map((g) => (
+                <li key={g.maquina}><strong>{g.maquina}</strong> — {g.motivos.join('; ')}.</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p style={imp.ressalvaTexto}>
+            Todas as máquinas atingiram o mínimo de conferências, de tempo total observado e
+            de período por conferência. O CV% entre conferências está na tabela como
+            referência de estabilidade do posto.
+          </p>
+        )}
+      </section>
+
+      <h2 style={imp.tituloSecao}>Resumo por máquina</h2>
+      <table style={imp.tabela}>
+        <thead>
+          <tr>
+            <th style={imp.th}>Máquina</th>
+            <th style={imp.thNum}>Conf.</th>
+            <th style={imp.thNum}>Peças</th>
+            <th style={imp.thNum}>Tempo obs.</th>
+            <th style={imp.thNum}>Ritmo (pç/h)</th>
+            <th style={imp.thNum}>Ciclo (s/pç)</th>
+            <th style={imp.thNum}>CV%</th>
+            <th style={imp.thNum}>Situação</th>
+          </tr>
+        </thead>
+        <tbody>
           {resumo.map((g) => (
-            <li key={g.maquina} style={imp.itemCriterio}>
-              <strong>{g.maquina}</strong>{' — '}
-              {g.confiavel
-                ? 'REFERÊNCIA OK: amostra atende aos critérios.'
-                : `AMOSTRA INSUFICIENTE: ${g.motivos.join('; ')}.`}
-            </li>
+            <tr key={g.maquina}>
+              <td style={imp.td}>{g.maquina}</td>
+              <td style={imp.tdNum}>{g.n}</td>
+              <td style={imp.tdNum}>{g.totalPecas}</td>
+              <td style={imp.tdNum}>{formatarDuracao(g.totalMs)}</td>
+              <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
+              <td style={imp.tdNum}>{formatarSegundos(g.cicloMedioMs)}</td>
+              <td style={imp.tdNum}>{g.cvPct != null ? g.cvPct.toFixed(1) : '—'}</td>
+              <td style={imp.tdNum}>{g.confiavel ? 'Referência' : 'Insuficiente'}</td>
+            </tr>
           ))}
-        </ul>
-      </section>
+        </tbody>
+      </table>
 
-      <section style={imp.secao}>
-        <h2 style={imp.secaoTitulo}>Resumo por máquina</h2>
-        <table style={imp.tabela}>
-          <thead>
-            <tr>
-              {['Máquina', 'Conf.', 'Peças', 'Tempo obs.', 'Ritmo médio (pç/h)', 'Ciclo médio (s/pç)', 'CV %', 'Situação']
-                .map((h, i) => <th key={h} style={i === 0 ? imp.th : imp.thNum}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {resumo.map((g) => (
-              <tr key={g.maquina}>
-                <td style={imp.td}>{g.maquina}</td>
-                <td style={imp.tdNum}>{g.n}</td>
-                <td style={imp.tdNum}>{g.totalPecas}</td>
-                <td style={imp.tdNum}>{formatarDuracao(g.totalMs)}</td>
-                <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
-                <td style={imp.tdNum}>{formatarSegundos(g.cicloMedioMs)}</td>
-                <td style={imp.tdNum}>{g.cvPct != null ? g.cvPct.toFixed(1) : '—'}</td>
-                <td style={imp.tdNum}>{g.confiavel ? 'Referência OK' : 'Insuficiente'}</td>
+      <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Conferências registradas ({linhas.length})</h2>
+      <table style={imp.tabela}>
+        <thead>
+          <tr>
+            <th style={imp.th}>Data</th>
+            <th style={imp.th}>Máquina</th>
+            <th style={imp.th}>Peça</th>
+            <th style={imp.th}>Horários</th>
+            <th style={imp.thNum}>Período</th>
+            <th style={imp.thNum}>Peças</th>
+            <th style={imp.thNum}>Peças/h</th>
+            <th style={imp.thNum}>Ciclo (s/pç)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map((c) => {
+            const calc = conferenciaRapida({ duracaoMs: Number(c.duracao_ms), pecas: c.pecas });
+            return (
+              <tr key={c.id}>
+                <td style={imp.td}>{formatarDataHora(c.salvo_em)}</td>
+                <td style={imp.td}>{c.maquina || '—'}</td>
+                <td style={imp.td}>{c.peca || '—'}</td>
+                <td style={imp.td}>{c.hora_inicial && c.hora_final ? `${c.hora_inicial}–${c.hora_final}` : '—'}</td>
+                <td style={imp.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
+                <td style={imp.tdNum}>{c.pecas}</td>
+                <td style={{ ...imp.tdNum, fontWeight: 700 }}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
+                <td style={imp.tdNum}>{calc?.cicloMedioMs ? formatarSegundos(calc.cicloMedioMs) : '—'}</td>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* Legenda em PALAVRAS: o documento circula em reuniao e nao pode
+          depender de quem escreveu para ser entendido. */}
+      <section style={imp.legenda}>
+        <strong>Legenda</strong>
+        <div style={imp.gradeLegenda}>
+          {[
+            ['Conferência', 'um período observado no posto: hora inicial, hora final e peças produzidas.'],
+            ['Período', 'tempo decorrido entre a hora inicial e a hora final.'],
+            ['Peças/h', 'ritmo do período (peças ÷ tempo × 3.600).'],
+            ['Ritmo médio', 'ponderado pelo tempo: Σ peças ÷ Σ tempo observado — não é a média das taxas.'],
+            ['Ciclo (s/pç)', 'segundos por peça (tempo ÷ peças).'],
+            ['CV%', 'variação do ritmo entre conferências da mesma máquina — quanto maior, mais instável.'],
+            ['Referência', 'amostra atende aos critérios mínimos declarados acima.'],
+            ['Insuficiente', 'amostra ainda não sustenta decisão de capacidade.'],
+          ].map(([sigla, texto]) => (
+            <div key={sigla} style={imp.itemLegenda}>
+              <strong style={{ whiteSpace: 'nowrap' }}>{sigla}:</strong>
+              <span>{texto}</span>
+            </div>
+          ))}
+        </div>
+        <p style={imp.nota}>
+          Conferência rápida mede <strong>vazão de posto</strong> (peças/hora). Não substitui o
+          estudo de tempos, que mede ciclo a ciclo com fator de ritmo e tolerância e produz o
+          tempo padrão.
+        </p>
       </section>
 
-      <section style={imp.secao}>
-        <h2 style={imp.secaoTitulo}>Conferências registradas ({linhas.length})</h2>
-        <table style={imp.tabela}>
-          <thead>
-            <tr>
-              {['Data', 'Máquina', 'Peça', 'Horários', 'Período', 'Peças', 'Peças/h', 'Ciclo (s/pç)']
-                .map((h, i) => <th key={h} style={i < 4 ? imp.th : imp.thNum}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.map((c) => {
-              const calc = conferenciaRapida({ duracaoMs: Number(c.duracao_ms), pecas: c.pecas });
-              return (
-                <tr key={c.id}>
-                  <td style={imp.td}>{formatarDataHora(c.salvo_em)}</td>
-                  <td style={imp.td}>{c.maquina || '—'}</td>
-                  <td style={imp.td}>{c.peca || '—'}</td>
-                  <td style={imp.td}>{c.hora_inicial && c.hora_final ? `${c.hora_inicial}–${c.hora_final}` : '—'}</td>
-                  <td style={imp.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
-                  <td style={imp.tdNum}>{c.pecas}</td>
-                  <td style={{ ...imp.tdNum, fontWeight: 700 }}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
-                  <td style={imp.tdNum}>{calc?.cicloMedioMs ? formatarSegundos(calc.cicloMedioMs) : '—'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <section style={imp.assinaturas}>
+        {['Analista responsável', 'Supervisão / PCP'].map((papel) => (
+          <div key={papel} style={imp.assinatura}>
+            <div style={imp.linhaAssinatura} />
+            <span style={imp.papelAssinatura}>{papel}</span>
+          </div>
+        ))}
       </section>
-
-      <footer style={imp.rodape}>
-        Ritmo médio ponderado pelo tempo: Σ peças ÷ Σ tempo observado. Conferência rápida mede
-        vazão de posto (peças/hora); não substitui o estudo de tempos, que mede ciclo a ciclo
-        com FR e tolerância e produz o tempo padrão.
-      </footer>
     </div>
   );
 }
@@ -611,6 +703,14 @@ const est = {
   iaRespostaTexto: { ...tipo('corpo'), color: t.texto, whiteSpace: 'pre-wrap', lineHeight: 1.6 },
   iaMeta: { ...tipo('legenda'), color: t.textoFraco },
 
+  faixaErro: {
+    display: 'flex', alignItems: 'center', gap: espaco.md,
+    padding: espaco.md, marginBottom: espaco.lg,
+    background: t.criticoFundo, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.critico,
+    ...tipo('legenda'), color: t.texto,
+  },
+
   modal: {
     position: 'fixed', inset: 0, zIndex: 30, background: 'rgba(15, 18, 22, 0.55)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: espaco.lg,
@@ -660,40 +760,45 @@ const est = {
   },
 };
 
-/* Impressao: preto sobre branco, tamanhos em pt-espirito (px pequenos). */
+/* Impressao: mesmos valores da Folha de Analise do estudo — o papel dos dois
+   relatorios precisa parecer da mesma casa. */
 const imp = {
-  folha: { color: '#000', fontFamily: "'Calibri', 'Carlito', 'Segoe UI', sans-serif", fontSize: 11 },
+  folha: { background: '#fff', color: '#000', fontSize: 10.5, lineHeight: 1.45,
+           fontFamily: "'Calibri', 'Carlito', 'Segoe UI', sans-serif" },
   cabecalho: {
-    display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-    gap: 16, borderBottom: '2px solid #000', paddingBottom: 8, marginBottom: 12,
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+    borderBottom: `2.5px solid ${claro.vermelho}`, paddingBottom: 8, marginBottom: 14,
   },
-  logo: { height: 28, width: 'auto', display: 'block', marginBottom: 6 },
-  titulo: { fontSize: 16, fontWeight: 700, margin: 0 },
-  emissao: { fontSize: 9, color: '#444', textAlign: 'right' },
+  logo: { height: 26, width: 'auto', display: 'block', marginBottom: 4 },
+  titulo: { margin: '2px 0 0', fontSize: 16, fontWeight: 700 },
+  emissao: { fontSize: 9, color: '#555', textAlign: 'right' },
 
-  secao: { marginBottom: 14 },
-  secaoTitulo: {
-    fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6,
-    margin: '0 0 6px', borderBottom: '1px solid #999', paddingBottom: 3,
-  },
-  texto: { margin: '0 0 6px', lineHeight: 1.5 },
-  listaCriterios: { margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 },
-  itemCriterio: { lineHeight: 1.5 },
+  identificacao: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 14px', marginBottom: 14 },
+  campo: { display: 'flex', flexDirection: 'column', borderBottom: '1px solid #ddd', paddingBottom: 3 },
+  campoRotulo: { fontSize: 7.5, textTransform: 'uppercase', letterSpacing: 0.6, color: '#666' },
+  campoValor: { fontSize: 10.5, fontWeight: 600 },
 
-  tabela: { width: '100%', borderCollapse: 'collapse', fontSize: 10 },
-  th: {
-    textAlign: 'left', padding: '4px 6px', fontWeight: 700,
-    borderBottom: '1px solid #000', whiteSpace: 'nowrap',
-  },
-  thNum: {
-    textAlign: 'right', padding: '4px 6px', fontWeight: 700,
-    borderBottom: '1px solid #000', whiteSpace: 'nowrap',
-  },
-  td: { padding: '3px 6px', borderBottom: '1px solid #CCC', verticalAlign: 'top' },
-  tdNum: {
-    padding: '3px 6px', borderBottom: '1px solid #CCC', textAlign: 'right',
-    fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-  },
+  validacao: { border: '1px solid #15803D', background: '#F2F9F4', padding: 8, marginBottom: 12, breakInside: 'avoid' },
+  ressalva: { border: '1px solid #B45309', background: '#FDF6EC', padding: 8, marginBottom: 12, breakInside: 'avoid' },
+  ressalvaTexto: { margin: '4px 0 0', fontSize: 9.5, lineHeight: 1.5 },
+  ressalvaLista: { margin: '4px 0 0', paddingLeft: 16, fontSize: 9.5, lineHeight: 1.5 },
 
-  rodape: { marginTop: 10, paddingTop: 6, borderTop: '1px solid #999', fontSize: 9, color: '#444', lineHeight: 1.5 },
+  tituloSecao: { fontSize: 12, fontWeight: 700, margin: '0 0 6px', paddingBottom: 3, borderBottom: '1px solid #999' },
+
+  tabela: { width: '100%', borderCollapse: 'collapse', fontSize: 9.5, breakInside: 'avoid' },
+  th: { textAlign: 'left', padding: '4px 5px', fontWeight: 700, borderBottom: '1.5px solid #000', whiteSpace: 'nowrap' },
+  thNum: { textAlign: 'right', padding: '4px 5px', fontWeight: 700, borderBottom: '1.5px solid #000', whiteSpace: 'nowrap' },
+  td: { padding: '3px 5px', borderBottom: '1px solid #DDD', verticalAlign: 'top' },
+  tdNum: { padding: '3px 5px', borderBottom: '1px solid #DDD', textAlign: 'right',
+           fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' },
+
+  legenda: { marginTop: 14, border: '1px solid #DDD', padding: 8, breakInside: 'avoid' },
+  gradeLegenda: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 16px', marginTop: 6 },
+  itemLegenda: { display: 'flex', gap: 6, fontSize: 9, lineHeight: 1.45, breakInside: 'avoid' },
+  nota: { margin: '8px 0 0', fontSize: 9, color: '#555', lineHeight: 1.5 },
+
+  assinaturas: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, marginTop: 32, breakInside: 'avoid' },
+  assinatura: { textAlign: 'center' },
+  linhaAssinatura: { borderTop: '1px solid #000', marginBottom: 4 },
+  papelAssinatura: { fontSize: 9, color: '#555' },
 };
