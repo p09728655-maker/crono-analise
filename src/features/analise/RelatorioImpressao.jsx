@@ -1,5 +1,6 @@
 import { claro } from '../../theme/tokensAnalise.js';
 import { formatarDuracao, formatarSegundos } from '../../domain/cronoanalise.js';
+import { PRIORIDADES } from '../../domain/sugestoes.js';
 import { GraficoYamazumi } from './graficos.jsx';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
@@ -15,7 +16,7 @@ import { VERSAO } from '../../versao.js';
  * propria confiabilidade: se a amostra nao fecha a meta, isso vai impresso,
  * nao escondido. Um numero sem contexto vira decisao errada.
  */
-export default function RelatorioImpressao({ estudo, analise }) {
+export default function RelatorioImpressao({ estudo, analise, leitura }) {
   const hoje = new Date().toLocaleDateString('pt-BR');
   const dataEstudo = estudo.data_estudo
     ? new Date(estudo.data_estudo).toLocaleDateString('pt-BR')
@@ -192,6 +193,39 @@ export default function RelatorioImpressao({ estudo, analise }) {
           que o posto não parou — significa que não houve registro no
           cronômetro. Para medir a perda, use o botão <strong>Parada</strong> na
           tela de coleta.
+        </p>
+      )}
+
+      {/* SUGESTOES — o que fazer com os numeros.
+          Vai no papel porque o relatorio circula em reuniao e "CV de 130%"
+          nao move ninguem; "revisar o MOP e treinar no metodo padrao" move.
+          Ordenadas: as de alta primeiro, o gargalo antes de tudo. */}
+      <h2 style={{ ...est.tituloSecao, marginTop: 12 }}>Sugestões de melhoria</h2>
+      {leitura?.sugestoes?.length ? (
+        <table style={est.tabela}>
+          <thead>
+            <tr>
+              <th style={est.th}>Prior.</th>
+              <th style={est.th}>Operação</th>
+              <th style={est.th}>Achado</th>
+              <th style={est.th}>Ação recomendada</th>
+            </tr>
+          </thead>
+          <tbody>
+            {leitura.sugestoes.map((s) => (
+              <tr key={s.id}>
+                <td style={est.td}>{PRIORIDADES[s.prioridade].rotulo}</td>
+                <td style={est.td}>{s.operacao || '—'}</td>
+                <td style={est.td}><strong>{s.titulo}</strong> — {s.diagnostico}</td>
+                <td style={est.td}>{s.acao}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p style={est.notaParadas}>
+          Nada a apontar nos números deste estudo: variação dentro da faixa boa,
+          nenhum posto acima do Takt e nenhuma parada relevante registrada.
         </p>
       )}
 

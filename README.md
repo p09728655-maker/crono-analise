@@ -151,6 +151,42 @@ A navegação vive numa **lateral fixa**; a barra horizontal não crescia — a
 partir de sete botões ela empurrava o título e quebrava a hierarquia. A
 coleta (celular) não tem lateral: lá a tela é pequena e a tarefa é uma só.
 
+### Sugestões, operadores e capacidade
+
+O painel responde **quanto** (tempo padrão, capacidade, operadores). Três
+abas respondem **e agora**:
+
+- **Sugestões** — lista priorizada do que fazer, cada item com o diagnóstico
+  e **a ação**: alta variação → causa raiz e MOP; gargalo acima do Takt →
+  balancear; parada por falta de material → kanban e ponto de pedido; tempos
+  subindo → fadiga e vida útil da ferramenta. O gargalo abre a lista: é o
+  único achado que trava a linha inteira, e comparar CV com minutos de
+  parada não significa nada — por isso a ordem é por prioridade, depois por
+  tipo, e o peso só desempata dentro do mesmo tipo. **Nenhuma sugestão manda
+  coletar mais ciclos** (fixado em teste): a meta de amostra é decisão do
+  analista.
+- **Operadores** — a fórmula `Σ TP ÷ Takt` fica escrita na tela, com a conta
+  do estudo e o arredondamento para cima explicado (meio operador não existe
+  no posto). Abaixo, a contribuição de cada operação e o campo *"quantos
+  você tem hoje"*, que devolve o veredito: sobram N, faltam N, ocupação do
+  time atual. Esse número é um **e-se do analista** — fica no `localStorage`
+  deste computador, por estudo, e não vai para o banco nem para o papel.
+- **Capacidade esperado × real** (no Yamazumi) — o que o Takt exige contra o
+  que o gargalo entrega, o atingimento em % e o déficit/superávit em pç/h.
+  Sem Takt configurado não há esperado: o comparativo mostra vazio em vez de
+  inventar meta.
+
+### Dois documentos impressos
+
+| Documento | Para quê |
+|---|---|
+| **Folha de Análise** (Imprimir relatório) | O técnico: identificação, base estatística, resultado por operação, paradas, sugestões, evidência gráfica, fórmulas e assinatura. É o que se arquiva e o que sustenta uma revisão de tempo padrão seis meses depois. |
+| **Resumo Executivo** | Uma página, para a reunião de dez minutos: entrega × demanda, o veredito em uma frase, tempo padrão por operação e as 3 ações de alta prioridade. |
+
+Só um dos dois é renderizado por vez — o outro nem existe no DOM, para não
+sair junto no papel. O `window.print()` acontece num efeito, depois do
+commit: chamado no clique, o navegador imprimiria o documento anterior.
+
 ### Meta de ciclos: quando parar
 
 A tela de coleta mostra a meta como fração (`7 / 10`) e barra de progresso.

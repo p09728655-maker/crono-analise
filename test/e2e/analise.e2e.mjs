@@ -63,6 +63,62 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(/Yamazumi/.test(abas) && /Opera/.test(abas) && /Paradas/.test(abas),
     `as abas que restam sao as que se usam (${abas.replace(/\s+/g, ' ').trim()})`);
 
+  /* ------------------------------------------------- capacidade e operadores */
+  /**
+   * O painel dizia quanto a linha produz, nunca se isso basta. As duas
+   * metades da pergunta agora ficam lado a lado — e o dimensionamento traz
+   * a formula escrita, porque este e' o numero que vai a' reuniao pedir ou
+   * devolver gente, e quem defende precisa mostrar a conta.
+   */
+  await p.locator('[role="tab"]', { hasText: 'Yamazumi' }).click();
+  await p.waitForTimeout(300);
+  const capacidade = await p.locator('[aria-label="Capacidade esperada e real"]').innerText();
+  checar(/Esperado \(Takt\)/i.test(capacidade) && /Real \(gargalo\)/i.test(capacidade),
+    'capacidade mostra o exigido e o entregue lado a lado');
+  checar(/300/.test(capacidade), 'esperado sai do Takt (12 s -> 300 pc/h)');
+  checar(/222/.test(capacidade), 'real sai do gargalo');
+  checar(/74%/.test(capacidade), 'atingimento e o quociente dos dois');
+  checar(/-78/.test(capacidade), 'deficit em pecas por hora, com sinal');
+
+  await p.locator('[role="tab"]', { hasText: 'Operadores' }).click();
+  await p.waitForTimeout(300);
+  const operadores = p.locator('[aria-label="Dimensionamento de operadores"]');
+  const textoOper = await operadores.innerText();
+  checar(/Σ TP ÷ Takt Time/.test(textoOper), 'a formula fica escrita na tela');
+  checar(/40\.2 s ÷ 12\.0 s/.test(textoOper), 'a conta aparece com os numeros do estudo');
+  checar(/3\.35/.test(textoOper) && /= 4/.test(textoOper), 'exato e arredondado, os dois');
+
+  await p.locator('#operadores-hoje').fill('7');
+  await p.waitForTimeout(300);
+  checar(/Sobram 3 operadores/.test(await operadores.innerText()),
+    'com o time atual, diz quanto sobra');
+  await p.locator('#operadores-hoje').fill('2');
+  await p.waitForTimeout(300);
+  checar(/Faltam 2 operadores/.test(await operadores.innerText()),
+    'e quanto falta');
+
+  // O e-se do analista sobrevive ao recarregar, mas nao sai no relatorio.
+  await p.reload();
+  await p.waitForTimeout(900);
+  await p.locator('[role="tab"]', { hasText: 'Operadores' }).click();
+  await p.waitForTimeout(300);
+  checar(await p.locator('#operadores-hoje').inputValue() === '2',
+    'o numero informado fica guardado neste computador');
+  checar(!/Faltam 2 operadores/.test(await p.locator('.somente-impressao').innerText()),
+    'e nao vaza para o documento impresso');
+
+  /* ----------------------------------------------------------- sugestoes */
+  await p.locator('[role="tab"]', { hasText: 'Sugest' }).click();
+  await p.waitForTimeout(300);
+  const sugestoes = await p.locator('[aria-label="Sugestões de melhoria"]').innerText();
+  checar(/Gargalo acima do Takt/.test(sugestoes), 'aponta o gargalo acima do Takt');
+  checar(/Ação:/.test(sugestoes), 'toda sugestao traz a acao junto');
+  checar(/Balancear a linha/.test(sugestoes), 'a acao e concreta, nao "melhorar o processo"');
+  checar(!/coletar mais|amostra pequena/i.test(sugestoes),
+    'nenhuma sugestao manda coletar mais ciclos');
+  checar(sugestoes.indexOf('Gargalo acima do Takt') < sugestoes.indexOf('Parada:'),
+    'o gargalo abre a lista: e o unico achado que trava a linha inteira');
+
   /* ------------------------------------------------------------ paradas */
   /**
    * A coleta registrava a parada com motivo e descontava do ciclo, mas
