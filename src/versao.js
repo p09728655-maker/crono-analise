@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.16.0',
+    data: '2026-08-26',
+    titulo: 'Estudos arquivados voltam',
+    itens: [
+      'Novo botão "Arquivados" no topo da lista, com a contagem: mostra os estudos que saíram da lista e restaura qualquer um com um clique. Antes, arquivar era caminho sem volta dentro do app.',
+      'O botão só aparece quando há estudo arquivado, e a tela de lista vazia passou a avisar que existem arquivados a restaurar — em vez de sugerir que não há nada.',
+    ],
+  },
+  {
     versao: '2.15.0',
     data: '2026-08-26',
     titulo: 'Template da embalagem + critérios no relatório',

@@ -409,6 +409,39 @@ rodar('API — integracao com Postgres', () => {
     expect(res.corpo.estudos.map((e) => e.id)).not.toContain(estudoId);
   });
 
+  it('arquivado volta pela listagem ?arquivados=1 e restaura com PATCH', async () => {
+    const { estudoId, operacaoId } = await criarEstudoComOperacao();
+    await sync(fingirReq({ metodo: 'POST', corpo: { observacoes: [ciclo(operacaoId, crypto.randomUUID())] } }), fingirRes());
+    await estudos(fingirReq({ metodo: 'DELETE', query: { id: estudoId } }), fingirRes());
+
+    // Sumiu da lista normal, mas aparece na dos arquivados — com os ciclos.
+    const normal = fingirRes();
+    await estudos(fingirReq({}), normal);
+    expect(normal.corpo.estudos.some((e) => e.id === estudoId)).toBe(false);
+
+    const arq = fingirRes();
+    await estudos(fingirReq({ query: { arquivados: '1' } }), arq);
+    const achado = arq.corpo.estudos.find((e) => e.id === estudoId);
+    expect(achado).toBeTruthy();
+    expect(Number(achado.total_observacoes)).toBe(1);
+
+    // Restaurar devolve para a lista normal.
+    const patch = fingirRes();
+    await estudos(fingirReq({ metodo: 'PATCH', query: { id: estudoId }, corpo: { status: 'coletando' } }), patch);
+    expect(patch.corpo.estudo.status).toBe('coletando');
+
+    const depois = fingirRes();
+    await estudos(fingirReq({}), depois);
+    expect(depois.corpo.estudos.some((e) => e.id === estudoId)).toBe(true);
+  });
+
+  it('status invalido leva 400, nao 500 vindo do Postgres', async () => {
+    const { estudoId } = await criarEstudoComOperacao();
+    const res = fingirRes();
+    await estudos(fingirReq({ metodo: 'PATCH', query: { id: estudoId }, corpo: { status: 'sumido' } }), res);
+    expect(res.statusCode).toBe(400);
+  });
+
   it('nao remove estudo de outra empresa', async () => {
     const alheia = await criarEstudoComOperacao(OUTRA_EMPRESA);
     const res = fingirRes();

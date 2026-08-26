@@ -80,6 +80,15 @@ com FR, tolerância e tempo padrão, continua sendo papel do estudo. Por não
 depender de rede, o atalho na lista de coleta fica visível mesmo com a API
 fora do ar.
 
+### Arquivar e restaurar
+
+O × da lista **arquiva** o estudo que já tem ciclos (dado de cronometragem
+não se refaz) e **apaga** o que não tem nenhum. Arquivado sai da listagem
+normal, mas o botão **Arquivados N** no topo — que só aparece quando existe
+algum — abre a lista deles com a contagem de ciclos intacta e restaura com
+um clique (`PATCH /api/estudos?id=…` com `status: 'coletando'`; a listagem
+dos arquivados é `GET /api/estudos?arquivados=1`).
+
 ### Importar (PDF do ERP ou template .xlsx)
 
 O botão **Importar** da Análise aceita dois formatos, ambos lidos no
