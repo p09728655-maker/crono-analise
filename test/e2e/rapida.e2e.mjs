@@ -46,9 +46,27 @@ const textoHoras = await painelHoras.innerText();
 checar(textoHoras.includes('10 min'), 'periodo formatado como 10 min');
 checar(textoHoras.includes('4.0'), 'ciclo medio 4.0 s/pc');
 
+/* ------------------------------------- salvar com o nome da peca */
+await p.locator('input[aria-label="Nome da peça"]').fill('Lateral Mesa Sleep');
+await p.getByRole('button', { name: 'SALVAR CONFERÊNCIA' }).tap();
+await p.getByRole('button', { name: /SALVA NESTE APARELHO/ }).waitFor({ timeout: 4000 });
+checar(true, 'salvar vira "salva" e trava contra toque duplo');
+
+const salvas = p.locator('[aria-label="Conferências salvas neste aparelho"]');
+let textoSalvas = await salvas.innerText();
+checar(textoSalvas.includes('Lateral Mesa Sleep') && textoSalvas.includes('900'),
+  'conferencia salva aparece na lista com peca e ritmo');
+
+await p.reload();
+await salvas.waitFor({ timeout: 8000 });
+textoSalvas = await salvas.innerText();
+checar(textoSalvas.includes('Lateral Mesa Sleep') && textoSalvas.includes('07:00–07:10'),
+  'salva sobrevive ao recarregar, com os horarios');
+
 // Virada de meia-noite: turno da noite tambem confere ritmo.
 await p.locator('input[aria-label="Hora inicial"]').fill('23:50');
 await p.locator('input[aria-label="Hora final"]').fill('00:10');
+await p.locator('input[aria-label="Peças no período"]').fill('150');
 checar(await ritmo() === 450, 'virada de meia-noite: 23:50 as 00:10 = 20 min -> 450 pc/h');
 
 // Botao "Agora" carimba a hora da passada sem digitar.
@@ -99,10 +117,29 @@ checar(ritmoEditado > ritmoContado, `editar as pecas recalcula o ritmo (${ritmoE
 // Mesmo periodo, so' mudou a quantidade: a proporcao tem de ser 150/4.
 checar(Math.abs(ritmoEditado / ritmoContado - 150 / 4) < 0.5, 'ritmo proporcional a quantidade digitada');
 
+/* ------------------------------- salvar tambem no resultado do cronometro */
+await p.locator('input[aria-label="Nome da peça"]').fill('Porta Ripada');
+await p.getByRole('button', { name: 'SALVAR CONFERÊNCIA' }).tap();
+await p.getByRole('button', { name: /SALVA NESTE APARELHO/ }).waitFor({ timeout: 4000 });
+
 /* ----------------------------------------------------------- reinicio */
 await p.getByRole('button', { name: /Nova conferência/ }).tap();
 await p.getByRole('button', { name: /CRONOMETRAR AO VIVO/ }).waitFor({ timeout: 4000 });
 checar(true, 'nova conferencia volta ao inicio');
+
+textoSalvas = await salvas.innerText();
+checar(textoSalvas.indexOf('Porta Ripada') < textoSalvas.indexOf('Lateral Mesa Sleep'),
+  'cronometro tambem salva, e a mais recente fica no topo');
+
+/* ------------------------------------------------------------- remover */
+await p.getByRole('button', { name: 'Remover conferência Porta Ripada' }).tap();
+textoSalvas = await salvas.innerText();
+checar(!textoSalvas.includes('Porta Ripada') && textoSalvas.includes('Lateral Mesa Sleep'),
+  'remover tira so a conferencia escolhida');
+
+await p.reload();
+await salvas.waitFor({ timeout: 8000 });
+checar(!(await salvas.innerText()).includes('Porta Ripada'), 'remocao tambem sobrevive ao recarregar');
 
 checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})`);
 

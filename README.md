@@ -58,10 +58,13 @@ Na mesma tela, o **cronômetro ao vivo** segue como alternativa para quem
 fica no posto contando peça a peça (alvo gigante, vibração, guarda de
 repique, tela acesa).
 
-Nada é gravado, de propósito: conferência é descartável por definição, e a
-tela avisa isso com todas as letras. Registro e tempo padrão continuam sendo
-papel do estudo. Por não depender de rede, o atalho na lista de coleta fica
-visível mesmo com a API fora do ar.
+O campo **Peça** e o botão **Salvar** guardam a conferência no próprio
+aparelho (localStorage, até 50, as mais recentes primeiro), numa lista na
+mesma tela — memória de bolso para comparar depois ou mostrar ao gestor,
+removível uma a uma. Nada vai para o servidor, de propósito: registro
+oficial, com FR, tolerância e tempo padrão, continua sendo papel do estudo,
+e a tela avisa isso com todas as letras. Por não depender de rede, o atalho
+na lista de coleta fica visível mesmo com a API fora do ar.
 
 ### Aviso de atualização
 

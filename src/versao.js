@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.13.0',
+    data: '2026-08-26',
+    titulo: 'Salvar conferência com a peça',
+    itens: [
+      'A conferência rápida ganhou o campo Peça e o botão Salvar: o resultado (peça, horários, período, peças e ritmo) fica guardado no próprio aparelho, numa lista na mesma tela — para comparar depois ou mostrar ao gestor.',
+      'As conferências salvas vivem só neste aparelho (até 50, as mais recentes) e podem ser removidas uma a uma. Registro oficial, com tempo padrão, continua sendo o estudo.',
+    ],
+  },
+  {
     versao: '2.12.0',
     data: '2026-08-26',
     titulo: 'Conferência por horários',

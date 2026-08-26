@@ -4,6 +4,7 @@ import {
   conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao, formatarSegundos,
 } from '../../domain/cronoanalise.js';
 import { TOQUE_MINIMO_MS } from '../../domain/estatistica.js';
+import { listarConferencias, removerConferencia, salvarConferencia } from '../../lib/conferencias.js';
 import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
 
 /**
@@ -20,9 +21,10 @@ import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
  * quem quer ficar diante da maquina contando peca a peca.
  *
  * Decisoes que vem desse cenario:
- *  - Nada e' gravado. Nem fila offline, nem servidor. Conferencia e'
- *    descartavel por definicao; registro e' papel do estudo. A tela diz
- *    isso com todas as letras para ninguem descobrir depois.
+ *  - Nada vai para o servidor. Salvar (opcional, com o nome da peca)
+ *    guarda a conferencia NESTE aparelho, numa lista na propria tela —
+ *    memoria de bolso para comparar depois. Registro oficial, com tempo
+ *    padrao, e' papel do estudo. A tela diz isso com todas as letras.
  *  - O resultado recalcula a cada tecla: preencheu os tres campos, a
  *    conta esta' na tela. Sem botao "calcular" — ele so' atrasaria.
  *  - A quantidade de pecas e' EDITAVEL tambem no resultado do cronometro,
@@ -41,6 +43,17 @@ export default function ConferenciaRapida({ aoSair }) {
   const [horaInicial, setHoraInicial] = useState('');
   const [horaFinal, setHoraFinal] = useState('');
   const [pecasPeriodo, setPecasPeriodo] = useState('');
+
+  // Nome da peca e memoria deste aparelho.
+  const [peca, setPeca] = useState('');
+  const [historico, setHistorico] = useState(() => listarConferencias());
+  const [salvo, setSalvo] = useState(null); // null | 'ok' | 'erro'
+
+  // Mudou qualquer dado, a conferencia na tela ja' e' outra: libera salvar
+  // de novo em vez de fingir que a alteracao tambem esta' guardada.
+  useEffect(() => {
+    setSalvo(null);
+  }, [peca, horaInicial, horaFinal, pecasPeriodo, pecasFinais, fase]);
 
   const rodando = fase === 'rodando';
   useWakeLock(rodando);
@@ -126,6 +139,30 @@ export default function ConferenciaRapida({ aoSair }) {
     return `${dois(d.getHours())}:${dois(d.getMinutes())}`;
   };
 
+  const salvar = useCallback((calculado, horarios) => {
+    const registro = salvarConferencia({
+      peca: peca.trim(),
+      horaInicial: horarios ? horaInicial : null,
+      horaFinal: horarios ? horaFinal : null,
+      duracaoMs: calculado.duracaoMs,
+      pecas: calculado.pecas,
+      pecasPorHora: calculado.pecasPorHora,
+      cicloMedioMs: calculado.cicloMedioMs,
+    });
+    if (registro) {
+      setHistorico(listarConferencias());
+      setSalvo('ok');
+      vibrar(45);
+    } else {
+      setSalvo('erro');
+    }
+  }, [peca, horaInicial, horaFinal]);
+
+  const remover = useCallback((id) => {
+    setHistorico(removerConferencia(id));
+    vibrar([25, 40, 25]);
+  }, []);
+
   return (
     <div style={{ ...est.tela, ...(rodando ? {} : est.telaRolavel) }}>
       <header style={est.cabecalho}>
@@ -134,7 +171,7 @@ export default function ConferenciaRapida({ aoSair }) {
         </button>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={est.titulo}>Conferência rápida</div>
-          <div style={est.subtitulo}>Sem cadastro · nada é gravado</div>
+          <div style={est.subtitulo}>Sem cadastro · salva só neste aparelho</div>
         </div>
         <span style={est.selo}>AVULSA</span>
       </header>
@@ -142,6 +179,18 @@ export default function ConferenciaRapida({ aoSair }) {
       {fase === 'pronto' && (
         <>
           <section style={est.formHoras} aria-label="Conferência por horários">
+            <label style={est.campoHora}>
+              <span style={est.rotuloCampo}>PEÇA</span>
+              <input
+                type="text"
+                placeholder="Ex: Lateral Mesa Sleep"
+                value={peca}
+                onChange={(ev) => setPeca(ev.target.value)}
+                style={est.inputTexto}
+                aria-label="Nome da peça"
+              />
+            </label>
+
             <div style={est.linhaHoras}>
               <div style={est.campoHora}>
                 <span style={est.rotuloCampo}>HORA INICIAL</span>
@@ -213,6 +262,7 @@ export default function ConferenciaRapida({ aoSair }) {
                   sufixo="s/pç"
                 />
               </div>
+              <BotaoSalvar salvo={salvo} aoSalvar={() => salvar(resultadoHoras, true)} />
             </section>
           ) : (
             <section style={est.explicacao}>
@@ -232,6 +282,40 @@ export default function ConferenciaRapida({ aoSair }) {
           <button type="button" onPointerDown={comecar} style={{ ...est.botaoGrande, ...est.botaoIniciar, ...est.botaoVivo }}>
             <span style={est.rotuloBotao}>▶ CRONOMETRAR AO VIVO</span>
           </button>
+
+          {historico.length > 0 && (
+            <section style={est.historico} aria-label="Conferências salvas neste aparelho">
+              <div style={est.historicoTitulo}>SALVAS NESTE APARELHO</div>
+              {historico.map((c) => (
+                <div key={c.id} style={est.itemHistorico}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={est.itemPeca}>{c.peca || 'Sem nome da peça'}</div>
+                    <div style={est.itemDetalhe}>
+                      {[
+                        c.horaInicial && c.horaFinal ? `${c.horaInicial}–${c.horaFinal}` : null,
+                        formatarDuracao(c.duracaoMs),
+                        `${c.pecas} pç`,
+                        dataCurta(c.salvoEm),
+                      ].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                  <div style={est.itemRitmo}>
+                    {Math.round(c.pecasPorHora)}
+                    <span style={est.itemRitmoSufixo}>pç/h</span>
+                  </div>
+                  <button
+                    type="button"
+                    style={est.itemRemover}
+                    onClick={() => remover(c.id)}
+                    aria-label={`Remover conferência ${c.peca || 'sem nome'}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </section>
+          )}
+
           <div style={est.rodape} />
         </>
       )}
@@ -275,6 +359,18 @@ export default function ConferenciaRapida({ aoSair }) {
       {fase === 'resultado' && resultado && (
         <>
           <section style={est.painelResultado} aria-label="Resultado da conferência">
+            <label style={est.campoHora}>
+              <span style={est.rotuloCampo}>PEÇA</span>
+              <input
+                type="text"
+                placeholder="Ex: Lateral Mesa Sleep"
+                value={peca}
+                onChange={(ev) => setPeca(ev.target.value)}
+                style={est.inputTexto}
+                aria-label="Nome da peça"
+              />
+            </label>
+
             <div style={est.linhaResultado}>
               <div style={est.blocoResultado}>
                 <span style={est.rotuloTempo}>TEMPO CRONOMETRADO</span>
@@ -309,11 +405,15 @@ export default function ConferenciaRapida({ aoSair }) {
                 sufixo="s/pç"
               />
             </div>
+
+            {resultado.pecas > 0 && (
+              <BotaoSalvar salvo={salvo} aoSalvar={() => salvar(resultado, false)} />
+            )}
           </section>
 
           <section style={est.aviso}>
-            Conferência não gravada. Para registrar ciclos e calcular o tempo
-            padrão, crie um estudo.
+            Salvar guarda a conferência só neste aparelho. Para registrar
+            ciclos e calcular o tempo padrão, crie um estudo.
           </section>
 
           <nav style={est.barraInferior} aria-label="Ações do resultado">
@@ -334,6 +434,39 @@ export default function ConferenciaRapida({ aoSair }) {
       )}
     </div>
   );
+}
+
+/**
+ * Botao de salvar com o proprio recibo: depois de guardar ele vira
+ * "✓ SALVA" e trava, para o dedo apressado nao duplicar o registro.
+ * Qualquer edicao nos dados libera de novo (ver o efeito sobre `salvo`).
+ */
+function BotaoSalvar({ salvo, aoSalvar }) {
+  return (
+    <>
+      <button
+        type="button"
+        style={{ ...est.botaoSalvar, ...(salvo === 'ok' ? est.botaoSalvarFeito : {}) }}
+        onClick={aoSalvar}
+        disabled={salvo === 'ok'}
+      >
+        {salvo === 'ok' ? '✓ SALVA NESTE APARELHO' : 'SALVAR CONFERÊNCIA'}
+      </button>
+      {salvo === 'erro' && (
+        <div style={est.erroSalvar}>
+          Não foi possível salvar neste aparelho — verifique o espaço do navegador.
+        </div>
+      )}
+    </>
+  );
+}
+
+/** "26/08 10:45" — curto o bastante para caber na linha do historico. */
+function dataCurta(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const dois = (n) => String(n).padStart(2, '0');
+  return `${dois(d.getDate())}/${dois(d.getMonth() + 1)} ${dois(d.getHours())}:${dois(d.getMinutes())}`;
 }
 
 function Parcial({ rotulo, valor, sufixo }) {
@@ -437,6 +570,53 @@ const est = {
     background: cores.superficie, border: `1px solid ${cores.borda}`,
     borderRadius: raio.lg, padding: espaco.lg,
   },
+  inputTexto: {
+    width: '100%', minHeight: 48, padding: `0 ${espaco.md}px`,
+    background: cores.fundo, borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
+    borderRadius: raio.sm, color: cores.texto,
+    fontSize: tamanho.corpo, fontWeight: 600, fontFamily: 'inherit', outline: 'none',
+  },
+  botaoSalvar: {
+    width: '100%', minHeight: ALVO_MINIMO,
+    background: cores.vermelho, border: 'none', borderRadius: raio.md,
+    color: '#fff', fontSize: tamanho.corpo, fontWeight: 700, letterSpacing: 1,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  botaoSalvarFeito: { background: cores.ok, cursor: 'default' },
+  erroSalvar: {
+    padding: espaco.md, textAlign: 'center',
+    fontSize: tamanho.legenda, color: cores.texto, lineHeight: 1.4,
+    background: cores.criticoFundo, borderRadius: raio.sm,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.critico,
+  },
+
+  /* ---- conferencias salvas neste aparelho ---- */
+  historico: {
+    flexShrink: 0, display: 'flex', flexDirection: 'column', gap: espaco.sm,
+    paddingTop: espaco.md,
+  },
+  historicoTitulo: { fontSize: 10, letterSpacing: 0.8, color: cores.textoFraco, textTransform: 'uppercase' },
+  itemHistorico: {
+    display: 'flex', alignItems: 'center', gap: espaco.md,
+    padding: `${espaco.sm}px ${espaco.md}px`,
+    background: cores.superficie, border: `1px solid ${cores.borda}`, borderRadius: raio.md,
+  },
+  itemPeca: {
+    fontSize: tamanho.pequeno, fontWeight: 700,
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  itemDetalhe: { fontSize: tamanho.legenda, color: cores.textoFraco, marginTop: 2 },
+  itemRitmo: {
+    flexShrink: 0, fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  itemRitmoSufixo: { fontSize: tamanho.legenda, color: cores.textoFraco, marginLeft: 3, fontWeight: 400 },
+  itemRemover: {
+    flexShrink: 0, width: 40, height: 40,
+    background: 'transparent', border: 'none', borderRadius: raio.sm,
+    color: cores.textoFraco, fontSize: 20, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit',
+  },
+
   divisorOu: { flexShrink: 0, display: 'flex', alignItems: 'center', gap: espaco.md, padding: `${espaco.xs}px 0` },
   traco: { flex: 1, height: 1, background: cores.borda },
   textoOu: { fontSize: tamanho.legenda, color: cores.textoFraco },
