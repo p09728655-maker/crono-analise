@@ -6,8 +6,10 @@ import ConferenciaRapida from './features/coleta/ConferenciaRapida.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import RelatorioConferencias from './features/analise/RelatorioConferencias.jsx';
 import BarraSincronizacao from './components/BarraSincronizacao.jsx';
+import { SistemaEncerrado } from './components/SairDoSistema.jsx';
 import { caminhos, ehDesktop, useRota } from './lib/dispositivo.js';
 import { obterEstudo } from './lib/api.js';
+import { carregarMotivos } from './lib/motivosParada.js';
 import { cores as escuro } from './theme/tokens.js';
 
 /**
@@ -21,6 +23,16 @@ export default function App() {
   const [rota, navegar] = useRota();
   const { modo, tela, estudoId, operacaoId } = rota;
   const desktop = ehDesktop();
+
+  /**
+   * Sair do sistema — so' existe no aparelho de toque.
+   *
+   * No PC o app vive numa aba: fechar e' o X do navegador. No tablet ele
+   * roda instalado, em tela cheia, e nao havia por onde sair ao fim do
+   * turno. O estado mora AQUI, e nao na lista, porque encerrar cobre o app
+   * inteiro — nao e' um modal de uma tela.
+   */
+  const [encerrado, setEncerrado] = useState(false);
 
   const irParaLista = useCallback(() => navegar(caminhos.lista(modo)), [navegar, modo]);
   const abrirEstudo = useCallback((id) => navegar(caminhos.estudo(modo, id)), [navegar, modo]);
@@ -51,6 +63,15 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', aoSair);
   }, [emColeta]);
 
+  /**
+   * Cadastro de motivos de parada, uma vez por abertura.
+   *
+   * A coleta ja' abre com a lista do cache (ou com os motivos de fabrica),
+   * entao isto nao bloqueia nada: e' so' a busca da versao mais recente.
+   * Falha em silencio de proposito — ver src/lib/motivosParada.js.
+   */
+  useEffect(() => { carregarMotivos(); }, []);
+
   // A URL canonica evita que "/" fique no historico e confunda o Voltar.
   useEffect(() => {
     if (rota.padrao) navegar(caminhos.lista(modo), { substituir: true });
@@ -68,6 +89,8 @@ export default function App() {
   // no aparelho de toque — nem por um quadro.
   if (!desktop && modo === 'analise') return null;
 
+  if (encerrado) return <SistemaEncerrado aoEntrar={() => setEncerrado(false)} />;
+
   return (
     <>
       {!telaCheia && (
@@ -84,6 +107,7 @@ export default function App() {
           modo={modo}
           aoTrocarModo={desktop ? trocarModo : undefined}
           aoConferirRapido={() => navegar(caminhos.rapida())}
+          aoSairDoSistema={desktop ? undefined : () => setEncerrado(true)}
           aoVerConferencias={() => navegar(caminhos.conferencias())}
         />
       )}

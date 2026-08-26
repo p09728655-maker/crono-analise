@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const URL_TESTE = process.env.TEST_DATABASE_URL;
 const rodar = URL_TESTE ? describe : describe.skip;
 
-let sql, sync, estudos, operacoes, config, conferenciasApi;
+let sql, sync, estudos, operacoes, config, conferenciasApi, motivosApi;
 const EMPRESA = '11111111-1111-1111-1111-111111111111';
 const OUTRA_EMPRESA = '99999999-9999-9999-9999-999999999999';
 const TOKEN = 'token-de-teste';
@@ -44,6 +44,7 @@ rodar('API — integracao com Postgres', () => {
     operacoes = (await import('../api/operacoes.js')).default;
     config = (await import('../api/config.js')).default;
     conferenciasApi = (await import('../api/conferencias.js')).default;
+    motivosApi = (await import('../api/motivos-parada.js')).default;
     // O teste cobre o caminho SEM chave no ambiente (a do banco).
     delete process.env.ANTHROPIC_API_KEY;
 
@@ -596,6 +597,119 @@ rodar('API — integracao com Postgres', () => {
     const muitos = Array.from({ length: 501 }, () => ciclo(operacaoId, crypto.randomUUID()));
     const res = fingirRes();
     await sync(fingirReq({ metodo: 'POST', corpo: { observacoes: muitos } }), res);
+    expect(res.statusCode).toBe(400);
+  });
+  /* ------------------------------------------- cadastro de motivos de parada */
+  /**
+   * O que precisa ser provado aqui e' o que protege o HISTORICO. A lista em
+   * si e' um CRUD banal; o que nao pode falhar e' a regra de que parada ja'
+   * registrada nunca perde o nome — nem por troca de codigo, nem por
+   * exclusao de um motivo em uso.
+   */
+  async function criarMotivo(corpo) {
+    const res = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'POST', corpo }), res);
+    return res;
+  }
+
+  it('cria motivo gerando o codigo a partir do nome digitado', async () => {
+    const res = await criarMotivo({ rotulo: 'Falta de energia', acao: 'Acionar a manutencao eletrica.' });
+    expect(res.statusCode).toBe(201);
+    // O analista digita o NOME; o codigo sai dele, sem acento e sem espaco.
+    expect(res.corpo.motivo.codigo).toBe('falta_de_energia');
+    expect(res.corpo.motivo.ativo).toBe(true);
+  });
+
+  it('recusa dois motivos com o mesmo codigo', async () => {
+    await criarMotivo({ rotulo: 'Troca de turno' });
+    const res = await criarMotivo({ rotulo: 'TROCA DE TURNO' });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('carga inicial grava a lista e repetir nao duplica', async () => {
+    const motivos = [
+      { codigo: 'setup', rotulo: 'Setup / Troca', acao: 'Aplicar SMED.' },
+      { codigo: 'manutencao', rotulo: 'Manutencao corretiva', acao: 'Implantar TPM.' },
+    ];
+    const primeira = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'POST', corpo: { motivos } }), primeira);
+    expect(primeira.statusCode).toBe(201);
+
+    const segunda = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'POST', corpo: { motivos } }), segunda);
+    const codigos = segunda.corpo.motivos.map((m) => m.codigo);
+    expect(codigos.filter((c) => c === 'setup')).toHaveLength(1);
+  });
+
+  it('renomear e seguro; trocar o codigo e recusado', async () => {
+    const criado = await criarMotivo({ rotulo: 'Ajuste fino' });
+    const id = criado.corpo.motivo.id;
+
+    const renomear = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'PATCH', query: { id }, corpo: { rotulo: 'Ajuste de maquina' } }), renomear);
+    expect(renomear.statusCode).toBe(200);
+    expect(renomear.corpo.motivo.rotulo).toBe('Ajuste de maquina');
+    // O codigo segue o mesmo: e' por ele que as paradas antigas se acham.
+    expect(renomear.corpo.motivo.codigo).toBe('ajuste_fino');
+
+    const trocar = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'PATCH', query: { id }, corpo: { codigo: 'outro_codigo' } }), trocar);
+    expect(trocar.statusCode).toBe(400);
+  });
+
+  it('reordena a lista inteira numa chamada so', async () => {
+    const a = (await criarMotivo({ rotulo: 'Primeiro' })).corpo.motivo;
+    const b = (await criarMotivo({ rotulo: 'Segundo' })).corpo.motivo;
+    const res = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'PATCH', corpo: { ordem: [b.id, a.id] } }), res);
+    expect(res.statusCode).toBe(200);
+    const ordenados = res.corpo.motivos.map((m) => m.codigo);
+    expect(ordenados.indexOf('segundo')).toBeLessThan(ordenados.indexOf('primeiro'));
+  });
+
+  it('motivo NAO usado se exclui; motivo em uso so se desativa', async () => {
+    const livre = (await criarMotivo({ rotulo: 'Nunca usado' })).corpo.motivo;
+    const excluir = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'DELETE', query: { id: livre.id } }), excluir);
+    expect(excluir.statusCode).toBe(200);
+
+    const usado = (await criarMotivo({ rotulo: 'Falta de peca' })).corpo.motivo;
+    const { operacaoId } = await criarEstudoComOperacao();
+    await sql`
+      INSERT INTO paradas (client_id, operacao_id, motivo, duracao_ms, iniciado_em)
+      VALUES (${crypto.randomUUID()}, ${operacaoId}, ${usado.codigo}, 60000, now())`;
+
+    const recusa = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'DELETE', query: { id: usado.id } }), recusa);
+    expect(recusa.statusCode).toBe(400);
+    expect(recusa.corpo.erro).toMatch(/Desative/);
+
+    // A saida oferecida pela mensagem precisa funcionar.
+    const desativar = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'PATCH', query: { id: usado.id }, corpo: { ativo: false } }), desativar);
+    expect(desativar.corpo.motivo.ativo).toBe(false);
+  });
+
+  it('nao enxerga nem altera motivo de outra empresa', async () => {
+    // Direto no banco: a API so' fala pela empresa autenticada, e e'
+    // exatamente esse limite que o teste quer atravessar.
+    const [alheio] = await sql`
+      INSERT INTO motivos_parada (empresa_id, codigo, rotulo)
+      VALUES (${OUTRA_EMPRESA}, 'so_da_concorrente', 'So da concorrente') RETURNING id`;
+
+    const listagem = fingirRes();
+    await motivosApi(fingirReq(), listagem);
+    expect(listagem.corpo.motivos.map((m) => m.id)).not.toContain(alheio.id);
+
+    const patch = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'PATCH', query: { id: alheio.id }, corpo: { rotulo: 'X' } }), patch);
+    expect(patch.statusCode).toBe(404);
+  });
+
+  it('recusa lista de motivos acima do limite', async () => {
+    const muitos = Array.from({ length: 101 }, (_, i) => ({ rotulo: `Motivo ${i}` }));
+    const res = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'POST', corpo: { motivos: muitos } }), res);
     expect(res.statusCode).toBe(400);
   });
 });

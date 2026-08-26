@@ -10,6 +10,8 @@ import Cabecalho from '../../components/Cabecalho.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
+import ConfirmarSaida from '../../components/SairDoSistema.jsx';
+import MotivosParada from '../analise/MotivosParada.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import ImportarRoteiro from './ImportarRoteiro.jsx';
 import { VERSAO } from '../../versao.js';
@@ -20,7 +22,10 @@ import { VERSAO } from '../../versao.js';
  *   coleta  (celular, no posto) — tema escuro, alvos grandes, cartoes.
  *   analise (PC, no escritorio) — tema claro igual ao do relatorio, tabela.
  */
-export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias }) {
+export default function ListaEstudos({
+  aoAbrir, aoEditar, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias,
+  aoSairDoSistema,
+}) {
   const [estudos, setEstudos] = useState([]);
   const [estado, setEstado] = useState('carregando');
   const [erro, setErro] = useState(null);
@@ -32,7 +37,9 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
   const [arquivados, setArquivados] = useState([]);
   const [verArquivados, setVerArquivados] = useState(false);
   const [verChaveIa, setVerChaveIa] = useState(false);
+  const [verMotivos, setVerMotivos] = useState(false);
   const [busca, setBusca] = useState('');
+  const [saindo, setSaindo] = useState(false);
 
   const analise = modo === 'analise';
   const t = tema(analise);
@@ -95,6 +102,7 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
       aoVerConferencias={aoVerConferencias}
       aoVerArquivados={() => setVerArquivados(true)}
       aoVerChaveIa={() => setVerChaveIa(true)}
+      aoVerMotivos={() => setVerMotivos(true)}
       aoTrocarModo={aoTrocarModo}
     />
   );
@@ -115,16 +123,30 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
            cronometra. O botao principal so' aparece quando ja' ha' lista:
            no estado vazio ele vive no proprio bloco vazio, e dois botoes
            identicos na mesma tela e' duplicacao, nao reforco. */
-        acoes={estado === 'pronto' && (
+        acoes={(
           <>
-            {arquivados.length > 0 && (
+            {estado === 'pronto' && arquivados.length > 0 && (
               <button type="button" style={est.botaoSecundario} onClick={() => setVerArquivados(true)}>
                 Arquivados {arquivados.length}
               </button>
             )}
-            {temEstudos && (
+            {estado === 'pronto' && temEstudos && (
               <button type="button" style={est.botaoPrimario} onClick={() => setCriando(true)}>
                 + Novo estudo
+              </button>
+            )}
+            {/* SAIR fica FORA do `estado === 'pronto'`: se a lista falhou em
+                carregar — que e' justamente quando alguem desiste e quer
+                fechar o app — o botao precisa existir do mesmo jeito. */}
+            {aoSairDoSistema && (
+              <button
+                type="button"
+                style={est.botaoSair}
+                onClick={() => setSaindo(true)}
+                aria-label="Sair do sistema"
+              >
+                <span aria-hidden="true" style={est.iconeSair}>⏻</span>
+                Sair
               </button>
             )}
           </>
@@ -298,6 +320,13 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
         )}
       </main>
 
+      {saindo && (
+        <ConfirmarSaida
+          aoCancelar={() => setSaindo(false)}
+          aoConfirmar={() => { setSaindo(false); aoSairDoSistema(); }}
+        />
+      )}
+
       {verVersoes && (
         <HistoricoVersoes modo={modo} aoFechar={() => setVerVersoes(false)} />
       )}
@@ -305,6 +334,9 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
       {verChaveIa && (
         <ChaveIa modo={modo} aoFechar={() => setVerChaveIa(false)} />
       )}
+
+      {/* Cadastro dos motivos de parada — trabalho de PC, so' no menu lateral. */}
+      {verMotivos && <MotivosParada aoFechar={() => setVerMotivos(false)} />}
 
       {verArquivados && (
         <EstudosArquivados
@@ -808,7 +840,7 @@ function FormularioEstudo({ est, t, analise, produtos = [], setores = [], aoSalv
         <div style={analise ? est.formCorpoDuplo : est.formCorpo}>
           <div style={est.formEsquerda}>
             <section style={est.secao} onFocusCapture={() => setEtapa(1)}>
-              <div style={est.secaoRotulo}>Identificação</div>
+              <div style={est.formRotulo}>Identificação</div>
               <div style={analise ? est.duasColunas : est.umaColuna}>
                 <div style={analise ? est.campoLargo : undefined}>
                   <Campo est={est} label="Nome do estudo" obrigatorio dica="Ex: Furação lateral — linha 2">
@@ -843,7 +875,7 @@ function FormularioEstudo({ est, t, analise, produtos = [], setores = [], aoSalv
             </section>
 
             <section style={est.secaoSeparada} onFocusCapture={() => setEtapa(2)}>
-              <div style={est.secaoRotulo}>Configuração da coleta</div>
+              <div style={est.formRotulo}>Configuração da coleta</div>
               <div style={est.duasColunas}>
                 <Campo est={est} label="Meta de ciclos" dica="Recomendado: 12 ciclos ou mais.">
                   <input ref={refMeta} type="number" min="1" max="999" style={est.input} {...campo('metaObs')} />
@@ -983,6 +1015,17 @@ function estilos(t, analise) {
       border: 'none', borderRadius: raio.md, color: '#fff',
       ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
     },
+    /* Sair do sistema — so' aparece no tablet. Contornado, nao preenchido:
+       encerrar o turno nao pode competir com "+ Novo estudo", que e' o que
+       a tela existe para oferecer. */
+    botaoSair: {
+      minHeight: alvo, padding: `0 ${espaco.lg}px`,
+      display: 'inline-flex', alignItems: 'center', gap: espaco.sm,
+      background: 'transparent',
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md,
+      color: t.texto, ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
+    },
+    iconeSair: { fontSize: 18, lineHeight: 1 },
 
     /* ---- atalho da conferencia rapida (so' coleta) ---- */
     atalhoRapida: {
@@ -1258,7 +1301,7 @@ function estilos(t, analise) {
       paddingTop: espaco.lg,
       borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
     },
-    secaoRotulo: rotulo(t.fraco),
+    formRotulo: rotulo(t.fraco),
 
     etapas: {
       display: 'flex', alignItems: 'center', gap: espaco.sm,

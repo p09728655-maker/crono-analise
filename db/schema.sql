@@ -135,6 +135,38 @@ CREATE UNIQUE INDEX IF NOT EXISTS conferencias_client_unq ON conferencias (clien
 CREATE INDEX IF NOT EXISTS conferencias_empresa_idx ON conferencias (empresa_id, salvo_em DESC);
 CREATE INDEX IF NOT EXISTS conferencias_ativas_idx ON conferencias (empresa_id, arquivada, salvo_em DESC);
 
+-- ------------------------------------------------------- motivos_parada
+-- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o
+-- relatorio interpreta.
+--
+-- Ate' aqui os nove motivos moravam no codigo (src/domain/cronoanalise.js):
+-- incluir "falta de energia" ou trocar a acao recomendada de setup exigia
+-- deploy. Agora quem conhece o chao de fabrica cadastra no PC.
+--
+-- O CODIGO e' imutavel depois de criado, e por isso ele e' curto e sem
+-- acento: e' ele que fica gravado em cada parada (tabela `paradas` e no
+-- jsonb de `conferencias`). Renomear o rotulo e' seguro — o historico
+-- inteiro passa a ler o nome novo; trocar o codigo orfanaria o passado.
+--
+-- A ACAO nao e' enfeite: e' o que a aba Sugestoes recomenda quando aquele
+-- motivo domina o tempo parado. Motivo sem acao vira diagnostico sem
+-- tratamento.
+CREATE TABLE IF NOT EXISTS motivos_parada (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id    uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  codigo        text NOT NULL CHECK (codigo ~ '^[a-z][a-z0-9_]{1,39}$'),
+  rotulo        text NOT NULL CHECK (length(btrim(rotulo)) BETWEEN 1 AND 60),
+  acao          text,
+  ordem         integer NOT NULL DEFAULT 0,
+  -- Motivo que saiu de uso e' DESATIVADO, nao apagado: some da coleta e
+  -- continua nomeando as paradas que ja' foram registradas com ele.
+  ativo         boolean NOT NULL DEFAULT true,
+  criado_em     timestamptz NOT NULL DEFAULT now(),
+  atualizado_em timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS motivos_parada_codigo_unq ON motivos_parada (empresa_id, codigo);
+CREATE INDEX IF NOT EXISTS motivos_parada_empresa_idx ON motivos_parada (empresa_id, ordem, criado_em);
+
 -- ------------------------------------------------------------ configuracoes
 -- Par chave/valor por empresa. Hoje guarda a chave da API de IA salva pelo
 -- app (quando nao ha ANTHROPIC_API_KEY no ambiente). O valor NUNCA volta
@@ -159,6 +191,10 @@ DROP TRIGGER IF EXISTS estudos_touch ON estudos;
 CREATE TRIGGER estudos_touch BEFORE UPDATE ON estudos
   FOR EACH ROW EXECUTE FUNCTION toca_atualizado_em();
 
+DROP TRIGGER IF EXISTS motivos_parada_touch ON motivos_parada;
+CREATE TRIGGER motivos_parada_touch BEFORE UPDATE ON motivos_parada
+  FOR EACH ROW EXECUTE FUNCTION toca_atualizado_em();
+
 -- ------------------------------------------------------------------- RLS
 -- O schema `public` e exposto pelo PostgREST com a chave anonima, que vive
 -- no navegador. Sem RLS, qualquer pessoa com essa chave leria e escreveria
@@ -178,7 +214,9 @@ ALTER TABLE observacoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE paradas     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conferencias ENABLE ROW LEVEL SECURITY;
 ALTER TABLE configuracoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE motivos_parada ENABLE ROW LEVEL SECURITY;
 
 -- Defesa em camadas: remove tambem os grants diretos dos papeis expostos.
-REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas, conferencias, configuracoes
+REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas, conferencias,
+  configuracoes, motivos_parada
   FROM anon, authenticated;

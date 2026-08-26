@@ -98,6 +98,24 @@ export const salvarChaveIa = (chaveIa) =>
 export const removerChaveIa = () =>
   requisitar('/config', { metodo: 'DELETE' }).then((r) => r.chaveIa);
 
+/* ------------------------------------------- cadastro de motivos de parada */
+export const listarMotivosParada = () => requisitar('/motivos-parada').then((r) => r.motivos || []);
+export const criarMotivoParada = (dados) =>
+  requisitar('/motivos-parada', { metodo: 'POST', corpo: dados }).then((r) => r.motivo);
+// Carga inicial: grava de uma vez os motivos que o app ja' usava, para o
+// cadastro nao comecar em branco pedindo redigitacao do que ja' existia.
+export const semearMotivosParada = (motivos) =>
+  requisitar('/motivos-parada', { metodo: 'POST', corpo: { motivos } }).then((r) => r.motivos || []);
+export const atualizarMotivoParada = (id, dados) =>
+  requisitar(`/motivos-parada?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados })
+    .then((r) => r.motivo);
+// A ordem vai INTEIRA numa chamada so': trocar dois vizinhos com dois PATCH
+// deixaria a lista torta se o segundo falhasse.
+export const ordenarMotivosParada = (ids) =>
+  requisitar('/motivos-parada', { metodo: 'PATCH', corpo: { ordem: ids } }).then((r) => r.motivos || []);
+export const removerMotivoParada = (id) =>
+  requisitar(`/motivos-parada?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
+
 const LOTE = 200;
 const TENTATIVAS = 4;
 

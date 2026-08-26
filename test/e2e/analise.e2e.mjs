@@ -31,22 +31,23 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   });
 
   await p.goto(PAGINA);
-  await p.waitForSelector('[role="tablist"]', { timeout: 10000 });
+  await p.waitForSelector('[aria-label="Análise"]', { timeout: 10000 });
   await p.waitForTimeout(400);
 
-  // A resposta fica FORA das abas: some-la ao examinar a evidencia seria
-  // perder a conclusao justo na hora de conferi-la.
+  // A resposta fica FORA da secao escolhida: some-la ao examinar a
+  // evidencia seria perder a conclusao justo na hora de conferi-la.
   const respostaVisivel = async () => (await p.locator('text=/peças\\/hora/').count()) > 0;
-  checar(await respostaVisivel(), 'resposta visivel na aba inicial');
+  const secao = (nome) => p.locator('[aria-label="Análise"] button', { hasText: nome });
+  checar(await respostaVisivel(), 'resposta visivel na secao inicial');
 
-  await p.locator('[role="tab"]', { hasText: 'Operações' }).click();
+  await secao('Operações').click();
   await p.waitForTimeout(300);
-  checar(new URL(p.url()).searchParams.get('aba') === 'operacoes', 'aba ativa vai para a URL');
-  checar(await respostaVisivel(), 'resposta continua visivel ao trocar de aba');
+  checar(new URL(p.url()).searchParams.get('aba') === 'operacoes', 'secao ativa vai para a URL');
+  checar(await respostaVisivel(), 'resposta continua visivel ao trocar de secao');
   checar(await p.locator('.somente-tela >> text=GARGALO').count() > 0, 'gargalo identificado na tabela');
   checar(await p.locator('text=/amostra suficiente/i').count() > 0, 'avisa amostra insuficiente antes de mostrar numeros');
   // Volta ao Yamazumi para as verificacoes do grafico.
-  await p.locator('[role="tab"]', { hasText: 'Yamazumi' }).click();
+  await secao('Yamazumi').click();
   await p.waitForTimeout(300);
   checar(await p.locator('text=/TAKT/').count() > 0, 'linha de Takt rotulada');
   checar(await p.locator('text=Tempo normal').count() > 0, 'legenda presente (identidade nunca so por cor)');
@@ -56,12 +57,12 @@ const navegador = await chromium.launch({ executablePath: EXEC });
    * decidir nada: quem responde "este ciclo saiu do padrao" e' o aviso de
    * ciclo atipico durante a coleta, e quem responde "este posto e' estavel"
    * e' o CV%, que continua na tabela e no papel. Este teste guarda a
-   * ausencia: aba fora, e a analise segue completa sem ela.
+   * ausencia: secao fora, e a analise segue completa sem ela.
    */
-  const abas = await p.locator('[role="tablist"]').innerText();
-  checar(!/Carta de controle/i.test(abas), 'a carta de controle nao aparece mais nas abas');
-  checar(/Yamazumi/.test(abas) && /Opera/.test(abas) && /Paradas/.test(abas),
-    `as abas que restam sao as que se usam (${abas.replace(/\s+/g, ' ').trim()})`);
+  const secoes = await p.locator('[aria-label="Análise"]').innerText();
+  checar(!/Carta de controle/i.test(secoes), 'a carta de controle nao aparece mais na navegacao');
+  checar(/Yamazumi/.test(secoes) && /Opera/.test(secoes) && /Paradas/.test(secoes),
+    `as secoes que restam sao as que se usam (${secoes.replace(/\s+/g, ' ').trim()})`);
 
   /* ------------------------------------------------- capacidade e operadores */
   /**
@@ -70,7 +71,7 @@ const navegador = await chromium.launch({ executablePath: EXEC });
    * a formula escrita, porque este e' o numero que vai a' reuniao pedir ou
    * devolver gente, e quem defende precisa mostrar a conta.
    */
-  await p.locator('[role="tab"]', { hasText: 'Yamazumi' }).click();
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Yamazumi' }).click();
   await p.waitForTimeout(300);
   const capacidade = await p.locator('[aria-label="Capacidade esperada e real"]').innerText();
   checar(/Esperado \(Takt\)/i.test(capacidade) && /Real \(gargalo\)/i.test(capacidade),
@@ -80,7 +81,7 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(/74%/.test(capacidade), 'atingimento e o quociente dos dois');
   checar(/-78/.test(capacidade), 'deficit em pecas por hora, com sinal');
 
-  await p.locator('[role="tab"]', { hasText: 'Operadores' }).click();
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Operadores' }).click();
   await p.waitForTimeout(300);
   const operadores = p.locator('[aria-label="Dimensionamento de operadores"]');
   const textoOper = await operadores.innerText();
@@ -100,7 +101,7 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   // O e-se do analista sobrevive ao recarregar, mas nao sai no relatorio.
   await p.reload();
   await p.waitForTimeout(900);
-  await p.locator('[role="tab"]', { hasText: 'Operadores' }).click();
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Operadores' }).click();
   await p.waitForTimeout(300);
   checar(await p.locator('#operadores-hoje').inputValue() === '2',
     'o numero informado fica guardado neste computador');
@@ -108,7 +109,7 @@ const navegador = await chromium.launch({ executablePath: EXEC });
     'e nao vaza para o documento impresso');
 
   /* ----------------------------------------------------------- sugestoes */
-  await p.locator('[role="tab"]', { hasText: 'Sugest' }).click();
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Sugest' }).click();
   await p.waitForTimeout(300);
   const sugestoes = await p.locator('[aria-label="Sugestões de melhoria"]').innerText();
   checar(/Gargalo acima do Takt/.test(sugestoes), 'aponta o gargalo acima do Takt');
@@ -125,7 +126,7 @@ const navegador = await chromium.launch({ executablePath: EXEC });
    * nenhuma tela mostrava: o dado morria no banco. Perda medida que ninguem
    * le nao vira melhoria.
    */
-  await p.locator('[role="tab"]', { hasText: 'Paradas' }).click();
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Paradas' }).click();
   await p.waitForTimeout(300);
   const painelParadas = await p.locator('.somente-tela').innerText();
   checar(/19 min/.test(painelParadas), 'soma o tempo parado do estudo inteiro (12 + 4 + 3 min)');
@@ -137,13 +138,13 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(/não entra/i.test(painelParadas), 'diz que o tempo parado nao infla o tempo observado');
 
   // Tabela de operacoes mostra o parado por operacao.
-  await p.locator('[role="tab"]', { hasText: 'Operações' }).click();
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Operações' }).click();
   await p.waitForTimeout(300);
   checar(/16 min/.test(await p.locator('.somente-tela table').first().innerText()),
     'a tabela de operacoes tambem mostra o parado de cada uma');
 
   // O grafico precisa preencher o container, nao ficar centralizado num vazio.
-  await p.locator('[role="tab"]', { hasText: 'Yamazumi' }).click();
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Yamazumi' }).click();
   await p.waitForTimeout(400);
   const preenche = await p.evaluate(() => {
     const svg = document.querySelector('.somente-tela figure svg');
@@ -156,13 +157,13 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   const overflow = await p.evaluate(() =>
     document.documentElement.scrollWidth > document.documentElement.clientWidth);
   checar(!overflow, 'sem rolagem horizontal');
-  // Recarregar preserva a vista — e' para isso que a aba vive na URL.
-  await p.locator('[role="tab"]', { hasText: 'Operações' }).click();
+  // Recarregar preserva a vista — e' para isso que a secao vive na URL.
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Operações' }).click();
   await p.waitForTimeout(300);
   await p.reload();
   await p.waitForTimeout(800);
-  const abaApos = await p.locator('[role="tab"][aria-selected="true"]').innerText();
-  checar(/Opera/.test(abaApos), `recarregar mantem a aba (${abaApos.split('\n')[0]})`);
+  const apos = await p.locator('[aria-label="Análise"] [aria-current="page"]').innerText();
+  checar(/Opera/.test(apos), `recarregar mantem a secao (${apos.split('\n')[0]})`);
 
   checar(erros.length === 0, `sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
 }
@@ -172,13 +173,13 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   // Largura util do A4 retrato com margem de 12mm: ~703px a 96dpi.
   const p = await (await navegador.newContext({ viewport: { width: 703, height: 1200 } })).newPage();
   await p.goto(PAGINA);
-  // O relatorio impresso NAO depende de aba: ele traz tudo, sempre.
-  await p.waitForSelector('[role="tablist"]');
+  // O relatorio impresso NAO depende da secao aberta: ele traz tudo, sempre.
+  await p.waitForSelector('[aria-label="Análise"]');
   await p.waitForTimeout(400);
   checar(await p.locator('[aria-label="Análise com IA"]').count() === 1,
     'secao Analise com IA presente no painel');
 
-  // O papel leva as paradas mesmo com outra aba aberta: o relatorio traz tudo.
+  // O papel leva as paradas mesmo com outra secao aberta: o relatorio traz tudo.
   const folha = await p.locator('.somente-impressao').innerText();
   checar(/Paradas registradas na coleta/.test(folha), 'folha impressa tem a secao de paradas');
   checar(/Falta de material/.test(folha) && /kanban/i.test(folha),

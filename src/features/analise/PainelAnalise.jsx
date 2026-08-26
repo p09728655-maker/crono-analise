@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { claro, fonteAnalise } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
-import Cabecalho from '../../components/Cabecalho.jsx';
-import Abas from '../../components/Abas.jsx';
+import MenuLateral from '../../components/MenuLateral.jsx';
+import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
+import { VERSAO } from '../../versao.js';
 import {
   amostraSuficiente, calcularOperacao, comparativoCapacidade, dimensionarOperadores,
   formatarDuracao, formatarSegundos, FR_PRESETS, resumirParadasDoEstudo,
@@ -50,6 +51,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
    */
   const [documento, setDocumento] = useState('folha');
   const [imprimindo, setImprimindo] = useState(false);
+  const [verVersoes, setVerVersoes] = useState(false);
 
   useEffect(() => {
     if (!imprimindo) return;
@@ -165,134 +167,141 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
         ? <ResumoExecutivo estudo={estudo} analise={analise} leitura={leitura} />
         : <RelatorioImpressao estudo={estudo} analise={analise} leitura={leitura} />}
 
-      <div className="somente-tela" style={est.envoltorio}>
-        <Cabecalho
-          modo="analise"
+      <div className="somente-tela" style={est.telaComLateral}>
+        {/* A MESMA navegacao da primeira tela: lateral fixa, com o estudo
+            aberto no lugar onde a lista mostra os produtos. As secoes da
+            analise eram abas horizontais no topo, logo abaixo de uma barra
+            que ja' trazia voltar, titulo e tres botoes — duas faixas de
+            navegacao empilhadas, nenhuma delas igual a tela anterior. */}
+        <MenuLateral
+          versao={VERSAO}
+          aoVerVersao={() => setVerVersoes(true)}
           aoVoltar={aoVoltar}
-          titulo={estudo.nome}
-          subtitulo={[estudo.recurso, estudo.produto, estudo.analista]
-            .filter(Boolean).join(' · ') + ` · Tolerância ${analise.tolerancia}%`}
-          acoes={(
-            <>
-              <button type="button" onClick={() => setEditandoEstudo(true)} style={est.botaoSecundario}>
-                Editar estudo
-              </button>
-              <button type="button" onClick={() => imprimir('resumo')} style={est.botaoSecundario}>
-                Resumo executivo
-              </button>
-              <button type="button" onClick={() => imprimir('folha')} style={est.botaoImprimir}>
-                Imprimir relatório
-              </button>
-            </>
-          )}
-        />
-
-        {/* Ressalva importante, mas e' ressalva — nao pode competir com o
-            resultado. Uma linha, com o detalhe sob demanda. */}
-        {analise.pendencias.length > 0 && (
-          <details style={est.avisoAmostra}>
-            <summary style={est.avisoResumo}>
-              <span style={est.avisoIcone} aria-hidden="true">!</span>
-              {analise.pendencias.length} operação(ões) ainda sem amostra suficiente —
-              os números orientam, mas não fecham dimensionamento
-            </summary>
-            <ul style={est.listaPendencias}>
-              {analise.pendencias.map(({ op, s: suf }) => (
-                <li key={op.id} style={est.itemPendencia}>
-                  <strong>{op.nome}</strong> — {suf.motivo}
-                  {aoColetar && (
-                    <button type="button" style={est.linkColeta} onClick={() => aoColetar(estudo, op)}>
-                      cronometrar
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-
-        {!analise.operacoes.length ? (
-          <div style={est.primeiroPasso}>
-            <h2 style={est.primeiroPassoTitulo}>Este estudo ainda não tem operações</h2>
-            <p style={est.primeiroPassoTexto}>
-              Cadastre aqui as operações que serão cronometradas — é trabalho de
-              escritório, não de chão de fábrica. Depois, no celular, o analista
-              abre a operação no posto e coleta os ciclos.
-            </p>
-            <button type="button" style={est.botaoImprimir} onClick={() => setAdicionandoOp(true)}>
-              + Cadastrar primeira operação
-            </button>
-          </div>
-        ) : (
-          <>
-        <Resposta analise={analise} />
-
-        <section style={est.contexto} aria-label="Números de apoio">
-          {[
-            ['Operações', analise.operacoes.length, ''],
-            ['Ciclos coletados', analise.totalCiclos, ''],
-            ['Σ TP por peça', formatarSegundos(analise.somaTp), ' s'],
-            ['Takt Time', analise.taktMs ? formatarSegundos(analise.taktMs) : '—', analise.taktMs ? ' s' : ''],
-            ['Tempo parado', analise.paradas.totalMs ? formatarDuracao(analise.paradas.totalMs) : '—', ''],
-          ].map(([rot, valor, sufixo]) => (
-            <div key={rot} style={est.contextoItem}>
-              <span style={est.contextoRotulo}>{rot}</span>
-              <span style={est.contextoValor}>{valor}{sufixo}</span>
-            </div>
-          ))}
-        </section>
-
-        {/* A resposta fica ACIMA das abas, nunca dentro de uma.
-            Se ela sumisse enquanto o analista olha o Yamazumi, ele perderia
-            a conclusao justo ao examinar a evidencia dela. */}
-        <Abas
-          ativa={aba}
-          aoTrocar={trocarAba}
-          abas={[
+          voltarRotulo="Estudos"
+          contexto={{
+            rotulo: 'Estudo aberto',
+            titulo: estudo.nome,
+            subtitulo: [estudo.recurso, estudo.produto, estudo.analista]
+              .filter(Boolean).join(' · ') + ` · Tolerância ${analise.tolerancia}%`,
+          }}
+          acaoPrimaria={{ rotulo: 'Imprimir relatório', aoClicar: () => imprimir('folha') }}
+          secoes={analise.operacoes.length ? [
             { id: 'yamazumi', rotulo: 'Yamazumi' },
             { id: 'operacoes', rotulo: 'Operações', contador: analise.operacoes.length },
             { id: 'operadores', rotulo: 'Operadores' },
             { id: 'paradas', rotulo: 'Paradas', contador: analise.paradas.n },
             { id: 'sugestoes', rotulo: 'Sugestões', contador: leitura.sugestoes.length },
+          ] : []}
+          secaoAtiva={aba}
+          aoTrocarSecao={trocarAba}
+          acoes={[
+            { rotulo: 'Editar estudo', aoClicar: () => setEditandoEstudo(true) },
+            { rotulo: 'Resumo executivo', aoClicar: () => imprimir('resumo') },
           ]}
         />
 
-        {aba === 'yamazumi' && (
-          <>
-            <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} />
-            <CapacidadeEsperadoReal
-              capacidade={leitura.capacidade}
-              gargalo={analise.gargalo}
-              aoDefinirTakt={() => setEditandoEstudo(true)}
+        <main style={est.conteudoLateral}>
+          {/* Ressalva importante, mas e' ressalva — nao pode competir com o
+              resultado. Uma linha, com o detalhe sob demanda. */}
+          {analise.pendencias.length > 0 && (
+            <details style={est.avisoAmostra}>
+              <summary style={est.avisoResumo}>
+                <span style={est.avisoIcone} aria-hidden="true">!</span>
+                {analise.pendencias.length} operação(ões) ainda sem amostra suficiente —
+                os números orientam, mas não fecham dimensionamento
+              </summary>
+              <ul style={est.listaPendencias}>
+                {analise.pendencias.map(({ op, s: suf }) => (
+                  <li key={op.id} style={est.itemPendencia}>
+                    <strong>{op.nome}</strong> — {suf.motivo}
+                    {aoColetar && (
+                      <button type="button" style={est.linkColeta} onClick={() => aoColetar(estudo, op)}>
+                        cronometrar
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          {!analise.operacoes.length ? (
+            <div style={est.primeiroPasso}>
+              <h2 style={est.primeiroPassoTitulo}>Este estudo ainda não tem operações</h2>
+              <p style={est.primeiroPassoTexto}>
+                Cadastre aqui as operações que serão cronometradas — é trabalho de
+                escritório, não de chão de fábrica. Depois, no celular, o analista
+                abre a operação no posto e coleta os ciclos.
+              </p>
+              <button type="button" style={est.botaoImprimir} onClick={() => setAdicionandoOp(true)}>
+                + Cadastrar primeira operação
+              </button>
+            </div>
+          ) : (
+            <>
+          <Resposta analise={analise} />
+
+          <section style={est.contexto} aria-label="Números de apoio">
+            {[
+              ['Operações', analise.operacoes.length, ''],
+              ['Ciclos coletados', analise.totalCiclos, ''],
+              ['Σ TP por peça', formatarSegundos(analise.somaTp), ' s'],
+              ['Takt Time', analise.taktMs ? formatarSegundos(analise.taktMs) : '—', analise.taktMs ? ' s' : ''],
+              ['Tempo parado', analise.paradas.totalMs ? formatarDuracao(analise.paradas.totalMs) : '—', ''],
+            ].map(([rot, valor, sufixo]) => (
+              <div key={rot} style={est.contextoItem}>
+                <span style={est.contextoRotulo}>{rot}</span>
+                <span style={est.contextoValor}>{valor}{sufixo}</span>
+              </div>
+            ))}
+          </section>
+
+          {/* A resposta fica ACIMA da secao escolhida, nunca dentro dela.
+              Se ela sumisse enquanto o analista olha o Yamazumi, ele perderia
+              a conclusao justo ao examinar a evidencia dela. Cada secao ja'
+              se apresenta com o proprio titulo — nao ha' cabecalho aqui. */}
+
+          {aba === 'yamazumi' && (
+            <>
+              <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} />
+              <CapacidadeEsperadoReal
+                capacidade={leitura.capacidade}
+                gargalo={analise.gargalo}
+                aoDefinirTakt={() => setEditandoEstudo(true)}
+              />
+            </>
+          )}
+
+          {aba === 'operacoes' && (
+            <TabelaOperacoes
+              analise={analise}
+              metaObs={estudo.meta_obs}
+              estudo={estudo}
+              aoAdicionar={() => setAdicionandoOp(true)}
+              aoColetar={aoColetar}
+              aoRemover={async (op) => {
+                if (!window.confirm(`Remover a operação "${op.nome}" e todos os seus ciclos?`)) return;
+                await removerOperacao(op.id);
+                carregar();
+              }}
             />
-          </>
-        )}
+          )}
 
-        {aba === 'operacoes' && (
-          <TabelaOperacoes
-            analise={analise}
-            metaObs={estudo.meta_obs}
-            estudo={estudo}
-            aoAdicionar={() => setAdicionandoOp(true)}
-            aoColetar={aoColetar}
-            aoRemover={async (op) => {
-              if (!window.confirm(`Remover a operação "${op.nome}" e todos os seus ciclos?`)) return;
-              await removerOperacao(op.id);
-              carregar();
-            }}
-          />
-        )}
+          {aba === 'operadores' && (
+            <PainelOperadores estudoId={estudoId} analise={analise} aoDefinirTakt={() => setEditandoEstudo(true)} />
+          )}
 
-        {aba === 'operadores' && (
-          <PainelOperadores estudoId={estudoId} analise={analise} aoDefinirTakt={() => setEditandoEstudo(true)} />
-        )}
+          {aba === 'paradas' && <PainelParadas resumo={analise.paradas} />}
 
-        {aba === 'paradas' && <PainelParadas resumo={analise.paradas} />}
+          {aba === 'sugestoes' && <PainelSugestoes sugestoes={leitura.sugestoes} />}
 
-        {aba === 'sugestoes' && <PainelSugestoes sugestoes={leitura.sugestoes} />}
+          <AnaliseIa estudo={estudo} analise={analise} />
+            </>
+          )}
+        </main>
 
-        <AnaliseIa estudo={estudo} analise={analise} />
-          </>
+        {verVersoes && (
+          <HistoricoVersoes modo="analise" aoFechar={() => setVerVersoes(false)} />
         )}
 
         {editandoEstudo && (
@@ -1341,8 +1350,12 @@ const corNivel = (n) => ({ estavel: claro.ok, atencao: claro.atencao, critico: c
 
 const est = {
   tela: { minHeight: '100vh', background: claro.fundo, color: claro.texto, fontFamily: fonteAnalise.familia },
-  envoltorio: { paddingBottom: espaco.gigante },
-  conteudo: { maxWidth: 1400, margin: '0 auto', padding: `${espaco.xl}px` },
+  // Lateral fixa + conteudo rolando — mesmo esqueleto da lista de estudos.
+  telaComLateral: { minHeight: '100dvh', display: 'flex', alignItems: 'flex-start' },
+  conteudoLateral: {
+    flex: 1, minWidth: 0, maxWidth: 1400,
+    padding: `${espaco.xl}px ${espaco.xl}px ${espaco.gigante}px`,
+  },
 
   botaoImprimir: {
     minHeight: 40, padding: `0 ${espaco.lg}px`, background: claro.vermelho, border: 'none',
