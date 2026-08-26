@@ -190,6 +190,29 @@ A última versão vista fica no `localStorage` por aparelho: o aviso aparece
 uma vez e some ao ser visto ou dispensado. Primeira visita não ganha faixa —
 usuário novo não tem passado para comparar.
 
+### Paradas do estudo (`/analise/estudo/<id>?aba=paradas`)
+
+Durante a coleta ciclo a ciclo, o botão **Parada** pergunta o motivo e
+cronometra o tempo parado. Esse tempo é **descontado do ciclo** — parada não
+pode inflar o TO e virar "operação lenta" — e fica registrado à parte, como
+perda.
+
+Registrar sem mostrar é trabalho jogado fora, então a aba **Paradas** do
+painel lê isso como Pareto: tempo total, quanto representa do tempo com o
+cronômetro na mão, os motivos da maior perda para a menor e **a ação que cada
+um pede** (SMED no setup, kanban na falta de material, TPM na manutenção).
+Motivo sem ação não vira melhoria, por isso a ação vem na mesma linha.
+
+O denominador é o tempo observado (ciclos válidos + paradas), nunca o turno:
+o estudo não observou o turno inteiro, e usar essa base daria um número que
+parece OEE sem ser. A mesma informação vai para a folha impressa e para a
+Análise com IA, que é instruída a tratar parada e lentidão como problemas
+diferentes.
+
+O motivo é gravado pelo **código** (`setup`), não pelo rótulo: revisar o
+texto na tela não pode quebrar o agrupamento de relatório antigo — e o
+rótulo antigo continua sendo reconhecido.
+
 ## Relatório impresso
 
 O botão **Imprimir relatório** gera uma folha A4 retrato. Não é a tela levada
@@ -200,6 +223,10 @@ gráfica, fórmulas e assinaturas.
 O relatório declara a própria confiabilidade. Se a amostra não fecha Nievel,
 isso vai **impresso e antes dos números**, não escondido: o documento circula
 em reunião, e número sem contexto vira decisão errada.
+
+A seção **Paradas registradas na coleta** sai com motivo, ocorrências, tempo,
+% do parado e ação recomendada. Quando não houve registro, o documento diz
+isso com todas as letras — ausência de registro não é ausência de parada.
 
 Os gráficos são SVG inline — imprimem com nitidez de vetor. A série de
 tolerância leva textura hachurada, então continua distinguível em impressão

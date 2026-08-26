@@ -28,10 +28,28 @@ export const MOTIVOS_PARADA = [
   { codigo: 'outro', rotulo: 'Outro', acao: 'Detalhar na observação para permitir classificação posterior.' },
 ];
 
-/** Rotulo legivel de um motivo de parada. Codigo desconhecido volta como veio. */
+/**
+ * Rotulo legivel de um motivo de parada. Codigo desconhecido volta como veio.
+ *
+ * Aceita tambem o proprio rotulo: a coleta de ciclos gravou o texto ("Setup
+ * / Troca") antes de passar a gravar o codigo, e parada velha no banco nao
+ * pode virar "Parada" generica so' porque a convencao mudou.
+ */
 export function rotuloMotivo(codigo) {
-  const achado = MOTIVOS_PARADA.find((m) => m.codigo === codigo);
+  const achado = MOTIVOS_PARADA.find((m) => m.codigo === codigo || m.rotulo === codigo);
   return achado ? achado.rotulo : String(codigo || 'Parada');
+}
+
+/** A acao que o motivo pede. Sai no relatorio: motivo sem acao nao vira melhoria. */
+export function acaoDoMotivo(codigo) {
+  const achado = MOTIVOS_PARADA.find((m) => m.codigo === codigo || m.rotulo === codigo);
+  return achado ? achado.acao : 'Detalhar na observação para permitir classificação posterior.';
+}
+
+/** Codigo canonico do motivo — aceita codigo ou rotulo (dado antigo). */
+function codigoMotivo(valor) {
+  const achado = MOTIVOS_PARADA.find((m) => m.codigo === valor || m.rotulo === valor);
+  return achado ? achado.codigo : String(valor || 'outro');
 }
 
 /**
@@ -51,24 +69,78 @@ export function somarParadas(paradas) {
   let setupMs = 0;
   const porMotivo = new Map();
 
+  let n = 0;
+
   for (const p of paradas || []) {
-    const ms = Math.max(0, Number(p?.duracaoMs ?? p?.duracao_ms) || 0);
+    // Tres nomes para o mesmo campo: conferencia (duracaoMs), banco
+    // (duracao_ms) e o payload do estudo (duracao).
+    const ms = Math.max(0, Number(p?.duracaoMs ?? p?.duracao_ms ?? p?.duracao) || 0);
     if (ms <= 0) continue;
-    const motivo = String(p?.motivo || 'outro');
+    const motivo = codigoMotivo(p?.motivo);
     totalMs += ms;
+    n += 1;
     if (motivo === 'setup') setupMs += ms;
-    porMotivo.set(motivo, (porMotivo.get(motivo) || 0) + ms);
+    const atual = porMotivo.get(motivo) || { ms: 0, n: 0 };
+    porMotivo.set(motivo, { ms: atual.ms + ms, n: atual.n + 1 });
   }
 
   return {
     totalMs,
     setupMs,
     outrasMs: totalMs - setupMs,
-    n: [...porMotivo.keys()].length,
+    n,
     // Maior perda primeiro: a lista ja' sai em ordem de Pareto.
     porMotivo: [...porMotivo.entries()]
-      .map(([motivo, ms]) => ({ motivo, rotulo: rotuloMotivo(motivo), ms }))
+      .map(([motivo, v]) => ({
+        motivo,
+        rotulo: rotuloMotivo(motivo),
+        acao: acaoDoMotivo(motivo),
+        ms: v.ms,
+        n: v.n,
+        pct: totalMs > 0 ? (v.ms / totalMs) * 100 : 0,
+      }))
       .sort((a, b) => b.ms - a.ms),
+  };
+}
+
+/**
+ * Paradas do ESTUDO inteiro — o que a tela de analise e o papel mostram.
+ *
+ * A coleta ciclo a ciclo ja' registrava a parada (botao Parada, com motivo)
+ * e ja' a descontava do ciclo, para nao inflar o TO. Mas o registro morria
+ * no banco: nenhuma tela mostrava. Perda medida que ninguem le nao vira
+ * melhoria — e' so' trabalho jogado fora.
+ *
+ * O denominador do percentual e' o tempo com o CRONOMETRO NA MAO (ciclos
+ * validos + paradas), nao o turno: o estudo nao observou o turno inteiro, e
+ * dizer "12% do turno" a partir de 25 ciclos seria inventar base.
+ */
+export function resumirParadasDoEstudo(operacoes) {
+  const todas = [];
+  const porOperacao = [];
+  let cronometradoMs = 0;
+
+  for (const op of operacoes || []) {
+    const soma = somarParadas(op?.paradas);
+    const tempos = temposValidos(op?.tempos);
+    cronometradoMs += tempos.reduce((acc, t) => acc + t, 0);
+    if (op?.paradas?.length) todas.push(...op.paradas);
+    if (soma.totalMs > 0) {
+      porOperacao.push({ id: op.id, nome: op.nome, ms: soma.totalMs, n: soma.n });
+    }
+  }
+
+  const geral = somarParadas(todas);
+  const base = geral.totalMs + cronometradoMs;
+
+  return {
+    totalMs: geral.totalMs,
+    setupMs: geral.setupMs,
+    n: geral.n,
+    cronometradoMs,
+    pctDoObservado: base > 0 ? (geral.totalMs / base) * 100 : 0,
+    porMotivo: geral.porMotivo,
+    porOperacao: porOperacao.sort((a, b) => b.ms - a.ms),
   };
 }
 

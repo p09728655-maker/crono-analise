@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } from '../../theme/tokens.js';
-import { calcularOperacao, formatarCronometro, formatarSegundos, MOTIVOS_PARADA } from '../../domain/cronoanalise.js';
+import { calcularOperacao, formatarCronometro, formatarSegundos, MOTIVOS_PARADA, rotuloMotivo } from '../../domain/cronoanalise.js';
 import { TOQUE_MINIMO_MS, ultimaObservacaoAtipica } from '../../domain/estatistica.js';
 import { enfileirar, novoId } from '../../lib/filaOffline.js';
 import { useCronometro, useOnline, useWakeLock, vibrar } from '../../lib/hooks.js';
@@ -277,7 +277,7 @@ function PainelPausa({ pausa, aoEncerrar }) {
     <div style={{ ...est.botaoRegistro, ...est.painelPausa }}>
       <span style={est.rotuloPausa}>PRODUCAO PARADA</span>
       <span style={est.cronometroPausa}>{formatarCronometro(decorrido)}</span>
-      <span style={est.motivoPausa}>{pausa.motivo}</span>
+      <span style={est.motivoPausa}>{rotuloMotivo(pausa.motivo)}</span>
       <button type="button" onClick={aoEncerrar} style={est.botaoRetomar}>
         RETOMAR PRODUCAO
       </button>
@@ -299,7 +299,9 @@ function BarraInferior({ rodando, pausado, temTempos, rodada, aoPausar, aoDesfaz
                 key={m.codigo}
                 type="button"
                 style={est.itemMotivo}
-                onClick={() => { aoPausar(m.rotulo); setMenuAberto(false); }}
+                /* Grava o CODIGO ('setup'), nao o rotulo: rotulo muda com
+                   revisao de texto e o relatorio perderia o agrupamento. */
+                onClick={() => { aoPausar(m.codigo); setMenuAberto(false); }}
               >
                 {m.rotulo}
               </button>

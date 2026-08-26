@@ -1,5 +1,5 @@
 import { claro } from '../../theme/tokensAnalise.js';
-import { formatarSegundos } from '../../domain/cronoanalise.js';
+import { formatarDuracao, formatarSegundos } from '../../domain/cronoanalise.js';
 import { CartaControle, GraficoYamazumi } from './graficos.jsx';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
@@ -89,6 +89,7 @@ export default function RelatorioImpressao({ estudo, analise }) {
           ['Σ TP por peça', formatarSegundos(analise.somaTp), 's'],
           ['Capacidade da linha', analise.capacidadeLinha || '—', 'pç/h'],
           ['Operadores', analise.operadores !== null ? analise.operadores.toFixed(2) : '—', ''],
+          ['Tempo parado', analise.paradas?.totalMs ? formatarDuracao(analise.paradas.totalMs) : '—', ''],
         ].map(([k, v, s]) => (
           <div key={k} style={est.resumoItem}>
             <span style={est.resumoRotulo}>{k}</span>
@@ -124,6 +125,7 @@ export default function RelatorioImpressao({ estudo, analise }) {
             <th style={est.thNum}>TP peça (s)</th>
             <th style={est.thNum}>CV%</th>
             <th style={est.thNum}>Cap/h</th>
+            <th style={est.thNum}>Parado</th>
           </tr>
         </thead>
         <tbody>
@@ -140,11 +142,58 @@ export default function RelatorioImpressao({ estudo, analise }) {
                 <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpPorPeca) : '—'}</td>
                 <td style={est.tdNum}>{r ? r.cvPct.toFixed(1) : '—'}</td>
                 <td style={est.tdNum}>{r ? r.cap : '—'}</td>
+                <td style={est.tdNum}>{r?.totalParada ? formatarDuracao(r.totalParada) : '—'}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
+
+      {/* PARADAS — a perda medida durante a coleta.
+          Vai no papel porque e' aqui que ela vira pauta: o relatorio circula
+          em reuniao, e "40 min em falta de material" e' o item que muda
+          decisao. Quando nao ha registro, o documento DIZ que nao ha, em vez
+          de omitir a secao — ausencia de registro nao e' ausencia de parada. */}
+      <h2 style={{ ...est.tituloSecao, marginTop: 12 }}>Paradas registradas na coleta</h2>
+      {analise.paradas?.n ? (
+        <>
+          <p style={est.notaParadas}>
+            {formatarDuracao(analise.paradas.totalMs)} em {analise.paradas.n} parada(s) —{' '}
+            {analise.paradas.pctDoObservado.toFixed(1)}% do tempo com o cronômetro na mão.
+            O tempo parado é descontado do ciclo e <strong>não entra</strong> no tempo
+            observado: é perda a tratar, não lentidão da operação.
+          </p>
+          <table style={est.tabela}>
+            <thead>
+              <tr>
+                <th style={est.th}>Motivo</th>
+                <th style={est.thNum}>Ocorr.</th>
+                <th style={est.thNum}>Tempo</th>
+                <th style={est.thNum}>% do parado</th>
+                <th style={est.th}>Ação recomendada</th>
+              </tr>
+            </thead>
+            <tbody>
+              {analise.paradas.porMotivo.map((m) => (
+                <tr key={m.motivo}>
+                  <td style={est.td}>{m.rotulo}</td>
+                  <td style={est.tdNum}>{m.n}</td>
+                  <td style={{ ...est.tdNum, fontWeight: 700 }}>{formatarDuracao(m.ms)}</td>
+                  <td style={est.tdNum}>{m.pct.toFixed(0)}%</td>
+                  <td style={est.td}>{m.acao}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <p style={est.notaParadas}>
+          Nenhuma parada foi registrada durante esta coleta. Isso não significa
+          que o posto não parou — significa que não houve registro no
+          cronômetro. Para medir a perda, use o botão <strong>Parada</strong> na
+          tela de coleta.
+        </p>
+      )}
 
       <div style={est.quebraPagina} />
 
@@ -174,6 +223,7 @@ export default function RelatorioImpressao({ estudo, analise }) {
             ['TP peça (s)', 'Tempo Padrão da peça', 'tempo normal com tolerância, vezes os ciclos por peça (TN × (1 + Tolerância) × ciclos). É o tempo que vale para o planejamento.'],
             ['CV%', 'Coeficiente de Variação', 'quanto os ciclos variaram entre si (desvio ÷ média × 100); menor = mais estável.'],
             ['Cap/h', 'Capacidade por hora', 'peças por hora no tempo padrão (3.600 ÷ TP da peça).'],
+            ['Parado', 'Tempo parado', 'tempo registrado com a produção parada (setup, falta de material, manutenção). Descontado do ciclo: não entra no TO.'],
             ['Σ TP', 'Soma dos tempos padrão', 'tempo padrão total do produto neste posto, somando as operações.'],
             ['Takt Time', 'Ritmo da demanda', 'tempo disponível por peça para atender a produção do dia (tempo ÷ quantidade). Operadores = Σ TP ÷ Takt.'],
           ].map(([sigla, nome, texto]) => (
@@ -223,6 +273,7 @@ const est = {
   resumoSufixo: { fontSize: 8, fontWeight: 400, marginLeft: 2 },
   gargalo: { padding: 9, background: '#f4f4f4', borderLeft: `4px solid ${claro.grafite}`, margin: '0 0 14px', fontSize: 9.5 },
   tituloSecao: { fontSize: 12, fontWeight: 700, margin: '0 0 6px', paddingBottom: 3, borderBottom: '1px solid #999' },
+  notaParadas: { fontSize: 9, lineHeight: 1.45, margin: '0 0 6px', color: '#333' },
   tabela: { width: '100%', borderCollapse: 'collapse', fontSize: 9.5, marginBottom: 14 },
   th: { textAlign: 'left', padding: '5px 6px', borderBottom: '1.5px solid #333', fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.4 },
   thNum: { textAlign: 'right', padding: '5px 6px', borderBottom: '1.5px solid #333', fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.4 },

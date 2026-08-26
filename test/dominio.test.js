@@ -7,7 +7,7 @@ import {
 import {
   amostraSuficiente, calcularOperacao, conferenciaRapida, duracaoEntreHoras,
   formatarCronometro, formatarDuracao, oee, operadoresNecessarios,
-  resumirConferencias, rotuloMotivo, somarParadas, taktTime,
+  resumirConferencias, resumirParadasDoEstudo, rotuloMotivo, somarParadas, taktTime,
 } from '../src/domain/cronoanalise.js';
 
 describe('temposValidos', () => {
@@ -249,6 +249,66 @@ describe('somarParadas', () => {
     const r = somarParadas([{ duracao_ms: 5 * MIN }]);
     expect(r.totalMs).toBe(5 * MIN);
     expect(r.porMotivo[0].motivo).toBe('outro');
+  });
+});
+
+describe('resumirParadasDoEstudo', () => {
+  const MIN = 60000;
+  const estudo = [
+    {
+      id: 'o1', nome: 'Fechar caixa', tempos: [10000, 10000, 10000],
+      paradas: [
+        { motivo: 'falta_material', duracao_ms: 12 * MIN, duracao: 12 * MIN },
+        { motivo: 'setup', duracao_ms: 4 * MIN, duracao: 4 * MIN },
+      ],
+    },
+    { id: 'o2', nome: 'Etiquetar', tempos: [5000, 5000], paradas: [{ motivo: 'setup', duracao_ms: 4 * MIN }] },
+    { id: 'o3', nome: 'Sem parada', tempos: [8000], paradas: [] },
+  ];
+
+  it('soma o estudo inteiro e ordena os motivos por Pareto, com a acao de cada um', () => {
+    const r = resumirParadasDoEstudo(estudo);
+    expect(r.totalMs).toBe(20 * MIN);
+    expect(r.n).toBe(3);
+    expect(r.setupMs).toBe(8 * MIN);
+    expect(r.porMotivo.map((m) => m.motivo)).toEqual(['falta_material', 'setup']);
+    expect(r.porMotivo[0].pct).toBe(60);
+    expect(r.porMotivo[1].n).toBe(2);
+    expect(r.porMotivo[0].acao).toMatch(/kanban/i);
+  });
+
+  it('o percentual e sobre o tempo com o cronometro na mao, nunca sobre o turno', () => {
+    const r = resumirParadasDoEstudo(estudo);
+    // 48s de ciclos + 20 min de parada.
+    expect(r.cronometradoMs).toBe(48000);
+    expect(r.pctDoObservado).toBeCloseTo((20 * MIN) / (20 * MIN + 48000) * 100, 5);
+  });
+
+  it('lista por operacao so quem parou, do maior para o menor', () => {
+    const r = resumirParadasDoEstudo(estudo);
+    expect(r.porOperacao.map((o) => o.nome)).toEqual(['Fechar caixa', 'Etiquetar']);
+    expect(r.porOperacao[0].ms).toBe(16 * MIN);
+  });
+
+  it('parada gravada com o ROTULO (dado antigo) agrupa junto com o codigo', () => {
+    const r = resumirParadasDoEstudo([
+      { id: 'x', nome: 'Op', tempos: [], paradas: [
+        { motivo: 'Setup / Troca', duracao_ms: 5 * MIN },
+        { motivo: 'setup', duracao_ms: 5 * MIN },
+      ] },
+    ]);
+    expect(r.porMotivo.length).toBe(1);
+    expect(r.setupMs).toBe(10 * MIN);
+    expect(rotuloMotivo('Setup / Troca')).toBe('Setup / Troca');
+  });
+
+  it('estudo sem parada devolve zeros, nao quebra a tela', () => {
+    const r = resumirParadasDoEstudo([{ id: 'a', nome: 'A', tempos: [1000], paradas: [] }]);
+    expect(r.n).toBe(0);
+    expect(r.totalMs).toBe(0);
+    expect(r.pctDoObservado).toBe(0);
+    expect(r.porMotivo).toEqual([]);
+    expect(resumirParadasDoEstudo(undefined).n).toBe(0);
   });
 });
 

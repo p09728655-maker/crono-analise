@@ -30,6 +30,10 @@ Regras:
 - Baseie-se SOMENTE nos numeros fornecidos. Nao invente dados.
 - Se a amostra for pequena ou o CV% alto, diga explicitamente que a conclusao
   e' fragil e o que precisa ser coletado antes de decidir.
+- "paradasPorMotivo" e' tempo em que a producao PAROU durante a coleta
+  (setup, falta de material, manutencao). Esse tempo NAO esta dentro do
+  tempo observado — foi descontado do ciclo. Trate como perda separada: nao
+  some ao TP nem diga que a operacao esta lenta por causa dele.
 - Priorize acoes praticas de chao de fabrica, nao teoria.
 - Seja direto. Sem preambulo.
 
@@ -114,6 +118,14 @@ export default handler(async (req, res) => {
     recurso: texto(corpo.recurso, 'recurso', { max: 120 }),
     toleranciaPct: decimal(corpo.toleranciaPct, 'toleranciaPct', { min: 0, max: 100, padrao: 0 }),
     taktTimeSeg: decimal(corpo.taktTimeSeg, 'taktTimeSeg', { min: 0, padrao: null }),
+    // Paradas do estudo por motivo. O tempo delas NAO esta' dentro do TO —
+    // e' descontado do ciclo na coleta —, entao e' perda a tratar a parte.
+    paradasPorMotivo: lista(corpo.paradas || [], 'paradas', { max: 20 })
+      .map((par, j) => ({
+        motivo: texto(par?.motivo, `paradas[${j}].motivo`, { max: 120 }),
+        minutos: decimal(par?.minutos, `paradas[${j}].minutos`, { min: 0, padrao: 0 }),
+        ocorrencias: inteiro(par?.ocorrencias, `paradas[${j}].ocorrencias`, { min: 0, max: 100000, padrao: 0 }),
+      })),
     operacoes: resumo,
   };
 
