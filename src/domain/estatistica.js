@@ -68,6 +68,17 @@ export function classificarEstabilidade(cvPct) {
 /**
  * Limites da carta de controle (+-3 sigma).
  * Limite inferior nunca e' negativo: tempo negativo nao existe.
+ *
+ * NAO E' MAIS RENDERIZADA (ago/2026). A carta saiu da tela de analise: com
+ * n <= 10 ela nao consegue sinalizar ponto nenhum — o afastamento maximo
+ * possivel e' (n-1)/raiz(n) < 3 — e exibia "estavel" por construcao, nao
+ * por resultado. As duas perguntas que ela ocupava seguem respondidas: o
+ * ciclo fora do padrao pela deteccao robusta (MAD) durante a coleta, e a
+ * estabilidade do posto pelo CV%.
+ *
+ * Fica aqui, testada, porque a correcao esta mapeada: trocar sigma global
+ * por I-MR (amplitude movel / d2 = 1,128) elimina o teto e passa a detectar
+ * com 8-10 pontos. E' o que a UI exigiria para voltar.
  */
 export function cartaDeControle(valores) {
   const m = media(valores);

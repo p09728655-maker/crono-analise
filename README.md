@@ -397,19 +397,33 @@ reenviar o mesmo lote não duplica nada.
 | Nº operadores | Σ TP ÷ Takt |
 | OEE | Disponibilidade × Desempenho × Qualidade |
 
-### Duas limitações da carta ±3σ, documentadas em teste
+### Por que não há carta de controle
 
-1. **Com n ≤ 10 a carta não consegue acusar nada.** O limite matemático é
+A carta ±3σ existiu na tela até ago/2026 e saiu. Duas limitações, ambas
+fixadas em teste em `test/dominio.test.js`:
+
+1. **Com n ≤ 10 ela não consegue acusar nada.** O limite matemático é
    `max|x − média| / σ ≤ (n−1)/√n`, que para n = 10 dá 2,85 — menor que 3 por
-   construção. Como a meta usual de coleta é ~10 ciclos, a carta só começa a
-   funcionar a partir de n = 11.
+   construção. Como a meta usual de coleta é ~10 ciclos, ela exibia "estável"
+   por construção, não por resultado.
 2. **Um outlier grosseiro isolado mascara a si mesmo**, porque infla o próprio
    σ. Uma série de ~1000 ms com um ciclo de 5000 ms eleva o LSC de 1018 ms
    para 5444 ms, e o ponto absurdo passa a caber dentro dos limites.
 
-Por isso a tela de coleta usa **detecção robusta (mediana + MAD)**, que não se
-deixa arrastar por pontos extremos e avisa o analista na hora, enquanto ainda
-dá tempo de descartar o ciclo.
+Somado a isso, ela pedia leitura de CEP para responder o que o analista já
+tinha de outro jeito. As duas perguntas que ela ocupava continuam respondidas:
+
+- *"este ciclo saiu do padrão?"* → **detecção robusta (mediana + MAD)** na tela
+  de coleta, que não se deixa arrastar por pontos extremos e avisa **na hora**,
+  enquanto ainda dá tempo de conferir o posto;
+- *"este posto é estável?"* → **CV%** e a classificação de estabilidade, na
+  tabela de operações e no relatório impresso.
+
+`cartaDeControle` e `foraDeControle` continuam em `src/domain/estatistica.js`,
+testadas: se um dia a evidência estatística for exigida — disputa de tempo
+padrão, auditoria —, o caminho certo é trocar o estimador de σ por I-MR
+(amplitude móvel ÷ d₂ = 1,128), que elimina o teto `(n−1)/√n` e detecta já com
+8–10 pontos. A UI é que não volta sem essa correção.
 
 ---
 

@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.27.0',
+    data: '2026-08-26',
+    titulo: 'Fora a carta de controle',
+    itens: [
+      'A aba Carta de controle saiu da análise e do relatório impresso. Ela pedia leitura de CEP — limites, sigma, ponto fora de controle — para responder o que você já tem de outro jeito, e com 10 ciclos ela era matematicamente incapaz de sinalizar qualquer coisa: dizia "estável" por construção, não por resultado.',
+      'Nada do que se usava se perdeu. Ciclo que fugiu do padrão continua sendo avisado durante a própria coleta, na hora, com o botão de descartar do lado. Estabilidade do posto continua no CV% e na coluna Estabilidade, na tela e no papel.',
+      'Saiu junto a mensagem que mandava coletar mais ciclos para a carta funcionar.',
+    ],
+  },
+  {
     versao: '2.26.0',
     data: '2026-08-26',
     titulo: 'Carta de controle sem a bagunça',
