@@ -422,7 +422,10 @@ function FiltroProduto({ grupos, filtro, aoFiltrar, est }) {
         aria-pressed={filtro === null}
         style={{ ...est.filtroItem, ...(filtro === null ? est.filtroAtivo : {}) }}
       >
-        Todos
+        {/* "Todos os produtos", nao "Todos": o rotulo precisa se distinguir
+            de um produto que por acaso tenha esse nome — e tem, porque quem
+            cadastra usa a palavra para dizer "vale para todos os modelos". */}
+        Todos os produtos
         <span style={est.filtroContagem}>{total}</span>
       </button>
 

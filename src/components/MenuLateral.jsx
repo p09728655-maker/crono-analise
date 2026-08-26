@@ -140,8 +140,14 @@ export default function MenuLateral({
           <div style={est.grupoRotulo}>Embalagem e demais postos</div>
           <div style={est.grupoDica}>Estudos de tempo — ciclo a ciclo, com tempo padrão</div>
           {/* O grupo de filtro cobre SO' os produtos: arquivados nao filtra
-              nada, abre outra tela. */}
-          {grupos.length > 0 && (
+              nada, abre outra tela.
+
+              Com UM produto so' o filtro nao filtra nada: "Todos 1" e o
+              proprio produto embaixo, com a mesma contagem. Pior quando o
+              produto se chama "TODOS" — e chama, porque quem cadastra usa
+              a palavra para dizer "vale para todos os modelos": viravam
+              duas linhas quase identicas, uma filtro e outra dado. */}
+          {grupos.length > 1 && (
             <div style={est.bloco} role="group" aria-label="Filtrar por produto">
               <button
                 type="button"
@@ -149,7 +155,9 @@ export default function MenuLateral({
                 aria-current={filtro === null ? 'true' : undefined}
                 style={{ ...est.item, ...(filtro === null ? est.itemAtivo : {}) }}
               >
-                <span style={est.itemTexto}>Todos</span>
+                {/* "Todos os produtos", nao "Todos": o rotulo precisa se
+                    distinguir de um produto que por acaso tenha esse nome. */}
+                <span style={est.itemTexto}>Todos os produtos</span>
                 <span style={est.contagem}>{total}</span>
               </button>
               {grupos.map((g) => (

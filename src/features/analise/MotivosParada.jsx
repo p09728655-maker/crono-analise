@@ -35,10 +35,18 @@ export default function MotivosParada({ aoFechar }) {
   const [editando, setEditando] = useState(null);   // id em edicao
   const [criando, setCriando] = useState(false);
 
+  /**
+   * Falha de carga deixa `motivos` em null de proposito.
+   *
+   * A versao anterior caia para lista vazia, e a tela mostrava "Nenhum
+   * motivo cadastrado" JUNTO com o erro: duas afirmacoes que se contradizem
+   * — uma diz que o cadastro esta vazio, a outra que nao deu para saber. E
+   * ainda oferecia gravar os nove num banco que acabou de recusar a leitura.
+   */
   useEffect(() => {
     listarMotivosParada()
       .then((lista) => setMotivos(lista))
-      .catch((e) => { setErro(e.message); setMotivos([]); });
+      .catch((e) => setErro(e.message));
   }, []);
 
   /**
@@ -62,6 +70,8 @@ export default function MotivosParada({ aoFechar }) {
     return ok;
   }
 
+  const recarregar = () => aplicar(() => Promise.resolve());
+
   const semear = () => aplicar(() => semearMotivosParada(
     MOTIVOS_PARADA.map((m) => ({ codigo: m.codigo, rotulo: m.rotulo, acao: m.acao })),
   ));
@@ -75,6 +85,7 @@ export default function MotivosParada({ aoFechar }) {
   };
 
   const vazio = motivos?.length === 0;
+  const naoCarregou = motivos == null && erro;
 
   return (
     <div style={est.modal} role="dialog" aria-label="Motivos de parada">
@@ -85,9 +96,9 @@ export default function MotivosParada({ aoFechar }) {
           relatório usa para recomendar o que fazer. Vale para o app inteiro.
         </p>
 
-        {motivos == null && <p style={est.texto}>Carregando cadastro...</p>}
+        {motivos == null && !erro && <p style={est.texto}>Carregando cadastro...</p>}
 
-        {vazio && (
+        {vazio && !naoCarregou && (
           <div style={est.vazio}>
             <div style={est.vazioTitulo}>Nenhum motivo cadastrado</div>
             <p style={est.vazioTexto}>
@@ -196,6 +207,12 @@ export default function MotivosParada({ aoFechar }) {
         )}
 
         {erro && <div style={est.erro} role="alert">{erro}</div>}
+
+        {naoCarregou && (
+          <button type="button" style={est.botaoSecundario} onClick={recarregar} disabled={ocupado}>
+            Tentar de novo
+          </button>
+        )}
 
         <div style={est.acoes}>
           <button type="button" style={{ ...est.botaoSecundario, flex: 1 }} onClick={aoFechar}>
