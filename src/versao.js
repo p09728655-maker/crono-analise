@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.25.0',
+    data: '2026-08-26',
+    titulo: 'Análise com IA para de estourar o tempo',
+    itens: [
+      'Corrigido o "O servidor demorou demais para responder" na Análise com IA. A análise passou a rodar em modo mais direto — é um diagnóstico sobre números já calculados, não um problema de raciocínio profundo — e o tempo do servidor dobrou, de 30 para 60 segundos.',
+      'Se ainda assim estourar, o app agora explica o que fazer ("tente de novo; se repetir, analise um estudo com menos operações") em vez de mostrar o erro cru da hospedagem.',
+      'Análise que bate no limite de tamanho passa a sair com a ressalva no fim, em vez de terminar no meio de uma frase parecendo conclusão.',
+    ],
+  },
+  {
     versao: '2.24.0',
     data: '2026-08-26',
     titulo: 'Furadeira e embalagem separadas pelo nome',
