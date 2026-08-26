@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.21.0',
+    data: '2026-08-26',
+    titulo: 'Primeira tela orientada pelo fluxo',
+    itens: [
+      'A tela inicial foi reorganizada para responder em segundos: onde estou, o que fazer agora, quais estudos existem e qual é o caminho. "+ Novo estudo" virou a única ação em destaque, logo abaixo da identidade — e o único elemento vermelho do menu.',
+      'Os três pilares agora aparecem como sequência numerada: ① Coleta → ② Análise → ③ Capacidade, sob o título "Depois de criar, o caminho é este" — fluxo do estudo, não três botões concorrentes.',
+      'Busca, Importar e Chave da IA passaram para o bloco Ferramentas, no fim do menu. "Ir para a Coleta" continua disponível, mas discreto no rodapé: a coleta é a primeira etapa de um estudo, não uma quarta ação.',
+    ],
+  },
+  {
     versao: '2.20.0',
     data: '2026-08-26',
     titulo: 'Aviso de versão nova, editar estudo e fim do tremor',

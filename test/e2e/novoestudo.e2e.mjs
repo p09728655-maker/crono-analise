@@ -28,6 +28,58 @@ const b = await chromium.launch({ executablePath: EXEC });
   await p.waitForSelector('text=Nenhum estudo cadastrado', { timeout: 8000 });
 
   checar(true, 'PC vazio: cartao central "Nenhum estudo cadastrado"');
+
+  /* ---------------- hierarquia da primeira tela ---------------- */
+  /**
+   * A tela inicial precisa responder em segundos: onde estou, o que faco,
+   * quais estudos existem e qual e' o fluxo. O que este teste guarda e' a
+   * ORDEM — nao a aparencia: identidade, acao principal, estudos,
+   * ferramentas. E que a acao principal seja unica no menu.
+   */
+  {
+    const ordem = await p.evaluate(() => {
+      const alvo = document.querySelector('nav[aria-label="Navegação"]');
+      // innerText devolve o texto RENDERIZADO: os rotulos de grupo saem em
+      // maiusculas por CSS. Comparar sem caixa evita testar a folha de
+      // estilo em vez da ordem.
+      const texto = alvo.innerText.toUpperCase();
+      const pos = (t) => texto.indexOf(t.toUpperCase());
+      const vermelhos = [...alvo.querySelectorAll('button')].filter((b) => {
+        const c = getComputedStyle(b).backgroundColor;
+        return c.startsWith('rgb(') && c.includes('219, 33, 38');
+      }).map((b) => b.textContent.trim());
+      return {
+        identidade: pos('RitmoPatrimar'),
+        acao: pos('+ Novo estudo'),
+        estudos: pos('Estudos de tempo'),
+        ferramentas: pos('Ferramentas'),
+        coleta: pos('Ir para a Coleta'),
+        vermelhos,
+      };
+    });
+    checar(ordem.identidade < ordem.acao, 'menu: identidade antes da acao principal');
+    checar(ordem.acao < ordem.estudos, 'menu: "+ Novo estudo" antes da lista de estudos');
+    checar(ordem.estudos < ordem.ferramentas, 'menu: estudos antes das ferramentas');
+    checar(ordem.ferramentas < ordem.coleta, 'menu: "Ir para a Coleta" por ultimo, sem disputar');
+    checar(ordem.vermelhos.length === 1 && /Novo estudo/.test(ordem.vermelhos[0]),
+      `menu: so a acao principal e vermelha (${ordem.vermelhos.join(', ') || 'nenhuma'})`);
+
+    // A busca deixou de ocupar o topo — e continua existindo.
+    const buscaDepoisDaAcao = await p.evaluate(() => {
+      const nav = document.querySelector('nav[aria-label="Navegação"]');
+      const busca = nav.querySelector('input[type=search]');
+      const botao = [...nav.querySelectorAll('button')].find((b) => /Novo estudo/.test(b.textContent));
+      return busca.getBoundingClientRect().top > botao.getBoundingClientRect().top;
+    });
+    checar(buscaDepoisDaAcao, 'menu: busca existe, mas abaixo do fluxo principal');
+
+    // O fluxo aparece numerado e na ordem certa.
+    const corpo = await p.locator('main').innerText();
+    checar(/DEPOIS DE CRIAR, O CAMINHO É ESTE/i.test(corpo), 'centro: o fluxo se apresenta como sequencia');
+    checar(corpo.indexOf('Coleta') < corpo.indexOf('Análise')
+      && corpo.indexOf('Análise') < corpo.indexOf('Capacidade'),
+      'centro: Coleta -> Analise -> Capacidade nesta ordem');
+  }
   for (const bloco of ['Cronometre os ciclos', 'Calcule o tempo padrão', 'Dimensione o posto']) {
     checar(await p.locator(`text=${bloco}`).count() === 1, `PC vazio: bloco "${bloco}"`);
   }

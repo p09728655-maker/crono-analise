@@ -27,6 +27,7 @@ export default function MenuLateral({
 
   return (
     <nav style={est.lateral} aria-label="Navegação">
+      {/* 1. Onde estou */}
       <div style={est.marca}>
         <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={est.logo} />
         <div style={est.titulo}>RitmoPatrimar</div>
@@ -40,60 +41,55 @@ export default function MenuLateral({
         </div>
       </div>
 
+      {/* 2. O que devo fazer — a acao principal vem antes de tudo, e e' a
+             unica coisa vermelha do menu. */}
       <div style={est.bloco}>
-        <label style={est.rotuloBusca} htmlFor="busca-estudos">Buscar</label>
-        <input
-          id="busca-estudos"
-          type="search"
-          value={busca}
-          onChange={(ev) => aoBuscar(ev.target.value)}
-          placeholder="Produto, peça, máquina..."
-          style={est.busca}
-          aria-label="Buscar estudo por produto, máquina ou analista"
-        />
+        <button type="button" style={est.botaoPrimario} onClick={aoNovoEstudo}>
+          + Novo estudo
+        </button>
       </div>
 
-      {grupos.length > 0 && (
-        <div style={est.bloco} role="group" aria-label="Filtrar por produto">
-          <div style={est.grupoRotulo}>Estudos de tempo</div>
-          <div style={est.grupoDica}>Ciclo a ciclo, com tempo padrão — ex: embalagem</div>
-          <button
-            type="button"
-            onClick={() => aoFiltrar(null)}
-            aria-current={filtro === null ? 'true' : undefined}
-            style={{ ...est.item, ...(filtro === null ? est.itemAtivo : {}) }}
-          >
-            <span style={est.itemTexto}>Todos</span>
-            <span style={est.contagem}>{total}</span>
-          </button>
-          {grupos.map((g) => (
+      {/* 3. Quais estudos ja existem */}
+      <div style={est.bloco}>
+        <div style={est.grupoRotulo}>Estudos de tempo</div>
+        <div style={est.grupoDica}>Ciclo a ciclo, com tempo padrão — ex: embalagem</div>
+        {/* O grupo de filtro cobre SO' os produtos: arquivados nao filtra
+            nada, abre outra tela. */}
+        {grupos.length > 0 && (
+          <div style={est.bloco} role="group" aria-label="Filtrar por produto">
             <button
-              key={g.chave}
               type="button"
-              onClick={() => aoFiltrar(g.chave === filtro ? null : g.chave)}
-              aria-current={g.chave === filtro ? 'true' : undefined}
-              style={{ ...est.item, ...(g.chave === filtro ? est.itemAtivo : {}) }}
-              title={g.rotulo}
+              onClick={() => aoFiltrar(null)}
+              aria-current={filtro === null ? 'true' : undefined}
+              style={{ ...est.item, ...(filtro === null ? est.itemAtivo : {}) }}
             >
-              <span style={est.itemTexto}>{g.rotulo}</span>
-              <span style={est.contagem}>{g.estudos.length}</span>
+              <span style={est.itemTexto}>Todos</span>
+              <span style={est.contagem}>{total}</span>
             </button>
-          ))}
-        </div>
-      )}
-
-      {/* Arquivados sao ESTUDOS: ficam com os estudos, nao com as
-          conferencias — agrupar pelo tipo de medicao e' o que faz o menu
-          responder "onde fica a embalagem" e "onde fica a furadeira". */}
-      {arquivados > 0 && (
-        <div style={est.bloco}>
+            {grupos.map((g) => (
+              <button
+                key={g.chave}
+                type="button"
+                onClick={() => aoFiltrar(g.chave === filtro ? null : g.chave)}
+                aria-current={g.chave === filtro ? 'true' : undefined}
+                style={{ ...est.item, ...(g.chave === filtro ? est.itemAtivo : {}) }}
+                title={g.rotulo}
+              >
+                <span style={est.itemTexto}>{g.rotulo}</span>
+                <span style={est.contagem}>{g.estudos.length}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {arquivados > 0 && (
           <button type="button" style={est.item} onClick={aoVerArquivados}>
             <span style={est.itemTexto}>Estudos arquivados</span>
             <span style={est.contagem}>{arquivados}</span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
+      {/* 4. A outra natureza de medicao, com peso menor */}
       {aoVerConferencias && (
         <div style={est.bloco}>
           <div style={est.grupoRotulo}>Conferências rápidas</div>
@@ -104,11 +100,20 @@ export default function MenuLateral({
         </div>
       )}
 
-      <div style={est.bloco}>
-        <div style={est.grupoRotulo}>Ações</div>
-        <button type="button" style={est.botaoPrimario} onClick={aoNovoEstudo}>
-          + Novo estudo
-        </button>
+      {/* 5. Ferramentas: existem, mas nao disputam a atencao. A busca vive
+             aqui — util quando ha muitos estudos, nunca a primeira coisa
+             que a tela oferece. */}
+      <div style={est.blocoFerramentas}>
+        <div style={est.grupoRotulo}>Ferramentas</div>
+        <input
+          id="busca-estudos"
+          type="search"
+          value={busca}
+          onChange={(ev) => aoBuscar(ev.target.value)}
+          placeholder="Buscar produto, peça, máquina..."
+          style={est.busca}
+          aria-label="Buscar estudo por produto, máquina ou analista"
+        />
         <button type="button" style={est.item} onClick={aoImportar}>
           <span style={est.itemTexto}>Importar PDF ou planilha</span>
         </button>
@@ -117,14 +122,16 @@ export default function MenuLateral({
         </button>
       </div>
 
-      <div style={est.rodape}>
-        {aoTrocarModo && (
-          <button type="button" style={est.item} onClick={aoTrocarModo} title="Tela de coleta (celular)">
+      {/* A coleta e' a primeira ETAPA de um estudo, nao uma quarta acao:
+          fica no rodape, discreta, para quem ja sabe o que quer. */}
+      {aoTrocarModo && (
+        <div style={est.rodape}>
+          <button type="button" style={est.itemDiscreto} onClick={aoTrocarModo} title="Tela de coleta (celular)">
             <span style={est.itemTexto}>Ir para a Coleta</span>
             <span aria-hidden="true" style={est.seta}>→</span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </nav>
   );
 }
@@ -157,11 +164,13 @@ const est = {
   },
 
   bloco: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  // Ferramentas ficam com o rotulo mais afastado: separacao por respiro,
+  // sem mais uma linha divisoria na tela.
+  blocoFerramentas: { display: 'flex', flexDirection: 'column', gap: espaco.xs, marginTop: espaco.md },
   grupoRotulo: { ...rotulo(t.textoFraco) },
   // A dica separa as duas naturezas de medicao: estudo mede ciclo, a
   // conferencia mede vazao. Sem isso o analista precisa abrir para saber.
   grupoDica: { ...tipo('micro'), color: t.textoFraco, marginBottom: espaco.xs, textTransform: 'none', letterSpacing: 0, fontWeight: 400 },
-  rotuloBusca: { ...rotulo(t.textoFraco), marginBottom: espaco.xs },
   busca: {
     width: '100%', minHeight: 38, padding: `0 ${espaco.md}px`,
     background: t.fundo, borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
@@ -189,11 +198,19 @@ const est = {
   },
   seta: { flexShrink: 0, color: t.textoFraco },
 
+  // Unico elemento vermelho do menu e o mais alto: e' a acao principal.
   botaoPrimario: {
-    width: '100%', minHeight: 40, padding: `0 ${espaco.md}px`,
+    width: '100%', minHeight: 46, padding: `0 ${espaco.md}px`,
     background: t.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
-    ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
-    boxShadow: elevacao.baixa, marginBottom: espaco.xs,
+    ...tipo('destaque'), cursor: 'pointer', fontFamily: 'inherit',
+    boxShadow: elevacao.baixa,
+  },
+  itemDiscreto: {
+    width: '100%', minHeight: 34, padding: `0 ${espaco.md}px`,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: espaco.sm,
+    background: 'transparent', border: 'none', borderRadius: raio.md,
+    color: t.textoFraco, ...tipo('legenda'), textAlign: 'left',
+    cursor: 'pointer', fontFamily: 'inherit',
   },
 
   rodape: {
