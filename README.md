@@ -58,6 +58,22 @@ Na mesma tela, o **cronômetro ao vivo** segue como alternativa para quem
 fica no posto contando peça a peça (alvo gigante, vibração, guarda de
 repique, tela acesa).
 
+**Paradas e setup.** O período quase nunca é só máquina rodando: troca de
+gabarito, falta de peça, manutenção. No formulário, `+ Setup / troca` e
+`+ Outra parada` marcam quantos minutos do período a máquina ficou parada;
+no cronômetro ao vivo, o botão **Parou** pergunta o motivo, cronometra a
+parada e **Voltou** a encerra (contar peça fica bloqueado enquanto isso — o
+relógio do período continua correndo, porque a parada está *dentro* dele).
+
+Com parada marcada, o ritmo passa a sair do **tempo em que a máquina
+rodou** — 100 peças em 30 min com 10 min de setup são 300 pç/h, não 200 —
+e o número do período inteiro (200 pç/h) fica ao lado, porque os dois
+respondem perguntas diferentes: o primeiro dimensiona capacidade, o segundo
+explica o que saiu do posto no turno. Sem parada marcada os dois são o mesmo
+número, e toda conferência antiga continua valendo. Setup sai separado das
+demais paradas de propósito: é a única que o processo exige, e a ação dele é
+SMED — não "atacar a causa da perda".
+
 Os campos **Máquina** e **Peça** e o botão **Salvar** guardam a conferência
 no aparelho (localStorage, até 50) **e** a enviam ao banco pelo mesmo
 caminho da coleta: fila offline com `client_id` idempotente via `/api/sync`
@@ -67,9 +83,17 @@ antes da sincronização existir sobem sozinhas na próxima abertura da tela
 
 No PC, o botão **Conferências** no topo da Análise abre o relatório
 (`/analise/conferencias`): resumo por máquina — medições, ritmo médio
-**ponderado pelo tempo** (Σ peças / Σ duração, não média de taxas), melhor
-e pior registro com a peça — mais a tabela completa, filtro por máquina e
-impressão em **documento A4 próprio** (não a tela no papel).
+**ponderado pelo tempo** (Σ peças / Σ tempo rodando, não média de taxas),
+tempo parado com o setup destacado, disponibilidade, melhor e pior registro
+com a peça — mais a tabela completa, filtro por máquina e impressão em
+**documento A4 próprio** (não a tela no papel).
+
+O botão **Paradas** de cada linha abre o cadastro no PC: quem confere no
+corredor raramente para para digitar o setup, e reconstituir depois — com o
+apontamento na mão — é trabalho de escritório. A lista é gravada inteira
+(o que está na tela vira o estado final), e a soma nunca pode alcançar o
+período: sem tempo de máquina rodando não há ritmo, e a conferência sairia
+dos cálculos sem dizer por quê — o botão trava e o servidor recusa.
 
 A tela traz o mesmo tratamento do painel do estudo: **gráfico de ritmo por
 máquina** (a barra de amostra insuficiente leva textura hachurada e rótulo,
@@ -78,18 +102,29 @@ resultado dos critérios, então diz o que ainda não serve de referência em
 vez de tirar conclusão de capacidade de uma medição de um minuto.
 
 Cada linha pode ser **arquivada** (sai dos cálculos, continua no banco — o
-caso da medição atípica, setup no meio do período) ou **excluída** com
+caso da medição atípica, turno interrompido) ou **excluída** com
 confirmação (o caso do registro errado, hora digitada errada). É a mesma
-distinção do estudo, pelo mesmo motivo.
+distinção do estudo, pelo mesmo motivo. Setup no meio do período deixou de
+ser motivo para arquivar: marca-se a parada e a medição continua contando.
 
 O relatório **se autoavalia** pelos `CRITERIOS_CONFERENCIA`, declarados
 antes dos números, na tela e impressos: mínimo de 3 conferências por
 máquina, 30 min de tempo total observado, nenhum período menor que 5 min.
+Os dois critérios de tempo olham o **tempo produtivo**: meia hora de relógio
+com 27 min de setup deixa 3 min de ritmo medido, e é isso que a amostra
+tem.
 Fora do critério, a máquina aparece carimbada de "amostra insuficiente" —
 o número continua visível, nunca passa por referência. Registro oficial,
 com FR, tolerância e tempo padrão, continua sendo papel do estudo. Por não
 depender de rede, o atalho na lista de coleta fica visível mesmo com a API
 fora do ar.
+
+No tablet as duas naturezas de coleta convivem na mesma tela e são
+rotuladas pelo posto, não pelo método: **Furadeiras — Conferência rápida**
+(peças/hora do período) no atalho do topo, e **Embalagem e demais postos —
+Estudos de tempo** (ciclo a ciclo, com FR e tolerância) na lista abaixo. A
+pergunta no chão de fábrica vem sempre nessa ordem — "vim medir a
+furadeira" —, então é o posto que abre a linha.
 
 ### Primeira tela: hierarquia pelo fluxo
 

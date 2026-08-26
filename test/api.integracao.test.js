@@ -296,6 +296,84 @@ rodar('API — integracao com Postgres', () => {
     expect(n).toBe(0);
   });
 
+  it('paradas sobem junto com a conferencia e voltam na leitura', async () => {
+    const clientId = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId, maquina: 'Furadeira 16', duracaoMs: 1_800_000, pecas: 100,
+          paradas: [
+            { motivo: 'setup', duracaoMs: 600_000, observacao: 'troca de gabarito' },
+            { motivo: 'falta_material', duracaoMs: 120_000 },
+          ],
+          salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+
+    const [linha] = await sql`SELECT paradas FROM conferencias WHERE client_id = ${clientId}`;
+    expect(linha.paradas.length).toBe(2);
+    expect(linha.paradas[0]).toEqual({ motivo: 'setup', duracaoMs: 600_000, observacao: 'troca de gabarito' });
+    expect(linha.paradas[1].observacao).toBeNull();
+  });
+
+  it('conferencia antiga, sem o campo, entra com lista vazia — nao quebra o relatorio', async () => {
+    const clientId = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId, maquina: 'Furadeira 03', duracaoMs: 600_000, pecas: 150,
+          salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+    const [linha] = await sql`SELECT paradas FROM conferencias WHERE client_id = ${clientId}`;
+    expect(linha.paradas).toEqual([]);
+  });
+
+  it('PATCH cadastra paradas no PC, e recusa quando elas comem o periodo inteiro', async () => {
+    const clientId = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId, maquina: 'Furadeira 16', duracaoMs: 1_800_000, pecas: 100,
+          salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+    const [criada] = await sql`SELECT id FROM conferencias WHERE client_id = ${clientId}`;
+
+    const ok = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', query: { id: criada.id },
+      corpo: { paradas: [{ motivo: 'setup', duracaoMs: 600_000 }] },
+    }), ok);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.corpo.conferencia.paradas).toEqual([{ motivo: 'setup', duracaoMs: 600_000, observacao: null }]);
+    // Arquivamento nao foi tocado: o PATCH so' mexe no que veio no corpo.
+    expect(ok.corpo.conferencia.arquivada).toBe(false);
+
+    // Sem tempo de maquina rodando nao ha ritmo: 400, e o dado anterior fica.
+    const demais = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', query: { id: criada.id },
+      corpo: { paradas: [{ motivo: 'manutencao', duracaoMs: 1_800_000 }] },
+    }), demais);
+    expect(demais.statusCode).toBe(400);
+    const [depois] = await sql`SELECT paradas FROM conferencias WHERE id = ${criada.id}`;
+    expect(depois.paradas[0].motivo).toBe('setup');
+
+    // Lista vazia limpa as paradas — e' assim que se corrige um engano.
+    const limpa = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', query: { id: criada.id }, corpo: { paradas: [] },
+    }), limpa);
+    expect(limpa.corpo.conferencia.paradas).toEqual([]);
+  });
+
   it('nao arquiva nem exclui conferencia de OUTRA empresa', async () => {
     const alheia = crypto.randomUUID();
     await sql`

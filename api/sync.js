@@ -14,7 +14,7 @@
 import { sql } from './_lib/db.js';
 import { autenticar } from './_lib/auth.js';
 import { ErroHttp, handler, json, lerCorpo, permitir } from './_lib/http.js';
-import { dataIso, hora, inteiro, lista, texto, uuid } from './_lib/validar.js';
+import { dataIso, hora, inteiro, lista, paradasDaConferencia, texto, uuid } from './_lib/validar.js';
 
 const MAX_ITENS = 500;
 
@@ -61,6 +61,9 @@ export default handler(async (req, res) => {
     horaFinal: hora(c.horaFinal, `conferencias[${i}].horaFinal`),
     duracaoMs: inteiro(c.duracaoMs, `conferencias[${i}].duracaoMs`, { min: 1, max: 86_400_000 }),
     pecas: inteiro(c.pecas, `conferencias[${i}].pecas`, { min: 1, max: 1_000_000 }),
+    // Paradas do periodo (setup, falta de material...). Sobem NA conferencia,
+    // no mesmo INSERT: o dado nasceu junto e nao pode chegar pela metade.
+    paradas: paradasDaConferencia(c.paradas, `conferencias[${i}]`),
     salvoEm: dataIso(c.salvoEm, `conferencias[${i}].salvoEm`, { padrao: new Date().toISOString() }),
   }));
 
@@ -102,8 +105,8 @@ export default handler(async (req, res) => {
 
     for (const c of confLimpas) {
       const r = await tx`
-        INSERT INTO conferencias (client_id, empresa_id, maquina, peca, hora_inicial, hora_final, duracao_ms, pecas, salvo_em)
-        VALUES (${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca}, ${c.horaInicial}, ${c.horaFinal}, ${c.duracaoMs}, ${c.pecas}, ${c.salvoEm})
+        INSERT INTO conferencias (client_id, empresa_id, maquina, peca, hora_inicial, hora_final, duracao_ms, pecas, paradas, salvo_em)
+        VALUES (${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca}, ${c.horaInicial}, ${c.horaFinal}, ${c.duracaoMs}, ${c.pecas}, ${JSON.stringify(c.paradas)}::jsonb, ${c.salvoEm})
         ON CONFLICT (client_id) DO NOTHING
         RETURNING client_id`;
       inseridos += r.length;

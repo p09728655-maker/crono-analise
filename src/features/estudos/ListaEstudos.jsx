@@ -142,16 +142,34 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
             analista que so' quer conferir um ritmo nao pode ficar refem da
             rede nem de cadastro. */}
         {!analise && aoConferirRapido && (
+          /* O rotulo FURADEIRAS vive DENTRO do botao, nao num cabecalho
+             acima dele: a secao inteira e' este unico atalho, e um titulo
+             separado so' repetiria em duas linhas o que a primeira ja' diz. */
           <button type="button" style={est.atalhoRapida} onClick={aoConferirRapido}>
             <Simbolo tipo="cronometro" cor={t.vermelho} tamanho={28} />
             <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+              <span style={est.atalhoRotulo}>Furadeiras</span>
               <div style={est.atalhoTitulo}>Conferência rápida</div>
               <div style={est.atalhoTexto}>
-                Furadeiras: hora inicial, hora final e peças — ritmo na hora, sem cadastro.
+                Peças/hora do posto: horários, peças e as paradas (setup, falta de peça). Sem cadastro.
               </div>
             </div>
             <span style={est.atalhoSeta} aria-hidden="true">→</span>
           </button>
+        )}
+
+        {/* A segunda seção da coleta. No tablet as duas coisas moram na
+            mesma tela e o analista precisa saber, sem perguntar, qual delas
+            e' a dele: a furadeira se confere por vazao (peças/hora), a
+            embalagem se estuda ciclo a ciclo. O rotulo diz o posto; o titulo
+            diz o metodo. */}
+        {!analise && (
+          <SecaoColeta
+            est={est}
+            rotulo="Embalagem e demais postos"
+            titulo="Estudos de tempo"
+            texto="Ciclo a ciclo, com fator de ritmo e tolerância — é o que vira tempo padrão. Precisa de estudo cadastrado."
+          />
         )}
 
         {estado === 'carregando' && (
@@ -320,6 +338,28 @@ export default function ListaEstudos({ aoAbrir, aoEditar, modo = 'coleta', aoTro
           aoCancelar={() => setRemovendo(null)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Cabecalho de secao da COLETA.
+ *
+ * No tablet as duas coletas convivem na mesma tela, e sao coisas
+ * diferentes: a furadeira se confere por vazao (peças/hora num periodo), a
+ * embalagem se estuda ciclo a ciclo (com FR e tolerancia, virando tempo
+ * padrao). Sem isto o analista abria a errada — o atalho da conferencia
+ * ficava colado na lista de estudos, como se fosse mais um item dela.
+ *
+ * O rotulo nomeia o POSTO e o titulo nomeia o METODO, porque no chao de
+ * fabrica a pergunta vem sempre na primeira ordem: "vim medir a furadeira".
+ */
+function SecaoColeta({ est, rotulo: nome, titulo, texto }) {
+  return (
+    <div style={est.secaoColeta}>
+      <span style={est.secaoRotulo}>{nome}</span>
+      <h2 style={est.secaoTitulo}>{titulo}</h2>
+      <p style={est.secaoTexto}>{texto}</p>
     </div>
   );
 }
@@ -930,6 +970,19 @@ function estilos(t, analise) {
       borderRadius: raio.md,
       color: t.texto, cursor: 'pointer', fontFamily: 'inherit',
     },
+    secaoColeta: {
+      display: 'flex', flexDirection: 'column', gap: 2,
+      margin: `${espaco.xl}px 0 ${espaco.md}px`,
+      paddingLeft: espaco.md,
+      // Barra na cor da marca a esquerda: separa as duas secoes sem gastar
+      // uma linha inteira de divisor em tela de tablet.
+      borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: t.vermelho,
+    },
+    secaoRotulo: { ...rotulo(t.vermelho) },
+    atalhoRotulo: { ...rotulo(t.vermelho), display: 'block', marginBottom: 2 },
+    secaoTitulo: { ...tipo('destaque'), margin: 0 },
+    secaoTexto: { ...tipo('legenda'), color: t.fraco, margin: 0, lineHeight: 1.45 },
+
     atalhoTitulo: { ...tipo('corpoF'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     atalhoTexto: { ...tipo('legenda'), color: t.fraco, marginTop: 2 },
     atalhoSeta: { fontSize: 20, color: t.vermelho, flexShrink: 0 },

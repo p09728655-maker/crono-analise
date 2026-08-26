@@ -28,6 +28,50 @@ export const MOTIVOS_PARADA = [
   { codigo: 'outro', rotulo: 'Outro', acao: 'Detalhar na observação para permitir classificação posterior.' },
 ];
 
+/** Rotulo legivel de um motivo de parada. Codigo desconhecido volta como veio. */
+export function rotuloMotivo(codigo) {
+  const achado = MOTIVOS_PARADA.find((m) => m.codigo === codigo);
+  return achado ? achado.rotulo : String(codigo || 'Parada');
+}
+
+/**
+ * Soma as paradas de um periodo, separando SETUP do resto.
+ *
+ * Setup sai separado porque e' a unica parada que o proprio processo
+ * exige: trocar gabarito, programa ou broca faz parte de produzir lote
+ * variado. As outras — falta de material, manutencao, qualidade — sao
+ * perda a ser eliminada. Misturar as duas numa unica "parada" esconde
+ * justamente a decisao que o PCP precisa tomar (reduzir setup com SMED x
+ * atacar a causa da perda).
+ *
+ * Aceita paradas do aparelho (camelCase) e do banco (snake_case).
+ */
+export function somarParadas(paradas) {
+  let totalMs = 0;
+  let setupMs = 0;
+  const porMotivo = new Map();
+
+  for (const p of paradas || []) {
+    const ms = Math.max(0, Number(p?.duracaoMs ?? p?.duracao_ms) || 0);
+    if (ms <= 0) continue;
+    const motivo = String(p?.motivo || 'outro');
+    totalMs += ms;
+    if (motivo === 'setup') setupMs += ms;
+    porMotivo.set(motivo, (porMotivo.get(motivo) || 0) + ms);
+  }
+
+  return {
+    totalMs,
+    setupMs,
+    outrasMs: totalMs - setupMs,
+    n: [...porMotivo.keys()].length,
+    // Maior perda primeiro: a lista ja' sai em ordem de Pareto.
+    porMotivo: [...porMotivo.entries()]
+      .map(([motivo, ms]) => ({ motivo, rotulo: rotuloMotivo(motivo), ms }))
+      .sort((a, b) => b.ms - a.ms),
+  };
+}
+
 export const FR_PRESETS = [
   { valor: 85, rotulo: 'Muito lento' },
   { valor: 95, rotulo: 'Abaixo do normal' },
@@ -115,18 +159,42 @@ export function amostraSuficiente(resultado, metaObs) {
  * por ciclo — e' uma medicao de vazao, nao um estudo de tempos. Por isso o
  * resultado fala em pecas/hora e ciclo MEDIO, nunca em TO/TN/TP.
  */
-export function conferenciaRapida({ duracaoMs, pecas }) {
+export function conferenciaRapida({ duracaoMs, pecas, paradas }) {
   const dur = Number(duracaoMs) || 0;
   if (dur <= 0) return null;
+
+  /**
+   * Parada dentro do periodo nao e' ritmo. Se das 7:00 as 7:30 a furadeira
+   * passou 10 minutos em setup, o ritmo dela e' 20 minutos de trabalho —
+   * nao 30. Sem separar isso, o mesmo posto aparece lento no dia de troca
+   * de lote e rapido no dia de lote longo, e o numero nunca fecha.
+   */
+  const par = somarParadas(paradas);
+  const paradaMs = Math.min(par.totalMs, dur);
+  const produtivoMs = dur - paradaMs;
+  // Periodo inteiro parado: nao ha ritmo a medir. Null obriga o chamador a
+  // mostrar vazio (e a tela explica), em vez de dividir por zero.
+  if (produtivoMs <= 0) return null;
+
   const qtd = Math.max(0, Math.floor(Number(pecas) || 0));
-  const pecasPorHora = (qtd * MS_POR_HORA) / dur;
+  const pecasPorHora = (qtd * MS_POR_HORA) / produtivoMs;
   return {
     duracaoMs: dur,
     pecas: qtd,
+    paradaMs,
+    setupMs: Math.min(par.setupMs, dur),
+    produtivoMs,
+    paradasPorMotivo: par.porMotivo,
+    // Ritmo com a maquina RODANDO — e' este que sustenta capacidade.
     pecasPorHora,
     pecasPorMinuto: pecasPorHora / 60,
+    // Ritmo do periodo inteiro, paradas incluidas: o que o posto entregou
+    // por hora de presenca. Sem parada marcada, os dois sao o mesmo numero.
+    pecasPorHoraBruto: (qtd * MS_POR_HORA) / dur,
+    // Quanto do periodo a maquina passou produzindo.
+    disponibilidadePct: (produtivoMs / dur) * 100,
     // Sem peca nao ha ciclo: null obriga o chamador a mostrar vazio, nao 0.
-    cicloMedioMs: qtd > 0 ? dur / qtd : null,
+    cicloMedioMs: qtd > 0 ? produtivoMs / qtd : null,
   };
 }
 
@@ -155,10 +223,14 @@ export const CRITERIOS_CONFERENCIA = {
  * MEDIO real, qual o melhor e o pior registro (e com qual peca) — e se a
  * amostra passa nos CRITERIOS_CONFERENCIA para valer como referencia.
  *
- * O ritmo medio e' PONDERADO pelo tempo (soma de pecas / soma de duracao),
- * nao a media das taxas: uma conferencia de 2h vale mais que uma de 5min,
- * e a media simples deixaria a medicao curta distorcer o numero que vai
- * sustentar decisao de capacidade.
+ * O ritmo medio e' PONDERADO pelo tempo (soma de pecas / soma do tempo
+ * PRODUTIVO), nao a media das taxas: uma conferencia de 2h vale mais que
+ * uma de 5min, e a media simples deixaria a medicao curta distorcer o
+ * numero que vai sustentar decisao de capacidade.
+ *
+ * Tempo produtivo = periodo observado menos as paradas marcadas (setup,
+ * falta de material, manutencao). Conferencia sem parada marcada da' o
+ * mesmo resultado de antes — produtivo e periodo sao o mesmo numero.
  *
  * Aceita linhas do servidor (snake_case) e do aparelho (camelCase).
  */
@@ -170,22 +242,37 @@ export function resumirConferencias(conferencias) {
     const pecas = Number(c.pecas) || 0;
     if (duracao <= 0 || pecas <= 0) continue;
 
+    // Tempo produtivo: o periodo menos o que ficou parado (setup, falta de
+    // material, manutencao). E' sobre ele que o ritmo e' calculado — parada
+    // e' perda a tratar, nao lentidao da maquina.
+    const par = somarParadas(c.paradas);
+    const paradaMs = Math.min(par.totalMs, duracao);
+    const produtivoMs = duracao - paradaMs;
+    if (produtivoMs <= 0) continue;
+
     const chave = String(c.maquina || '').trim() || 'Sem máquina';
     if (!grupos.has(chave)) {
       grupos.set(chave, {
         maquina: chave, n: 0, totalPecas: 0, totalMs: 0,
+        totalProdutivoMs: 0, totalParadaMs: 0, totalSetupMs: 0, paradasPorMotivo: new Map(),
         curtas: 0, ritmos: [], melhor: null, pior: null,
       });
     }
     const g = grupos.get(chave);
-    const ritmo = (pecas * MS_POR_HORA) / duracao;
+    const ritmo = (pecas * MS_POR_HORA) / produtivoMs;
     const peca = String(c.peca || '').trim() || null;
 
     g.n += 1;
     g.totalPecas += pecas;
     g.totalMs += duracao;
+    g.totalProdutivoMs += produtivoMs;
+    g.totalParadaMs += paradaMs;
+    g.totalSetupMs += Math.min(par.setupMs, duracao);
+    for (const m of par.porMotivo) g.paradasPorMotivo.set(m.motivo, (g.paradasPorMotivo.get(m.motivo) || 0) + m.ms);
     g.ritmos.push(ritmo);
-    if (duracao < CRITERIOS_CONFERENCIA.minPeriodoMs) g.curtas += 1;
+    // Periodo curto se mede pelo tempo PRODUTIVO: meia hora de relogio com
+    // 27 minutos de setup deixa 3 minutos de ritmo observado.
+    if (produtivoMs < CRITERIOS_CONFERENCIA.minPeriodoMs) g.curtas += 1;
     if (!g.melhor || ritmo > g.melhor.ritmo) g.melhor = { ritmo, peca };
     if (!g.pior || ritmo < g.pior.ritmo) g.pior = { ritmo, peca };
   }
@@ -197,16 +284,29 @@ export function resumirConferencias(conferencias) {
       if (g.n < c.minConferencias) {
         motivos.push(`${g.n} conferência(s) — mínimo de ${c.minConferencias} para servir de referência`);
       }
-      if (g.totalMs < c.minTempoTotalMs) {
-        motivos.push(`tempo total observado de ${formatarDuracao(g.totalMs)} — mínimo de ${formatarDuracao(c.minTempoTotalMs)}`);
+      if (g.totalProdutivoMs < c.minTempoTotalMs) {
+        // Com parada marcada o texto diz de onde saiu a diferenca: senao o
+        // analista ve "20 min" onde cronometrou 30 e acha que o app errou.
+        motivos.push(g.totalParadaMs > 0
+          ? `tempo produtivo de ${formatarDuracao(g.totalProdutivoMs)} (${formatarDuracao(g.totalMs)} observados, ${formatarDuracao(g.totalParadaMs)} parados) — mínimo de ${formatarDuracao(c.minTempoTotalMs)}`
+          : `tempo total observado de ${formatarDuracao(g.totalMs)} — mínimo de ${formatarDuracao(c.minTempoTotalMs)}`);
       }
       if (g.curtas > 0) {
-        motivos.push(`${g.curtas} conferência(s) com menos de ${formatarDuracao(c.minPeriodoMs)} — período curto mede rajada, não ritmo`);
+        motivos.push(`${g.curtas} conferência(s) com menos de ${formatarDuracao(c.minPeriodoMs)} de máquina rodando — período curto mede rajada, não ritmo`);
       }
       return {
         ...g,
-        ritmoMedio: (g.totalPecas * MS_POR_HORA) / g.totalMs,
-        cicloMedioMs: g.totalMs / g.totalPecas,
+        // Ponderado pelo tempo produtivo: soma de pecas sobre soma do tempo
+        // em que a maquina de fato rodou.
+        ritmoMedio: (g.totalPecas * MS_POR_HORA) / g.totalProdutivoMs,
+        // Ritmo do relogio, paradas incluidas — o que saiu do posto por
+        // hora de presenca. Sem parada marcada, igual ao ritmoMedio.
+        ritmoBruto: (g.totalPecas * MS_POR_HORA) / g.totalMs,
+        disponibilidadePct: (g.totalProdutivoMs / g.totalMs) * 100,
+        cicloMedioMs: g.totalProdutivoMs / g.totalPecas,
+        paradasPorMotivo: [...g.paradasPorMotivo.entries()]
+          .map(([motivo, ms]) => ({ motivo, rotulo: rotuloMotivo(motivo), ms }))
+          .sort((a, b) => b.ms - a.ms),
         // CV entre conferencias: referencia de estabilidade do posto.
         cvPct: g.ritmos.length >= 2 ? coeficienteVariacao(g.ritmos) : null,
         confiavel: motivos.length === 0,

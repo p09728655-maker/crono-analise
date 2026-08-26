@@ -66,6 +66,7 @@ await movel.close();
   ];
   let recusar = true;
   const chamadas = [];
+  const patches = [];
 
   await p2.route('**/api/conferencias**', (rota) => {
     const req = rota.request();
@@ -79,7 +80,11 @@ await movel.close();
       return rota.fulfill({ json: { acao: 'excluida' } });
     }
     if (req.method() === 'PATCH') {
-      lista = lista.map((c) => (req.url().includes(c.id) ? { ...c, arquivada: true } : c));
+      const corpoPatch = JSON.parse(req.postData() || '{}');
+      patches.push(corpoPatch);
+      lista = lista.map((c) => (req.url().includes(c.id)
+        ? { ...c, ...('arquivada' in corpoPatch ? { arquivada: true } : {}), ...('paradas' in corpoPatch ? { paradas: corpoPatch.paradas } : {}) }
+        : c));
       return rota.fulfill({ json: { conferencia: { id: 'c1', arquivada: true } } });
     }
     return rota.fulfill({ json: { conferencias: lista.filter((c) => !c.arquivada), outras: lista.filter((c) => c.arquivada).length } });
@@ -101,6 +106,40 @@ await movel.close();
   const corpo = await p2.locator('body').innerText();
   checar(!/Furadeira14/.test(corpo), 'excluida some da lista');
   checar(await p2.locator('[aria-label="Excluir conferência"]').count() === 0, 'modal fecha ao concluir');
+
+  /* ------------------------------- cadastrar paradas direto no PC */
+  /**
+   * O setup nem sempre e' marcado no corredor. Aqui o analista o registra
+   * depois, com o apontamento na mao — e o ritmo passa a sair do tempo em
+   * que a maquina rodou, sem precisar arquivar a medicao.
+   */
+  await p2.getByRole('button', { name: 'Paradas' }).first().click();
+  await p2.locator('[aria-label="Paradas da conferência"]').waitFor({ timeout: 4000 });
+  checar(true, 'o botao Paradas abre o cadastro da conferencia');
+
+  await p2.getByRole('button', { name: '+ Setup / troca' }).click();
+  await p2.locator('input[aria-label="Minutos parada — Setup / Troca"]').fill('10');
+  const janela = await p2.locator('[aria-label="Paradas da conferência"]').innerText();
+  checar(/20 min/.test(janela), 'a janela mostra quanto sobra de maquina rodando (30 - 10 = 20 min)');
+
+  // Parada do tamanho do periodo: o botao trava antes de chamar o servidor.
+  await p2.locator('input[aria-label="Minutos parada — Setup / Troca"]').fill('30');
+  checar(await p2.getByRole('button', { name: 'Gravar paradas' }).isDisabled(),
+    'parada do tamanho do periodo trava a gravacao');
+
+  await p2.locator('input[aria-label="Minutos parada — Setup / Troca"]').fill('10');
+  await p2.getByRole('button', { name: 'Gravar paradas' }).click();
+  await p2.waitForTimeout(800);
+  const gravada = patches.find((x) => 'paradas' in x);
+  checar(!!gravada && gravada.paradas[0].motivo === 'setup' && gravada.paradas[0].duracaoMs === 600000,
+    'grava a parada em milissegundos, com o motivo escolhido');
+  checar(await p2.locator('[aria-label="Paradas da conferência"]').count() === 0,
+    'a janela fecha depois de gravar');
+
+  const depois = await p2.locator('body').innerText();
+  checar(/840/.test(depois),
+    'o ritmo passa a sair do tempo rodando (420 pc em 20 min = 840 pc/h)');
+  checar(/Paradas \(1\)/.test(depois), 'a linha passa a mostrar que ha parada marcada');
 
   await p2.getByRole('button', { name: 'Arquivar' }).first().click();
   await p2.waitForTimeout(800);

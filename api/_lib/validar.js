@@ -68,3 +68,21 @@ export function lista(valor, campo, { max = 500 } = {}) {
   }
   return valor;
 }
+
+/**
+ * Paradas de uma conferencia rapida: [{motivo, duracaoMs, observacao}].
+ *
+ * Guardadas como jsonb na propria conferencia, entao a validacao aqui e' a
+ * unica barreira — nao ha CHECK de coluna por campo. Lista vazia e ausente
+ * significam a mesma coisa (conferencia sem parada marcada), e e' assim que
+ * as conferencias antigas continuam validas.
+ */
+export function paradasDaConferencia(valor, campo, { max = 50 } = {}) {
+  if (valor == null) return [];
+  const itens = lista(valor, `${campo}.paradas`, { max });
+  return itens.map((p, i) => ({
+    motivo: texto(p?.motivo, `${campo}.paradas[${i}].motivo`, { obrigatorio: true, max: 60 }),
+    duracaoMs: inteiro(p?.duracaoMs, `${campo}.paradas[${i}].duracaoMs`, { min: 1, max: 86_400_000 }),
+    observacao: texto(p?.observacao, `${campo}.paradas[${i}].observacao`, { max: 500 }),
+  }));
+}

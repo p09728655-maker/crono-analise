@@ -80,6 +80,11 @@ export const listarConferenciasServidor = ({ maquina, arquivadas = false } = {})
 };
 export const arquivarConferencia = (id, arquivada = true) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { arquivada } });
+// Paradas cadastradas no PC (setup marcado depois, olhando o apontamento).
+// A lista vai INTEIRA — e' o estado final das paradas daquela conferencia,
+// nao um acrescimo: assim corrigir e apagar usam o mesmo caminho.
+export const salvarParadasConferencia = (id, paradas) =>
+  requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { paradas } });
 export const excluirConferencia = (id) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 export const analisarConferenciasComIa = (dados) =>
@@ -167,5 +172,12 @@ const paraConferencia = (x) => ({
   horaFinal: x.horaFinal ?? null,
   duracaoMs: x.duracaoMs,
   pecas: x.pecas,
+  // Paradas do periodo. Conferencia enfileirada antes desta versao nao tem
+  // o campo — vai como lista vazia e continua valendo.
+  paradas: (x.paradas || []).map((p) => ({
+    motivo: p.motivo,
+    duracaoMs: Math.round(p.duracaoMs),
+    observacao: p.observacao ?? null,
+  })),
   salvoEm: x.salvoEm,
 });
