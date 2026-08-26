@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.28.0',
+    data: '2026-08-26',
+    titulo: 'Sugestões, operadores, capacidade e resumo executivo',
+    itens: [
+      'Nova aba SUGESTÕES: a lista priorizada do que fazer com os números — alta variação, gargalo acima do Takt, parada que mais custou, tempos subindo ao longo da coleta. Cada uma com o diagnóstico e a AÇÃO ("aplicar SMED e padronizar o plano de troca", "revisar kanban, ponto de pedido e lead time"). O gargalo abre a lista: é o único achado que trava a linha inteira. Nenhuma sugestão manda coletar mais ciclos.',
+      'Nova aba OPERADORES: a fórmula escrita na tela (Σ TP ÷ Takt = 3,35 → 4), a contribuição de cada operação em barras, e o campo "quantos você tem hoje" com o veredito — sobram 3, faltam 2, ocupação do time atual. O número informado fica neste computador, por estudo, e não sai no relatório: é simulação do analista.',
+      'No Yamazumi, a CAPACIDADE agora é esperado × real: o que o Takt exige, o que o gargalo entrega, o atingimento em % e o déficit ou superávit em peças/hora. Antes o app dizia quanto a linha produz e nunca se aquilo bastava.',
+      'Novo botão RESUMO EXECUTIVO ao lado de Imprimir: uma página só, para a reunião de dez minutos — entrega × demanda, o veredito em uma frase, tempo padrão por operação e as 3 ações de alta prioridade. A Folha de Análise continua sendo o documento técnico, agora com as sugestões junto.',
+    ],
+  },
+  {
     versao: '2.27.0',
     data: '2026-08-26',
     titulo: 'Fora a carta de controle',

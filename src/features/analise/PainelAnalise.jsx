@@ -4,16 +4,18 @@ import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../
 import Cabecalho from '../../components/Cabecalho.jsx';
 import Abas from '../../components/Abas.jsx';
 import {
-  amostraSuficiente, calcularOperacao, formatarDuracao, formatarSegundos, FR_PRESETS,
-  resumirParadasDoEstudo,
+  amostraSuficiente, calcularOperacao, comparativoCapacidade, dimensionarOperadores,
+  formatarDuracao, formatarSegundos, FR_PRESETS, resumirParadasDoEstudo,
   operadoresNecessarios, taktTime,
 } from '../../domain/cronoanalise.js';
+import { PRIORIDADES, contarPorPrioridade, sugerirMelhorias } from '../../domain/sugestoes.js';
 import {
   analisarComIa, atualizarEstudo, criarOperacao, obterConfigIa, obterEstudo,
   removerOperacao, salvarChaveIa,
 } from '../../lib/api.js';
 import { GraficoYamazumi } from './graficos.jsx';
 import RelatorioImpressao from './RelatorioImpressao.jsx';
+import ResumoExecutivo from './ResumoExecutivo.jsx';
 
 /**
  * PAINEL DE ANALISE — desktop.
@@ -24,14 +26,41 @@ import RelatorioImpressao from './RelatorioImpressao.jsx';
  * Perguntas que a tela precisa responder, nesta ordem:
  *   1. O estudo tem base estatistica para decidir?
  *   2. Onde esta o gargalo?
- *   3. Quantos operadores a linha precisa?
+ *   3. Quantos operadores a linha precisa — e como isso se compara com o
+ *      time que existe hoje?
  *   4. Qual operacao esta instavel e por que?
+ *   5. O que fazer com isso (sugestoes com acao, priorizadas).
  */
 export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
   const [dados, setDados] = useState(null);
   const [estado, setEstado] = useState('carregando');
   const [erro, setErro] = useState(null);
   const [adicionandoOp, setAdicionandoOp] = useState(false);
+
+  /**
+   * Dois documentos, um botao cada.
+   *
+   * A Folha de Analise e' o tecnico (quatro paginas, formulas, assinatura);
+   * o Resumo Executivo e' o de reuniao (uma pagina: entrega, gargalo, o que
+   * tratar primeiro). Qual deles vai ao papel e' escolha no momento de
+   * imprimir — o outro nem e' renderizado, para nao sair junto.
+   *
+   * O print() nao acontece no clique: espera o efeito, depois do commit, ou
+   * o navegador imprimiria o documento anterior.
+   */
+  const [documento, setDocumento] = useState('folha');
+  const [imprimindo, setImprimindo] = useState(false);
+
+  useEffect(() => {
+    if (!imprimindo) return;
+    window.print();
+    setImprimindo(false);
+  }, [imprimindo]);
+
+  const imprimir = useCallback((qual) => {
+    setDocumento(qual);
+    setImprimindo(true);
+  }, []);
   // ?editar=1 abre a edicao direto: e' como a lista manda o analista
   // consertar um nome errado sem precisar descobrir onde fica o botao.
   const [editandoEstudo, setEditandoEstudo] = useState(
@@ -40,7 +69,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
   // Aba na URL: recarregar e compartilhar link preservam a vista.
   const [aba, setAba] = useState(() => {
     const q = new URLSearchParams(window.location.search).get('aba');
-    return ['yamazumi', 'operacoes', 'paradas'].includes(q) ? q : 'yamazumi';
+    return ['yamazumi', 'operacoes', 'operadores', 'paradas', 'sugestoes'].includes(q) ? q : 'yamazumi';
   });
 
   const trocarAba = useCallback((id) => {
@@ -105,6 +134,25 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
     };
   }, [dados]);
 
+  /**
+   * Sugestoes e comparativos saem de um segundo passo porque dependem do
+   * primeiro inteiro — gargalo, Takt e paradas ja' resolvidos.
+   */
+  const leitura = useMemo(() => {
+    if (!analise) return null;
+    return {
+      capacidade: comparativoCapacidade({
+        taktMs: analise.taktMs, capacidadeLinha: analise.capacidadeLinha,
+      }),
+      sugestoes: sugerirMelhorias({
+        operacoes: analise.operacoes,
+        taktMs: analise.taktMs,
+        gargalo: analise.gargalo,
+        paradas: analise.paradas,
+      }),
+    };
+  }, [analise]);
+
   if (estado === 'carregando') return <Estado texto="Carregando estudo..." />;
   if (estado === 'erro') return <Estado texto={`Falha ao carregar: ${erro}`} acao={{ rotulo: 'Tentar de novo', aoClicar: carregar }} />;
 
@@ -113,7 +161,9 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
   return (
     <div style={est.tela}>
       {/* Versao de impressao: escondida na tela, e' a unica coisa visivel no papel. */}
-      <RelatorioImpressao estudo={estudo} analise={analise} />
+      {documento === 'resumo'
+        ? <ResumoExecutivo estudo={estudo} analise={analise} leitura={leitura} />
+        : <RelatorioImpressao estudo={estudo} analise={analise} leitura={leitura} />}
 
       <div className="somente-tela" style={est.envoltorio}>
         <Cabecalho
@@ -127,7 +177,10 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
               <button type="button" onClick={() => setEditandoEstudo(true)} style={est.botaoSecundario}>
                 Editar estudo
               </button>
-              <button type="button" onClick={() => window.print()} style={est.botaoImprimir}>
+              <button type="button" onClick={() => imprimir('resumo')} style={est.botaoSecundario}>
+                Resumo executivo
+              </button>
+              <button type="button" onClick={() => imprimir('folha')} style={est.botaoImprimir}>
                 Imprimir relatório
               </button>
             </>
@@ -198,12 +251,21 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           abas={[
             { id: 'yamazumi', rotulo: 'Yamazumi' },
             { id: 'operacoes', rotulo: 'Operações', contador: analise.operacoes.length },
+            { id: 'operadores', rotulo: 'Operadores' },
             { id: 'paradas', rotulo: 'Paradas', contador: analise.paradas.n },
+            { id: 'sugestoes', rotulo: 'Sugestões', contador: leitura.sugestoes.length },
           ]}
         />
 
         {aba === 'yamazumi' && (
-          <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} />
+          <>
+            <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} />
+            <CapacidadeEsperadoReal
+              capacidade={leitura.capacidade}
+              gargalo={analise.gargalo}
+              aoDefinirTakt={() => setEditandoEstudo(true)}
+            />
+          </>
         )}
 
         {aba === 'operacoes' && (
@@ -221,7 +283,13 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           />
         )}
 
+        {aba === 'operadores' && (
+          <PainelOperadores estudoId={estudoId} analise={analise} aoDefinirTakt={() => setEditandoEstudo(true)} />
+        )}
+
         {aba === 'paradas' && <PainelParadas resumo={analise.paradas} />}
+
+        {aba === 'sugestoes' && <PainelSugestoes sugestoes={leitura.sugestoes} />}
 
         <AnaliseIa estudo={estudo} analise={analise} />
           </>
@@ -724,6 +792,303 @@ function Resposta({ analise }) {
 }
 
 /**
+ * CAPACIDADE — o que o Takt exige contra o que o gargalo entrega.
+ *
+ * O painel ja' dizia quanto a linha produz. Faltava a outra metade da
+ * pergunta: se isso basta. Sem os dois lado a lado, "222 pc/h" e' um numero
+ * sem veredito — e a conta de cabeca ("quanto mesmo a demanda pede?")
+ * acontecia fora da tela, que e' onde ela erra.
+ */
+function CapacidadeEsperadoReal({ capacidade, gargalo, aoDefinirTakt }) {
+  const { esperado, real, atingimentoPct, diferenca } = capacidade;
+  const atinge = atingimentoPct !== null && atingimentoPct >= 100;
+
+  return (
+    <section style={est.blocoTabela} aria-label="Capacidade esperada e real">
+      <div style={est.cabecalhoSecao}>
+        <h2 style={est.tituloSecao}>Capacidade — esperado × real</h2>
+        {esperado === null && (
+          <button type="button" style={est.botaoSecundario} onClick={aoDefinirTakt}>
+            Definir Takt Time
+          </button>
+        )}
+      </div>
+
+      <div style={est.gradeKpi}>
+        <Kpi
+          rotuloKpi="Esperado (Takt)"
+          valor={esperado !== null ? String(esperado) : '—'}
+          unidade={esperado !== null ? 'pç/h' : ''}
+          nota={esperado !== null ? 'o que a demanda exige' : 'defina o Takt Time para comparar'}
+          cor={esperado === null ? claro.atencao : claro.borda}
+        />
+        <Kpi
+          rotuloKpi="Real (gargalo)"
+          valor={String(real)}
+          unidade="pç/h"
+          nota={gargalo ? `limitada por ${gargalo.nome}` : 'sem ciclos coletados'}
+          cor={claro.borda}
+        />
+        <Kpi
+          rotuloKpi="Atingimento"
+          valor={atingimentoPct !== null ? `${atingimentoPct.toFixed(0)}%` : '—'}
+          nota={atingimentoPct !== null ? (atinge ? 'a linha entrega o ritmo' : 'abaixo do ritmo exigido') : '—'}
+          cor={atingimentoPct === null ? claro.borda : (atinge ? claro.ok : claro.critico)}
+        />
+        <Kpi
+          rotuloKpi={diferenca !== null && diferenca < 0 ? 'Déficit' : 'Superávit'}
+          valor={diferenca !== null ? `${diferenca > 0 ? '+' : ''}${diferenca}` : '—'}
+          unidade={diferenca !== null ? 'pç/h' : ''}
+          nota={diferenca === null ? '—' : (diferenca < 0 ? 'faltam por hora para fechar o Takt' : 'sobram por hora sobre o Takt')}
+          cor={diferenca === null ? claro.borda : (diferenca < 0 ? claro.critico : claro.ok)}
+        />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Cartao de numero com barra de acento.
+ *
+ * A cor da barra NUNCA vai sozinha: cada cartao tem rotulo em cima e uma
+ * nota em palavras embaixo dizendo o que aquele numero significa.
+ */
+function Kpi({ rotuloKpi, valor, unidade, nota, cor }) {
+  return (
+    <div style={{ ...est.cartaoKpi, borderLeftColor: cor }}>
+      <span style={est.kpiRotulo}>{rotuloKpi}</span>
+      <div style={est.kpiLinha}>
+        <span style={est.kpiValor}>{valor}</span>
+        {unidade && <span style={est.kpiUnidade}>{unidade}</span>}
+      </div>
+      <span style={est.kpiNota}>{nota}</span>
+    </div>
+  );
+}
+
+/**
+ * QUANTOS OPERADORES — necessario x atual.
+ *
+ * A formula fica escrita na tela de proposito. Este e' o numero que vai a'
+ * reuniao pedir ou devolver gente, e quem defende precisa mostrar a conta,
+ * nao so' o resultado.
+ *
+ * O "quantos voce tem hoje" e' um E-SE do analista, nao um cadastro: fica
+ * neste navegador (localStorage), por estudo, e nao sobe para o banco.
+ */
+function PainelOperadores({ estudoId, analise, aoDefinirTakt }) {
+  const chave = `ritmopatrimar.operadores.${estudoId}`;
+  const [atuais, setAtuais] = useState(() => {
+    try { return localStorage.getItem(chave) || ''; } catch { return ''; }
+  });
+
+  useEffect(() => {
+    try {
+      if (atuais) localStorage.setItem(chave, atuais);
+      else localStorage.removeItem(chave);
+    } catch { /* navegador sem storage: o e-se vale so' nesta sessao */ }
+  }, [chave, atuais]);
+
+  const dim = dimensionarOperadores({
+    somaTpMs: analise.somaTp, taktMs: analise.taktMs, operadoresAtuais: atuais,
+  });
+
+  if (!dim) {
+    return (
+      <section style={est.blocoTabela} aria-label="Dimensionamento de operadores">
+        <div style={est.cabecalhoSecao}>
+          <h2 style={est.tituloSecao}>Quantos operadores preciso?</h2>
+          <button type="button" style={est.botaoImprimir} onClick={aoDefinirTakt}>
+            Definir Takt Time
+          </button>
+        </div>
+        <p style={est.vazioParadas}>
+          O dimensionamento é <strong>Σ TP ÷ Takt Time</strong>: sem o Takt não há
+          ritmo exigido com que comparar o tempo padrão, e o número de operadores
+          não existe. O Takt sai da demanda do período — quantas peças, em quantas
+          horas — e se configura em <strong>Editar estudo</strong>.
+        </p>
+      </section>
+    );
+  }
+
+  const maiorTp = Math.max(...analise.comDados.map((o) => o.resultado.tpPorPeca), 1);
+
+  return (
+    <section style={est.blocoTabela} aria-label="Dimensionamento de operadores">
+      <div style={est.cabecalhoSecao}>
+        <h2 style={est.tituloSecao}>Quantos operadores preciso?</h2>
+      </div>
+
+      <div style={est.blocoFormula}>
+        <div style={est.formulaTitulo}>N° de operadores = Σ TP ÷ Takt Time</div>
+        <div style={est.formulaConta}>
+          {formatarSegundos(analise.somaTp)} s ÷ {formatarSegundos(analise.taktMs)} s
+          {' = '}{dim.exato.toFixed(2)} → arredonda para cima ={' '}
+          <strong style={est.formulaResultado}>{dim.necessarios}</strong>
+        </div>
+      </div>
+
+      <div style={est.gradeKpi}>
+        <Kpi
+          rotuloKpi="Operadores necessários"
+          valor={String(dim.necessarios)}
+          nota={`cálculo exato: ${dim.exato.toFixed(2)} — meio operador não existe no posto`}
+          cor={claro.vermelho}
+        />
+        <Kpi
+          rotuloKpi="Ocupação com esse nº"
+          valor={`${dim.eficienciaPct.toFixed(1)}%`}
+          nota={dim.eficienciaPct >= 85 ? 'time bem aproveitado' : 'sobra tempo do arredondamento'}
+          cor={dim.eficienciaPct >= 85 ? claro.ok : claro.atencao}
+        />
+        <Kpi
+          rotuloKpi="Σ Tempo padrão"
+          valor={formatarSegundos(analise.somaTp)}
+          unidade="s"
+          nota={`${analise.comDados.length} operação(ões) somadas`}
+          cor={claro.borda}
+        />
+        <Kpi
+          rotuloKpi="Takt Time"
+          valor={formatarSegundos(analise.taktMs)}
+          unidade="s"
+          nota="ritmo exigido pela demanda"
+          cor={claro.borda}
+        />
+      </div>
+
+      <div style={est.listaContribuicao} aria-label="Contribuição de cada operação">
+        <span style={est.rotuloBloco}>Contribuição de cada operação</span>
+        {analise.comDados.map((o) => {
+          const ops = o.resultado.tpPorPeca / analise.taktMs;
+          return (
+            <div key={o.id} style={est.linhaContribuicao}>
+              <span style={est.contribNome} title={o.nome}>{o.nome}</span>
+              <span style={est.contribTempo}>{formatarSegundos(o.resultado.tpPorPeca)} s</span>
+              <div style={est.barraTrilho}>
+                <div style={{ ...est.barraValor, width: `${Math.max(2, (o.resultado.tpPorPeca / maiorTp) * 100)}%`, background: claro.textoMedio }} />
+              </div>
+              <span style={est.contribOps}>{ops.toFixed(2)} op</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={est.blocoAtual}>
+        <label style={est.rotuloBloco} htmlFor="operadores-hoje">Quantos operadores você tem hoje?</label>
+        <div style={est.linhaAtual}>
+          <input
+            id="operadores-hoje"
+            type="number"
+            min="0"
+            step="1"
+            inputMode="numeric"
+            placeholder="—"
+            value={atuais}
+            onChange={(ev) => setAtuais(ev.target.value)}
+            style={est.inputOperadores}
+          />
+          {dim.diferenca !== null && <VereditoTime dim={dim} />}
+        </div>
+        <span style={est.notaAtual}>
+          Fica guardado neste computador, por estudo. É simulação do analista — não
+          vai para o banco nem sai no relatório.
+        </span>
+      </div>
+    </section>
+  );
+}
+
+/** O veredito do time atual: sobra, falta ou fecha. */
+function VereditoTime({ dim }) {
+  const sobra = dim.diferenca > 0;
+  const fecha = dim.diferenca === 0;
+  const cor = fecha ? claro.ok : (sobra ? claro.atencao : claro.critico);
+
+  return (
+    <div style={{ ...est.veredito, borderColor: cor }} role="status">
+      <strong style={{ color: cor }}>
+        {fecha && 'Time dimensionado'}
+        {sobra && `Sobra${dim.diferenca > 1 ? 'm' : ''} ${dim.diferenca} operador${dim.diferenca > 1 ? 'es' : ''}`}
+        {!fecha && !sobra && `Falta${dim.diferenca < -1 ? 'm' : ''} ${Math.abs(dim.diferenca)} operador${dim.diferenca < -1 ? 'es' : ''}`}
+      </strong>
+      <span style={est.vereditoTexto}>
+        Tem {dim.atuais}, precisa de {dim.necessarios}.
+        {' '}Ocupação do time atual: {dim.eficienciaAtualPct.toFixed(1)}%.
+        {sobra && ' Avalie realocar — ou rever o Takt, se a demanda usada no cálculo já não é a atual.'}
+        {!fecha && !sobra && ' Com esse time a linha não atinge o ritmo da demanda.'}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * SUGESTOES — o que fazer com os numeros.
+ *
+ * Cada item traz o diagnostico e A ACAO. Diagnostico sem acao vira numero
+ * na parede; e' a acao que o supervisor consegue levar para o posto.
+ *
+ * Nenhuma sugestao manda coletar mais ciclos: a meta de amostra e' decisao
+ * do analista, e o app declara a confiabilidade sem cobrar observacao.
+ */
+function PainelSugestoes({ sugestoes }) {
+  const contagem = contarPorPrioridade(sugestoes);
+
+  if (!sugestoes.length) {
+    return (
+      <section style={est.blocoTabela} aria-label="Sugestões de melhoria">
+        <div style={est.cabecalhoSecao}>
+          <h2 style={est.tituloSecao}>Sugestões de melhoria</h2>
+        </div>
+        <p style={est.vazioParadas}>
+          Nada a apontar nos números deste estudo: variação dentro da faixa boa,
+          nenhuma parada registrada e nenhum posto acima do Takt. A lista aparece
+          sozinha quando algum desses passar do limite.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section style={est.blocoTabela} aria-label="Sugestões de melhoria">
+      <div style={est.cabecalhoSecao}>
+        <h2 style={est.tituloSecao}>Sugestões de melhoria</h2>
+        <span style={est.paradasResumo}>{sugestoes.length} no total</span>
+      </div>
+
+      <div style={est.gradeKpi}>
+        {['alta', 'media', 'baixa'].map((nivel) => (
+          <Kpi
+            key={nivel}
+            rotuloKpi={`Prioridade ${PRIORIDADES[nivel].rotulo.toLowerCase()}`}
+            valor={String(contagem[nivel])}
+            nota={PRIORIDADES[nivel].descricao}
+            cor={{ alta: claro.critico, media: claro.atencao, baixa: claro.ok }[nivel]}
+          />
+        ))}
+      </div>
+
+      <div style={est.listaSugestoes}>
+        {sugestoes.map((s) => (
+          <div key={s.id} style={{ ...est.cartaoSugestao, borderLeftColor: { alta: claro.critico, media: claro.atencao, baixa: claro.ok }[s.prioridade] }}>
+            <div style={est.sugestaoTopo}>
+              <span style={{ ...est.selo, marginLeft: 0, background: { alta: claro.critico, media: claro.atencao, baixa: claro.ok }[s.prioridade] }}>
+                {PRIORIDADES[s.prioridade].rotulo}
+              </span>
+              {s.operacao && <span style={est.sugestaoOperacao} title={s.operacao}>{s.operacao}</span>}
+              <span style={est.sugestaoTitulo}>{s.titulo}</span>
+            </div>
+            <p style={est.sugestaoDiagnostico}>{s.diagnostico}</p>
+            <p style={est.sugestaoAcao}><strong>Ação:</strong> {s.acao}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
  * PARADAS DO ESTUDO — a perda que a coleta ja' media e ninguem via.
  *
  * A tela de coleta registra a parada com motivo e desconta do ciclo, para o
@@ -1043,6 +1408,99 @@ const est = {
     borderRadius: raio.sm, ...tipo('micro'), fontSize: 10,
   },
   meta: { color: claro.textoFraco, ...tipo('legenda') },
+
+  /* ---- cartoes de numero (capacidade, operadores, sugestoes) ---- */
+  gradeKpi: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: espaco.lg, padding: `${espaco.lg}px ${espaco.xl}px`,
+  },
+  // Barra de acento a esquerda. A cor nunca informa sozinha: o rotulo esta
+  // em cima e a nota, em palavras, embaixo.
+  cartaoKpi: {
+    display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0,
+    padding: `${espaco.md}px ${espaco.lg}px`,
+    background: claro.fundo, borderRadius: raio.md,
+    borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: claro.borda,
+  },
+  kpiRotulo: { ...rotulo(claro.textoFraco) },
+  kpiLinha: { display: 'flex', alignItems: 'baseline', gap: espaco.xs, minWidth: 0 },
+  kpiValor: { ...tipo('titulo'), ...numeros, fontFamily: fonteAnalise.numero, color: claro.texto },
+  kpiUnidade: { ...tipo('legenda'), color: claro.textoFraco },
+  kpiNota: { ...tipo('legenda'), color: claro.textoFraco, lineHeight: 1.4 },
+
+  /* ---- dimensionamento de operadores ---- */
+  blocoFormula: {
+    margin: `${espaco.lg}px ${espaco.xl}px 0`, padding: espaco.lg,
+    background: claro.fundo, borderRadius: raio.md,
+    display: 'flex', flexDirection: 'column', gap: espaco.xs,
+  },
+  formulaTitulo: { ...tipo('corpoF'), color: claro.texto },
+  formulaConta: {
+    ...tipo('corpo'), ...numeros, fontFamily: fonteAnalise.numero,
+    color: claro.textoMedio,
+  },
+  formulaResultado: { color: claro.vermelho, fontSize: 16 },
+  rotuloBloco: { ...rotulo(claro.textoFraco) },
+  listaContribuicao: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm,
+    padding: `${espaco.lg}px ${espaco.xl}px`,
+  },
+  linhaContribuicao: {
+    display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 64px minmax(120px, 2fr) 68px',
+    alignItems: 'center', gap: espaco.md,
+  },
+  contribNome: {
+    ...tipo('corpo'), color: claro.texto, minWidth: 0,
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  contribTempo: { ...tipo('corpo'), ...numeros, color: claro.textoMedio, textAlign: 'right' },
+  contribOps: { ...tipo('legenda'), ...numeros, color: claro.textoFraco, textAlign: 'right' },
+  blocoAtual: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm,
+    padding: `${espaco.lg}px ${espaco.xl}px`,
+    borderTop: `1px solid ${claro.borda}`,
+  },
+  linhaAtual: { display: 'flex', alignItems: 'stretch', gap: espaco.lg, flexWrap: 'wrap' },
+  inputOperadores: {
+    width: 110, flexShrink: 0, minHeight: 56, textAlign: 'center',
+    background: claro.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: raio.md,
+    color: claro.texto, ...tipo('titulo'), ...numeros, fontFamily: fonteAnalise.numero,
+  },
+  notaAtual: { ...tipo('legenda'), color: claro.textoFraco, lineHeight: 1.45 },
+  veredito: {
+    flex: '1 1 320px', minWidth: 0,
+    display: 'flex', flexDirection: 'column', gap: 2,
+    padding: `${espaco.md}px ${espaco.lg}px`, borderRadius: raio.md,
+    background: claro.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda,
+  },
+  vereditoTexto: { ...tipo('legenda'), color: claro.textoMedio, lineHeight: 1.5 },
+
+  /* ---- sugestoes de melhoria ---- */
+  listaSugestoes: {
+    display: 'flex', flexDirection: 'column', gap: espaco.md,
+    padding: `${espaco.lg}px ${espaco.xl}px`,
+  },
+  cartaoSugestao: {
+    display: 'flex', flexDirection: 'column', gap: espaco.xs,
+    padding: `${espaco.md}px ${espaco.lg}px`,
+    background: claro.fundo, borderRadius: raio.md,
+    borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: claro.borda,
+  },
+  sugestaoTopo: { display: 'flex', alignItems: 'center', gap: espaco.sm, flexWrap: 'wrap', minWidth: 0 },
+  sugestaoOperacao: {
+    maxWidth: 320, padding: `2px ${espaco.sm}px`, borderRadius: raio.sm,
+    background: claro.papel, ...tipo('legenda'), color: claro.textoMedio,
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  sugestaoTitulo: { ...tipo('corpoF'), color: claro.texto },
+  sugestaoDiagnostico: { ...tipo('corpo'), color: claro.textoMedio, margin: 0, lineHeight: 1.5 },
+  sugestaoAcao: {
+    ...tipo('corpo'), color: claro.texto, margin: 0, lineHeight: 1.5,
+    padding: `${espaco.sm}px ${espaco.md}px`, borderRadius: raio.sm,
+    background: claro.papel,
+  },
 
   /* ---- paradas do estudo ---- */
   paradasResumo: { ...tipo('legenda'), color: claro.textoMedio },
