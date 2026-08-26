@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
  *   /coleta/estudo/<id>/operacao/<opId>  cronometro no posto
  *   /analise                             lista (PC)
  *   /analise/estudo/<id>                 painel de analise
+ *   /analise/conferencias                relatorio das conferencias por maquina
  *
  * Voltar, avancar, recarregar e link direto passam a funcionar de graca,
  * porque quem guarda o estado e' o historico do navegador.
@@ -58,6 +59,8 @@ export function analisarCaminho(caminho) {
   if (/^\/coleta\/rapida\/?$/i.test(p)) return { modo: 'coleta', tela: 'rapida', estudoId: null, operacaoId: null };
 
   if (/^\/coleta\/?$/i.test(p)) return { modo: 'coleta', tela: 'lista', estudoId: null, operacaoId: null };
+  if (/^\/analise\/conferencias\/?$/i.test(p)) return { modo: 'analise', tela: 'conferencias', estudoId: null, operacaoId: null };
+
   if (/^\/analise\/?$/i.test(p)) return { modo: 'analise', tela: 'lista', estudoId: null, operacaoId: null };
 
   // Raiz (ou caminho desconhecido): manda para a experiencia do aparelho.
@@ -95,6 +98,7 @@ export function useRota() {
 export const caminhos = {
   lista: (modo) => `/${modo}`,
   rapida: () => '/coleta/rapida',
+  conferencias: () => '/analise/conferencias',
   estudo: (modo, estudoId) => `/${modo}/estudo/${estudoId}`,
   coletar: (estudoId, operacaoId) => `/coleta/estudo/${estudoId}/operacao/${operacaoId}`,
 };

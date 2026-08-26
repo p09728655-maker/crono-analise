@@ -18,7 +18,7 @@ import { VERSAO } from '../../versao.js';
  *   coleta  (celular, no posto) — tema escuro, alvos grandes, cartoes.
  *   analise (PC, no escritorio) — tema claro igual ao do relatorio, tabela.
  */
-export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, aoConferirRapido }) {
+export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias }) {
   const [estudos, setEstudos] = useState([]);
   const [estado, setEstado] = useState('carregando');
   const [erro, setErro] = useState(null);
@@ -79,6 +79,11 @@ export default function ListaEstudos({ aoAbrir, modo = 'coleta', aoTrocarModo, a
            nada, so' se cronometra. */
         acoes={estado === 'pronto' && (
           <>
+            {analise && aoVerConferencias && (
+              <button type="button" style={est.botaoSecundario} onClick={aoVerConferencias}>
+                Conferências
+              </button>
+            )}
             {analise && (
               <button type="button" style={est.botaoSecundario} onClick={() => setImportando(true)}>
                 Importar roteiro

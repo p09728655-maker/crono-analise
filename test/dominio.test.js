@@ -6,7 +6,8 @@ import {
 } from '../src/domain/estatistica.js';
 import {
   amostraSuficiente, calcularOperacao, conferenciaRapida, duracaoEntreHoras,
-  formatarCronometro, formatarDuracao, oee, operadoresNecessarios, taktTime,
+  formatarCronometro, formatarDuracao, oee, operadoresNecessarios,
+  resumirConferencias, taktTime,
 } from '../src/domain/cronoanalise.js';
 
 describe('temposValidos', () => {
@@ -212,6 +213,43 @@ describe('conferenciaRapida', () => {
     expect(conferenciaRapida({ duracaoMs: 60000, pecas: '30.9' }).pecas).toBe(30);
     expect(conferenciaRapida({ duracaoMs: 60000, pecas: '' }).pecas).toBe(0);
     expect(conferenciaRapida({ duracaoMs: 60000, pecas: -5 }).pecas).toBe(0);
+  });
+});
+
+describe('resumirConferencias', () => {
+  const MIN = 60000;
+  it('agrupa por maquina e pondera o ritmo pelo tempo, nao pela media das taxas', () => {
+    const [g] = resumirConferencias([
+      // 10 min a 900 pc/h (150 pc) + 110 min a 60 pc/h (110 pc):
+      // media simples daria 480; ponderado da (260 pc / 2h) = 130.
+      { maquina: 'Furadeira 03', peca: 'A', duracaoMs: 10 * MIN, pecas: 150 },
+      { maquina: 'Furadeira 03', peca: 'B', duracaoMs: 110 * MIN, pecas: 110 },
+    ]);
+    expect(g.maquina).toBe('Furadeira 03');
+    expect(g.n).toBe(2);
+    expect(g.ritmoMedio).toBe(130);
+    expect(g.melhor.ritmo).toBe(900);
+    expect(g.melhor.peca).toBe('A');
+    expect(g.pior.ritmo).toBe(60);
+  });
+
+  it('aceita linhas do servidor (snake_case) e maquina vazia vira "Sem máquina"', () => {
+    const grupos = resumirConferencias([
+      { maquina: '', peca: null, duracao_ms: 10 * MIN, pecas: 100 },
+      { maquina: 'Seccionadora', duracao_ms: 10 * MIN, pecas: 50 },
+    ]);
+    expect(grupos.map((g) => g.maquina).sort()).toEqual(['Seccionadora', 'Sem máquina']);
+  });
+
+  it('mais medicoes primeiro; linha invalida (sem peca ou tempo) e ignorada', () => {
+    const grupos = resumirConferencias([
+      { maquina: 'B', duracaoMs: MIN, pecas: 10 },
+      { maquina: 'A', duracaoMs: MIN, pecas: 10 },
+      { maquina: 'A', duracaoMs: MIN, pecas: 20 },
+      { maquina: 'C', duracaoMs: 0, pecas: 10 },
+      { maquina: 'C', duracaoMs: MIN, pecas: 0 },
+    ]);
+    expect(grupos.map((g) => g.maquina)).toEqual(['A', 'B']);
   });
 });
 

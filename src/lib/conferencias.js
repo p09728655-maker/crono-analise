@@ -41,3 +41,19 @@ export function removerConferencia(id) {
   try { localStorage.setItem(CHAVE, JSON.stringify(lista)); } catch { /* fica so' em memoria */ }
   return lista;
 }
+
+/**
+ * Marca conferencias como ja' ENFILEIRADAS para o servidor.
+ *
+ * A marca evita reenfileirar a cada abertura de tela — mas nao e' garantia
+ * de entrega: quem garante e' a fila offline (que persiste ate' o servidor
+ * confirmar) e o ON CONFLICT do client_id (que torna reenvio inofensivo).
+ * Conferencias salvas ANTES da sincronizacao existir nao tem a marca, e e'
+ * exatamente assim que o backfill as encontra.
+ */
+export function marcarEnviadas(ids) {
+  const alvo = new Set(ids);
+  const lista = listarConferencias().map((c) => (alvo.has(c.id) ? { ...c, enviada: true } : c));
+  try { localStorage.setItem(CHAVE, JSON.stringify(lista)); } catch { /* segue sem marca */ }
+  return lista;
+}

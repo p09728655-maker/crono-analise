@@ -14,7 +14,7 @@
 import { sql } from './_lib/db.js';
 import { autenticar } from './_lib/auth.js';
 import { ErroHttp, handler, json, lerCorpo, permitir } from './_lib/http.js';
-import { dataIso, inteiro, lista, texto, uuid } from './_lib/validar.js';
+import { dataIso, hora, inteiro, lista, texto, uuid } from './_lib/validar.js';
 
 const MAX_ITENS = 500;
 
@@ -25,8 +25,9 @@ export default handler(async (req, res) => {
 
   const observacoes = lista(corpo.observacoes || [], 'observacoes', { max: MAX_ITENS });
   const paradas = lista(corpo.paradas || [], 'paradas', { max: MAX_ITENS });
+  const conferencias = lista(corpo.conferencias || [], 'conferencias', { max: MAX_ITENS });
 
-  if (!observacoes.length && !paradas.length) {
+  if (!observacoes.length && !paradas.length && !conferencias.length) {
     return json(res, 200, { observacoesGravadas: 0, paradasGravadas: 0, clientIds: [] });
   }
 
@@ -48,8 +49,24 @@ export default handler(async (req, res) => {
     iniciadoEm: dataIso(p.iniciadoEm, `paradas[${i}].iniciadoEm`, { padrao: new Date().toISOString() }),
   }));
 
+  // Conferencia rapida: vazao avulsa de um posto, sem estudo nem operacao.
+  // Vai para a mesma fila porque a garantia e' a mesma — o dado nasceu no
+  // aparelho e nao pode se perder nem duplicar. Ate' 24h de periodo: e' o
+  // maior turno concebivel; acima disso e' hora digitada errada.
+  const confLimpas = conferencias.map((c, i) => ({
+    clientId: uuid(c.clientId, `conferencias[${i}].clientId`),
+    maquina: texto(c.maquina, `conferencias[${i}].maquina`, { max: 120 }),
+    peca: texto(c.peca, `conferencias[${i}].peca`, { max: 120 }),
+    horaInicial: hora(c.horaInicial, `conferencias[${i}].horaInicial`),
+    horaFinal: hora(c.horaFinal, `conferencias[${i}].horaFinal`),
+    duracaoMs: inteiro(c.duracaoMs, `conferencias[${i}].duracaoMs`, { min: 1, max: 86_400_000 }),
+    pecas: inteiro(c.pecas, `conferencias[${i}].pecas`, { min: 1, max: 1_000_000 }),
+    salvoEm: dataIso(c.salvoEm, `conferencias[${i}].salvoEm`, { padrao: new Date().toISOString() }),
+  }));
+
   // Toda operacao referenciada precisa pertencer a esta empresa. Sem esta
   // checagem, um token valido conseguiria escrever no estudo de outro cliente.
+  // (Conferencias ficam fora: pertencem direto a' empresa autenticada.)
   const operacaoIds = [...new Set([...obsLimpas, ...parLimpas].map((x) => x.operacaoId))];
   const permitidas = await sql`
     SELECT o.id FROM operacoes o
@@ -83,13 +100,22 @@ export default handler(async (req, res) => {
       inseridos += r.length;
     }
 
+    for (const c of confLimpas) {
+      const r = await tx`
+        INSERT INTO conferencias (client_id, empresa_id, maquina, peca, hora_inicial, hora_final, duracao_ms, pecas, salvo_em)
+        VALUES (${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca}, ${c.horaInicial}, ${c.horaFinal}, ${c.duracaoMs}, ${c.pecas}, ${c.salvoEm})
+        ON CONFLICT (client_id) DO NOTHING
+        RETURNING client_id`;
+      inseridos += r.length;
+    }
+
     return inseridos;
   });
 
   // Devolvemos TODOS os clientIds recebidos, nao apenas os recem-inseridos.
   // Um item ja existente tambem esta confirmado no servidor, e o app precisa
   // limpar a fila local nos dois casos — senao reenviaria para sempre.
-  const clientIds = [...obsLimpas, ...parLimpas].map((x) => x.clientId);
+  const clientIds = [...obsLimpas, ...parLimpas, ...confLimpas].map((x) => x.clientId);
 
   return json(res, 200, {
     recebidos: clientIds.length,

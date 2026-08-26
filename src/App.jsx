@@ -4,6 +4,7 @@ import DetalheEstudo from './features/estudos/DetalheEstudo.jsx';
 import ColetaFuradeira from './features/coleta/ColetaFuradeira.jsx';
 import ConferenciaRapida from './features/coleta/ConferenciaRapida.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
+import RelatorioConferencias from './features/analise/RelatorioConferencias.jsx';
 import BarraSincronizacao from './components/BarraSincronizacao.jsx';
 import { caminhos, ehDesktop, useRota } from './lib/dispositivo.js';
 import { obterEstudo } from './lib/api.js';
@@ -78,11 +79,16 @@ export default function App() {
           modo={modo}
           aoTrocarModo={desktop ? trocarModo : undefined}
           aoConferirRapido={() => navegar(caminhos.rapida())}
+          aoVerConferencias={() => navegar(caminhos.conferencias())}
         />
       )}
 
       {tela === 'rapida' && (
         <ConferenciaRapida aoSair={() => navegar(caminhos.lista('coleta'))} />
+      )}
+
+      {tela === 'conferencias' && (
+        <RelatorioConferencias aoVoltar={() => navegar(caminhos.lista('analise'))} />
       )}
 
       {tela === 'estudo' && (

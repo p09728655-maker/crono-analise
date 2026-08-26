@@ -43,6 +43,17 @@ export function decimal(valor, campo, { min = -Infinity, max = Infinity, padrao 
   return n;
 }
 
+/** Horario de relogio "HH:MM", como o input type=time entrega. Opcional. */
+export function hora(valor, campo) {
+  if (valor == null || valor === '') return null;
+  const s = String(valor).trim();
+  const m = /^(\d{2}):(\d{2})$/.exec(s);
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) {
+    throw erroValidacao(`Campo "${campo}" deve ser um horario HH:MM valido`);
+  }
+  return s;
+}
+
 export function dataIso(valor, campo, { padrao = null } = {}) {
   if (!valor) return padrao;
   const d = new Date(valor);

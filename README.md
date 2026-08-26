@@ -58,13 +58,20 @@ Na mesma tela, o **cronômetro ao vivo** segue como alternativa para quem
 fica no posto contando peça a peça (alvo gigante, vibração, guarda de
 repique, tela acesa).
 
-O campo **Peça** e o botão **Salvar** guardam a conferência no próprio
-aparelho (localStorage, até 50, as mais recentes primeiro), numa lista na
-mesma tela — memória de bolso para comparar depois ou mostrar ao gestor,
-removível uma a uma. Nada vai para o servidor, de propósito: registro
-oficial, com FR, tolerância e tempo padrão, continua sendo papel do estudo,
-e a tela avisa isso com todas as letras. Por não depender de rede, o atalho
-na lista de coleta fica visível mesmo com a API fora do ar.
+Os campos **Máquina** e **Peça** e o botão **Salvar** guardam a conferência
+no aparelho (localStorage, até 50) **e** a enviam ao banco pelo mesmo
+caminho da coleta: fila offline com `client_id` idempotente via `/api/sync`
+— salvar nunca espera a rede, e reenviar não duplica. Conferências salvas
+antes da sincronização existir sobem sozinhas na próxima abertura da tela
+(backfill pela marca `enviada`).
+
+No PC, o botão **Conferências** no topo da Análise abre o relatório
+(`/analise/conferencias`): resumo por máquina — medições, ritmo médio
+**ponderado pelo tempo** (Σ peças / Σ duração, não média de taxas), melhor
+e pior registro com a peça — mais a tabela completa, filtro por máquina e
+impressão. Registro oficial, com FR, tolerância e tempo padrão, continua
+sendo papel do estudo. Por não depender de rede, o atalho na lista de
+coleta fica visível mesmo com a API fora do ar.
 
 ### Aviso de atualização
 

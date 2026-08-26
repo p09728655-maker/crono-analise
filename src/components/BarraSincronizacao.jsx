@@ -68,18 +68,20 @@ export default function BarraSincronizacao() {
   );
 }
 
+// "Registro(s)", nao "ciclo(s)": a fila leva ciclos, paradas e conferencias
+// rapidas — o analista so' precisa saber que ha' dado esperando rede.
 function descrever({ online, pendentes, estado, erro }) {
-  if (estado === 'enviando') return { cor: cores.neutro, texto: 'Enviando ciclos...' };
-  if (estado === 'erro') return { cor: cores.critico, texto: `Falha ao enviar: ${erro}. Os ciclos seguem salvos no aparelho.` };
+  if (estado === 'enviando') return { cor: cores.neutro, texto: 'Enviando registros...' };
+  if (estado === 'erro') return { cor: cores.critico, texto: `Falha ao enviar: ${erro}. Os registros seguem salvos no aparelho.` };
   if (!online) {
     return {
       cor: cores.atencao,
       texto: pendentes > 0
-        ? `Sem rede · ${pendentes} ciclo(s) salvos no aparelho, aguardando conexao`
+        ? `Sem rede · ${pendentes} registro(s) salvos no aparelho, aguardando conexao`
         : 'Sem rede · a coleta continua funcionando normalmente',
     };
   }
-  if (pendentes > 0) return { cor: cores.atencao, texto: `${pendentes} ciclo(s) aguardando envio` };
+  if (pendentes > 0) return { cor: cores.atencao, texto: `${pendentes} registro(s) aguardando envio` };
   return { cor: cores.ok, texto: 'Tudo sincronizado' };
 }
 

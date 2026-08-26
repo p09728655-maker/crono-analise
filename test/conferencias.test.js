@@ -15,7 +15,7 @@ globalThis.localStorage = {
   },
 };
 
-const { listarConferencias, removerConferencia, salvarConferencia } =
+const { listarConferencias, marcarEnviadas, removerConferencia, salvarConferencia } =
   await import('../src/lib/conferencias.js');
 
 const CHAVE = 'ritmopatrimar.conferencias';
@@ -51,6 +51,15 @@ describe('conferencias salvas no aparelho', () => {
     const resto = removerConferencia(b.id);
     expect(resto.map((c) => c.id)).toEqual([a.id]);
     expect(listarConferencias().length).toBe(1);
+  });
+
+  it('marcarEnviadas poe a marca so nos ids pedidos — e o backfill acha quem nao tem', () => {
+    const a = salvarConferencia({ ...base, peca: 'ja subiu' });
+    const b = salvarConferencia({ ...base, peca: 'antiga, de antes da sincronizacao' });
+    const lista = marcarEnviadas([a.id]);
+    expect(lista.find((c) => c.id === a.id).enviada).toBe(true);
+    expect(lista.find((c) => c.id === b.id).enviada).toBeUndefined();
+    expect(listarConferencias().filter((c) => !c.enviada).map((c) => c.id)).toEqual([b.id]);
   });
 
   it('storage corrompido vira lista vazia, nunca excecao', () => {

@@ -20,6 +20,12 @@ describe('conferencia rapida na URL', () => {
     expect(caminhos.rapida()).toBe('/coleta/rapida');
   });
 
+  it('/analise/conferencias abre o relatorio por maquina', () => {
+    const r = analisarCaminho('/analise/conferencias');
+    expect(r).toEqual({ modo: 'analise', tela: 'conferencias', estudoId: null, operacaoId: null });
+    expect(caminhos.conferencias()).toBe('/analise/conferencias');
+  });
+
   it('nao engole a lista nem a rota de estudo', () => {
     expect(analisarCaminho('/coleta').tela).toBe('lista');
     const id = 'b17e849c-da3f-4d8c-a262-81e8748c589b';

@@ -98,6 +98,29 @@ CREATE TABLE IF NOT EXISTS paradas (
 CREATE UNIQUE INDEX IF NOT EXISTS paradas_client_unq ON paradas (client_id);
 CREATE INDEX IF NOT EXISTS paradas_operacao_idx ON paradas (operacao_id);
 
+-- ------------------------------------------------------------ conferencias
+-- Conferencia rapida sincronizada do aparelho: hora inicial, hora final e
+-- pecas de um periodo observado num posto (ex.: Furadeira 03). Guardamos o
+-- dado BRUTO (duracao + pecas); pecas/hora e ciclo medio sao derivados e se
+-- recalculam. Nao pertence a estudo nenhum — e' medicao de vazao avulsa,
+-- e o relatorio agrupa por maquina e peca.
+CREATE TABLE IF NOT EXISTS conferencias (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- Gerada no aparelho antes da rede: reenvio da fila offline e' idempotente.
+  client_id    uuid NOT NULL,
+  empresa_id   uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  maquina      text,                      -- posto conferido (ex.: "Furadeira 03")
+  peca         text,
+  hora_inicial text CHECK (hora_inicial IS NULL OR hora_inicial ~ '^\d{2}:\d{2}$'),
+  hora_final   text CHECK (hora_final   IS NULL OR hora_final   ~ '^\d{2}:\d{2}$'),
+  duracao_ms   bigint  NOT NULL CHECK (duracao_ms > 0),
+  pecas        integer NOT NULL CHECK (pecas > 0),
+  salvo_em     timestamptz NOT NULL,      -- horario real do aparelho
+  criado_em    timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS conferencias_client_unq ON conferencias (client_id);
+CREATE INDEX IF NOT EXISTS conferencias_empresa_idx ON conferencias (empresa_id, salvo_em DESC);
+
 -- ------------------------------------------------------------ configuracoes
 -- Par chave/valor por empresa. Hoje guarda a chave da API de IA salva pelo
 -- app (quando nao ha ANTHROPIC_API_KEY no ambiente). O valor NUNCA volta
@@ -139,8 +162,9 @@ ALTER TABLE estudos     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE operacoes   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE observacoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE paradas     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conferencias ENABLE ROW LEVEL SECURITY;
 ALTER TABLE configuracoes ENABLE ROW LEVEL SECURITY;
 
 -- Defesa em camadas: remove tambem os grants diretos dos papeis expostos.
-REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas, configuracoes
+REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas, conferencias, configuracoes
   FROM anon, authenticated;
