@@ -4,9 +4,11 @@
  * local ja' garantiu que o dado esta salvo.
  */
 import { listarFila, removerDaFila } from './filaOffline.js';
+import {
+  ErroDeEntrada, adotarCredencialDoAparelho, entrarComEmail, sairDaConta, tokenDeAcesso,
+} from './supabase.js';
 
 const BASE = import.meta.env?.VITE_API_BASE || '/api';
-const TOKEN = import.meta.env?.VITE_API_TOKEN || '';
 
 export class ErroApi extends Error {
   constructor(status, mensagem, detalhes) {
@@ -16,33 +18,16 @@ export class ErroApi extends Error {
   }
 }
 
-/**
- * Token da sessao do analista, quando ha' uma.
- *
- * Lido do localStorage a cada requisicao em vez de guardado em modulo: sair
- * numa aba precisa valer nas outras, e o custo de ler uma chave e' nenhum.
- * Ele NAO substitui o token de servico — vai junto, e so' responde "quem
- * esta neste computador".
- */
-const CHAVE_SESSAO = 'ritmopatrimar.sessao';
-export const tokenDaSessao = () => {
-  try { return localStorage.getItem(CHAVE_SESSAO) || ''; } catch { return ''; }
-};
-export const guardarSessao = (token) => {
-  try {
-    if (token) localStorage.setItem(CHAVE_SESSAO, token);
-    else localStorage.removeItem(CHAVE_SESSAO);
-  } catch { /* sem localStorage: a sessao dura o que durar a aba */ }
-};
-
 async function requisitar(caminho, { metodo = 'GET', corpo, sinal } = {}) {
-  const sessao = tokenDaSessao();
+  // O token do Supabase e' quem abre a API agora — do analista que entrou
+  // no PC ou do tablet pareado. Nenhum segredo mora mais no bundle: sem
+  // sessao, a requisicao vai sem Authorization e volta 401.
+  const jwt = await tokenDeAcesso();
   const resposta = await fetch(`${BASE}${caminho}`, {
     method: metodo,
     headers: {
       'Content-Type': 'application/json',
-      ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
-      ...(sessao ? { 'X-Sessao': sessao } : {}),
+      ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
     },
     body: corpo ? JSON.stringify(corpo) : undefined,
     signal: sinal,
@@ -147,19 +132,34 @@ export const atualizarUsuario = (id, dados) =>
 export const removerUsuario = (id) =>
   requisitar(`/usuarios?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 
-export const quemSouEu = () => requisitar('/sessao').then((r) => r.usuario);
+// Sem sessao o /sessao responde 401 — que aqui significa "ninguem", nao erro.
+export const quemSouEu = () => requisitar('/sessao').then((r) => r.usuario)
+  .catch((e) => { if (e instanceof ErroApi && e.status === 401) return null; throw e; });
+
+/**
+ * Entrar e sair falam com o SUPABASE, nao com a nossa API: e' ele quem
+ * guarda senha e sessao. O que muda para quem chama e' nada — mesmos nomes,
+ * mesmo contrato de sempre.
+ */
 export const entrar = async (email, senha) => {
-  const r = await requisitar('/sessao', { metodo: 'POST', corpo: { email, senha } });
-  guardarSessao(r.token);
-  return r.usuario;
+  try {
+    await entrarComEmail(email, senha);
+  } catch (e) {
+    throw e instanceof ErroDeEntrada ? new ErroApi(401, e.message) : e;
+  }
+  return quemSouEu();
 };
-export const sair = async () => {
-  // O DELETE precisa ir COM o token, senao o servidor nao sabe qual sessao
-  // encerrar. Mas o apagar local acontece de qualquer jeito, mesmo se a rede
-  // falhar: o computador da sala nao pode continuar identificado como quem
-  // acabou de sair. A sessao orfa no servidor vence sozinha.
-  try { await requisitar('/sessao', { metodo: 'DELETE' }); } catch { /* segue */ }
-  guardarSessao('');
+export const sair = () => sairDaConta();
+
+/* ---------------------------------------------- pareamento do tablet */
+export const gerarCodigoPareamento = () =>
+  requisitar('/dispositivos', { metodo: 'POST', corpo: { acao: 'codigo' } });
+
+/** Troca o codigo pela credencial do aparelho e ja' entra com ela. */
+export const parearAparelho = async (codigo, nome) => {
+  const r = await requisitar('/dispositivos', { metodo: 'POST', corpo: { codigo, nome } });
+  await adotarCredencialDoAparelho({ email: r.email, senha: r.senha });
+  return r.dispositivo;
 };
 
 const LOTE = 200;

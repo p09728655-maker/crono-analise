@@ -10,8 +10,7 @@
  * ANTHROPIC_API_KEY no ambiente, quando existir, tem precedencia: e' a
  * configuracao do administrador, e o app nao a sobrescreve.
  */
-import { sql } from './_lib/db.js';
-import { autenticar } from './_lib/auth.js';
+import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, handler, json, lerCorpo, permitir } from './_lib/http.js';
 
 export const CHAVE_IA = 'anthropic_api_key';
@@ -21,41 +20,48 @@ const resumir = (chave) => `•••${chave.slice(-4)}`;
 
 export default handler(async (req, res) => {
   permitir(req, ['GET', 'POST', 'DELETE']);
-  const { empresaId } = await autenticar(req);
+  const auth = await autenticar(req);
+  const { empresaId } = auth;
+  // Configuracao guarda SEGREDO (a chave da IA): tudo aqui e' de admin —
+  // inclusive o GET, que so' devolve o resumo, mas nao precisa existir para
+  // quem nao pode trocar a chave. Mesma regra da politica de RLS.
+  exigirPapel(auth, ['admin'], 'A chave da IA e configuracao do administrador');
 
-  if (req.method === 'GET') {
-    if (process.env.ANTHROPIC_API_KEY) {
+  return auth.rls(async (db) => {
+    if (req.method === 'GET') {
+      if (process.env.ANTHROPIC_API_KEY) {
+        return json(res, 200, {
+          chaveIa: { configurada: true, origem: 'ambiente', resumo: resumir(process.env.ANTHROPIC_API_KEY) },
+        });
+      }
+      const [linha] = await db`
+        SELECT valor FROM configuracoes WHERE empresa_id = ${empresaId} AND chave = ${CHAVE_IA}`;
       return json(res, 200, {
-        chaveIa: { configurada: true, origem: 'ambiente', resumo: resumir(process.env.ANTHROPIC_API_KEY) },
+        chaveIa: linha
+          ? { configurada: true, origem: 'banco', resumo: resumir(linha.valor) }
+          : { configurada: false, origem: null, resumo: null },
       });
     }
-    const [linha] = await sql`
-      SELECT valor FROM configuracoes WHERE empresa_id = ${empresaId} AND chave = ${CHAVE_IA}`;
-    return json(res, 200, {
-      chaveIa: linha
-        ? { configurada: true, origem: 'banco', resumo: resumir(linha.valor) }
-        : { configurada: false, origem: null, resumo: null },
-    });
-  }
 
-  if (req.method === 'POST') {
-    const corpo = await lerCorpo(req);
-    const chave = String(corpo.chaveIa || '').trim();
-    if (!RE_CHAVE.test(chave)) {
-      throw new ErroHttp(400,
-        'A chave deve começar com "sk-ant-". Copie-a exatamente como aparece no console da Anthropic.');
+    if (req.method === 'POST') {
+      const corpo = await lerCorpo(req);
+      const chave = String(corpo.chaveIa || '').trim();
+      if (!RE_CHAVE.test(chave)) {
+        throw new ErroHttp(400,
+          'A chave deve começar com "sk-ant-". Copie-a exatamente como aparece no console da Anthropic.');
+      }
+      await db`
+        INSERT INTO configuracoes (empresa_id, chave, valor)
+        VALUES (${empresaId}, ${CHAVE_IA}, ${chave})
+        ON CONFLICT (empresa_id, chave)
+        DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`;
+      return json(res, 200, { chaveIa: { configurada: true, origem: 'banco', resumo: resumir(chave) } });
     }
-    await sql`
-      INSERT INTO configuracoes (empresa_id, chave, valor)
-      VALUES (${empresaId}, ${CHAVE_IA}, ${chave})
-      ON CONFLICT (empresa_id, chave)
-      DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`;
-    return json(res, 200, { chaveIa: { configurada: true, origem: 'banco', resumo: resumir(chave) } });
-  }
 
-  await sql`DELETE FROM configuracoes WHERE empresa_id = ${empresaId} AND chave = ${CHAVE_IA}`;
-  const ambiente = Boolean(process.env.ANTHROPIC_API_KEY);
-  return json(res, 200, {
-    chaveIa: { configurada: ambiente, origem: ambiente ? 'ambiente' : null, resumo: null },
+    await db`DELETE FROM configuracoes WHERE empresa_id = ${empresaId} AND chave = ${CHAVE_IA}`;
+    const ambiente = Boolean(process.env.ANTHROPIC_API_KEY);
+    return json(res, 200, {
+      chaveIa: { configurada: ambiente, origem: ambiente ? 'ambiente' : null, resumo: null },
+    });
   });
 });

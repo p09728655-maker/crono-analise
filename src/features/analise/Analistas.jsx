@@ -2,31 +2,28 @@ import { useEffect, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
-  atualizarUsuario, criarUsuario, entrar, listarUsuarios, quemSouEu, removerUsuario, sair,
+  atualizarUsuario, criarUsuario, entrar, gerarCodigoPareamento, listarUsuarios, quemSouEu,
+  removerUsuario, sair,
 } from '../../lib/api.js';
 
 /**
- * ANALISTAS — quem mede, e quem esta neste computador.
+ * ANALISTAS — quem mede, quem esta neste computador, e os tablets pareados.
  *
  * Nasceu de um numero: os estudos gravavam o analista em texto livre, e a
  * mesma pessoa apareceu como "ODERLI", "ODERLI GARCIA" e "ODERLI SERGIO
  * GARCIA". Indicador por pessoa contava o Oderli como tres. Com o cadastro,
  * o nome do estudo passa a ser escolhido de uma lista.
  *
- * DUAS COISAS QUE ESTA TELA NAO E', ditas aqui para ninguem se enganar:
+ * Desde a mudanca para o Supabase Auth este cadastro TAMBEM e' o controle
+ * de acesso: cada linha e' uma conta de verdade, o PC exige entrar, e as
+ * politicas do banco (RLS) decidem o que cada papel alcanca. A SENHA
+ * continua opcional — analista que so' precisa ser escolhido num estudo
+ * nao entra no sistema, e exigir senha de quem nao usa so' produziria
+ * senha anotada em post-it ao lado do monitor.
  *
- *  - Nao e' controle de acesso. O token de servico do app abre a API
- *    sozinho, e precisa continuar abrindo, porque o tablet entra sem senha,
- *    de luva, diante da maquina. Identificar-se aqui responde "quem esta
- *    usando este PC" — e' o que carimba autoria no estudo, nao o que barra
- *    alguem.
- *  - Nao e' obrigatorio. O app funciona inteiro sem ninguem identificado,
- *    como sempre funcionou. Por isso entrar e' um convite no rodape do
- *    menu, e nao uma porta trancada na frente da tela.
- *
- * A SENHA e' opcional no cadastro: analista que so' precisa ser escolhido
- * num estudo nao entra no sistema, e exigir senha de quem nao usa so'
- * produziria senha anotada em post-it ao lado do monitor.
+ * O TABLET nao aparece como pessoa: ele e' um APARELHO pareado (papel
+ * 'coletor'), com secao propria. Parear gera um codigo de 15 minutos que
+ * alguem digita no tablet uma unica vez; revogar e' desativa-lo aqui.
  */
 export default function Analistas({ aoFechar, aoTrocarUsuario }) {
   const [usuarios, setUsuarios] = useState(null);
@@ -36,6 +33,7 @@ export default function Analistas({ aoFechar, aoTrocarUsuario }) {
   const [editando, setEditando] = useState(null);
   const [criando, setCriando] = useState(false);
   const [entrando, setEntrando] = useState(false);
+  const [codigo, setCodigo] = useState(null);
 
   useEffect(() => {
     Promise.all([listarUsuarios(), quemSouEu()])
@@ -60,7 +58,18 @@ export default function Analistas({ aoFechar, aoTrocarUsuario }) {
   }
 
   const naoCarregou = usuarios == null && erro;
-  const ativos = usuarios?.filter((u) => u.ativo).length ?? 0;
+  // Pessoa e aparelho moram na mesma tabela (mesma identidade, mesmas
+  // politicas), mas sao coisas diferentes na tela.
+  const pessoas = usuarios?.filter((u) => u.papel !== 'coletor') ?? null;
+  const aparelhos = usuarios?.filter((u) => u.papel === 'coletor') ?? [];
+  const ativos = pessoas?.filter((u) => u.ativo).length ?? 0;
+
+  async function parearTablet() {
+    setOcupado(true);
+    setErro(null);
+    try { setCodigo(await gerarCodigoPareamento()); } catch (e) { setErro(e.message); }
+    setOcupado(false);
+  }
 
   return (
     <div style={est.modal} role="dialog" aria-label="Analistas">
@@ -102,7 +111,7 @@ export default function Analistas({ aoFechar, aoTrocarUsuario }) {
 
         {usuarios == null && !erro && <p style={est.texto}>Carregando cadastro...</p>}
 
-        {usuarios?.length === 0 && !naoCarregou && (
+        {pessoas?.length === 0 && !naoCarregou && (
           <div style={est.vazio}>
             <div style={est.vazioTitulo}>Nenhum analista cadastrado</div>
             <p style={est.vazioTexto}>
@@ -113,9 +122,9 @@ export default function Analistas({ aoFechar, aoTrocarUsuario }) {
           </div>
         )}
 
-        {usuarios?.length > 0 && (
+        {pessoas?.length > 0 && (
           <div style={est.lista}>
-            {usuarios.map((u) => (
+            {pessoas.map((u) => (
               editando === u.id ? (
                 <FormularioAnalista
                   key={u.id}
@@ -186,12 +195,64 @@ export default function Analistas({ aoFechar, aoTrocarUsuario }) {
 
         {erro && <div style={est.erro} role="alert">{erro}</div>}
 
-        {usuarios?.length > 0 && (
+        {pessoas?.length > 0 && (
           <p style={est.rodapeTexto}>
-            {ativos} analista(s) na lista de escolha. Identificar-se aqui não
-            restringe o acesso de ninguém ao app — serve para o estudo saber
-            de quem ele é.
+            {ativos} analista(s) na lista de escolha. Quem tem e-mail e senha
+            entra no PC; o papel decide o que cada um pode fazer.
           </p>
+        )}
+
+        {/* Tablets pareados: os aparelhos do chao de fabrica. Cada um tem
+            identidade propria — revogar aqui corta o acesso daquele tablet
+            sem mexer em nenhum outro. */}
+        {usuarios != null && !naoCarregou && (
+          <div style={est.euBloco}>
+            <div style={est.euRotulo}>Tablets pareados</div>
+            {aparelhos.length === 0 && (
+              <p style={est.texto}>
+                Nenhum tablet pareado ainda. Gere um código e digite-o no
+                aparelho, na tela “Preparar este aparelho”.
+              </p>
+            )}
+            {aparelhos.map((a) => (
+              <div key={a.id} style={est.euLinha}>
+                <span style={a.ativo ? est.euNome : est.euVazio}>
+                  {a.nome}{a.ativo ? '' : ' · revogado'}
+                </span>
+                <span style={est.linhaBotoes}>
+                  <button
+                    type="button" style={est.botaoTexto} disabled={ocupado}
+                    onClick={() => aplicar(() => atualizarUsuario(a.id, { ativo: !a.ativo }))}
+                    aria-label={`${a.ativo ? 'Revogar' : 'Reativar'} ${a.nome}`}
+                  >
+                    {a.ativo ? 'Revogar' : 'Reativar'}
+                  </button>
+                  {!a.ativo && (
+                    <button
+                      type="button" style={est.botaoTexto} disabled={ocupado}
+                      onClick={() => aplicar(() => removerUsuario(a.id))}
+                      aria-label={`Excluir ${a.nome}`}
+                    >
+                      Excluir
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+            {codigo ? (
+              <div style={est.codigoBloco}>
+                <div style={est.codigo}>{codigo.codigo}</div>
+                <p style={est.texto}>
+                  Digite este código no tablet em até {codigo.minutos} minutos.
+                  Ele vale para UM aparelho; para outro tablet, gere de novo.
+                </p>
+              </div>
+            ) : (
+              <button type="button" style={est.botaoSecundario} disabled={ocupado} onClick={parearTablet}>
+                Parear tablet
+              </button>
+            )}
+          </div>
         )}
 
         <div style={est.acoes}>
@@ -204,7 +265,7 @@ export default function Analistas({ aoFechar, aoTrocarUsuario }) {
   );
 }
 
-/** Entrar: e-mail e senha, sem promessa de proteger nada. */
+/** Entrar: e-mail e senha, conferidos pelo Supabase Auth. */
 function FormularioEntrada({ ocupado, aoEntrar, aoCancelar }) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -299,8 +360,8 @@ function FormularioAnalista({ usuario, ocupado, aoSalvar, aoCancelar }) {
           placeholder="opcional · mínimo 8 caracteres" style={est.input} autoComplete="new-password"
         />
         <span style={est.dica}>
-          Só quem vai se identificar neste computador precisa de senha. Quem
-          apenas assina estudos pode ficar sem.
+          Senha (com e-mail) é o que abre o sistema no PC. Quem apenas
+          assina estudos pode ficar sem as duas coisas.
           {!novo && ' Em branco, a senha atual não muda.'}
         </span>
       </label>
@@ -342,6 +403,17 @@ const est = {
   euLinha: { display: 'flex', alignItems: 'center', gap: espaco.md, justifyContent: 'space-between' },
   euNome: { ...tipo('corpoF'), color: t.texto },
   euVazio: { ...tipo('corpo'), color: t.textoFraco, fontStyle: 'italic' },
+
+  codigoBloco: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm, alignItems: 'center',
+    padding: espaco.md, background: t.papel, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'dashed', borderColor: t.bordaForte,
+  },
+  // Grande e espacado: vai ser lido daqui e digitado no tablet, de pe'.
+  codigo: {
+    fontSize: 34, fontWeight: 700, letterSpacing: '0.3em', color: t.texto,
+    fontFamily: "'Roboto Mono', 'Consolas', monospace",
+  },
 
   vazio: {
     display: 'flex', flexDirection: 'column', gap: espaco.sm,

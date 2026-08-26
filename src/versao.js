@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.34.0',
+    data: '2026-08-26',
+    titulo: 'A segurança mudou de lugar: agora ela mora no banco',
+    itens: [
+      'O PC passou a pedir e-mail e senha. Quem entra é quem o cadastro de Analistas diz que é — e o papel (administrador, analista, leitor) decide o que cada um pode fazer. A senha e a sessão vivem no Supabase Auth, nunca no nosso banco.',
+      'O tablet não pede senha nenhuma: ele é PAREADO uma única vez com um código gerado na tela de Analistas, ganha identidade própria de coletor e entra sozinho dali em diante. Revogar um aparelho é um clique na mesma tela.',
+      'O token que ficava embutido no próprio site — e abria a API inteira para qualquer pessoa que abrisse a página — saiu do ar. Cada requisição agora carrega um token assinado, verificado no servidor, e as regras de acesso são avaliadas DENTRO do Postgres (RLS), tabela por tabela.',
+      'Nada muda no trabalho de coletar: a fila offline, o reenvio sem duplicar e as telas continuam como eram.',
+    ],
+  },
+  {
     versao: '2.33.0',
     data: '2026-08-26',
     titulo: 'O período da conferência agora é um instante, e só',

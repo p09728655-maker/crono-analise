@@ -9,6 +9,7 @@
  * Uso: npm run dev  (porta 5199) e depois node test/e2e/navegacao.e2e.mjs
  */
 import { chromium } from 'playwright';
+import { semearSessao } from './_sessao.mjs';
 import { analisarCaminho, caminhos } from '../../src/lib/dispositivo.js';
 
 let falhas = 0;
@@ -47,6 +48,7 @@ delete globalThis.window;
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
 const p = await ctx.newPage();
+await semearSessao(p);
 
 // A API nao esta no ar no harness. O endpoint responde formatos diferentes
 // para lista e para detalhe, e o mock precisa respeitar isso — misturar os

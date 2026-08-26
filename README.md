@@ -357,26 +357,31 @@ Estudo antigo se liga a mão, em **Editar estudo**: a lista mostra o nome
 digitado ao lado da opção "sem vínculo", porque sem isso não daria para
 saber a quem o estudo se refere.
 
-### Identificação não é controle de acesso
+### Controle de acesso: Supabase Auth + RLS
 
-Está escrito no código (`api/_lib/senha.js`), na tela e aqui, porque é o
-tipo de coisa em que alguém confia por engano:
+Desde a v2.34 a segurança mora no banco, não na tela:
 
-**O token de serviço (`API_TOKEN`) vive embutido no bundle do navegador e
-abre a API sozinho.** Precisa continuar abrindo — o tablet entra sem senha,
-de luva, diante da máquina. Dizer quem você é no PC responde *"quem está
-usando este computador"*, e é isso que carimba autoria no estudo. Não barra
-ninguém, e o app funciona inteiro sem ninguém identificado.
-
-Isolar empresas de verdade (RLS com política por `empresa_id`) exige tirar o
-token do bundle — e aí o tablet passa a ter login também. É uma decisão de
-produto, não um ajuste de schema.
-
-O que existe hoje, e é real: senha em **scrypt com sal por usuário** (sem
-dependência nova — é do próprio Node), sessão guardada como **hash** do
-token (vazar a tabela não entrega sessão válida), mesma resposta para
-e-mail inexistente e senha errada (distinguir entregaria quais e-mails
-existem), e senha que nunca volta para o navegador.
+- **Identidade oficial é o Supabase Auth** (`auth.users`). Cada linha de
+  `public.usuarios` é o PERFIL de uma conta — mesmo id, um para um. Senha e
+  sessão vivem lá; o schema `public` não guarda credencial nenhuma.
+- **PC entra com e-mail e senha.** O navegador fala direto com o
+  `/auth/v1` do projeto (`src/lib/supabase.js`, sem SDK — três chamadas
+  HTTP) e manda o token de acesso em cada requisição à API.
+- **Tablet é PAREADO uma vez** (`api/dispositivos.js`): o admin gera um
+  código de 15 minutos na tela de Analistas, alguém digita no aparelho, e o
+  tablet ganha uma conta própria de papel `coletor` — coleta tudo,
+  administra nada, revogável na mesma tela. Registro anônimo do Supabase
+  foi descartado de propósito: é aberto ao mundo.
+- **A API verifica o token localmente** (`api/_lib/jwt.js`, ES256 contra o
+  JWKS público do projeto — sem segredo compartilhado, HS256 recusado) e
+  executa as consultas DENTRO da RLS: `SET LOCAL role authenticated` +
+  `request.jwt.claims` na transação (`comRls` em `api/_lib/db.js`), como o
+  PostgREST faz. As políticas estão em `db/schema.sql`; um `WHERE`
+  esquecido em endpoint novo não vaza dado de outra empresa.
+- **Transição:** o token de serviço antigo (`API_TOKEN`) continua aceito
+  ENQUANTO a variável existir na Vercel — é o que mantém tablet com bundle
+  velho em cache funcionando. Apagar `API_TOKEN` e `VITE_API_TOKEN` do
+  ambiente encerra a transição; nenhum bundle novo embute segredo algum.
 
 ### `client_id` não é o aparelho
 
@@ -502,17 +507,16 @@ Em **Settings → Environment Variables**:
 | Variável | Onde vive | Observação |
 |---|---|---|
 | `DATABASE_URL` | servidor | Pooler do Supabase, porta 6543 |
-| `API_TOKEN` | servidor | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-| `EMPRESA_ID` | servidor | UUID retornado no passo acima |
+| `EMPRESA_ID` | servidor | Só com mais de uma empresa no banco; com uma, é descoberta sozinha |
 | `ANTHROPIC_API_KEY` | servidor | **Nunca** prefixar com `VITE_`. Tem precedência sobre a chave salva pelo app — e só se remove aqui, não pela tela |
-| `VITE_API_TOKEN` | navegador | Vai para o bundle — ver aviso abaixo |
+| `API_TOKEN` | servidor | **Transição** — apagar depois que a v2.34 estiver no ar e os tablets recarregarem |
+| `VITE_API_TOKEN` | navegador | **Transição** — apagar junto com `API_TOKEN`; bundle novo não o lê |
 
-> ⚠️ **`VITE_API_TOKEN` fica visível no bundle.** Qualquer pessoa com acesso à
-> URL consegue lê-lo e chamar a API. Isso é aceitável enquanto o app rodar
-> restrito à rede da fábrica, e é o mesmo nível de exposição do modelo
-> anterior — mas **não** é autenticação de verdade. Antes de expor o app na
-> internet, trocar por login por usuário (a fronteira já está isolada em
-> `api/_lib/auth.js`, então a troca não espalha pelo resto do código).
+> A URL do projeto Supabase e a chave publicável ficam no código
+> (`src/lib/supabase.js`, `api/_lib/supabase.js`): são identificadores
+> públicos por desenho. O que protege os dados é a senha de cada usuário e
+> a RLS — `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` no ambiente só são
+> necessárias para apontar outro projeto (teste).
 
 ### Tempo da análise com IA
 

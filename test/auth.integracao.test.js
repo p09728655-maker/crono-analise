@@ -44,7 +44,9 @@ rodar('autenticacao e resolucao de empresa', () => {
 
   it('rejeita token errado antes de tocar o banco', async () => {
     const autenticar = await autenticarLimpo();
-    await expect(autenticar(req('errado'))).rejects.toThrow(/Token invalido/);
+    // Token que nao e' o de servico e' tratado como JWT do Supabase — e um
+    // que nem tem cara de JWT cai na mesma recusa, sem consulta nenhuma.
+    await expect(autenticar(req('errado'))).rejects.toThrow(/Sessao invalida/);
   });
 
   it('descobre a empresa sozinho quando existe apenas uma', async () => {
