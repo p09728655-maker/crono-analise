@@ -8,6 +8,7 @@
  */
 import { naoAutorizado } from './http.js';
 import { sql } from './db.js';
+import { hashDoToken } from './senha.js';
 
 function tokenDaRequisicao(req) {
   const header = req.headers?.authorization || '';
@@ -70,6 +71,35 @@ async function resolverEmpresa() {
 
   empresaCache = { empresaId: empresas[0].id, empresaNome: empresas[0].nome };
   return empresaCache;
+}
+
+/**
+ * Quem esta' pedindo — quando da' para saber.
+ *
+ * Devolve o usuario da sessao ou null. NUNCA recusa a requisicao: o token de
+ * servico e' que autoriza, e o tablet nao tem sessao nenhuma. Isto existe
+ * para carimbar autoria, nao para barrar ninguem — ver api/_lib/senha.js.
+ */
+export async function usuarioDaSessao(req, empresaId) {
+  const bruto = req.headers?.['x-sessao'];
+  const token = Array.isArray(bruto) ? bruto[0] : bruto;
+  if (!token || typeof token !== 'string' || token.length > 200) return null;
+
+  try {
+    const [linha] = await sql`
+      SELECT u.id, u.nome, u.email, u.papel
+        FROM sessoes s
+        JOIN usuarios u ON u.id = s.usuario_id
+       WHERE s.token_hash = ${hashDoToken(token)}
+         AND s.expira_em > now()
+         AND u.ativo
+         AND u.empresa_id = ${empresaId}`;
+    return linha || null;
+  } catch {
+    // Instalacao sem a tabela `sessoes` ainda: o app inteiro continua
+    // funcionando sem identificacao, que e' exatamente como era antes.
+    return null;
+  }
 }
 
 export async function autenticar(req) {

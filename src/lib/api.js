@@ -16,12 +16,33 @@ export class ErroApi extends Error {
   }
 }
 
+/**
+ * Token da sessao do analista, quando ha' uma.
+ *
+ * Lido do localStorage a cada requisicao em vez de guardado em modulo: sair
+ * numa aba precisa valer nas outras, e o custo de ler uma chave e' nenhum.
+ * Ele NAO substitui o token de servico — vai junto, e so' responde "quem
+ * esta neste computador".
+ */
+const CHAVE_SESSAO = 'ritmopatrimar.sessao';
+export const tokenDaSessao = () => {
+  try { return localStorage.getItem(CHAVE_SESSAO) || ''; } catch { return ''; }
+};
+export const guardarSessao = (token) => {
+  try {
+    if (token) localStorage.setItem(CHAVE_SESSAO, token);
+    else localStorage.removeItem(CHAVE_SESSAO);
+  } catch { /* sem localStorage: a sessao dura o que durar a aba */ }
+};
+
 async function requisitar(caminho, { metodo = 'GET', corpo, sinal } = {}) {
+  const sessao = tokenDaSessao();
   const resposta = await fetch(`${BASE}${caminho}`, {
     method: metodo,
     headers: {
       'Content-Type': 'application/json',
       ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+      ...(sessao ? { 'X-Sessao': sessao } : {}),
     },
     body: corpo ? JSON.stringify(corpo) : undefined,
     signal: sinal,
@@ -115,6 +136,31 @@ export const ordenarMotivosParada = (ids) =>
   requisitar('/motivos-parada', { metodo: 'PATCH', corpo: { ordem: ids } }).then((r) => r.motivos || []);
 export const removerMotivoParada = (id) =>
   requisitar(`/motivos-parada?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
+
+/* ------------------------------------------ analistas e identificacao */
+export const listarUsuarios = () => requisitar('/usuarios').then((r) => r.usuarios || []);
+export const criarUsuario = (dados) =>
+  requisitar('/usuarios', { metodo: 'POST', corpo: dados }).then((r) => r.usuario);
+export const atualizarUsuario = (id, dados) =>
+  requisitar(`/usuarios?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados })
+    .then((r) => r.usuario);
+export const removerUsuario = (id) =>
+  requisitar(`/usuarios?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
+
+export const quemSouEu = () => requisitar('/sessao').then((r) => r.usuario);
+export const entrar = async (email, senha) => {
+  const r = await requisitar('/sessao', { metodo: 'POST', corpo: { email, senha } });
+  guardarSessao(r.token);
+  return r.usuario;
+};
+export const sair = async () => {
+  // O DELETE precisa ir COM o token, senao o servidor nao sabe qual sessao
+  // encerrar. Mas o apagar local acontece de qualquer jeito, mesmo se a rede
+  // falhar: o computador da sala nao pode continuar identificado como quem
+  // acabou de sair. A sessao orfa no servidor vence sozinha.
+  try { await requisitar('/sessao', { metodo: 'DELETE' }); } catch { /* segue */ }
+  guardarSessao('');
+};
 
 const LOTE = 200;
 const TENTATIVAS = 4;

@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores as escuro } from '../../theme/tokens.js';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
-import { criarEstudo, listarArquivados, listarEstudos, removerEstudo, restaurarEstudo } from '../../lib/api.js';
+import {
+  criarEstudo, listarArquivados, listarEstudos, listarUsuarios, quemSouEu,
+  removerEstudo, restaurarEstudo,
+} from '../../lib/api.js';
 import { agruparPorProduto, produtosConhecidos, setoresConhecidos } from '../../domain/agrupamento.js';
 import AvisoAtualizacao from '../../components/AvisoAtualizacao.jsx';
 import ChaveIa from '../../components/ChaveIa.jsx';
@@ -12,6 +15,7 @@ import MenuLateral from '../../components/MenuLateral.jsx';
 import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
 import ConfirmarSaida from '../../components/SairDoSistema.jsx';
 import MotivosParada from '../analise/MotivosParada.jsx';
+import Analistas from '../analise/Analistas.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import ImportarRoteiro from './ImportarRoteiro.jsx';
 import { VERSAO } from '../../versao.js';
@@ -38,6 +42,11 @@ export default function ListaEstudos({
   const [verArquivados, setVerArquivados] = useState(false);
   const [verChaveIa, setVerChaveIa] = useState(false);
   const [verMotivos, setVerMotivos] = useState(false);
+  const [verAnalistas, setVerAnalistas] = useState(false);
+  // Cadastro de analistas e quem esta neste PC. So' no modo Analise: no
+  // tablet nao ha ninguem para identificar nem estudo para criar.
+  const [analistas, setAnalistas] = useState([]);
+  const [eu, setEu] = useState(null);
   const [busca, setBusca] = useState('');
   const [saindo, setSaindo] = useState(false);
 
@@ -46,6 +55,15 @@ export default function ListaEstudos({
   const est = estilos(t, analise);
 
   useEffect(() => { carregar(); }, []);
+
+  const carregarIdentificacao = useCallback(() => {
+    if (!analise) return;
+    // Falha em silencio: cadastro de analista nao pode impedir de ver estudo.
+    listarUsuarios().then((lista) => setAnalistas(lista.filter((u) => u.ativo))).catch(() => {});
+    quemSouEu().then(setEu).catch(() => {});
+  }, [analise]);
+
+  useEffect(() => { carregarIdentificacao(); }, [carregarIdentificacao]);
 
   async function carregar() {
     setEstado('carregando');
@@ -79,7 +97,7 @@ export default function ListaEstudos({
   // quem procura "FUR16" quer a maquina — os dois caem no mesmo campo.
   const termo = busca.trim().toLowerCase();
   const encontrados = termo
-    ? estudos.filter((e) => [e.nome, e.produto, e.recurso, e.setor, e.analista]
+    ? estudos.filter((e) => [e.nome, e.produto, e.recurso, e.setor, e.analista_nome || e.analista]
         .some((campo) => String(campo || '').toLowerCase().includes(termo)))
     : estudos;
 
@@ -103,6 +121,8 @@ export default function ListaEstudos({
       aoVerArquivados={() => setVerArquivados(true)}
       aoVerChaveIa={() => setVerChaveIa(true)}
       aoVerMotivos={() => setVerMotivos(true)}
+      aoVerAnalistas={() => setVerAnalistas(true)}
+      usuario={eu}
       aoTrocarModo={aoTrocarModo}
     />
   );
@@ -338,6 +358,13 @@ export default function ListaEstudos({
       {/* Cadastro dos motivos de parada — trabalho de PC, so' no menu lateral. */}
       {verMotivos && <MotivosParada aoFechar={() => setVerMotivos(false)} />}
 
+      {verAnalistas && (
+        <Analistas
+          aoFechar={() => { setVerAnalistas(false); carregarIdentificacao(); }}
+          aoTrocarUsuario={setEu}
+        />
+      )}
+
       {verArquivados && (
         <EstudosArquivados
           est={est}
@@ -365,6 +392,8 @@ export default function ListaEstudos({
           analise={analise}
           produtos={produtosConhecidos(estudos)}
           setores={setoresConhecidos(estudos)}
+          analistas={analistas}
+          eu={eu}
           aoSalvar={criar}
           aoCancelar={() => setCriando(false)}
         />
@@ -528,7 +557,7 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover }) {
                   e o texto inteiro tem de continuar alcancavel. */}
               <td style={est.tdNome} title={e.nome}>{e.nome}</td>
               <td style={est.td} title={e.recurso || ''}>{e.recurso || '—'}</td>
-              <td style={est.td} title={e.analista || ''}>{e.analista || '—'}</td>
+              <td style={est.td} title={e.analista_nome || e.analista || ''}>{e.analista_nome || e.analista || '—'}</td>
               <td style={est.tdNum}>{e.total_operacoes}</td>
               <td style={est.tdNum}>{e.total_observacoes}</td>
               <td style={est.tdFraco}>{formatarData(e.atualizado_em)}</td>
@@ -569,7 +598,7 @@ function CartoesEstudos({ estudos, est, aoAbrir, aoRemover }) {
               <div style={est.cartaoTitulo}>{e.nome}</div>
               <div style={est.cartaoSub}>
                 {/* Sem o produto: ele ja' nomeia o grupo logo acima. */}
-                {[e.recurso, e.analista].filter(Boolean).join(' · ') || 'Sem detalhes'}
+                {[e.recurso, e.analista_nome || e.analista].filter(Boolean).join(' · ') || 'Sem detalhes'}
               </div>
             </div>
             <div style={est.cartaoNumeros}>
@@ -626,7 +655,7 @@ function EstudosArquivados({ est, arquivados, aoRestaurar, aoFechar }) {
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={est.arquivadoNome}>{e.nome}</div>
                 <div style={est.arquivadoSub}>
-                  {[e.recurso, e.analista].filter(Boolean).join(' · ') || 'Sem detalhes'}
+                  {[e.recurso, e.analista_nome || e.analista].filter(Boolean).join(' · ') || 'Sem detalhes'}
                   {' · '}{e.total_observacoes} ciclo(s)
                 </div>
               </div>
@@ -797,9 +826,16 @@ function ConfirmarRemocao({ est, estudo, aoConfirmar, aoCancelar }) {
  * entao o formulario pede esses dois numeros e mostra o ritmo calculado.
  * (Quem souber o Takt direto ajusta depois, em Ajustes do estudo.)
  */
-function FormularioEstudo({ est, t, analise, produtos = [], setores = [], aoSalvar, aoCancelar }) {
+function FormularioEstudo({
+  est, t, analise, produtos = [], setores = [], analistas = [], eu, aoSalvar, aoCancelar,
+}) {
   const [dados, setDados] = useState({
-    nome: '', setor: '', recurso: '', produto: '', analista: '', toleranciaPct: 15, metaObs: 12,
+    nome: '', setor: '', recurso: '', produto: '', analista: '',
+    // Ja' vem preenchido com quem esta neste computador: quem cria o estudo
+    // e' quase sempre quem vai conduzi-lo, e um campo certo por padrao e'
+    // melhor que um campo vazio pedindo atencao.
+    analistaId: eu?.id || '',
+    toleranciaPct: 15, metaObs: 12,
   });
   const [calc, setCalc] = useState({ ...CALC_PADRAO });
   const [etapa, setEtapa] = useState(1);
@@ -871,9 +907,25 @@ function FormularioEstudo({ est, t, analise, produtos = [], setores = [], aoSalv
                     {produtos.map((nome) => <option key={nome} value={nome} />)}
                   </datalist>
                 </Campo>
-                <Campo est={est} label="Analista" dica="Quem conduz o estudo.">
-                  <input style={est.input} {...campo('analista')} />
-                </Campo>
+                {/* Com cadastro, o analista vira LISTA: e' o que impede a
+                    mesma pessoa de virar "ODERLI", "ODERLI GARCIA" e
+                    "ODERLI SERGIO GARCIA" em tres estudos. Sem cadastro
+                    ainda, segue texto livre — a tela nao pode travar quem
+                    nunca abriu Ferramentas > Analistas. */}
+                {analistas.length > 0 ? (
+                  <Campo est={est} label="Analista" dica="Cadastre em Ferramentas → Analistas.">
+                    <select style={est.input} {...campo('analistaId')}>
+                      <option value="">Escolha o analista</option>
+                      {analistas.map((u) => (
+                        <option key={u.id} value={u.id}>{u.nome}</option>
+                      ))}
+                    </select>
+                  </Campo>
+                ) : (
+                  <Campo est={est} label="Analista" dica="Quem conduz o estudo.">
+                    <input style={est.input} {...campo('analista')} />
+                  </Campo>
+                )}
               </div>
             </section>
 

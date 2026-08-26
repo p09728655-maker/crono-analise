@@ -12,14 +12,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const URL_TESTE = process.env.TEST_DATABASE_URL;
 const rodar = URL_TESTE ? describe : describe.skip;
 
-let sql, sync, estudos, operacoes, config, conferenciasApi, motivosApi;
+let sql, sync, estudos, operacoes, config, conferenciasApi, motivosApi, usuariosApi, sessaoApi;
 const EMPRESA = '11111111-1111-1111-1111-111111111111';
 const OUTRA_EMPRESA = '99999999-9999-9999-9999-999999999999';
 const TOKEN = 'token-de-teste';
 
 /** Simula req/res da Vercel. */
-function fingirReq({ metodo = 'GET', corpo, query = {}, token = TOKEN } = {}) {
-  return { method: metodo, body: corpo, query, headers: { authorization: `Bearer ${token}` } };
+function fingirReq({ metodo = 'GET', corpo, query = {}, token = TOKEN, sessao } = {}) {
+  return {
+    method: metodo, body: corpo, query,
+    headers: { authorization: `Bearer ${token}`, ...(sessao ? { 'x-sessao': sessao } : {}) },
+  };
 }
 
 function fingirRes() {
@@ -45,6 +48,8 @@ rodar('API — integracao com Postgres', () => {
     config = (await import('../api/config.js')).default;
     conferenciasApi = (await import('../api/conferencias.js')).default;
     motivosApi = (await import('../api/motivos-parada.js')).default;
+    usuariosApi = (await import('../api/usuarios.js')).default;
+    sessaoApi = (await import('../api/sessao.js')).default;
     // O teste cobre o caminho SEM chave no ambiente (a do banco).
     delete process.env.ANTHROPIC_API_KEY;
 
@@ -799,5 +804,173 @@ rodar('API — integracao com Postgres', () => {
     const res = fingirRes();
     await motivosApi(fingirReq({ metodo: 'POST', corpo: { motivos: muitos } }), res);
     expect(res.statusCode).toBe(400);
+  });
+  /* ------------------------------------- cadastro de analistas e sessao */
+  /**
+   * O que precisa ser provado aqui e' o que protege PESSOA e HISTORICO: a
+   * senha nunca volta para o navegador, entrar errado nao diz o que errou,
+   * e analista que ja assinou estudo nao some do relatorio.
+   *
+   * O que NAO se prova aqui, porque nao e verdade: que a sessao restringe
+   * acesso. O token de servico abre a API sozinho — ver api/_lib/senha.js.
+   */
+  async function criarAnalista(corpo) {
+    const res = fingirRes();
+    await usuariosApi(fingirReq({ metodo: 'POST', corpo }), res);
+    return res;
+  }
+
+  async function entrar(email, senha) {
+    const res = fingirRes();
+    await sessaoApi(fingirReq({ metodo: 'POST', corpo: { email, senha } }), res);
+    return res;
+  }
+
+  it('cria analista e NUNCA devolve a senha, nem o hash', async () => {
+    const res = await criarAnalista({ nome: 'Oderli Sergio Garcia', email: 'oderli@patrimar.com', senha: 'furadeira2026' });
+    expect(res.statusCode).toBe(201);
+    expect(JSON.stringify(res.corpo)).not.toMatch(/furadeira2026|senha_hash|senha_salt/);
+
+    const lista = fingirRes();
+    await usuariosApi(fingirReq(), lista);
+    const oderli = lista.corpo.usuarios.find((u) => u.email === 'oderli@patrimar.com');
+    expect(oderli.tem_senha).toBe(true);
+    expect(JSON.stringify(lista.corpo)).not.toMatch(/furadeira2026|senha_hash/);
+  });
+
+  it('analista sem senha existe para ser escolhido, mas nao entra', async () => {
+    await criarAnalista({ nome: 'Sem Acesso', email: 'semacesso@patrimar.com' });
+    // Sem isto, "sem senha" viraria "qualquer senha serve".
+    const res = await entrar('semacesso@patrimar.com', '');
+    expect(res.statusCode).toBe(401);
+    const comChute = await entrar('semacesso@patrimar.com', 'qualquercoisa');
+    expect(comChute.statusCode).toBe(401);
+  });
+
+  it('entra com a senha certa e a sessao diz quem e', async () => {
+    await criarAnalista({ nome: 'Mauricio', email: 'mauricio@patrimar.com', senha: 'senhaboa123' });
+    const res = await entrar('mauricio@patrimar.com', 'senhaboa123');
+    expect(res.statusCode).toBe(200);
+    expect(res.corpo.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(res.corpo.usuario.nome).toBe('Mauricio');
+
+    const eu = fingirRes();
+    await sessaoApi(fingirReq({ sessao: res.corpo.token }), eu);
+    expect(eu.corpo.usuario.nome).toBe('Mauricio');
+
+    // O banco guarda o HASH, nunca o token.
+    const [guardada] = await sql`SELECT token_hash FROM sessoes WHERE usuario_id = ${res.corpo.usuario.id}`;
+    expect(guardada.token_hash).not.toBe(res.corpo.token);
+  });
+
+  it('senha errada e e-mail inexistente dao a MESMA resposta', async () => {
+    await criarAnalista({ nome: 'Alvo', email: 'alvo@patrimar.com', senha: 'senhaboa123' });
+    const errada = await entrar('alvo@patrimar.com', 'senhaerrada1');
+    const inexistente = await entrar('ninguem@patrimar.com', 'senhaerrada1');
+    // Distinguir entregaria de graca quais e-mails existem no sistema.
+    expect(errada.statusCode).toBe(401);
+    expect(inexistente.statusCode).toBe(401);
+    expect(errada.corpo.erro).toBe(inexistente.corpo.erro);
+  });
+
+  it('sem sessao o app segue funcionando, so nao sabe quem e', async () => {
+    const res = fingirRes();
+    await sessaoApi(fingirReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.corpo.usuario).toBeNull();
+  });
+
+  it('sair derruba a sessao; desativar tambem', async () => {
+    const criado = await criarAnalista({ nome: 'Vai Sair', email: 'vaisair@patrimar.com', senha: 'senhaboa123' });
+    const { token } = (await entrar('vaisair@patrimar.com', 'senhaboa123')).corpo;
+
+    await sessaoApi(fingirReq({ metodo: 'DELETE', sessao: token }), fingirRes());
+    const depois = fingirRes();
+    await sessaoApi(fingirReq({ sessao: token }), depois);
+    expect(depois.corpo.usuario).toBeNull();
+
+    // Desativar precisa derrubar sessao aberta, senao a pessoa segue
+    // identificada ate o token vencer sozinho.
+    const { token: outro } = (await entrar('vaisair@patrimar.com', 'senhaboa123')).corpo;
+    await usuariosApi(fingirReq({
+      metodo: 'PATCH', query: { id: criado.corpo.usuario.id }, corpo: { ativo: false },
+    }), fingirRes());
+    const apos = fingirRes();
+    await sessaoApi(fingirReq({ sessao: outro }), apos);
+    expect(apos.corpo.usuario).toBeNull();
+  });
+
+  it('o estudo passa a saber quem e o analista, e quem o criou', async () => {
+    const criado = await criarAnalista({ nome: 'Oderli', email: 'oderli2@patrimar.com', senha: 'senhaboa123' });
+    const analistaId = criado.corpo.usuario.id;
+    const { token } = (await entrar('oderli2@patrimar.com', 'senhaboa123')).corpo;
+
+    const res = fingirRes();
+    await estudos(fingirReq({
+      metodo: 'POST', sessao: token,
+      corpo: { nome: 'Rack Sirius', analistaId, operacoes: [] },
+    }), res);
+    expect(res.statusCode).toBe(201);
+    expect(res.corpo.estudo.analista_id).toBe(analistaId);
+    // criado_por sai da sessao, nao do corpo: ninguem assina em nome de outro.
+    expect(res.corpo.estudo.criado_por).toBe(analistaId);
+
+    const lido = fingirRes();
+    await estudos(fingirReq({ query: { id: res.corpo.estudo.id } }), lido);
+    expect(lido.corpo.estudo.analista_nome).toBe('Oderli');
+  });
+
+  it('estudo antigo, so com o nome digitado, continua legivel', async () => {
+    const res = fingirRes();
+    await estudos(fingirReq({
+      metodo: 'POST',
+      corpo: { nome: 'Estudo de antes', analista: 'ODERLI SERGIO GARCIA', operacoes: [] },
+    }), res);
+
+    const lido = fingirRes();
+    await estudos(fingirReq({ query: { id: res.corpo.estudo.id } }), lido);
+    // Sem vinculo, o nome vem do texto — e nada quebra por isso.
+    expect(lido.corpo.estudo.analista_id).toBeNull();
+    expect(lido.corpo.estudo.analista_nome).toBe('ODERLI SERGIO GARCIA');
+  });
+
+  it('analista que ja assinou estudo nao se exclui; desativar e o caminho', async () => {
+    const criado = await criarAnalista({ nome: 'Assinou', email: 'assinou@patrimar.com' });
+    const analistaId = criado.corpo.usuario.id;
+    await estudos(fingirReq({
+      metodo: 'POST', corpo: { nome: 'Com autor', analistaId, operacoes: [] },
+    }), fingirRes());
+
+    const recusa = fingirRes();
+    await usuariosApi(fingirReq({ metodo: 'DELETE', query: { id: analistaId } }), recusa);
+    expect(recusa.statusCode).toBe(400);
+    expect(recusa.corpo.erro).toMatch(/Desative/);
+
+    const desativa = fingirRes();
+    await usuariosApi(fingirReq({ metodo: 'PATCH', query: { id: analistaId }, corpo: { ativo: false } }), desativa);
+    expect(desativa.corpo.usuario.ativo).toBe(false);
+  });
+
+  it('recusa e-mail repetido e senha curta demais', async () => {
+    await criarAnalista({ nome: 'Primeiro', email: 'repetido@patrimar.com' });
+    const repetido = await criarAnalista({ nome: 'Segundo', email: 'REPETIDO@patrimar.com' });
+    expect(repetido.statusCode).toBe(409);
+
+    const curta = await criarAnalista({ nome: 'Curta', email: 'curta@patrimar.com', senha: '123' });
+    expect(curta.statusCode).toBe(400);
+  });
+
+  it('nao enxerga analista de outra empresa', async () => {
+    const [alheio] = await sql`
+      INSERT INTO usuarios (empresa_id, nome, email)
+      VALUES (${OUTRA_EMPRESA}, 'Da Concorrente', 'concorrente@outra.com') RETURNING id`;
+
+    const lista = fingirRes();
+    await usuariosApi(fingirReq(), lista);
+    expect(lista.corpo.usuarios.map((u) => u.id)).not.toContain(alheio.id);
+
+    const patch = fingirRes();
+    await usuariosApi(fingirReq({ metodo: 'PATCH', query: { id: alheio.id }, corpo: { nome: 'X' } }), patch);
+    expect(patch.statusCode).toBe(404);
   });
 });
