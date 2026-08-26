@@ -66,6 +66,55 @@ await p.reload();
 await p.getByRole('button', { name: /Conferência rápida/ }).waitFor({ timeout: 8000 });
 checar(await faixa().count() === 0, 'dispensada tambem conta como vista apos recarregar');
 
+/* ---------------- 4. versao NOVA no ar enquanto o app esta aberto */
+/**
+ * O tablet do posto fica aberto o dia inteiro e nao sabe que houve deploy:
+ * segue rodando o bundle que baixou de manha. O app pergunta ao servidor
+ * (versao.json) e avisa — sem nunca recarregar sozinho, porque o analista
+ * pode estar no meio de um cadastro.
+ */
+{
+  const faixaNova = p.locator('[aria-label="Nova versão disponível"]');
+
+  // Mesma versao no ar: nada a dizer.
+  await p.route('**/versao.json**', (r) => r.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ versao: VERSAO }),
+  }));
+  await p.evaluate(([k, v]) => localStorage.setItem(k, v), [CHAVE, VERSAO]);
+  await p.reload();
+  await p.getByRole('button', { name: /Conferência rápida/ }).waitFor({ timeout: 8000 });
+  await p.waitForTimeout(600);
+  checar(await faixaNova.count() === 0, 'versao igual a do servidor: sem aviso');
+
+  // Servidor com versao diferente: avisa e oferece recarregar.
+  await p.unroute('**/versao.json**');
+  await p.route('**/versao.json**', (r) => r.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ versao: '99.0.0' }),
+  }));
+  await p.reload();
+  await faixaNova.waitFor({ timeout: 8000 });
+  checar(true, 'versao nova no ar: o app avisa sem precisar recarregar antes');
+  const textoFaixa = await faixaNova.innerText();
+  checar(new RegExp(`v${VERSAO.replace(/\./g, '\\.')}`).test(textoFaixa),
+    'a faixa diz qual versao voce esta usando');
+  checar(/nada do que já foi salvo se perde/i.test(textoFaixa),
+    'tranquiliza sobre o que ja foi salvo');
+  checar(await faixaNova.getByRole('button', { name: 'Atualizar agora' }).count() === 1,
+    'oferece "Atualizar agora"');
+
+  // Nunca recarrega sozinho: "Agora não" tira a faixa do caminho.
+  await faixaNova.getByRole('button', { name: 'Agora não' }).click();
+  checar(await faixaNova.count() === 0, '"Agora não" adia sem recarregar');
+
+  // Resposta invalida (rewrite devolvendo index.html) nao pode inventar aviso.
+  await p.unroute('**/versao.json**');
+  await p.route('**/versao.json**', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><html></html>' }));
+  await p.reload();
+  await p.getByRole('button', { name: /Conferência rápida/ }).waitFor({ timeout: 8000 });
+  await p.waitForTimeout(600);
+  checar(await faixaNova.count() === 0, 'resposta que nao e JSON: cala a boca em vez de inventar');
+}
+
 checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})`);
 
 await navegador.close();

@@ -127,7 +127,20 @@ navegador sem biblioteca (PDF via `lib/pdfTexto.js`; planilha via
 
 ### Aviso de atualização
 
-O deploy troca o app por baixo do usuário — a tela só "amanhece diferente".
+Duas situações diferentes, duas mensagens:
+
+**Saiu versão nova enquanto você está com o app aberto.** O build publica
+`versao.json` (plugin em `vite.config.js`) e o app pergunta por ele ao abrir,
+ao voltar para a aba e a cada 10 minutos. Se o que está no ar difere do que
+está rodando, aparece "Nova versão disponível" com **Atualizar agora**. Sem
+isso, o tablet do posto — que fica aberto o dia inteiro — seguiria na versão
+que baixou de manhã, com erros já corrigidos. **Nunca recarrega sozinho**:
+perder o que está sendo digitado é pior que esperar. Resposta ausente ou
+inválida (sem rede, ou o rewrite devolvendo `index.html` em desenvolvimento)
+significa silêncio, nunca alarme falso.
+
+**Você acabou de carregar uma versão nova.** O deploy troca o app por baixo
+do usuário — a tela só "amanhece diferente".
 Ao abrir depois de uma atualização, uma faixa no topo da lista diz qual
 versão chegou e o que ela traz; "Ver novidades" abre o histórico completo.
 A última versão vista fica no `localStorage` por aparelho: o aviso aparece

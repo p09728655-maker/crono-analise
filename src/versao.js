@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.20.0',
+    data: '2026-08-26',
+    titulo: 'Aviso de versão nova, editar estudo e fim do tremor',
+    itens: [
+      'Com o app aberto, se sair uma versão nova aparece a faixa "Nova versão disponível" com o botão Atualizar agora. Antes você só descobria ao recarregar por conta própria — o tablet do posto podia passar o dia inteiro numa versão antiga, com erros já corrigidos. A checagem acontece ao abrir, ao voltar para a aba e a cada 10 minutos; o app nunca recarrega sozinho.',
+      'Agora dá para corrigir o NOME do estudo, o produto e o posto: antes um erro de digitação ficava para sempre, porque os ajustes só cobriam setor, analista, tolerância e meta — e recriar o estudo custaria os ciclos já cronometrados. Novo botão "Editar" na lista abre a correção direto.',
+      'A tela do estudo não treme mais: o detalhe da operação aparecia só ao passar o mouse e crescia a página, o que fazia a barra de rolagem surgir, o gráfico se remedir e a barra sair de baixo do cursor — em ciclo. O detalhe agora tem lugar fixo e o espaço da barra de rolagem fica sempre reservado.',
+    ],
+  },
+  {
     versao: '2.19.0',
     data: '2026-08-26',
     titulo: 'Excluir funciona, impressão igual e caminhos claros',

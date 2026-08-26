@@ -15,6 +15,14 @@
     <style>
       *, *::before, *::after { box-sizing: border-box; }
       html, body, #raiz { height: 100%; margin: 0; }
+
+      /* Espaco da barra de rolagem SEMPRE reservado.
+         Sem isto, qualquer coisa que cresca a pagina (um tooltip que
+         aparece ao passar o mouse) faz a barra surgir, a viewport
+         estreitar e o grafico se remedir — que move a barra do grafico
+         de baixo do cursor, esconde o tooltip, encolhe a pagina, e o
+         ciclo recomeca. Na tela isso aparece como tremor. */
+      html { scrollbar-gutter: stable; }
       body {
         background: #14171A;
         color: #F5F7FA;
