@@ -130,6 +130,45 @@ export function conferenciaRapida({ duracaoMs, pecas }) {
   };
 }
 
+/**
+ * Duracao entre dois horarios de relogio ("HH:MM"), em ms.
+ *
+ * E' assim que a conferencia acontece de verdade: o analista passa pela
+ * maquina as 7:00, volta as 7:10 e le o contador — ninguem fica parado
+ * segurando cronometro. Virada de meia-noite conta como dia seguinte
+ * (23:50 -> 00:10 = 20 min), porque turno da noite tambem confere ritmo.
+ * Horarios iguais ou invalidos devolvem 0 — campo ainda nao preenchido,
+ * nao "24 horas".
+ */
+export function duracaoEntreHoras(horaInicial, horaFinal) {
+  const minutos = (s) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(s ?? '').trim());
+    if (!m) return null;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h > 23 || min > 59) return null;
+    return h * 60 + min;
+  };
+  const inicio = minutos(horaInicial);
+  const fim = minutos(horaFinal);
+  if (inicio === null || fim === null) return 0;
+  const diff = fim - inicio;
+  if (diff === 0) return 0;
+  return (diff > 0 ? diff : diff + 24 * 60) * 60000;
+}
+
+/** Formata duracao em ms como "10 min" / "1 h" / "2 h 30 min" — apresentacao. */
+export function formatarDuracao(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  // Antes do arredondamento: 30s arredondaria para "1 min" e mentiria.
+  if (ms < 60000) return '< 1 min';
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (!h) return `${min} min`;
+  return min ? `${h} h ${min} min` : `${h} h`;
+}
+
 /** Takt Time em ms. Ritmo que a demanda exige. */
 export function taktTime(tempoDisponivelSeg, quantidade) {
   const qtd = Number(quantidade) || 0;

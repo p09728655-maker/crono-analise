@@ -1,10 +1,10 @@
 /**
- * Conferencia rapida — cronometro avulso, sem cadastro.
+ * Conferencia rapida — horarios + cronometro ao vivo, sem cadastro.
  *
  * Roda contra o app REAL, com a API fora do ar DE PROPOSITO: a promessa da
  * tela e' funcionar sem servidor, entao o teste cobre exatamente isso —
- * o atalho aparece mesmo com a lista em erro, e o fluxo inteiro (iniciar,
- * contar, encerrar, editar a quantidade) fecha sem uma requisicao sequer.
+ * o atalho aparece mesmo com a lista em erro, e os dois fluxos (horarios
+ * digitados e cronometro ao vivo) fecham sem uma requisicao sequer.
  *
  * Uso: npm run dev (porta 5199) e depois node test/e2e/rapida.e2e.mjs
  */
@@ -22,6 +22,8 @@ const p = await ctx.newPage();
 const erros = [];
 p.on('pageerror', (e) => erros.push(e.message));
 
+const ritmo = async () => parseInt((await p.locator('[aria-label="Ritmo do período"]').innerText()), 10);
+
 /* ------------------------------------------ atalho independe do servidor */
 await p.goto(`${BASE}/coleta`);
 const atalho = p.getByRole('button', { name: /Conferência rápida/ });
@@ -32,8 +34,30 @@ await atalho.tap();
 await p.waitForFunction(() => location.pathname === '/coleta/rapida', { timeout: 8000 });
 checar(true, 'atalho leva para /coleta/rapida');
 
-/* ------------------------------------------------------- fluxo completo */
-await p.getByRole('button', { name: /INICIAR CONFERÊNCIA/ }).tap();
+/* -------------------- caminho principal: hora inicial, hora final, pecas */
+await p.locator('input[aria-label="Hora inicial"]').fill('07:00');
+await p.locator('input[aria-label="Hora final"]').fill('07:10');
+await p.locator('input[aria-label="Peças no período"]').fill('150');
+
+const painelHoras = p.locator('[aria-label="Resultado dos horários"]');
+await painelHoras.waitFor({ timeout: 4000 });
+checar(await ritmo() === 900, 'exemplo real: 7:00 as 7:10 com 150 pecas da 900 pc/h');
+const textoHoras = await painelHoras.innerText();
+checar(textoHoras.includes('10 min'), 'periodo formatado como 10 min');
+checar(textoHoras.includes('4.0'), 'ciclo medio 4.0 s/pc');
+
+// Virada de meia-noite: turno da noite tambem confere ritmo.
+await p.locator('input[aria-label="Hora inicial"]').fill('23:50');
+await p.locator('input[aria-label="Hora final"]').fill('00:10');
+checar(await ritmo() === 450, 'virada de meia-noite: 23:50 as 00:10 = 20 min -> 450 pc/h');
+
+// Botao "Agora" carimba a hora da passada sem digitar.
+await p.getByRole('button', { name: 'Agora' }).first().tap();
+const agora = await p.locator('input[aria-label="Hora inicial"]').inputValue();
+checar(/^\d{2}:\d{2}$/.test(agora), `"Agora" carimba a hora atual no campo (${agora})`);
+
+/* ------------------------------------------- alternativa: cronometro vivo */
+await p.getByRole('button', { name: /CRONOMETRAR AO VIVO/ }).tap();
 await p.waitForTimeout(1000);
 
 const contar = p.locator('[aria-label="Contar uma peça"]');
@@ -56,12 +80,15 @@ await p.evaluate(() => {
 await p.waitForTimeout(100);
 checar((await contar.innerText()).includes('4'), 'toque em repique (<200ms) nao conta peca');
 
+// Cronometrando, nada pode rolar: o analista esta de maos ocupadas.
+checar(await p.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1),
+  'ao vivo tudo cabe na viewport do celular, sem rolagem');
+
 await p.getByRole('button', { name: /Encerrar/ }).tap();
 const inputPecas = p.locator('input[aria-label="Peças no período"]');
 await inputPecas.waitFor({ timeout: 4000 });
 checar(await inputPecas.inputValue() === '4', 'resultado abre com as pecas contadas');
 
-const ritmo = async () => parseInt((await p.locator('[aria-label="Ritmo do período"]').innerText()), 10);
 const ritmoContado = await ritmo();
 checar(ritmoContado > 0, `ritmo calculado na hora (${ritmoContado} pc/h)`);
 
@@ -69,16 +96,12 @@ checar(ritmoContado > 0, `ritmo calculado na hora (${ritmoContado} pc/h)`);
 await inputPecas.fill('150');
 const ritmoEditado = await ritmo();
 checar(ritmoEditado > ritmoContado, `editar as pecas recalcula o ritmo (${ritmoEditado} pc/h)`);
-// 150 pecas em ~2.9s de cronometro: a proporcao com o ritmo de 4 pecas
-// tem de ser exatamente 150/4 — mesmo periodo, so' mudou a quantidade.
+// Mesmo periodo, so' mudou a quantidade: a proporcao tem de ser 150/4.
 checar(Math.abs(ritmoEditado / ritmoContado - 150 / 4) < 0.5, 'ritmo proporcional a quantidade digitada');
 
-/* --------------------------------------------------- reinicio e viewport */
-checar(await p.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1),
-  'tudo cabe na viewport do celular, sem rolagem');
-
+/* ----------------------------------------------------------- reinicio */
 await p.getByRole('button', { name: /Nova conferência/ }).tap();
-await p.getByRole('button', { name: /INICIAR CONFERÊNCIA/ }).waitFor({ timeout: 4000 });
+await p.getByRole('button', { name: /CRONOMETRAR AO VIVO/ }).waitFor({ timeout: 4000 });
 checar(true, 'nova conferencia volta ao inicio');
 
 checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})`);

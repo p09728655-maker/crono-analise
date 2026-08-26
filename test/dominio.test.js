@@ -5,8 +5,8 @@ import {
   temposValidos, tendencia, ultimaObservacaoAtipica,
 } from '../src/domain/estatistica.js';
 import {
-  amostraSuficiente, calcularOperacao, conferenciaRapida, formatarCronometro,
-  oee, operadoresNecessarios, taktTime,
+  amostraSuficiente, calcularOperacao, conferenciaRapida, duracaoEntreHoras,
+  formatarCronometro, formatarDuracao, oee, operadoresNecessarios, taktTime,
 } from '../src/domain/cronoanalise.js';
 
 describe('temposValidos', () => {
@@ -212,6 +212,39 @@ describe('conferenciaRapida', () => {
     expect(conferenciaRapida({ duracaoMs: 60000, pecas: '30.9' }).pecas).toBe(30);
     expect(conferenciaRapida({ duracaoMs: 60000, pecas: '' }).pecas).toBe(0);
     expect(conferenciaRapida({ duracaoMs: 60000, pecas: -5 }).pecas).toBe(0);
+  });
+});
+
+describe('duracaoEntreHoras', () => {
+  it('exemplo real: 7:00 as 7:10 sao 10 minutos', () => {
+    expect(duracaoEntreHoras('07:00', '07:10')).toBe(600000);
+  });
+  it('virada de meia-noite conta como dia seguinte (turno da noite)', () => {
+    expect(duracaoEntreHoras('23:50', '00:10')).toBe(1200000);
+  });
+  it('horarios iguais significam "nao preenchido", nao 24 horas', () => {
+    expect(duracaoEntreHoras('07:00', '07:00')).toBe(0);
+  });
+  it('entrada invalida ou vazia devolve zero', () => {
+    expect(duracaoEntreHoras('', '07:10')).toBe(0);
+    expect(duracaoEntreHoras('7h00', '07:10')).toBe(0);
+    expect(duracaoEntreHoras('25:00', '07:10')).toBe(0);
+    expect(duracaoEntreHoras('07:00', '07:61')).toBe(0);
+    expect(duracaoEntreHoras(null, undefined)).toBe(0);
+  });
+  it('aceita hora sem zero a esquerda, como quem digita de cabeca', () => {
+    expect(duracaoEntreHoras('7:00', '7:10')).toBe(600000);
+  });
+});
+
+describe('formatarDuracao', () => {
+  it('minutos puros', () => expect(formatarDuracao(600000)).toBe('10 min'));
+  it('hora cheia', () => expect(formatarDuracao(3600000)).toBe('1 h'));
+  it('horas e minutos', () => expect(formatarDuracao(9000000)).toBe('2 h 30 min'));
+  it('abaixo de um minuto', () => expect(formatarDuracao(30000)).toBe('< 1 min'));
+  it('zero ou invalido vira traco', () => {
+    expect(formatarDuracao(0)).toBe('—');
+    expect(formatarDuracao(NaN)).toBe('—');
   });
 });
 
