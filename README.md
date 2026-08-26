@@ -354,7 +354,7 @@ Em **Settings → Environment Variables**:
 | `DATABASE_URL` | servidor | Pooler do Supabase, porta 6543 |
 | `API_TOKEN` | servidor | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `EMPRESA_ID` | servidor | UUID retornado no passo acima |
-| `ANTHROPIC_API_KEY` | servidor | **Nunca** prefixar com `VITE_` |
+| `ANTHROPIC_API_KEY` | servidor | **Nunca** prefixar com `VITE_`. Tem precedência sobre a chave salva pelo app — e só se remove aqui, não pela tela |
 | `VITE_API_TOKEN` | navegador | Vai para o bundle — ver aviso abaixo |
 
 > ⚠️ **`VITE_API_TOKEN` fica visível no bundle.** Qualquer pessoa com acesso à

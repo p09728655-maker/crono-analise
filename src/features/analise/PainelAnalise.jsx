@@ -11,7 +11,7 @@ import {
 import { PRIORIDADES, contarPorPrioridade, sugerirMelhorias } from '../../domain/sugestoes.js';
 import {
   analisarComIa, atualizarEstudo, criarOperacao, obterConfigIa, obterEstudo,
-  removerOperacao, salvarChaveIa,
+  removerChaveIa, removerOperacao, salvarChaveIa,
 } from '../../lib/api.js';
 import { GraficoYamazumi } from './graficos.jsx';
 import RelatorioImpressao from './RelatorioImpressao.jsx';
@@ -589,6 +589,7 @@ function AnaliseIa({ estudo, analise }) {
   const [config, setConfig] = useState(null);
   const [chave, setChave] = useState('');
   const [trocando, setTrocando] = useState(false);
+  const [removendo, setRemovendo] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [rodando, setRodando] = useState(false);
   const [resposta, setResposta] = useState(null);
@@ -612,6 +613,24 @@ function AnaliseIa({ estudo, analise }) {
       setConfig(await salvarChaveIa(chave.trim()));
       setChave('');
       setTrocando(false);
+    } catch (e) { setErro(e.message); }
+    setSalvando(false);
+  }
+
+  /**
+   * Remover a chave. Diferente de trocar: sem chave a analise por IA para
+   * de funcionar, entao a confirmacao diz isso antes — e o botao so'
+   * aparece para a chave salva no app. A do ambiente e' do administrador.
+   */
+  async function remover() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      setConfig(await removerChaveIa());
+      setRemovendo(false);
+      setTrocando(false);
+      setChave('');
+      setResposta(null);
     } catch (e) { setErro(e.message); }
     setSalvando(false);
   }
@@ -665,9 +684,14 @@ function AnaliseIa({ estudo, analise }) {
           <div style={est.iaAcoes}>
             {config.resumo && <span style={est.iaChave}>chave {config.resumo}</span>}
             {config.origem === 'banco' && (
-              <button type="button" style={est.iaBotaoTexto} onClick={() => setTrocando(true)}>
-                Trocar chave
-              </button>
+              <>
+                <button type="button" style={est.iaBotaoTexto} onClick={() => setTrocando(true)}>
+                  Trocar chave
+                </button>
+                <button type="button" style={est.iaBotaoTexto} onClick={() => setRemovendo(true)}>
+                  Remover
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -710,6 +734,23 @@ function AnaliseIa({ estudo, analise }) {
             </button>
           </div>
         </form>
+      )}
+
+      {removendo && (
+        <div style={est.iaConfirmar} role="alert">
+          <span>
+            Remover apaga a chave do servidor. A análise por IA para de funcionar
+            até você salvar outra — nenhum estudo é afetado.
+          </span>
+          <div style={est.iaConfirmarAcoes}>
+            <button type="button" style={est.iaBotaoTexto} onClick={() => setRemovendo(false)}>
+              Cancelar
+            </button>
+            <button type="button" style={est.botaoPerigo} onClick={remover} disabled={salvando}>
+              {salvando ? 'Removendo...' : 'Remover chave'}
+            </button>
+          </div>
+        </div>
       )}
 
       {erro && <div style={est.iaErro}>{erro}</div>}
@@ -1408,6 +1449,22 @@ const est = {
     borderRadius: raio.sm, ...tipo('micro'), fontSize: 10,
   },
   meta: { color: claro.textoFraco, ...tipo('legenda') },
+  iaConfirmar: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: espaco.lg, flexWrap: 'wrap',
+    padding: espaco.md, borderRadius: raio.md,
+    background: claro.atencaoFundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.atencao,
+    ...tipo('legenda'), color: claro.texto, lineHeight: 1.5,
+  },
+  iaConfirmarAcoes: { display: 'flex', alignItems: 'center', gap: espaco.md, flexShrink: 0 },
+  // Laranja queimado, nao o vermelho da marca: aqui e' status, e o vermelho
+  // deste app e' identidade.
+  botaoPerigo: {
+    minHeight: 34, padding: `0 ${espaco.md}px`, background: claro.critico,
+    border: 'none', borderRadius: raio.sm, color: '#fff',
+    ...tipo('legenda'), fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+  },
 
   /* ---- cartoes de numero (capacidade, operadores, sugestoes) ---- */
   gradeKpi: {

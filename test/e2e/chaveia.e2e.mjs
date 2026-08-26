@@ -59,6 +59,31 @@ checar(!(await dialogo.innerText()).includes('sk-ant-teste'),
 await dialogo.getByRole('button', { name: 'Trocar chave' }).click();
 checar(await dialogo.locator('input[type=password]').count() === 1, '"Trocar chave" reabre o campo');
 
+/* ------------------------------------------------------------- remover */
+/**
+ * Trocar era a unica saida: para tirar a chave do ar — analista que saiu,
+ * chave vazada, conta trocada — nao havia caminho na tela. Remover apaga
+ * do servidor, e a confirmacao diz o que se perde antes de apagar.
+ */
+await dialogo.getByRole('button', { name: 'Cancelar' }).click();
+await dialogo.getByRole('button', { name: 'Remover chave' }).click();
+checar(/Análise com IA/.test(await dialogo.innerText())
+  && /para\s+de funcionar/.test(await dialogo.innerText()),
+  'a confirmacao diz o que para de funcionar');
+
+await dialogo.getByRole('button', { name: 'Cancelar' }).click();
+checar(await p.evaluate(() => window.__deletes.length) === 0, 'cancelar nao apaga nada');
+
+// O botao que abriu a confirmacao some, entao "Remover chave" agora e' o de
+// confirmar: sao dois cliques no mesmo rotulo, nunca dois botoes na tela.
+await dialogo.getByRole('button', { name: 'Remover chave' }).click();
+await dialogo.getByRole('button', { name: 'Remover chave' }).click();
+await p.waitForFunction(() => window.__deletes.some((u) => u.includes('/config')), { timeout: 8000 });
+checar(true, 'confirmar dispara DELETE /config');
+await dialogo.locator('input[type=password]').waitFor({ timeout: 4000 });
+checar(!(await dialogo.innerText()).includes('•••cdef'),
+  'sem chave, o resumo some e o formulario volta');
+
 await dialogo.getByRole('button', { name: 'Fechar' }).click();
 await dialogo.waitFor({ state: 'detached', timeout: 4000 });
 checar(true, 'modal fecha');
