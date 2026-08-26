@@ -50,37 +50,18 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   await p.waitForTimeout(300);
   checar(await p.locator('text=/TAKT/').count() > 0, 'linha de Takt rotulada');
   checar(await p.locator('text=Tempo normal').count() > 0, 'legenda presente (identidade nunca so por cor)');
-  // A carta abre na primeira operacao (14 ciclos), onde o aviso NAO deve
-  // aparecer. Selecionamos a de 6 ciclos para checar o aviso de fato.
-  await p.locator('[role="tab"]', { hasText: 'Carta de controle' }).click();
-  await p.waitForTimeout(300);
-  checar(await p.locator('text=/Leitura limitada/').count() === 0,
-    'nao alarma sem motivo: operacao com 14 ciclos nao mostra aviso de limite');
-  // O seletor virou lista suspensa: nome de operacao importada do roteiro e'
-  // a lista de pecas da caixa, e uma fila de botoes com isso dentro ocupava
-  // mais tela que o proprio grafico.
-  const opConferir = await p.locator('#carta-operacao option', { hasText: 'Conferir furo' }).getAttribute('value');
-  await p.locator('#carta-operacao').selectOption(opConferir);
-  await p.waitForTimeout(300);
-  checar(await p.locator('text=/Leitura limitada/').count() > 0,
-    'avisa o limite matematico da carta ao selecionar operacao com 6 ciclos');
-
-  // Percorrer sem abrir a lista: comparar cartas e' o que se faz nesta aba.
-  const antes = await p.locator('#carta-operacao').inputValue();
-  await p.getByRole('button', { name: 'Próxima operação' }).click();
-  await p.waitForTimeout(200);
-  checar(await p.locator('#carta-operacao').inputValue() !== antes,
-    'a seta avanca para a proxima operacao sem abrir a lista');
-  await p.getByRole('button', { name: 'Operação anterior' }).click();
-  await p.waitForTimeout(200);
-  checar(await p.locator('#carta-operacao').inputValue() === antes,
-    'e a seta de voltar desfaz o passo');
-  checar(/de 4/.test(await p.locator('#carta-operacao').locator('..').innerText()),
-    'a posicao na lista fica visivel (x de N)');
-
-  // O seletor nao pode voltar a ocupar mais tela que o grafico.
-  const alturaSeletor = (await p.locator('#carta-operacao').locator('..').boundingBox())?.height ?? 999;
-  checar(alturaSeletor <= 60, `seletor cabe numa linha (${Math.round(alturaSeletor)}px)`);
+  /**
+   * A carta de controle SAIU da tela (ago/2026). Ela pedia leitura de CEP —
+   * limites, sigma, ponto fora de controle — e o analista nao a usava para
+   * decidir nada: quem responde "este ciclo saiu do padrao" e' o aviso de
+   * ciclo atipico durante a coleta, e quem responde "este posto e' estavel"
+   * e' o CV%, que continua na tabela e no papel. Este teste guarda a
+   * ausencia: aba fora, e a analise segue completa sem ela.
+   */
+  const abas = await p.locator('[role="tablist"]').innerText();
+  checar(!/Carta de controle/i.test(abas), 'a carta de controle nao aparece mais nas abas');
+  checar(/Yamazumi/.test(abas) && /Opera/.test(abas) && /Paradas/.test(abas),
+    `as abas que restam sao as que se usam (${abas.replace(/\s+/g, ' ').trim()})`);
 
   /* ------------------------------------------------------------ paradas */
   /**

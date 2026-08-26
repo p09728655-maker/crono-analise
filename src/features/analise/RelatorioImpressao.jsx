@@ -1,6 +1,6 @@
 import { claro } from '../../theme/tokensAnalise.js';
 import { formatarDuracao, formatarSegundos } from '../../domain/cronoanalise.js';
-import { CartaControle, GraficoYamazumi } from './graficos.jsx';
+import { GraficoYamazumi } from './graficos.jsx';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
 
@@ -201,12 +201,6 @@ export default function RelatorioImpressao({ estudo, analise }) {
       <div style={est.grafico}>
         <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} altura={300} />
       </div>
-      {analise.gargalo && (
-        <div style={est.grafico}>
-          <CartaControle operacao={analise.gargalo} altura={240} />
-        </div>
-      )}
-
       {/* Legenda em PALAVRAS, nao so formula: o relatorio circula em reuniao
           com gente que nao vive de cronoanalise — "TO (s)" precisa dizer o
           que e' sem ninguem perguntar. A formula vai junto, entre parenteses,
@@ -235,8 +229,9 @@ export default function RelatorioImpressao({ estudo, analise }) {
         </div>
         <p style={est.nota}>
           Desvio padrão amostral (n−1). Ciclos abaixo de 200 ms são descartados como
-          toque acidental. A carta de controle ±3σ só produz sinal a partir de 11
-          observações — abaixo disso o limite (n−1)/√n é inferior a 3 por construção.
+          toque acidental. A dispersão é reportada pelo CV% — ciclo que fugiu do
+          padrão é sinalizado ao analista durante a própria coleta, enquanto ainda
+          dá tempo de conferir o que aconteceu no posto.
         </p>
       </section>
 
