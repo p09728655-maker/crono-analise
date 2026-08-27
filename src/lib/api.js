@@ -56,7 +56,17 @@ async function requisitar(caminho, { metodo = 'GET', corpo, sinal } = {}) {
     }
   }
 
-  if (!resposta.ok) throw new ErroApi(resposta.status, dados.erro || 'Falha na requisicao', dados.detalhes);
+  if (!resposta.ok) {
+    // O codigo do erro entra na PROPRIA mensagem: "Erro interno" sozinho nao
+    // diz nem a classe do problema, e quem esta diante da tela quebrada nao
+    // tem como abrir o log do servidor.
+    const mensagem = dados.erro || 'Falha na requisicao';
+    throw new ErroApi(
+      resposta.status,
+      dados.codigo ? `${mensagem} (${dados.codigo})` : mensagem,
+      dados.detalhes,
+    );
+  }
   return dados;
 }
 

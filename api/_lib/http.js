@@ -38,6 +38,30 @@ function tabelaQueFalta(err) {
 }
 
 /**
+ * Caixa-preta: grava a falha no banco.
+ *
+ * O console da funcao serverless nao e' alcancavel de fora da Vercel, e
+ * "Erro interno" na tela nao diz nada — o diagnostico virava adivinhacao.
+ * Com isto, a falha fica onde quem mantem o sistema consegue ler.
+ *
+ * NUNCA pode derrubar a resposta: se o proprio log falhar (banco fora,
+ * tabela ausente), o usuario ainda recebe o 500 dele.
+ */
+async function registrarErro(req, err) {
+  try {
+    const { sql } = await import('./db.js');
+    await sql`
+      INSERT INTO erros_api (rota, metodo, tipo, sqlstate, mensagem, versao)
+      VALUES (${String(req?.url || '').split('?')[0].slice(0, 200)},
+              ${req?.method ?? null},
+              ${err?.constructor?.name ?? null},
+              ${err?.code ?? null},
+              ${String(err?.message ?? '').slice(0, 500)},
+              ${process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null})`;
+  } catch { /* diagnostico nao pode custar a resposta */ }
+}
+
+/**
  * Envolve um handler: normaliza erro, evita vazar stack para o cliente e
  * garante que toda falha inesperada vire 500 com log no servidor.
  */
@@ -68,10 +92,9 @@ export function handler(fn) {
       // "Erro interno" seco ja' custou uma manha de diagnostico as cegas.
       // O TIPO do erro e o SQLSTATE nao carregam segredo nenhum (mensagem e
       // stack continuam so' no log) e apontam a classe do problema na hora.
-      json(res, 500, {
-        erro: 'Erro interno',
-        codigo: [err?.constructor?.name, err?.code].filter(Boolean).join(':') || null,
-      });
+      const codigo = [err?.constructor?.name, err?.code].filter(Boolean).join(':') || null;
+      await registrarErro(req, err);
+      json(res, 500, { erro: 'Erro interno', codigo });
     }
   };
 }
