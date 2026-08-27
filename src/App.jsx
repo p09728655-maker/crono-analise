@@ -68,6 +68,14 @@ export default function App() {
     (estudo, operacao) => navegar(caminhos.coletar(estudo.id, operacao.id)),
     [navegar],
   );
+  /**
+   * Ir medir um estudo — a MESMA tela de coleta de sempre.
+   *
+   * Nao ha rota nova aqui: e' o caminho que o alternador de modo ja' usava,
+   * so' que agora alcancado direto do estudo que esta' esperando, em vez de
+   * "trocar de modo e procurar de novo na lista".
+   */
+  const medirEstudo = useCallback((id) => navegar(caminhos.estudo('coleta', id)), [navegar]);
   const trocarModo = useCallback(() => {
     const outro = modo === 'analise' ? 'coleta' : 'analise';
     // Mantem o estudo aberto ao trocar de modo, em vez de jogar para a lista.
@@ -139,6 +147,7 @@ export default function App() {
         <ListaEstudos
           aoAbrir={abrirEstudo}
           aoEditar={editarEstudo}
+          aoMedir={medirEstudo}
           modo={modo}
           aoTrocarModo={desktop ? trocarModo : undefined}
           aoConferirRapido={() => navegar(caminhos.rapida())}
