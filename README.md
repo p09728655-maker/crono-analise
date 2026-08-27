@@ -231,6 +231,16 @@ algum — abre a lista deles com a contagem de ciclos intacta e restaura com
 um clique (`PATCH /api/estudos?id=…` com `status: 'coletando'`; a listagem
 dos arquivados é `GET /api/estudos?arquivados=1`).
 
+**No tablet o × nunca apaga: arquiva sempre**, mesmo o estudo com zero
+ciclos. "Sem ciclo" não quer dizer "sem trabalho" — o analista monta
+operações, fator de ritmo, meta e roteiro do ERP no PC e manda para o posto
+antes da primeira cronometragem, e um toque no chão de fábrica destruía esse
+preparo inteiro. A regra vale nas três camadas: a tela do tablet só oferece
+**Arquivar**, a API converte o DELETE do papel `coletor` em arquivamento, e a
+política `estudos_apaga` (`db/schema.sql`) recusa o DELETE no banco. Quem
+apaga é gente, no PC — e **Excluir de vez** (`?definitivo=1`, dentro da lista
+de arquivados) continua exclusivo do administrador.
+
 ### Importar (PDF do ERP ou template .xlsx)
 
 O botão **Importar** da Análise aceita dois formatos, ambos lidos no

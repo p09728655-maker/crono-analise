@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.37.0',
+    data: '2026-08-27',
+    titulo: 'O tablet não apaga estudo — arquiva',
+    itens: [
+      'No tablet, o × do cartão apagava de vez o estudo que ainda não tinha nenhum ciclo, e a tela avisava isso por escrito: "apagado definitivamente". Só que estudo sem ciclo não é estudo sem trabalho — é o preparo que veio do PC (operações, fator de ritmo, meta, roteiro do ERP). Um toque no posto destruía tudo, sem volta.',
+      'Agora, no tablet, remover sempre arquiva: o estudo sai da lista do posto e continua no banco, em Arquivados, de onde volta com um toque.',
+      'No PC nada muda: rascunho sem ciclo continua podendo ser excluído, e "Excluir de vez" continua sendo do administrador.',
+      'A regra passou a valer também no servidor e no banco — não é só a tela que esconde o botão.',
+    ],
+  },
+  {
     versao: '2.36.1',
     data: '2026-08-27',
     titulo: 'A tela da análise não fica mais meio preta ao abrir',

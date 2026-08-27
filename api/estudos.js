@@ -188,6 +188,20 @@ export default handler(async (req, res) => {
   const definitivo = String(req.query?.definitivo ?? '') === '1';
   exigirPapel(auth, definitivo ? ['admin'] : ['admin', 'analista', 'coletor'],
     definitivo ? 'Excluir de vez e decisao do administrador' : undefined);
+
+  // O TABLET NUNCA APAGA — nem estudo sem ciclo nenhum.
+  //
+  // A regra de baixo (sem ciclo, apaga) foi escrita pensando no rascunho
+  // que o proprio analista cria e desfaz no PC. No tablet ela dava outra
+  // coisa: o analista monta o estudo (operacoes, fator de ritmo, meta,
+  // roteiro do ERP) e manda para o posto ANTES da primeira cronometragem —
+  // e ali, com zero ciclos, um toque no botao de remover apagava o preparo
+  // inteiro, sem volta. Sem ciclo nao quer dizer sem trabalho.
+  //
+  // Para o coletor, remover ARQUIVA sempre: o estudo sai da lista do posto
+  // e continua no banco. Quem decide o fim dele e' o analista, no PC. A
+  // politica estudos_apaga (db/schema.sql) repete esta regra no banco.
+  const soArquiva = auth.papel === 'coletor';
   const estudoId = uuid(id, 'id');
   return auth.rls(async (db) => {
     await garantirEstudo(db, estudoId, empresaId);
@@ -198,7 +212,7 @@ export default handler(async (req, res) => {
         JOIN operacoes op ON op.id = o.operacao_id
        WHERE op.estudo_id = ${estudoId}`;
 
-    if (ciclos > 0 && !definitivo) {
+    if ((ciclos > 0 || soArquiva) && !definitivo) {
       await db`
         UPDATE estudos SET status = 'arquivado'
          WHERE id = ${estudoId} AND empresa_id = ${empresaId}`;
