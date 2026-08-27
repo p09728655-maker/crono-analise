@@ -61,6 +61,23 @@ export default handler(async (req, res) => {
     }
   }
 
+  /**
+   * Autoteste da autenticacao Supabase, DESTE servidor.
+   *
+   * A verificacao de token funciona sem rede (chave embutida), mas a
+   * rotacao de chave depende de o servidor alcancar o JWKS. Quando o login
+   * falhar em producao, e' AQUI que se olha primeiro — o resultado diz se o
+   * problema e' a rede da funcao, sem adivinhar por mensagens de 500.
+   */
+  let jwks = 'nao testado';
+  try {
+    const { buscarJwks } = await import('./_lib/jwt.js');
+    jwks = `ok — ${await buscarJwks()} chave(s) publicada(s)`;
+  } catch (err) {
+    jwks = `falha na busca (a chave embutida segue valendo): ${err?.constructor?.name}`;
+    console.error('[ritmopatrimar] JWKS inalcancavel:', err.message);
+  }
+
   const pendencias = [];
   if (!variaveis.API_TOKEN) {
     pendencias.push('Configure API_TOKEN nas variaveis de ambiente da Vercel.');
@@ -95,6 +112,7 @@ export default handler(async (req, res) => {
     apiToken: impressaoToken,
     banco,
     empresas,
+    supabaseAuth: { jwks, node: process.version },
     pendencias,
     // Lembrete do erro mais comum: salvar variavel nao afeta deploy existente.
     lembrete: pronto

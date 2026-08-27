@@ -20,29 +20,51 @@ const ALGORITMOS = {
 };
 
 /**
- * Cache do JWKS por instancia da funcao.
+ * A chave publica do projeto, EMBUTIDA.
  *
- * A chave publica muda rarissimamente (rotacao manual no painel). Um `kid`
- * desconhecido forca uma rebusca — e' assim que a rotacao entra sem deploy —
- * mas no maximo uma vez por minuto, para um token forjado com kid aleatorio
- * nao virar um martelo de requisicoes contra o endpoint do JWKS.
+ * E' material publico por definicao (qualquer um a le no
+ * /auth/v1/.well-known/jwks.json) e muda rarissimamente — so' em rotacao
+ * manual no painel. Embutir a chave tira a REDE do caminho critico: sem
+ * isso, a primeira requisicao de cada instancia da funcao dependia de um
+ * fetch ao Supabase, e qualquer soluco nessa busca derrubava TODA a
+ * autenticacao com um "Erro interno" que nao dizia nada.
+ *
+ * A rotacao continua entrando sozinha: um `kid` desconhecido dispara a
+ * rebusca pela rede (no maximo uma vez por minuto, para kid forjado nao
+ * virar martelo contra o endpoint).
  */
-let chaves = new Map();
+const JWKS_EMBUTIDO = [{
+  kty: 'EC', crv: 'P-256', alg: 'ES256', use: 'sig',
+  kid: '39ba9eb6-872d-4073-b7d9-445a432833bf',
+  x: 'tpzGhgckUgfjodS69ytwr1BbonHTWo5YQg849O0YoWM',
+  y: 'ZFltVAbWUvss3DflAnSAcsNstA_NAua-cOTgUBnRQIk',
+}];
+
+let chaves = new Map(JWKS_EMBUTIDO.map((jwk) => [jwk.kid, jwk]));
 let buscadoEm = 0;
 
-async function buscarJwks() {
+export async function buscarJwks() {
   const resposta = await fetch(`${URL_SUPABASE}/auth/v1/.well-known/jwks.json`, {
-    signal: AbortSignal.timeout(5000),
+    // Node sem AbortSignal.timeout segue sem prazo — melhor lento que morto.
+    signal: AbortSignal.timeout?.(5000),
   });
   if (!resposta.ok) throw new Error(`JWKS respondeu ${resposta.status}`);
   const { keys } = await resposta.json();
-  chaves = new Map((keys || []).map((jwk) => [jwk.kid, jwk]));
+  // As embutidas ficam: rotacao com JANELA (chave nova assinando antes de a
+  // antiga sumir do endpoint) nao pode invalidar token recem-emitido.
+  for (const jwk of keys || []) chaves.set(jwk.kid, jwk);
   buscadoEm = Date.now();
+  return (keys || []).length;
 }
 
 async function chavePublica(kid) {
   if (!chaves.has(kid) && Date.now() - buscadoEm > 60_000) {
-    await buscarJwks();
+    try {
+      await buscarJwks();
+    } catch {
+      // Sem rede ate' o Supabase, um kid desconhecido e' indistinguivel de
+      // token forjado: recusa como 401, nunca como erro interno.
+    }
   }
   const jwk = chaves.get(kid);
   if (!jwk) throw naoAutorizado('Sessao invalida');

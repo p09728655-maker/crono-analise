@@ -79,4 +79,25 @@ describe('verificarToken', () => {
     await expect(verificarToken(token({ cabecalho: { kid: 'kid-fantasma' } })))
       .rejects.toThrow(/Sessao invalida/);
   });
+
+  /**
+   * O caso que derrubou o login em producao: a funcao serverless subiu e a
+   * busca do JWKS falhou. Com a chave EMBUTIDA a verificacao nao depende de
+   * rede — e um kid desconhecido, sem rede, continua sendo 401 limpo, nunca
+   * "Erro interno".
+   */
+  it('funciona com a rede morta, e ainda assim recusa o desconhecido', async () => {
+    const fetchOriginal = globalThis.fetch;
+    globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
+    try {
+      const mod = await import('../api/_lib/jwt.js');
+      // Estado de instancia fria: so' a chave embutida, nenhuma buscada.
+      mod._definirJwks([]);
+      await expect(mod.verificarToken(token({ cabecalho: { kid: 'kid-1' } })))
+        .rejects.toThrow(/Sessao invalida/);
+      await expect(mod.buscarJwks()).rejects.toThrow();
+    } finally {
+      globalThis.fetch = fetchOriginal;
+    }
+  });
 });

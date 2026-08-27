@@ -65,7 +65,13 @@ export function handler(fn) {
       }
 
       console.error('[ritmopatrimar] erro nao tratado:', err);
-      json(res, 500, { erro: 'Erro interno' });
+      // "Erro interno" seco ja' custou uma manha de diagnostico as cegas.
+      // O TIPO do erro e o SQLSTATE nao carregam segredo nenhum (mensagem e
+      // stack continuam so' no log) e apontam a classe do problema na hora.
+      json(res, 500, {
+        erro: 'Erro interno',
+        codigo: [err?.constructor?.name, err?.code].filter(Boolean).join(':') || null,
+      });
     }
   };
 }

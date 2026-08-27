@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.35.1',
+    data: '2026-08-27',
+    titulo: 'Entrar não depende mais da rede do servidor',
+    itens: [
+      'A chave que confere o login passou a viajar dentro do próprio servidor. Antes, cada vez que a função "acordava" ela ia buscar essa chave no Supabase — e se essa busca falhasse, entrar dava "Erro interno" sem explicar nada.',
+      'Quando algo assim voltar a acontecer, a tela passa a dizer o tipo do problema em vez de só "Erro interno", e /api/status responde se o servidor alcança o Supabase. Diagnóstico deixa de ser adivinhação.',
+    ],
+  },
+  {
     versao: '2.35.0',
     data: '2026-08-27',
     titulo: 'O PC decide o que o tablet vê — e estudo de teste morre de vez',
