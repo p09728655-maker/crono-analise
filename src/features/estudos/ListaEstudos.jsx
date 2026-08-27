@@ -869,8 +869,13 @@ function ProximasAcoes({ estudos, est, t, aoMedir, aoAnalisar }) {
  *
  * O espaco a direita estava vazio numa tela de 1440px. Em vez de esticar a
  * tabela — linha comprida demais e' pior de ler — ele responde o que o
- * analista pergunta antes de abrir estudo nenhum: quanto ja' foi medido,
- * em quais postos, e o que ainda esta parado sem nenhum ciclo.
+ * analista pergunta antes de abrir estudo nenhum: quanto ja' foi medido e
+ * em quais postos.
+ *
+ * O painel CONTA as pendencias; quem as NOMEIA e' a area de Proximas acoes,
+ * abaixo da tabela, onde cada uma vem com o botao que a resolve. Enquanto os
+ * dois listavam os mesmos estudos, a tela dizia duas vezes a mesma coisa —
+ * e com cortes diferentes ("5 e mais 4" de um lado, "4 e mais 5" do outro).
  *
  * Tudo sai dos estudos ja' carregados: nenhuma requisicao a mais.
  */
@@ -879,7 +884,7 @@ function PainelResumo({ estudos, est }) {
   const totalOperacoes = estudos.reduce((acc, e) => acc + (Number(e.total_operacoes) || 0), 0);
   // Mesma regra das Proximas acoes, num lugar so': estudo CONCLUIDO sem
   // ciclo nao e' pendencia — foi decisao de quem analisou, nao esquecimento.
-  const semCiclo = estudos.filter((e) => situacao(e) === 'pendente');
+  const pendencias = estudos.filter((e) => situacao(e) === 'pendente').length;
 
   // Postos ordenados por ciclos: onde a medicao realmente aconteceu.
   const porPosto = new Map();
@@ -907,7 +912,7 @@ function PainelResumo({ estudos, est }) {
             ['Estudos', estudos.length, false],
             ['Ciclos', totalCiclos, false],
             ['Operações', totalOperacoes, false],
-            ['Pendências', semCiclo.length, semCiclo.length > 0],
+            ['Pendências', pendencias, pendencias > 0],
           ].map(([k, v, alerta]) => (
             <div key={k} style={est.painelNumero}>
               <span style={alerta ? est.painelValorAtencao : est.painelValor}>{v}</span>
@@ -939,19 +944,6 @@ function PainelResumo({ estudos, est }) {
         </div>
       )}
 
-      {semCiclo.length > 0 && (
-        <div style={{ ...est.painelBloco, ...est.painelAtencao }}>
-          <div style={est.painelRotulo}>Ainda sem medição</div>
-          {semCiclo.slice(0, 5).map((e) => (
-            <div key={e.id} style={est.painelLinha}>
-              <span style={est.painelLinhaTexto}>{e.nome}</span>
-            </div>
-          ))}
-          {semCiclo.length > 5 && (
-            <div style={est.painelNota}>e mais {semCiclo.length - 5}</div>
-          )}
-        </div>
-      )}
     </aside>
   );
 }
@@ -1352,7 +1344,6 @@ function estilos(t, analise) {
       padding: espaco.lg, display: 'flex', flexDirection: 'column', gap: espaco.sm,
       boxShadow: t.sombra,
     },
-    painelAtencao: { borderColor: claro.atencao },
     painelRotulo: rotulo(t.fraco),
     painelNumeros: {
       display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
