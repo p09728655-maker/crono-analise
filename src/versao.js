@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.35.3',
+    data: '2026-08-27',
+    titulo: 'O erro passa a dizer o que é',
+    itens: [
+      'Quando algo falha no servidor, a tela mostra o tipo do problema junto da mensagem — antes vinha só "Erro interno", que não permite nem começar a investigar.',
+      'A falha também fica registrada no banco, com rota e horário. É o que permite descobrir a causa sem depender de quem estava na frente da tela.',
+    ],
+  },
+  {
     versao: '2.35.2',
     data: '2026-08-27',
     titulo: 'Ajustes depois de fechar a porta antiga',
