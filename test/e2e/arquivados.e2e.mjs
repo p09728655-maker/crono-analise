@@ -128,13 +128,13 @@ for (const modo of ['analise', 'coleta']) {
   await p.getByText('Estudo pronto').first().waitFor({ timeout: 8000 });
   checar(true, 'PC: estudo concluido aparece na lista de analise');
   const linha = p.locator('tr', { hasText: 'Estudo pronto' });
-  checar(await linha.getByRole('button', { name: 'Enviar ao tablet' }).count() === 1,
-    'PC: estudo concluido oferece "Enviar ao tablet"');
-  await linha.getByRole('button', { name: 'Enviar ao tablet' }).click();
+  checar(await linha.getByRole('button', { name: 'Ao tablet' }).count() === 1,
+    'PC: estudo concluido oferece o caminho de volta ao tablet');
+  await linha.getByRole('button', { name: 'Ao tablet' }).click();
   await p.waitForFunction(() => window.__patches.length > 0, { timeout: 8000 });
   const patch = await p.evaluate(() => window.__patches[0]);
   checar(patch.corpo.status === 'coletando' && patch.url.includes('id=e9'),
-    'PC: "Enviar ao tablet" poe o estudo de volta em coleta');
+    'PC: "Ao tablet" poe o estudo de volta em coleta');
   await ctx.close();
 
   // Tablet: o mesmo estudo concluido NAO aparece.

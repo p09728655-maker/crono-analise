@@ -556,7 +556,9 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarCol
           <col style={{ width: 100 }} />
           <col style={{ width: 84 }} />
           <col style={{ width: 112 }} />
-          <col style={{ width: 192 }} />
+          {/* Acoes: eram tres botoes em 192px. Com "Enviar/Tirar do tablet"
+              sao quatro, e o ultimo saia da tela cortado pela metade. */}
+          <col style={{ width: 320 }} />
         </colgroup>
         <thead>
           <tr>
@@ -586,25 +588,30 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarCol
               <td style={est.tdNum}>{e.total_observacoes}</td>
               <td style={est.tdFraco}>{formatarData(e.atualizado_em)}</td>
               <td style={est.tdAcoes}>
+                <span style={est.acoesLinha}>
                 {/* Editar leva ao mesmo painel com a edicao ja aberta: nome
                     digitado errado tinha de ser descoberto la dentro. */}
                 <button type="button" style={est.botaoLinha} onClick={() => aoEditar?.(e.id)}>
                   Editar
                 </button>
-                <button type="button" style={{ ...est.botaoLinha, marginLeft: espaco.xs }} onClick={() => aoAbrir?.(e.id)}>
+                <button type="button" style={est.botaoLinha} onClick={() => aoAbrir?.(e.id)}>
                   Analisar
                 </button>
                 {/* Quem decide o que o TABLET ve e' o PC. Concluido some da
                     coleta; este botao e' o unico caminho de ida e volta. */}
                 <button
                   type="button"
-                  style={{ ...est.botaoLinha, marginLeft: espaco.xs }}
+                  style={est.botaoLinha}
                   onClick={() => aoTrocarColeta?.(e)}
                   title={e.status === 'coletando'
                     ? 'O estudo some da lista do tablet e fica só na análise'
                     : 'O estudo volta à lista do tablet para coletar mais tempos'}
                 >
-                  {e.status === 'coletando' ? 'Tirar do tablet' : 'Enviar ao tablet'}
+                  {/* Texto curto de proposito: com "Enviar ao tablet" os quatro
+                      botoes nao cabiam na linha e quebravam em duas, deixando
+                      cada linha da tabela com altura diferente. O title diz o
+                      resto, e o rotulo diz ONDE o estudo passa a viver. */}
+                  {e.status === 'coletando' ? 'Só no PC' : 'Ao tablet'}
                 </button>
                 <button
                   type="button"
@@ -615,6 +622,7 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarCol
                 >
                   ×
                 </button>
+                </span>
               </td>
             </tr>
           ))}
@@ -1123,7 +1131,9 @@ function estilos(t, analise) {
       display: 'flex', alignItems: 'flex-start',
     },
     conteudoLateral: {
-      flex: 1, minWidth: 0, maxWidth: 1400,
+      // Precisa comportar tabela (1180) + respiro + painel (280) + padding:
+      // com 1400 sobrava faixa vazia a direita e a tabela nem chegava ao teto.
+      flex: 1, minWidth: 0, maxWidth: 1560,
       padding: `${espaco.xl}px ${espaco.xl}px ${espaco.gigante}px`,
     },
     conteudo: {
@@ -1192,8 +1202,10 @@ function estilos(t, analise) {
     /* ---- tabela + painel de informacao (PC) ---- */
     areaComPainel: { display: 'flex', alignItems: 'flex-start', gap: espaco.xl },
     // A tabela para de crescer: linha larga demais obriga o olho a viajar
-    // do nome ate' o numero e perde a linha no caminho.
-    colunaTabela: { flex: 1, minWidth: 0, maxWidth: 1040 },
+    // do nome ate' o numero e perde a linha no caminho. O teto subiu de 1040
+    // para 1180 quando a coluna de acoes ganhou o quarto botao — o bastante
+    // para ele caber, sem transformar a linha numa travessia.
+    colunaTabela: { flex: 1, minWidth: 0, maxWidth: 1180 },
     painelInfo: {
       width: 280, flexShrink: 0, position: 'sticky', top: espaco.xl,
       display: 'flex', flexDirection: 'column', gap: espaco.md,
@@ -1290,8 +1302,14 @@ function estilos(t, analise) {
       color: t.texto, borderBottom: `1px solid ${t.borda}`,
     },
     tdAcoes: {
-      padding: `${espaco.sm}px ${espaco.lg}px`, textAlign: 'right', whiteSpace: 'nowrap',
+      padding: `${espaco.sm}px ${espaco.lg}px`, textAlign: 'right',
       borderBottom: `1px solid ${t.borda}`,
+    },
+    // Sem `nowrap`: numa tela estreita os botoes descem para a linha de
+    // baixo em vez de sumirem cortados na borda direita.
+    acoesLinha: {
+      display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end',
+      alignItems: 'center', gap: espaco.xs,
     },
     botaoLinha: {
       minHeight: 34, padding: `0 ${espaco.md}px`, background: 'transparent',
@@ -1299,7 +1317,7 @@ function estilos(t, analise) {
       color: t.texto, ...tipo('legenda'), fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
     },
     botaoRemover: {
-      width: 32, height: 32, marginLeft: espaco.xs, background: 'transparent', border: 'none',
+      width: 32, height: 32, background: 'transparent', border: 'none',
       borderRadius: raio.sm, color: t.fraco, fontSize: 18, lineHeight: 1,
       cursor: 'pointer', fontFamily: 'inherit',
     },
