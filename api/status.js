@@ -18,32 +18,13 @@ export default handler(async (req, res) => {
   permitir(req, ['GET']);
 
   const variaveis = {
-    API_TOKEN: Boolean(process.env.API_TOKEN),
     DATABASE_URL: Boolean(process.env.DATABASE_URL),
     ANTHROPIC_API_KEY: Boolean(process.env.ANTHROPIC_API_KEY),
     EMPRESA_ID: Boolean(process.env.EMPRESA_ID),
+    // LEGADO da transicao para o Supabase Auth. Ausente e' o estado DESEJADO:
+    // quem entra e' pessoa ou tablet pareado, com token proprio.
+    API_TOKEN: Boolean(process.env.API_TOKEN),
   };
-
-  /**
-   * Impressao do token: tamanho e as pontas.
-   *
-   * O servidor NAO enxerga o VITE_API_TOKEN — ele e' embutido no bundle do
-   * navegador. Entao quando os dois nao batem, o status nao tinha como
-   * apontar onde estava a diferenca, e "Token invalido" virava adivinhacao.
-   *
-   * Com tamanho e as pontas da' para comparar de olho com o que foi colado
-   * na Vercel e ver truncamento na hora. Nao ha' perda de sigilo: o mesmo
-   * valor ja' vive publico no bundle por causa do prefixo VITE_.
-   */
-  const token = process.env.API_TOKEN || '';
-  const impressaoToken = token
-    ? {
-        tamanho: token.length,
-        pontas: `${token.slice(0, 4)}…${token.slice(-4)}`,
-        // 64 hex e o que `crypto.randomBytes(32).toString('hex')` produz.
-        tamanhoEsperado: token.length === 64,
-      }
-    : null;
 
   let banco = 'nao testado';
   let empresas = null;
@@ -79,19 +60,18 @@ export default handler(async (req, res) => {
   }
 
   const pendencias = [];
-  if (!variaveis.API_TOKEN) {
-    pendencias.push('Configure API_TOKEN nas variaveis de ambiente da Vercel.');
-  } else if (token.length !== 64) {
-    pendencias.push(
-      `API_TOKEN tem ${token.length} caracteres; o esperado sao 64. `
-      + 'Provavelmente foi truncado ao copiar.',
-    );
-  }
+  /**
+   * API_TOKEN ausente NAO e' pendencia — e' o fim da transicao.
+   *
+   * Enquanto ele existia, quem portasse o token abria a API inteira. Pedir
+   * que fosse "configurado" (o que este endpoint fazia) hoje seria mandar
+   * reabrir a porta que acabou de ser fechada.
+   */
   if (variaveis.API_TOKEN) {
     pendencias.push(
-      'Se o app disser "Token invalido", o VITE_API_TOKEN nao bate com o '
-      + `API_TOKEN. Compare com a impressao acima (${token.length} caracteres, `
-      + `${token.slice(0, 4)}…${token.slice(-4)}) e publique um deploy novo depois de corrigir.`,
+      'API_TOKEN ainda existe: e o token de servico da transicao, e quem o '
+      + 'tiver abre a API sem login. Assim que os tablets estiverem pareados, '
+      + 'apague API_TOKEN e VITE_API_TOKEN na Vercel e publique um deploy novo.',
     );
   }
   if (!variaveis.DATABASE_URL) {
@@ -109,7 +89,6 @@ export default handler(async (req, res) => {
   return json(res, 200, {
     pronto,
     variaveis,
-    apiToken: impressaoToken,
     banco,
     empresas,
     supabaseAuth: { jwks, node: process.version },

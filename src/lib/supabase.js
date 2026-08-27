@@ -129,6 +129,19 @@ async function renovar(sessao) {
 }
 
 /**
+ * Uma reentrada por vez, pelo mesmo motivo — e por um medido: o tablet
+ * abria tres sessoes no MESMO milissegundo, porque as primeiras requisicoes
+ * da tela pedem o token juntas e cada uma achava que precisava entrar.
+ * Sessao a mais nao quebra nada, mas e' lixo no servidor por abertura.
+ */
+let entrando = null;
+
+function entrarUmaVezSo(email, senha) {
+  entrando ??= entrarComEmail(email, senha).finally(() => { entrando = null; });
+  return entrando;
+}
+
+/**
  * O token de acesso valido — renovando ou reentrando quando preciso.
  *
  * No tablet pareado a credencial do APARELHO cobre qualquer falha de
@@ -150,7 +163,7 @@ export async function tokenDeAcesso() {
   const aparelho = ler(GUARDA_APARELHO);
   if (aparelho?.email) {
     try {
-      await entrarComEmail(aparelho.email, aparelho.senha);
+      await entrarUmaVezSo(aparelho.email, aparelho.senha);
       return ler(GUARDA_SESSAO)?.access ?? null;
     } catch (e) {
       if (e instanceof ErroDeEntrada) guardar(GUARDA_APARELHO, null);

@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.35.2',
+    data: '2026-08-27',
+    titulo: 'Ajustes depois de fechar a porta antiga',
+    itens: [
+      'O diagnóstico em /api/status pedia para reconfigurar a chave de acesso antiga — justamente a que acabou de ser removida por segurança. Agora ele avisa o contrário: enquanto ela existir, é ela que deve sair.',
+      'O tablet abria três sessões ao mesmo tempo ao ligar. Passou a abrir uma só.',
+    ],
+  },
+  {
     versao: '2.35.1',
     data: '2026-08-27',
     titulo: 'Entrar não depende mais da rede do servidor',
