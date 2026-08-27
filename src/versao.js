@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.36.1',
+    data: '2026-08-27',
+    titulo: 'A tela da análise não fica mais meio preta ao abrir',
+    itens: [
+      'Ao clicar em Analisar, enquanto o estudo carregava, o texto "Carregando estudo..." aparecia num quadro claro que cobria só a parte de cima da janela — o resto ficava preto, com a cor da tela de coleta. Se o estudo demorava (ou o servidor não respondia), a faixa preta ficava lá parada e parecia que o app tinha travado.',
+      'A tela de carregamento e a de erro da análise agora ocupam a janela inteira, claras de cima a baixo, como o resto do painel.',
+    ],
+  },
+  {
     versao: '2.36.0',
     data: '2026-08-27',
     titulo: 'A lista de estudos volta a caber na tela',
