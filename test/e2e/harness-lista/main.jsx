@@ -35,6 +35,9 @@ const comArquivados = params.get('arq') === '1';
 // App quem decide isso. O harness renderiza a lista sozinha, entao a decisao
 // vem pela URL.
 const comSair = params.get('sair') === '1';
+// ?comconcluido=1 acrescenta um estudo CONCLUIDO: ele deve aparecer no PC
+// (com o botao de mandar ao tablet) e sumir da lista do tablet.
+const comConcluido = params.get('comconcluido') === '1';
 // ?umproduto=1 deixa so' um grupo — o caso em que o filtro por produto nao
 // filtra nada e por isso nao deve aparecer.
 const umProduto = params.get('umproduto') === '1';
@@ -222,10 +225,21 @@ window.fetch = async (url, opts = {}) => {
     const id = new URL(alvo, location.origin).searchParams.get('id');
     const alvoEstudo = arquivados.estudos.find((e) => e.id === id);
     if (alvoEstudo) {
+      // O status vem do CLIENTE: restaurar no PC manda 'concluido', no
+      // tablet manda 'coletando' — o harness so' repete, como o servidor.
       arquivados = { estudos: arquivados.estudos.filter((e) => e.id !== id) };
-      restaurados.push({ ...alvoEstudo, status: 'coletando' });
+      restaurados.push({ ...alvoEstudo, status: corpo.status || 'coletando' });
     }
-    return new Response(JSON.stringify({ estudo: { id, status: 'coletando' } }), {
+    return new Response(JSON.stringify({ estudo: { id, status: corpo.status } }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (metodo === 'DELETE') {
+    window.__deletes.push(alvo);
+    const id = new URL(alvo, location.origin).searchParams.get('id');
+    arquivados = { estudos: arquivados.estudos.filter((e) => e.id !== id) };
+    return new Response(JSON.stringify({ acao: 'excluido' }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     });
   }
@@ -239,7 +253,11 @@ window.fetch = async (url, opts = {}) => {
   const base = vazio ? { estudos: [] }
     : umProduto ? { estudos: RESPOSTA.estudos.filter((e) => e.produto === 'Sleep Base') }
     : RESPOSTA;
-  return new Response(JSON.stringify({ estudos: [...base.estudos, ...restaurados] }), {
+  const extras = comConcluido
+    ? [{ id: 'e9', nome: 'Estudo pronto', recurso: 'Furadeira 03', produto: 'Sleep Base',
+         analista: 'Oderli', total_operacoes: 2, total_observacoes: 40, status: 'concluido' }]
+    : [];
+  return new Response(JSON.stringify({ estudos: [...base.estudos, ...extras, ...restaurados] }), {
     status: 200, headers: { 'Content-Type': 'application/json' },
   });
 };

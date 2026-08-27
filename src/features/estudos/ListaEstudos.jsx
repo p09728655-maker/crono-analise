@@ -3,8 +3,8 @@ import { ALVO_MINIMO, cores as escuro } from '../../theme/tokens.js';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import {
-  criarEstudo, listarArquivados, listarEstudos, listarUsuarios, quemSouEu,
-  removerEstudo, restaurarEstudo,
+  atualizarEstudo, criarEstudo, excluirEstudoDeVez, listarArquivados, listarEstudos,
+  listarUsuarios, quemSouEu, removerEstudo, restaurarEstudo,
 } from '../../lib/api.js';
 import { agruparPorProduto, produtosConhecidos, setoresConhecidos } from '../../domain/agrupamento.js';
 import AvisoAtualizacao from '../../components/AvisoAtualizacao.jsx';
@@ -75,7 +75,11 @@ export default function ListaEstudos({
       // As duas listas na mesma ida: assim a contagem de arquivados existe
       // antes do clique, e o botao so' aparece quando ha' o que restaurar.
       const [r, a] = await Promise.all([listarEstudos(), listarArquivados()]);
-      setEstudos(r.estudos || []);
+      // O tablet so' lista o que esta EM COLETA. Estudo concluido e' assunto
+      // de analise: aparecer no chao de fabrica so' convida toque errado —
+      // e restaurar um arquivado no PC nao pode reabri-lo para coleta.
+      const lista = r.estudos || [];
+      setEstudos(analise ? lista : lista.filter((e) => e.status !== 'concluido'));
       setArquivados(a.estudos || []);
       setEstado('pronto');
     } catch (e) {
@@ -331,7 +335,14 @@ export default function ListaEstudos({
                   </div>
 
                   {analise
-                    ? <TabelaEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoEditar={aoEditar} aoRemover={setRemovendo} />
+                    ? <TabelaEstudos
+                        estudos={grupo.estudos} est={est} aoAbrir={aoAbrir}
+                        aoEditar={aoEditar} aoRemover={setRemovendo}
+                        aoTrocarColeta={async (e) => {
+                          await atualizarEstudo(e.id, { status: e.status === 'coletando' ? 'concluido' : 'coletando' });
+                          await carregar();
+                        }}
+                      />
                     : <CartoesEstudos estudos={grupo.estudos} est={est} aoAbrir={aoAbrir} aoRemover={setRemovendo} />}
                 </section>
               ))}
@@ -373,7 +384,16 @@ export default function ListaEstudos({
         <EstudosArquivados
           est={est}
           arquivados={arquivados}
-          aoRestaurar={async (id) => { await restaurarEstudo(id); await carregar(); }}
+          analise={analise}
+          aoRestaurar={async (id) => {
+            // Restaurado NO PC volta para a analise; no tablet, para a
+            // coleta — cada um devolve o estudo para o proprio contexto.
+            await restaurarEstudo(id, analise ? 'concluido' : 'coletando');
+            await carregar();
+          }}
+          aoExcluirDeVez={analise
+            ? async (id) => { await excluirEstudoDeVez(id); await carregar(); }
+            : undefined}
           aoFechar={() => setVerArquivados(false)}
         />
       )}
@@ -516,7 +536,7 @@ function Simbolo({ tipo: qual, cor, tamanho = 36 }) {
   );
 }
 
-function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover }) {
+function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarColeta }) {
   const [sobre, setSobre] = useState(null);
 
   return (
@@ -573,6 +593,18 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover }) {
                 </button>
                 <button type="button" style={{ ...est.botaoLinha, marginLeft: espaco.xs }} onClick={() => aoAbrir?.(e.id)}>
                   Analisar
+                </button>
+                {/* Quem decide o que o TABLET ve e' o PC. Concluido some da
+                    coleta; este botao e' o unico caminho de ida e volta. */}
+                <button
+                  type="button"
+                  style={{ ...est.botaoLinha, marginLeft: espaco.xs }}
+                  onClick={() => aoTrocarColeta?.(e)}
+                  title={e.status === 'coletando'
+                    ? 'O estudo some da lista do tablet e fica só na análise'
+                    : 'O estudo volta à lista do tablet para coletar mais tempos'}
+                >
+                  {e.status === 'coletando' ? 'Tirar do tablet' : 'Enviar ao tablet'}
                 </button>
                 <button
                   type="button"
@@ -633,8 +665,10 @@ function CartoesEstudos({ estudos, est, aoAbrir, aoRemover }) {
  * ficava sem saida dentro do app. Aqui ele reaparece com a contagem de
  * ciclos intacta e volta para a lista num clique.
  */
-function EstudosArquivados({ est, arquivados, aoRestaurar, aoFechar }) {
+function EstudosArquivados({ est, arquivados, analise, aoRestaurar, aoExcluirDeVez, aoFechar }) {
   const [restaurando, setRestaurando] = useState(null);
+  const [confirmando, setConfirmando] = useState(null);
+  const [excluindo, setExcluindo] = useState(null);
   const [erro, setErro] = useState(null);
 
   async function restaurar(id) {
@@ -644,13 +678,24 @@ function EstudosArquivados({ est, arquivados, aoRestaurar, aoFechar }) {
     catch (e) { setErro(e.message); setRestaurando(null); }
   }
 
+  async function excluirDeVez(id) {
+    setExcluindo(id);
+    setErro(null);
+    try { await aoExcluirDeVez(id); setConfirmando(null); }
+    catch (e) { setErro(e.message); }
+    setExcluindo(null);
+  }
+
   return (
     <div style={est.modal} role="dialog" aria-label="Estudos arquivados">
       <div style={est.formulario}>
         <h2 style={est.formTitulo}>Estudos arquivados</h2>
         <p style={est.textoModal}>
           Arquivar tira o estudo da lista, mas <strong>não apaga nada</strong> —
-          os ciclos continuam no banco. Restaurar traz o estudo de volta.
+          os ciclos continuam no banco.
+          {analise
+            ? ' Restaurar devolve o estudo à análise, sem reabri-lo na coleta do tablet. Excluir de vez é para estudo de teste: apaga tudo, sem volta.'
+            : ' Restaurar traz o estudo de volta para a coleta.'}
         </p>
 
         <ul style={est.listaArquivados}>
@@ -663,14 +708,43 @@ function EstudosArquivados({ est, arquivados, aoRestaurar, aoFechar }) {
                   {' · '}{e.total_observacoes} ciclo(s)
                 </div>
               </div>
-              <button
-                type="button"
-                style={est.botaoLinha}
-                onClick={() => restaurar(e.id)}
-                disabled={restaurando === e.id}
-              >
-                {restaurando === e.id ? 'Restaurando...' : 'Restaurar'}
-              </button>
+              {confirmando === e.id ? (
+                <span style={est.confirmarExclusao}>
+                  {/* O numero na pergunta e' o custo real do clique. */}
+                  <span style={est.confirmarTexto}>
+                    Apagar {e.total_observacoes} ciclo(s) para sempre?
+                  </span>
+                  <button
+                    type="button" style={est.botaoExcluirDeVez} disabled={excluindo === e.id}
+                    onClick={() => excluirDeVez(e.id)}
+                  >
+                    {excluindo === e.id ? 'Apagando...' : 'Apagar tudo'}
+                  </button>
+                  <button type="button" style={est.botaoLinha} onClick={() => setConfirmando(null)}>
+                    Cancelar
+                  </button>
+                </span>
+              ) : (
+                <span style={est.confirmarExclusao}>
+                  <button
+                    type="button"
+                    style={est.botaoLinha}
+                    onClick={() => restaurar(e.id)}
+                    disabled={restaurando === e.id}
+                  >
+                    {restaurando === e.id ? 'Restaurando...' : 'Restaurar'}
+                  </button>
+                  {aoExcluirDeVez && (
+                    <button
+                      type="button" style={est.botaoLinha}
+                      onClick={() => setConfirmando(e.id)}
+                      aria-label={`Excluir de vez ${e.nome}`}
+                    >
+                      Excluir de vez
+                    </button>
+                  )}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -1319,6 +1393,15 @@ function estilos(t, analise) {
       ...tipo('corpoF'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
     },
     arquivadoSub: { ...tipo('legenda'), color: t.fraco, marginTop: 2 },
+    confirmarExclusao: { display: 'flex', alignItems: 'center', gap: espaco.sm, flexShrink: 0 },
+    confirmarTexto: { ...tipo('legenda'), color: t.critico, fontWeight: 600 },
+    // Laranja de estado critico, nao o vermelho da marca: isto e' perigo,
+    // e o vermelho Patrimar e' identidade — nunca aviso.
+    botaoExcluirDeVez: {
+      minHeight: 32, padding: `0 ${espaco.md}px`, background: t.critico,
+      border: 'none', borderRadius: raio.sm, color: '#fff',
+      ...tipo('legenda'), fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+    },
 
     /* ---- modal ---- */
     modal: {

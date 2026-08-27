@@ -1119,5 +1119,45 @@ rodar('API — integracao com Postgres', () => {
     await config(fingirReq({ token: jwt }), chave);
     expect(chave.statusCode).toBe(403);
   });
+
+  /* ------------------------------------ excluir de vez (estudo de teste) */
+  it('excluir de vez apaga estudo COM ciclos — e so o administrador pode', async () => {
+    const { estudoId, operacaoId } = await criarEstudoComOperacao();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: { observacoes: [ciclo(operacaoId, crypto.randomUUID())] },
+    }), fingirRes());
+
+    // Sem ?definitivo, estudo com ciclo ARQUIVA — a protecao continua.
+    const protegido = fingirRes();
+    await estudos(fingirReq({ metodo: 'DELETE', query: { id: estudoId } }), protegido);
+    expect(protegido.corpo.acao).toBe('arquivado');
+
+    // O coletor (tablet) nem conhece esse caminho: 403.
+    const gerado = fingirRes();
+    await dispositivosApi(fingirReq({ metodo: 'POST', corpo: { acao: 'codigo' } }), gerado);
+    const pareado = fingirRes();
+    await dispositivosApi(
+      { method: 'POST', body: { codigo: gerado.corpo.codigo, nome: 'T' }, query: {}, headers: {} },
+      pareado,
+    );
+    const recusa = fingirRes();
+    await estudos(fingirReq({
+      metodo: 'DELETE', query: { id: estudoId, definitivo: '1' },
+      token: tokenDe(pareado.corpo.dispositivo.id),
+    }), recusa);
+    expect(recusa.statusCode).toBe(403);
+
+    // O servico (e o admin) apagam de verdade, ciclos junto.
+    const apagado = fingirRes();
+    await estudos(fingirReq({ metodo: 'DELETE', query: { id: estudoId, definitivo: '1' } }), apagado);
+    expect(apagado.corpo.acao).toBe('excluido');
+    expect(apagado.corpo.ciclos).toBe(1);
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM estudos WHERE id = ${estudoId}`;
+    expect(n).toBe(0);
+    const [{ n: orfaos }] = await sql`
+      SELECT count(*)::int AS n FROM observacoes WHERE operacao_id = ${operacaoId}`;
+    expect(orfaos).toBe(0);
+  });
 });
 

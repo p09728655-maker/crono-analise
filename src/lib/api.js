@@ -62,8 +62,18 @@ async function requisitar(caminho, { metodo = 'GET', corpo, sinal } = {}) {
 
 export const listarEstudos = () => requisitar('/estudos');
 export const listarArquivados = () => requisitar('/estudos?arquivados=1');
-export const restaurarEstudo = (id) =>
-  requisitar(`/estudos?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { status: 'coletando' } });
+/**
+ * Restaurar depende de ONDE se restaura: no PC o estudo volta como
+ * 'concluido' — analise, sem reaparecer na coleta do tablet; no tablet
+ * volta como 'coletando', porque ali restaurar significa "arquivei sem
+ * querer o que eu estava medindo".
+ */
+export const restaurarEstudo = (id, destino = 'concluido') =>
+  requisitar(`/estudos?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { status: destino } });
+// Apaga MESMO, com ciclos e tudo — o caminho do estudo de teste. So' o
+// administrador; o servidor recusa os demais.
+export const excluirEstudoDeVez = (id) =>
+  requisitar(`/estudos?id=${encodeURIComponent(id)}&definitivo=1`, { metodo: 'DELETE' });
 export const obterEstudo = (id) => requisitar(`/estudos?id=${encodeURIComponent(id)}`);
 export const criarEstudo = (dados) => requisitar('/estudos', { metodo: 'POST', corpo: dados });
 export const atualizarEstudo = (id, dados) =>
