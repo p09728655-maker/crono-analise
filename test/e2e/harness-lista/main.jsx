@@ -6,7 +6,7 @@ import { enfileirar } from '/src/lib/filaOffline.js';
 const RESPOSTA = {
   estudos: [
     { id: 'e1', nome: 'Furação lateral', recurso: 'Furadeira 03',
-      produto: 'Sleep Base', analista: 'Maurício', total_operacoes: 4, total_observacoes: 45 },
+      produto: 'Sleep Base', analista: 'Maurício', total_operacoes: 4, total_observacoes: 45, status: 'coletando' },
     { id: 'e2', nome: 'Furação fundo', recurso: 'Furadeira 16',
       produto: 'SLEEP BASE', analista: 'Oderli', total_operacoes: 2, total_observacoes: 12 },
     { id: 'e3', nome: 'Corte base', recurso: 'Seccionadora 01',

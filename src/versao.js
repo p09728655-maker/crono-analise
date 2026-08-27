@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.36.0',
+    data: '2026-08-27',
+    titulo: 'A lista de estudos volta a caber na tela',
+    itens: [
+      'O botão que manda o estudo para o tablet (ou tira dele) estava cortado na borda direita: a coluna de ações tinha espaço para três botões e passou a ter quatro. A coluna cresceu, a tabela ganhou 140px de largura e sobra menos tela vazia à direita.',
+      'Os rótulos ficaram curtos — "Ao tablet" e "Só no PC" — para os quatro botões caberem numa linha só. Passando o mouse, a explicação completa continua lá.',
+      'Em tela estreita os botões agora descem para a linha de baixo em vez de sumirem cortados.',
+    ],
+  },
+  {
     versao: '2.35.4',
     data: '2026-08-27',
     titulo: 'Quando o servidor não acha o banco, ele diz isso',
