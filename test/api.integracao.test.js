@@ -7,15 +7,44 @@
  *
  * Pula automaticamente se TEST_DATABASE_URL nao estiver definida.
  */
+import { generateKeyPairSync, sign } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const URL_TESTE = process.env.TEST_DATABASE_URL;
 const rodar = URL_TESTE ? describe : describe.skip;
 
-let sql, sync, estudos, operacoes, config, conferenciasApi, motivosApi, usuariosApi, sessaoApi;
+// Antes de qualquer import da API: jwt.js congela a URL do projeto ao carregar.
+process.env.SUPABASE_URL = 'https://supabase.teste.local';
+
+let sql, sync, estudos, operacoes, config, conferenciasApi, motivosApi, usuariosApi, sessaoApi,
+  dispositivosApi;
 const EMPRESA = '11111111-1111-1111-1111-111111111111';
 const OUTRA_EMPRESA = '99999999-9999-9999-9999-999999999999';
 const TOKEN = 'token-de-teste';
+
+/**
+ * Tokens do "Supabase" destes testes: a MESMA verificacao de producao
+ * (ES256 + JWKS), so' que com uma chave gerada aqui e entregue por
+ * _definirJwks. Nada e' mockado no caminho — assinatura, exp, iss e aud
+ * passam pela checagem real.
+ */
+const par = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+const b64u = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+
+function tokenDe(usuarioId, extras = {}) {
+  const cabecalho = b64u({ alg: 'ES256', kid: 'kid-de-teste', typ: 'JWT' });
+  const corpo = b64u({
+    iss: 'https://supabase.teste.local/auth/v1',
+    aud: 'authenticated',
+    role: 'authenticated',
+    sub: usuarioId,
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    ...extras,
+  });
+  const assinatura = sign('sha256', Buffer.from(`${cabecalho}.${corpo}`),
+    { key: par.privateKey, dsaEncoding: 'ieee-p1363' });
+  return `${cabecalho}.${corpo}.${assinatura.toString('base64url')}`;
+}
 
 /** Simula req/res da Vercel. */
 function fingirReq({ metodo = 'GET', corpo, query = {}, token = TOKEN, sessao } = {}) {
@@ -42,6 +71,8 @@ rodar('API — integracao com Postgres', () => {
     process.env.EMPRESA_ID = EMPRESA;
 
     ({ sql } = await import('../api/_lib/db.js'));
+    const { _definirJwks } = await import('../api/_lib/jwt.js');
+    _definirJwks([{ ...par.publicKey.export({ format: 'jwk' }), kid: 'kid-de-teste', alg: 'ES256' }]);
     sync = (await import('../api/sync.js')).default;
     estudos = (await import('../api/estudos.js')).default;
     operacoes = (await import('../api/operacoes.js')).default;
@@ -50,6 +81,7 @@ rodar('API — integracao com Postgres', () => {
     motivosApi = (await import('../api/motivos-parada.js')).default;
     usuariosApi = (await import('../api/usuarios.js')).default;
     sessaoApi = (await import('../api/sessao.js')).default;
+    dispositivosApi = (await import('../api/dispositivos.js')).default;
     // O teste cobre o caminho SEM chave no ambiente (a do banco).
     delete process.env.ANTHROPIC_API_KEY;
 
@@ -822,11 +854,14 @@ rodar('API — integracao com Postgres', () => {
   /* ------------------------------------- cadastro de analistas e sessao */
   /**
    * O que precisa ser provado aqui e' o que protege PESSOA e HISTORICO: a
-   * senha nunca volta para o navegador, entrar errado nao diz o que errou,
-   * e analista que ja assinou estudo nao some do relatorio.
+   * senha nunca aparece em resposta nenhuma (ela nem mora mais no schema
+   * public — vive em auth.users, como bcrypt), o token do Supabase e' quem
+   * abre a API, e analista que ja assinou estudo nao some do relatorio.
    *
-   * O que NAO se prova aqui, porque nao e verdade: que a sessao restringe
-   * acesso. O token de servico abre a API sozinho — ver api/_lib/senha.js.
+   * O login em si (e-mail + senha -> token) e' do GoTrue e nao se testa
+   * aqui; o que se testa e' o contrato da API com o TOKEN ja emitido —
+   * assinado nestes testes com uma chave ES256 propria, entregue a
+   * verificacao via _definirJwks.
    */
   async function criarAnalista(corpo) {
     const res = fingirRes();
@@ -834,16 +869,14 @@ rodar('API — integracao com Postgres', () => {
     return res;
   }
 
-  async function entrar(email, senha) {
-    const res = fingirRes();
-    await sessaoApi(fingirReq({ metodo: 'POST', corpo: { email, senha } }), res);
-    return res;
-  }
-
-  it('cria analista e NUNCA devolve a senha, nem o hash', async () => {
+  it('cria analista e NUNCA devolve a senha, nem hash nenhum', async () => {
     const res = await criarAnalista({ nome: 'Oderli Sergio Garcia', email: 'oderli@patrimar.com', senha: 'furadeira2026' });
     expect(res.statusCode).toBe(201);
-    expect(JSON.stringify(res.corpo)).not.toMatch(/furadeira2026|senha_hash|senha_salt/);
+    expect(JSON.stringify(res.corpo)).not.toMatch(/furadeira2026|senha_hash|encrypted/);
+
+    // A conta nasceu no auth.users, com o MESMO id e bcrypt de verdade.
+    const [conta] = await sql`SELECT encrypted_password FROM auth.users WHERE id = ${res.corpo.usuario.id}`;
+    expect(conta.encrypted_password).toMatch(/^\$2/);
 
     const lista = fingirRes();
     await usuariosApi(fingirReq(), lista);
@@ -852,81 +885,83 @@ rodar('API — integracao com Postgres', () => {
     expect(JSON.stringify(lista.corpo)).not.toMatch(/furadeira2026|senha_hash/);
   });
 
-  it('analista sem senha existe para ser escolhido, mas nao entra', async () => {
-    await criarAnalista({ nome: 'Sem Acesso', email: 'semacesso@patrimar.com' });
-    // Sem isto, "sem senha" viraria "qualquer senha serve".
-    const res = await entrar('semacesso@patrimar.com', '');
-    expect(res.statusCode).toBe(401);
-    const comChute = await entrar('semacesso@patrimar.com', 'qualquercoisa');
-    expect(comChute.statusCode).toBe(401);
+  it('analista sem senha existe para ser escolhido, mas nao tem login', async () => {
+    const res = await criarAnalista({ nome: 'Sem Acesso', email: 'semacesso@patrimar.com' });
+    // Senha vazia no auth nao confere com senha nenhuma: "sem senha" nunca
+    // vira "qualquer senha serve".
+    const [conta] = await sql`SELECT encrypted_password FROM auth.users WHERE id = ${res.corpo.usuario.id}`;
+    expect(conta.encrypted_password).toBe('');
+
+    const lista = fingirRes();
+    await usuariosApi(fingirReq(), lista);
+    expect(lista.corpo.usuarios.find((u) => u.email === 'semacesso@patrimar.com').tem_senha).toBe(false);
   });
 
-  it('entra com a senha certa e a sessao diz quem e', async () => {
-    await criarAnalista({ nome: 'Mauricio', email: 'mauricio@patrimar.com', senha: 'senhaboa123' });
-    const res = await entrar('mauricio@patrimar.com', 'senhaboa123');
-    expect(res.statusCode).toBe(200);
-    expect(res.corpo.token).toMatch(/^[0-9a-f]{64}$/);
-    expect(res.corpo.usuario.nome).toBe('Mauricio');
-
+  it('o token do Supabase abre a API e diz quem e', async () => {
+    const criado = await criarAnalista({ nome: 'Mauricio', email: 'mauricio@patrimar.com', senha: 'senhaboa123' });
     const eu = fingirRes();
-    await sessaoApi(fingirReq({ sessao: res.corpo.token }), eu);
+    await sessaoApi(fingirReq({ token: tokenDe(criado.corpo.usuario.id) }), eu);
+    expect(eu.statusCode).toBe(200);
     expect(eu.corpo.usuario.nome).toBe('Mauricio');
-
-    // O banco guarda o HASH, nunca o token.
-    const [guardada] = await sql`SELECT token_hash FROM sessoes WHERE usuario_id = ${res.corpo.usuario.id}`;
-    expect(guardada.token_hash).not.toBe(res.corpo.token);
   });
 
-  it('senha errada e e-mail inexistente dao a MESMA resposta', async () => {
-    await criarAnalista({ nome: 'Alvo', email: 'alvo@patrimar.com', senha: 'senhaboa123' });
-    const errada = await entrar('alvo@patrimar.com', 'senhaerrada1');
-    const inexistente = await entrar('ninguem@patrimar.com', 'senhaerrada1');
-    // Distinguir entregaria de graca quais e-mails existem no sistema.
-    expect(errada.statusCode).toBe(401);
-    expect(inexistente.statusCode).toBe(401);
-    expect(errada.corpo.erro).toBe(inexistente.corpo.erro);
+  it('token forjado, vencido ou de conta desconhecida NAO abre', async () => {
+    const semConta = fingirRes();
+    await sessaoApi(fingirReq({ token: tokenDe(crypto.randomUUID()) }), semConta);
+    expect(semConta.statusCode).toBe(401);
+
+    const vencido = fingirRes();
+    await sessaoApi(fingirReq({ token: tokenDe(crypto.randomUUID(), { exp: Math.floor(Date.now() / 1000) - 10 }) }), vencido);
+    expect(vencido.statusCode).toBe(401);
+
+    const rabiscado = fingirRes();
+    await sessaoApi(fingirReq({ token: 'nem.parece.jwt' }), rabiscado);
+    expect(rabiscado.statusCode).toBe(401);
   });
 
-  it('sem sessao o app segue funcionando, so nao sabe quem e', async () => {
+  it('login proprio saiu do ar: POST /sessao manda recarregar', async () => {
+    const res = fingirRes();
+    await sessaoApi(fingirReq({ metodo: 'POST', corpo: { email: 'x@x.br', senha: 'x' } }), res);
+    expect(res.statusCode).toBe(410);
+    expect(res.corpo.erro).toMatch(/Recarregue/);
+  });
+
+  it('no modo de servico sem X-Sessao o app segue, so nao sabe quem e', async () => {
     const res = fingirRes();
     await sessaoApi(fingirReq(), res);
     expect(res.statusCode).toBe(200);
     expect(res.corpo.usuario).toBeNull();
   });
 
-  it('sair derruba a sessao; desativar tambem', async () => {
+  it('desativar derruba a sessao do Supabase e o acesso junto', async () => {
     const criado = await criarAnalista({ nome: 'Vai Sair', email: 'vaisair@patrimar.com', senha: 'senhaboa123' });
-    const { token } = (await entrar('vaisair@patrimar.com', 'senhaboa123')).corpo;
+    const id = criado.corpo.usuario.id;
+    await sql`INSERT INTO auth.sessions (user_id) VALUES (${id})`;
 
-    await sessaoApi(fingirReq({ metodo: 'DELETE', sessao: token }), fingirRes());
-    const depois = fingirRes();
-    await sessaoApi(fingirReq({ sessao: token }), depois);
-    expect(depois.corpo.usuario).toBeNull();
+    await usuariosApi(fingirReq({ metodo: 'PATCH', query: { id }, corpo: { ativo: false } }), fingirRes());
 
-    // Desativar precisa derrubar sessao aberta, senao a pessoa segue
-    // identificada ate o token vencer sozinho.
-    const { token: outro } = (await entrar('vaisair@patrimar.com', 'senhaboa123')).corpo;
-    await usuariosApi(fingirReq({
-      metodo: 'PATCH', query: { id: criado.corpo.usuario.id }, corpo: { ativo: false },
-    }), fingirRes());
-    const apos = fingirRes();
-    await sessaoApi(fingirReq({ sessao: outro }), apos);
-    expect(apos.corpo.usuario).toBeNull();
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM auth.sessions WHERE user_id = ${id}`;
+    expect(n).toBe(0);
+    // E o token que ainda nao venceu para de abrir: a conta esta inativa.
+    const res = fingirRes();
+    await sessaoApi(fingirReq({ token: tokenDe(id) }), res);
+    expect(res.statusCode).toBe(401);
   });
 
   it('o estudo passa a saber quem e o analista, e quem o criou', async () => {
     const criado = await criarAnalista({ nome: 'Oderli', email: 'oderli2@patrimar.com', senha: 'senhaboa123' });
     const analistaId = criado.corpo.usuario.id;
-    const { token } = (await entrar('oderli2@patrimar.com', 'senhaboa123')).corpo;
 
+    // Criado COM o token do proprio analista: alem da autoria, isto prova o
+    // caminho inteiro sob RLS — set_config + politicas de INSERT.
     const res = fingirRes();
     await estudos(fingirReq({
-      metodo: 'POST', sessao: token,
+      metodo: 'POST', token: tokenDe(analistaId),
       corpo: { nome: 'Rack Sirius', analistaId, operacoes: [] },
     }), res);
     expect(res.statusCode).toBe(201);
     expect(res.corpo.estudo.analista_id).toBe(analistaId);
-    // criado_por sai da sessao, nao do corpo: ninguem assina em nome de outro.
+    // criado_por sai do token, nao do corpo: ninguem assina em nome de outro.
     expect(res.corpo.estudo.criado_por).toBe(analistaId);
 
     const lido = fingirRes();
@@ -965,26 +1000,124 @@ rodar('API — integracao com Postgres', () => {
     expect(desativa.corpo.usuario.ativo).toBe(false);
   });
 
-  it('recusa e-mail repetido e senha curta demais', async () => {
+  it('recusa e-mail repetido, senha curta e senha sem e-mail', async () => {
     await criarAnalista({ nome: 'Primeiro', email: 'repetido@patrimar.com' });
     const repetido = await criarAnalista({ nome: 'Segundo', email: 'REPETIDO@patrimar.com' });
     expect(repetido.statusCode).toBe(409);
 
     const curta = await criarAnalista({ nome: 'Curta', email: 'curta@patrimar.com', senha: '123' });
     expect(curta.statusCode).toBe(400);
+
+    // Sem e-mail nao ha por onde entrar: senha sozinha seria promessa vazia.
+    const semMail = await criarAnalista({ nome: 'So Senha', senha: 'senhaboa123' });
+    expect(semMail.statusCode).toBe(400);
   });
 
   it('nao enxerga analista de outra empresa', async () => {
-    const [alheio] = await sql`
-      INSERT INTO usuarios (empresa_id, nome, email)
-      VALUES (${OUTRA_EMPRESA}, 'Da Concorrente', 'concorrente@outra.com') RETURNING id`;
+    const alheioId = crypto.randomUUID();
+    await sql`
+      INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at,
+                              confirmation_token, recovery_token, email_change_token_new, email_change)
+      VALUES (${alheioId}, 'authenticated', 'authenticated', 'concorrente@outra.com', '', now(), now(), '', '', '', '')`;
+    await sql`
+      INSERT INTO usuarios (id, empresa_id, nome, email)
+      VALUES (${alheioId}, ${OUTRA_EMPRESA}, 'Da Concorrente', 'concorrente@outra.com')`;
 
     const lista = fingirRes();
     await usuariosApi(fingirReq(), lista);
-    expect(lista.corpo.usuarios.map((u) => u.id)).not.toContain(alheio.id);
+    expect(lista.corpo.usuarios.map((u) => u.id)).not.toContain(alheioId);
 
     const patch = fingirRes();
-    await usuariosApi(fingirReq({ metodo: 'PATCH', query: { id: alheio.id }, corpo: { nome: 'X' } }), patch);
+    await usuariosApi(fingirReq({ metodo: 'PATCH', query: { id: alheioId }, corpo: { nome: 'X' } }), patch);
     expect(patch.statusCode).toBe(404);
   });
+
+  it('cada token so enxerga a empresa do proprio perfil — nas duas camadas', async () => {
+    const alheioId = crypto.randomUUID();
+    await sql`
+      INSERT INTO auth.users (id, aud, role, email, encrypted_password, created_at, updated_at,
+                              confirmation_token, recovery_token, email_change_token_new, email_change)
+      VALUES (${alheioId}, 'authenticated', 'authenticated', 'isolado@outra.com', '', now(), now(), '', '', '', '')`;
+    await sql`
+      INSERT INTO usuarios (id, empresa_id, nome, email)
+      VALUES (${alheioId}, ${OUTRA_EMPRESA}, 'Isolado', 'isolado@outra.com')`;
+    const { estudoId } = await criarEstudoComOperacao(EMPRESA);
+
+    const lista = fingirRes();
+    await estudos(fingirReq({ token: tokenDe(alheioId) }), lista);
+    expect(lista.statusCode).toBe(200);
+    expect(lista.corpo.estudos.map((e) => e.id)).not.toContain(estudoId);
+
+    const direto = fingirRes();
+    await estudos(fingirReq({ token: tokenDe(alheioId), query: { id: estudoId } }), direto);
+    expect(direto.statusCode).toBe(404);
+  });
+
+  /* --------------------------------------------- pareamento do tablet */
+  /**
+   * O tablet nao tem login por turno: ele troca UM codigo — gerado pelo
+   * admin, com validade curta — por uma conta propria de coletor. O que
+   * precisa ser provado: o codigo e' de uso unico, codigo errado nao abre
+   * nada, e a conta que nasce coleta mas nao administra.
+   */
+  async function parear(corpo) {
+    const res = fingirRes();
+    // SEM token: e' o aparelho que ainda nao tem credencial nenhuma.
+    await dispositivosApi({ method: 'POST', body: corpo, query: {}, headers: {} }, res);
+    return res;
+  }
+
+  it('pareia o tablet: codigo vira conta de coletor, uma unica vez', async () => {
+    const gerado = fingirRes();
+    await dispositivosApi(fingirReq({ metodo: 'POST', corpo: { acao: 'codigo' } }), gerado);
+    expect(gerado.statusCode).toBe(200);
+    expect(gerado.corpo.codigo).toMatch(/^[A-Z2-9]{6}$/);
+
+    const res = await parear({ codigo: gerado.corpo.codigo, nome: 'Tablet furadeiras' });
+    expect(res.statusCode).toBe(201);
+    expect(res.corpo.email).toMatch(/@dispositivo/);
+    expect(res.corpo.senha.length).toBeGreaterThan(20);
+
+    // A conta nasceu de verdade: auth + perfil coletor, mesma linha de id.
+    const [perfil] = await sql`SELECT papel, nome FROM usuarios WHERE id = ${res.corpo.dispositivo.id}`;
+    expect(perfil.papel).toBe('coletor');
+    expect(perfil.nome).toBe('Tablet furadeiras');
+    const [conta] = await sql`SELECT encrypted_password FROM auth.users WHERE id = ${res.corpo.dispositivo.id}`;
+    expect(conta.encrypted_password).toMatch(/^\$2/);
+
+    // USO UNICO: o mesmo codigo nao pareia um segundo aparelho.
+    const denovo = await parear({ codigo: gerado.corpo.codigo, nome: 'Clon' });
+    expect(denovo.statusCode).toBe(401);
+  });
+
+  it('codigo errado nao abre nada — e a mensagem diz onde pedir um', async () => {
+    const res = await parear({ codigo: 'XXXXXX', nome: 'Invasor' });
+    expect(res.statusCode).toBe(401);
+    expect(res.corpo.erro).toMatch(/Analistas/);
+  });
+
+  it('o coletor coleta, mas nao administra', async () => {
+    const gerado = fingirRes();
+    await dispositivosApi(fingirReq({ metodo: 'POST', corpo: { acao: 'codigo' } }), gerado);
+    const pareado = await parear({ codigo: gerado.corpo.codigo, nome: 'Tablet' });
+    const jwt = tokenDe(pareado.corpo.dispositivo.id);
+
+    // Coleta: cria estudo e sobe ciclo pelo sync, sob RLS.
+    const estudoRes = fingirRes();
+    await estudos(fingirReq({ metodo: 'POST', token: jwt, corpo: { nome: 'Do tablet', operacoes: [] } }), estudoRes);
+    expect(estudoRes.statusCode).toBe(201);
+    // Aparelho nao e' autor: criado_por fica vazio.
+    expect(estudoRes.corpo.estudo.criado_por).toBeNull();
+
+    // Administracao: cadastro de motivos e' 403 — sei quem e, e nao pode.
+    const motivo = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'POST', token: jwt, corpo: { rotulo: 'Golpe' } }), motivo);
+    expect(motivo.statusCode).toBe(403);
+
+    // Segredo: a configuracao da IA nem responde para o coletor.
+    const chave = fingirRes();
+    await config(fingirReq({ token: jwt }), chave);
+    expect(chave.statusCode).toBe(403);
+  });
 });
+

@@ -12,6 +12,7 @@
  * Uso: npm run dev (porta 5199) e depois node test/e2e/editar.e2e.mjs
  */
 import { chromium } from 'playwright';
+import { semearSessao } from './_sessao.mjs';
 
 const BASE = process.env.E2E_BASE || 'http://localhost:5199';
 const EXEC = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
@@ -41,6 +42,7 @@ const estudo = {
 const b = await chromium.launch({ executablePath: EXEC });
 const ctx = await b.newContext({ viewport: { width: 1440, height: 950 } });
 const p = await ctx.newPage();
+await semearSessao(p);
 const erros = [];
 p.on('pageerror', (e) => erros.push(e.message));
 

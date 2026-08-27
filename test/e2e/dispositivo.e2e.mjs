@@ -12,6 +12,7 @@
  * Uso: npm run dev (porta 5199) e depois node test/e2e/dispositivo.e2e.mjs
  */
 import { chromium } from 'playwright';
+import { semearSessao } from './_sessao.mjs';
 
 const BASE = process.env.E2E_BASE || 'http://localhost:5199';
 const EXEC = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
@@ -26,6 +27,7 @@ const b = await chromium.launch({ executablePath: EXEC });
 {
   const ctx = await b.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
   const p = await ctx.newPage();
+  await semearSessao(p);
 
   await p.goto(`${BASE}/analise`);
   await p.waitForFunction(() => location.pathname === '/coleta', { timeout: 8000 });
@@ -44,6 +46,7 @@ const b = await chromium.launch({ executablePath: EXEC });
 {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
   const p = await ctx.newPage();
+  await semearSessao(p);
   await p.goto(`${BASE}/analise`);
   await p.waitForTimeout(800);
   checar(await p.evaluate(() => location.pathname) === '/analise', 'PC: /analise permanece analise');

@@ -31,3 +31,22 @@ export const sql = postgres(url, {
   connect_timeout: 10,
   ssl: local ? false : 'require',
 });
+
+/**
+ * Executa `fn` DENTRO da RLS, como o usuario do token.
+ *
+ * A conexao chega como `postgres`, que ignora RLS por atributo de papel
+ * (rolbypassrls). Estas duas set_config, locais a' transacao, trocam o
+ * papel corrente para `authenticated` e entregam as claims verificadas do
+ * JWT — e' exatamente o que o PostgREST faz. A partir dai' auth.uid()
+ * responde, as politicas sao avaliadas de verdade, e um WHERE esquecido em
+ * qualquer consulta deixa de expor dado de outra empresa: o banco barra.
+ *
+ * Tudo roda numa transacao so' — o que tambem da', de graca, atomicidade
+ * por requisicao. No COMMIT o papel volta sozinho (escopo `true` = local).
+ */
+export const comRls = (claims, fn) => sql.begin(async (tx) => {
+  await tx`SELECT set_config('role', 'authenticated', true),
+                  set_config('request.jwt.claims', ${JSON.stringify(claims)}, true)`;
+  return fn(tx);
+});

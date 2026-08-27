@@ -14,7 +14,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { sql } from '../_lib/db.js';
-import { autenticar } from '../_lib/auth.js';
+import { autenticar, exigirPapel } from '../_lib/auth.js';
 import { ErroHttp, handler, json, lerCorpo, permitir } from '../_lib/http.js';
 import { decimal, inteiro, lista, texto } from '../_lib/validar.js';
 import { comPrazo } from '../_lib/prazo.js';
@@ -105,7 +105,13 @@ function comRessalvaDeCorte(texto, stopReason) {
 
 export default handler(async (req, res) => {
   permitir(req, ['POST']);
-  const { empresaId } = await autenticar(req);
+  const auth = await autenticar(req);
+  const { empresaId } = auth;
+  // Analise e' trabalho de PC — o tablet pareado nao tem por que gastar a
+  // cota de IA da empresa. A chave em si e' lida ADIANTE fora da RLS, de
+  // proposito: ela nunca sai do servidor, e a politica que a esconde do
+  // navegador nao deve impedir o proprio servidor de usa-la.
+  exigirPapel(auth, ['admin', 'analista', 'leitor']);
 
   // Ambiente primeiro (configuracao do administrador); senao, a chave que o
   // usuario salvou pelo painel (tabela configuracoes).

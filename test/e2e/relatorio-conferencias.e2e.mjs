@@ -10,6 +10,7 @@
  * Uso: npm run dev (porta 5199) e depois node test/e2e/relatorio-conferencias.e2e.mjs
  */
 import { chromium } from 'playwright';
+import { semearSessao } from './_sessao.mjs';
 
 const BASE = process.env.E2E_BASE || 'http://localhost:5199';
 const EXEC = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
@@ -20,6 +21,7 @@ const checar = (ok, msg) => { console.log(`${ok ? 'OK  ' : 'FALHA'} ${msg}`); if
 const navegador = await chromium.launch({ executablePath: EXEC });
 const ctx = await navegador.newContext({ viewport: { width: 1440, height: 900 } });
 const p = await ctx.newPage();
+await semearSessao(p);
 const erros = [];
 p.on('pageerror', (e) => erros.push(e.message));
 
@@ -43,6 +45,7 @@ checar(true, 'voltar leva para /analise');
 // No celular, /analise/conferencias nao existe: cai na coleta.
 const movel = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
 const pm = await movel.newPage();
+await semearSessao(pm);
 await pm.goto(`${BASE}/analise/conferencias`);
 await pm.waitForFunction(() => location.pathname === '/coleta', { timeout: 8000 });
 checar(true, 'celular: relatorio redireciona para a coleta');
@@ -57,6 +60,7 @@ await movel.close();
 {
   const ctx2 = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
   const p2 = await ctx2.newPage();
+  await semearSessao(p2);
   const hoje = new Date().toISOString();
   // c1 vem no formato de hoje (instantes). c2 vem no formato ANTIGO, so' com
   // o texto: e' o que um servidor revertido devolveria, e a tela precisa

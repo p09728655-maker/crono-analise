@@ -15,8 +15,7 @@
  *    continua nomeando as paradas antigas. Excluir so' passa quando nada no
  *    banco aponta para aquele codigo — e' o caso do motivo criado errado.
  */
-import { sql } from './_lib/db.js';
-import { autenticar } from './_lib/auth.js';
+import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
 import { inteiro, lista, texto, uuid } from './_lib/validar.js';
 
@@ -52,8 +51,8 @@ function codigoDe(valor) {
  * origens moram na mesma tabela e se alcanca a empresa por qualquer uma
  * delas (operacao -> estudo -> empresa, ou conferencia -> empresa).
  */
-async function estaEmUso(empresaId, codigo, rotulo) {
-  const [usada] = await sql`
+async function estaEmUso(db, empresaId, codigo, rotulo) {
+  const [usada] = await db`
     SELECT 1 AS usado
       FROM paradas p
       LEFT JOIN operacoes o    ON o.id = p.operacao_id
@@ -65,7 +64,7 @@ async function estaEmUso(empresaId, codigo, rotulo) {
   return Boolean(usada);
 }
 
-const listar = (empresaId) => sql`
+const listar = (db, empresaId) => db`
   SELECT id, codigo, rotulo, acao, ordem, ativo
     FROM motivos_parada
    WHERE empresa_id = ${empresaId}
@@ -73,130 +72,137 @@ const listar = (empresaId) => sql`
 
 export default handler(async (req, res) => {
   permitir(req, ['GET', 'POST', 'PATCH', 'DELETE']);
-  const { empresaId } = await autenticar(req);
+  const auth = await autenticar(req);
+  const { empresaId } = auth;
   const id = req.query?.id;
 
   if (req.method === 'GET') {
-    return json(res, 200, { motivos: await listar(empresaId) });
+    return auth.rls(async (db) => json(res, 200, { motivos: await listar(db, empresaId) }));
   }
 
-  if (req.method === 'POST') {
-    const corpo = await lerCorpo(req);
+  // A lista mestre e' decisao de administrador: e' ela que da' nome a toda
+  // parada ja' registrada — mesma regra da politica de RLS.
+  exigirPapel(auth, ['admin'], 'So o administrador altera o cadastro de motivos');
+  return auth.rls(async (db) => {
 
-    /**
-     * Carga inicial: grava de uma vez a lista que o app ja' usava.
-     *
-     * Sem ela a primeira visita a' tela mostraria um cadastro vazio e
-     * pediria que o analista redigitasse os nove motivos que ele ja' via na
-     * coleta — trabalho que o proprio app pode fazer.
-     */
-    if (Array.isArray(corpo.motivos)) {
-      const itens = lista(corpo.motivos, 'motivos', { max: 100 }).map((m, i) => ({
-        codigo: codigoDe(m?.codigo || m?.rotulo),
-        rotulo: texto(m?.rotulo, `motivos[${i}].rotulo`, { obrigatorio: true, max: 60 }),
-        acao: texto(m?.acao, `motivos[${i}].acao`, { max: 300 }),
-        ordem: i,
-      }));
-      for (const m of itens) {
-        // ON CONFLICT DO NOTHING: repetir a carga nao duplica nem sobrescreve
-        // o que o analista ja' ajustou a mao.
-        await sql`
-          INSERT INTO motivos_parada (empresa_id, codigo, rotulo, acao, ordem)
-          VALUES (${empresaId}, ${m.codigo}, ${m.rotulo}, ${m.acao}, ${m.ordem})
-          ON CONFLICT (empresa_id, codigo) DO NOTHING`;
+    if (req.method === 'POST') {
+      const corpo = await lerCorpo(req);
+
+      /**
+       * Carga inicial: grava de uma vez a lista que o app ja' usava.
+       *
+       * Sem ela a primeira visita a' tela mostraria um cadastro vazio e
+       * pediria que o analista redigitasse os nove motivos que ele ja' via na
+       * coleta — trabalho que o proprio app pode fazer.
+       */
+      if (Array.isArray(corpo.motivos)) {
+        const itens = lista(corpo.motivos, 'motivos', { max: 100 }).map((m, i) => ({
+          codigo: codigoDe(m?.codigo || m?.rotulo),
+          rotulo: texto(m?.rotulo, `motivos[${i}].rotulo`, { obrigatorio: true, max: 60 }),
+          acao: texto(m?.acao, `motivos[${i}].acao`, { max: 300 }),
+          ordem: i,
+        }));
+        for (const m of itens) {
+          // ON CONFLICT DO NOTHING: repetir a carga nao duplica nem sobrescreve
+          // o que o analista ja' ajustou a mao.
+          await db`
+            INSERT INTO motivos_parada (empresa_id, codigo, rotulo, acao, ordem)
+            VALUES (${empresaId}, ${m.codigo}, ${m.rotulo}, ${m.acao}, ${m.ordem})
+            ON CONFLICT (empresa_id, codigo) DO NOTHING`;
+        }
+        return json(res, 201, { motivos: await listar(db, empresaId) });
       }
-      return json(res, 201, { motivos: await listar(empresaId) });
+
+      const rotulo = texto(corpo.rotulo, 'rotulo', { obrigatorio: true, max: 60 });
+      const codigo = codigoDe(corpo.codigo || rotulo);
+      const acao = texto(corpo.acao, 'acao', { max: 300 });
+
+      const [existe] = await db`
+        SELECT rotulo FROM motivos_parada WHERE empresa_id = ${empresaId} AND codigo = ${codigo}`;
+      if (existe) {
+        throw new ErroHttp(409, `Ja existe um motivo com este codigo: "${existe.rotulo}"`);
+      }
+
+      const [{ proxima }] = await db`
+        SELECT coalesce(max(ordem) + 1, 0) AS proxima
+          FROM motivos_parada WHERE empresa_id = ${empresaId}`;
+      const [motivo] = await db`
+        INSERT INTO motivos_parada (empresa_id, codigo, rotulo, acao, ordem)
+        VALUES (${empresaId}, ${codigo}, ${rotulo}, ${acao}, ${proxima})
+        RETURNING id, codigo, rotulo, acao, ordem, ativo`;
+      return json(res, 201, { motivo });
     }
 
-    const rotulo = texto(corpo.rotulo, 'rotulo', { obrigatorio: true, max: 60 });
-    const codigo = codigoDe(corpo.codigo || rotulo);
-    const acao = texto(corpo.acao, 'acao', { max: 300 });
+    if (req.method === 'PATCH') {
+      const corpo = await lerCorpo(req);
 
-    const [existe] = await sql`
-      SELECT rotulo FROM motivos_parada WHERE empresa_id = ${empresaId} AND codigo = ${codigo}`;
-    if (existe) {
-      throw new ErroHttp(409, `Ja existe um motivo com este codigo: "${existe.rotulo}"`);
-    }
-
-    const [{ proxima }] = await sql`
-      SELECT coalesce(max(ordem) + 1, 0) AS proxima
-        FROM motivos_parada WHERE empresa_id = ${empresaId}`;
-    const [motivo] = await sql`
-      INSERT INTO motivos_parada (empresa_id, codigo, rotulo, acao, ordem)
-      VALUES (${empresaId}, ${codigo}, ${rotulo}, ${acao}, ${proxima})
-      RETURNING id, codigo, rotulo, acao, ordem, ativo`;
-    return json(res, 201, { motivo });
-  }
-
-  if (req.method === 'PATCH') {
-    const corpo = await lerCorpo(req);
-
-    /**
-     * Reordenar chega SEM id, com a lista inteira na ordem final.
-     *
-     * Trocar dois vizinhos com dois PATCH separados deixaria a lista em
-     * estado invalido entre as duas chamadas se a segunda falhasse.
-     */
-    if (!id && Array.isArray(corpo.ordem)) {
-      const ids = lista(corpo.ordem, 'ordem', { max: 100 }).map((v, i) => uuid(v, `ordem[${i}]`));
-      await sql.begin(async (tx) => {
+      /**
+       * Reordenar chega SEM id, com a lista inteira na ordem final.
+       *
+       * Trocar dois vizinhos com dois PATCH separados deixaria a lista em
+       * estado invalido entre as duas chamadas se a segunda falhasse.
+       */
+      if (!id && Array.isArray(corpo.ordem)) {
+        const ids = lista(corpo.ordem, 'ordem', { max: 100 }).map((v, i) => uuid(v, `ordem[${i}]`));
+        // A requisicao inteira ja' e' uma transacao (auth.rls): a lista nunca
+        // fica torta no meio do caminho.
         for (const [i, motivoId] of ids.entries()) {
-          await tx`
+          await db`
             UPDATE motivos_parada SET ordem = ${i}
              WHERE id = ${motivoId} AND empresa_id = ${empresaId}`;
         }
-      });
-      return json(res, 200, { motivos: await listar(empresaId) });
+        return json(res, 200, { motivos: await listar(db, empresaId) });
+      }
+
+      const motivoId = uuid(id, 'id');
+      const [atual] = await db`
+        SELECT id, codigo FROM motivos_parada WHERE id = ${motivoId} AND empresa_id = ${empresaId}`;
+      if (!atual) throw naoEncontrado('Motivo de parada nao encontrado');
+
+      const tem = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
+      if (tem('codigo')) {
+        throw erroValidacao(
+          'O codigo de um motivo nao muda: ele e o que identifica as paradas ja registradas. '
+          + 'Para trocar o nome que aparece na tela, mande "rotulo".',
+        );
+      }
+      if (!tem('rotulo') && !tem('acao') && !tem('ativo') && !tem('ordem')) {
+        throw erroValidacao('Nada a atualizar: informe "rotulo", "acao", "ativo" ou "ordem"');
+      }
+
+      if (tem('rotulo')) {
+        const rotulo = texto(corpo.rotulo, 'rotulo', { obrigatorio: true, max: 60 });
+        await db`UPDATE motivos_parada SET rotulo = ${rotulo} WHERE id = ${motivoId}`;
+      }
+      if (tem('acao')) {
+        await db`UPDATE motivos_parada SET acao = ${texto(corpo.acao, 'acao', { max: 300 })} WHERE id = ${motivoId}`;
+      }
+      if (tem('ativo')) {
+        await db`UPDATE motivos_parada SET ativo = ${Boolean(corpo.ativo)} WHERE id = ${motivoId}`;
+      }
+      if (tem('ordem')) {
+        const ordem = inteiro(corpo.ordem, 'ordem', { min: 0, max: 999, padrao: 0 });
+        await db`UPDATE motivos_parada SET ordem = ${ordem} WHERE id = ${motivoId}`;
+      }
+
+      const [motivo] = await db`
+        SELECT id, codigo, rotulo, acao, ordem, ativo FROM motivos_parada WHERE id = ${motivoId}`;
+      return json(res, 200, { motivo });
     }
 
     const motivoId = uuid(id, 'id');
-    const [atual] = await sql`
-      SELECT id, codigo FROM motivos_parada WHERE id = ${motivoId} AND empresa_id = ${empresaId}`;
-    if (!atual) throw naoEncontrado('Motivo de parada nao encontrado');
+    const [motivo] = await db`
+      SELECT codigo, rotulo FROM motivos_parada WHERE id = ${motivoId} AND empresa_id = ${empresaId}`;
+    if (!motivo) throw naoEncontrado('Motivo de parada nao encontrado');
 
-    const tem = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
-    if (tem('codigo')) {
+    if (await estaEmUso(db, empresaId, motivo.codigo, motivo.rotulo)) {
       throw erroValidacao(
-        'O codigo de um motivo nao muda: ele e o que identifica as paradas ja registradas. '
-        + 'Para trocar o nome que aparece na tela, mande "rotulo".',
+        `"${motivo.rotulo}" ja foi usado em paradas registradas. Desative-o em vez de excluir: `
+        + 'ele some da coleta e as paradas antigas continuam com o nome certo.',
       );
     }
-    if (!tem('rotulo') && !tem('acao') && !tem('ativo') && !tem('ordem')) {
-      throw erroValidacao('Nada a atualizar: informe "rotulo", "acao", "ativo" ou "ordem"');
-    }
 
-    if (tem('rotulo')) {
-      const rotulo = texto(corpo.rotulo, 'rotulo', { obrigatorio: true, max: 60 });
-      await sql`UPDATE motivos_parada SET rotulo = ${rotulo} WHERE id = ${motivoId}`;
-    }
-    if (tem('acao')) {
-      await sql`UPDATE motivos_parada SET acao = ${texto(corpo.acao, 'acao', { max: 300 })} WHERE id = ${motivoId}`;
-    }
-    if (tem('ativo')) {
-      await sql`UPDATE motivos_parada SET ativo = ${Boolean(corpo.ativo)} WHERE id = ${motivoId}`;
-    }
-    if (tem('ordem')) {
-      const ordem = inteiro(corpo.ordem, 'ordem', { min: 0, max: 999, padrao: 0 });
-      await sql`UPDATE motivos_parada SET ordem = ${ordem} WHERE id = ${motivoId}`;
-    }
-
-    const [motivo] = await sql`
-      SELECT id, codigo, rotulo, acao, ordem, ativo FROM motivos_parada WHERE id = ${motivoId}`;
-    return json(res, 200, { motivo });
-  }
-
-  const motivoId = uuid(id, 'id');
-  const [motivo] = await sql`
-    SELECT codigo, rotulo FROM motivos_parada WHERE id = ${motivoId} AND empresa_id = ${empresaId}`;
-  if (!motivo) throw naoEncontrado('Motivo de parada nao encontrado');
-
-  if (await estaEmUso(empresaId, motivo.codigo, motivo.rotulo)) {
-    throw erroValidacao(
-      `"${motivo.rotulo}" ja foi usado em paradas registradas. Desative-o em vez de excluir: `
-      + 'ele some da coleta e as paradas antigas continuam com o nome certo.',
-    );
-  }
-
-  await sql`DELETE FROM motivos_parada WHERE id = ${motivoId} AND empresa_id = ${empresaId}`;
-  return json(res, 200, { acao: 'excluido' });
+    await db`DELETE FROM motivos_parada WHERE id = ${motivoId} AND empresa_id = ${empresaId}`;
+    return json(res, 200, { acao: 'excluido' });
+  });
 });

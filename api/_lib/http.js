@@ -10,6 +10,8 @@ export class ErroHttp extends Error {
 
 export const erroValidacao = (msg, detalhes) => new ErroHttp(400, msg, detalhes);
 export const naoAutorizado = (msg = 'Nao autorizado') => new ErroHttp(401, msg);
+// 403 e' "sei quem voce e', e nao pode" — diferente do 401, que e' "entre".
+export const proibido = (msg = 'Sem permissao') => new ErroHttp(403, msg);
 export const naoEncontrado = (msg = 'Nao encontrado') => new ErroHttp(404, msg);
 
 export function json(res, status, corpo) {

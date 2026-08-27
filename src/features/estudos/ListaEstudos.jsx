@@ -59,7 +59,11 @@ export default function ListaEstudos({
   const carregarIdentificacao = useCallback(() => {
     if (!analise) return;
     // Falha em silencio: cadastro de analista nao pode impedir de ver estudo.
-    listarUsuarios().then((lista) => setAnalistas(lista.filter((u) => u.ativo))).catch(() => {});
+    // Tablet pareado (papel coletor) mora na mesma tabela mas nao e' gente:
+    // nao pode aparecer como opcao de analista.
+    listarUsuarios()
+      .then((lista) => setAnalistas(lista.filter((u) => u.ativo && u.papel !== 'coletor')))
+      .catch(() => {});
     quemSouEu().then(setEu).catch(() => {});
   }, [analise]);
 

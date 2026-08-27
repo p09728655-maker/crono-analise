@@ -1,13 +1,23 @@
 /**
- * Autenticacao por token de servico.
+ * Autenticacao: Supabase Auth como fonte oficial de identidade.
  *
- * Deliberadamente simples: o app roda na rede da fabrica, com um numero
- * pequeno e conhecido de analistas. Nao ha cadastro publico nem senha para
- * vazar. Se no futuro houver acesso externo, trocar por OIDC/JWT aqui — o
- * resto da API so' depende do objeto devolvido por autenticar().
+ * O caminho normal e' um JWT do Supabase no Authorization — do analista que
+ * entrou no PC com e-mail e senha, ou do tablet pareado como aparelho
+ * coletor. O token e' verificado localmente (api/_lib/jwt.js) e as MESMAS
+ * claims vao para o Postgres via rls(), onde as politicas de RLS avaliam a
+ * identidade de novo. A API filtra por empresa E o banco filtra por
+ * empresa: duas camadas, de proposito.
+ *
+ * TRANSICAO — o token de servico antigo (API_TOKEN) continua aceito
+ * ENQUANTO a variavel existir na Vercel, porque tablet com bundle antigo em
+ * cache ainda fala por ele. Nesse modo nada muda: papel `postgres`, RLS
+ * ignorada, filtro so' na aplicacao — como sempre foi. Apagar API_TOKEN e
+ * VITE_API_TOKEN do ambiente e' o interruptor que encerra a transicao;
+ * nenhum deploy novo embute mais esse token.
  */
-import { naoAutorizado } from './http.js';
-import { sql } from './db.js';
+import { naoAutorizado, proibido } from './http.js';
+import { comRls, sql } from './db.js';
+import { verificarToken } from './jwt.js';
 import { hashDoToken } from './senha.js';
 
 function tokenDaRequisicao(req) {
@@ -29,7 +39,7 @@ function comparaSeguro(a, b) {
 }
 
 /**
- * Cache da empresa resolvida.
+ * Cache da empresa resolvida (so' o modo de servico usa).
  *
  * Instancia serverless quente reaproveita o modulo entre requisicoes, entao
  * a consulta acontece uma vez por instancia, nao a cada chamada.
@@ -37,14 +47,12 @@ function comparaSeguro(a, b) {
 let empresaCache = null;
 
 /**
- * Resolve a empresa do ambiente.
+ * Resolve a empresa do ambiente — caminho do token de servico, onde nao ha'
+ * usuario para dizer a qual empresa pertence.
  *
- * EMPRESA_ID e' OPCIONAL: quando o banco tem uma unica empresa — o caso
- * normal de uma instalacao por fabrica — ela e' descoberta sozinha. Isso
- * elimina uma variavel de ambiente que so' existia para ser digitada errada.
- *
- * Com mais de uma empresa a variavel passa a ser obrigatoria, porque ai' a
- * escolha e' ambigua e adivinhar seria pior que falhar.
+ * EMPRESA_ID e' OPCIONAL: com uma unica empresa no banco — o caso normal de
+ * uma instalacao por fabrica — ela e' descoberta sozinha. Com mais de uma, a
+ * variavel vira obrigatoria: adivinhar seria pior que falhar.
  */
 async function resolverEmpresa() {
   if (empresaCache) return empresaCache;
@@ -74,13 +82,12 @@ async function resolverEmpresa() {
 }
 
 /**
- * Quem esta' pedindo — quando da' para saber.
+ * Identidade do bundle antigo: sessao propria via X-Sessao.
  *
- * Devolve o usuario da sessao ou null. NUNCA recusa a requisicao: o token de
- * servico e' que autoriza, e o tablet nao tem sessao nenhuma. Isto existe
- * para carimbar autoria, nao para barrar ninguem — ver api/_lib/senha.js.
+ * So' o modo de servico ainda passa por aqui, e so' ate a tabela `sessoes`
+ * cair na fase final da migracao — o try/catch ja' cobre esse dia.
  */
-export async function usuarioDaSessao(req, empresaId) {
+async function usuarioDaSessaoAntiga(req, empresaId) {
   const bruto = req.headers?.['x-sessao'];
   const token = Array.isArray(bruto) ? bruto[0] : bruto;
   if (!token || typeof token !== 'string' || token.length > 200) return null;
@@ -96,27 +103,69 @@ export async function usuarioDaSessao(req, empresaId) {
          AND u.empresa_id = ${empresaId}`;
     return linha || null;
   } catch {
-    // Instalacao sem a tabela `sessoes` ainda: o app inteiro continua
-    // funcionando sem identificacao, que e' exatamente como era antes.
     return null;
   }
 }
 
+/**
+ * Autentica a requisicao e devolve com quem a API esta falando.
+ *
+ *   modo      'usuario' (JWT do Supabase) ou 'servico' (token de transicao)
+ *   empresaId a empresa de quem chama — TODO filtro de consulta usa isto
+ *   usuario   {id, nome, email, papel} — no modo servico, o da sessao
+ *             antiga quando ha' uma; pode ser null
+ *   papel     o papel do usuario, ou 'servico'
+ *   rls(fn)   executa fn(tx) dentro da RLS como este usuario; no modo de
+ *             servico executa direto, sem RLS — o comportamento antigo
+ */
 export async function autenticar(req) {
-  const esperado = process.env.API_TOKEN;
-  if (!esperado) {
-    console.error('[ritmopatrimar] API_TOKEN nao configurado — recusando tudo.');
-    // A mensagem diz o que fazer, nao apenas o que falta: quem le esta
-    // travado no painel da Vercel, nao lendo codigo.
-    throw naoAutorizado(
-      'Servidor sem API_TOKEN. Configure a variavel na Vercel e publique um '
-      + 'deploy novo — variavel nao entra em deploy que ja existe. '
-      + 'Abra /api/status para ver o que falta.',
-    );
+  const token = tokenDaRequisicao(req);
+  if (!token) throw naoAutorizado('Entre no sistema para continuar');
+
+  const servico = process.env.API_TOKEN;
+  if (servico && comparaSeguro(token, servico)) {
+    const { empresaId, empresaNome } = await resolverEmpresa();
+    const usuario = await usuarioDaSessaoAntiga(req, empresaId);
+    return {
+      modo: 'servico',
+      empresaId,
+      empresaNome,
+      usuario,
+      papel: 'servico',
+      rls: (fn) => fn(sql),
+    };
   }
 
-  const token = tokenDaRequisicao(req);
-  if (!token || !comparaSeguro(token, esperado)) throw naoAutorizado('Token invalido');
+  const claims = await verificarToken(token);
 
-  return resolverEmpresa();
+  // O perfil e' quem diz a empresa e o papel. Sem perfil, sem entrada:
+  // um token anonimo do Supabase, por exemplo, nao abre nada aqui.
+  const [usuario] = await sql`
+    SELECT id, nome, email, papel, ativo, empresa_id
+      FROM usuarios WHERE id = ${claims.sub}`;
+  if (!usuario || !usuario.ativo) {
+    throw naoAutorizado('Acesso revogado ou conta ainda nao cadastrada neste sistema');
+  }
+
+  return {
+    modo: 'usuario',
+    empresaId: usuario.empresa_id,
+    usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: usuario.papel },
+    papel: usuario.papel,
+    rls: (fn) => comRls(claims, fn),
+  };
+}
+
+/**
+ * Barreira de papel na APLICACAO — espelho das politicas de RLS.
+ *
+ * O banco ja' barra; isto existe para a recusa virar uma mensagem que diz o
+ * porque, em vez de um "0 linhas afetadas" silencioso. O modo de servico
+ * passa direto: e' o comportamento do token antigo durante a transicao.
+ */
+export function exigirPapel(auth, papeis, mensagem) {
+  if (auth.modo === 'servico') return;
+  if (!papeis.includes(auth.papel)) {
+    throw proibido(mensagem || 'Seu papel nao permite esta operacao');
+  }
 }

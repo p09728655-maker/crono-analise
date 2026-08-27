@@ -11,7 +11,8 @@
  *    pode travar quem nunca abriu Ferramentas;
  *  - com cadastro, ele vira lista, que e o unico jeito de acabar com as
  *    grafias;
- *  - a tela diz que identificar-se NAO restringe acesso, porque nao restringe.
+ *  - a tela diz que papel e senha CONTROLAM acesso, porque agora controlam
+ *    (Supabase Auth + RLS) — e oferece o pareamento de tablets.
  *
  * Uso: npm run dev (porta 5199) e depois node test/e2e/analistas.e2e.mjs
  */
@@ -73,8 +74,10 @@ await p.waitForFunction(
 const texto = await dialogo.innerText();
 checar(!/furadeira2026/.test(texto), 'a senha NAO aparece em lugar nenhum da tela');
 checar(/com senha/.test(texto), 'a tela diz quem consegue se identificar, sem mostrar a senha');
-checar(/não restringe o acesso/.test(texto),
-  'a tela e honesta: identificar-se nao restringe acesso de ninguem');
+checar(/o papel decide o que cada um pode fazer/.test(texto),
+  'a tela e honesta: papel e senha agora CONTROLAM o acesso');
+checar(/tablets pareados/i.test(texto),
+  'a secao de tablets pareados existe — e o caminho de revogar um aparelho');
 
 /* ----------------------------------- desativar tira da lista de escolha */
 await dialogo.getByRole('button', { name: 'Desativar Oderli Sergio Garcia' }).click();

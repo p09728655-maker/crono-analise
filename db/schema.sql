@@ -1,7 +1,92 @@
 -- RitmoPatrimar — schema Postgres
 -- Convencao: tempos em MILISSEGUNDOS (bigint), datas em timestamptz (UTC).
+--
+-- ORDEM IMPORTA num banco que ja' esta' no ar: este arquivo contem passos
+-- DESTRUTIVOS do fim das migracoes (derrubar hora_inicial/hora_final, a
+-- autenticacao propria e a tabela sessoes). Aplique-o junto com — ou depois
+-- de — publicar a versao que nao usa mais essas colunas (v2.34+). Instalacao
+-- nova pode rodar o arquivo inteiro sem pensar.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- --------------------------------------------------- identidade (auth)
+-- A FONTE OFICIAL de identidade e' o Supabase Auth: senha, sessao e emissao
+-- de token vivem no schema `auth`, que o Supabase mantem. `usuarios` aqui e'
+-- so' PERFIL (nome, papel, empresa) — mesma linha, mesmo id, um para um.
+--
+-- Num Postgres local (teste/dev), o schema `auth` nao existe. Este bloco
+-- cria o MINIMO que a API escreve e que as politicas leem, para os testes
+-- de integracao provarem o mesmo comportamento. No Supabase ele nao faz
+-- absolutamente nada.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'auth') THEN
+    CREATE SCHEMA auth;
+    CREATE TABLE auth.users (
+      instance_id        uuid,
+      id                 uuid PRIMARY KEY,
+      aud                text,
+      role               text,
+      email              text,
+      encrypted_password text,
+      email_confirmed_at timestamptz,
+      created_at         timestamptz,
+      updated_at         timestamptz,
+      raw_app_meta_data  jsonb,
+      raw_user_meta_data jsonb,
+      confirmation_token text,
+      recovery_token     text,
+      email_change_token_new text,
+      email_change       text,
+      is_sso_user        boolean DEFAULT false,
+      is_anonymous       boolean DEFAULT false
+    );
+    CREATE TABLE auth.identities (
+      id             uuid PRIMARY KEY,
+      user_id        uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+      provider_id    text,
+      provider       text,
+      identity_data  jsonb,
+      last_sign_in_at timestamptz,
+      created_at     timestamptz,
+      updated_at     timestamptz
+    );
+    CREATE TABLE auth.sessions (
+      id      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
+    );
+    -- A mesma definicao do Supabase: o "quem" sai das claims do JWT que a
+    -- API poe na transacao (request.jwt.claims).
+    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
+      $f$ SELECT nullif(current_setting('request.jwt.claims', true)::json->>'sub', '')::uuid $f$;
+  END IF;
+END $$;
+
+-- A API chama extensions.crypt/gen_salt (bcrypt, o formato que o GoTrue
+-- confere). No Supabase o pgcrypto ja' mora em `extensions`; num banco local
+-- ele acabou de nascer em `public` — muda de casa aqui.
+CREATE SCHEMA IF NOT EXISTS extensions;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'extensions' AND p.proname = 'crypt'
+  ) THEN
+    ALTER EXTENSION pgcrypto SET SCHEMA extensions;
+  END IF;
+END $$;
+
+-- Papeis que o Supabase ja' tem e um banco local nao: as politicas de RLS
+-- abaixo sao concedidas a `authenticated`, entao ele precisa existir.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    CREATE ROLE authenticated NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    CREATE ROLE anon NOLOGIN;
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------- empresas
 CREATE TABLE IF NOT EXISTS empresas (
@@ -12,13 +97,16 @@ CREATE TABLE IF NOT EXISTS empresas (
 );
 
 -- ---------------------------------------------------------------- usuarios
+-- PERFIL de uma conta do Supabase Auth: id = auth.users.id, um para um.
+-- Senha NAO mora aqui — nunca mais. 'coletor' e' o papel do TABLET pareado
+-- (api/dispositivos.js): um aparelho com identidade propria, que so' coleta.
 CREATE TABLE IF NOT EXISTS usuarios (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id          uuid PRIMARY KEY,
   empresa_id  uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
   nome        text NOT NULL,
   email       text,
   papel       text NOT NULL DEFAULT 'analista'
-              CHECK (papel IN ('admin', 'analista', 'leitor')),
+              CHECK (papel IN ('admin', 'analista', 'leitor', 'coletor')),
   ativo       boolean NOT NULL DEFAULT true,
   criado_em   timestamptz NOT NULL DEFAULT now()
 );
@@ -26,32 +114,48 @@ CREATE TABLE IF NOT EXISTS usuarios (
 -- depender da extensao citext (que o linter do Supabase sinaliza no schema public).
 CREATE UNIQUE INDEX IF NOT EXISTS usuarios_email_unq ON usuarios (lower(email)) WHERE email IS NOT NULL;
 
--- Senha em scrypt com sal por usuario, quando houver. E OPCIONAL: analista
--- que so' precisa ser escolhido num estudo nao entra no sistema, e criar
--- senha para quem nao usa so' produz senha anotada em post-it.
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS senha_hash       text;
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS senha_salt       text;
+-- Banco que ja' existia: o CHECK antigo nao conhecia 'coletor', e o id tinha
+-- DEFAULT proprio (agora ele vem SEMPRE do auth.users).
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_papel_check;
+ALTER TABLE usuarios ADD CONSTRAINT usuarios_papel_check
+  CHECK (papel IN ('admin', 'analista', 'leitor', 'coletor'));
+ALTER TABLE usuarios ALTER COLUMN id DROP DEFAULT;
+
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_acesso_em timestamptz;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS atualizado_em    timestamptz NOT NULL DEFAULT now();
+-- Perfil profissional, do desenho de cadastro do PCP. Nenhum obrigatorio:
+-- quem nao souber o cargo de alguem nao pode ficar impedido de cadastra-lo.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cargo text;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS area  text;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS setor text;
 
--- ----------------------------------------------------------------- sessoes
--- Identificacao do analista no PC. NAO e controle de acesso: o token de
--- servico embutido no bundle abre a API sozinho, porque o tablet entra sem
--- senha, de luva, diante da maquina. Isto responde "quem esta usando este
--- computador" — e e' o que carimba autoria no estudo.
---
--- Guardamos o HASH do token, nao o token: vazar a tabela nao pode entregar
--- sessao valida a ninguem. Mesmo motivo pelo qual a senha tambem nao e
--- guardada em claro.
-CREATE TABLE IF NOT EXISTS sessoes (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  token_hash text NOT NULL,
-  criado_em  timestamptz NOT NULL DEFAULT now(),
-  expira_em  timestamptz NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS sessoes_token_unq   ON sessoes (token_hash);
-CREATE INDEX        IF NOT EXISTS sessoes_usuario_idx ON sessoes (usuario_id, expira_em DESC);
+-- A tela de Analistas lista os ativos da empresa a cada abertura. Parcial
+-- porque inativo quase nunca e' consultado.
+CREATE INDEX IF NOT EXISTS usuarios_empresa_idx ON usuarios (empresa_id) WHERE ativo;
+
+-- O laco com a identidade oficial: perfil sem conta nao existe. So' entra
+-- quando todo usuario ja' tem a conta correspondente (fase B da migracao) —
+-- num banco novo, e' imediato.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM usuarios u
+     WHERE NOT EXISTS (SELECT 1 FROM auth.users a WHERE a.id = u.id)
+  ) THEN
+    RAISE NOTICE 'usuarios_auth_fkey adiada: ha usuario sem conta no auth.users. Ligue-os antes (fase B).';
+  ELSE
+    ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_auth_fkey;
+    ALTER TABLE usuarios ADD CONSTRAINT usuarios_auth_fkey
+      FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+-- A autenticacao propria (scrypt + tabela sessoes) saiu: era um segundo
+-- sistema de login dentro de `public`, exatamente o que o Supabase Auth ja'
+-- faz. Derrubar perde no maximo a senha e a sessao de teste da transicao.
+ALTER TABLE usuarios DROP COLUMN IF EXISTS senha_hash;
+ALTER TABLE usuarios DROP COLUMN IF EXISTS senha_salt;
+DROP TABLE IF EXISTS sessoes;
 
 -- ---------------------------------------------------------------- estudos
 CREATE TABLE IF NOT EXISTS estudos (
@@ -64,7 +168,8 @@ CREATE TABLE IF NOT EXISTS estudos (
   -- como fonte enquanto o estudo nao for ligado ao cadastro: foi este campo
   -- que produziu tres grafias da mesma pessoa (ODERLI, ODERLI GARCIA,
   -- ODERLI SERGIO GARCIA), e qualquer indicador por analista contava tres.
-  analista       text,
+  -- "_legado" no nome diz o que ele e': registro do passado, nao o vinculo.
+  analista_legado text,
   setor          text,
   recurso        text,                    -- posto/maquina (ex.: "Furadeira 03")
   data_estudo    date NOT NULL DEFAULT CURRENT_DATE,
@@ -84,6 +189,19 @@ ALTER TABLE estudos ADD COLUMN IF NOT EXISTS analista_id uuid
   REFERENCES usuarios(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS estudos_analista_idx ON estudos (analista_id)
   WHERE analista_id IS NOT NULL;
+
+-- Banco que ja' existia: o texto digitado passa a se chamar pelo que e'.
+-- Renomear (e nao remover) preserva a unica autoria que os estudos antigos
+-- tem, ate' cada um ser ligado a um usuario pela tela Editar estudo.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'estudos' AND column_name = 'analista'
+  ) THEN
+    ALTER TABLE estudos RENAME COLUMN analista TO analista_legado;
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------- operacoes
 CREATE TABLE IF NOT EXISTS operacoes (
@@ -340,28 +458,218 @@ CREATE TRIGGER motivos_parada_touch BEFORE UPDATE ON motivos_parada
   FOR EACH ROW EXECUTE FUNCTION toca_atualizado_em();
 
 -- ------------------------------------------------------------------- RLS
--- O schema `public` e exposto pelo PostgREST com a chave anonima, que vive
--- no navegador. Sem RLS, qualquer pessoa com essa chave leria e escreveria
--- todos os estudos.
+-- A seguranca MORA AQUI, nao na tela. A API verifica o JWT do Supabase e
+-- entra na transacao como o papel `authenticated`, com as claims em
+-- request.jwt.claims (api/_lib/db.js) — dai' em diante e' o banco que
+-- decide, linha a linha, o que aquele usuario alcanca. Um WHERE esquecido
+-- em qualquer consulta nova nao expoe dado de outra empresa: o Postgres
+-- barra sozinho.
 --
--- Habilitamos RLS SEM policy nenhuma: nega 100% do acesso anonimo. O backend
--- do app nao passa pelo PostgREST — conecta direto no Postgres com o papel
--- `postgres`, que ignora RLS por definicao. A API segue funcionando.
---
--- Verificado: `SET ROLE anon; SELECT * FROM estudos` retorna
--- "permission denied for table estudos".
-ALTER TABLE empresas    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE usuarios    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE estudos     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE operacoes   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE observacoes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE paradas     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE conferencias ENABLE ROW LEVEL SECURITY;
-ALTER TABLE configuracoes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE motivos_parada ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sessoes        ENABLE ROW LEVEL SECURITY;
+-- Papeis do sistema (usuarios.papel):
+--   admin    tudo da propria empresa, inclusive os segredos (configuracoes)
+--   analista mede e escreve o dominio; nao mexe em cadastro nem segredo
+--   leitor   so' le
+--   coletor  o TABLET pareado: coleta (estudos, operacoes, ciclos, paradas,
+--            conferencias) e nada de administracao
 
--- Defesa em camadas: remove tambem os grants diretos dos papeis expostos.
-REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas, conferencias,
-  configuracoes, motivos_parada, sessoes
-  FROM anon, authenticated;
+-- As funcoes que sustentam tudo. SECURITY DEFINER nao e' enfeite: sem ele,
+-- a politica de `usuarios` consultaria `usuarios` e entraria em recursao
+-- infinita. search_path = '' fecha a porta de sequestro de esquema.
+CREATE OR REPLACE FUNCTION public.empresa_atual()
+RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT empresa_id FROM public.usuarios WHERE id = auth.uid() AND ativo
+$$;
+
+CREATE OR REPLACE FUNCTION public.papel_atual()
+RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT papel FROM public.usuarios WHERE id = auth.uid() AND ativo
+$$;
+
+-- Coletar = registrar medicao e montar estudo. Inclui o tablet.
+CREATE OR REPLACE FUNCTION public.pode_coletar()
+RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT public.papel_atual() IN ('admin', 'analista', 'coletor')
+$$;
+
+-- Escrever de ANALISE (arquivar conferencia, marcar parada no PC, descartar
+-- ciclo): trabalho de gente, nao de aparelho.
+CREATE OR REPLACE FUNCTION public.pode_escrever()
+RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT public.papel_atual() IN ('admin', 'analista')
+$$;
+
+-- A empresa chega pelo estudo — uma funcao evita repetir o EXISTS.
+CREATE OR REPLACE FUNCTION public.estudo_e_meu(p_estudo uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT EXISTS (SELECT 1 FROM public.estudos e
+                  WHERE e.id = p_estudo AND e.empresa_id = public.empresa_atual())
+$$;
+
+CREATE OR REPLACE FUNCTION public.operacao_e_minha(p_operacao uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT EXISTS (SELECT 1 FROM public.operacoes o
+                    JOIN public.estudos e ON e.id = o.estudo_id
+                  WHERE o.id = p_operacao AND e.empresa_id = public.empresa_atual())
+$$;
+
+-- A origem da parada e' exclusiva (paradas_origem_chk): uma funcao cobre as duas.
+CREATE OR REPLACE FUNCTION public.parada_e_minha(p_operacao uuid, p_conferencia uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT CASE
+    WHEN p_operacao IS NOT NULL THEN public.operacao_e_minha(p_operacao)
+    WHEN p_conferencia IS NOT NULL THEN EXISTS (
+      SELECT 1 FROM public.conferencias c
+       WHERE c.id = p_conferencia AND c.empresa_id = public.empresa_atual())
+    ELSE false END
+$$;
+
+-- Estudo sem nenhum ciclo coletado: e' o unico que nao-admin pode APAGAR —
+-- a mesma regra que a API sempre teve (com ciclo, arquiva; sem, exclui).
+CREATE OR REPLACE FUNCTION public.estudo_sem_ciclos(p_estudo uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT NOT EXISTS (
+    SELECT 1 FROM public.observacoes ob
+      JOIN public.operacoes o ON o.id = ob.operacao_id
+     WHERE o.estudo_id = p_estudo)
+$$;
+
+ALTER TABLE empresas       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usuarios       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE estudos        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operacoes      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE observacoes    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE paradas        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conferencias   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE configuracoes  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE motivos_parada ENABLE ROW LEVEL SECURITY;
+
+-- empresas: cada um ve so' a sua. Criar empresa e' operacao de plataforma,
+-- fora do alcance de usuario.
+DROP POLICY IF EXISTS empresas_le ON empresas;
+CREATE POLICY empresas_le ON empresas FOR SELECT TO authenticated
+  USING (id = public.empresa_atual());
+DROP POLICY IF EXISTS empresas_admin_atualiza ON empresas;
+CREATE POLICY empresas_admin_atualiza ON empresas FOR UPDATE TO authenticated
+  USING (id = public.empresa_atual() AND public.papel_atual() = 'admin')
+  WITH CHECK (id = public.empresa_atual());
+
+-- usuarios: a empresa inteira se ve (a tela de Analistas e a escolha do
+-- analista no estudo dependem disso). Cada um edita o proprio perfil;
+-- cadastro, papel e ativacao sao de admin.
+DROP POLICY IF EXISTS usuarios_le ON usuarios;
+CREATE POLICY usuarios_le ON usuarios FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS usuarios_admin_cria ON usuarios;
+CREATE POLICY usuarios_admin_cria ON usuarios FOR INSERT TO authenticated
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+DROP POLICY IF EXISTS usuarios_atualiza ON usuarios;
+CREATE POLICY usuarios_atualiza ON usuarios FOR UPDATE TO authenticated
+  USING (empresa_id = public.empresa_atual()
+         AND (id = auth.uid() OR public.papel_atual() = 'admin'))
+  WITH CHECK (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS usuarios_admin_apaga ON usuarios;
+CREATE POLICY usuarios_admin_apaga ON usuarios FOR DELETE TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+
+-- estudos: quem coleta cria e edita. Apagar estudo COM ciclos e' so' de
+-- admin — e' a perda irrecuperavel do sistema (CASCADE leva os ciclos).
+DROP POLICY IF EXISTS estudos_le ON estudos;
+CREATE POLICY estudos_le ON estudos FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS estudos_cria ON estudos;
+CREATE POLICY estudos_cria ON estudos FOR INSERT TO authenticated
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.pode_coletar());
+DROP POLICY IF EXISTS estudos_atualiza ON estudos;
+CREATE POLICY estudos_atualiza ON estudos FOR UPDATE TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.pode_coletar())
+  WITH CHECK (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS estudos_apaga ON estudos;
+CREATE POLICY estudos_apaga ON estudos FOR DELETE TO authenticated
+  USING (empresa_id = public.empresa_atual()
+         AND (public.papel_atual() = 'admin'
+              OR (public.pode_coletar() AND public.estudo_sem_ciclos(id))));
+
+-- operacoes: estrutura do estudo — quem coleta monta e desmonta.
+DROP POLICY IF EXISTS operacoes_le ON operacoes;
+CREATE POLICY operacoes_le ON operacoes FOR SELECT TO authenticated
+  USING (public.estudo_e_meu(estudo_id));
+DROP POLICY IF EXISTS operacoes_escreve ON operacoes;
+CREATE POLICY operacoes_escreve ON operacoes FOR ALL TO authenticated
+  USING (public.estudo_e_meu(estudo_id) AND public.pode_coletar())
+  WITH CHECK (public.estudo_e_meu(estudo_id) AND public.pode_coletar());
+
+-- observacoes: o ciclo NASCE de quem coleta; descartar (UPDATE) e' decisao
+-- de analise; apagar de vez, so' admin.
+DROP POLICY IF EXISTS observacoes_le ON observacoes;
+CREATE POLICY observacoes_le ON observacoes FOR SELECT TO authenticated
+  USING (public.operacao_e_minha(operacao_id));
+DROP POLICY IF EXISTS observacoes_cria ON observacoes;
+CREATE POLICY observacoes_cria ON observacoes FOR INSERT TO authenticated
+  WITH CHECK (public.operacao_e_minha(operacao_id) AND public.pode_coletar());
+DROP POLICY IF EXISTS observacoes_atualiza ON observacoes;
+CREATE POLICY observacoes_atualiza ON observacoes FOR UPDATE TO authenticated
+  USING (public.operacao_e_minha(operacao_id) AND public.pode_escrever())
+  WITH CHECK (public.operacao_e_minha(operacao_id));
+DROP POLICY IF EXISTS observacoes_admin_apaga ON observacoes;
+CREATE POLICY observacoes_admin_apaga ON observacoes FOR DELETE TO authenticated
+  USING (public.operacao_e_minha(operacao_id) AND public.papel_atual() = 'admin');
+
+-- paradas: nascem na coleta (tablet inclusive); corrigir e apagar sao da
+-- analise no PC (a lista de paradas da conferencia regrava inteira).
+DROP POLICY IF EXISTS paradas_le ON paradas;
+CREATE POLICY paradas_le ON paradas FOR SELECT TO authenticated
+  USING (public.parada_e_minha(operacao_id, conferencia_id));
+DROP POLICY IF EXISTS paradas_cria ON paradas;
+CREATE POLICY paradas_cria ON paradas FOR INSERT TO authenticated
+  WITH CHECK (public.parada_e_minha(operacao_id, conferencia_id) AND public.pode_coletar());
+DROP POLICY IF EXISTS paradas_atualiza ON paradas;
+CREATE POLICY paradas_atualiza ON paradas FOR UPDATE TO authenticated
+  USING (public.parada_e_minha(operacao_id, conferencia_id) AND public.pode_escrever())
+  WITH CHECK (public.parada_e_minha(operacao_id, conferencia_id));
+DROP POLICY IF EXISTS paradas_apaga ON paradas;
+CREATE POLICY paradas_apaga ON paradas FOR DELETE TO authenticated
+  USING (public.parada_e_minha(operacao_id, conferencia_id) AND public.pode_escrever());
+
+-- conferencias: nascem na coleta; arquivar/marcar parada e' analise;
+-- excluir medicao e' admin — a operacao sem volta deste relatorio.
+DROP POLICY IF EXISTS conferencias_le ON conferencias;
+CREATE POLICY conferencias_le ON conferencias FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS conferencias_cria ON conferencias;
+CREATE POLICY conferencias_cria ON conferencias FOR INSERT TO authenticated
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.pode_coletar());
+DROP POLICY IF EXISTS conferencias_atualiza ON conferencias;
+CREATE POLICY conferencias_atualiza ON conferencias FOR UPDATE TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.pode_escrever())
+  WITH CHECK (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS conferencias_admin_apaga ON conferencias;
+CREATE POLICY conferencias_admin_apaga ON conferencias FOR DELETE TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+
+-- motivos_parada: todo mundo le (a coleta precisa da lista), so' admin mexe
+-- — e' a lista que da' nome a toda parada ja' registrada.
+DROP POLICY IF EXISTS motivos_le ON motivos_parada;
+CREATE POLICY motivos_le ON motivos_parada FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS motivos_admin ON motivos_parada;
+CREATE POLICY motivos_admin ON motivos_parada FOR ALL TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin')
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+
+-- configuracoes: GUARDA SEGREDO (a chave da IA). Nem o leitor nem o
+-- analista enxergam — e o codigo de pareamento tambem mora aqui.
+DROP POLICY IF EXISTS configuracoes_admin ON configuracoes;
+CREATE POLICY configuracoes_admin ON configuracoes FOR ALL TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin')
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+
+-- Contraintuitivo e importante: `authenticated` PRECISA do GRANT para a
+-- politica ter o que filtrar. Sem GRANT o Postgres recusa antes de olhar a
+-- politica — e "permission denied" onde se esperava "0 linhas" leva a
+-- diagnosticar o problema errado. `anon` fica sem nada: nao existe acesso
+-- anonimo neste sistema.
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON empresas, usuarios, estudos, operacoes,
+  observacoes, paradas, conferencias, configuracoes, motivos_parada TO authenticated;
+REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas,
+  conferencias, configuracoes, motivos_parada FROM anon;

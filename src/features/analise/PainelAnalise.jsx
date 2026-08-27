@@ -56,7 +56,10 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
   // antigo — que e' como as tres grafias de uma pessoa so' se resolvem.
   const [analistas, setAnalistas] = useState([]);
   useEffect(() => {
-    listarUsuarios().then((l) => setAnalistas(l.filter((u) => u.ativo))).catch(() => {});
+    // Sem os tablets pareados (papel coletor): aparelho nao assina estudo.
+    listarUsuarios()
+      .then((l) => setAnalistas(l.filter((u) => u.ativo && u.papel !== 'coletor')))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

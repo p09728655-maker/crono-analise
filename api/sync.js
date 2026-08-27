@@ -11,8 +11,7 @@
  *      no meio deixaria o estudo com metade dos ciclos e o app sem saber
  *      quais reenviar.
  */
-import { sql } from './_lib/db.js';
-import { autenticar } from './_lib/auth.js';
+import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, handler, json, lerCorpo, permitir } from './_lib/http.js';
 import { dataIso, hora, inteiro, lista, paradasDaConferencia, texto, uuid } from './_lib/validar.js';
 
@@ -30,7 +29,10 @@ const FUSO = 'America/Sao_Paulo';
 
 export default handler(async (req, res) => {
   permitir(req, ['POST']);
-  const { empresaId } = await autenticar(req);
+  const auth = await autenticar(req);
+  const { empresaId } = auth;
+  // E' o endpoint do tablet pareado — e de quem mais coleta. Leitor nao.
+  exigirPapel(auth, ['admin', 'analista', 'coletor']);
   const corpo = await lerCorpo(req);
 
   const observacoes = lista(corpo.observacoes || [], 'observacoes', { max: MAX_ITENS });
@@ -83,22 +85,24 @@ export default handler(async (req, res) => {
     salvoEm: dataIso(c.salvoEm, `conferencias[${i}].salvoEm`, { padrao: new Date().toISOString() }),
   }));
 
-  // Toda operacao referenciada precisa pertencer a esta empresa. Sem esta
-  // checagem, um token valido conseguiria escrever no estudo de outro cliente.
-  // (Conferencias ficam fora: pertencem direto a' empresa autenticada.)
-  const operacaoIds = [...new Set([...obsLimpas, ...parLimpas].map((x) => x.operacaoId))];
-  const permitidas = await sql`
-    SELECT o.id FROM operacoes o
-      JOIN estudos e ON e.id = o.estudo_id
-     WHERE o.id = ANY(${operacaoIds}) AND e.empresa_id = ${empresaId}`;
-  const idsPermitidos = new Set(permitidas.map((o) => o.id));
-  const invalidas = operacaoIds.filter((id) => !idsPermitidos.has(id));
-  if (invalidas.length) {
-    throw new ErroHttp(404, 'Operacao inexistente ou de outra empresa', { operacoes: invalidas });
-  }
+  // Tudo numa transacao so' (o lote inteiro grava ou nada grava), DENTRO da
+  // RLS: alem do filtro abaixo, o proprio banco recusa escrita fora da
+  // empresa de quem chama.
+  const novos = await auth.rls(async (tx) => {
+    // Toda operacao referenciada precisa pertencer a esta empresa. Sem esta
+    // checagem, um token valido conseguiria escrever no estudo de outro cliente.
+    // (Conferencias ficam fora: pertencem direto a' empresa autenticada.)
+    const operacaoIds = [...new Set([...obsLimpas, ...parLimpas].map((x) => x.operacaoId))];
+    const permitidas = await tx`
+      SELECT o.id FROM operacoes o
+        JOIN estudos e ON e.id = o.estudo_id
+       WHERE o.id = ANY(${operacaoIds}) AND e.empresa_id = ${empresaId}`;
+    const idsPermitidos = new Set(permitidas.map((o) => o.id));
+    const invalidas = operacaoIds.filter((id) => !idsPermitidos.has(id));
+    if (invalidas.length) {
+      throw new ErroHttp(404, 'Operacao inexistente ou de outra empresa', { operacoes: invalidas });
+    }
 
-  // Uma unica transacao: o lote inteiro grava ou nada grava.
-  const novos = await sql.begin(async (tx) => {
     let inseridos = 0;
 
     for (const o of obsLimpas) {

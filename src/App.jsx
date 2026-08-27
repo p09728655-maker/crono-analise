@@ -7,10 +7,33 @@ import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import RelatorioConferencias from './features/analise/RelatorioConferencias.jsx';
 import BarraSincronizacao from './components/BarraSincronizacao.jsx';
 import { SistemaEncerrado } from './components/SairDoSistema.jsx';
+import EntrarNoPc from './features/analise/EntrarNoPc.jsx';
+import PrepararAparelho from './features/coleta/PrepararAparelho.jsx';
 import { caminhos, ehDesktop, useRota } from './lib/dispositivo.js';
 import { obterEstudo } from './lib/api.js';
+import { aparelhoPareado, temSessao } from './lib/supabase.js';
 import { carregarMotivos } from './lib/motivosParada.js';
 import { cores as escuro } from './theme/tokens.js';
+
+/**
+ * Re-renderiza quando a sessao muda — entrar, sair, pareamento, revogacao.
+ *
+ * O estado em si mora no localStorage (src/lib/supabase.js); aqui so' se
+ * escuta o aviso. 'storage' cobre a OUTRA aba; o evento proprio cobre esta,
+ * porque o navegador nao entrega 'storage' para a aba que escreveu.
+ */
+function useSessaoViva() {
+  const [, marcar] = useState(0);
+  useEffect(() => {
+    const reagir = () => marcar((n) => n + 1);
+    window.addEventListener('ritmopatrimar-sessao', reagir);
+    window.addEventListener('storage', reagir);
+    return () => {
+      window.removeEventListener('ritmopatrimar-sessao', reagir);
+      window.removeEventListener('storage', reagir);
+    };
+  }, []);
+}
 
 /**
  * Toda a navegacao vem da URL — ver src/lib/dispositivo.js.
@@ -23,6 +46,7 @@ export default function App() {
   const [rota, navegar] = useRota();
   const { modo, tela, estudoId, operacaoId } = rota;
   const desktop = ehDesktop();
+  useSessaoViva();
 
   /**
    * Sair do sistema — so' existe no aparelho de toque.
@@ -90,6 +114,17 @@ export default function App() {
   if (!desktop && modo === 'analise') return null;
 
   if (encerrado) return <SistemaEncerrado aoEntrar={() => setEncerrado(false)} />;
+
+  /**
+   * A porta de entrada, por tipo de aparelho.
+   *
+   * PC: cada pessoa entra com e-mail e senha — e' quem assina o que faz.
+   * Tablet: pareado uma vez, entra sozinho para sempre; sem pareamento,
+   * a unica tela possivel e' a de parear. As duas condicoes reagem ao
+   * useSessaoViva la' de cima: entrar/sair troca a tela na hora.
+   */
+  if (desktop && !temSessao()) return <EntrarNoPc />;
+  if (!desktop && !temSessao() && !aparelhoPareado()) return <PrepararAparelho />;
 
   return (
     <>
