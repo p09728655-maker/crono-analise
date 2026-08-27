@@ -77,7 +77,9 @@ await p.goto('http://localhost:5199/analise');
 await p.waitForSelector('text=Furação lateral', { timeout: 10000 });
 checar(true, 'lista carregou em /analise');
 
-await p.locator('button', { hasText: 'Analisar' }).first().click();
+// O NOME do estudo e' a porta da analise: o botao "Analisar" da linha saiu
+// quando a area de Proximas acoes passou a oferecer o mesmo destino.
+await p.locator('button', { hasText: 'Furação lateral' }).first().click();
 await p.waitForTimeout(500);
 checar(p.url().includes(`/analise/estudo/${ID_A}`), `URL virou ${new URL(p.url()).pathname}`);
 

@@ -24,13 +24,20 @@ const porRecencia = (a, b) => quando(b) - quando(a);
 /**
  * Em que ponto do caminho o estudo esta'.
  *
- * A ordem das perguntas importa: concluido e' decisao de quem analisou, e
- * vale mesmo que o estudo tenha ficado sem ciclo nenhum.
+ * O CICLO decide antes do status, e a razao e' o que 'concluido' quer dizer
+ * neste app: nao e' "a medicao terminou", e' "o estudo saiu da lista do
+ * tablet" — e' o que o botao Só no PC / Ao tablet alterna, e o que a lista
+ * da coleta filtra. Um estudo preparado no PC e tirado do tablet fica
+ * 'concluido' com zero ciclo, e ele nao tem nada de concluido: ninguem
+ * cronometrou uma peca sequer.
+ *
+ * Sem nenhum ciclo, entao, o estudo esta' esperando medicao — venha de onde
+ * vier o status.
  */
 export function situacao(estudo) {
+  if (ciclosDe(estudo) === 0) return 'pendente';
   if (estudo.status === 'concluido') return 'concluido';
-  if (ciclosDe(estudo) > 0) return 'andamento';
-  return 'pendente';
+  return 'andamento';
 }
 
 const RECEITA = {

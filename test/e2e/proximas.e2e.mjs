@@ -52,6 +52,17 @@ const b = await chromium.launch({ executablePath: EXEC });
   checar(texto.includes('MEDIÇÃO EM ANDAMENTO'), 'estudo com ciclos aparece como em andamento');
   checar(texto.includes('Continuar medição'), 'estudo em andamento oferece continuar');
 
+  // O destino da analise existe UMA vez por estudo: no nome, na tabela.
+  // O botao "Analisar" da linha saiu para nao repetir, ao lado, o mesmo
+  // alvo que os cartoes ja oferecem.
+  const linhas = p.locator('table tbody tr');
+  checar(
+    await linhas.locator('button', { hasText: /^Analisar$/ }).count() === 0,
+    'a linha da tabela nao repete o botao Analisar',
+  );
+  await linhas.first().locator('button', { hasText: 'Furação lateral' }).click();
+  checar(await p.evaluate(() => window.__aberto) === 'e1', 'o nome do estudo abre a analise');
+
   // Pendencias tambem viram indicador na Visao geral.
   const painel = p.locator('aside[aria-label="Visão geral"]');
   checar((await painel.innerText()).includes('Pendências'), 'a Visao geral mostra pendencias de medicao');

@@ -569,9 +569,11 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarCol
           <col style={{ width: 100 }} />
           <col style={{ width: 84 }} />
           <col style={{ width: 112 }} />
-          {/* Acoes: eram tres botoes em 192px. Com "Enviar/Tirar do tablet"
-              sao quatro, e o ultimo saia da tela cortado pela metade. */}
-          <col style={{ width: 320 }} />
+          {/* Acoes: eram quatro botoes em 320px. "Analisar" mudou-se para o
+              proprio nome do estudo, na primeira coluna, e os tres que
+              sobraram cabem com folga em 240 — a largura que sobra vai para
+              o nome, que e' o texto que de fato cresce. */}
+          <col style={{ width: 240 }} />
         </colgroup>
         <thead>
           <tr>
@@ -592,9 +594,25 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarCol
               onMouseEnter={() => setSobre(e.id)}
               onMouseLeave={() => setSobre(null)}
             >
-              {/* title: com largura fixa o nome longo corta com reticencias,
+              {/* O NOME e' o caminho para a analise — nao um botao a mais na
+                  ponta da linha. O botao "Analisar" saiu daqui quando a area
+                  de Proximas acoes passou a oferecer o mesmo destino logo
+                  abaixo: eram dois alvos identicos para o mesmo estudo. Mas
+                  a area so' mostra os primeiros; sem isto, todo estudo fora
+                  dela ficaria sem porta de entrada.
+
+                  title: com largura fixa o nome longo corta com reticencias,
                   e o texto inteiro tem de continuar alcancavel. */}
-              <td style={est.tdNome} title={e.nome}>{e.nome}</td>
+              <td style={est.tdNome}>
+                <button
+                  type="button"
+                  style={{ ...est.linkNome, ...(sobre === e.id ? est.linkNomeSobre : {}) }}
+                  onClick={() => aoAbrir?.(e.id)}
+                  title={`Analisar ${e.nome}`}
+                >
+                  {e.nome}
+                </button>
+              </td>
               <td style={est.td} title={e.recurso || ''}>{e.recurso || '—'}</td>
               <td style={est.td} title={e.analista_nome || e.analista || ''}>{e.analista_nome || e.analista || '—'}</td>
               <td style={est.tdNum}>{e.total_operacoes}</td>
@@ -606,9 +624,6 @@ function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarCol
                     digitado errado tinha de ser descoberto la dentro. */}
                 <button type="button" style={est.botaoLinha} onClick={() => aoEditar?.(e.id)}>
                   Editar
-                </button>
-                <button type="button" style={est.botaoLinha} onClick={() => aoAbrir?.(e.id)}>
-                  Analisar
                 </button>
                 {/* Quem decide o que o TABLET ve e' o PC. Concluido some da
                     coleta; este botao e' o unico caminho de ida e volta. */}
@@ -882,8 +897,9 @@ function ProximasAcoes({ estudos, est, t, aoMedir, aoAnalisar }) {
 function PainelResumo({ estudos, est }) {
   const totalCiclos = estudos.reduce((acc, e) => acc + (Number(e.total_observacoes) || 0), 0);
   const totalOperacoes = estudos.reduce((acc, e) => acc + (Number(e.total_operacoes) || 0), 0);
-  // Mesma regra das Proximas acoes, num lugar so': estudo CONCLUIDO sem
-  // ciclo nao e' pendencia — foi decisao de quem analisou, nao esquecimento.
+  // Mesma regra das Proximas acoes, num lugar so': o que manda e' o CICLO.
+  // Estudo sem nenhum e' pendencia mesmo marcado 'concluido' — esse status
+  // diz que ele saiu do tablet, nao que a medicao aconteceu.
   const pendencias = estudos.filter((e) => situacao(e) === 'pendente').length;
 
   // Postos ordenados por ciclos: onde a medicao realmente aconteceu.
@@ -1485,6 +1501,18 @@ function estilos(t, analise) {
       borderBottom: `1px solid ${t.borda}`,
       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
     },
+    // Parece texto, nao botao: a linha inteira ja' reage ao mouse, e um
+    // contorno em volta de cada nome viraria uma coluna de caixas. O
+    // sublinhado so' aparece com o cursor em cima — e' ele que promete o
+    // clique. Sem `display: block` o botao encolhe ao texto e o alvo fica
+    // menor que a celula.
+    linkNome: {
+      display: 'block', width: '100%', padding: 0, textAlign: 'left',
+      background: 'transparent', border: 'none',
+      color: 'inherit', font: 'inherit', cursor: 'pointer',
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    },
+    linkNomeSobre: { textDecoration: 'underline' },
     tdFraco: { padding: `${espaco.lg}px`, ...tipo('legenda'), color: t.fraco, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap' },
     tdNum: {
       padding: `${espaco.lg}px`, textAlign: 'right', ...tipo('corpoF'), ...numeros,

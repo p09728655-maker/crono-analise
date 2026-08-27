@@ -8,7 +8,7 @@ const estudo = (id, extra = {}) => ({
 });
 
 describe('situacao', () => {
-  it('sem ciclo e' + ' pendente', () => {
+  it('sem ciclo, esta pendente', () => {
     expect(situacao(estudo('a'))).toBe('pendente');
   });
 
@@ -16,9 +16,20 @@ describe('situacao', () => {
     expect(situacao(estudo('a', { total_observacoes: 7 }))).toBe('andamento');
   });
 
-  it('concluido vale mesmo sem ciclo nenhum', () => {
-    expect(situacao(estudo('a', { status: 'concluido' }))).toBe('concluido');
+  it('concluido com ciclos esta concluido', () => {
     expect(situacao(estudo('a', { status: 'concluido', total_observacoes: 40 }))).toBe('concluido');
+  });
+
+  /**
+   * O caso que a tela errou em producao: um RACK SIRIUS 1.6 com 8 operacoes
+   * e ZERO ciclos aparecia como "Último estudo concluído", oferecendo
+   * Analisar quando ninguem tinha cronometrado nada ainda.
+   *
+   * 'concluido' no banco quer dizer "saiu da lista do tablet" — o botao
+   * Só no PC / Ao tablet grava esse status. Nao quer dizer medicao feita.
+   */
+  it('marcado concluido, mas sem nenhum ciclo, continua sendo pendencia', () => {
+    expect(situacao(estudo('a', { status: 'concluido', total_observacoes: 0 }))).toBe('pendente');
   });
 
   it('estudo sem status, sem ciclo, conta como pendente', () => {
@@ -50,8 +61,8 @@ describe('proximasAcoes', () => {
 
   it('mostra um unico concluido, o mais recente', () => {
     const { itens } = proximasAcoes([
-      estudo('velho', { status: 'concluido', atualizado_em: '2026-01-01T12:00:00Z' }),
-      estudo('novo', { status: 'concluido', atualizado_em: '2026-08-27T12:00:00Z' }),
+      estudo('velho', { status: 'concluido', total_observacoes: 30, atualizado_em: '2026-01-01T12:00:00Z' }),
+      estudo('novo', { status: 'concluido', total_observacoes: 40, atualizado_em: '2026-08-27T12:00:00Z' }),
     ]);
     expect(itens).toHaveLength(1);
     expect(itens[0].id).toBe('novo');
@@ -118,7 +129,7 @@ describe('proximasAcoes', () => {
     const r = proximasAcoes([
       estudo('p1'), estudo('p2'),
       estudo('a1', { total_observacoes: 3 }),
-      estudo('c1', { status: 'concluido' }),
+      estudo('c1', { status: 'concluido', total_observacoes: 30 }),
     ]);
     expect(r.pendentes).toBe(2);
     expect(r.emAndamento).toBe(1);
