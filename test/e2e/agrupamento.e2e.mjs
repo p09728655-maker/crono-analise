@@ -85,7 +85,7 @@ for (const modo of ['analise', 'coleta']) {
 
     const achados = [];
     for (const item of document.querySelectorAll('li')) {
-      const remover = item.querySelector('button[aria-label^="Remover"]');
+      const remover = item.querySelector('button[aria-label^="Arquivar"]');
       if (!remover) continue;
       const rRem = remover.getBoundingClientRect();
 
@@ -104,9 +104,14 @@ for (const modo of ['analise', 'coleta']) {
       ? `botao remover cobre: ${colisoes.join(', ')}`
       : 'botao remover nao cobre nenhum texto do cartao');
 
-  const alvo = await p.locator('button[aria-label^="Remover"]').first().boundingBox();
+  // O laco acima nao acha nada se o seletor errar, e "nenhuma colisao"
+  // passaria em silencio. Este contador e' o que garante que ele olhou.
+  const quantos = await p.locator('button[aria-label^="Arquivar"]').count();
+  checar(quantos > 0, `${quantos} cartao(oes) com botao de arquivar para conferir`);
+
+  const alvo = await p.locator('button[aria-label^="Arquivar"]').first().boundingBox();
   checar(alvo && alvo.width >= 40 && alvo.height >= 40,
-    `botao remover com alvo de ${Math.round(alvo?.width || 0)}x${Math.round(alvo?.height || 0)}px`);
+    `botao arquivar com alvo de ${Math.round(alvo?.width || 0)}x${Math.round(alvo?.height || 0)}px`);
 
   await ctx.close();
 }

@@ -470,7 +470,8 @@ CREATE TRIGGER motivos_parada_touch BEFORE UPDATE ON motivos_parada
 --   analista mede e escreve o dominio; nao mexe em cadastro nem segredo
 --   leitor   so' le
 --   coletor  o TABLET pareado: coleta (estudos, operacoes, ciclos, paradas,
---            conferencias) e nada de administracao
+--            conferencias), nada de administracao e nada de apagar —
+--            remover no tablet arquiva, e quem apaga e' gente, no PC
 
 -- As funcoes que sustentam tudo. SECURITY DEFINER nao e' enfeite: sem ele,
 -- a politica de `usuarios` consultaria `usuarios` e entraria em recursao
@@ -571,8 +572,17 @@ DROP POLICY IF EXISTS usuarios_admin_apaga ON usuarios;
 CREATE POLICY usuarios_admin_apaga ON usuarios FOR DELETE TO authenticated
   USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
 
--- estudos: quem coleta cria e edita. Apagar estudo COM ciclos e' so' de
--- admin — e' a perda irrecuperavel do sistema (CASCADE leva os ciclos).
+-- estudos: quem coleta cria e edita. APAGAR e' de gente, nunca do aparelho:
+-- o tablet (coletor) monta estudo e arquiva, mas nao apaga linha nenhuma.
+--
+-- "Sem ciclo" nao quer dizer "sem trabalho": o analista monta operacoes,
+-- fator de ritmo, meta e roteiro do ERP no PC e manda para o tablet ANTES
+-- da primeira cronometragem. Um toque errado no chao de fabrica apagava
+-- esse preparo inteiro. Agora o tablet arquiva — o estudo sai da lista do
+-- posto e continua no banco, para o analista decidir no PC.
+--
+-- Apagar estudo COM ciclos continua so' de admin — e' a perda
+-- irrecuperavel do sistema (CASCADE leva os ciclos).
 DROP POLICY IF EXISTS estudos_le ON estudos;
 CREATE POLICY estudos_le ON estudos FOR SELECT TO authenticated
   USING (empresa_id = public.empresa_atual());
@@ -587,7 +597,7 @@ DROP POLICY IF EXISTS estudos_apaga ON estudos;
 CREATE POLICY estudos_apaga ON estudos FOR DELETE TO authenticated
   USING (empresa_id = public.empresa_atual()
          AND (public.papel_atual() = 'admin'
-              OR (public.pode_coletar() AND public.estudo_sem_ciclos(id))));
+              OR (public.pode_escrever() AND public.estudo_sem_ciclos(id))));
 
 -- operacoes: estrutura do estudo — quem coleta monta e desmonta.
 DROP POLICY IF EXISTS operacoes_le ON operacoes;

@@ -107,6 +107,33 @@ function conflitosShorthand(src) {
   return [...new Set(achados)];
 }
 
+/**
+ * Tela de fundo proprio que NAO cobre a janela.
+ *
+ * O body e' escuro (#14171A, a paleta da coleta). Toda tela clara pinta o
+ * proprio fundo por cima — e se ela para antes do rodape, o que sobra da
+ * janela fica preto. Foi assim que "Carregando estudo..." da analise, com
+ * minHeight de 60vh, mostrava um tercos de tela preta embaixo do texto: o
+ * usuario clicava em Analisar e via a tela ficar preta.
+ *
+ * A regra: quem declara `background` e mede a altura em unidade de
+ * viewport tem de chegar a 100. Altura em px, %, ou sem fundo proprio,
+ * nao entra — sao blocos DENTRO de uma tela, e o fundo ja' e' de quem
+ * os contem. `maxHeight` tambem nao: e' teto de rolagem, nao piso de tela.
+ */
+function fundoQueNaoCobre(src) {
+  const achados = [];
+  for (const m of src.matchAll(/^\s{2,4}([a-zA-Z][a-zA-Z0-9]*):\s*\{/gm)) {
+    const corpo = corpoDoEstilo(src, m[1]);
+    if (!/\bbackground(?:Color)?:/.test(corpo)) continue;
+    const altura = /\bminHeight:\s*['"`](\d+(?:\.\d+)?)(dvh|vh|svh|lvh)['"`]/.exec(corpo);
+    if (altura && Number(altura[1]) < 100) {
+      achados.push(`est.${m[1]} pinta fundo mas so' vai ate ${altura[1]}${altura[2]} — o resto da janela fica com o fundo escuro do body`);
+    }
+  }
+  return achados;
+}
+
 let problemas = 0;
 for (const arq of arquivos('src')) {
   const src = readFileSync(arq, 'utf8');
@@ -119,12 +146,14 @@ for (const arq of arquivos('src')) {
 
   const faltando = [...usadas].filter((k) => !declaradas.has(k));
   const conflitos = conflitosShorthand(src);
+  const descobertos = fundoQueNaoCobre(src);
 
-  if (faltando.length || conflitos.length) {
-    problemas += faltando.length + conflitos.length;
+  if (faltando.length || conflitos.length || descobertos.length) {
+    problemas += faltando.length + conflitos.length + descobertos.length;
     console.log(`${arq}`);
     faltando.forEach((k) => console.log(`   est.${k} usado mas nao definido`));
     conflitos.forEach((c) => console.log(`   ${c}`));
+    descobertos.forEach((d) => console.log(`   ${d}`));
   }
 }
 console.log(problemas ? `\n${problemas} referencia(s) quebrada(s)` : '\nNenhuma referencia de estilo quebrada');

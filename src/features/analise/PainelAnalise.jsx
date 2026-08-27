@@ -1375,7 +1375,7 @@ function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, 
 function Estado({ texto, acao }) {
   return (
     <div style={est.estadoVazio}>
-      <p>{texto}</p>
+      <p style={{ margin: 0, ...tipo('corpo') }}>{texto}</p>
       {acao && <button type="button" style={est.botaoImprimir} onClick={acao.aoClicar}>{acao.rotulo}</button>}
     </div>
   );
@@ -1735,9 +1735,17 @@ const est = {
     textAlign: 'center', ...tipo('corpo'), color: claro.textoFraco,
     background: claro.papel, border: `1px dashed ${claro.borda}`, borderRadius: raio.lg,
   },
+  /* Carregando e erro sao TELA INTEIRA, nao um bloco no meio do nada.
+     Com 60vh a caixa clara cobria so' dois tercos da janela e o resto
+     ficava com o fundo escuro do body (#14171A, a paleta da coleta):
+     abrir a analise piscava uma faixa preta embaixo do "Carregando
+     estudo...", e no erro ela ficava la' parada. A analise e' clara do
+     topo ao rodape — 100dvh e' o que garante isso. */
   estadoVazio: {
-    minHeight: '60vh', display: 'flex', flexDirection: 'column',
+    minHeight: '100dvh', width: '100%',
+    display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center', gap: espaco.lg,
+    padding: espaco.xl, textAlign: 'center',
     background: claro.fundo, color: claro.textoMedio, fontFamily: fonteAnalise.familia,
   },
 };

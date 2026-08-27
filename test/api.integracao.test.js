@@ -1120,6 +1120,62 @@ rodar('API — integracao com Postgres', () => {
     expect(chave.statusCode).toBe(403);
   });
 
+  /**
+   * O TABLET NUNCA APAGA — nem o estudo que ainda nao tem ciclo.
+   *
+   * "Sem ciclo" nao quer dizer "sem trabalho": o analista monta o estudo no
+   * PC (operacoes, fator de ritmo, meta, roteiro importado do ERP) e manda
+   * para o tablet ANTES da primeira cronometragem. Um toque no botao de
+   * remover, no chao de fabrica, apagava esse preparo inteiro sem volta.
+   *
+   * No tablet remover ARQUIVA, sempre. O estudo sai da lista do posto,
+   * continua no banco, e quem decide o fim dele e' o analista no PC.
+   */
+  it('o tablet ARQUIVA em vez de apagar — mesmo estudo sem nenhum ciclo', async () => {
+    const gerado = fingirRes();
+    await dispositivosApi(fingirReq({ metodo: 'POST', corpo: { acao: 'codigo' } }), gerado);
+    const pareado = await parear({ codigo: gerado.corpo.codigo, nome: 'Tablet furadeira' });
+    const jwt = tokenDe(pareado.corpo.dispositivo.id);
+
+    const { estudoId } = await criarEstudoComOperacao();
+
+    const res = fingirRes();
+    await estudos(fingirReq({ metodo: 'DELETE', query: { id: estudoId }, token: jwt }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.corpo.acao).toBe('arquivado');
+
+    // O preparo continua inteiro: estudo no banco, operacao junto.
+    const [linha] = await sql`SELECT status FROM estudos WHERE id = ${estudoId}`;
+    expect(linha?.status).toBe('arquivado');
+    const [{ n: ops }] = await sql`
+      SELECT count(*)::int AS n FROM operacoes WHERE estudo_id = ${estudoId}`;
+    expect(ops).toBe(1);
+  });
+
+  /**
+   * A mesma regra no BANCO, sem passar pela API: e' a RLS que garante.
+   * Se um dia alguem chamar o Postgres por fora — outro cliente, um script,
+   * um bundle antigo — o DELETE do coletor nao pode passar assim mesmo.
+   */
+  it('a RLS recusa o DELETE do coletor, mesmo sem ciclo nenhum', async () => {
+    const gerado = fingirRes();
+    await dispositivosApi(fingirReq({ metodo: 'POST', corpo: { acao: 'codigo' } }), gerado);
+    const pareado = await parear({ codigo: gerado.corpo.codigo, nome: 'Tablet RLS' });
+    const coletorId = pareado.corpo.dispositivo.id;
+
+    const { estudoId } = await criarEstudoComOperacao();
+
+    await sql.begin(async (tx) => {
+      await tx`SELECT set_config('role', 'authenticated', true),
+                      set_config('request.jwt.claims', ${JSON.stringify({ sub: coletorId })}, true)`;
+      await tx`DELETE FROM estudos WHERE id = ${estudoId}`;
+    });
+
+    const [linha] = await sql`SELECT status FROM estudos WHERE id = ${estudoId}`;
+    expect(linha, 'o coletor nao pode apagar estudo pelo banco').toBeTruthy();
+  });
+
   /* ------------------------------------ excluir de vez (estudo de teste) */
   it('excluir de vez apaga estudo COM ciclos — e so o administrador pode', async () => {
     const { estudoId, operacaoId } = await criarEstudoComOperacao();

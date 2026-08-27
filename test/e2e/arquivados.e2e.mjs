@@ -147,5 +147,53 @@ for (const modo of ['analise', 'coleta']) {
   await ctx2.close();
 }
 
+/* ------------------------ o tablet nunca apaga: remover ali e' arquivar */
+/**
+ * "Sem ciclo" nao quer dizer "sem trabalho".
+ *
+ * O estudo e5 do harness tem 0 ciclos. No PC ele e' rascunho e pode ser
+ * apagado. No TABLET ele e' o preparo que o analista mandou para o posto —
+ * operacoes, fator de ritmo, meta — e a tela chegou a prometer, por
+ * escrito, que aquilo seria "apagado definitivamente" com um toque.
+ */
+{
+  // Tablet: a confirmacao fala em ARQUIVAR, e nao promete apagar nada.
+  const ctx = await b.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const p = await ctx.newPage();
+  await p.goto(`${PAGINA}?modo=coleta`);
+  await p.getByText('Estudo sem produto').first().waitFor({ timeout: 8000 });
+
+  checar(await p.getByRole('button', { name: 'Arquivar Estudo sem produto' }).count() === 1,
+    'tablet: o botao do cartao se chama Arquivar, nao Remover');
+  await p.getByRole('button', { name: 'Arquivar Estudo sem produto' }).tap();
+
+  const dialogo = p.getByRole('dialog', { name: 'Confirmar remoção' });
+  await dialogo.waitFor({ timeout: 8000 });
+  const texto = await dialogo.innerText();
+  checar(/Arquivar estudo\?/.test(texto), 'tablet: pergunta "Arquivar estudo?"');
+  checar(!/apagado definitivamente/i.test(texto),
+    'tablet: NAO promete apagar definitivamente');
+  checar(/não é apagado/i.test(texto), 'tablet: diz que o estudo continua existindo');
+  checar(await dialogo.getByRole('button', { name: 'Arquivar' }).count() === 1,
+    'tablet: o botao de confirmar diz Arquivar');
+  await ctx.close();
+}
+{
+  // PC: o rascunho sem ciclo continua sendo apagavel — a regra so' muda no tablet.
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
+  const p = await ctx.newPage();
+  await p.goto(`${PAGINA}?modo=analise`);
+  await p.getByText('Estudo sem produto').first().waitFor({ timeout: 8000 });
+  await p.locator('tr', { hasText: 'Estudo sem produto' })
+    .getByRole('button', { name: 'Remover Estudo sem produto' }).click();
+
+  const dialogo = p.getByRole('dialog', { name: 'Confirmar remoção' });
+  await dialogo.waitFor({ timeout: 8000 });
+  const texto = await dialogo.innerText();
+  checar(/Excluir estudo\?/.test(texto), 'PC: rascunho sem ciclo ainda pergunta "Excluir estudo?"');
+  checar(/apagado definitivamente/i.test(texto), 'PC: e diz o que vai acontecer');
+  await ctx.close();
+}
+
 await b.close();
 process.exit(falhas ? 1 : 0);
