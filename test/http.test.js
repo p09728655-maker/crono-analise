@@ -52,4 +52,41 @@ describe('handler', () => {
     expect(res.statusCode).toBe(409);
     expect(res.corpo.erro).toBe('Ja existe');
   });
+
+  /**
+   * O caso que quebrou o login em producao: DATABASE_URL nao chegou na
+   * funcao, o driver caiu em localhost e toda consulta morreu com
+   * ECONNREFUSED — que a tela mostrava como "Erro interno", sem pista.
+   */
+  it('banco inalcancavel vira 503 dizendo o que configurar', async () => {
+    const guardado = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    try {
+      const res = fingirRes();
+      const erro = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), { code: 'ECONNREFUSED' });
+      await handler(async () => { throw erro; })({ method: 'GET' }, res);
+      expect(res.statusCode).toBe(503);
+      expect(res.corpo.erro).toMatch(/DATABASE_URL/);
+      expect(res.corpo.erro).toMatch(/deploy novo/);
+      expect(res.corpo.codigo).toBe('ECONNREFUSED');
+    } finally {
+      if (guardado) process.env.DATABASE_URL = guardado;
+    }
+  });
+
+  it('com DATABASE_URL presente, a recusa aponta o pooler e o /api/status', async () => {
+    const guardado = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgres://alguem@host:6543/postgres';
+    try {
+      const res = fingirRes();
+      const erro = Object.assign(new Error('recusou'), { code: 'ECONNREFUSED' });
+      await handler(async () => { throw erro; })({ method: 'GET' }, res);
+      expect(res.statusCode).toBe(503);
+      expect(res.corpo.erro).toMatch(/6543/);
+      expect(res.corpo.erro).toMatch(/api\/status/);
+    } finally {
+      if (guardado) process.env.DATABASE_URL = guardado; else delete process.env.DATABASE_URL;
+    }
+  });
 });
+

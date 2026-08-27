@@ -13,6 +13,14 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.35.4',
+    data: '2026-08-27',
+    titulo: 'Quando o servidor não acha o banco, ele diz isso',
+    itens: [
+      'A causa do "Erro interno" ao entrar era o servidor não conseguir falar com o banco. O aviso agora nomeia o problema e o que configurar, em vez de esconder atrás de uma mensagem genérica.',
+    ],
+  },
+  {
     versao: '2.35.3',
     data: '2026-08-27',
     titulo: 'O erro passa a dizer o que é',

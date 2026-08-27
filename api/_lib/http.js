@@ -38,6 +38,28 @@ function tabelaQueFalta(err) {
 }
 
 /**
+ * Banco fora de alcance — e o que fazer a respeito.
+ *
+ * ECONNREFUSED aqui quase sempre significa UMA coisa: DATABASE_URL nao
+ * chegou nesta funcao, e o driver caiu no padrao (localhost), onde nao ha
+ * Postgres nenhum. Isso ja' apareceu como "Erro interno" sem pista, e o
+ * proprio registro de erro no banco nao pode ajudar — ele tambem depende do
+ * banco. Entao a mensagem precisa ser a pista.
+ */
+function bancoInalcancavel(err) {
+  if (!['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH'].includes(err?.code)) {
+    return null;
+  }
+  if (!process.env.DATABASE_URL) {
+    return 'O servidor esta sem DATABASE_URL: a variavel nao existe neste ambiente '
+      + '(confira se ela cobre Production E Preview na Vercel) ou o deploy e anterior a ela. '
+      + 'Configure e publique um deploy novo — variavel nao entra em deploy que ja existe.';
+  }
+  return 'O banco nao respondeu (conexao recusada). Confira se DATABASE_URL aponta para a '
+    + 'Transaction Pooler do Supabase (porta 6543) e se o projeto esta ativo. Abra /api/status.';
+}
+
+/**
  * Caixa-preta: grava a falha no banco.
  *
  * O console da funcao serverless nao e' alcancavel de fora da Vercel, e
@@ -72,6 +94,14 @@ export function handler(fn) {
     } catch (err) {
       if (err instanceof ErroHttp) {
         json(res, err.status, { erro: err.message, detalhes: err.detalhes });
+        return;
+      }
+
+      const semBanco = bancoInalcancavel(err);
+      if (semBanco) {
+        console.error('[ritmopatrimar] banco inalcancavel:', err.code);
+        // 503, nao 500: o servico esta de pe', falta configuracao.
+        json(res, 503, { erro: semBanco, codigo: err.code });
         return;
       }
 

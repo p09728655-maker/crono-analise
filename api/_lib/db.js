@@ -13,7 +13,16 @@ import postgres from 'postgres';
 const url = process.env.DATABASE_URL;
 
 if (!url) {
-  console.error('[ritmopatrimar] DATABASE_URL nao configurada.');
+  // Sem URL o driver cai no padrao dele — localhost:5432 — e toda consulta
+  // morre com ECONNREFUSED, um erro que nao diz absolutamente nada sobre a
+  // causa. Quem le esta' com o app quebrado em producao: o aviso precisa
+  // nomear a variavel. api/_lib/http.js traduz o ECONNREFUSED em 503 com
+  // instrucao, e /api/status responde sem autenticacao justamente para
+  // este caso.
+  console.error(
+    '[ritmopatrimar] DATABASE_URL nao configurada — nenhuma consulta vai funcionar. '
+    + 'Configure a variavel na Vercel (Production E Preview) e publique um deploy novo.',
+  );
 } else if (!url.includes('6543') && url.includes('supabase')) {
   console.warn(
     '[ritmopatrimar] DATABASE_URL parece apontar para a conexao direta do Supabase. ' +
