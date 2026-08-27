@@ -7,6 +7,7 @@ import {
   listarUsuarios, quemSouEu, removerEstudo, restaurarEstudo,
 } from '../../lib/api.js';
 import { agruparPorProduto, produtosConhecidos, setoresConhecidos } from '../../domain/agrupamento.js';
+import { proximasAcoes, situacao } from '../../domain/proximasAcoes.js';
 import AvisoAtualizacao from '../../components/AvisoAtualizacao.jsx';
 import ChaveIa from '../../components/ChaveIa.jsx';
 import Cabecalho from '../../components/Cabecalho.jsx';
@@ -27,7 +28,7 @@ import { VERSAO } from '../../versao.js';
  *   analise (PC, no escritorio) — tema claro igual ao do relatorio, tabela.
  */
 export default function ListaEstudos({
-  aoAbrir, aoEditar, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias,
+  aoAbrir, aoEditar, aoMedir, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias,
   aoSairDoSistema,
 }) {
   const [estudos, setEstudos] = useState([]);
@@ -348,6 +349,17 @@ export default function ListaEstudos({
               ))}
               </div>
               </div>
+
+              {/* O espaco abaixo da tabela era vazio numa tela de 1440px. Ele
+                  vira a resposta da pergunta que a tabela nao responde: qual
+                  estudo esta' esperando alguem, e qual botao resolve isso.
+                  Nada de novo e' buscado — sai dos mesmos estudos ja' na tela. */}
+              {analise && (
+                <ProximasAcoes
+                  estudos={encontrados} est={est} t={t}
+                  aoMedir={aoMedir} aoAnalisar={aoAbrir}
+                />
+              )}
             </div>
 
             {analise && <PainelResumo estudos={encontrados} est={est} />}
@@ -772,6 +784,87 @@ function EstudosArquivados({ est, arquivados, analise, aoRestaurar, aoExcluirDeV
 }
 
 /**
+ * Proximas acoes — o que fazer agora, logo abaixo da tabela.
+ *
+ * A tabela responde "o que existe". Ela nao responde "o que esta' esperando
+ * por mim", e essa era a pergunta que o analista trazia de manha': percorrer
+ * linha a linha comparando ciclos com status e' trabalho que a tela pode
+ * fazer sozinha.
+ *
+ * A regra de quem entra e em que ordem mora em src/domain/proximasAcoes.js —
+ * aqui so' se desenha. A area some inteira quando nao ha nada a fazer: uma
+ * secao vazia com titulo e' pior que secao nenhuma.
+ */
+function ProximasAcoes({ estudos, est, t, aoMedir, aoAnalisar }) {
+  const { itens, restantes, pendentes, emAndamento } = proximasAcoes(estudos);
+  if (!itens.length) return null;
+
+  // Resumo da direita: so' o que exige acao. Se nada exige, a linha some em
+  // vez de anunciar "0 pendencias" — a ausencia ja' e' a boa noticia.
+  const resumo = [
+    pendentes > 0 && `${pendentes} aguardando medição`,
+    emAndamento > 0 && `${emAndamento} em andamento`,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <section style={est.acoesSecao} aria-label="Próximas ações">
+      <div style={est.acoesCabecalho}>
+        <span style={est.acoesRotulo}>Próximas ações</span>
+        {resumo && <span style={est.acoesResumo}>{resumo}</span>}
+      </div>
+
+      <div style={est.acoesLista}>
+        {itens.map((item, i) => {
+          const cor = t[item.tom];
+          const executar = item.acao === 'medir' ? aoMedir : aoAnalisar;
+          // Numeros do estudo em UMA linha fraca: contexto e tamanho sao a
+          // mesma pergunta ("que estudo e' esse?"), e separa-los em duas
+          // linhas dobrava a altura do cartao sem acrescentar nada.
+          const detalhe = [
+            item.contexto,
+            plural(item.operacoes, 'operação', 'operações'),
+            plural(item.ciclos, 'ciclo', 'ciclos'),
+            item.faltam > 0 && `faltam ${item.faltam} para a meta`,
+          ].filter(Boolean).join(' · ');
+
+          return (
+            <div key={item.id} style={{ ...est.acaoCartao, borderLeftColor: cor }}>
+              <div style={est.acaoTexto}>
+                <span style={{ ...est.acaoEstado, color: cor }}>
+                  <span style={{ ...est.acaoPonto, background: cor }} aria-hidden="true" />
+                  {item.rotulo}
+                </span>
+                <div style={est.acaoNome} title={item.nome}>{item.nome}</div>
+                <div style={est.acaoDetalhe}>{detalhe}</div>
+              </div>
+
+              {/* Um unico botao vermelho na area: o primeiro da fila, que e'
+                  o mais urgente. Os demais ficam contornados — quatro
+                  chamadas com o mesmo peso nao chamam para nada. */}
+              {executar && (
+                <button
+                  type="button"
+                  style={i === 0 ? est.acaoBotaoPrimario : est.acaoBotao}
+                  onClick={() => executar(item.id)}
+                >
+                  {item.acaoRotulo}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {restantes > 0 && (
+        <div style={est.acoesNota}>
+          e mais {plural(restantes, 'estudo', 'estudos')} esperando medição — a lista completa está na tabela acima.
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
  * Painel de informacao ao lado da tabela.
  *
  * O espaco a direita estava vazio numa tela de 1440px. Em vez de esticar a
@@ -784,7 +877,9 @@ function EstudosArquivados({ est, arquivados, analise, aoRestaurar, aoExcluirDeV
 function PainelResumo({ estudos, est }) {
   const totalCiclos = estudos.reduce((acc, e) => acc + (Number(e.total_observacoes) || 0), 0);
   const totalOperacoes = estudos.reduce((acc, e) => acc + (Number(e.total_operacoes) || 0), 0);
-  const semCiclo = estudos.filter((e) => !Number(e.total_observacoes));
+  // Mesma regra das Proximas acoes, num lugar so': estudo CONCLUIDO sem
+  // ciclo nao e' pendencia — foi decisao de quem analisou, nao esquecimento.
+  const semCiclo = estudos.filter((e) => situacao(e) === 'pendente');
 
   // Postos ordenados por ciclos: onde a medicao realmente aconteceu.
   const porPosto = new Map();
@@ -803,14 +898,19 @@ function PainelResumo({ estudos, est }) {
     <aside style={est.painelInfo} aria-label="Visão geral">
       <div style={est.painelBloco}>
         <div style={est.painelRotulo}>Visão geral</div>
+        {/* Quatro numeros em 2x2, nao tres numa fila: o quarto e' o unico que
+            pede acao, e espremer quatro colunas em 280px deixaria cada valor
+            menor que o rotulo embaixo dele. A pendencia so' ganha cor quando
+            existe — "0" colorido treinaria o olho a ignorar a cor. */}
         <div style={est.painelNumeros}>
           {[
-            ['Estudos', estudos.length],
-            ['Ciclos', totalCiclos],
-            ['Operações', totalOperacoes],
-          ].map(([k, v]) => (
+            ['Estudos', estudos.length, false],
+            ['Ciclos', totalCiclos, false],
+            ['Operações', totalOperacoes, false],
+            ['Pendências', semCiclo.length, semCiclo.length > 0],
+          ].map(([k, v, alerta]) => (
             <div key={k} style={est.painelNumero}>
-              <span style={est.painelValor}>{v}</span>
+              <span style={alerta ? est.painelValorAtencao : est.painelValor}>{v}</span>
               <span style={est.painelChave}>{k}</span>
             </div>
           ))}
@@ -1122,6 +1222,15 @@ function Campo({ est, label, obrigatorio, dica, children }) {
   );
 }
 
+/**
+ * Plural por extenso — "1 ciclo", "8 ciclos".
+ *
+ * A tabela usa "ciclo(s)" porque a coluna e' estreita e o rotulo se repete
+ * em toda linha. Nos cartoes de acao a linha e' de leitura corrida, e ali
+ * "8 operação(ões)" trava o olho no meio da frase.
+ */
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
 const formatarData = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -1131,14 +1240,18 @@ const formatarData = (iso) => {
 /* -------------------------------------------------------------------- tema */
 
 function tema(analise) {
+  // ok/atencao/critico sao os tons de ESTADO — nunca o vermelho, que aqui e'
+  // identidade da marca (ver src/theme/tokens.js).
   return analise
     ? { fundo: claro.fundo, superficie: claro.papel, borda: claro.borda, realce: '#F8F9FB',
         texto: claro.texto, medio: claro.textoMedio, fraco: claro.textoFraco,
         vermelho: claro.vermelho, critico: claro.critico, criticoFundo: claro.criticoFundo,
+        atencao: claro.atencao, ok: claro.ok,
         sombra: elevacao.baixa }
     : { fundo: escuro.fundo, superficie: escuro.superficie, borda: escuro.borda, realce: escuro.superficieAlta,
         texto: escuro.texto, medio: escuro.textoFraco, fraco: escuro.textoFraco,
         vermelho: escuro.vermelho, critico: escuro.critico, criticoFundo: escuro.criticoFundo,
+        atencao: escuro.atencao, ok: escuro.ok,
         sombra: elevacao.escuraMedia };
 }
 
@@ -1241,9 +1354,13 @@ function estilos(t, analise) {
     },
     painelAtencao: { borderColor: claro.atencao },
     painelRotulo: rotulo(t.fraco),
-    painelNumeros: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: espaco.sm },
+    painelNumeros: {
+      display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
+      gap: `${espaco.md}px ${espaco.sm}px`,
+    },
     painelNumero: { display: 'flex', flexDirection: 'column', minWidth: 0 },
     painelValor: { ...tipo('destaque'), ...numeros, color: t.texto },
+    painelValorAtencao: { ...tipo('destaque'), ...numeros, color: t.critico },
     painelChave: { ...tipo('legenda'), color: t.fraco },
     painelLinha: {
       display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
@@ -1253,6 +1370,64 @@ function estilos(t, analise) {
     painelLinhaNum: { flexShrink: 0, ...numeros, fontWeight: 700, color: t.texto },
     painelDestaque: { ...tipo('corpoF'), color: t.texto },
     painelNota: { ...tipo('legenda'), color: t.fraco },
+
+    /* ---- proximas acoes (abaixo da tabela, so' no PC) ---- */
+    // Filete no topo: a area e' outra coisa que a tabela, e sem a linha ela
+    // parecia um rodape solto da ultima linha do ultimo grupo.
+    acoesSecao: {
+      marginTop: espaco.sm, paddingTop: espaco.xl,
+      borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
+      display: 'flex', flexDirection: 'column', gap: espaco.md,
+    },
+    acoesCabecalho: {
+      display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+      gap: espaco.md, flexWrap: 'wrap',
+    },
+    acoesRotulo: rotulo(t.fraco),
+    acoesResumo: { ...tipo('legenda'), color: t.fraco },
+    acoesLista: { display: 'flex', flexDirection: 'column', gap: espaco.sm },
+    // Barra de estado a esquerda, o resto neutro: quatro cartoes contornados
+    // de laranja transformariam a area num alarme continuo. A cor entra so'
+    // onde ela informa — filete, ponto e rotulo do estado.
+    acaoCartao: {
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap',
+      gap: `${espaco.md}px ${espaco.lg}px`,
+      padding: `${espaco.md}px ${espaco.lg}px`,
+      background: t.superficie, borderRadius: raio.md,
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+      borderLeftWidth: 3,
+      boxShadow: t.sombra,
+    },
+    // 320 nao e' o tamanho do texto: e' o ponto de quebra. Com base menor,
+    // o cartao de botao curto ("Analisar") continuava em uma linha enquanto
+    // os vizinhos ja' tinham quebrado — quatro cartoes, dois desenhos.
+    acaoTexto: { flex: '1 1 320px', minWidth: 0 },
+    acaoEstado: {
+      display: 'inline-flex', alignItems: 'center', gap: espaco.xs,
+      ...tipo('micro'), textTransform: 'uppercase',
+    },
+    acaoPonto: { width: 7, height: 7, borderRadius: raio.pill, flexShrink: 0 },
+    acaoNome: {
+      ...tipo('corpoF'), color: t.texto, marginTop: 2,
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    },
+    // Sem `nowrap`: numa tela estreita esta linha quebra em duas em vez de
+    // cortar justamente os numeros que justificam a acao.
+    acaoDetalhe: { ...tipo('legenda'), color: t.fraco, marginTop: 2 },
+    acaoBotao: {
+      flexShrink: 0, minHeight: 36, minWidth: 150, padding: `0 ${espaco.lg}px`,
+      background: 'transparent',
+      borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+      color: t.texto, ...tipo('legenda'), fontWeight: 700,
+      cursor: 'pointer', fontFamily: 'inherit',
+    },
+    acaoBotaoPrimario: {
+      flexShrink: 0, minHeight: 36, minWidth: 150, padding: `0 ${espaco.lg}px`,
+      background: t.vermelho, border: 'none', borderRadius: raio.sm, color: '#fff',
+      ...tipo('legenda'), fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+      boxShadow: elevacao.baixa,
+    },
+    acoesNota: { ...tipo('legenda'), color: t.fraco },
 
     /* ---- agrupamento por produto ---- */
     filtro: {

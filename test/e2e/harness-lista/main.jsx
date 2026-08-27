@@ -45,6 +45,8 @@ window.__posts = [];
 window.__patches = [];
 window.__deletes = [];
 window.__aberto = null;
+// Qual estudo foi mandado para a medicao — a rota de coleta que ja' existe.
+window.__medindo = null;
 window.__saiu = false;
 // A fila offline vive no IndexedDB do navegador: o teste precisa poder
 // colocar registro nela para exercitar o aviso de "ainda nao enviados".
@@ -267,6 +269,7 @@ const modo = params.get('modo') || 'coleta';
 createRoot(document.getElementById('raiz')).render(
   <ListaEstudos
     aoAbrir={(id) => { window.__aberto = id; }}
+    aoMedir={(id) => { window.__medindo = id; }}
     modo={modo}
     aoTrocarModo={() => {}}
     aoSairDoSistema={comSair ? () => { window.__saiu = true; } : undefined}
