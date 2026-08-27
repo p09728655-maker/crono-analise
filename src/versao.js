@@ -13,6 +13,26 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.35.1',
+    data: '2026-08-27',
+    titulo: 'Entrar não depende mais da rede do servidor',
+    itens: [
+      'A chave que confere o login passou a viajar dentro do próprio servidor. Antes, cada vez que a função "acordava" ela ia buscar essa chave no Supabase — e se essa busca falhasse, entrar dava "Erro interno" sem explicar nada.',
+      'Quando algo assim voltar a acontecer, a tela passa a dizer o tipo do problema em vez de só "Erro interno", e /api/status responde se o servidor alcança o Supabase. Diagnóstico deixa de ser adivinhação.',
+    ],
+  },
+  {
+    versao: '2.35.0',
+    data: '2026-08-27',
+    titulo: 'O PC decide o que o tablet vê — e estudo de teste morre de vez',
+    itens: [
+      'Restaurar um estudo arquivado no PC não o devolve mais à coleta: ele volta como concluído, visível só na análise. O tablet lista apenas o que está EM COLETA.',
+      'Cada estudo na tabela do PC ganhou o botão "Enviar ao tablet" / "Tirar do tablet" — é você quem decide quando um estudo volta ao chão de fábrica para pegar mais tempos.',
+      'Restaurar NO TABLET continua devolvendo à coleta: ali, restaurar significa "arquivei sem querer o que eu estava medindo".',
+      'Estudos arquivados ganharam "Excluir de vez" (só administrador, com confirmação que diz quantos ciclos morrem): é o caminho para apagar estudo de teste, que antes virava lixo eterno no arquivo.',
+    ],
+  },
+  {
     versao: '2.34.0',
     data: '2026-08-26',
     titulo: 'A segurança mudou de lugar: agora ela mora no banco',

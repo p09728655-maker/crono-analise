@@ -180,7 +180,14 @@ export default handler(async (req, res) => {
   // e deixar rascunho e teste acumulando na lista atrapalha quem trabalha.
   // (A politica de RLS repete esta regra: apagar estudo com ciclo, so' o
   // administrador.)
-  exigirPapel(auth, ['admin', 'analista', 'coletor']);
+  //
+  // ?definitivo=1 e' a exceccao DELIBERADA: apaga de vez mesmo com ciclos.
+  // Existe para o estudo de TESTE, que arquivado vira lixo eterno. So' o
+  // administrador, e so' a partir da lista de arquivados no PC — o tablet
+  // nem conhece o parametro.
+  const definitivo = String(req.query?.definitivo ?? '') === '1';
+  exigirPapel(auth, definitivo ? ['admin'] : ['admin', 'analista', 'coletor'],
+    definitivo ? 'Excluir de vez e decisao do administrador' : undefined);
   const estudoId = uuid(id, 'id');
   return auth.rls(async (db) => {
     await garantirEstudo(db, estudoId, empresaId);
@@ -191,16 +198,16 @@ export default handler(async (req, res) => {
         JOIN operacoes op ON op.id = o.operacao_id
        WHERE op.estudo_id = ${estudoId}`;
 
-    if (ciclos > 0) {
+    if (ciclos > 0 && !definitivo) {
       await db`
         UPDATE estudos SET status = 'arquivado'
          WHERE id = ${estudoId} AND empresa_id = ${empresaId}`;
       return json(res, 200, { acao: 'arquivado', ciclos });
     }
 
-    // ON DELETE CASCADE cuida de operacoes e paradas.
+    // ON DELETE CASCADE cuida de operacoes, ciclos e paradas.
     await db`DELETE FROM estudos WHERE id = ${estudoId} AND empresa_id = ${empresaId}`;
-    return json(res, 200, { acao: 'excluido', ciclos: 0 });
+    return json(res, 200, { acao: 'excluido', ciclos });
   });
 });
 
