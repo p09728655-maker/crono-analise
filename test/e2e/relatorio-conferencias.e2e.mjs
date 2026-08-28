@@ -106,13 +106,26 @@ await movel.close();
   await p2.goto(`${BASE}/analise/conferencias`);
   await p2.getByText('Furadeira14').first().waitFor({ timeout: 8000 });
 
+  /* -------------------- painel: KPIs, o que falta e proximas acoes */
+  const kpis = p2.locator('[aria-label="Resumo do período"]');
+  const textoKpis = await kpis.innerText();
+  checar(/Referências fechadas/i.test(textoKpis) && /0 de 3/.test(textoKpis),
+    'a faixa de KPIs abre com o numero que importa: referencias fechadas');
+  checar(/Conferências/i.test(textoKpis) && /Disponibilidade/i.test(textoKpis),
+    'os demais KPIs contextualizam: conferencias, tempo, disponibilidade, setup');
+
+  const acoesPainel = p2.locator('[aria-label="Próximas ações"]');
+  const textoAcoes = await acoesPainel.innerText();
+  checar(/Princesa Fundo/.test(textoAcoes) && /\+2 conferência/.test(textoAcoes),
+    'proximas acoes dizem o caminho por peca (+2 conferencias, minutos)');
+
   /* --------------------- referencia por peca: criterio aplicado a peca */
   const refPecas = p2.locator('[aria-label="Referência por peça"]');
   const textoRef = await refPecas.innerText();
   checar(/Princesa Fundo/.test(textoRef) && /Lateral Mesa/.test(textoRef),
     'referencia por peca lista cada peca de cada maquina');
-  checar(/Insuficiente/.test(textoRef),
-    'peca com 1 conferencia sai carimbada de insuficiente');
+  checar(/1\/3 conf/.test(textoRef),
+    'peca com 1 conferencia mostra o que falta: 1/3 conf e os minutos');
   checar(/900/.test(textoRef),
     'o ritmo consolidado da peca aparece (300pc/20min = 900 pc/h)');
 

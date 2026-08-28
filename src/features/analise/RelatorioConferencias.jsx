@@ -149,6 +149,78 @@ export default function RelatorioConferencias({ aoVoltar }) {
     }).filter(Boolean);
   }, [filtro, visiveis]);
 
+  /**
+   * PAINEL — os numeros de cima e o Pareto de paradas do periodo.
+   *
+   * Um dashboard responde, nesta ordem: esta bom ou ruim? onde? o que
+   * fazer? A faixa de KPIs responde a primeira (referencias fechadas e'
+   * O numero — o resto contextualiza); o quadro por peca responde a
+   * segunda; as Proximas acoes, a terceira.
+   */
+  const painel = useMemo(() => {
+    if (!linhas.length) return null;
+    let totalMs = 0; let paradaMs = 0; let pecasTot = 0; let semPeca = 0;
+    const todasParadas = [];
+    for (const c of linhas) {
+      const dur = Number(c.duracao_ms) || 0;
+      const par = somarParadas(c.paradas);
+      totalMs += dur;
+      paradaMs += Math.min(par.totalMs, dur);
+      pecasTot += Number(c.pecas) || 0;
+      if (!String(c.peca || '').trim()) semPeca += 1;
+      if (c.paradas?.length) todasParadas.push(...c.paradas);
+    }
+    return {
+      n: linhas.length,
+      maquinas: resumo.length,
+      pecasTot,
+      semPeca,
+      totalMs,
+      produtivoMs: totalMs - paradaMs,
+      paradaMs,
+      disponibilidadePct: totalMs > 0 ? ((totalMs - paradaMs) / totalMs) * 100 : 100,
+      pareto: somarParadas(todasParadas),
+      refFechadas: resumoPecas.filter((g) => g.confiavel).length,
+      refTotal: resumoPecas.length,
+    };
+  }, [linhas, resumo, resumoPecas]);
+
+  /**
+   * O caminho mais curto para cada referencia, em uma linha por peca.
+   * Ordena por proximidade (quem falta menos vem primeiro) e corta em 6:
+   * lista de acoes maior que isso vira ruido, nao plano.
+   */
+  const proximasAcoes = useMemo(() => {
+    const crit = CRITERIOS_CONFERENCIA;
+    const lista = resumoPecas
+      .filter((g) => !g.confiavel)
+      .map((g) => {
+        const faltamConf = Math.max(0, crit.minConferencias - g.n);
+        const faltamMin = Math.max(0, Math.ceil((crit.minTempoTotalMs - g.totalProdutivoMs) / 60000));
+        const partes = [];
+        if (g.curtas > 0) partes.push(`arquivar ${g.curtas} medição(ões) curta(s)`);
+        if (faltamConf > 0) partes.push(`+${faltamConf} conferência(s)`);
+        if (faltamMin > 0) partes.push(`+${faltamMin} min rodando`);
+        return {
+          chave: `${g.maquina}·${g.peca}`,
+          quem: `${g.peca} · ${g.maquina}`,
+          texto: partes.join(' · '),
+          peso: faltamConf + faltamMin / 15 + g.curtas * 0.5,
+        };
+      })
+      .filter((a) => a.texto)
+      .sort((a, b) => a.peso - b.peso);
+    if (painel?.semPeca > 0) {
+      lista.push({
+        chave: '__sem-peca',
+        quem: `${painel.semPeca} conferência(s) sem nome de peça`,
+        texto: 'ficam fora da referência — preencher a peça ao medir',
+        peso: 99,
+      });
+    }
+    return lista.slice(0, 6);
+  }, [resumoPecas, painel]);
+
   /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
      dentro dela pelo mesmo motivo que os produtos foram na lista: e'
      navegacao, nao um controle do conteudo. */
@@ -226,6 +298,40 @@ export default function RelatorioConferencias({ aoVoltar }) {
 
           {estado === 'pronto' && linhas.length > 0 && (
             <>
+              {!verArquivadas && painel && (
+                <section style={est.kpis} aria-label="Resumo do período">
+                  {[
+                    {
+                      rot: 'Referências fechadas',
+                      val: `${painel.refFechadas} de ${painel.refTotal}`,
+                      sub: painel.refTotal > 0 && painel.refFechadas === painel.refTotal
+                        ? 'todas as peças medidas têm referência'
+                        : 'peças ainda em medição — ver Próximas ações',
+                      destaque: true,
+                      fechou: painel.refTotal > 0 && painel.refFechadas === painel.refTotal,
+                    },
+                    { rot: 'Conferências', val: String(painel.n), sub: `${painel.maquinas} máquina(s) · ${painel.pecasTot} pç medidas` },
+                    { rot: 'Tempo rodando', val: formatarDuracao(painel.produtivoMs), sub: `de ${formatarDuracao(painel.totalMs)} observados` },
+                    {
+                      rot: 'Disponibilidade',
+                      val: `${painel.disponibilidadePct.toFixed(0)}%`,
+                      sub: painel.paradaMs > 0 ? `${formatarDuracao(painel.paradaMs)} parados` : 'nenhuma parada marcada',
+                    },
+                    {
+                      rot: 'Setup',
+                      val: painel.pareto.setupMs > 0 ? formatarDuracao(painel.pareto.setupMs) : '—',
+                      sub: painel.pareto.setupMs > 0 ? 'tempo em troca no período' : 'nenhuma troca marcada',
+                    },
+                  ].map((k) => (
+                    <div key={k.rot} style={{ ...est.kpi, ...(k.destaque ? (k.fechou ? est.kpiOk : est.kpiAtencao) : {}) }}>
+                      <div style={est.kpiRotulo}>{k.rot}</div>
+                      <div style={est.kpiValor}>{k.val}</div>
+                      <div style={est.kpiSub}>{k.sub}</div>
+                    </div>
+                  ))}
+                </section>
+              )}
+
               <section style={est.resumoGrade} aria-label="Resumo por máquina">
                 {(filtro ? resumo.filter((g) => g.maquina === filtro) : resumo).map((g) => (
                   <div key={g.maquina} style={est.cartaoMaquina}>
@@ -283,7 +389,9 @@ export default function RelatorioConferencias({ aoVoltar }) {
                   So' na visao ativa: referencia nao sai de arquivadas. */}
               {!verArquivadas && resumoPecas.length > 0 && (
                 <section style={est.painel} aria-label="Referência por peça">
-                  <div style={{ padding: '0 0 4px' }}>
+                  {/* O mesmo respiro das celulas: sem ele o titulo encosta na
+                      borda do cartao e parece cortado (apontado em 28/08). */}
+                  <div style={{ padding: `${espaco.lg}px ${espaco.lg}px ${espaco.sm}px` }}>
                     <h2 style={est.iaTitulo}>Referência por peça</h2>
                     <p style={est.iaTexto}>
                       Ritmo consolidado de cada peça em cada máquina. O critério mínimo
@@ -320,8 +428,16 @@ export default function RelatorioConferencias({ aoVoltar }) {
                           </td>
                           {/* O motivo mora no title: a tabela fica limpa e a
                               explicacao aparece para quem parar o mouse. */}
+                          {/* Confiavel ganha selo; insuficiente diz O QUE FALTA,
+                              compacto — o detalhe completo segue no title. */}
                           <td style={est.tdNum} title={g.motivos.join('; ') || undefined}>
-                            {g.confiavel ? 'Referência OK' : 'Insuficiente'}
+                            {g.confiavel
+                              ? <span style={{ ...est.selo, ...est.seloOk }}>Referência OK</span>
+                              : (
+                                <span style={est.paraFechar}>
+                                  {`${Math.min(g.n, CRITERIOS_CONFERENCIA.minConferencias)}/${CRITERIOS_CONFERENCIA.minConferencias} conf · ${Math.round(g.totalProdutivoMs / 60000)}/${Math.round(CRITERIOS_CONFERENCIA.minTempoTotalMs / 60000)} min${g.curtas > 0 ? ` · ${g.curtas} curta(s)` : ''}`}
+                                </span>
+                              )}
                           </td>
                         </tr>
                       ))}
@@ -344,6 +460,41 @@ export default function RelatorioConferencias({ aoVoltar }) {
                     <GraficoRitmoMaquinas maquinas={filtro ? resumo.filter((g) => nomeChave(g.maquina) === nomeChave(filtro)) : resumo} />
                   )}
                 </section>
+              )}
+
+              {!verArquivadas && painel && (painel.pareto.totalMs > 0 || proximasAcoes.length > 0) && (
+                <div style={est.duasColunas}>
+                  {painel.pareto.totalMs > 0 && (
+                    <section style={est.painelMiolo} aria-label="Paradas do período">
+                      <h2 style={est.iaTitulo}>Paradas</h2>
+                      <p style={est.iaTexto}>{formatarDuracao(painel.pareto.totalMs)} no total — Pareto por motivo</p>
+                      <div style={{ display: 'grid', gap: espaco.md, marginTop: espaco.md }}>
+                        {painel.pareto.porMotivo.map((m) => (
+                          <div key={m.motivo} style={est.paretoLinha}>
+                            <span>{m.rotulo}</span>
+                            <span style={est.paretoTrilha}>
+                              <i style={{ ...est.paretoBarra, width: `${Math.max(4, m.pct)}%` }} />
+                            </span>
+                            <b style={{ whiteSpace: 'nowrap' }}>{formatarDuracao(m.ms)}</b>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  {proximasAcoes.length > 0 && (
+                    <section style={est.painelMiolo} aria-label="Próximas ações">
+                      <h2 style={est.iaTitulo}>Próximas ações</h2>
+                      <p style={est.iaTexto}>O caminho mais curto para as referências — quem falta menos vem primeiro.</p>
+                      <ol style={est.listaAcoes}>
+                        {proximasAcoes.map((a) => (
+                          <li key={a.chave} style={est.itemAcao}>
+                            <strong>{a.quem}:</strong> {a.texto}
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
+                  )}
+                </div>
               )}
 
               {!verArquivadas && <AnaliseIaConferencias resumo={resumo} />}
@@ -764,6 +915,9 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas }) {
             : 'Nenhuma parada marcada'],
           ['Critério mínimo', `${crit.minConferencias} conf. · ${formatarDuracao(crit.minTempoTotalMs)}`],
           ['Período mínimo', formatarDuracao(crit.minPeriodoMs)],
+          ['Referências por peça', resumoPecas?.length
+            ? `${resumoPecas.filter((g) => g.confiavel).length} de ${resumoPecas.length} fechadas`
+            : '—'],
         ].map(([k, v]) => (
           <div key={k} style={imp.campo}>
             <span style={imp.campoRotulo}>{k}</span>
@@ -981,6 +1135,44 @@ const est = {
     background: t.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
     ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa,
   },
+
+  /* ---- faixa de KPIs do painel ---- */
+  kpis: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(172px, 1fr))',
+    gap: espaco.md, marginBottom: espaco.xl,
+  },
+  kpi: {
+    background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    padding: `${espaco.lg}px ${espaco.xl}px`,
+  },
+  // O KPI que importa leva cor de ESTADO (nunca o vermelho da marca):
+  // ambar enquanto ha referencia em aberto, verde quando todas fecharam.
+  kpiAtencao: { borderColor: '#EAD9A0', background: 'linear-gradient(180deg, #FFFDF4, #FFFFFF)' },
+  kpiOk: { borderColor: '#BFE3CD', background: 'linear-gradient(180deg, #F4FBF7, #FFFFFF)' },
+  kpiRotulo: { ...rotulo(t.textoFraco) },
+  kpiValor: { ...tipo('display'), ...numeros, lineHeight: 1.15, marginTop: 2 },
+  kpiSub: { ...tipo('legenda'), color: t.textoMedio, marginTop: 2 },
+
+  /* ---- paradas (pareto) + proximas acoes ---- */
+  duasColunas: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gap: espaco.lg, marginBottom: espaco.xl,
+  },
+  painelMiolo: {
+    background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, padding: espaco.xl,
+  },
+  paretoLinha: {
+    display: 'grid', gridTemplateColumns: 'minmax(120px, auto) 1fr auto',
+    gap: espaco.md, alignItems: 'center', ...tipo('corpo'), ...numeros,
+  },
+  paretoTrilha: { height: 10, background: '#EDF0F3', borderRadius: raio.pill, overflow: 'hidden' },
+  paretoBarra: { display: 'block', height: '100%', borderRadius: raio.pill, background: '#D97706' },
+  listaAcoes: { margin: `${espaco.md}px 0 0`, paddingLeft: 22, display: 'grid', gap: espaco.sm },
+  itemAcao: { ...tipo('corpo'), color: t.textoMedio, lineHeight: 1.45 },
+  // Insuficiente diz o que falta, em numero curto; o title da celula detalha.
+  paraFechar: { ...tipo('legenda'), color: t.textoMedio, whiteSpace: 'nowrap' },
 
   resumoGrade: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
