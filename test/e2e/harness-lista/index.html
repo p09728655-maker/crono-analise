@@ -5,5 +5,10 @@
   html, body, #raiz { height: 100%; margin: 0; }
   body { background: transparent; color:#F5F7FA; font-family:'Calibri','Carlito','Segoe UI',system-ui,sans-serif; }
   button { font-family: inherit; }
-</style></head>
+
+      /* A mesma regra da casca real (index.html): o documento de impressao
+         nao aparece na tela — so' no papel. */
+      .somente-impressao { display: none; }
+      @media print { .somente-tela { display: none !important; } .somente-impressao { display: block !important; } }
+    </style></head>
 <body><div id="raiz"></div><script type="module" src="./main.jsx"></script></body></html>

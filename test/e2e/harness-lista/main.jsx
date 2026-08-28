@@ -66,6 +66,17 @@ let sessao = null;
 
 let motivos = [];
 let proximoMotivo = 1;
+
+// Cadastro de maquinas com grupos codificados (padrao ERP), ja povoado:
+// e' o estado de quem trouxe as maquinas e organizou os grupos.
+const gruposMaq = [
+  { id: 'g1', codigo: '0001', nome: 'SECCIONADORA' },
+  { id: 'g2', codigo: '0002', nome: 'FURADEIRA' },
+];
+const maquinasCad = [
+  { id: 'm1', nome: 'Furadeira 12', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+  { id: 'm2', nome: 'Furadeira 16', ativa: false, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+];
 const codigoDe = (v) => String(v || '').trim().toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -73,6 +84,12 @@ const codigoDe = (v) => String(v || '').trim().toLowerCase()
 window.fetch = async (url, opts = {}) => {
   const metodo = opts.method || 'GET';
   const alvo = String(url);
+
+  if (alvo.includes('/maquinas')) {
+    return new Response(JSON.stringify({ maquinas: maquinasCad, grupos: gruposMaq }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   // Chave da IA: estado proprio, como no servidor — o navegador nunca
   // recebe a chave de volta, so' os 4 ultimos caracteres.

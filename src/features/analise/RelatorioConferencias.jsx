@@ -1204,7 +1204,9 @@ const est = {
   paraFechar: { ...tipo('legenda'), color: t.textoMedio, whiteSpace: 'nowrap' },
 
   resumoGrade: {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+    // auto-FIT, nao auto-fill: com uma maquina filtrada, o cartao ESTICA e
+    // ocupa a tela em vez de deixar um buraco a direita (apontado em 28/08).
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
     gap: espaco.lg, marginBottom: espaco.xl,
   },
   cartaoMaquina: {
