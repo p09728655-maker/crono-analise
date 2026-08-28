@@ -1155,7 +1155,9 @@ const est = {
   tela: { minHeight: '100dvh', background: t.fundo, color: t.texto },
   telaComLateral: { minHeight: '100dvh', display: 'flex', alignItems: 'flex-start' },
   conteudoLateral: {
-    flex: 1, minWidth: 0, maxWidth: 1400,
+    // Sem max-width: em monitor largo o relatorio ocupa a tela toda em vez
+    // de deixar uma faixa vazia a direita (apontado em 28/08).
+    flex: 1, minWidth: 0,
     padding: `${espaco.xl}px ${espaco.xl}px ${espaco.gigante}px`,
   },
 
