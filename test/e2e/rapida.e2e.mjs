@@ -67,8 +67,8 @@ checar(!/CICLO MOTOR/i.test(await painelHoras.innerText()),
 await p.locator('input[aria-label="Nome da máquina"]').fill('Furadeira 03');
 await p.locator('input[aria-label="Nome da peça"]').fill('Lateral Mesa Sleep');
 await p.getByRole('button', { name: 'SALVAR CONFERÊNCIA' }).tap();
-await p.getByRole('button', { name: /SALVA NESTE APARELHO/ }).waitFor({ timeout: 4000 });
-checar(true, 'salvar vira "salva" e trava contra toque duplo');
+await p.getByRole('button', { name: /SALVA — VAI PARA O RELATÓRIO DO PC/ }).waitFor({ timeout: 4000 });
+checar(true, 'o recibo diz para onde a medicao vai: relatorio do PC');
 
 const salvas = p.locator('[aria-label="Conferências salvas neste aparelho"]');
 let textoSalvas = await salvas.innerText();
@@ -206,7 +206,7 @@ checar(Math.abs(ritmoEditado / ritmoContado - 150 / 4) < 0.5, 'ritmo proporciona
 /* ------------------------------- salvar tambem no resultado do cronometro */
 await p.locator('input[aria-label="Nome da peça"]').fill('Porta Ripada');
 await p.getByRole('button', { name: 'SALVAR CONFERÊNCIA' }).tap();
-await p.getByRole('button', { name: /SALVA NESTE APARELHO/ }).waitFor({ timeout: 4000 });
+await p.getByRole('button', { name: /SALVA — VAI PARA O RELATÓRIO DO PC/ }).waitFor({ timeout: 4000 });
 
 /* ----------------------------------------------------------- reinicio */
 await p.getByRole('button', { name: /Nova conferência/ }).tap();

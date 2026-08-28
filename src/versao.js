@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.40.1',
+    data: '2026-08-28',
+    titulo: 'Salvar diz a verdade sobre o envio ao PC',
+    itens: [
+      'O recibo do botão dizia "SALVA NESTE APARELHO" — e passava a mensagem errada: salvar sempre ENVIOU a conferência para o relatório do PC. Agora ele diz isso: "SALVA — VAI PARA O RELATÓRIO DO PC". A nota explicando o destino, que só existia no cronômetro ao vivo, apareceu também no caminho dos horários.',
+      'O rótulo "no PC" da lista marcava quem ENTROU NA FILA, não quem chegou: uma medição presa por falha do servidor aparecia como entregue (aconteceu em 28/08, na janela de uma migração). Agora a lista consulta a fila de verdade — "no PC" só quando o servidor confirmou; até lá, "aguardando envio".',
+      'A tela do Ritmo da furadeira passou a empurrar a fila ao abrir. Antes, uma medição que falhou no envio só subia sozinha trocando de tela ou reabrindo o app — a barra de sincronização não aparece na tela cheia.',
+    ],
+  },
+  {
     versao: '2.40.0',
     data: '2026-08-28',
     titulo: 'O número grande é o que saiu do posto',
