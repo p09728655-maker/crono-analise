@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.43.0',
+    data: '2026-08-28',
+    titulo: 'Referência por peça — o número que dimensiona lote',
+    itens: [
+      'O relatório ganhou o quadro "Referência por peça": o ritmo consolidado de cada peça em cada máquina, com conferências, peças, tempo rodando, ritmo ponderado, ciclo do motor e CV%. Na tela e na folha impressa.',
+      'O critério mínimo (3 conferências · 30 min rodando) passa a valer PARA A PEÇA nesse quadro. Antes, três medições de peças variadas fechavam o critério da máquina sem nenhuma peça ter referência de verdade — referência emprestada não dimensiona lote.',
+      'O CV% ganhou a régua em palavras, no quadro e no cartão da máquina: estável (≤10%), variação moderada (≤20%) ou alta variação — a mesma classificação do estudo de ciclos, em vez do número cru.',
+      'Conferência sem nome de peça fica fora do quadro (sem nome não há o que referenciar) — mais um motivo para preencher a peça ao medir.',
+    ],
+  },
+  {
     versao: '2.42.0',
     data: '2026-08-28',
     titulo: 'Filtrou a máquina, o gráfico abre as conferências',

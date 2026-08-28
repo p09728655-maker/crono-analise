@@ -375,7 +375,15 @@ export const CRITERIOS_CONFERENCIA = {
  *
  * Aceita linhas do servidor (snake_case) e do aparelho (camelCase).
  */
-export function resumirConferencias(conferencias) {
+export function resumirConferencias(conferencias, { porPeca = false } = {}) {
+  /**
+   * `porPeca` agrupa por PECA x MAQUINA em vez de so' por maquina — e' o
+   * "Referencia por peca" do relatorio. A conta e o criterio sao os mesmos;
+   * o que muda e' a pergunta: a maquina responde "quanto este posto rende",
+   * a peca responde "quanto ESTA peca rende NESTE posto" — que e' o numero
+   * que dimensiona carga e lote. Conferencia sem nome de peca fica de fora
+   * deste agrupamento: sem nome nao ha' o que referenciar.
+   */
   const grupos = new Map();
 
   for (const c of conferencias || []) {
@@ -391,10 +399,15 @@ export function resumirConferencias(conferencias) {
     const produtivoMs = duracao - paradaMs;
     if (produtivoMs <= 0) continue;
 
-    const chave = String(c.maquina || '').trim() || 'Sem máquina';
+    const nomeMaquina = String(c.maquina || '').trim() || 'Sem máquina';
+    const nomePeca = String(c.peca || '').trim();
+    if (porPeca && !nomePeca) continue;
+    // \u0000 nao aparece em nome digitado: separa maquina de peca sem risco.
+    const chave = porPeca ? `${nomeMaquina}\u0000${nomePeca}` : nomeMaquina;
     if (!grupos.has(chave)) {
       grupos.set(chave, {
-        maquina: chave, n: 0, totalPecas: 0, totalAcionamentos: 0, totalMs: 0,
+        maquina: nomeMaquina, ...(porPeca ? { peca: nomePeca } : {}),
+        n: 0, totalPecas: 0, totalAcionamentos: 0, totalMs: 0,
         totalProdutivoMs: 0, totalParadaMs: 0, totalSetupMs: 0, paradasPorMotivo: new Map(),
         curtas: 0, ritmos: [], melhor: null, pior: null,
       });
@@ -458,11 +471,16 @@ export function resumirConferencias(conferencias) {
           .sort((a, b) => b.ms - a.ms),
         // CV entre conferencias: referencia de estabilidade do posto.
         cvPct: g.ritmos.length >= 2 ? coeficienteVariacao(g.ritmos) : null,
+        // A regua do CV, em palavras — a mesma do estudo de ciclos. O numero
+        // cru ("17,3%") obrigava o leitor a saber a tabela de cabeca.
+        estabilidade: g.ritmos.length >= 2 ? classificarEstabilidade(coeficienteVariacao(g.ritmos)) : null,
         confiavel: motivos.length === 0,
         motivos,
       };
     })
-    .sort((a, b) => b.n - a.n || a.maquina.localeCompare(b.maquina));
+    .sort((a, b) => (porPeca
+      ? (a.peca.localeCompare(b.peca) || a.maquina.localeCompare(b.maquina))
+      : (b.n - a.n || a.maquina.localeCompare(b.maquina))));
 }
 
 /**

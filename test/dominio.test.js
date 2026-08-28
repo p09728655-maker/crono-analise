@@ -479,6 +479,57 @@ describe('resumirConferencias', () => {
   });
 });
 
+describe('resumirConferencias por peca — a referencia que dimensiona lote', () => {
+  const MIN = 60000;
+  it('agrupa por peca x maquina e aplica o criterio A PECA', () => {
+    const r = resumirConferencias([
+      { maquina: 'F12', peca: 'Princesa', duracaoMs: 10 * MIN, pecas: 100 },
+      { maquina: 'F12', peca: 'Princesa', duracaoMs: 10 * MIN, pecas: 110 },
+      { maquina: 'F12', peca: 'Princesa', duracaoMs: 10 * MIN, pecas: 90 },
+      { maquina: 'F12', peca: 'Lateral', duracaoMs: 10 * MIN, pecas: 50 },
+    ], { porPeca: true });
+    expect(r.length).toBe(2);
+    const princesa = r.find((g) => g.peca === 'Princesa');
+    expect(princesa.maquina).toBe('F12');
+    expect(princesa.n).toBe(3);
+    expect(princesa.confiavel).toBe(true);   // 3 conf, 30 min rodando, nenhuma curta
+    expect(princesa.ritmoMedio).toBe(600);   // 300 pc em 30 min
+    // A maquina fecha o criterio com 4 conferencias, mas a Lateral NAO:
+    // criterio por peca e' o que impede referencia emprestada.
+    expect(r.find((g) => g.peca === 'Lateral').confiavel).toBe(false);
+  });
+
+  it('mesma peca em maquinas diferentes sao referencias separadas', () => {
+    const r = resumirConferencias([
+      { maquina: 'F12', peca: 'Base', duracaoMs: 10 * MIN, pecas: 100 },
+      { maquina: 'F16', peca: 'Base', duracaoMs: 10 * MIN, pecas: 200 },
+    ], { porPeca: true });
+    expect(r.length).toBe(2);
+    expect(r.map((g) => g.maquina).sort()).toEqual(['F12', 'F16']);
+  });
+
+  it('conferencia sem nome de peca fica fora — sem nome nao ha o que referenciar', () => {
+    const r = resumirConferencias([
+      { maquina: 'F12', peca: '', duracaoMs: 10 * MIN, pecas: 100 },
+      { maquina: 'F12', peca: 'Base', duracaoMs: 10 * MIN, pecas: 50 },
+    ], { porPeca: true });
+    expect(r.length).toBe(1);
+    expect(r[0].peca).toBe('Base');
+  });
+
+  it('a regua do CV sai em palavras junto do numero', () => {
+    const [g] = resumirConferencias([
+      { maquina: 'F', peca: 'A', duracaoMs: 10 * MIN, pecas: 100 },
+      { maquina: 'F', peca: 'A', duracaoMs: 10 * MIN, pecas: 150 },
+    ], { porPeca: true });
+    expect(g.cvPct).toBeGreaterThan(20);
+    expect(g.estabilidade.nivel).toBe('critico');
+    // Com uma so conferencia nao ha variacao a classificar.
+    const [uma] = resumirConferencias([{ maquina: 'F', peca: 'A', duracaoMs: 10 * MIN, pecas: 100 }], { porPeca: true });
+    expect(uma.estabilidade).toBeNull();
+  });
+});
+
 describe('duracaoEntreHoras', () => {
   it('exemplo real: 7:00 as 7:10 sao 10 minutos', () => {
     expect(duracaoEntreHoras('07:00', '07:10')).toBe(600000);
