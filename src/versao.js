@@ -13,6 +13,14 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.48.1',
+    data: '2026-08-28',
+    titulo: 'O relatório ocupa a tela inteira',
+    itens: [
+      'No PC de tela larga, o relatório das Furadeiras parava numa largura fixa e sobrava uma faixa vazia à direita. O conteúdo agora estica até a borda da janela: os cartões de indicadores, os cartões de máquina, a Referência por peça e o gráfico de ritmo ganham esse espaço.',
+    ],
+  },
+  {
     versao: '2.48.0',
     data: '2026-08-28',
     titulo: 'O cadastro de máquinas ganha impressão própria',
