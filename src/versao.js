@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.47.0',
+    data: '2026-08-28',
+    titulo: 'O grupo de máquina sai na impressão',
+    itens: [
+      'A folha impressa das Furadeiras passou a identificar os GRUPOS: a identificação traz "Grupos de máquina: 0002 · FURADEIRA" e o Resumo por máquina ganhou a coluna Grupo — o papel agora fala a língua do ERP.',
+      'Na tela, o cartão de cada máquina mostra o grupo com o código, batendo com o papel.',
+      'A ligação é pelo cadastro (Ferramentas > Máquinas): máquina fora do cadastro aparece sem grupo, e a legenda impressa explica.',
+    ],
+  },
+  {
     versao: '2.46.0',
     data: '2026-08-28',
     titulo: 'Grupos de máquina, com o código da fábrica',

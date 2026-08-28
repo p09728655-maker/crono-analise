@@ -7,8 +7,8 @@ import {
 } from '../../domain/cronoanalise.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import {
-  analisarConferenciasComIa, arquivarConferencia, excluirConferencia, listarConferenciasServidor,
-  salvarParadasConferencia,
+  analisarConferenciasComIa, arquivarConferencia, excluirConferencia, listarCadastroMaquinas,
+  listarConferenciasServidor, salvarParadasConferencia,
 } from '../../lib/api.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
@@ -64,6 +64,26 @@ export default function RelatorioConferencias({ aoVoltar }) {
   const [ocupado, setOcupado] = useState(null);
 
   useEffect(() => { carregar(verArquivadas); }, [verArquivadas]);
+
+  /**
+   * O GRUPO da maquina (0002 · FURADEIRA) vem do cadastro, ligado pelo
+   * nome — a conferencia grava texto, e a ligacao usa a mesma chave
+   * normalizada do agrupamento. Falha de carga nao derruba o relatorio:
+   * sem cadastro, as maquinas simplesmente aparecem sem grupo.
+   */
+  const [mapaGrupos, setMapaGrupos] = useState(() => new Map());
+  useEffect(() => {
+    listarCadastroMaquinas()
+      .then(({ maquinas }) => {
+        const mapa = new Map();
+        for (const m of maquinas) {
+          if (m.grupo_codigo) mapa.set(nomeChave(m.nome), `${m.grupo_codigo} · ${m.grupo_nome}`);
+        }
+        setMapaGrupos(mapa);
+      })
+      .catch(() => {});
+  }, []);
+  const grupoDe = (maquina) => mapaGrupos.get(nomeChave(maquina)) || null;
 
   async function carregar(arquivadas = verArquivadas) {
     setEstado('carregando');
@@ -336,7 +356,10 @@ export default function RelatorioConferencias({ aoVoltar }) {
                 {(filtro ? resumo.filter((g) => g.maquina === filtro) : resumo).map((g) => (
                   <div key={g.maquina} style={est.cartaoMaquina}>
                     <div style={est.cartaoTopo}>
-                      <div style={est.cartaoTitulo}>{g.maquina}</div>
+                      <div style={est.cartaoTitulo}>
+                        {g.maquina}
+                        {grupoDe(g.maquina) && <span style={est.cartaoGrupo}>{grupoDe(g.maquina)}</span>}
+                      </div>
                       <span style={{ ...est.selo, ...(g.confiavel ? est.seloOk : est.seloAtencao) }}>
                         {g.confiavel ? 'Referência OK' : 'Amostra insuficiente'}
                       </span>
@@ -630,7 +653,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
       </div>
 
       {estado === 'pronto' && linhas.length > 0 && (
-        <ImpressaoConferencias linhas={linhas} resumo={resumo} resumoPecas={resumoPecas} />
+        <ImpressaoConferencias linhas={linhas} resumo={resumo} resumoPecas={resumoPecas} grupoDe={grupoDe} />
       )}
     </div>
   );
@@ -878,7 +901,9 @@ function AnaliseIaConferencias({ resumo }) {
  * criterio minimo continua declarado (identificacao, coluna Situacao e a
  * nota depois do resumo) — ele qualifica o numero, nao o esconde.
  */
-function ImpressaoConferencias({ linhas, resumo, resumoPecas }) {
+function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
+  // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
+  const gruposCobertos = [...new Set(resumo.map((g) => grupoDe?.(g.maquina)).filter(Boolean))].sort();
   const hoje = new Date().toLocaleDateString('pt-BR');
   const crit = CRITERIOS_CONFERENCIA;
   const semReferencia = resumo.filter((g) => !g.confiavel);
@@ -906,6 +931,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas }) {
         {[
           ['Tipo de medição', 'Ritmo do posto (vazão)'],
           ['Período coberto', periodo],
+          ['Grupos de máquina', gruposCobertos.length ? gruposCobertos.join(' · ') : '—'],
           ['Máquinas', String(resumo.length)],
           ['Conferências', String(linhas.length)],
           ['Total de peças', String(totalPecas)],
@@ -931,6 +957,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas }) {
         <thead>
           <tr>
             <th style={imp.th}>Máquina</th>
+            <th style={imp.th}>Grupo</th>
             <th style={imp.thNum}>Conf.</th>
             <th style={imp.thNum}>Peças</th>
             <th style={imp.thNum}>Tempo obs.</th>
@@ -945,6 +972,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas }) {
           {resumo.map((g) => (
             <tr key={g.maquina}>
               <td style={imp.td}>{g.maquina}</td>
+              <td style={imp.td}>{grupoDe?.(g.maquina) || '—'}</td>
               <td style={imp.tdNum}>{g.n}</td>
               <td style={imp.tdNum}>{g.totalPecas}</td>
               <td style={imp.tdNum}>{formatarDuracao(g.totalMs)}</td>
@@ -1085,6 +1113,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas }) {
             ['CV%', 'variação do ritmo entre conferências da mesma máquina — quanto maior, mais instável.'],
             ['Referência', 'amostra atende aos critérios mínimos declarados acima.'],
             ['Referência por peça', 'ritmo consolidado da peça naquela máquina, com o critério mínimo aplicado à própria peça — é o número que dimensiona carga e lote. Conferência sem nome de peça fica fora deste quadro.'],
+            ['Grupo', 'grupo de máquina do cadastro, com o código da fábrica (ex: 0002 · FURADEIRA). Máquina fora do cadastro aparece sem grupo.'],
             ['Insuficiente', 'amostra ainda não sustenta decisão de capacidade.'],
           ].map(([sigla, texto]) => (
             <div key={sigla} style={imp.itemLegenda}>
@@ -1186,6 +1215,10 @@ const est = {
   cartaoTopo: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     gap: espaco.md, flexWrap: 'wrap',
+  },
+  cartaoGrupo: {
+    display: 'block', ...tipo('micro'), color: t.textoFraco,
+    letterSpacing: 1, marginTop: 2,
   },
   cartaoTitulo: { ...tipo('corpoF') },
   selo: {
