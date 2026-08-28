@@ -483,15 +483,20 @@ export default function ConferenciaRapida({ aoSair }) {
             </section>
           ) : resultadoHoras && resultadoHoras.pecas > 0 ? (
             <section style={est.painelHoras} aria-label="Resultado dos horários">
+              {/* O numero grande e' o que SAIU do posto no periodo — e' a
+                  producao que o analista confere no contador e defende na
+                  reuniao. O ritmo com a maquina rodando (o de capacidade)
+                  desce para a linha das paradas, logo abaixo: contexto,
+                  nao manchete. Sem parada marcada, os dois sao o mesmo. */}
               <div style={est.destaqueRitmo} aria-label="Ritmo do período">
-                <span style={est.valorRitmo}>{Math.round(resultadoHoras.pecasPorHora)}</span>
+                <span style={est.valorRitmo}>{Math.round(resultadoHoras.pecasPorHoraBruto)}</span>
                 <span style={est.sufixoRitmo}>
-                  {resultadoHoras.paradaMs > 0 ? 'peças/hora com a máquina rodando' : 'peças/hora'}
+                  {resultadoHoras.paradaMs > 0 ? 'peças/hora produzidas no período' : 'peças/hora'}
                 </span>
               </div>
               <div style={est.linhaParcial}>
                 <Parcial rotulo="Período" valor={formatarDuracao(duracaoHoras)} />
-                <Parcial rotulo="Peças/min" valor={resultadoHoras.pecasPorMinuto.toFixed(1)} />
+                <Parcial rotulo="Peças/min" valor={(resultadoHoras.pecasPorHoraBruto / 60).toFixed(1)} />
                 <Parcial
                   rotulo="Ciclo médio"
                   valor={resultadoHoras.cicloMedioMs ? formatarSegundos(resultadoHoras.cicloMedioMs) : '—'}
@@ -569,7 +574,9 @@ export default function ConferenciaRapida({ aoSair }) {
                     </div>
                   </div>
                   <div style={est.itemRitmo}>
-                    {Math.round(c.pecasPorHora)}
+                    {/* O mesmo numero da manchete do resultado: producao do
+                        periodo. Registro antigo, sem o bruto, mostra o que tem. */}
+                    {Math.round(c.pecasPorHoraBruto ?? c.pecasPorHora)}
                     <span style={est.itemRitmoSufixo}>pç/h</span>
                   </div>
                   <button
@@ -738,17 +745,20 @@ export default function ConferenciaRapida({ aoSair }) {
               </label>
             </div>
 
+            {/* Mesma hierarquia do caminho dos horarios: a manchete e' o
+                que saiu do posto; o ritmo de maquina rodando fica na linha
+                das paradas. */}
             <div style={est.destaqueRitmo} aria-label="Ritmo do período">
-              <span style={est.valorRitmo}>{Math.round(resultado.pecasPorHora)}</span>
+              <span style={est.valorRitmo}>{Math.round(resultado.pecasPorHoraBruto)}</span>
               <span style={est.sufixoRitmo}>
-                {resultado.paradaMs > 0 ? 'peças/hora com a máquina rodando' : 'peças/hora'}
+                {resultado.paradaMs > 0 ? 'peças/hora produzidas no período' : 'peças/hora'}
               </span>
             </div>
 
             <CiclosFuracao valor={ciclosPorPeca} aoTrocar={setCiclosPorPeca} compacto />
 
             <div style={est.linhaParcial}>
-              <Parcial rotulo="Peças/min" valor={resultado.pecasPorMinuto.toFixed(1)} />
+              <Parcial rotulo="Peças/min" valor={(resultado.pecasPorHoraBruto / 60).toFixed(1)} />
               <Parcial
                 rotulo="Ciclo médio"
                 valor={resultado.cicloMedioMs ? formatarSegundos(resultado.cicloMedioMs) : '—'}
@@ -981,9 +991,11 @@ function CronoSetup({ inicio, aoEncerrar }) {
 /**
  * A linha que so' existe quando ha' parada marcada.
  *
- * Mostra o outro numero — o do periodo inteiro — porque os dois respondem
- * perguntas diferentes: o ritmo com a maquina rodando dimensiona capacidade;
- * o do periodo explica o que de fato saiu do posto naquelas horas.
+ * Mostra o outro numero — o ritmo com a maquina RODANDO — porque os dois
+ * respondem perguntas diferentes: a manchete diz o que de fato saiu do
+ * posto naquelas horas; este aqui dimensiona capacidade. Decisao de
+ * ago/2026: a producao real lidera e o de capacidade e' contexto — antes
+ * era o contrario, e o analista lia 505 onde o posto entregou 441.
  */
 function ComParadas({ calculado }) {
   if (!calculado || !calculado.paradaMs) return null;
@@ -991,7 +1003,7 @@ function ComParadas({ calculado }) {
     <div style={est.linhaParcial}>
       <Parcial rotulo="Parado" valor={formatarDuracao(calculado.paradaMs)} />
       <Parcial rotulo="Rodando" valor={formatarDuracao(calculado.produtivoMs)} />
-      <Parcial rotulo="No período" valor={String(Math.round(calculado.pecasPorHoraBruto))} sufixo="pç/h" />
+      <Parcial rotulo="Máq. rodando" valor={String(Math.round(calculado.pecasPorHora))} sufixo="pç/h" />
     </div>
   );
 }
