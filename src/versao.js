@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.39.1',
+    data: '2026-08-28',
+    titulo: 'No iPhone, a seta de voltar sai de baixo do relógio',
+    itens: [
+      'O app ocupa a tela inteira do iPhone, inclusive a faixa da barra de status — e as telas do celular só reservavam espaço na parte de baixo. O cabeçalho, com a seta de voltar, subia para debaixo do relógio e ficava difícil de tocar.',
+      'As telas do aparelho (Ritmo da furadeira, coleta de ciclos, lista de estudos e operações) agora respeitam a área segura também no topo. Em aparelhos sem essa faixa, nada muda.',
+    ],
+  },
+  {
     versao: '2.39.0',
     data: '2026-08-28',
     titulo: 'A conferência aprende os ciclos de furação da peça',

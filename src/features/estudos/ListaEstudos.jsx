@@ -1283,6 +1283,9 @@ function estilos(t, analise) {
     conteudo: {
       maxWidth: 1400, margin: '0 auto',
       padding: analise ? `${espaco.xl}px ${espaco.xl}px ${espaco.gigante}px` : espaco.lg,
+      // So' no aparelho: no iPhone (viewport-fit=cover) o conteudo passa por
+      // baixo da barra de status e o topo da lista sumia sob o relogio.
+      ...(analise ? {} : { paddingTop: `calc(${espaco.lg}px + env(safe-area-inset-top, 0px))` }),
     },
 
     botaoPrimario: {

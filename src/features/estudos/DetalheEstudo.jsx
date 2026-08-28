@@ -200,6 +200,9 @@ const est = {
   },
   conteudo: {
     padding: espaco.lg,
+    // No iPhone (viewport-fit=cover) o conteudo passa por baixo da barra de
+    // status: sem esta folga a seta de voltar sobe para debaixo do relogio.
+    paddingTop: `calc(${espaco.lg}px + env(safe-area-inset-top, 0px))`,
     display: 'flex', flexDirection: 'column', gap: espaco.lg,
   },
   cabecalho: { display: 'flex', alignItems: 'center', gap: espaco.md },
