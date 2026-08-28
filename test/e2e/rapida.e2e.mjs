@@ -86,6 +86,26 @@ checar(await p.locator('input[aria-label="Nome da peça"]').inputValue() === '',
 checar(await p.locator('input[aria-label="Nome da máquina"]').inputValue() === 'Furadeira 03',
   'outra peca: maquina fica — trocar de peca nao e trocar de posto');
 
+/* --------------- caminho da referencia: mesma peca, mais um periodo */
+// O criterio da maquina fecha com 3 conferencias e 30 min rodando — e o
+// jeito de medir e' repetir a MESMA peca. Este botao emenda o horario e
+// preserva peca e ciclos, sem a redigitacao que "outra peca" exige.
+await p.locator('input[aria-label="Nome da peça"]').fill('Lateral Mesa Sleep');
+await p.getByRole('radio', { name: '2 ciclos' }).tap();
+await p.locator('input[aria-label="Hora final"]').fill('07:20');
+await p.locator('input[aria-label="Peças no período"]').fill('80');
+await painelHoras.waitFor({ timeout: 4000 });
+await p.getByRole('button', { name: /MAIS UM PERÍODO — MESMA PEÇA/ }).tap();
+checar(await p.locator('input[aria-label="Nome da peça"]').inputValue() === 'Lateral Mesa Sleep',
+  'mesma peca: o nome da peca fica');
+checar(await p.getByRole('radio', { name: '2 ciclos' }).getAttribute('aria-checked') === 'true',
+  'mesma peca: os ciclos de furacao ficam');
+checar(await p.locator('input[aria-label="Hora inicial"]').inputValue() === '07:20',
+  'mesma peca: a hora inicial emenda na final do periodo anterior');
+checar(await p.locator('input[aria-label="Peças no período"]').inputValue() === '',
+  'mesma peca: as pecas limpam para a proxima contagem');
+await p.getByRole('radio', { name: '1 ciclo' }).tap();
+
 await p.reload();
 await salvas.waitFor({ timeout: 8000 });
 textoSalvas = await salvas.innerText();
