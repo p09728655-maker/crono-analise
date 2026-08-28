@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.45.0',
+    data: '2026-08-28',
+    titulo: 'Cadastro de máquinas — o nome sai igual em toda medição',
+    itens: [
+      'Novo cadastro em Ferramentas > Máquinas, no PC. Máquina era texto livre no celular, e o mesmo posto saía escrito de três jeitos — foi o que dividiu a mesma peça em linhas que não somavam. O cadastro ataca a causa.',
+      'Com a lista preenchida, o celular passa a OFERECER as máquinas no Ritmo da furadeira — escolher em vez de digitar. "Outra máquina..." abre o texto livre; sem cadastro (ou sem rede e sem cache), o campo é o de sempre. Nada tranca.',
+      '"Trazer das conferências" preenche o cadastro com os nomes que o banco já usou, uma grafia por máquina — ninguém redigita o próprio histórico.',
+      'Máquina com conferência registrada não se exclui: DESATIVA — some da escolha e continua nomeando o histórico. Renomear vale para as próximas medições.',
+    ],
+  },
+  {
     versao: '2.44.0',
     data: '2026-08-28',
     titulo: 'O relatório das Furadeiras vira painel',

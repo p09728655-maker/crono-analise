@@ -10,6 +10,7 @@ import { sincronizar } from '../../lib/api.js';
 import { listarConferencias, marcarEnviadas, removerConferencia, salvarConferencia } from '../../lib/conferencias.js';
 import { enfileirar, listarFila, novoId } from '../../lib/filaOffline.js';
 import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
+import { carregarMaquinas, useMaquinas } from '../../lib/maquinas.js';
 
 /**
  * CONFERENCIA RAPIDA — hora inicial, hora final, pecas. Sem cadastro.
@@ -111,6 +112,9 @@ export default function ConferenciaRapida({ aoSair }) {
     // Foi o caso real de 28/08: sync respondeu 500 por uns minutos e a
     // medicao so' subiria "sozinha" trocando de tela.
     sincronizar().catch(() => {});
+    // Cadastro de maquinas: atualiza o cache do aparelho quando ha rede.
+    // Sem rede, a lista ja vista continua valendo (ver lib/maquinas.js).
+    carregarMaquinas();
 
     const pendentes = listarConferencias()
       .filter((c) => !c.enviada && Number(c.duracaoMs) > 0 && Number(c.pecas) > 0);
@@ -428,14 +432,7 @@ export default function ConferenciaRapida({ aoSair }) {
             <div style={est.linhaHoras}>
               <label style={est.campoHora}>
                 <span style={est.rotuloCampo}>MÁQUINA</span>
-                <input
-                  type="text"
-                  placeholder="Ex: Furadeira 03"
-                  value={maquina}
-                  onChange={(ev) => setMaquina(ev.target.value)}
-                  style={est.inputTexto}
-                  aria-label="Nome da máquina"
-                />
+                <CampoMaquina valor={maquina} aoTrocar={setMaquina} />
               </label>
               <label style={est.campoHora}>
                 <span style={est.rotuloCampo}>PEÇA</span>
@@ -762,14 +759,7 @@ export default function ConferenciaRapida({ aoSair }) {
             <div style={est.linhaResultado}>
               <label style={est.campoHora}>
                 <span style={est.rotuloCampo}>MÁQUINA</span>
-                <input
-                  type="text"
-                  placeholder="Ex: Furadeira 03"
-                  value={maquina}
-                  onChange={(ev) => setMaquina(ev.target.value)}
-                  style={est.inputTexto}
-                  aria-label="Nome da máquina"
-                />
+                <CampoMaquina valor={maquina} aoTrocar={setMaquina} />
               </label>
               <label style={est.campoHora}>
                 <span style={est.rotuloCampo}>PEÇA</span>
@@ -978,6 +968,65 @@ function Paradas({ motivos, paradas, resumo, duracaoMs, setupCrono, aoIniciarSet
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Campo da MAQUINA — escolha quando ha cadastro, texto quando nao ha.
+ *
+ * O nome digitado foi o que dividiu a mesma peca em linhas que nao somam
+ * (28/08). Com o cadastro preenchido no PC (Ferramentas > Maquinas), o
+ * celular OFERECE a lista e digitar vira excecao — mas nunca tranca:
+ * "Outra maquina..." abre o texto livre, e sem cadastro (ou sem rede e sem
+ * cache) o campo e' o de sempre. O aria-label do texto livre nao muda: e'
+ * o mesmo campo de todo o historico.
+ */
+function CampoMaquina({ valor, aoTrocar }) {
+  const maquinas = useMaquinas();
+  const [digitando, setDigitando] = useState(false);
+  const noCadastro = maquinas.some((m) => m.nome === valor);
+  // Valor fora do cadastro (historico, "outra") mantem o texto visivel:
+  // um select sem a opcao esconderia o que vai ser gravado.
+  const livre = digitando || maquinas.length === 0 || (Boolean(valor) && !noCadastro);
+
+  if (livre) {
+    return (
+      <>
+        <input
+          type="text"
+          placeholder="Ex: Furadeira 03"
+          value={valor}
+          onChange={(ev) => aoTrocar(ev.target.value)}
+          style={est.inputTexto}
+          aria-label="Nome da máquina"
+        />
+        {maquinas.length > 0 && (
+          <button
+            type="button" style={est.linkCadastro}
+            onClick={() => { setDigitando(false); aoTrocar(''); }}
+          >
+            ▾ escolher do cadastro
+          </button>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <select
+      value={valor}
+      onChange={(ev) => {
+        if (ev.target.value === '__outra') { setDigitando(true); aoTrocar(''); return; }
+        aoTrocar(ev.target.value);
+        if (ev.target.value) vibrar(30);
+      }}
+      style={est.selectMaquina}
+      aria-label="Máquina"
+    >
+      <option value="">Escolha a máquina…</option>
+      {maquinas.map((m) => <option key={m.id} value={m.nome}>{m.nome}</option>)}
+      <option value="__outra">Outra máquina…</option>
+    </select>
   );
 }
 
@@ -1211,6 +1260,19 @@ const est = {
     flexShrink: 0, display: 'flex', flexDirection: 'column', gap: espaco.md,
     background: cores.superficie, border: `1px solid ${cores.borda}`,
     borderRadius: raio.lg, padding: espaco.lg,
+  },
+  selectMaquina: {
+    width: '100%', minHeight: 48, padding: `0 ${espaco.sm}px`,
+    background: cores.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.sm,
+    color: cores.texto, fontSize: tamanho.corpo, fontWeight: 600,
+    fontFamily: 'inherit', outline: 'none', colorScheme: 'dark',
+  },
+  linkCadastro: {
+    marginTop: espaco.xs, padding: 0, alignSelf: 'flex-start',
+    background: 'transparent', border: 'none', color: cores.textoFraco,
+    fontSize: tamanho.legenda, fontWeight: 600, textDecoration: 'underline',
+    cursor: 'pointer', fontFamily: 'inherit',
   },
   inputTexto: {
     width: '100%', minHeight: 48, padding: `0 ${espaco.md}px`,
