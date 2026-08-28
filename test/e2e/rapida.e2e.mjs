@@ -121,11 +121,14 @@ await minutosSetup.waitFor({ timeout: 4000 });
 const medido = parseFloat((await minutosSetup.inputValue()).replace(',', '.'));
 checar(medido > 0 && medido < 1, `o tempo medido cai na lista em minutos (${medido})`);
 await minutosSetup.fill('10');
-checar(await ritmo() === 300, 'setup de 10 min: sobram 20 min rodando -> 300 pc/h');
+// A manchete e' o que SAIU do posto: marcar setup nao muda a producao do
+// periodo (100 pc em 30 min = 200 pc/h). O ritmo de maquina rodando (300)
+// desce para a linha das paradas.
+checar(await ritmo() === 200, 'setup de 10 min nao mexe na manchete: 200 pc/h produzidas no periodo');
 
 const comParada = await painelHoras.innerText();
-checar(/rodando/i.test(comParada), 'a tela diz que o numero grande e o da maquina rodando');
-checar(comParada.includes('200'), 'o ritmo do periodo inteiro continua visivel ao lado');
+checar(/produzidas no per/i.test(comParada), 'a tela diz que o numero grande e o que foi produzido no periodo');
+checar(comParada.includes('300'), 'o ritmo com a maquina rodando (300) continua visivel ao lado');
 checar(comParada.includes('10 min'), 'o tempo parado aparece no resultado');
 
 // Parada maior que o periodo: avisa, nao some com a conta nem divide por zero.
@@ -136,7 +139,7 @@ checar(true, 'parada maior que o periodo troca o resultado por um aviso');
 await minutosSetup.fill('10');
 await painelHoras.waitFor({ timeout: 4000 });
 await p.getByRole('button', { name: 'Remover parada Setup / Troca' }).tap();
-checar(await ritmo() === 200, 'remover a parada devolve o ritmo do periodo inteiro');
+checar(await ritmo() === 200, 'sem parada os dois ritmos sao um so: 200 pc/h no destaque');
 
 /* ------------------------------------------- alternativa: cronometro vivo */
 await p.getByRole('button', { name: /CRONOMETRAR AO VIVO/ }).tap();

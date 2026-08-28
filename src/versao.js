@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.40.0',
+    data: '2026-08-28',
+    titulo: 'O número grande é o que saiu do posto',
+    itens: [
+      'No resultado da conferência, o destaque era o ritmo com a máquina rodando (ex.: 505 pç/h) — e a produção real do período (441 pç/h) ficava pequena, na linha de baixo. Quem olhava a tela lia 505 onde o posto entregou 441.',
+      'Invertido: a manchete agora é o que foi PRODUZIDO no período — o número que bate com o contador da máquina. O ritmo com a máquina rodando (o de capacidade) desceu para a linha das paradas, como "Máq. rodando", ao lado do tempo parado.',
+      'Sem parada marcada nada muda: os dois ritmos são o mesmo número.',
+      'A lista de salvas no aparelho e as peças/min acompanham a manchete: produção do período, não ritmo de máquina.',
+    ],
+  },
+  {
     versao: '2.39.1',
     data: '2026-08-28',
     titulo: 'No iPhone, a seta de voltar sai de baixo do relógio',
