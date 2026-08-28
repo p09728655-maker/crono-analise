@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.46.0',
+    data: '2026-08-28',
+    titulo: 'Grupos de máquina, com o código da fábrica',
+    itens: [
+      'O cadastro de máquinas ganhou GRUPOS com código no padrão do ERP: 0001 SECCIONADORA, 0002 FURADEIRA... O código identifica e ordena; o nome aparece. Tudo em Ferramentas > Máquinas: criar grupo (com o próximo código sugerido), editar, e vincular cada máquina ao seu grupo.',
+      'No celular, a escolha da máquina vem agrupada pelo código: "0002 · FURADEIRA" com as furadeiras dentro. Máquina sem grupo continua valendo — o grupo organiza, não trava.',
+      'Excluir um grupo nunca apaga máquina: ela só fica sem grupo. E máquina com conferência registrada segue sem poder ser excluída — desativa.',
+      'É o alicerce para a leitura por grupo nos relatórios, quando outros postos além das furadeiras entrarem na medição.',
+    ],
+  },
+  {
     versao: '2.45.0',
     data: '2026-08-28',
     titulo: 'Cadastro de máquinas — o nome sai igual em toda medição',

@@ -143,16 +143,25 @@ export const removerMotivoParada = (id) =>
   requisitar(`/motivos-parada?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 
 /* --------------------------------------------------- cadastro de maquinas */
-export const listarMaquinas = () => requisitar('/maquinas').then((r) => r.maquinas || []);
-export const criarMaquina = (nome) =>
-  requisitar('/maquinas', { metodo: 'POST', corpo: { nome } }).then((r) => r.maquina);
+// O cadastro vem inteiro: { maquinas, grupos }. Grupos moram no MESMO
+// endpoint (o plano da Vercel limita funcoes e o projeto esta no teto).
+export const listarCadastroMaquinas = () =>
+  requisitar('/maquinas').then((r) => ({ maquinas: r.maquinas || [], grupos: r.grupos || [] }));
+export const criarMaquina = ({ nome, grupoId }) =>
+  requisitar('/maquinas', { metodo: 'POST', corpo: { nome, grupoId } }).then((r) => r.maquina);
 // Carga inicial: os nomes que as conferencias ja usaram, uma grafia por maquina.
 export const semearMaquinasDasConferencias = () =>
-  requisitar('/maquinas', { metodo: 'POST', corpo: { dasConferencias: true } }).then((r) => r.maquinas || []);
+  requisitar('/maquinas', { metodo: 'POST', corpo: { dasConferencias: true } });
 export const atualizarMaquina = (id, dados) =>
   requisitar(`/maquinas?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados }).then((r) => r.maquina);
 export const removerMaquina = (id) =>
   requisitar(`/maquinas?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
+export const criarGrupoMaquina = ({ codigo, nome }) =>
+  requisitar('/maquinas', { metodo: 'POST', corpo: { grupo: { codigo, nome } } }).then((r) => r.grupo);
+export const atualizarGrupoMaquina = (id, dados) =>
+  requisitar(`/maquinas?grupo=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados }).then((r) => r.grupo);
+export const removerGrupoMaquina = (id) =>
+  requisitar(`/maquinas?grupo=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 
 /* ------------------------------------------ analistas e identificacao */
 export const listarUsuarios = () => requisitar('/usuarios').then((r) => r.usuarios || []);
