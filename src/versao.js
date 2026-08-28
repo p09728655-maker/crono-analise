@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.44.0',
+    data: '2026-08-28',
+    titulo: 'O relatório das Furadeiras vira painel',
+    itens: [
+      'Faixa de resumo no topo, respondendo na ordem certa: REFERÊNCIAS FECHADAS (o número que importa — âmbar enquanto há peça em aberto, verde quando todas fecham), conferências, tempo rodando, disponibilidade e setup do período.',
+      'No quadro por peça, "Insuficiente" virou o que falta, em números curtos: "1/3 conf · 12/30 min · 1 curta". O detalhe completo continua no passar do mouse.',
+      'Seção nova de PRÓXIMAS AÇÕES: uma linha por peça com o caminho mais curto para a referência (arquivar curtas, quantas conferências e minutos faltam) — quem falta menos vem primeiro. Conferência sem nome de peça também é apontada.',
+      'Pareto de PARADAS do período, por motivo, ao lado das ações.',
+      'A folha impressa ganhou a linha "Referências por peça: X de Y fechadas" na identificação.',
+    ],
+  },
+  {
     versao: '2.43.1',
     data: '2026-08-28',
     titulo: 'A grafia do nome não divide mais o grupo',
