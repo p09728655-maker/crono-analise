@@ -16,6 +16,7 @@ import MenuLateral from '../../components/MenuLateral.jsx';
 import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
 import ConfirmarSaida from '../../components/SairDoSistema.jsx';
 import MotivosParada from '../analise/MotivosParada.jsx';
+import Maquinas from '../analise/Maquinas.jsx';
 import Analistas from '../analise/Analistas.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import ImportarRoteiro from './ImportarRoteiro.jsx';
@@ -43,6 +44,7 @@ export default function ListaEstudos({
   const [verArquivados, setVerArquivados] = useState(false);
   const [verChaveIa, setVerChaveIa] = useState(false);
   const [verMotivos, setVerMotivos] = useState(false);
+  const [verMaquinas, setVerMaquinas] = useState(false);
   const [verAnalistas, setVerAnalistas] = useState(false);
   // Cadastro de analistas e quem esta neste PC. So' no modo Analise: no
   // tablet nao ha ninguem para identificar nem estudo para criar.
@@ -130,6 +132,7 @@ export default function ListaEstudos({
       aoVerArquivados={() => setVerArquivados(true)}
       aoVerChaveIa={() => setVerChaveIa(true)}
       aoVerMotivos={() => setVerMotivos(true)}
+      aoVerMaquinas={() => setVerMaquinas(true)}
       aoVerAnalistas={() => setVerAnalistas(true)}
       usuario={eu}
       aoTrocarModo={aoTrocarModo}
@@ -384,6 +387,7 @@ export default function ListaEstudos({
 
       {/* Cadastro dos motivos de parada — trabalho de PC, so' no menu lateral. */}
       {verMotivos && <MotivosParada aoFechar={() => setVerMotivos(false)} />}
+      {verMaquinas && <Maquinas aoFechar={() => setVerMaquinas(false)} />}
 
       {verAnalistas && (
         <Analistas

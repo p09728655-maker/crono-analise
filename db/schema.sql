@@ -395,6 +395,41 @@ CREATE TABLE IF NOT EXISTS motivos_parada (
 CREATE UNIQUE INDEX IF NOT EXISTS motivos_parada_codigo_unq ON motivos_parada (empresa_id, codigo);
 CREATE INDEX IF NOT EXISTS motivos_parada_empresa_idx ON motivos_parada (empresa_id, ordem, criado_em);
 
+-- --------------------------------------------------------------- maquinas
+-- Cadastro de MAQUINAS — a lista que padroniza o nome digitado.
+--
+-- Maquina era texto livre na conferencia, e o mesmo posto saia como
+-- "Furadeira 16", "furadeira 16" e "Furadeira  16". O agrupamento por
+-- chave normalizada (nomeChave, 28/08) juntou o historico; este cadastro
+-- ataca a CAUSA: o celular passa a oferecer a lista, e digitar vira
+-- excecao. O nome e' gravado como esta' aqui — nao ha codigo a parte,
+-- porque a conferencia sempre gravou (e continua gravando) o texto.
+--
+-- Maquina que sai de linha e' DESATIVADA, nao apagada: some da escolha e
+-- continua nomeando o historico. Excluir so' quando nenhuma conferencia
+-- aponta para ela (cadastro errado).
+CREATE TABLE IF NOT EXISTS maquinas (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  nome       text NOT NULL CHECK (length(btrim(nome)) BETWEEN 1 AND 120),
+  ativa      boolean NOT NULL DEFAULT true,
+  criado_em  timestamptz NOT NULL DEFAULT now()
+);
+-- Unicidade sem caixa: "furadeira 16" e "Furadeira 16" sao a mesma maquina.
+CREATE UNIQUE INDEX IF NOT EXISTS maquinas_nome_unq ON maquinas (empresa_id, lower(btrim(nome)));
+CREATE INDEX IF NOT EXISTS maquinas_empresa_idx ON maquinas (empresa_id, nome);
+
+ALTER TABLE maquinas ENABLE ROW LEVEL SECURITY;
+-- Mesma regra dos motivos: todo mundo le (o celular precisa da lista),
+-- so' admin mexe.
+DROP POLICY IF EXISTS maquinas_le ON maquinas;
+CREATE POLICY maquinas_le ON maquinas FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS maquinas_admin ON maquinas;
+CREATE POLICY maquinas_admin ON maquinas FOR ALL TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin')
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+
 -- ------------------------------------------------- passo 3 da migracao
 -- Derruba o formato antigo, DEPOIS de a conversao acima ter rodado e de as
 -- paradas terem virado linha. E' a ultima etapa da refatoracao do periodo:

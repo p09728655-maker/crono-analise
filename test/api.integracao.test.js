@@ -16,8 +16,8 @@ const rodar = URL_TESTE ? describe : describe.skip;
 // Antes de qualquer import da API: jwt.js congela a URL do projeto ao carregar.
 process.env.SUPABASE_URL = 'https://supabase.teste.local';
 
-let sql, sync, estudos, operacoes, config, conferenciasApi, motivosApi, usuariosApi, sessaoApi,
-  dispositivosApi;
+let sql, sync, estudos, operacoes, config, conferenciasApi, motivosApi, maquinasApi, usuariosApi,
+  sessaoApi, dispositivosApi;
 const EMPRESA = '11111111-1111-1111-1111-111111111111';
 const OUTRA_EMPRESA = '99999999-9999-9999-9999-999999999999';
 const TOKEN = 'token-de-teste';
@@ -79,6 +79,7 @@ rodar('API — integracao com Postgres', () => {
     config = (await import('../api/config.js')).default;
     conferenciasApi = (await import('../api/conferencias.js')).default;
     motivosApi = (await import('../api/motivos-parada.js')).default;
+    maquinasApi = (await import('../api/maquinas.js')).default;
     usuariosApi = (await import('../api/usuarios.js')).default;
     sessaoApi = (await import('../api/sessao.js')).default;
     dispositivosApi = (await import('../api/dispositivos.js')).default;
@@ -740,6 +741,80 @@ rodar('API — integracao com Postgres', () => {
     await sync(fingirReq({ metodo: 'POST', corpo: { observacoes: muitos } }), res);
     expect(res.statusCode).toBe(400);
   });
+  /* --------------------------------------------------- cadastro de maquinas */
+  /**
+   * O que protege aqui e' a PADRONIZACAO sem perda: nome unico sem
+   * diferenciar caixa, carga a partir do que as conferencias ja usaram, e
+   * maquina com historico que nao se exclui — se desativa.
+   */
+  async function criarMaquina(nome) {
+    const res = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { nome } }), res);
+    return res;
+  }
+
+  it('cria maquina aparando espacos e recusa a mesma com outra caixa', async () => {
+    const res = await criarMaquina('  Furadeira   21  ');
+    expect(res.statusCode).toBe(201);
+    expect(res.corpo.maquina.nome).toBe('Furadeira 21');
+    expect(res.corpo.maquina.ativa).toBe(true);
+
+    const repetida = await criarMaquina('furadeira 21');
+    expect(repetida.statusCode).toBe(409);
+  });
+
+  it('traz das conferencias uma grafia por maquina, e repetir nao duplica', async () => {
+    await sql`DELETE FROM maquinas WHERE empresa_id = ${EMPRESA}`;
+    await sql`DELETE FROM conferencias WHERE empresa_id = ${EMPRESA}`;
+    await sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas, salvo_em) VALUES
+      (${crypto.randomUUID()}, ${EMPRESA}, 'Furadeira 16',  300000, 10, now() - interval '2 hours'),
+      (${crypto.randomUUID()}, ${EMPRESA}, 'furadeira  16', 300000, 10, now() - interval '1 hour'),
+      (${crypto.randomUUID()}, ${EMPRESA}, 'Furadeira 12',  300000, 10, now())`;
+
+    const primeira = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { dasConferencias: true } }), primeira);
+    expect(primeira.statusCode).toBe(201);
+    expect(primeira.corpo.maquinas.map((m) => m.nome)).toEqual(['Furadeira 12', 'furadeira 16']);
+
+    const segunda = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { dasConferencias: true } }), segunda);
+    expect(segunda.corpo.maquinas).toHaveLength(2);
+  });
+
+  it('maquina com conferencia registrada nao se exclui — se desativa', async () => {
+    const [linha] = await sql`
+      SELECT id, nome FROM maquinas
+       WHERE empresa_id = ${EMPRESA} AND lower(nome) = 'furadeira 16'`;
+
+    const excluir = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'DELETE', query: { id: linha.id } }), excluir);
+    expect(excluir.statusCode).toBe(400);
+
+    const desativar = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'PATCH', query: { id: linha.id }, corpo: { ativa: false } }), desativar);
+    expect(desativar.statusCode).toBe(200);
+    expect(desativar.corpo.maquina.ativa).toBe(false);
+  });
+
+  it('renomeia sem colidir e exclui a que nunca foi usada', async () => {
+    const criada = await criarMaquina('Seccionadora Nova');
+    const id = criada.corpo.maquina.id;
+
+    const renomear = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'PATCH', query: { id }, corpo: { nome: 'Seccionadora 02' } }), renomear);
+    expect(renomear.statusCode).toBe(200);
+    expect(renomear.corpo.maquina.nome).toBe('Seccionadora 02');
+
+    const excluir = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'DELETE', query: { id } }), excluir);
+    expect(excluir.statusCode).toBe(200);
+
+    const lista = fingirRes();
+    await maquinasApi(fingirReq({}), lista);
+    expect(lista.corpo.maquinas.map((m) => m.nome)).not.toContain('Seccionadora 02');
+  });
+
   /* ------------------------------------------- cadastro de motivos de parada */
   /**
    * O que precisa ser provado aqui e' o que protege o HISTORICO. A lista em

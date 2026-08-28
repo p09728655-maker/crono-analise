@@ -142,6 +142,18 @@ export const ordenarMotivosParada = (ids) =>
 export const removerMotivoParada = (id) =>
   requisitar(`/motivos-parada?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 
+/* --------------------------------------------------- cadastro de maquinas */
+export const listarMaquinas = () => requisitar('/maquinas').then((r) => r.maquinas || []);
+export const criarMaquina = (nome) =>
+  requisitar('/maquinas', { metodo: 'POST', corpo: { nome } }).then((r) => r.maquina);
+// Carga inicial: os nomes que as conferencias ja usaram, uma grafia por maquina.
+export const semearMaquinasDasConferencias = () =>
+  requisitar('/maquinas', { metodo: 'POST', corpo: { dasConferencias: true } }).then((r) => r.maquinas || []);
+export const atualizarMaquina = (id, dados) =>
+  requisitar(`/maquinas?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados }).then((r) => r.maquina);
+export const removerMaquina = (id) =>
+  requisitar(`/maquinas?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
+
 /* ------------------------------------------ analistas e identificacao */
 export const listarUsuarios = () => requisitar('/usuarios').then((r) => r.usuarios || []);
 export const criarUsuario = (dados) =>

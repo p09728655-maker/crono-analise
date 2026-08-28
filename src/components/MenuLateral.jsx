@@ -38,10 +38,10 @@ export default function MenuLateral({
   // --- lista de estudos ---
   busca, aoBuscar, grupos = [], filtro, aoFiltrar,
   aoNovoEstudo, aoImportar, aoVerConferencias, aoVerArquivados, arquivados = 0,
-  aoVerChaveIa, aoVerMotivos, aoVerAnalistas, usuario, aoTrocarModo,
+  aoVerChaveIa, aoVerMotivos, aoVerMaquinas, aoVerAnalistas, usuario, aoTrocarModo,
 }) {
   const total = grupos.reduce((acc, g) => acc + g.estudos.length, 0);
-  const temFerramentas = aoBuscar || aoImportar || aoVerChaveIa || aoVerMotivos || aoVerAnalistas;
+  const temFerramentas = aoBuscar || aoImportar || aoVerChaveIa || aoVerMotivos || aoVerMaquinas || aoVerAnalistas;
 
   return (
     <nav style={est.lateral} aria-label="Navegação">
@@ -225,6 +225,11 @@ export default function MenuLateral({
           {aoVerMotivos && (
             <button type="button" style={est.item} onClick={aoVerMotivos}>
               <span style={est.itemTexto}>Motivos de parada</span>
+            </button>
+          )}
+          {aoVerMaquinas && (
+            <button type="button" style={est.item} onClick={aoVerMaquinas}>
+              <span style={est.itemTexto}>Máquinas</span>
             </button>
           )}
           {aoVerChaveIa && (
