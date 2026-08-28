@@ -348,7 +348,20 @@ const est = {
  * regra do Yamazumi, e aqui ela importa mais ainda: e' exatamente a barra
  * que NAO pode ser lida como referencia.
  */
-export function GraficoRitmoMaquinas({ maquinas, altura = 300 }) {
+export function GraficoRitmoMaquinas({
+  maquinas, altura = 300,
+  /* A MESMA moldura serve para duas leituras: por maquina (padrao) e, com a
+     lateral filtrada, uma barra POR CONFERENCIA da maquina escolhida. Os
+     textos viram props para a legenda nao mentir na segunda leitura — la'
+     a hachura marca periodo curto, nao amostra insuficiente. Cada item
+     aceita `rotulo` (padrao: maquina), `nota` (linha pequena sob o rotulo;
+     padrao: aviso quando nao confiavel) e `chave` (padrao: maquina). */
+  titulo = 'Ritmo por máquina',
+  subtitulo = 'Peças/hora médias, ponderadas pelo tempo observado',
+  rotuloOk = 'Referência OK',
+  rotuloFraco = 'Amostra insuficiente',
+  notaFraca = 'amostra insuficiente',
+}) {
   const id = useId().replace(/:/g, '');
   const [refContainer, larguraContainer] = useLarguraContainer(360);
 
@@ -371,15 +384,15 @@ export function GraficoRitmoMaquinas({ maquinas, altura = 300 }) {
   return (
     <figure style={est.figura}>
       <figcaption style={est.titulo}>
-        Ritmo por máquina
-        <span style={est.subtitulo}>Peças/hora médias, ponderadas pelo tempo observado</span>
+        {titulo}
+        <span style={est.subtitulo}>{subtitulo}</span>
       </figcaption>
 
       <Legenda
         itens={[
-          { rotulo: 'Referência OK', cor: serie.tn },
+          { rotulo: rotuloOk, cor: serie.tn },
           {
-            rotulo: 'Amostra insuficiente',
+            rotulo: rotuloFraco,
             cor: serie.tolerancia,
             hachura: `repeating-linear-gradient(45deg, ${serie.tolerancia} 0 3px, rgba(255,255,255,.55) 3px 5px)`,
           },
@@ -393,7 +406,7 @@ export function GraficoRitmoMaquinas({ maquinas, altura = 300 }) {
           height={altura}
           style={{ maxWidth: '100%', height: altura, display: 'block' }}
           role="img"
-          aria-label={`Ritmo de ${maquinas.length} máquina(s) em peças por hora`}
+          aria-label={`${titulo}: ${maquinas.length} barra(s), em peças por hora`}
         >
           <Texturas id={id} />
 
@@ -414,8 +427,10 @@ export function GraficoRitmoMaquinas({ maquinas, altura = 300 }) {
             const x = centro - larguraBarra / 2;
             const y = yDe(m.ritmoMedio);
             const alturaBarra = Math.max(1, EIXO.topo + alturaPlot - y);
+            const rotuloBarra = m.rotulo ?? m.maquina;
+            const nota = m.nota ?? (!m.confiavel ? notaFraca : null);
             return (
-              <g key={m.maquina}>
+              <g key={m.chave ?? m.maquina}>
                 <rect
                   x={x} y={y} width={larguraBarra} height={alturaBarra}
                   fill={m.confiavel ? serie.tn : serie.tolerancia}
@@ -428,11 +443,14 @@ export function GraficoRitmoMaquinas({ maquinas, altura = 300 }) {
                   {Math.round(m.ritmoMedio)}
                 </text>
                 <text x={centro} y={altura - EIXO.base + 16} textAnchor="middle" fontSize="11" fill={claro.textoMedio}>
-                  {m.maquina.length > 16 ? `${m.maquina.slice(0, 15)}…` : m.maquina}
+                  {rotuloBarra.length > 16 ? `${rotuloBarra.slice(0, 15)}…` : rotuloBarra}
                 </text>
-                {!m.confiavel && (
-                  <text x={centro} y={altura - EIXO.base + 30} textAnchor="middle" fontSize="9" fill={claro.atencao}>
-                    amostra insuficiente
+                {nota && (
+                  <text
+                    x={centro} y={altura - EIXO.base + 30} textAnchor="middle" fontSize="9"
+                    fill={m.confiavel ? claro.textoFraco : claro.atencao}
+                  >
+                    {nota}
                   </text>
                 )}
               </g>

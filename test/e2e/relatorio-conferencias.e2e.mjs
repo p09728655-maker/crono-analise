@@ -72,6 +72,10 @@ await movel.close();
       duracao_ms: 180000, pecas: 20, salvo_em: hoje, arquivada: false, paradas: [] },
     { id: 'c2', maquina: 'Furadeira 03', peca: 'Lateral Mesa', hora_inicial: '07:00', hora_final: '07:30',
       duracao_ms: 1800000, pecas: 420, salvo_em: hoje, arquivada: false, paradas: [] },
+    // Segunda medicao da MESMA maquina: e' ela que faz o filtro da lateral
+    // abrir o grafico por conferencia, com a peca embaixo de cada barra.
+    { id: 'c3', maquina: 'Furadeira 03', peca: 'Princesa Fundo', hora_inicial: '07:30', hora_final: '07:50',
+      duracao_ms: 1200000, pecas: 300, salvo_em: hoje, arquivada: false, paradas: [] },
   ];
   let recusar = true;
   const chamadas = [];
@@ -101,6 +105,23 @@ await movel.close();
 
   await p2.goto(`${BASE}/analise/conferencias`);
   await p2.getByText('Furadeira14').first().waitFor({ timeout: 8000 });
+
+  /* ------------- filtro na lateral abre o grafico por conferencia */
+  const grafico = p2.locator('figure').first();
+  checar(/Ritmo por máquina/.test(await grafico.textContent()),
+    'sem filtro, o grafico compara maquinas (uma barra por maquina)');
+  await p2.getByRole('button', { name: /^Furadeira 03/ }).click();
+  const graficoFiltrado = await grafico.textContent();
+  checar(/Conferências — Furadeira 03/.test(graficoFiltrado),
+    'filtrando a maquina, o grafico abre as conferencias dela');
+  checar(/Lateral Mesa/.test(graficoFiltrado) && /Princesa Fundo/.test(graficoFiltrado),
+    'cada barra leva a peca embaixo — da para ver qual puxa o ritmo');
+  checar(/840/.test(graficoFiltrado) && /900/.test(graficoFiltrado),
+    'os ritmos individuais aparecem (420pc/30min=840 e 300pc/20min=900)');
+  await p2.getByRole('button', { name: /^Todas/ }).click();
+  checar(/Ritmo por máquina/.test(await grafico.textContent()),
+    'voltar a Todas devolve a comparacao entre maquinas');
+
 
   await p2.getByRole('button', { name: /Excluir conferência de Furadeira14/ }).click();
   await p2.getByRole('button', { name: /Excluir definitivamente/ }).click();
@@ -146,8 +167,10 @@ await movel.close();
     'a janela fecha depois de gravar');
 
   const depois = await p2.locator('body').innerText();
-  checar(/840/.test(depois),
-    'o ritmo passa a sair do tempo rodando (420 pc em 20 min = 840 pc/h)');
+  // 420 pc num periodo de 30 min com 10 de setup: sobram 20 min rodando e
+  // a linha da tabela sobe de 840 para 1260 pc/h.
+  checar(/1260/.test(depois),
+    'o ritmo passa a sair do tempo rodando (420 pc em 20 min = 1260 pc/h)');
   checar(/Paradas \(1\)/.test(depois), 'a linha passa a mostrar que ha parada marcada');
 
   await p2.getByRole('button', { name: 'Arquivar' }).first().click();

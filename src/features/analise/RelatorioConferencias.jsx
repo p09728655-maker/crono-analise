@@ -111,6 +111,38 @@ export default function RelatorioConferencias({ aoVoltar }) {
     [linhas, filtro],
   );
 
+  /**
+   * Com a lateral filtrada numa maquina, o grafico abre POR CONFERENCIA:
+   * uma barra por medicao, com a peca embaixo — e' assim que se enxerga
+   * qual peca puxa o ritmo para cima ou para baixo. Sem filtro, cada
+   * maquina e' uma barra so' (a media ponderada), porque duas barras da
+   * mesma maquina nao se comparam com a barra unica da vizinha.
+   *
+   * Da esquerda para a direita, da mais antiga para a mais recente: e' a
+   * ordem em que o posto foi medido. A hachura aqui marca PERIODO CURTO
+   * (menos de 5 min de maquina rodando), nao amostra insuficiente — a
+   * legenda que vai junto diz isso.
+   */
+  const barrasDoFiltro = useMemo(() => {
+    if (!filtro) return null;
+    return [...visiveis].reverse().map((c) => {
+      const calc = conferenciaRapida({
+        duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas,
+        ciclosPorPeca: c.ciclos_por_peca,
+      });
+      if (!calc || !(calc.pecasPorHora > 0)) return null;
+      const peca = String(c.peca || '').trim();
+      return {
+        chave: c.id,
+        rotulo: faixaHoraria(c) || formatarDataHora(c.salvo_em),
+        nota: peca ? (peca.length > 20 ? `${peca.slice(0, 19)}…` : peca) : null,
+        ritmoMedio: calc.pecasPorHora,
+        confiavel: calc.produtivoMs >= CRITERIOS_CONFERENCIA.minPeriodoMs,
+        maquina: filtro,
+      };
+    }).filter(Boolean);
+  }, [filtro, visiveis]);
+
   /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
      dentro dela pelo mesmo motivo que os produtos foram na lista: e'
      navegacao, nao um controle do conteudo. */
@@ -243,7 +275,17 @@ export default function RelatorioConferencias({ aoVoltar }) {
 
               {!verArquivadas && resumo.length > 0 && (
                 <section style={est.painelGrafico} aria-label="Ritmo por máquina">
-                  <GraficoRitmoMaquinas maquinas={filtro ? resumo.filter((g) => g.maquina === filtro) : resumo} />
+                  {filtro && barrasDoFiltro?.length ? (
+                    <GraficoRitmoMaquinas
+                      maquinas={barrasDoFiltro}
+                      titulo={`Conferências — ${filtro}`}
+                      subtitulo="Peças/hora com a máquina rodando · uma barra por medição, da mais antiga para a mais recente"
+                      rotuloOk="Período válido"
+                      rotuloFraco="Menos de 5 min rodando"
+                    />
+                  ) : (
+                    <GraficoRitmoMaquinas maquinas={filtro ? resumo.filter((g) => g.maquina === filtro) : resumo} />
+                  )}
                 </section>
               )}
 
