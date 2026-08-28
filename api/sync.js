@@ -79,6 +79,9 @@ export default handler(async (req, res) => {
     horaFinal: hora(c.horaFinal, `conferencias[${i}].horaFinal`),
     duracaoMs: inteiro(c.duracaoMs, `conferencias[${i}].duracaoMs`, { min: 1, max: 86_400_000 }),
     pecas: inteiro(c.pecas, `conferencias[${i}].pecas`, { min: 1, max: 1_000_000 }),
+    // Acionamentos do motor por peca (1 a 3 no processo de hoje; 99 e' folga
+    // de validacao, nao meta). Aparelho antigo nao manda — vira 1.
+    ciclosPorPeca: inteiro(c.ciclosPorPeca, `conferencias[${i}].ciclosPorPeca`, { min: 1, max: 99, padrao: 1 }),
     // Paradas do periodo (setup, falta de material...). Sobem NA conferencia,
     // no mesmo INSERT: o dado nasceu junto e nao pode chegar pela metade.
     paradas: paradasDaConferencia(c.paradas, `conferencias[${i}]`),
@@ -158,12 +161,12 @@ export default handler(async (req, res) => {
         )
         INSERT INTO conferencias
           (client_id, empresa_id, maquina, peca,
-           iniciado_em, finalizado_em, duracao_ms, pecas, salvo_em)
+           iniciado_em, finalizado_em, duracao_ms, pecas, ciclos_por_peca, salvo_em)
         SELECT ${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca},
                p.ini,
                -- Periodo que atravessa a meia-noite: o fim caiu no dia seguinte.
                CASE WHEN p.fim < p.ini THEN p.fim + interval '1 day' ELSE p.fim END,
-               ${c.duracaoMs}, ${c.pecas}, ${c.salvoEm}
+               ${c.duracaoMs}, ${c.pecas}, ${c.ciclosPorPeca}, ${c.salvoEm}
           FROM periodo p
         ON CONFLICT (client_id) DO NOTHING
         RETURNING id`;

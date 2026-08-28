@@ -25,10 +25,12 @@ import EstadoVazio from '../../components/EstadoVazio.jsx';
  * resumo, e a tabela embaixo guarda o dado bruto, mais recente primeiro.
  *
  * O relatorio se autoavalia pelos CRITERIOS_CONFERENCIA, na tela e no
- * papel, ANTES dos numeros: minimo de conferencias, tempo total observado
- * e periodo por conferencia. Uma unica medicao de 1 minuto continua
- * visivel — mas carimbada de "amostra insuficiente", nunca de referencia.
- * (Mesma filosofia do estudo de ciclos: criterio declarado, nao trava.)
+ * papel: minimo de conferencias, tempo total observado e periodo por
+ * conferencia. Desde ago/2026 os NUMEROS vem primeiro — a primeira
+ * conferencia ja' aparece como resultado — e a insuficiencia e' uma nota
+ * logo depois, nunca um carimbo na frente do que foi medido. O criterio
+ * nao mudou nem trava nada: qualifica o numero como indicio, nao
+ * referencia. (Mesma filosofia do estudo de ciclos: criterio declarado.)
  *
  * O ritmo medio e' ponderado pelo tempo — soma de pecas sobre soma do
  * tempo PRODUTIVO — porque e' esse numero que aguenta decisao de
@@ -205,6 +207,14 @@ export default function RelatorioConferencias({ aoVoltar }) {
                         Ciclo médio: {formatarSegundos(g.cicloMedioMs)} s/pç
                         {g.cvPct != null && ` · CV entre conferências: ${g.cvPct.toFixed(1)}%`}
                       </span>
+                      {/* So' quando ha' peca de mais de um ciclo: com tudo
+                          em 1, ciclo do motor e ciclo medio sao o mesmo. */}
+                      {g.totalAcionamentos > g.totalPecas && (
+                        <span>
+                          Furação: {g.totalAcionamentos} acionamentos do motor
+                          {' · '}ciclo do motor {formatarSegundos(g.cicloMotorMs)} s/acion.
+                        </span>
+                      )}
                       {g.totalParadaMs > 0 && (
                         <span>
                           Parado: {formatarDuracao(g.totalParadaMs)}
@@ -220,10 +230,12 @@ export default function RelatorioConferencias({ aoVoltar }) {
                         </span>
                       )}
                     </div>
+                    {/* Nota, nao lista de pendencias: os numeros acima ja'
+                        sao o resultado; aqui so' o que falta para fechar. */}
                     {!g.confiavel && (
-                      <ul style={est.motivos}>
-                        {g.motivos.map((m) => <li key={m} style={est.motivo}>{m}</li>)}
-                      </ul>
+                      <div style={est.motivoNota}>
+                        Para virar referência: {g.motivos.join('; ')}.
+                      </div>
                     )}
                   </div>
                 ))}
@@ -248,6 +260,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <th style={est.thNum}>Período</th>
                       <th style={est.thNum}>Parado</th>
                       <th style={est.thNum}>Peças</th>
+                      <th style={est.thNum}>Ciclos/pç</th>
                       <th style={est.thNum}>Peças/h</th>
                       <th style={est.thNum}>Ciclo (s/pç)</th>
                       <th style={est.th} aria-label="Ações" />
@@ -257,6 +270,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                     {visiveis.map((c) => {
                       const calc = conferenciaRapida({
                         duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas,
+                        ciclosPorPeca: c.ciclos_por_peca,
                       });
                       const par = somarParadas(c.paradas);
                       return (
@@ -271,6 +285,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                           <td style={est.tdNum} title={par.porMotivo.map((m) => `${m.rotulo}: ${formatarDuracao(m.ms)}`).join(' · ')}>
                             {par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}
                           </td>
+                          <td style={est.tdNum}>{Number(c.ciclos_por_peca) || 1}</td>
                           <td style={est.tdNum}>{c.pecas}</td>
                           <td style={est.tdNumForte}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
                           <td style={est.tdNum}>{calc?.cicloMedioMs ? formatarSegundos(calc.cicloMedioMs) : '—'}</td>
@@ -557,6 +572,8 @@ function AnaliseIaConferencias({ resumo }) {
           paradas: g.paradasPorMotivo.map((m) => ({ motivo: m.rotulo, minutos: +(m.ms / 60000).toFixed(1) })),
           ritmo: +g.ritmoMedio.toFixed(1),
           cicloSeg: +(g.cicloMedioMs / 1000).toFixed(2),
+          acionamentos: g.totalAcionamentos,
+          cicloMotorSeg: +(g.cicloMotorMs / 1000).toFixed(2),
           cvPct: g.cvPct != null ? +g.cvPct.toFixed(1) : null,
           melhor: g.melhor ? +g.melhor.ritmo.toFixed(1) : null,
           pior: g.pior ? +g.pior.ritmo.toFixed(1) : null,
@@ -601,14 +618,15 @@ function AnaliseIaConferencias({ resumo }) {
 /**
  * FOLHA DE CONFERENCIAS — A4 retrato.
  *
- * Mesmo documento que a Folha de Analise do estudo, na mesma ordem que um
- * relatorio tecnico exige: identificacao, confiabilidade ANTES do resultado,
- * resumo, dado bruto, legenda em palavras e assinaturas. Nao e' a tela no
- * papel — a tela tem filtro, botao e cor de interface; o papel tem contexto
- * e responsavel.
+ * Mesmo documento que a Folha de Analise do estudo: identificacao, resumo,
+ * nota de confiabilidade, dado bruto, legenda em palavras e assinaturas.
+ * Nao e' a tela no papel — a tela tem filtro, botao e cor de interface; o
+ * papel tem contexto e responsavel.
  *
- * A confiabilidade vem antes dos numeros pelo mesmo motivo do estudo: o
- * documento circula em reuniao, e numero sem contexto vira decisao errada.
+ * A ordem mudou em ago/2026, a pedido de quem usa o relatorio: a primeira
+ * conferencia ja' e' RESULTADO e aparece antes de qualquer ressalva. O
+ * criterio minimo continua declarado (identificacao, coluna Situacao e a
+ * nota depois do resumo) — ele qualifica o numero, nao o esconde.
  */
 function ImpressaoConferencias({ linhas, resumo }) {
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -655,35 +673,6 @@ function ImpressaoConferencias({ linhas, resumo }) {
         ))}
       </section>
 
-      {/* Confiabilidade ANTES do resultado — igual a folha do estudo. */}
-      <section style={semReferencia.length ? imp.ressalva : imp.validacao}>
-        <strong>
-          {semReferencia.length
-            ? '⚠ Máquinas com amostra insuficiente'
-            : '✓ Todas as máquinas atendem aos critérios'}
-        </strong>
-        {semReferencia.length ? (
-          <>
-            <p style={imp.ressalvaTexto}>
-              As máquinas abaixo não atingiram os critérios mínimos de amostra. Os ritmos
-              apresentados servem como indício, mas <strong>não devem embasar
-              dimensionamento de capacidade</strong> enquanto a amostra não fechar.
-            </p>
-            <ul style={imp.ressalvaLista}>
-              {semReferencia.map((g) => (
-                <li key={g.maquina}><strong>{g.maquina}</strong> — {g.motivos.join('; ')}.</li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p style={imp.ressalvaTexto}>
-            Todas as máquinas atingiram o mínimo de conferências, de tempo total observado e
-            de período por conferência. O CV% entre conferências está na tabela como
-            referência de estabilidade do posto.
-          </p>
-        )}
-      </section>
-
       <h2 style={imp.tituloSecao}>Resumo por máquina</h2>
       <table style={imp.tabela}>
         <thead>
@@ -716,6 +705,38 @@ function ImpressaoConferencias({ linhas, resumo }) {
         </tbody>
       </table>
 
+      {/* A nota vem DEPOIS dos numeros (decisao ago/2026): o que ja' foi
+          medido aparece primeiro, desde a primeira conferencia. O criterio
+          nao mudou — segue declarado na identificacao e na coluna Situacao;
+          so' deixou de barrar a leitura do resultado. */}
+      <section style={semReferencia.length ? imp.ressalva : imp.validacao}>
+        <strong>
+          {semReferencia.length
+            ? '⚠ Nota — máquinas com amostra ainda insuficiente'
+            : '✓ Todas as máquinas atendem aos critérios'}
+        </strong>
+        {semReferencia.length ? (
+          <>
+            <p style={imp.ressalvaTexto}>
+              As máquinas abaixo ainda não atingiram os critérios mínimos de amostra. Os ritmos
+              acima valem como primeira medição, mas <strong>não devem embasar
+              dimensionamento de capacidade</strong> enquanto a amostra não fechar.
+            </p>
+            <ul style={imp.ressalvaLista}>
+              {semReferencia.map((g) => (
+                <li key={g.maquina}><strong>{g.maquina}</strong> — {g.motivos.join('; ')}.</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p style={imp.ressalvaTexto}>
+            Todas as máquinas atingiram o mínimo de conferências, de tempo total observado e
+            de período por conferência. O CV% entre conferências está na tabela como
+            referência de estabilidade do posto.
+          </p>
+        )}
+      </section>
+
       <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Conferências registradas ({linhas.length})</h2>
       <table style={imp.tabela}>
         <thead>
@@ -727,6 +748,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
             <th style={imp.thNum}>Período</th>
             <th style={imp.thNum}>Parado</th>
             <th style={imp.thNum}>Peças</th>
+            <th style={imp.thNum}>Ciclos/pç</th>
             <th style={imp.thNum}>Peças/h</th>
             <th style={imp.thNum}>Ciclo (s/pç)</th>
           </tr>
@@ -735,6 +757,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
           {linhas.map((c) => {
             const calc = conferenciaRapida({
               duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas,
+              ciclosPorPeca: c.ciclos_por_peca,
             });
             const par = somarParadas(c.paradas);
             return (
@@ -746,6 +769,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
                 <td style={imp.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
                 <td style={imp.tdNum}>{par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}</td>
                 <td style={imp.tdNum}>{c.pecas}</td>
+                <td style={imp.tdNum}>{Number(c.ciclos_por_peca) || 1}</td>
                 <td style={{ ...imp.tdNum, fontWeight: 700 }}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
                 <td style={imp.tdNum}>{calc?.cicloMedioMs ? formatarSegundos(calc.cicloMedioMs) : '—'}</td>
               </tr>
@@ -766,6 +790,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
             ['Peças/h', 'ritmo com a máquina rodando: peças ÷ (período − parado) × 3.600. Sem parada marcada, é o ritmo do período.'],
             ['Ritmo médio', 'ponderado pelo tempo: Σ peças ÷ Σ tempo com a máquina rodando — não é a média das taxas.'],
             ['Ciclo (s/pç)', 'segundos por peça (tempo ÷ peças).'],
+            ['Ciclos/pç', 'acionamentos do motor para furar uma peça (lateral simples fura em 1; motor que sobe e desce, 2; até 3). Peça de mais ciclos rende menos peças/hora sem a máquina estar mais lenta — o ciclo do motor é o número comparável.'],
             ['CV%', 'variação do ritmo entre conferências da mesma máquina — quanto maior, mais instável.'],
             ['Referência', 'amostra atende aos critérios mínimos declarados acima.'],
             ['Insuficiente', 'amostra ainda não sustenta decisão de capacidade.'],
@@ -849,11 +874,7 @@ const est = {
     display: 'flex', flexDirection: 'column', gap: 2,
     ...tipo('legenda'), color: t.textoMedio,
   },
-  motivos: {
-    margin: 0, paddingLeft: espaco.lg,
-    display: 'flex', flexDirection: 'column', gap: 2,
-  },
-  motivo: { ...tipo('legenda'), color: t.atencao },
+  motivoNota: { ...tipo('legenda'), color: t.atencao, lineHeight: 1.5 },
 
   botaoSecundario: {
     minHeight: 40, padding: `0 ${espaco.lg}px`, background: 'transparent',

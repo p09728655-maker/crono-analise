@@ -235,7 +235,7 @@ rodar('API — integracao com Postgres', () => {
       conferencias: [{
         clientId, maquina: 'Furadeira 03', peca: 'Lateral Mesa Sleep',
         horaInicial: '07:00', horaFinal: '07:10',
-        duracaoMs: 600000, pecas: 150, salvoEm: new Date().toISOString(),
+        duracaoMs: 600000, pecas: 150, ciclosPorPeca: 2, salvoEm: new Date().toISOString(),
       }],
     };
 
@@ -252,6 +252,8 @@ rodar('API — integracao com Postgres', () => {
     expect(linha.empresa_id).toBe(EMPRESA);
     expect(linha.maquina).toBe('Furadeira 03');
     expect(Number(linha.duracao_ms)).toBe(600000);
+    // Ciclos de furacao da peca (2 = motor sobe e desce) chegam ao banco.
+    expect(Number(linha.ciclos_por_peca)).toBe(2);
   });
 
   it('conferencia com horario invalido leva 400 antes de tocar o banco', async () => {

@@ -214,6 +214,24 @@ describe('conferenciaRapida', () => {
     expect(conferenciaRapida({ duracaoMs: 60000, pecas: '' }).pecas).toBe(0);
     expect(conferenciaRapida({ duracaoMs: 60000, pecas: -5 }).pecas).toBe(0);
   });
+  it('sem ciclosPorPeca assume 1: ciclo do motor E o ciclo medio', () => {
+    const r = conferenciaRapida({ duracaoMs: 10 * 60 * 1000, pecas: 150 });
+    expect(r.ciclosPorPeca).toBe(1);
+    expect(r.cicloMotorMs).toBe(r.cicloMedioMs);
+  });
+  it('peca de 2 ciclos: o motor e acionado 2x por peca, ciclo do motor cai pela metade', () => {
+    // 125 pc em 15 min rodando: ciclo medio 7,2 s/pc; com 2 acionamentos
+    // por peca o motor fecha um ciclo a cada 3,6 s.
+    const r = conferenciaRapida({ duracaoMs: 15 * 60 * 1000, pecas: 125, ciclosPorPeca: 2 });
+    expect(r.cicloMedioMs).toBe(7200);
+    expect(r.cicloMotorMs).toBe(3600);
+    // O ritmo em PECAS nao muda: ciclos explicam o ritmo, nao o alteram.
+    expect(r.pecasPorHora).toBe(500);
+  });
+  it('ciclosPorPeca invalido cai para 1, nunca para zero', () => {
+    expect(conferenciaRapida({ duracaoMs: 60000, pecas: 10, ciclosPorPeca: 0 }).ciclosPorPeca).toBe(1);
+    expect(conferenciaRapida({ duracaoMs: 60000, pecas: 10, ciclosPorPeca: 'x' }).ciclosPorPeca).toBe(1);
+  });
 });
 
 describe('somarParadas', () => {
@@ -376,6 +394,25 @@ describe('resumirConferencias', () => {
     expect(g.ritmoMedio).toBe(12000); // o numero continua la...
     expect(g.confiavel).toBe(false);  // ...mas carimbado de nao-referencia
     expect(g.motivos.length).toBe(3); // poucas medicoes, pouco tempo, periodo curto
+  });
+
+  it('ciclos de furacao viram acionamentos e o ciclo do motor pondera pelo tempo', () => {
+    const [g] = resumirConferencias([
+      // Peca simples (1 ciclo) e peca que sobe-e-desce (2 ciclos) na mesma
+      // maquina: 100 + 50 pc, mas 100 + 100 acionamentos em 20 min.
+      { maquina: 'F12', peca: 'Base', duracaoMs: 10 * MIN, pecas: 100, ciclosPorPeca: 1 },
+      { maquina: 'F12', peca: 'Lateral dupla', duracao_ms: 10 * MIN, pecas: 50, ciclos_por_peca: 2 },
+    ]);
+    expect(g.totalPecas).toBe(150);
+    expect(g.totalAcionamentos).toBe(200);
+    expect(g.cicloMedioMs).toBe((20 * MIN) / 150);
+    expect(g.cicloMotorMs).toBe((20 * MIN) / 200);
+  });
+
+  it('conferencia antiga sem o dado conta como 1 ciclo por peca', () => {
+    const [g] = resumirConferencias([{ maquina: 'F', duracaoMs: 10 * MIN, pecas: 100 }]);
+    expect(g.totalAcionamentos).toBe(100);
+    expect(g.cicloMotorMs).toBe(g.cicloMedioMs);
   });
 
   it('3 conferencias, 30min+ observados e nenhuma curta: referencia OK', () => {

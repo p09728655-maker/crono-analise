@@ -13,6 +13,28 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.39.0',
+    data: '2026-08-28',
+    titulo: 'A conferência aprende os ciclos de furação da peça',
+    itens: [
+      'Na furadeira, cada peça exige um número de acionamentos do motor: a lateral simples fura num ciclo; há peças em que o motor sobe e depois desce (2 ciclos) e chega a 3. A conferência rápida ganhou esse campo — três botões, 1, 2 ou 3, ao lado do nome da peça.',
+      'Com 2 ou 3 ciclos, o resultado mostra também o CICLO DO MOTOR (segundos por acionamento). É o número comparável entre peças: a peça de 2 ciclos rende menos peças/hora sem a máquina estar mais lenta — antes, essa diferença parecia queda de ritmo.',
+      'O dado sobe com a conferência e aparece no relatório do PC: coluna "Ciclos/pç" na tabela (tela e impresso), acionamentos e ciclo do motor no cartão da máquina, e a Análise com IA passa a receber os dois — para não confundir peça de furação dupla com posto lento.',
+      'Conferências antigas, sem o dado, contam como 1 ciclo por peça — nada muda nos números delas.',
+    ],
+  },
+  {
+    versao: '2.38.0',
+    data: '2026-08-28',
+    titulo: 'Setup cronometrado — e o resultado vem antes da ressalva',
+    itens: [
+      'O setup da furadeira ganhou cronômetro na conferência rápida: um toque em "Setup / troca" marca o início, o tempo corre na tela e o segundo toque grava os minutos exatos como parada — sem estimar de cabeça. O valor cai na lista já convertido e continua editável; quem prefere digitar de memória usa "Outra parada" e troca o motivo.',
+      'Enquanto o setup cronometra, a tela fica acesa e o navegador avisa antes de fechar a página — mesma proteção do cronômetro ao vivo.',
+      'No relatório das furadeiras, a primeira conferência já aparece como resultado: a folha impressa mostra o resumo por máquina antes do aviso de amostra, que virou uma nota logo abaixo dos números — na tela, o cartão da máquina diz numa linha o que falta para virar referência.',
+      'O critério mínimo não mudou (3 conferências · 30 min · nenhum período menor que 5 min): segue declarado na identificação e na coluna Situação. Ele qualifica o número, não o esconde.',
+    ],
+  },
+  {
     versao: '2.37.0',
     data: '2026-08-27',
     titulo: 'O tablet não apaga estudo — arquiva',
