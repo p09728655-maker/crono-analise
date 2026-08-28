@@ -463,6 +463,10 @@ const est = {
     flexDirection: 'column',
     gap: espaco.md,
     padding: espaco.md,
+    // Area segura do iPhone nos DOIS extremos. So' o rodape era tratado:
+    // com viewport-fit=cover o conteudo passa por baixo da barra de status,
+    // e a seta de voltar subia para debaixo do relogio do aparelho.
+    paddingTop: `calc(${espaco.md}px + env(safe-area-inset-top, 0px))`,
     paddingBottom: `calc(${espaco.md}px + env(safe-area-inset-bottom, 0px))`,
     background: cores.fundo,
     color: cores.texto,
