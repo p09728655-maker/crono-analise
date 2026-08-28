@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.42.0',
+    data: '2026-08-28',
+    titulo: 'Filtrou a máquina, o gráfico abre as conferências',
+    itens: [
+      'Sem filtro, o gráfico segue como era: uma barra por máquina, com a média ponderada — 3 medições em 2 máquinas são 2 barras, porque é assim que máquinas se comparam.',
+      'A novidade é ao clicar numa máquina na lateral: o gráfico abre UMA BARRA POR CONFERÊNCIA daquela máquina, da mais antiga para a mais recente, com o horário e a peça embaixo de cada barra. É onde se enxerga qual peça puxa o ritmo para cima ou para baixo.',
+      'Na visão aberta, a hachura marca outra coisa — período com menos de 5 min de máquina rodando (rajada, não ritmo) — e a legenda diz isso.',
+    ],
+  },
+  {
     versao: '2.41.0',
     data: '2026-08-28',
     titulo: 'Mais um período — mesma peça',
