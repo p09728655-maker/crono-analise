@@ -106,6 +106,16 @@ await movel.close();
   await p2.goto(`${BASE}/analise/conferencias`);
   await p2.getByText('Furadeira14').first().waitFor({ timeout: 8000 });
 
+  /* --------------------- referencia por peca: criterio aplicado a peca */
+  const refPecas = p2.locator('[aria-label="Referência por peça"]');
+  const textoRef = await refPecas.innerText();
+  checar(/Princesa Fundo/.test(textoRef) && /Lateral Mesa/.test(textoRef),
+    'referencia por peca lista cada peca de cada maquina');
+  checar(/Insuficiente/.test(textoRef),
+    'peca com 1 conferencia sai carimbada de insuficiente');
+  checar(/900/.test(textoRef),
+    'o ritmo consolidado da peca aparece (300pc/20min = 900 pc/h)');
+
   /* ------------- filtro na lateral abre o grafico por conferencia */
   const grafico = p2.locator('figure').first();
   checar(/Ritmo por máquina/.test(await grafico.textContent()),

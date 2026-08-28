@@ -106,6 +106,10 @@ export default function RelatorioConferencias({ aoVoltar }) {
   }
 
   const resumo = useMemo(() => resumirConferencias(linhas), [linhas]);
+  // Referencia POR PECA: mesmo calculo e mesmo criterio, agrupado por
+  // peca x maquina — e' o numero que dimensiona carga e lote. Ver o
+  // comentario em resumirConferencias.
+  const resumoPecas = useMemo(() => resumirConferencias(linhas, { porPeca: true }), [linhas]);
   const visiveis = useMemo(
     () => (filtro ? linhas.filter((c) => (String(c.maquina || '').trim() || 'Sem máquina') === filtro) : linhas),
     [linhas, filtro],
@@ -237,7 +241,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <span>{g.n} conferência(s) · {g.totalPecas} pç · {formatarDuracao(g.totalMs)}</span>
                       <span>
                         Ciclo médio: {formatarSegundos(g.cicloMedioMs)} s/pç
-                        {g.cvPct != null && ` · CV entre conferências: ${g.cvPct.toFixed(1)}%`}
+                        {g.cvPct != null && ` · CV entre conferências: ${g.cvPct.toFixed(1)}% (${g.estabilidade.rotulo.toLowerCase()})`}
                       </span>
                       {/* So' quando ha' peca de mais de um ciclo: com tudo
                           em 1, ciclo do motor e ciclo medio sao o mesmo. */}
@@ -272,6 +276,57 @@ export default function RelatorioConferencias({ aoVoltar }) {
                   </div>
                 ))}
               </section>
+
+              {/* Referencia POR PECA — o numero que planeja carga e lote.
+                  So' na visao ativa: referencia nao sai de arquivadas. */}
+              {!verArquivadas && resumoPecas.length > 0 && (
+                <section style={est.painel} aria-label="Referência por peça">
+                  <div style={{ padding: '0 0 4px' }}>
+                    <h2 style={est.iaTitulo}>Referência por peça</h2>
+                    <p style={est.iaTexto}>
+                      Ritmo consolidado de cada peça em cada máquina. O critério mínimo
+                      (3 conf. · 30 min rodando) aqui vale para a peça — máquina com o
+                      critério fechado por peças variadas ainda não tem referência de nenhuma.
+                    </p>
+                  </div>
+                  <table style={est.tabela}>
+                    <thead>
+                      <tr>
+                        <th style={est.th}>Peça</th>
+                        <th style={est.th}>Máquina</th>
+                        <th style={est.thNum}>Conf.</th>
+                        <th style={est.thNum}>Peças</th>
+                        <th style={est.thNum}>Rodando</th>
+                        <th style={est.thNum}>Ritmo (pç/h)</th>
+                        <th style={est.thNum}>Ciclo motor (s)</th>
+                        <th style={est.thNum}>CV%</th>
+                        <th style={est.thNum}>Situação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(filtro ? resumoPecas.filter((g) => g.maquina === filtro) : resumoPecas).map((g) => (
+                        <tr key={`${g.maquina}·${g.peca}`}>
+                          <td style={est.tdCurto}>{g.peca}</td>
+                          <td style={est.tdCurto}>{g.maquina}</td>
+                          <td style={est.tdNum}>{g.n}</td>
+                          <td style={est.tdNum}>{g.totalPecas}</td>
+                          <td style={est.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
+                          <td style={est.tdNumForte}>{Math.round(g.ritmoMedio)}</td>
+                          <td style={est.tdNum}>{formatarSegundos(g.cicloMotorMs)}</td>
+                          <td style={est.tdNum}>
+                            {g.cvPct != null ? `${g.cvPct.toFixed(1)} · ${g.estabilidade.rotulo.toLowerCase()}` : '—'}
+                          </td>
+                          {/* O motivo mora no title: a tabela fica limpa e a
+                              explicacao aparece para quem parar o mouse. */}
+                          <td style={est.tdNum} title={g.motivos.join('; ') || undefined}>
+                            {g.confiavel ? 'Referência OK' : 'Insuficiente'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
+              )}
 
               {!verArquivadas && resumo.length > 0 && (
                 <section style={est.painelGrafico} aria-label="Ritmo por máquina">
@@ -422,7 +477,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
       </div>
 
       {estado === 'pronto' && linhas.length > 0 && (
-        <ImpressaoConferencias linhas={linhas} resumo={resumo} />
+        <ImpressaoConferencias linhas={linhas} resumo={resumo} resumoPecas={resumoPecas} />
       )}
     </div>
   );
@@ -670,7 +725,7 @@ function AnaliseIaConferencias({ resumo }) {
  * criterio minimo continua declarado (identificacao, coluna Situacao e a
  * nota depois do resumo) — ele qualifica o numero, nao o esconde.
  */
-function ImpressaoConferencias({ linhas, resumo }) {
+function ImpressaoConferencias({ linhas, resumo, resumoPecas }) {
   const hoje = new Date().toLocaleDateString('pt-BR');
   const crit = CRITERIOS_CONFERENCIA;
   const semReferencia = resumo.filter((g) => !g.confiavel);
@@ -779,6 +834,44 @@ function ImpressaoConferencias({ linhas, resumo }) {
         )}
       </section>
 
+      {/* Referencia por peca: o criterio aplicado A PECA, nao a maquina.
+          E' a tabela que o PCP leva para dimensionar carga e lote. */}
+      {resumoPecas?.length > 0 && (
+        <>
+          <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Referência por peça</h2>
+          <table style={imp.tabela}>
+            <thead>
+              <tr>
+                <th style={imp.th}>Peça</th>
+                <th style={imp.th}>Máquina</th>
+                <th style={imp.thNum}>Conf.</th>
+                <th style={imp.thNum}>Peças</th>
+                <th style={imp.thNum}>Rodando</th>
+                <th style={imp.thNum}>Ritmo (pç/h)</th>
+                <th style={imp.thNum}>Ciclo motor (s)</th>
+                <th style={imp.thNum}>CV%</th>
+                <th style={imp.thNum}>Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resumoPecas.map((g) => (
+                <tr key={`${g.maquina}·${g.peca}`}>
+                  <td style={imp.td}>{g.peca}</td>
+                  <td style={imp.td}>{g.maquina}</td>
+                  <td style={imp.tdNum}>{g.n}</td>
+                  <td style={imp.tdNum}>{g.totalPecas}</td>
+                  <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
+                  <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
+                  <td style={imp.tdNum}>{formatarSegundos(g.cicloMotorMs)}</td>
+                  <td style={imp.tdNum}>{g.cvPct != null ? g.cvPct.toFixed(1) : '—'}</td>
+                  <td style={imp.tdNum}>{g.confiavel ? 'Referência' : 'Insuficiente'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
       <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Conferências registradas ({linhas.length})</h2>
       <table style={imp.tabela}>
         <thead>
@@ -835,6 +928,7 @@ function ImpressaoConferencias({ linhas, resumo }) {
             ['Ciclos/pç', 'acionamentos do motor para furar uma peça (lateral simples fura em 1; motor que sobe e desce, 2; até 3). Peça de mais ciclos rende menos peças/hora sem a máquina estar mais lenta — o ciclo do motor é o número comparável.'],
             ['CV%', 'variação do ritmo entre conferências da mesma máquina — quanto maior, mais instável.'],
             ['Referência', 'amostra atende aos critérios mínimos declarados acima.'],
+            ['Referência por peça', 'ritmo consolidado da peça naquela máquina, com o critério mínimo aplicado à própria peça — é o número que dimensiona carga e lote. Conferência sem nome de peça fica fora deste quadro.'],
             ['Insuficiente', 'amostra ainda não sustenta decisão de capacidade.'],
           ].map(([sigla, texto]) => (
             <div key={sigla} style={imp.itemLegenda}>
