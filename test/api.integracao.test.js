@@ -797,31 +797,48 @@ rodar('API — integracao com Postgres', () => {
     expect(desativar.corpo.maquina.ativa).toBe(false);
   });
 
-  it('grupo organiza: cria com grupo, edita, e a lista vem agrupada', async () => {
-    const res = fingirRes();
-    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { nome: 'Coladeira 01', grupo: ' Coladeiras ' } }), res);
-    expect(res.statusCode).toBe(201);
-    expect(res.corpo.maquina.grupo).toBe('Coladeiras');
+  it('grupo tem CODIGO (padrao ERP): cria, vincula maquina e a lista vem agrupada', async () => {
+    const g1 = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { grupo: { codigo: '0001', nome: 'SECCIONADORA' } } }), g1);
+    expect(g1.statusCode).toBe(201);
+    expect(g1.corpo.grupo.codigo).toBe('0001');
 
-    // Vazio LIMPA o grupo.
-    const limpar = fingirRes();
-    await maquinasApi(fingirReq({
-      metodo: 'PATCH', query: { id: res.corpo.maquina.id }, corpo: { grupo: '' },
-    }), limpar);
-    expect(limpar.corpo.maquina.grupo).toBeNull();
+    // Codigo repetido e codigo nao numerico sao recusados.
+    const repetido = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { grupo: { codigo: '0001', nome: 'OUTRO' } } }), repetido);
+    expect(repetido.statusCode).toBe(409);
+    const invalido = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { grupo: { codigo: 'A1', nome: 'COLADEIRA' } } }), invalido);
+    expect(invalido.statusCode).toBe(400);
 
-    const devolver = fingirRes();
-    await maquinasApi(fingirReq({
-      metodo: 'PATCH', query: { id: res.corpo.maquina.id }, corpo: { grupo: 'Coladeiras' },
-    }), devolver);
-    expect(devolver.corpo.maquina.grupo).toBe('Coladeiras');
+    const m = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { nome: 'Seccionadora 01', grupoId: g1.corpo.grupo.id } }), m);
+    expect(m.statusCode).toBe(201);
+    expect(m.corpo.maquina.grupo_id).toBe(g1.corpo.grupo.id);
 
-    // Agrupadas vem primeiro (por grupo, depois nome); sem grupo, no fim.
+    // Agrupadas (por codigo do grupo) vem primeiro; sem grupo, no fim.
     const lista = fingirRes();
     await maquinasApi(fingirReq({}), lista);
-    const nomes = lista.corpo.maquinas;
-    expect(nomes[0].grupo).toBe('Coladeiras');
-    expect(nomes[nomes.length - 1].grupo).toBeNull();
+    expect(lista.corpo.maquinas[0].grupo_codigo).toBe('0001');
+    expect(lista.corpo.maquinas[lista.corpo.maquinas.length - 1].grupo_codigo).toBeNull();
+    expect(lista.corpo.grupos.map((x) => x.codigo)).toContain('0001');
+
+    // grupoId vazio LIMPA; excluir o grupo NAO apaga a maquina.
+    const limpar = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'PATCH', query: { id: m.corpo.maquina.id }, corpo: { grupoId: '' } }), limpar);
+    expect(limpar.corpo.maquina.grupo_id).toBeNull();
+    const religar = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'PATCH', query: { id: m.corpo.maquina.id }, corpo: { grupoId: g1.corpo.grupo.id } }), religar);
+    expect(religar.corpo.maquina.grupo_codigo).toBe('0001');
+
+    const excluirGrupo = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'DELETE', query: { grupo: g1.corpo.grupo.id } }), excluirGrupo);
+    expect(excluirGrupo.statusCode).toBe(200);
+    const depois = fingirRes();
+    await maquinasApi(fingirReq({}), depois);
+    const sobrou = depois.corpo.maquinas.find((x) => x.nome === 'Seccionadora 01');
+    expect(sobrou).toBeTruthy();
+    expect(sobrou.grupo_id).toBeNull();
   });
 
   it('renomeia sem colidir e exclui a que nunca foi usada', async () => {

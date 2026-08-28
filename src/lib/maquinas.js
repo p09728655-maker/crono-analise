@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { listarMaquinas } from './api.js';
+import { listarCadastroMaquinas } from './api.js';
 
 /**
  * O cadastro de maquinas, do lado do navegador.
@@ -19,20 +19,22 @@ import { listarMaquinas } from './api.js';
  */
 const CHAVE = 'ritmopatrimar.maquinas';
 
+/** O cache guarda o cadastro INTEIRO: { maquinas, grupos }. Cache antigo
+ *  (so' a lista) e formato invalido caem no vazio — texto livre. */
 function lerCache() {
   try {
     const bruto = JSON.parse(localStorage.getItem(CHAVE));
-    return Array.isArray(bruto) ? bruto : null;
+    return bruto && Array.isArray(bruto.maquinas) ? bruto : null;
   } catch { return null; }
 }
 
-function gravarCache(maquinas) {
-  try { localStorage.setItem(CHAVE, JSON.stringify(maquinas)); } catch { /* segue sem cache */ }
+function gravarCache(cadastro) {
+  try { localStorage.setItem(CHAVE, JSON.stringify(cadastro)); } catch { /* segue sem cache */ }
 }
 
-const soAtivas = (lista) => lista.filter((m) => m.ativa !== false);
+const soAtivas = (cadastro) => (cadastro.maquinas || []).filter((m) => m.ativa !== false);
 
-let catalogo = lerCache() || [];
+let catalogo = lerCache() || { maquinas: [], grupos: [] };
 // Guardada, nao filtrada a cada leitura: useSyncExternalStore compara por
 // identidade, e um filter novo a cada snapshot faria a tela redesenhar em
 // loop (a mesma armadilha documentada em motivosParada.js).
@@ -40,9 +42,9 @@ let ativas = soAtivas(catalogo);
 
 const ouvintes = new Set();
 
-function publicar(maquinas) {
-  if (maquinas === catalogo) return;
-  catalogo = maquinas;
+function publicar(cadastro) {
+  if (cadastro === catalogo) return;
+  catalogo = cadastro;
   ativas = soAtivas(catalogo);
   ouvintes.forEach((fn) => fn());
 }
@@ -65,18 +67,18 @@ export function useMaquinas() {
  */
 export async function carregarMaquinas() {
   try {
-    const maquinas = await listarMaquinas();
-    gravarCache(maquinas);
-    publicar(maquinas);
-    return maquinas;
+    const cadastro = await listarCadastroMaquinas();
+    gravarCache(cadastro);
+    publicar(cadastro);
+    return cadastro;
   } catch {
     return catalogo;
   }
 }
 
-/** Adota uma lista recem-salva sem uma segunda ida ao servidor. */
-export function adotarMaquinas(maquinas) {
-  if (!Array.isArray(maquinas)) return;
-  gravarCache(maquinas);
-  publicar(maquinas);
+/** Adota um cadastro recem-salvo sem uma segunda ida ao servidor. */
+export function adotarMaquinas(cadastro) {
+  if (!cadastro || !Array.isArray(cadastro.maquinas)) return;
+  gravarCache(cadastro);
+  publicar(cadastro);
 }

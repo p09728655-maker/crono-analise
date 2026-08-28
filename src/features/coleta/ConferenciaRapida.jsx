@@ -1017,9 +1017,10 @@ function CampoMaquina({ valor, aoTrocar }) {
   // grupo, ficam soltas no fim — o cadastro organiza, nao trava.
   const grupos = [];
   for (const m of maquinas) {
+    const rotuloGrupo = m.grupo_codigo ? `${m.grupo_codigo} · ${m.grupo_nome}` : null;
     const ultimo = grupos[grupos.length - 1];
-    if (ultimo && ultimo.grupo === (m.grupo || null)) ultimo.itens.push(m);
-    else grupos.push({ grupo: m.grupo || null, itens: [m] });
+    if (ultimo && ultimo.grupo === rotuloGrupo) ultimo.itens.push(m);
+    else grupos.push({ grupo: rotuloGrupo, itens: [m] });
   }
 
   return (

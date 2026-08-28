@@ -412,15 +412,60 @@ CREATE TABLE IF NOT EXISTS maquinas (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   empresa_id uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
   nome       text NOT NULL CHECK (length(btrim(nome)) BETWEEN 1 AND 120),
-  -- GRUPO da maquina ("Furadeiras", "Seccionadoras"): organiza a escolha no
-  -- celular e prepara leitura por grupo no relatorio. E' organizacao, nao
-  -- trava — maquina sem grupo continua valendo.
-  grupo      text CHECK (grupo IS NULL OR length(btrim(grupo)) BETWEEN 1 AND 60),
   ativa      boolean NOT NULL DEFAULT true,
   criado_em  timestamptz NOT NULL DEFAULT now()
 );
-ALTER TABLE maquinas ADD COLUMN IF NOT EXISTS grupo text
-  CHECK (grupo IS NULL OR length(btrim(grupo)) BETWEEN 1 AND 60);
+
+-- GRUPOS de maquina, com CODIGO no padrao da fabrica/ERP:
+-- 0001 SECCIONADORA, 0002 FURADEIRA... O codigo identifica (e ordena); o
+-- nome e' o que aparece. Grupo organiza a escolha no celular e prepara a
+-- leitura por grupo no relatorio — maquina sem grupo continua valendo.
+CREATE TABLE IF NOT EXISTS grupos_maquina (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  codigo     text NOT NULL CHECK (codigo ~ '^[0-9]{1,10}$'),
+  nome       text NOT NULL CHECK (length(btrim(nome)) BETWEEN 1 AND 60),
+  criado_em  timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS grupos_maquina_codigo_unq ON grupos_maquina (empresa_id, codigo);
+CREATE UNIQUE INDEX IF NOT EXISTS grupos_maquina_nome_unq ON grupos_maquina (empresa_id, lower(btrim(nome)));
+
+ALTER TABLE grupos_maquina ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS grupos_maquina_le ON grupos_maquina;
+CREATE POLICY grupos_maquina_le ON grupos_maquina FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS grupos_maquina_admin ON grupos_maquina;
+CREATE POLICY grupos_maquina_admin ON grupos_maquina FOR ALL TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin')
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+
+-- Excluir um grupo NAO apaga maquina: ela so' fica sem grupo.
+ALTER TABLE maquinas ADD COLUMN IF NOT EXISTS grupo_id uuid REFERENCES grupos_maquina(id) ON DELETE SET NULL;
+
+-- Migra o formato intermediario (coluna de texto `grupo`, que nunca chegou
+-- a ser publicada): vira linha em grupos_maquina com codigo sequencial
+-- (0001, 0002...) e a maquina passa a apontar por grupo_id.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'maquinas' AND column_name = 'grupo'
+  ) THEN
+    INSERT INTO grupos_maquina (empresa_id, codigo, nome)
+    SELECT empresa_id,
+           lpad((row_number() OVER (PARTITION BY empresa_id ORDER BY lower(btrim(grupo))))::text, 4, '0'),
+           btrim(grupo)
+      FROM (SELECT DISTINCT empresa_id, grupo FROM maquinas WHERE grupo IS NOT NULL) d
+    ON CONFLICT DO NOTHING;
+
+    UPDATE maquinas m SET grupo_id = g.id
+      FROM grupos_maquina g
+     WHERE m.grupo IS NOT NULL AND m.grupo_id IS NULL
+       AND g.empresa_id = m.empresa_id AND lower(btrim(g.nome)) = lower(btrim(m.grupo));
+
+    ALTER TABLE maquinas DROP COLUMN grupo;
+  END IF;
+END $$;
 -- Unicidade sem caixa: "furadeira 16" e "Furadeira 16" sao a mesma maquina.
 CREATE UNIQUE INDEX IF NOT EXISTS maquinas_nome_unq ON maquinas (empresa_id, lower(btrim(nome)));
 CREATE INDEX IF NOT EXISTS maquinas_empresa_idx ON maquinas (empresa_id, nome);
