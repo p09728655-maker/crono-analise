@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.48.0',
+    data: '2026-08-28',
+    titulo: 'O cadastro de máquinas ganha impressão própria',
+    itens: [
+      'Botão IMPRIMIR em Ferramentas > Máquinas: sai um documento A4 dedicado ao cadastro — cada grupo com seu código e suas máquinas, com a situação (ativa/desativada) e os totais. Para conferir com o ERP ou fixar no quadro.',
+      'Grupo ainda sem máquina também sai no papel, marcado — ele existe e espera as máquinas dele. Máquina usada só por texto livre não aparece: a nota da folha aponta o caminho ("Trazer das conferências").',
+      'No relatório das Furadeiras, o cartão da máquina agora ESTICA quando há poucas máquinas na tela — acabou o buraco à direita ao filtrar uma máquina.',
+    ],
+  },
+  {
     versao: '2.47.0',
     data: '2026-08-28',
     titulo: 'O grupo de máquina sai na impressão',
