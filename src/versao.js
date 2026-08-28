@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.40.2',
+    data: '2026-08-28',
+    titulo: 'Os ciclos de furação chegam inteiros ao PC',
+    itens: [
+      'A conferência salva com 2 ciclos/pç chegava ao relatório do PC como 1: o envio da fila listava os campos um a um e esqueceu o novo. Aconteceu de verdade — a medição da Furadeira 16 de 28/08 subiu sem os ciclos (o registro no banco foi corrigido à mão).',
+      'Corrigido, com um teste que trava o contrato: o que a fila do aparelho carrega chega inteiro ao servidor.',
+    ],
+  },
+  {
     versao: '2.40.1',
     data: '2026-08-28',
     titulo: 'Salvar diz a verdade sobre o envio ao PC',

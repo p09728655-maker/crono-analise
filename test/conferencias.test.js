@@ -5,6 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { faixaHoraria } from '../src/domain/cronoanalise.js';
+import { paraConferencia } from '../src/lib/api.js';
 
 const memoria = new Map();
 let negarEscrita = false;
@@ -103,5 +104,45 @@ describe('faixa horaria da conferencia', () => {
     // Metade do par nao e periodo.
     expect(faixaHoraria({ hora_inicial: '07:00' })).toBeNull();
     expect(faixaHoraria({ iniciado_em: '2026-08-20T10:00:00.000Z' })).toBeNull();
+  });
+});
+
+
+/**
+ * O contrato do payload de sincronizacao.
+ *
+ * O mapeador lista campo a campo, e foi exatamente ali que um dado se
+ * perdeu (28/08): a tela enfileirava ciclosPorPeca 2, o envio descartava
+ * e o servidor gravava o padrao 1. Este teste trava o contrato: o que a
+ * fila carrega chega inteiro ao /api/sync.
+ */
+describe('paraConferencia — item da fila vira payload do sync', () => {
+  it('leva TODOS os campos da conferencia, ciclos de furacao incluidos', () => {
+    const corpo = paraConferencia({
+      tipo: 'conferencia',
+      clientId: 'abc',
+      maquina: 'Furadeira 16',
+      peca: 'Space reforço mesa',
+      horaInicial: '08:47',
+      horaFinal: '08:52',
+      duracaoMs: 300000,
+      pecas: 60,
+      ciclosPorPeca: 2,
+      paradas: [{ motivo: 'setup', duracaoMs: 60000 }],
+      salvoEm: '2026-08-28T11:53:53.448Z',
+    });
+    expect(corpo.ciclosPorPeca).toBe(2);
+    expect(corpo.pecas).toBe(60);
+    expect(corpo.maquina).toBe('Furadeira 16');
+    expect(corpo.horaInicial).toBe('08:47');
+    expect(corpo.paradas).toEqual([{ motivo: 'setup', duracaoMs: 60000, observacao: null }]);
+    expect(corpo.salvoEm).toBe('2026-08-28T11:53:53.448Z');
+  });
+
+  it('conferencia enfileirada por versao antiga, sem o campo, vai como 1 ciclo', () => {
+    const corpo = paraConferencia({ clientId: 'x', duracaoMs: 60000, pecas: 10 });
+    expect(corpo.ciclosPorPeca).toBe(1);
+    expect(corpo.maquina).toBeNull();
+    expect(corpo.paradas).toEqual([]);
   });
 });
