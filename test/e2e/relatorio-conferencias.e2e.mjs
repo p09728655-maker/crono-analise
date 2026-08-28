@@ -81,6 +81,17 @@ await movel.close();
   const chamadas = [];
   const patches = [];
 
+  // Cadastro de maquinas: liga o nome gravado ao GRUPO (0002 · FURADEIRA).
+  await p2.route('**/api/maquinas**', (rota) => rota.fulfill({
+    json: {
+      maquinas: [
+        { id: 'm1', nome: 'Furadeira 03', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+        { id: 'm2', nome: 'Furadeira14', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+      ],
+      grupos: [{ id: 'g2', codigo: '0002', nome: 'FURADEIRA' }],
+    },
+  }));
+
   await p2.route('**/api/conferencias**', (rota) => {
     const req = rota.request();
     chamadas.push(req.method());
@@ -105,6 +116,13 @@ await movel.close();
 
   await p2.goto(`${BASE}/analise/conferencias`);
   await p2.getByText('Furadeira14').first().waitFor({ timeout: 8000 });
+
+  /* ------------------- grupo de maquina: no cartao e na impressao */
+  const cartoes = await p2.locator('[aria-label="Resumo por máquina"]').innerText();
+  checar(/0002 · FURADEIRA/.test(cartoes), 'o cartao da maquina mostra o grupo com o codigo da fabrica');
+  const impresso = await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
+  checar(/Grupos de máquina/.test(impresso) && /0002 · FURADEIRA/.test(impresso),
+    'a folha impressa identifica os grupos cobertos e o grupo de cada maquina');
 
   /* -------------------- painel: KPIs, o que falta e proximas acoes */
   const kpis = p2.locator('[aria-label="Resumo do período"]');
