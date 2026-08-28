@@ -296,6 +296,11 @@ CREATE TABLE IF NOT EXISTS conferencias (
   finalizado_em timestamptz,
   duracao_ms   bigint  NOT NULL CHECK (duracao_ms > 0),
   pecas        integer NOT NULL CHECK (pecas > 0),
+  -- Ciclos de FURACAO por peca: acionamentos do motor para furar UMA peca
+  -- (lateral simples e' 1; motor que sobe e desce, 2; chega a 3). Mesmo
+  -- conceito do ciclos_por_peca de `operacoes` — e' o que torna pecas de
+  -- furacao diferente comparaveis na mesma maquina.
+  ciclos_por_peca integer NOT NULL DEFAULT 1 CHECK (ciclos_por_peca > 0 AND ciclos_por_peca <= 99),
   salvo_em     timestamptz NOT NULL,      -- horario real do aparelho
   -- Medicao atipica (turno interrompido, lote de teste) sai dos calculos sem
   -- sumir do banco. Registro ERRADO — hora digitada errada — e' excluido de
@@ -316,6 +321,8 @@ ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS finalizado_em timestamptz;
 -- encontrar o que converter num banco que ainda nao passou pelo passo 1.
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS hora_inicial text;
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS hora_final   text;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS ciclos_por_peca integer NOT NULL DEFAULT 1
+  CHECK (ciclos_por_peca > 0 AND ciclos_por_peca <= 99);
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS paradas jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 -- Converte o horario de texto para instante. A data vem de salvo_em lida no

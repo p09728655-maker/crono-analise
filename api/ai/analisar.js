@@ -76,6 +76,12 @@ Regras:
 - CV% alto entre conferencias significa ritmo instavel: aponte isso.
 - "ritmoMedioPecasHora" e' o ritmo com a MAQUINA RODANDO: ja' desconta as
   paradas marcadas (tempoParadoMin). Nao confunda com vazao do turno.
+- Ciclos de FURACAO: cada peca exige 1, 2 ou 3 acionamentos do motor
+  (acionamentosMotor = soma de pecas x ciclos). Peca de mais ciclos rende
+  menos pecas/hora SEM a maquina estar mais lenta — antes de comparar
+  maquinas ou pecas pelo ritmo, compare o cicloMotorSeg (segundos por
+  acionamento), que e' o numero comparavel. So' chame de lentidao o que o
+  ciclo do motor confirmar.
 - Trate parada e lentidao como problemas DIFERENTES: disponibilidade baixa
   com ritmo alto pede atacar a parada (SMED no setup, kanban na falta de
   material, TPM na manutencao); ritmo baixo com disponibilidade alta pede
@@ -248,6 +254,9 @@ async function analisarConferencias(res, corpo, chaveIa) {
       tempoObservadoMin: decimal(m.minutos, `maquinas[${i}].minutos`, { min: 0, padrao: 0 }),
       ritmoMedioPecasHora: decimal(m.ritmo, `maquinas[${i}].ritmo`, { min: 0, padrao: 0 }),
       cicloMedioSeg: decimal(m.cicloSeg, `maquinas[${i}].cicloSeg`, { min: 0, padrao: 0 }),
+      // Furacao: total de acionamentos do motor e o tempo de UM acionamento.
+      acionamentosMotor: inteiro(m.acionamentos, `maquinas[${i}].acionamentos`, { min: 0, max: 100_000_000, padrao: null }),
+      cicloMotorSeg: decimal(m.cicloMotorSeg, `maquinas[${i}].cicloMotorSeg`, { min: 0, padrao: null }),
       cvPct: decimal(m.cvPct, `maquinas[${i}].cvPct`, { min: 0, padrao: null }),
       melhorPecasHora: decimal(m.melhor, `maquinas[${i}].melhor`, { min: 0, padrao: null }),
       piorPecasHora: decimal(m.pior, `maquinas[${i}].pior`, { min: 0, padrao: null }),

@@ -290,9 +290,15 @@ export function amostraSuficiente(resultado, metaObs) {
  * por ciclo — e' uma medicao de vazao, nao um estudo de tempos. Por isso o
  * resultado fala em pecas/hora e ciclo MEDIO, nunca em TO/TN/TP.
  */
-export function conferenciaRapida({ duracaoMs, pecas, paradas }) {
+export function conferenciaRapida({ duracaoMs, pecas, paradas, ciclosPorPeca }) {
   const dur = Number(duracaoMs) || 0;
   if (dur <= 0) return null;
+
+  // Ciclos de FURACAO por peca: quantas vezes o motor e' acionado para
+  // furar UMA peca. Lateral simples fura num ciclo; ha' pecas em que o
+  // motor sobe e desce (2 ciclos) ou chega a 3. Mesmo conceito do
+  // ciclosPorPeca do estudo — e mesmo fallback: nao informado, e' 1.
+  const ciclos = Math.max(1, Math.floor(Number(ciclosPorPeca) || 1));
 
   /**
    * Parada dentro do periodo nao e' ritmo. Se das 7:00 as 7:30 a furadeira
@@ -326,6 +332,10 @@ export function conferenciaRapida({ duracaoMs, pecas, paradas }) {
     disponibilidadePct: (produtivoMs / dur) * 100,
     // Sem peca nao ha ciclo: null obriga o chamador a mostrar vazio, nao 0.
     cicloMedioMs: qtd > 0 ? produtivoMs / qtd : null,
+    ciclosPorPeca: ciclos,
+    // Tempo de UM acionamento do motor. E' o numero comparavel entre pecas:
+    // a peca de 2 ciclos leva o dobro do tempo sem a furadeira estar lenta.
+    cicloMotorMs: qtd > 0 ? produtivoMs / (qtd * ciclos) : null,
   };
 }
 
@@ -384,7 +394,7 @@ export function resumirConferencias(conferencias) {
     const chave = String(c.maquina || '').trim() || 'Sem máquina';
     if (!grupos.has(chave)) {
       grupos.set(chave, {
-        maquina: chave, n: 0, totalPecas: 0, totalMs: 0,
+        maquina: chave, n: 0, totalPecas: 0, totalAcionamentos: 0, totalMs: 0,
         totalProdutivoMs: 0, totalParadaMs: 0, totalSetupMs: 0, paradasPorMotivo: new Map(),
         curtas: 0, ritmos: [], melhor: null, pior: null,
       });
@@ -392,9 +402,14 @@ export function resumirConferencias(conferencias) {
     const g = grupos.get(chave);
     const ritmo = (pecas * MS_POR_HORA) / produtivoMs;
     const peca = String(c.peca || '').trim() || null;
+    // Ciclos de furacao da peca conferida (1 se a conferencia e' antiga e
+    // nao trouxe o dado). Somados viram ACIONAMENTOS do motor: e' por eles
+    // que pecas de furacao diferente ficam comparaveis na mesma maquina.
+    const ciclos = Math.max(1, Math.floor(Number(c.ciclosPorPeca ?? c.ciclos_por_peca) || 1));
 
     g.n += 1;
     g.totalPecas += pecas;
+    g.totalAcionamentos += pecas * ciclos;
     g.totalMs += duracao;
     g.totalProdutivoMs += produtivoMs;
     g.totalParadaMs += paradaMs;
@@ -435,6 +450,9 @@ export function resumirConferencias(conferencias) {
         ritmoBruto: (g.totalPecas * MS_POR_HORA) / g.totalMs,
         disponibilidadePct: (g.totalProdutivoMs / g.totalMs) * 100,
         cicloMedioMs: g.totalProdutivoMs / g.totalPecas,
+        // Tempo de um acionamento do motor, ponderado como o ritmo. So'
+        // difere do ciclo medio quando alguma peca fura em mais de um ciclo.
+        cicloMotorMs: g.totalProdutivoMs / g.totalAcionamentos,
         paradasPorMotivo: [...g.paradasPorMotivo.entries()]
           .map(([motivo, ms]) => ({ motivo, rotulo: rotuloMotivo(motivo), ms }))
           .sort((a, b) => b.ms - a.ms),

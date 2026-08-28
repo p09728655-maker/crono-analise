@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.39.0',
+    data: '2026-08-28',
+    titulo: 'A conferência aprende os ciclos de furação da peça',
+    itens: [
+      'Na furadeira, cada peça exige um número de acionamentos do motor: a lateral simples fura num ciclo; há peças em que o motor sobe e depois desce (2 ciclos) e chega a 3. A conferência rápida ganhou esse campo — três botões, 1, 2 ou 3, ao lado do nome da peça.',
+      'Com 2 ou 3 ciclos, o resultado mostra também o CICLO DO MOTOR (segundos por acionamento). É o número comparável entre peças: a peça de 2 ciclos rende menos peças/hora sem a máquina estar mais lenta — antes, essa diferença parecia queda de ritmo.',
+      'O dado sobe com a conferência e aparece no relatório do PC: coluna "Ciclos/pç" na tabela (tela e impresso), acionamentos e ciclo do motor no cartão da máquina, e a Análise com IA passa a receber os dois — para não confundir peça de furação dupla com posto lento.',
+      'Conferências antigas, sem o dado, contam como 1 ciclo por peça — nada muda nos números delas.',
+    ],
+  },
+  {
     versao: '2.38.0',
     data: '2026-08-28',
     titulo: 'Setup cronometrado — e o resultado vem antes da ressalva',

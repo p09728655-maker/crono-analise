@@ -52,6 +52,17 @@ const textoHoras = await painelHoras.innerText();
 checar(textoHoras.includes('10 min'), 'periodo formatado como 10 min');
 checar(textoHoras.includes('4.0'), 'ciclo medio 4.0 s/pc');
 
+// Ciclos de FURACAO da peca: com 2 acionamentos por peca o resultado passa
+// a mostrar o ciclo do motor (comparavel entre pecas); com 1, ele some —
+// seria o proprio ciclo medio repetido.
+await p.getByRole('radio', { name: '2 ciclos' }).tap();
+const comCiclos = await painelHoras.innerText();
+checar(/CICLO MOTOR/i.test(comCiclos) && comCiclos.includes('2.0'),
+  'com 2 ciclos/pc aparece o ciclo do motor: 2.0 s/acionamento');
+await p.getByRole('radio', { name: '1 ciclo' }).tap();
+checar(!/CICLO MOTOR/i.test(await painelHoras.innerText()),
+  'com 1 ciclo o ciclo do motor some da tela');
+
 /* ------------------------------- salvar com maquina e nome da peca */
 await p.locator('input[aria-label="Nome da máquina"]').fill('Furadeira 03');
 await p.locator('input[aria-label="Nome da peça"]').fill('Lateral Mesa Sleep');

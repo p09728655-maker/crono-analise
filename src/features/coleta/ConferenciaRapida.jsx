@@ -70,6 +70,9 @@ export default function ConferenciaRapida({ aoSair }) {
   // Maquina, peca e memoria deste aparelho.
   const [maquina, setMaquina] = useState('');
   const [peca, setPeca] = useState('');
+  // Ciclos de FURACAO da peca: 1 acionamento do motor (lateral simples),
+  // 2 (sobe e desce) ou 3. E' dado da PECA, por isso mora ao lado dela.
+  const [ciclosPorPeca, setCiclosPorPeca] = useState(1);
   const [historico, setHistorico] = useState(() => listarConferencias());
   const [salvo, setSalvo] = useState(null); // null | 'ok' | 'erro'
 
@@ -77,7 +80,7 @@ export default function ConferenciaRapida({ aoSair }) {
   // de novo em vez de fingir que a alteracao tambem esta' guardada.
   useEffect(() => {
     setSalvo(null);
-  }, [maquina, peca, horaInicial, horaFinal, pecasPeriodo, pecasFinais, paradas, fase]);
+  }, [maquina, peca, ciclosPorPeca, horaInicial, horaFinal, pecasPeriodo, pecasFinais, paradas, fase]);
 
   // BACKFILL: conferencias salvas antes da sincronizacao existir (ou num
   // navegador em que a fila falhou) nao tem a marca `enviada`. Ao abrir a
@@ -99,6 +102,7 @@ export default function ConferenciaRapida({ aoSair }) {
             horaFinal: c.horaFinal || null,
             duracaoMs: Math.round(c.duracaoMs),
             pecas: c.pecas,
+            ciclosPorPeca: c.ciclosPorPeca || 1,
             paradas: c.paradas || [],
             salvoEm: c.salvoEm,
           });
@@ -254,13 +258,13 @@ export default function ConferenciaRapida({ aoSair }) {
   }, [fase, rodando, contarPeca, comecar, escolhendoMotivo]);
 
   const parcial = useMemo(
-    () => conferenciaRapida({ duracaoMs: decorrido, pecas, paradas: paradasEmMs }),
-    [decorrido, pecas, paradasEmMs],
+    () => conferenciaRapida({ duracaoMs: decorrido, pecas, paradas: paradasEmMs, ciclosPorPeca }),
+    [decorrido, pecas, paradasEmMs, ciclosPorPeca],
   );
 
   const resultado = useMemo(
-    () => conferenciaRapida({ duracaoMs: duracaoFinal, pecas: pecasFinais, paradas: paradasEmMs }),
-    [duracaoFinal, pecasFinais, paradasEmMs],
+    () => conferenciaRapida({ duracaoMs: duracaoFinal, pecas: pecasFinais, paradas: paradasEmMs, ciclosPorPeca }),
+    [duracaoFinal, pecasFinais, paradasEmMs, ciclosPorPeca],
   );
 
   // A conta dos horarios sai a cada tecla: preencheu, apareceu.
@@ -270,9 +274,9 @@ export default function ConferenciaRapida({ aoSair }) {
   );
   const resultadoHoras = useMemo(
     () => (duracaoHoras > 0
-      ? conferenciaRapida({ duracaoMs: duracaoHoras, pecas: pecasPeriodo, paradas: paradasEmMs })
+      ? conferenciaRapida({ duracaoMs: duracaoHoras, pecas: pecasPeriodo, paradas: paradasEmMs, ciclosPorPeca })
       : null),
-    [duracaoHoras, pecasPeriodo, paradasEmMs],
+    [duracaoHoras, pecasPeriodo, paradasEmMs, ciclosPorPeca],
   );
   // Paradas maiores que o periodo: sobra zero de maquina rodando e nao ha
   // ritmo a calcular. A tela diz isso em vez de sumir com o resultado.
@@ -297,6 +301,7 @@ export default function ConferenciaRapida({ aoSair }) {
       horaFinal: horarios ? horaFinal : null,
       duracaoMs: calculado.duracaoMs,
       pecas: calculado.pecas,
+      ciclosPorPeca: calculado.ciclosPorPeca,
       paradas: paradasEmMs,
       pecasPorHora: calculado.pecasPorHora,
       pecasPorHoraBruto: calculado.pecasPorHoraBruto,
@@ -323,6 +328,7 @@ export default function ConferenciaRapida({ aoSair }) {
         horaFinal: registro.horaFinal,
         duracaoMs: Math.round(registro.duracaoMs),
         pecas: registro.pecas,
+        ciclosPorPeca: registro.ciclosPorPeca,
         paradas: registro.paradas,
         salvoEm: registro.salvoEm,
       });
@@ -345,6 +351,8 @@ export default function ConferenciaRapida({ aoSair }) {
   const outraPeca = useCallback(() => {
     setPeca('');
     setPecasPeriodo('');
+    // Peca nova pode furar em outro numero de ciclos: volta ao padrao.
+    setCiclosPorPeca(1);
     setHoraInicial(horaFinal || '');
     setHoraFinal('');
     // Parada e' do periodo que acabou: o proximo comeca sem nenhuma.
@@ -395,6 +403,8 @@ export default function ConferenciaRapida({ aoSair }) {
                 />
               </label>
             </div>
+
+            <CiclosFuracao valor={ciclosPorPeca} aoTrocar={setCiclosPorPeca} />
 
             <div style={est.linhaHoras}>
               <div style={est.campoHora}>
@@ -487,6 +497,15 @@ export default function ConferenciaRapida({ aoSair }) {
                   valor={resultadoHoras.cicloMedioMs ? formatarSegundos(resultadoHoras.cicloMedioMs) : '—'}
                   sufixo="s/pç"
                 />
+                {/* So' quando a peca fura em mais de um ciclo: com 1, o
+                    ciclo do motor E' o ciclo medio — repetir seria ruido. */}
+                {resultadoHoras.ciclosPorPeca > 1 && (
+                  <Parcial
+                    rotulo="Ciclo motor"
+                    valor={resultadoHoras.cicloMotorMs ? formatarSegundos(resultadoHoras.cicloMotorMs) : '—'}
+                    sufixo="s/acion."
+                  />
+                )}
               </div>
               <ComParadas calculado={resultadoHoras} />
               <BotaoSalvar salvo={salvo} aoSalvar={() => salvar(resultadoHoras, true)} />
@@ -542,6 +561,7 @@ export default function ConferenciaRapida({ aoSair }) {
                         c.horaInicial && c.horaFinal ? `${c.horaInicial}–${c.horaFinal}` : null,
                         formatarDuracao(c.duracaoMs),
                         `${c.pecas} pç`,
+                        c.ciclosPorPeca > 1 ? `${c.ciclosPorPeca} ciclos/pç` : null,
                         c.paradaMs > 0 ? `${formatarDuracao(c.paradaMs)} parada` : null,
                         dataCurta(c.salvoEm),
                         c.enviada ? 'no PC' : 'aguardando envio',
@@ -725,6 +745,8 @@ export default function ConferenciaRapida({ aoSair }) {
               </span>
             </div>
 
+            <CiclosFuracao valor={ciclosPorPeca} aoTrocar={setCiclosPorPeca} compacto />
+
             <div style={est.linhaParcial}>
               <Parcial rotulo="Peças/min" valor={resultado.pecasPorMinuto.toFixed(1)} />
               <Parcial
@@ -732,6 +754,13 @@ export default function ConferenciaRapida({ aoSair }) {
                 valor={resultado.cicloMedioMs ? formatarSegundos(resultado.cicloMedioMs) : '—'}
                 sufixo="s/pç"
               />
+              {resultado.ciclosPorPeca > 1 && (
+                <Parcial
+                  rotulo="Ciclo motor"
+                  valor={resultado.cicloMotorMs ? formatarSegundos(resultado.cicloMotorMs) : '—'}
+                  sufixo="s/acion."
+                />
+              )}
             </div>
 
             <ComParadas calculado={resultado} />
@@ -809,9 +838,14 @@ function Paradas({ motivos, paradas, resumo, duracaoMs, setupCrono, aoIniciarSet
         <div style={est.linhaBotoesParada}>
           {/* Setup abre CRONOMETRO, nao linha em branco: era o unico numero
               estimado de cabeca numa tela onde tudo e' medido. Quem prefere
-              digitar usa Outra parada e troca o motivo — a dica diz isso. */}
-          <button type="button" style={est.botaoSetup} onClick={aoIniciarSetup}>
-            ⏱ SETUP / TROCA
+              digitar usa Outra parada e troca o motivo — a dica diz isso.
+              Sem cronometro disponivel (o resultado do ao vivo, em que o
+              periodo ja' fechou), o botao volta a criar a linha manual. */}
+          <button
+            type="button" style={est.botaoSetup}
+            onClick={aoIniciarSetup || (() => aoAdicionar(codigoPreferido(motivos, 'setup')))}
+          >
+            {aoIniciarSetup ? '⏱ SETUP / TROCA' : '+ SETUP / TROCA'}
           </button>
           <button
             type="button" style={est.botaoParada}
@@ -826,7 +860,7 @@ function Paradas({ motivos, paradas, resumo, duracaoMs, setupCrono, aoIniciarSet
         <span style={est.dicaParada}>
           {setupCrono
             ? 'O tempo entra na lista quando o setup terminar — e continua editável lá.'
-            : 'Nenhuma marcada — o período inteiro conta como máquina rodando. Setup / troca cronometra a parada; para digitar minutos de cabeça, use Outra parada e troque o motivo.'}
+            : `Nenhuma marcada — o período inteiro conta como máquina rodando.${aoIniciarSetup ? ' Setup / troca cronometra a parada; para digitar minutos de cabeça, use Outra parada e troque o motivo.' : ''}`}
         </span>
       ) : (
         <>
@@ -872,6 +906,45 @@ function Paradas({ motivos, paradas, resumo, duracaoMs, setupCrono, aoIniciarSet
             </span>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Ciclos de furacao da peca — quantos acionamentos do motor por peca.
+ *
+ * Na furadeira isso e' dado de processo, nao detalhe: uma lateral fura num
+ * ciclo; ha' pecas em que o motor sobe e depois desce (2) e chega a 3.
+ * Sem registrar, a mesma maquina parece lenta na peca de 3 ciclos — quando
+ * o que mudou foi a peca, nao o posto. Tres botoes grandes, sem digitacao:
+ * e' escolha de um toque, de luva, e 3 e' o maximo que o processo tem.
+ */
+function CiclosFuracao({ valor, aoTrocar, compacto }) {
+  return (
+    <div style={est.blocoCiclos}>
+      <span style={est.rotuloCampo}>CICLOS DE FURAÇÃO POR PEÇA</span>
+      <div style={est.linhaCiclos} role="radiogroup" aria-label="Ciclos de furação por peça">
+        {[1, 2, 3].map((n) => (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={valor === n}
+            style={{ ...est.botaoCiclo, ...(valor === n ? est.botaoCicloAtivo : {}) }}
+            onClick={() => { aoTrocar(n); vibrar(30); }}
+          >
+            {n} {n === 1 ? 'ciclo' : 'ciclos'}
+          </button>
+        ))}
+      </div>
+      {/* No resultado do ao vivo o espaco vertical e' curto e o conceito
+          ja' foi lido no formulario: a explicacao fica so' la'. */}
+      {!compacto && (
+        <span style={est.dicaParada}>
+          Quantas vezes o motor é acionado para furar uma peça. Com 2 ou 3, o
+          resultado mostra também o ciclo do motor — comparável entre peças.
+        </span>
       )}
     </div>
   );
@@ -1172,7 +1245,10 @@ const est = {
   iconeBarra: { fontSize: 18, lineHeight: 1 },
 
   painelResultado: {
-    flex: '1 1 auto', minHeight: 0,
+    // Cresce ate' preencher a tela, mas NUNCA encolhe abaixo do conteudo:
+    // encolhendo, o miolo centralizado vazava por cima do aviso de salvar
+    // (a tela ja' rola nesta fase — sobrar conteudo e' rolagem, nao invasao).
+    flex: '1 0 auto',
     display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: espaco.lg,
     background: cores.superficie, border: `1px solid ${cores.borda}`,
     borderRadius: raio.lg, padding: espaco.lg,
@@ -1232,6 +1308,17 @@ const est = {
     cursor: 'pointer', fontFamily: 'inherit',
   },
   dicaParada: { fontSize: tamanho.legenda, color: cores.textoFraco, lineHeight: 1.4 },
+  /* ---- ciclos de furacao ---- */
+  blocoCiclos: { display: 'flex', flexDirection: 'column', gap: espaco.sm, minWidth: 0 },
+  linhaCiclos: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: espaco.sm },
+  botaoCiclo: {
+    minHeight: 48, padding: `0 ${espaco.sm}px`,
+    background: cores.superficieAlta,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.sm,
+    color: cores.texto, fontSize: tamanho.pequeno, fontWeight: 700, letterSpacing: 0.5,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  botaoCicloAtivo: { borderColor: cores.ok, color: cores.ok, background: cores.okFundo },
   // Faixa do setup em andamento: mesma paleta ambar do botao que a abriu.
   cronoSetup: {
     display: 'flex', alignItems: 'center', gap: espaco.md,

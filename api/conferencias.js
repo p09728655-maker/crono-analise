@@ -38,7 +38,7 @@ export default handler(async (req, res) => {
       // recebeu ({motivo, duracaoMs, observacao}). A tela nao precisa saber
       // que elas deixaram de morar dentro da conferencia.
       const linhas = await db`
-        SELECT c.id, c.maquina, c.peca, c.iniciado_em, c.finalizado_em, c.duracao_ms, c.pecas, c.salvo_em, c.arquivada,
+        SELECT c.id, c.maquina, c.peca, c.iniciado_em, c.finalizado_em, c.duracao_ms, c.pecas, c.ciclos_por_peca, c.salvo_em, c.arquivada,
                coalesce((
                  SELECT jsonb_agg(jsonb_build_object(
                           'motivo', p.motivo,
