@@ -252,7 +252,7 @@ const paraParada = (x) => ({
   iniciadoEm: x.iniciadoEm,
 });
 
-const paraConferencia = (x) => ({
+export const paraConferencia = (x) => ({
   clientId: x.clientId,
   maquina: x.maquina ?? null,
   peca: x.peca ?? null,
@@ -260,6 +260,11 @@ const paraConferencia = (x) => ({
   horaFinal: x.horaFinal ?? null,
   duracaoMs: x.duracaoMs,
   pecas: x.pecas,
+  // Ciclos de furacao da peca. Este mapeador lista campo a campo, e foi
+  // exatamente aqui que o dado se perdeu uma vez: a tela enfileirava 2, o
+  // envio descartava e o servidor gravava o padrao 1 (Furadeira 16,
+  // 28/08). Exportado para o teste travar o contrato do payload.
+  ciclosPorPeca: x.ciclosPorPeca || 1,
   // Paradas do periodo. Conferencia enfileirada antes desta versao nao tem
   // o campo — vai como lista vazia e continua valendo.
   paradas: (x.paradas || []).map((p) => ({
