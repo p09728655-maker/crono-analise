@@ -797,6 +797,33 @@ rodar('API — integracao com Postgres', () => {
     expect(desativar.corpo.maquina.ativa).toBe(false);
   });
 
+  it('grupo organiza: cria com grupo, edita, e a lista vem agrupada', async () => {
+    const res = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { nome: 'Coladeira 01', grupo: ' Coladeiras ' } }), res);
+    expect(res.statusCode).toBe(201);
+    expect(res.corpo.maquina.grupo).toBe('Coladeiras');
+
+    // Vazio LIMPA o grupo.
+    const limpar = fingirRes();
+    await maquinasApi(fingirReq({
+      metodo: 'PATCH', query: { id: res.corpo.maquina.id }, corpo: { grupo: '' },
+    }), limpar);
+    expect(limpar.corpo.maquina.grupo).toBeNull();
+
+    const devolver = fingirRes();
+    await maquinasApi(fingirReq({
+      metodo: 'PATCH', query: { id: res.corpo.maquina.id }, corpo: { grupo: 'Coladeiras' },
+    }), devolver);
+    expect(devolver.corpo.maquina.grupo).toBe('Coladeiras');
+
+    // Agrupadas vem primeiro (por grupo, depois nome); sem grupo, no fim.
+    const lista = fingirRes();
+    await maquinasApi(fingirReq({}), lista);
+    const nomes = lista.corpo.maquinas;
+    expect(nomes[0].grupo).toBe('Coladeiras');
+    expect(nomes[nomes.length - 1].grupo).toBeNull();
+  });
+
   it('renomeia sem colidir e exclui a que nunca foi usada', async () => {
     const criada = await criarMaquina('Seccionadora Nova');
     const id = criada.corpo.maquina.id;

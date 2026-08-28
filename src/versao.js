@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.46.0',
+    data: '2026-08-28',
+    titulo: 'Máquinas ganham grupo',
+    itens: [
+      'O cadastro de máquinas ganhou o GRUPO ("Furadeiras", "Seccionadoras", "Coladeiras"): cada máquina pode pertencer a um, e a tela de Ferramentas organiza a lista por grupo — com sugestão dos grupos já usados ao cadastrar.',
+      'No celular, a escolha da máquina vem agrupada: as furadeiras juntas, cada grupo com seu título. Máquina sem grupo continua valendo — o grupo organiza, não trava.',
+      'É o alicerce para a leitura por grupo nos relatórios, quando outros postos além das furadeiras entrarem na medição.',
+    ],
+  },
+  {
     versao: '2.45.0',
     data: '2026-08-28',
     titulo: 'Cadastro de máquinas — o nome sai igual em toda medição',

@@ -21,10 +21,12 @@ import { texto, uuid } from './_lib/validar.js';
 // e' o nome EXIBIDO; a unicidade compara sem caixa (indice lower/btrim).
 const nomeLimpo = (v) => String(v || '').trim().replace(/\s+/g, ' ');
 
+// Grupo antes de nome: e' a ordem em que o celular monta a escolha
+// (Furadeiras juntas, Seccionadoras juntas); sem grupo vai para o fim.
 const listar = (db, empresaId) => db`
-  SELECT id, nome, ativa FROM maquinas
+  SELECT id, nome, grupo, ativa FROM maquinas
    WHERE empresa_id = ${empresaId}
-   ORDER BY nome`;
+   ORDER BY (grupo IS NULL), lower(coalesce(grupo, '')), lower(nome)`;
 
 // "Em uso" olha as conferencias pela mesma comparacao da unicidade.
 async function emUso(db, empresaId, nome) {
@@ -73,6 +75,7 @@ export default handler(async (req, res) => {
 
       const nome = nomeLimpo(texto(corpo.nome, 'nome', { obrigatorio: true, max: 120 }));
       if (!nome) throw erroValidacao('Informe o nome da maquina');
+      const grupo = nomeLimpo(texto(corpo.grupo, 'grupo', { max: 60 })) || null;
 
       const [existe] = await db`
         SELECT nome FROM maquinas
@@ -80,8 +83,8 @@ export default handler(async (req, res) => {
       if (existe) throw new ErroHttp(409, `Ja existe esta maquina no cadastro: "${existe.nome}"`);
 
       const [maquina] = await db`
-        INSERT INTO maquinas (empresa_id, nome) VALUES (${empresaId}, ${nome})
-        RETURNING id, nome, ativa`;
+        INSERT INTO maquinas (empresa_id, nome, grupo) VALUES (${empresaId}, ${nome}, ${grupo})
+        RETURNING id, nome, grupo, ativa`;
       return json(res, 201, { maquina });
     }
 
@@ -93,8 +96,8 @@ export default handler(async (req, res) => {
       if (!atual) throw naoEncontrado('Maquina nao encontrada');
 
       const tem = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
-      if (!tem('nome') && !tem('ativa')) {
-        throw erroValidacao('Nada a atualizar: informe "nome" ou "ativa"');
+      if (!tem('nome') && !tem('ativa') && !tem('grupo')) {
+        throw erroValidacao('Nada a atualizar: informe "nome", "grupo" ou "ativa"');
       }
 
       if (tem('nome')) {
@@ -106,11 +109,17 @@ export default handler(async (req, res) => {
         if (outra) throw new ErroHttp(409, `Ja existe esta maquina no cadastro: "${outra.nome}"`);
         await db`UPDATE maquinas SET nome = ${nome} WHERE id = ${maquinaId}`;
       }
+      if (tem('grupo')) {
+        // Vazio LIMPA o grupo: e' o caminho de tirar uma maquina de um
+        // grupo errado sem inventar um "sem grupo" literal.
+        const grupo = nomeLimpo(texto(corpo.grupo, 'grupo', { max: 60 })) || null;
+        await db`UPDATE maquinas SET grupo = ${grupo} WHERE id = ${maquinaId}`;
+      }
       if (tem('ativa')) {
         await db`UPDATE maquinas SET ativa = ${Boolean(corpo.ativa)} WHERE id = ${maquinaId}`;
       }
 
-      const [maquina] = await db`SELECT id, nome, ativa FROM maquinas WHERE id = ${maquinaId}`;
+      const [maquina] = await db`SELECT id, nome, grupo, ativa FROM maquinas WHERE id = ${maquinaId}`;
       return json(res, 200, { maquina });
     }
 

@@ -1012,6 +1012,16 @@ function CampoMaquina({ valor, aoTrocar }) {
     );
   }
 
+  // Agrupadas pelo GRUPO do cadastro (Furadeiras juntas, Seccionadoras
+  // juntas). A lista ja vem ordenada do servidor; aqui so' se fatia. Sem
+  // grupo, ficam soltas no fim — o cadastro organiza, nao trava.
+  const grupos = [];
+  for (const m of maquinas) {
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.grupo === (m.grupo || null)) ultimo.itens.push(m);
+    else grupos.push({ grupo: m.grupo || null, itens: [m] });
+  }
+
   return (
     <select
       value={valor}
@@ -1024,7 +1034,13 @@ function CampoMaquina({ valor, aoTrocar }) {
       aria-label="Máquina"
     >
       <option value="">Escolha a máquina…</option>
-      {maquinas.map((m) => <option key={m.id} value={m.nome}>{m.nome}</option>)}
+      {grupos.map((g) => (g.grupo ? (
+        <optgroup key={g.grupo} label={g.grupo}>
+          {g.itens.map((m) => <option key={m.id} value={m.nome}>{m.nome}</option>)}
+        </optgroup>
+      ) : (
+        g.itens.map((m) => <option key={m.id} value={m.nome}>{m.nome}</option>)
+      )))}
       <option value="__outra">Outra máquina…</option>
     </select>
   );

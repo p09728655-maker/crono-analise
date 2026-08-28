@@ -144,8 +144,8 @@ export const removerMotivoParada = (id) =>
 
 /* --------------------------------------------------- cadastro de maquinas */
 export const listarMaquinas = () => requisitar('/maquinas').then((r) => r.maquinas || []);
-export const criarMaquina = (nome) =>
-  requisitar('/maquinas', { metodo: 'POST', corpo: { nome } }).then((r) => r.maquina);
+export const criarMaquina = ({ nome, grupo }) =>
+  requisitar('/maquinas', { metodo: 'POST', corpo: { nome, grupo } }).then((r) => r.maquina);
 // Carga inicial: os nomes que as conferencias ja usaram, uma grafia por maquina.
 export const semearMaquinasDasConferencias = () =>
   requisitar('/maquinas', { metodo: 'POST', corpo: { dasConferencias: true } }).then((r) => r.maquinas || []);

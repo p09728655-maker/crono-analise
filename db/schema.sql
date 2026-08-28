@@ -412,9 +412,15 @@ CREATE TABLE IF NOT EXISTS maquinas (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   empresa_id uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
   nome       text NOT NULL CHECK (length(btrim(nome)) BETWEEN 1 AND 120),
+  -- GRUPO da maquina ("Furadeiras", "Seccionadoras"): organiza a escolha no
+  -- celular e prepara leitura por grupo no relatorio. E' organizacao, nao
+  -- trava — maquina sem grupo continua valendo.
+  grupo      text CHECK (grupo IS NULL OR length(btrim(grupo)) BETWEEN 1 AND 60),
   ativa      boolean NOT NULL DEFAULT true,
   criado_em  timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE maquinas ADD COLUMN IF NOT EXISTS grupo text
+  CHECK (grupo IS NULL OR length(btrim(grupo)) BETWEEN 1 AND 60);
 -- Unicidade sem caixa: "furadeira 16" e "Furadeira 16" sao a mesma maquina.
 CREATE UNIQUE INDEX IF NOT EXISTS maquinas_nome_unq ON maquinas (empresa_id, lower(btrim(nome)));
 CREATE INDEX IF NOT EXISTS maquinas_empresa_idx ON maquinas (empresa_id, nome);
