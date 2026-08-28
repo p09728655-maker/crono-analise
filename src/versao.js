@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.41.0',
+    data: '2026-08-28',
+    titulo: 'Mais um período — mesma peça',
+    itens: [
+      'O caminho da referência ficou de um toque: a máquina vira "Referência OK" com 3 conferências e 30 min rodando, e o jeito de medir isso é repetir a mesma peça em períodos separados. Só que "Começar outra peça" apagava o nome e os ciclos — três medições eram três redigitações.',
+      'O resultado ganhou o botão "↻ Mais um período — mesma peça": mantém peça e ciclos de furação, emenda a hora inicial na final do período anterior e limpa só as peças e as paradas (que são do período que acabou).',
+      '"Começar outra peça" continua logo abaixo, para quando a máquina troca de lote.',
+    ],
+  },
+  {
     versao: '2.40.2',
     data: '2026-08-28',
     titulo: 'Os ciclos de furação chegam inteiros ao PC',

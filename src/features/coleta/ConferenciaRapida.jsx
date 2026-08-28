@@ -389,6 +389,24 @@ export default function ConferenciaRapida({ aoSair }) {
     vibrar(30);
   }, [horaFinal]);
 
+  /**
+   * Mais um periodo da MESMA peca.
+   *
+   * E' o caminho da REFERENCIA: o criterio da maquina fecha com 3
+   * conferencias e 30 min rodando, e o jeito de medir isso e' repetir a
+   * mesma peca em periodos separados. "Comecar outra peca" obrigava a
+   * redigitar nome e ciclos tres vezes — aqui peca e ciclos ficam, so' o
+   * horario emenda (a parada e' do periodo que acabou e sai igual).
+   */
+  const maisUmPeriodo = useCallback(() => {
+    setPecasPeriodo('');
+    setHoraInicial(horaFinal || '');
+    setHoraFinal('');
+    setParadas([]);
+    setSetupCrono(null);
+    vibrar(30);
+  }, [horaFinal]);
+
   return (
     <div style={{ ...est.tela, ...(rodando ? {} : est.telaRolavel) }}>
       <header style={est.cabecalho}>
@@ -550,6 +568,12 @@ export default function ConferenciaRapida({ aoSair }) {
                 e guarda uma cópia neste aparelho. Para registrar ciclos e calcular
                 o tempo padrão, crie um estudo.
               </section>
+              {/* Mesma peca primeiro: depois de salvar, o proximo passo do
+                  fluxo de referencia e' repetir a medicao — trocar de peca
+                  e' o caso menos frequente. */}
+              <button type="button" style={est.botaoOutraPeca} onClick={maisUmPeriodo}>
+                ↻ MAIS UM PERÍODO — MESMA PEÇA
+              </button>
               <button type="button" style={est.botaoOutraPeca} onClick={outraPeca}>
                 ➜ COMEÇAR OUTRA PEÇA
               </button>
