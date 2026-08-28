@@ -3,7 +3,7 @@ import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
   CRITERIOS_CONFERENCIA, conferenciaRapida, faixaHoraria, formatarDuracao, formatarSegundos,
-  resumirConferencias, rotuloMotivo, somarParadas,
+  nomeChave, resumirConferencias, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import {
@@ -111,7 +111,9 @@ export default function RelatorioConferencias({ aoVoltar }) {
   // comentario em resumirConferencias.
   const resumoPecas = useMemo(() => resumirConferencias(linhas, { porPeca: true }), [linhas]);
   const visiveis = useMemo(
-    () => (filtro ? linhas.filter((c) => (String(c.maquina || '').trim() || 'Sem máquina') === filtro) : linhas),
+    () => (filtro
+      ? linhas.filter((c) => nomeChave(String(c.maquina || '').trim() || 'Sem máquina') === nomeChave(filtro))
+      : linhas),
     [linhas, filtro],
   );
 
@@ -304,7 +306,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {(filtro ? resumoPecas.filter((g) => g.maquina === filtro) : resumoPecas).map((g) => (
+                      {(filtro ? resumoPecas.filter((g) => nomeChave(g.maquina) === nomeChave(filtro)) : resumoPecas).map((g) => (
                         <tr key={`${g.maquina}·${g.peca}`}>
                           <td style={est.tdCurto}>{g.peca}</td>
                           <td style={est.tdCurto}>{g.maquina}</td>
@@ -339,7 +341,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       rotuloFraco="Menos de 5 min rodando"
                     />
                   ) : (
-                    <GraficoRitmoMaquinas maquinas={filtro ? resumo.filter((g) => g.maquina === filtro) : resumo} />
+                    <GraficoRitmoMaquinas maquinas={filtro ? resumo.filter((g) => nomeChave(g.maquina) === nomeChave(filtro)) : resumo} />
                   )}
                 </section>
               )}

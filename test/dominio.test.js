@@ -6,7 +6,7 @@ import {
 } from '../src/domain/estatistica.js';
 import {
   amostraSuficiente, calcularOperacao, conferenciaRapida, duracaoEntreHoras,
-  formatarCronometro, formatarDuracao, oee, operadoresNecessarios,
+  formatarCronometro, formatarDuracao, nomeChave, oee, operadoresNecessarios,
   resumirConferencias, resumirParadasDoEstudo, rotuloMotivo, somarParadas, taktTime,
 } from '../src/domain/cronoanalise.js';
 
@@ -476,6 +476,42 @@ describe('resumirConferencias', () => {
       { maquina: 'C', duracaoMs: MIN, pecas: 0 },
     ]);
     expect(grupos.map((g) => g.maquina)).toEqual(['A', 'B']);
+  });
+});
+
+describe('nomeChave — nomes digitados agrupam apesar da grafia', () => {
+  it('ignora caixa, acento e espaco repetido', () => {
+    expect(nomeChave('Princesa Fundo trás')).toBe(nomeChave('princesa  fundo tras '));
+    expect(nomeChave('Furadeira 16')).toBe(nomeChave('furadeira 16'));
+  });
+  it('nomes realmente diferentes continuam diferentes', () => {
+    expect(nomeChave('Furadeira 16')).not.toBe(nomeChave('Furadeira 12'));
+  });
+});
+
+describe('resumirConferencias — grafia do nome nao divide o grupo', () => {
+  const MIN = 60000;
+  it('caso real de 28/08: a mesma peca digitada diferente creditava 1+2 em vez de 3', () => {
+    const r = resumirConferencias([
+      { maquina: 'Furadeira 16', peca: 'Princesa Fundo tras', duracaoMs: 10 * MIN, pecas: 100 },
+      { maquina: 'furadeira 16', peca: 'princesa fundo tras ', duracaoMs: 10 * MIN, pecas: 110 },
+      { maquina: 'Furadeira 16', peca: 'Princesa  fundo trás', duracaoMs: 10 * MIN, pecas: 90 },
+    ], { porPeca: true });
+    expect(r.length).toBe(1);
+    expect(r[0].n).toBe(3);
+    expect(r[0].confiavel).toBe(true);
+    // O nome exibido e' como foi digitado (o primeiro visto no grupo).
+    expect(r[0].peca).toBe('Princesa Fundo tras');
+    expect(r[0].maquina).toBe('Furadeira 16');
+  });
+
+  it('a maquina tambem agrupa pela chave, nao pelo texto exato', () => {
+    const r = resumirConferencias([
+      { maquina: 'Furadeira 16', duracaoMs: 10 * MIN, pecas: 100 },
+      { maquina: 'furadeira 16 ', duracaoMs: 10 * MIN, pecas: 100 },
+    ]);
+    expect(r.length).toBe(1);
+    expect(r[0].n).toBe(2);
   });
 });
 

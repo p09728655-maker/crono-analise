@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.43.1',
+    data: '2026-08-28',
+    titulo: 'A grafia do nome não divide mais o grupo',
+    itens: [
+      'Máquina e peça são texto digitado, e o mesmo nome sai de três jeitos: "Princesa Fundo", "princesa fundo ", "princesa  fundo". O agrupamento era pelo texto exato — e a mesma peça aparecia em duas linhas que não somavam: o analista fazia 3 medições e o quadro creditava 1+2 (aconteceu hoje, na Furadeira 16).',
+      'Agora o agrupamento ignora maiúscula/minúscula, acento e espaço repetido — na referência por peça, no resumo por máquina e no filtro da lateral. O nome exibido continua como foi digitado.',
+      'Nomes realmente diferentes continuam separados: "Furadeira 16" e "Furadeira 12" não se misturam.',
+    ],
+  },
+  {
     versao: '2.43.0',
     data: '2026-08-28',
     titulo: 'Referência por peça — o número que dimensiona lote',

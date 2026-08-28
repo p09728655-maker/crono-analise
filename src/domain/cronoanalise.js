@@ -375,6 +375,24 @@ export const CRITERIOS_CONFERENCIA = {
  *
  * Aceita linhas do servidor (snake_case) e do aparelho (camelCase).
  */
+/**
+ * Chave de agrupamento de um NOME DIGITADO no chao de fabrica.
+ *
+ * Maquina e peca sao texto livre no celular, e o mesmo nome sai digitado
+ * de tres jeitos: "Princesa Fundo", "princesa fundo ", "princesa  fundo".
+ * Agrupar pelo texto exato dividia a mesma peca em linhas que nao somam —
+ * o analista fazia 3 medicoes e o quadro creditava 1+2 (caso real de
+ * 28/08). A chave ignora caixa, acento e espaco repetido; o NOME EXIBIDO
+ * continua como foi digitado (o primeiro visto no grupo).
+ */
+export function nomeChave(nome) {
+  return String(nome || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR');
+}
+
 export function resumirConferencias(conferencias, { porPeca = false } = {}) {
   /**
    * `porPeca` agrupa por PECA x MAQUINA em vez de so' por maquina — e' o
@@ -402,8 +420,9 @@ export function resumirConferencias(conferencias, { porPeca = false } = {}) {
     const nomeMaquina = String(c.maquina || '').trim() || 'Sem máquina';
     const nomePeca = String(c.peca || '').trim();
     if (porPeca && !nomePeca) continue;
-    // \u0000 nao aparece em nome digitado: separa maquina de peca sem risco.
-    const chave = porPeca ? `${nomeMaquina}\u0000${nomePeca}` : nomeMaquina;
+    // Agrupa pela chave NORMALIZADA (ver nomeChave); \u0000 nao aparece em
+    // nome digitado e separa maquina de peca sem risco.
+    const chave = porPeca ? `${nomeChave(nomeMaquina)}\u0000${nomeChave(nomePeca)}` : nomeChave(nomeMaquina);
     if (!grupos.has(chave)) {
       grupos.set(chave, {
         maquina: nomeMaquina, ...(porPeca ? { peca: nomePeca } : {}),
