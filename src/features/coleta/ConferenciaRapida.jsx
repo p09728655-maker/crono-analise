@@ -8,7 +8,7 @@ import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import { TOQUE_MINIMO_MS } from '../../domain/estatistica.js';
 import { sincronizar } from '../../lib/api.js';
 import { listarConferencias, marcarEnviadas, removerConferencia, salvarConferencia } from '../../lib/conferencias.js';
-import { enfileirar, novoId } from '../../lib/filaOffline.js';
+import { enfileirar, listarFila, novoId } from '../../lib/filaOffline.js';
 import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
 
 /**
@@ -75,6 +75,24 @@ export default function ConferenciaRapida({ aoSair }) {
   const [ciclosPorPeca, setCiclosPorPeca] = useState(1);
   const [historico, setHistorico] = useState(() => listarConferencias());
   const [salvo, setSalvo] = useState(null); // null | 'ok' | 'erro'
+  // Conferencias ainda NA FILA offline. A marca `enviada` diz "entrou na
+  // fila"; quem confirma entrega e' o servidor, removendo da fila. O rotulo
+  // "no PC" ja' mentiu uma vez — medicao presa por erro de sync aparecia
+  // como entregue — entao a lista consulta a fila de verdade.
+  const [naFila, setNaFila] = useState(() => new Set());
+
+  useEffect(() => {
+    let vivo = true;
+    const olharFila = async () => {
+      try {
+        const fila = await listarFila();
+        if (vivo) setNaFila(new Set(fila.filter((x) => x.tipo === 'conferencia').map((x) => x.clientId)));
+      } catch { /* sem fila neste navegador: rotulo cai na marca local */ }
+    };
+    olharFila();
+    const id = setInterval(olharFila, 5000);
+    return () => { vivo = false; clearInterval(id); };
+  }, []);
 
   // Mudou qualquer dado, a conferencia na tela ja' e' outra: libera salvar
   // de novo em vez de fingir que a alteracao tambem esta' guardada.
@@ -87,6 +105,13 @@ export default function ConferenciaRapida({ aoSair }) {
   // tela elas entram na fila — o client_id torna qualquer repeticao
   // inofensiva no servidor — e passam a aparecer no relatorio do PC.
   useEffect(() => {
+    // Abrir a tela tambem EMPURRA a fila. A barra de sincronizacao nao monta
+    // aqui (tela cheia), entao uma conferencia que falhou no envio — servidor
+    // fora, migracao pendente — ficava presa ate' o analista voltar a' lista.
+    // Foi o caso real de 28/08: sync respondeu 500 por uns minutos e a
+    // medicao so' subiria "sozinha" trocando de tela.
+    sincronizar().catch(() => {});
+
     const pendentes = listarConferencias()
       .filter((c) => !c.enviada && Number(c.duracaoMs) > 0 && Number(c.pecas) > 0);
     if (!pendentes.length) return;
@@ -333,6 +358,9 @@ export default function ConferenciaRapida({ aoSair }) {
         salvoEm: registro.salvoEm,
       });
       setHistorico(marcarEnviadas([registro.id]));
+      // Na fila ate' o servidor confirmar: o rotulo mostra isso na hora,
+      // sem esperar o proximo olhar periodico.
+      setNaFila((f) => new Set(f).add(registro.id));
       sincronizar().catch(() => {});
     } catch { /* sem fila neste navegador: o backfill tenta na proxima abertura */ }
   }, [maquina, peca, horaInicial, horaFinal, paradasEmMs]);
@@ -514,6 +542,14 @@ export default function ConferenciaRapida({ aoSair }) {
               </div>
               <ComParadas calculado={resultadoHoras} />
               <BotaoSalvar salvo={salvo} aoSalvar={() => salvar(resultadoHoras, true)} />
+              {/* A mesma nota do resultado ao vivo: quem salva aqui precisa
+                  saber que a medicao SOBE para o PC — sem ela, o recibo era
+                  a unica pista e ja' induziu leitura errada uma vez. */}
+              <section style={est.aviso}>
+                Salvar envia esta conferência para o relatório das Furadeiras, no PC,
+                e guarda uma cópia neste aparelho. Para registrar ciclos e calcular
+                o tempo padrão, crie um estudo.
+              </section>
               <button type="button" style={est.botaoOutraPeca} onClick={outraPeca}>
                 ➜ COMEÇAR OUTRA PEÇA
               </button>
@@ -551,7 +587,7 @@ export default function ConferenciaRapida({ aoSair }) {
                   no relatorio do PC — nem que o que ainda nao subiu vai
                   subir sozinho na proxima abertura. */}
               <div style={est.historicoDica}>
-                {historico.every((c) => c.enviada)
+                {historico.every((c) => c.enviada && !naFila.has(c.id))
                   ? 'Todas já estão no relatório do PC.'
                   : 'As que ainda não subiram vão para o relatório do PC assim que houver rede.'}
               </div>
@@ -569,7 +605,7 @@ export default function ConferenciaRapida({ aoSair }) {
                         c.ciclosPorPeca > 1 ? `${c.ciclosPorPeca} ciclos/pç` : null,
                         c.paradaMs > 0 ? `${formatarDuracao(c.paradaMs)} parada` : null,
                         dataCurta(c.salvoEm),
-                        c.enviada ? 'no PC' : 'aguardando envio',
+                        c.enviada && !naFila.has(c.id) ? 'no PC' : 'aguardando envio',
                       ].filter(Boolean).join(' · ')}
                     </div>
                   </div>
@@ -1012,6 +1048,12 @@ function ComParadas({ calculado }) {
  * Botao de salvar com o proprio recibo: depois de guardar ele vira
  * "✓ SALVA" e trava, para o dedo apressado nao duplicar o registro.
  * Qualquer edicao nos dados libera de novo (ver o efeito sobre `salvo`).
+ *
+ * O recibo dizia "SALVA NESTE APARELHO" — e passava a mensagem ERRADA:
+ * o analista lia que a medicao ficou presa no celular e que "tinha que
+ * mandar para o estudo". Salvar sempre ENVIOU para o relatorio do PC
+ * (fila offline, sobe quando ha' rede); agora o recibo diz isso. O
+ * estado por medicao ("no PC" / "aguardando envio") segue na lista.
  */
 function BotaoSalvar({ salvo, aoSalvar }) {
   return (
@@ -1022,7 +1064,7 @@ function BotaoSalvar({ salvo, aoSalvar }) {
         onClick={aoSalvar}
         disabled={salvo === 'ok'}
       >
-        {salvo === 'ok' ? '✓ SALVA NESTE APARELHO' : 'SALVAR CONFERÊNCIA'}
+        {salvo === 'ok' ? '✓ SALVA — VAI PARA O RELATÓRIO DO PC' : 'SALVAR CONFERÊNCIA'}
       </button>
       {salvo === 'erro' && (
         <div style={est.erroSalvar}>
