@@ -62,6 +62,10 @@ export default function ConferenciaRapida({ aoSair }) {
   const [paradas, setParadas] = useState([]);
   const [emParada, setEmParada] = useState(null);      // {motivo, inicio} no ao vivo
   const [escolhendoMotivo, setEscolhendoMotivo] = useState(false);
+  // Cronometro do SETUP no caminho dos horarios: {inicio}. O setup era o
+  // unico numero digitado de cabeca numa tela onde tudo e' medido — agora
+  // um toque marca o inicio da troca e o segundo grava os minutos exatos.
+  const [setupCrono, setSetupCrono] = useState(null);
 
   // Maquina, peca e memoria deste aparelho.
   const [maquina, setMaquina] = useState('');
@@ -134,22 +138,44 @@ export default function ConferenciaRapida({ aoSair }) {
     vibrar([25, 40, 25]);
   }, []);
 
+  const iniciarSetup = useCallback(() => {
+    setSetupCrono({ inicio: performance.now() });
+    vibrar([30, 40, 30]);
+  }, []);
+
+  const encerrarSetup = useCallback(() => {
+    if (!setupCrono) return;
+    const ms = performance.now() - setupCrono.inicio;
+    // Menos de 1s e' toque errado, nao setup — mesma regra da parada ao
+    // vivo. Duas casas no minuto pelo mesmo motivo de la': 45s viram 0,75.
+    if (ms >= 1000) adicionarParada(codigoPreferido(motivosParada, 'setup'), (ms / 60000).toFixed(2));
+    setSetupCrono(null);
+    vibrar(45);
+  }, [setupCrono, adicionarParada, motivosParada]);
+
   const rodando = fase === 'rodando';
-  useWakeLock(rodando);
+  // Tela acesa tambem durante o setup cronometrado: o analista esta' de
+  // maos ocupadas na troca, e o aparelho apagando pausaria a medicao.
+  useWakeLock(rodando || Boolean(setupCrono));
   const { decorrido, iniciar, parar } = useCronometro();
   const ultimoToqueRef = useRef(0);
 
-  // Recarregar no meio da conferencia perderia o periodo cronometrado.
+  // Recarregar no meio da conferencia (ou de um setup cronometrado)
+  // perderia o tempo medido.
+  const medindo = rodando || Boolean(setupCrono);
   useEffect(() => {
-    if (!rodando) return undefined;
+    if (!medindo) return undefined;
     const aoFechar = (ev) => { ev.preventDefault(); ev.returnValue = ''; };
     window.addEventListener('beforeunload', aoFechar);
     return () => window.removeEventListener('beforeunload', aoFechar);
-  }, [rodando]);
+  }, [medindo]);
 
   const comecar = useCallback(() => {
     setPecas(0);
     setParadas([]);
+    // O cronometro ao vivo mede o periodo inteiro; um setup que estivesse
+    // correndo no formulario pertencia ao periodo anterior.
+    setSetupCrono(null);
     setFase('rodando');
     iniciar();
     vibrar(45);
@@ -323,6 +349,7 @@ export default function ConferenciaRapida({ aoSair }) {
     setHoraFinal('');
     // Parada e' do periodo que acabou: o proximo comeca sem nenhuma.
     setParadas([]);
+    setSetupCrono(null);
     vibrar(30);
   }, [horaFinal]);
 
@@ -429,6 +456,9 @@ export default function ConferenciaRapida({ aoSair }) {
               paradas={paradas}
               resumo={totalParada}
               duracaoMs={duracaoHoras}
+              setupCrono={setupCrono}
+              aoIniciarSetup={iniciarSetup}
+              aoEncerrarSetup={encerrarSetup}
               aoAdicionar={adicionarParada}
               aoAlterar={alterarParada}
               aoRemover={removerParada}
@@ -766,31 +796,37 @@ export default function ConferenciaRapida({ aoSair }) {
  *
  * O campo e' em MINUTOS: ninguem no chao de fabrica pensa em milissegundos.
  */
-function Paradas({ motivos, paradas, resumo, duracaoMs, aoAdicionar, aoAlterar, aoRemover }) {
+function Paradas({ motivos, paradas, resumo, duracaoMs, setupCrono, aoIniciarSetup, aoEncerrarSetup, aoAdicionar, aoAlterar, aoRemover }) {
   const produtivoMs = duracaoMs > 0 ? duracaoMs - Math.min(resumo.totalMs, duracaoMs) : 0;
 
   return (
     <div style={est.blocoParadas} aria-label="Paradas no período">
       <span style={est.rotuloCampo}>PARADAS NO PERÍODO</span>
 
-      <div style={est.linhaBotoesParada}>
-        <button
-          type="button" style={est.botaoSetup}
-          onClick={() => aoAdicionar(codigoPreferido(motivos, 'setup'))}
-        >
-          + SETUP / TROCA
-        </button>
-        <button
-          type="button" style={est.botaoParada}
-          onClick={() => aoAdicionar(codigoPreferido(motivos, 'falta_material'))}
-        >
-          + OUTRA PARADA
-        </button>
-      </div>
+      {setupCrono ? (
+        <CronoSetup inicio={setupCrono.inicio} aoEncerrar={aoEncerrarSetup} />
+      ) : (
+        <div style={est.linhaBotoesParada}>
+          {/* Setup abre CRONOMETRO, nao linha em branco: era o unico numero
+              estimado de cabeca numa tela onde tudo e' medido. Quem prefere
+              digitar usa Outra parada e troca o motivo — a dica diz isso. */}
+          <button type="button" style={est.botaoSetup} onClick={aoIniciarSetup}>
+            ⏱ SETUP / TROCA
+          </button>
+          <button
+            type="button" style={est.botaoParada}
+            onClick={() => aoAdicionar(codigoPreferido(motivos, 'falta_material'))}
+          >
+            + OUTRA PARADA
+          </button>
+        </div>
+      )}
 
       {paradas.length === 0 ? (
         <span style={est.dicaParada}>
-          Nenhuma marcada — o período inteiro conta como máquina rodando.
+          {setupCrono
+            ? 'O tempo entra na lista quando o setup terminar — e continua editável lá.'
+            : 'Nenhuma marcada — o período inteiro conta como máquina rodando. Setup / troca cronometra a parada; para digitar minutos de cabeça, use Outra parada e troque o motivo.'}
         </span>
       ) : (
         <>
@@ -837,6 +873,34 @@ function Paradas({ motivos, paradas, resumo, duracaoMs, aoAdicionar, aoAlterar, 
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Cronometro do setup no caminho dos horarios.
+ *
+ * Um toque quando a troca comeca, outro quando a maquina volta a rodar:
+ * os minutos caem na lista de paradas ja' convertidos (duas casas), ainda
+ * editaveis. Precisa de relogio proprio porque no formulario nada mais
+ * repinta a tela — ao vivo quem repinta e' o cronometro do periodo.
+ */
+function CronoSetup({ inicio, aoEncerrar }) {
+  const [decorrido, setDecorrido] = useState(() => performance.now() - inicio);
+  useEffect(() => {
+    const id = setInterval(() => setDecorrido(performance.now() - inicio), 100);
+    return () => clearInterval(id);
+  }, [inicio]);
+
+  return (
+    <div style={est.cronoSetup} role="timer" aria-label="Setup em andamento">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={est.cronoSetupRotulo}>SETUP EM ANDAMENTO</div>
+        <div style={est.cronoSetupTempo}>{formatarCronometro(decorrido)}</div>
+      </div>
+      <button type="button" style={est.botaoFimSetup} onClick={aoEncerrar}>
+        ■ SETUP TERMINOU
+      </button>
     </div>
   );
 }
@@ -1168,6 +1232,24 @@ const est = {
     cursor: 'pointer', fontFamily: 'inherit',
   },
   dicaParada: { fontSize: tamanho.legenda, color: cores.textoFraco, lineHeight: 1.4 },
+  // Faixa do setup em andamento: mesma paleta ambar do botao que a abriu.
+  cronoSetup: {
+    display: 'flex', alignItems: 'center', gap: espaco.md,
+    padding: espaco.md,
+    background: cores.atencaoFundo, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.atencao,
+  },
+  cronoSetupRotulo: { fontSize: 10, fontWeight: 700, letterSpacing: 0.8, color: cores.atencao },
+  cronoSetupTempo: {
+    fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero,
+    fontVariantNumeric: 'tabular-nums', lineHeight: 1.2, marginTop: 2,
+  },
+  botaoFimSetup: {
+    flexShrink: 0, minHeight: 48, padding: `0 ${espaco.md}px`,
+    background: cores.atencao, border: 'none', borderRadius: raio.sm,
+    color: '#fff', fontSize: tamanho.pequeno, fontWeight: 700, letterSpacing: 0.5,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
   linhaParada: { display: 'flex', alignItems: 'center', gap: espaco.sm, minWidth: 0 },
   selectMotivo: {
     flex: 1, minWidth: 0, minHeight: 48, padding: `0 ${espaco.sm}px`,

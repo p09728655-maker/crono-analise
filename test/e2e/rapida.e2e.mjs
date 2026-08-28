@@ -98,8 +98,17 @@ await p.locator('input[aria-label="Hora final"]').fill('07:30');
 await p.locator('input[aria-label="Peças no período"]').fill('100');
 checar(await ritmo() === 200, '30 min com 100 pecas dao 200 pc/h antes de marcar parada');
 
-await p.getByRole('button', { name: '+ SETUP / TROCA' }).tap();
+// Setup e' CRONOMETRADO: um toque abre o relogio, o segundo grava os
+// minutos medidos como parada — que continuam editaveis na lista.
+await p.getByRole('button', { name: /SETUP \/ TROCA/ }).tap();
+await p.getByText('SETUP EM ANDAMENTO').waitFor({ timeout: 4000 });
+checar(true, 'toque em setup abre o cronometro da troca');
+await p.waitForTimeout(1200);
+await p.getByRole('button', { name: /SETUP TERMINOU/ }).tap();
 const minutosSetup = p.locator('input[aria-label="Minutos parada — Setup / Troca"]');
+await minutosSetup.waitFor({ timeout: 4000 });
+const medido = parseFloat((await minutosSetup.inputValue()).replace(',', '.'));
+checar(medido > 0 && medido < 1, `o tempo medido cai na lista em minutos (${medido})`);
 await minutosSetup.fill('10');
 checar(await ritmo() === 300, 'setup de 10 min: sobram 20 min rodando -> 300 pc/h');
 
