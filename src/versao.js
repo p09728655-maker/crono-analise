@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.38.0',
+    data: '2026-08-28',
+    titulo: 'Setup cronometrado — e o resultado vem antes da ressalva',
+    itens: [
+      'O setup da furadeira ganhou cronômetro na conferência rápida: um toque em "Setup / troca" marca o início, o tempo corre na tela e o segundo toque grava os minutos exatos como parada — sem estimar de cabeça. O valor cai na lista já convertido e continua editável; quem prefere digitar de memória usa "Outra parada" e troca o motivo.',
+      'Enquanto o setup cronometra, a tela fica acesa e o navegador avisa antes de fechar a página — mesma proteção do cronômetro ao vivo.',
+      'No relatório das furadeiras, a primeira conferência já aparece como resultado: a folha impressa mostra o resumo por máquina antes do aviso de amostra, que virou uma nota logo abaixo dos números — na tela, o cartão da máquina diz numa linha o que falta para virar referência.',
+      'O critério mínimo não mudou (3 conferências · 30 min · nenhum período menor que 5 min): segue declarado na identificação e na coluna Situação. Ele qualifica o número, não o esconde.',
+    ],
+  },
+  {
     versao: '2.37.0',
     data: '2026-08-27',
     titulo: 'O tablet não apaga estudo — arquiva',

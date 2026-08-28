@@ -25,10 +25,12 @@ import EstadoVazio from '../../components/EstadoVazio.jsx';
  * resumo, e a tabela embaixo guarda o dado bruto, mais recente primeiro.
  *
  * O relatorio se autoavalia pelos CRITERIOS_CONFERENCIA, na tela e no
- * papel, ANTES dos numeros: minimo de conferencias, tempo total observado
- * e periodo por conferencia. Uma unica medicao de 1 minuto continua
- * visivel — mas carimbada de "amostra insuficiente", nunca de referencia.
- * (Mesma filosofia do estudo de ciclos: criterio declarado, nao trava.)
+ * papel: minimo de conferencias, tempo total observado e periodo por
+ * conferencia. Desde ago/2026 os NUMEROS vem primeiro — a primeira
+ * conferencia ja' aparece como resultado — e a insuficiencia e' uma nota
+ * logo depois, nunca um carimbo na frente do que foi medido. O criterio
+ * nao mudou nem trava nada: qualifica o numero como indicio, nao
+ * referencia. (Mesma filosofia do estudo de ciclos: criterio declarado.)
  *
  * O ritmo medio e' ponderado pelo tempo — soma de pecas sobre soma do
  * tempo PRODUTIVO — porque e' esse numero que aguenta decisao de
@@ -220,10 +222,12 @@ export default function RelatorioConferencias({ aoVoltar }) {
                         </span>
                       )}
                     </div>
+                    {/* Nota, nao lista de pendencias: os numeros acima ja'
+                        sao o resultado; aqui so' o que falta para fechar. */}
                     {!g.confiavel && (
-                      <ul style={est.motivos}>
-                        {g.motivos.map((m) => <li key={m} style={est.motivo}>{m}</li>)}
-                      </ul>
+                      <div style={est.motivoNota}>
+                        Para virar referência: {g.motivos.join('; ')}.
+                      </div>
                     )}
                   </div>
                 ))}
@@ -601,14 +605,15 @@ function AnaliseIaConferencias({ resumo }) {
 /**
  * FOLHA DE CONFERENCIAS — A4 retrato.
  *
- * Mesmo documento que a Folha de Analise do estudo, na mesma ordem que um
- * relatorio tecnico exige: identificacao, confiabilidade ANTES do resultado,
- * resumo, dado bruto, legenda em palavras e assinaturas. Nao e' a tela no
- * papel — a tela tem filtro, botao e cor de interface; o papel tem contexto
- * e responsavel.
+ * Mesmo documento que a Folha de Analise do estudo: identificacao, resumo,
+ * nota de confiabilidade, dado bruto, legenda em palavras e assinaturas.
+ * Nao e' a tela no papel — a tela tem filtro, botao e cor de interface; o
+ * papel tem contexto e responsavel.
  *
- * A confiabilidade vem antes dos numeros pelo mesmo motivo do estudo: o
- * documento circula em reuniao, e numero sem contexto vira decisao errada.
+ * A ordem mudou em ago/2026, a pedido de quem usa o relatorio: a primeira
+ * conferencia ja' e' RESULTADO e aparece antes de qualquer ressalva. O
+ * criterio minimo continua declarado (identificacao, coluna Situacao e a
+ * nota depois do resumo) — ele qualifica o numero, nao o esconde.
  */
 function ImpressaoConferencias({ linhas, resumo }) {
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -655,35 +660,6 @@ function ImpressaoConferencias({ linhas, resumo }) {
         ))}
       </section>
 
-      {/* Confiabilidade ANTES do resultado — igual a folha do estudo. */}
-      <section style={semReferencia.length ? imp.ressalva : imp.validacao}>
-        <strong>
-          {semReferencia.length
-            ? '⚠ Máquinas com amostra insuficiente'
-            : '✓ Todas as máquinas atendem aos critérios'}
-        </strong>
-        {semReferencia.length ? (
-          <>
-            <p style={imp.ressalvaTexto}>
-              As máquinas abaixo não atingiram os critérios mínimos de amostra. Os ritmos
-              apresentados servem como indício, mas <strong>não devem embasar
-              dimensionamento de capacidade</strong> enquanto a amostra não fechar.
-            </p>
-            <ul style={imp.ressalvaLista}>
-              {semReferencia.map((g) => (
-                <li key={g.maquina}><strong>{g.maquina}</strong> — {g.motivos.join('; ')}.</li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p style={imp.ressalvaTexto}>
-            Todas as máquinas atingiram o mínimo de conferências, de tempo total observado e
-            de período por conferência. O CV% entre conferências está na tabela como
-            referência de estabilidade do posto.
-          </p>
-        )}
-      </section>
-
       <h2 style={imp.tituloSecao}>Resumo por máquina</h2>
       <table style={imp.tabela}>
         <thead>
@@ -715,6 +691,38 @@ function ImpressaoConferencias({ linhas, resumo }) {
           ))}
         </tbody>
       </table>
+
+      {/* A nota vem DEPOIS dos numeros (decisao ago/2026): o que ja' foi
+          medido aparece primeiro, desde a primeira conferencia. O criterio
+          nao mudou — segue declarado na identificacao e na coluna Situacao;
+          so' deixou de barrar a leitura do resultado. */}
+      <section style={semReferencia.length ? imp.ressalva : imp.validacao}>
+        <strong>
+          {semReferencia.length
+            ? '⚠ Nota — máquinas com amostra ainda insuficiente'
+            : '✓ Todas as máquinas atendem aos critérios'}
+        </strong>
+        {semReferencia.length ? (
+          <>
+            <p style={imp.ressalvaTexto}>
+              As máquinas abaixo ainda não atingiram os critérios mínimos de amostra. Os ritmos
+              acima valem como primeira medição, mas <strong>não devem embasar
+              dimensionamento de capacidade</strong> enquanto a amostra não fechar.
+            </p>
+            <ul style={imp.ressalvaLista}>
+              {semReferencia.map((g) => (
+                <li key={g.maquina}><strong>{g.maquina}</strong> — {g.motivos.join('; ')}.</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p style={imp.ressalvaTexto}>
+            Todas as máquinas atingiram o mínimo de conferências, de tempo total observado e
+            de período por conferência. O CV% entre conferências está na tabela como
+            referência de estabilidade do posto.
+          </p>
+        )}
+      </section>
 
       <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Conferências registradas ({linhas.length})</h2>
       <table style={imp.tabela}>
@@ -849,11 +857,7 @@ const est = {
     display: 'flex', flexDirection: 'column', gap: 2,
     ...tipo('legenda'), color: t.textoMedio,
   },
-  motivos: {
-    margin: 0, paddingLeft: espaco.lg,
-    display: 'flex', flexDirection: 'column', gap: 2,
-  },
-  motivo: { ...tipo('legenda'), color: t.atencao },
+  motivoNota: { ...tipo('legenda'), color: t.atencao, lineHeight: 1.5 },
 
   botaoSecundario: {
     minHeight: 40, padding: `0 ${espaco.lg}px`, background: 'transparent',
