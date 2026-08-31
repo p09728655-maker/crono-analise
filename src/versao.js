@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.57.1',
+    data: '2026-08-31',
+    titulo: 'Últimos acertos da revisão visual',
+    itens: [
+      'O botão "Arquivar esta máquina" era visualmente idêntico ao "Arquivar" de uma linha só, a poucos centímetros dele no mesmo painel — um mexe em todas as medições da máquina, o outro em uma. Agora o de máquina tem borda e peso próprios.',
+      'Os números do cartão de máquina ("Máquina rodando: 75%") passaram a usar a mesma largura de dígito do resto do relatório, para as linhas ficarem alinhadas ao comparar máquinas.',
+      'O nome do grupo na lateral usava um tamanho de fonte criado só para ele, fora da escala do app.',
+    ],
+  },
+  {
     versao: '2.57.0',
     data: '2026-08-31',
     titulo: 'Três buracos que perdiam dado na coleta',

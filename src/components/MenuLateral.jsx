@@ -291,8 +291,12 @@ const est = {
 
   // Nome do grupo dentro de um bloco: menor que o rotulo do bloco, para a
   // hierarquia ficar em tres niveis sem virar tres tamanhos de titulo.
+  // Sem tamanho proprio: o `fontSize: 10` que estava aqui era um degrau
+  // criado so' para este rotulo, e levava a tela do relatorio a dez tamanhos
+  // distintos (teto da escala e' cinco). A hierarquia sai do espacamento e
+  // da cor, nao de um tamanho novo.
   subgrupoRotulo: {
-    ...rotulo(t.textoFraco), fontSize: 10,
+    ...rotulo(t.textoFraco),
     padding: `${espaco.md}px ${espaco.sm}px ${espaco.xs}px`,
   },
   // Shorthand inteiro, nao paddingLeft: misturar com o `padding` do

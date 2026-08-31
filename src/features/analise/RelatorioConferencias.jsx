@@ -817,7 +817,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                   {loteDaMaquina && (
                     <button
                       type="button"
-                      style={est.botaoLinha}
+                      style={est.botaoLote}
                       onClick={() => setConfirmandoLote(loteDaMaquina)}
                       disabled={ocupado === 'lote'}
                     >
@@ -1888,7 +1888,7 @@ const est = {
   cartaoRitmoMinuto: { ...tipo('corpoF'), ...numeros, color: t.textoMedio },
   cartaoLinhas: {
     display: 'flex', flexDirection: 'column', gap: 2,
-    ...tipo('legenda'), color: t.textoMedio,
+    ...tipo('legenda'), ...numeros, color: t.textoMedio,
   },
   // Nota discreta, em cinza: informa sem carimbar o numero de "errado".
   notaPoucas: { ...tipo('legenda'), color: t.textoFraco, lineHeight: 1.5 },
@@ -1902,6 +1902,16 @@ const est = {
     minHeight: 40, padding: `0 ${espaco.lg}px`, background: t.critico,
     border: 'none', borderRadius: raio.md, color: '#fff',
     ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit',
+  },
+  /* O botao que mexe em VARIAS linhas nao pode ser igual ao que mexe em uma:
+     eram gemeos a 25 px de distancia no mesmo painel, so' a largura mudava.
+     Borda mais forte e texto mais pesado — sem virar acao primaria, que na
+     tela e' so' Imprimir. */
+  botaoLote: {
+    minHeight: 32, padding: `0 ${espaco.md}px`, background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.bordaForte, borderRadius: raio.sm,
+    color: t.texto, ...tipo('legenda'), fontWeight: 700,
+    cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
   },
   botaoLinha: {
     minHeight: 32, padding: `0 ${espaco.md}px`, background: 'transparent',
