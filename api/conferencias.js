@@ -15,12 +15,44 @@
  *    proprio analista. Ai nao ha o que preservar, e manter lixo no
  *    relatorio custa mais que apagar. Apagar medicao e' decisao de
  *    administrador — e' a operacao sem volta deste relatorio.
+ *
+ * RENOMEAR A PECA e' a terceira escrita daqui, e existe por um motivo de
+ * chao de fabrica: o nome da peca e' DIGITADO no aparelho, medicao a
+ * medicao. Duas grafias da mesma peca ("Sleep base 380x330x15" e "Sleep
+ * base 380x330") viram duas linhas no Ritmo por peca, cada uma com metade
+ * das medicoes — e a referencia da peca fica errada nas duas. Corrigir o
+ * texto e' o unico jeito de juntar de novo, e vale tanto para UMA medicao
+ * quanto para todas as que herdaram a grafia errada (o lote).
+ *
+ * ARQUIVAR EM LOTE (PATCH sem `id`, com `ids` no corpo) e' o mesmo
+ * arquivamento, so' que de varias medicoes numa ida — e' o que sustenta o
+ * "arquivar por maquina" do relatorio. Quem decide QUAIS medicoes entram e'
+ * a tela, que ja' agrupa por maquina com a chave normalizada; mandar a
+ * lista de ids evita que o servidor precise repetir essa normalizacao e
+ * garante que o que foi arquivado e' exatamente o que estava na tela.
  */
 import { autenticar, exigirPapel } from './_lib/auth.js';
-import { erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
-import { paradasDaConferencia, texto, uuid } from './_lib/validar.js';
+import { erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir, proibido } from './_lib/http.js';
+import { lista, paradasDaConferencia, texto, uuid } from './_lib/validar.js';
 
 const MAX_LINHAS = 1000;
+// Teto do lote: uma maquina com mais medicoes que isto arquiva em duas
+// idas. O limite existe para uma requisicao nao virar uma transacao longa.
+const MAX_LOTE = 500;
+
+/**
+ * O banco recusou em silencio.
+ *
+ * UPDATE que nao acha linha nenhuma volta 200 com zero alteracoes — e' o
+ * "arquivar nao funciona" mais dificil de diagnosticar, porque nada
+ * aparece na tela nem no log. Aqui ele vira uma mensagem que diz o que
+ * conferir.
+ */
+const nadaMudou = () => proibido(
+  'O banco nao alterou nenhuma medicao. Confira se o seu usuario esta com papel '
+  + 'administrador ou analista nesta empresa — a politica de acesso do banco recusa '
+  + 'a alteracao dos demais papeis sem devolver erro.',
+);
 
 export default handler(async (req, res) => {
   permitir(req, ['GET', 'PATCH', 'DELETE']);
@@ -64,8 +96,47 @@ export default handler(async (req, res) => {
     });
   }
 
-  const conferenciaId = uuid(id, 'id');
   exigirPapel(auth, req.method === 'DELETE' ? ['admin'] : ['admin', 'analista']);
+
+  // PATCH sem `id` e' o LOTE: arquiva (ou restaura) a lista inteira de uma
+  // vez. E' assim que o relatorio arquiva uma maquina — a tela manda os ids
+  // das medicoes que estao debaixo daquele nome.
+  if (req.method === 'PATCH' && !id) {
+    const corpo = await lerCorpo(req);
+    const temNoLote = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
+    if (!temNoLote('arquivada') && !temNoLote('peca')) {
+      throw erroValidacao('Nada a atualizar no lote: informe "arquivada" ou "peca"');
+    }
+    const ids = lista(corpo.ids, 'ids', { max: MAX_LOTE }).map((x, i) => uuid(x, `ids[${i}]`));
+    if (!ids.length) throw erroValidacao('Informe ao menos uma medicao em "ids"');
+    // Mesmo teto do que sobe do aparelho: o nome corrigido no PC nao pode
+    // ser maior do que o que a coleta aceita.
+    const peca = temNoLote('peca') ? texto(corpo.peca, 'peca', { max: 120 }) : null;
+
+    return auth.rls(async (db) => {
+      let alteradas = null;
+      if (temNoLote('arquivada')) {
+        alteradas = await db`
+          UPDATE conferencias SET arquivada = ${Boolean(corpo.arquivada)}
+           WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
+          RETURNING id`;
+      }
+      if (temNoLote('peca')) {
+        alteradas = await db`
+          UPDATE conferencias SET peca = ${peca}
+           WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
+          RETURNING id`;
+      }
+      if (!alteradas.length) throw nadaMudou();
+      return json(res, 200, {
+        atualizadas: alteradas.length,
+        ...(temNoLote('arquivada') ? { arquivada: Boolean(corpo.arquivada) } : {}),
+        ...(temNoLote('peca') ? { peca } : {}),
+      });
+    });
+  }
+
+  const conferenciaId = uuid(id, 'id');
 
   return auth.rls(async (db) => {
     const [existe] = await db`
@@ -76,9 +147,14 @@ export default handler(async (req, res) => {
     if (req.method === 'PATCH') {
       const corpo = await lerCorpo(req);
       const tem = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
-      if (!tem('arquivada') && !tem('paradas')) {
-        throw erroValidacao('Nada a atualizar: informe "arquivada" ou "paradas"');
+      if (!tem('arquivada') && !tem('paradas') && !tem('peca')) {
+        throw erroValidacao('Nada a atualizar: informe "arquivada", "paradas" ou "peca"');
       }
+      // Toda validacao ANTES de qualquer escrita: no modo de servico a
+      // requisicao nao e' uma transacao, entao recusar no meio deixaria
+      // metade gravada. Aqui, o que for recusado e' recusado sem ter
+      // escrito nada.
+      const pecaNova = tem('peca') ? texto(corpo.peca, 'peca', { max: 120 }) : null;
 
       // Paradas cadastradas no PC: o analista marcou o setup depois, olhando
       // o apontamento. Mesmo formato do que sobe do aparelho.
@@ -105,14 +181,28 @@ export default handler(async (req, res) => {
         }
       }
 
+      // Correcao do nome digitado no aparelho — ver o cabecalho.
+      if (tem('peca')) {
+        const alteradas = await db`
+          UPDATE conferencias SET peca = ${pecaNova}
+           WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}
+          RETURNING id`;
+        if (!alteradas.length) throw nadaMudou();
+      }
+
       if (tem('arquivada')) {
-        await db`
+        // RETURNING nao e' enfeite: sem ele, um UPDATE barrado pela politica
+        // do banco volta 200 sem ter mudado nada, e o botao "Arquivar" fica
+        // com cara de quebrado.
+        const alteradas = await db`
           UPDATE conferencias SET arquivada = ${Boolean(corpo.arquivada)}
-           WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}`;
+           WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}
+          RETURNING id`;
+        if (!alteradas.length) throw nadaMudou();
       }
 
       const [linha] = await db`
-        SELECT c.id, c.arquivada,
+        SELECT c.id, c.arquivada, c.peca,
                coalesce((
                  SELECT jsonb_agg(jsonb_build_object(
                           'motivo', p.motivo,

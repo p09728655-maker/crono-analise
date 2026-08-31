@@ -151,6 +151,21 @@ checar(/produzidas no per/i.test(comParada), 'a tela diz que o numero grande e o
 checar(comParada.includes('300'), 'o ritmo com a maquina rodando (300) continua visivel ao lado');
 checar(comParada.includes('10 min'), 'o tempo parado aparece no resultado');
 
+/**
+ * PECAS/MIN: os dois, cada um dizendo de qual tempo sai.
+ *
+ * O celular mostrava "PEÇAS/MIN" do periodo inteiro e o relatorio do PC
+ * mostrava o de maquina rodando, ambos com o mesmo rotulo — a mesma
+ * medicao dava 10.3 aqui e 13.2 la', e o analista concluia, com razao,
+ * que os tempos nao batiam. Agora o rotulo diz a base, e o numero do PC
+ * aparece tambem aqui: 100 pc em 30 min = 3.3/min no periodo; com 10 de
+ * setup, 100 pc em 20 min = 5.0/min com a maquina rodando.
+ */
+checar(/PEÇAS\/MIN NO PERÍODO/i.test(comParada) && comParada.includes('3.3'),
+  'o peças/min do periodo diz que e do periodo (100 pc / 30 min = 3.3)');
+checar(/PEÇAS\/MIN RODANDO/i.test(comParada) && comParada.includes('5.0'),
+  'e o peças/min de maquina rodando aparece junto — o mesmo numero do PC (100 pc / 20 min = 5.0)');
+
 // Parada maior que o periodo: avisa, nao some com a conta nem divide por zero.
 await minutosSetup.fill('40');
 await painelHoras.waitFor({ state: 'detached', timeout: 4000 });

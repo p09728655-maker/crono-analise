@@ -106,6 +106,21 @@ export const listarConferenciasServidor = ({ maquina, arquivadas = false } = {})
 };
 export const arquivarConferencia = (id, arquivada = true) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { arquivada } });
+// Arquivar/restaurar VARIAS numa ida — e' o "por maquina" do relatorio.
+// Quem escolhe as medicoes e' a tela (ela ja agrupa por maquina); aqui vai
+// a lista de ids, entao o que se arquiva e' exatamente o que estava na tela.
+export const arquivarConferencias = (ids, arquivada = true) =>
+  requisitar('/conferencias', { metodo: 'PATCH', corpo: { ids, arquivada } });
+/**
+ * Corrige o NOME DA PECA — o texto que o aparelho digitou na medicao.
+ * Duas grafias da mesma peca viram duas linhas no Ritmo por peca; renomear
+ * e' o que junta de novo. Uma lista de ids corrige todas as medicoes que
+ * herdaram a grafia errada numa unica ida.
+ */
+export const renomearPecaConferencia = (id, peca) =>
+  requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { peca } });
+export const renomearPecaConferencias = (ids, peca) =>
+  requisitar('/conferencias', { metodo: 'PATCH', corpo: { ids, peca } });
 // Paradas cadastradas no PC (setup marcado depois, olhando o apontamento).
 // A lista vai INTEIRA — e' o estado final das paradas daquela conferencia,
 // nao um acrescimo: assim corrigir e apagar usam o mesmo caminho.

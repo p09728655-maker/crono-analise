@@ -339,6 +339,197 @@ rodar('API — integracao com Postgres', () => {
     expect(n).toBe(0);
   });
 
+  /**
+   * ARQUIVAR POR MAQUINA — o lote.
+   *
+   * A medicao entra uma a uma, mas sai por posto: "a FURADEIRA 16 ja' foi
+   * analisada, tira ela do relatorio". Quem escolhe as medicoes e' a tela
+   * (ela agrupa por maquina com a chave normalizada); o servidor recebe os
+   * ids e nao inventa criterio proprio — o que se arquiva e' o que estava
+   * na tela.
+   */
+  it('PATCH em lote arquiva as medicoes de uma maquina e nao toca nas outras', async () => {
+    await sql`DELETE FROM conferencias WHERE empresa_id IN (${EMPRESA}, ${OUTRA_EMPRESA})`;
+    const agora = new Date().toISOString();
+    const clientIds = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          { clientId: clientIds[0], maquina: 'FURADEIRA 16', duracaoMs: 600000, pecas: 150, salvoEm: agora },
+          { clientId: clientIds[1], maquina: 'FURADEIRA 16', duracaoMs: 300000, pecas: 80, salvoEm: agora },
+          { clientId: clientIds[2], maquina: 'FURADEIRA 03', duracaoMs: 600000, pecas: 200, salvoEm: agora },
+        ],
+      },
+    }), fingirRes());
+    const linhas = await sql`
+      SELECT id, maquina FROM conferencias WHERE client_id = ANY(${clientIds})`;
+    const daDezesseis = linhas.filter((l) => l.maquina === 'FURADEIRA 16').map((l) => l.id);
+
+    const lote = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', corpo: { ids: daDezesseis, arquivada: true },
+    }), lote);
+    expect(lote.statusCode).toBe(200);
+    expect(lote.corpo.atualizadas).toBe(2);
+
+    // A outra maquina fica: o lote e' da maquina escolhida, nao do relatorio.
+    const ativas = fingirRes();
+    await conferenciasApi(fingirReq({}), ativas);
+    expect(ativas.corpo.conferencias.map((c) => c.maquina)).toEqual(['FURADEIRA 03']);
+    expect(ativas.corpo.outras).toBe(2);
+
+    // E volta inteira: restaurar e' o mesmo caminho com arquivada: false.
+    // E volta pelo caminho de PRODUCAO: token do analista, RLS ligada. E'
+    // a politica do banco que precisa deixar o lote passar — no modo de
+    // servico ela nem e' avaliada, e o teste passaria sem provar nada.
+    const analista = await criarAnalista({
+      nome: 'Lote Analista', email: 'lote@patrimar.com', senha: 'senhaboa123',
+    });
+    const volta = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', token: tokenDe(analista.corpo.usuario.id),
+      corpo: { ids: daDezesseis, arquivada: false },
+    }), volta);
+    expect(volta.corpo.atualizadas).toBe(2);
+    const [{ n }] = await sql`
+      SELECT count(*)::int AS n FROM conferencias
+       WHERE empresa_id = ${EMPRESA} AND NOT arquivada`;
+    expect(n).toBe(3);
+  });
+
+  /**
+   * A razao de o UPDATE devolver RETURNING.
+   *
+   * A politica do banco recusa a escrita de quem nao e' admin/analista SEM
+   * erro nenhum: o UPDATE simplesmente nao acha linha e volta 200. Foi
+   * assim que "Arquivar" ficou com cara de botao quebrado. O teste fixa os
+   * dois lados: o banco recusa, e a API transforma a recusa em 403.
+   */
+  it('UPDATE de quem nao pode escrever nao muda nada — e a API nao chama isso de sucesso', async () => {
+    const clientId = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId, maquina: 'FURADEIRA 16', duracaoMs: 600000, pecas: 150,
+          salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+    const [medicao] = await sql`SELECT id FROM conferencias WHERE client_id = ${clientId}`;
+
+    const gerado = fingirRes();
+    await dispositivosApi(fingirReq({ metodo: 'POST', corpo: { acao: 'codigo' } }), gerado);
+    const pareado = await parear({ codigo: gerado.corpo.codigo, nome: 'Tablet lote' });
+    const coletorId = pareado.corpo.dispositivo.id;
+
+    // No banco, direto: a RLS deixa o UPDATE passar sem alterar nada.
+    let alteradas = null;
+    await sql.begin(async (tx) => {
+      await tx`SELECT set_config('role', 'authenticated', true),
+                      set_config('request.jwt.claims', ${JSON.stringify({ sub: coletorId })}, true)`;
+      alteradas = await tx`
+        UPDATE conferencias SET arquivada = true WHERE id = ${medicao.id} RETURNING id`;
+    });
+    expect(alteradas.length, 'a politica do banco recusa em silencio').toBe(0);
+    const [depois] = await sql`SELECT arquivada FROM conferencias WHERE id = ${medicao.id}`;
+    expect(depois.arquivada).toBe(false);
+
+    // Pela API, o mesmo coletor leva 403 — com mensagem, nao com silencio.
+    const res = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', token: tokenDe(coletorId), corpo: { ids: [medicao.id], arquivada: true },
+    }), res);
+    expect(res.statusCode).toBe(403);
+
+    await sql`DELETE FROM conferencias WHERE id = ${medicao.id}`;
+  });
+
+  /**
+   * RENOMEAR A PECA.
+   *
+   * O nome nao vem de cadastro: e' digitado no aparelho, medicao a medicao.
+   * Duas grafias do mesmo produto viram duas linhas no Ritmo por peca, cada
+   * uma com metade das medicoes — e nenhuma descreve a peca. Corrigir o
+   * texto (de uma medicao ou de todas as que herdaram a grafia) e' o unico
+   * jeito de juntar de novo.
+   */
+  it('renomeia a peca de uma medicao e do lote inteiro', async () => {
+    await sql`DELETE FROM conferencias WHERE empresa_id = ${EMPRESA}`;
+    const agora = new Date().toISOString();
+    const clientIds = [crypto.randomUUID(), crypto.randomUUID()];
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          { clientId: clientIds[0], maquina: 'FURADEIRA 16', peca: 'Sleep tampo', duracaoMs: 600000, pecas: 150, salvoEm: agora },
+          { clientId: clientIds[1], maquina: 'FURADEIRA 16', peca: 'Sleep tampo', duracaoMs: 300000, pecas: 80, salvoEm: agora },
+        ],
+      },
+    }), fingirRes());
+    const medicoes = await sql`
+      SELECT id FROM conferencias WHERE client_id = ANY(${clientIds}) ORDER BY salvo_em`;
+
+    // Uma so': o PATCH individual devolve o nome corrigido.
+    const uma = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', query: { id: medicoes[0].id }, corpo: { peca: '  Sleep tampo 380x330x15 ' },
+    }), uma);
+    expect(uma.statusCode).toBe(200);
+    // O texto vai limpo para o banco: espaco nas pontas e' grafia nova.
+    expect(uma.corpo.conferencia.peca).toBe('Sleep tampo 380x330x15');
+
+    // E o lote: as duas passam a ter a mesma grafia.
+    const lote = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', corpo: { ids: medicoes.map((m) => m.id), peca: 'Sleep tampo 380x330x15' },
+    }), lote);
+    expect(lote.corpo.atualizadas).toBe(2);
+    const nomes = await sql`
+      SELECT DISTINCT peca FROM conferencias WHERE id = ANY(${medicoes.map((m) => m.id)})`;
+    expect(nomes.map((n) => n.peca)).toEqual(['Sleep tampo 380x330x15']);
+
+    // Nome maior que o que a coleta aceita e recusado — o relatorio nao
+    // pode gravar o que o aparelho nao consegue mandar.
+    const grande = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', query: { id: medicoes[0].id }, corpo: { peca: 'x'.repeat(121) },
+    }), grande);
+    expect(grande.statusCode).toBe(400);
+  });
+
+  it('o lote nao atravessa a empresa nem aceita id que nao e uuid', async () => {
+    const [alheia] = await sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em)
+      VALUES (${crypto.randomUUID()}, ${OUTRA_EMPRESA}, 'Alheia', 60000, 10,
+              now() - interval '1 minute', now(), now())
+      RETURNING id`;
+
+    // Id de outra empresa: nenhuma linha muda, e isso vira erro — nao um
+    // 200 silencioso que faria a tela dizer que arquivou.
+    const res = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', corpo: { ids: [alheia.id], arquivada: true },
+    }), res);
+    expect(res.statusCode).toBe(403);
+    const [linha] = await sql`SELECT arquivada FROM conferencias WHERE id = ${alheia.id}`;
+    expect(linha.arquivada).toBe(false);
+
+    const invalido = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', corpo: { ids: ['nao-e-uuid'], arquivada: true },
+    }), invalido);
+    expect(invalido.statusCode).toBe(400);
+
+    const vazio = fingirRes();
+    await conferenciasApi(fingirReq({ metodo: 'PATCH', corpo: { ids: [], arquivada: true } }), vazio);
+    expect(vazio.statusCode).toBe(400);
+
+    await sql`DELETE FROM conferencias WHERE id = ${alheia.id}`;
+  });
+
   it('paradas sobem junto com a conferencia e voltam na leitura', async () => {
     const clientId = crypto.randomUUID();
     await sync(fingirReq({

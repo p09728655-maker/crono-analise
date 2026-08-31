@@ -78,6 +78,8 @@ await movel.close();
       duracao_ms: 1200000, pecas: 300, salvo_em: hoje, arquivada: false, paradas: [] },
   ];
   let recusar = true;
+  let recusarLote = true;
+  let recusarLinha = false;
   const chamadas = [];
   const patches = [];
 
@@ -106,12 +108,41 @@ await movel.close();
     if (req.method() === 'PATCH') {
       const corpoPatch = JSON.parse(req.postData() || '{}');
       patches.push(corpoPatch);
+      // Lote (arquivar por maquina): sem id na URL, a lista vem no corpo.
+      if (Array.isArray(corpoPatch.ids)) {
+        if (recusarLote && 'arquivada' in corpoPatch) {
+          return rota.fulfill({ status: 403, contentType: 'application/json',
+            body: JSON.stringify({ erro: 'Seu papel nao permite esta operacao' }) });
+        }
+        lista = lista.map((c) => (corpoPatch.ids.includes(c.id)
+          ? {
+            ...c,
+            ...('arquivada' in corpoPatch ? { arquivada: Boolean(corpoPatch.arquivada) } : {}),
+            ...('peca' in corpoPatch ? { peca: corpoPatch.peca } : {}),
+          }
+          : c));
+        return rota.fulfill({ json: { atualizadas: corpoPatch.ids.length } });
+      }
+      if (recusarLinha && 'arquivada' in corpoPatch) {
+        return rota.fulfill({ status: 403, contentType: 'application/json',
+          body: JSON.stringify({ erro: 'Seu papel nao permite esta operacao' }) });
+      }
       lista = lista.map((c) => (req.url().includes(c.id)
-        ? { ...c, ...('arquivada' in corpoPatch ? { arquivada: true } : {}), ...('paradas' in corpoPatch ? { paradas: corpoPatch.paradas } : {}) }
+        ? {
+          ...c,
+          ...('arquivada' in corpoPatch ? { arquivada: true } : {}),
+          ...('paradas' in corpoPatch ? { paradas: corpoPatch.paradas } : {}),
+          ...('peca' in corpoPatch ? { peca: corpoPatch.peca } : {}),
+        }
         : c));
       return rota.fulfill({ json: { conferencia: { id: 'c1', arquivada: true } } });
     }
-    return rota.fulfill({ json: { conferencias: lista.filter((c) => !c.arquivada), outras: lista.filter((c) => c.arquivada).length } });
+    // A lista arquivada e' a outra face da mesma tabela: ?arquivadas=1.
+    const soArquivadas = /arquivadas=1/.test(req.url());
+    return rota.fulfill({ json: {
+      conferencias: lista.filter((c) => Boolean(c.arquivada) === soArquivadas),
+      outras: lista.filter((c) => Boolean(c.arquivada) !== soArquivadas).length,
+    } });
   });
 
   await p2.goto(`${BASE}/analise/conferencias`);
@@ -262,9 +293,138 @@ await movel.close();
     'o ritmo passa a sair do tempo rodando (420 pc em 20 min = 1260 pc/h)');
   checar(/Paradas \(1\)/.test(depois), 'a linha passa a mostrar que ha parada marcada');
 
+  /**
+   * A RECUSA PRECISA SER LIDA DE ONDE SE CLICOU.
+   *
+   * Era este o "arquivar nao funciona" de 31/08: o servidor negava, a faixa
+   * de erro nascia no TOPO do relatorio — mil pixels acima de quem clicou no
+   * fim da tabela — e a tela parecia nao ter feito nada. O aviso agora
+   * flutua preso a' janela; o teste mede a posicao dele, nao so a presenca.
+   */
+  recusarLinha = true;
+  const botaoArquivar = p2.getByRole('button', { name: 'Arquivar' }).first();
+  await botaoArquivar.scrollIntoViewIfNeeded();
+  await botaoArquivar.click();
+  await p2.waitForTimeout(800);
+  const aviso = p2.locator('main [role="alert"]').first();
+  const caixa = await aviso.boundingBox();
+  const altura = await p2.evaluate(() => window.innerHeight);
+  checar(!!caixa && caixa.y >= 0 && caixa.y + caixa.height <= altura,
+    'a recusa aparece DENTRO da janela, na altura em que o usuario esta');
+  checar(/Seu papel nao permite/.test(await aviso.innerText()),
+    'e o aviso diz o motivo da recusa, nao um silencio');
+
+  recusarLinha = false;
   await p2.getByRole('button', { name: 'Arquivar' }).first().click();
   await p2.waitForTimeout(800);
   checar(chamadas.includes('PATCH'), 'arquivar dispara PATCH no servidor');
+
+  /* ------------------------------- ARQUIVAR POR MAQUINA (lote) */
+  /**
+   * A medicao entra uma a uma, mas sai por posto. Sem isto, tirar uma
+   * maquina do relatorio era um clique por medicao — e nao havia como
+   * saber quando tinha acabado.
+   */
+  // A medicao arquivada logo acima volta: o lote precisa de mais de uma
+  // linha da mesma maquina para provar o que faz.
+  lista = lista.map((c) => ({ ...c, arquivada: false }));
+  await p2.goto(`${BASE}/analise/conferencias`);
+  await p2.getByText('Lateral Mesa').first().waitFor({ timeout: 8000 });
+
+  await p2.getByRole('button', { name: /^Furadeira 03/ }).click();
+  await p2.waitForTimeout(300);
+  const cabecalho = await p2.locator('section[aria-label="Todas as medições"]').innerText();
+  checar(/Todas as medições · Furadeira 03/.test(cabecalho),
+    'o cabecalho da tabela diz de qual maquina sao as linhas');
+
+  await p2.getByRole('button', { name: 'Arquivar esta máquina' }).click();
+  const janelaLote = p2.locator('[aria-label="Arquivar máquina"]');
+  await janelaLote.waitFor({ timeout: 4000 });
+  const textoLote = await janelaLote.innerText();
+  checar(/Arquivar as medições da Furadeira 03\?/.test(textoLote),
+    'a janela nomeia a maquina que vai sair do relatorio');
+  checar(/2 medição\(ões\)/.test(textoLote) && /Nada é apagado/.test(textoLote),
+    'diz QUANTAS medicoes saem e que nada e apagado — arquivar nao e excluir');
+
+  // Primeiro a RECUSA: o servidor nega e a tela precisa dizer, com a
+  // janela aberta e o botao ainda ali.
+  await p2.getByRole('button', { name: 'Arquivar 2' }).click();
+  await p2.waitForTimeout(700);
+  checar(/Seu papel nao permite/.test(await janelaLote.innerText()),
+    'lote recusado: o erro sai DENTRO da janela, ao lado do botao que falhou');
+
+  recusarLote = false;
+  await p2.getByRole('button', { name: 'Arquivar 2' }).click();
+  await p2.waitForTimeout(900);
+  const loteEnviado = patches.find((x) => Array.isArray(x.ids));
+  checar(!!loteEnviado && loteEnviado.ids.length === 2 && loteEnviado.arquivada === true,
+    'o lote vai numa unica ida, com os ids das medicoes que estavam na tela');
+  const depoisDoLote = await p2.locator('body').innerText();
+  checar(!/Lateral Mesa/.test(depoisDoLote) && !/Princesa Fundo/.test(depoisDoLote),
+    'as medicoes da maquina somem do relatorio de uma vez');
+  checar(await p2.locator('[aria-label="Arquivar máquina"]').count() === 0,
+    'a janela fecha depois de arquivar');
+
+  /* -------- e voltam inteiras: restaurar tambem e' por maquina */
+  await p2.getByRole('button', { name: /Arquivadas 2/ }).click();
+  await p2.waitForTimeout(700);
+  checar(/Lateral Mesa/.test(await p2.locator('body').innerText()),
+    'as arquivadas aparecem na outra face da lista');
+  await p2.getByRole('button', { name: /^Furadeira 03/ }).click();
+  await p2.waitForTimeout(300);
+  await p2.getByRole('button', { name: 'Restaurar esta máquina' }).click();
+  await p2.getByRole('button', { name: 'Restaurar 2' }).click();
+  await p2.waitForTimeout(900);
+  const volta = patches.filter((x) => Array.isArray(x.ids)).pop();
+  checar(volta.arquivada === false && volta.ids.length === 2,
+    'restaurar por maquina e o mesmo caminho, com arquivada: false');
+  checar(/Nenhuma medição arquivada/.test(await p2.locator('body').innerText()),
+    'a lista de arquivadas vazia diz que esta vazia — nao "nada sincronizado"');
+
+  /* ------------------------------- CORRIGIR O NOME DA PECA */
+  /**
+   * O nome da peca e' digitado no aparelho, medicao a medicao: o mesmo
+   * produto chega escrito de dois jeitos e o Ritmo por peca mostra duas
+   * pecas com metade das medicoes cada. Corrigir o texto e' o que junta.
+   */
+  await p2.getByRole('button', { name: 'Ver ativas' }).first().click();
+  await p2.waitForTimeout(700);
+  await p2.getByRole('button', { name: /^Todas/ }).click();
+  await p2.waitForTimeout(300);
+  const pecasAntes = await p2.locator('[aria-label="Ritmo por peça"]').innerText();
+  checar(/Lateral Mesa/.test(pecasAntes) && /Princesa Fundo/.test(pecasAntes),
+    'as duas grafias aparecem como duas pecas diferentes no Ritmo por peça');
+
+  await p2.getByRole('button', { name: 'Princesa Fundo', exact: true }).click();
+  const janelaNome = p2.locator('[aria-label="Nome da peça"]').first();
+  await janelaNome.waitFor({ timeout: 4000 });
+  checar(await p2.locator('#pecas-ja-medidas option').count() >= 2,
+    'a janela oferece os nomes ja medidos — escolher evita inventar a terceira grafia');
+
+  await p2.locator('input[aria-label="Nome da peça"]').fill('Lateral Mesa');
+  await p2.getByRole('button', { name: /^Renomear$/ }).click();
+  await p2.waitForTimeout(900);
+  const renomeada = patches.filter((x) => 'peca' in x).pop();
+  checar(!!renomeada && renomeada.peca === 'Lateral Mesa',
+    'o novo nome vai para o servidor');
+  const pecasDepois = await p2.locator('[aria-label="Ritmo por peça"]').innerText();
+  checar(!/Princesa Fundo/.test(pecasDepois),
+    'a grafia velha some do Ritmo por peça');
+  checar(/Lateral Mesa/.test(pecasDepois) && /720/.test(pecasDepois),
+    'as duas medicoes viram UMA peca so (420 + 300 = 720 pc)');
+
+  // E com irmas na lista, a correcao alcanca todas de uma vez.
+  await p2.getByRole('button', { name: 'Lateral Mesa', exact: true }).first().click();
+  await janelaNome.waitFor({ timeout: 4000 });
+  checar(/Corrigir também a outra medição com este mesmo nome/.test(await janelaNome.innerText()),
+    'com outra medicao na mesma grafia, a janela oferece corrigir as duas');
+  await p2.locator('input[aria-label="Nome da peça"]').fill('LATERAL MESA 380');
+  await p2.getByRole('button', { name: /^Renomear as 2 medições$/ }).click();
+  await p2.waitForTimeout(900);
+  const loteNome = patches.filter((x) => Array.isArray(x.ids) && 'peca' in x).pop();
+  checar(!!loteNome && loteNome.ids.length === 2 && loteNome.peca === 'LATERAL MESA 380',
+    'a correcao vai para as duas medicoes numa unica ida');
+
   await ctx2.close();
 }
 
