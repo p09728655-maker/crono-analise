@@ -13,6 +13,24 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.56.0',
+    data: '2026-08-31',
+    titulo: 'Auditoria: dois números estavam errados e um clique apagava nome de peça',
+    itens: [
+      'ATENÇÃO — O QUE A PARADA CUSTOU mudou de valor. Com mais de uma máquina no relatório, a conta aplicava o ritmo MÉDIO do conjunto ao tempo parado do conjunto: creditava à máquina lenta o ritmo da rápida. Num caso real de auditoria, o quadro dizia "deixaram de sair 367 peças" onde a perda verdadeira era 100. Agora a conta é feita MÁQUINA POR MÁQUINA e somada. Com uma máquina só, o número não muda.',
+      'ATENÇÃO — PEÇAS QUE DEIXARAM DE SAIR, no estudo, também mudou. Somava o tempo parado de TODAS as operações e multiplicava pela capacidade da linha — mas parada em operação folgada é absorvida pela folga dela, e as paradas foram observadas em momentos diferentes (o analista cronometra um posto por vez). Passou a contar só a parada do GARGALO, que é quem manda no ritmo. Num estudo de exemplo, caiu de 70 para 11 peças. O custo de cada operação, na capacidade dela, aparece agora numa coluna nova da tabela de paradas.',
+      'RENOMEAR PEÇA COM O CAMPO VAZIO APAGAVA O NOME de até 500 medições de uma vez, sem confirmação e sem volta — a caixa "corrigir também as outras" vem marcada por padrão. Agora nome vazio não grava, nem pela tela nem pela API, e a janela mostra de qual grafia para qual antes de você clicar, avisando que não há como desfazer.',
+      'ATENÇÃO: corrigir o nome da peça REESCREVE o nome em medições já salvas, inclusive de meses anteriores, e não tem desfazer. O ritmo e os tempos não mudam — muda o nome com que a peça aparece no relatório e nas impressões. Confira a grafia antes de gravar.',
+      'A CURVA DO DIA usava a hora do computador de quem abre o relatório, e o servidor grava a hora da FÁBRICA: num PC com fuso diferente, "07h" virava "10h" e a análise apontava uma hora que não existe no turno. Agora as duas pontas usam o mesmo relógio. Medição antiga sem horário de início passou a deduzir o início pelo fim menos a duração, em vez de cair uma hora à frente.',
+      'A hora fraca do dia só é apontada entre horas com tempo medido suficiente: uma rajada de 2 minutos deixou de virar "às 13h o ritmo cai 40%".',
+      'Arquivar ou renomear uma máquina com mais de 500 medições era um botão que sempre falhava — agora o envio vai em partes, sozinho.',
+      'A recusa do servidor deixou de falar em "política de acesso do banco" e passa a dizer o que fazer: pedir a um administrador para ajustar o seu papel.',
+      'O comparativo avisa quando ainda está em medição, o ritmo médio do topo declara que sai só do tempo com a máquina rodando, e a frase que se cola em e-mail leva junto a proteção de que o potencial não é meta.',
+      'No celular: o campo de acionamentos do motor deixou de falar só em furação (a tela serve qualquer posto), "Máq. rodando" virou "Pç/h rodando" para não colidir com o "Máquina rodando %" do PC, e o bloco "sem a parada" ficou mais curto — o botão SALVAR subiu na tela.',
+      'Cadastro de máquinas com cache corrompido derrubava o app em tela branca; agora ele apenas volta ao texto livre.',
+    ],
+  },
+  {
     versao: '2.55.0',
     data: '2026-08-31',
     titulo: 'O relatório é de máquina, não de furadeira — e ganhou disponibilidade e curva do dia',

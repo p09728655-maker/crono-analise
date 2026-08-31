@@ -34,7 +34,8 @@
  * @returns [{ titulo, linhas: [string] }] — secoes na ordem de leitura
  */
 import {
-  CRITERIOS_CONFERENCIA, formatarDuracao, nomeChave, ritmoPorHoraDoDia, somarParadas,
+  CRITERIOS_CONFERENCIA, comparativoDeParadas, formatarDuracao, nomeChave, ritmoPorHoraDoDia,
+  somarParadas,
 } from './cronoanalise.js';
 
 const MS_POR_HORA = 3600000;
@@ -294,26 +295,41 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
       const [rotulo, ms] = maiores[0];
       linhas.push(`O maior motivo de parada foi ${rotulo}: ${formatarDuracao(ms)} de ${formatarDuracao(totParada)} parados.`);
     }
-    // O custo da parada em PECAS: minutos parados sao abstratos, pecas que
-    // deixaram de sair sao concretas — e' o numero que muda conversa.
-    if (ritmoGeral != null && totParada >= 5 * 60000) {
-      const perdidas = Math.round((ritmoGeral * totParada) / MS_POR_HORA);
-      if (perdidas >= 10) {
-        linhas.push(`Ao ritmo médio, esse tempo parado custou cerca de ${perdidas} peças que deixaram de sair.`);
-        // O COMPARATIVO em uma frase: o numero sozinho ("perdemos 322") nao
-        // diz de quanto para quanto. Com os dois lados, a frase serve de
-        // legenda para o quadro em destaque no topo — e sobrevive sozinha,
-        // colada num e-mail.
-        const potencial = totPecas + perdidas;
-        const totMs = totProdutivo + totParada;
-        const ritmoPeriodo = (totPecas * MS_POR_HORA) / totMs;
-        linhas.push(
-          `No MESMO período, sem essa parada, teriam saído cerca de ${potencial} peças em vez de `
-          + `${totPecas} — de ${Math.round(ritmoPeriodo)} pç/h (${pMin(ritmoPeriodo)} pç/min) `
-          + `para ${Math.round(ritmoGeral)} pç/h (${pMin(ritmoGeral)} pç/min), `
-          + `${Math.round((perdidas / totPecas) * 100)}% a mais de produção no mesmo tempo.`,
-        );
-      }
+    /**
+     * O custo da parada em PECAS: minutos parados sao abstratos, pecas que
+     * deixaram de sair sao concretas — e' o numero que muda conversa.
+     *
+     * A conta e' MAQUINA POR MAQUINA e somada (comparativoDeParadas), nunca
+     * o ritmo do conjunto aplicado ao tempo parado do conjunto: o ritmo
+     * medio e' puxado por quem rodou bem e o tempo parado e' de quem parou.
+     * Somando antes de dividir, a auditoria de 31/08 achou uma perda de 367
+     * pecas onde a real era 100.
+     */
+    const custo = comparativoDeParadas(maquinas);
+    if (custo && custo.perdidas >= 10 && totParada >= 5 * 60000) {
+      linhas.push(
+        `Esse tempo parado custou cerca de ${custo.perdidas} peças que deixaram de sair `
+        + `(conta feita máquina por máquina, ao ritmo de cada uma com ela rodando).`,
+      );
+      // O COMPARATIVO em uma frase: o numero sozinho ("perdemos 322") nao
+      // diz de quanto para quanto. Com os dois lados, a frase serve de
+      // legenda para o quadro em destaque no topo — e sobrevive sozinha,
+      // colada num e-mail.
+      /**
+       * "essa parada" (singular) vinha logo depois da linha do MAIOR MOTIVO
+       * e creditava a ele um ganho que e' de TODAS as paradas. E esta frase
+       * e' a unica saida do comparativo que viaja sozinha — colada num
+       * e-mail, sem o quadro do relatorio junto —, entao a protecao contra
+       * ler o potencial como META tem de vir dentro dela.
+       */
+      linhas.push(
+        `No MESMO período, sem as paradas marcadas, teriam saído cerca de ${custo.potencial} peças `
+        + `em vez de ${custo.pecas} — de ${Math.round(custo.ritmoPeriodo)} pç/h `
+        + `(${pMin(custo.ritmoPeriodo)} pç/min) para ${Math.round(custo.ritmoPotencial)} pç/h `
+        + `(${pMin(custo.ritmoPotencial)} pç/min), ${Math.round(custo.ganhoPct)}% a mais no mesmo `
+        + 'tempo. Não é meta nem capacidade de catálogo: é o ritmo que cada máquina fez com ela '
+        + 'rodando, aplicado ao período dela.',
+      );
     }
     // Troca dominante pede organizacao de troca, nao maquina nova: e' o
     // ganho que nao custa investimento. Dito sem a sigla SMED.
@@ -336,8 +352,13 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
      ser apenas a hora em que a maquina mais lenta foi medida — a frase
      mandaria investigar a hora quando o que mudou foi o posto. */
   const curva = maquinas.length === 1 ? ritmoPorHoraDoDia(conferencias) : [];
-  if (curva.length >= MIN_HORAS_CURVA && totMedicoes >= MIN_MEDICOES_CURVA) {
-    const ordenadas = [...curva].sort((a, b) => b.ritmoMedio - a.ritmoMedio);
+  /* So' horas com tempo medido suficiente entram na COMPARACAO: uma hora
+     com 2 min medidos descreve uma rajada, e apontar ela como "hora fraca"
+     manda investigar ruido. Ela continua no grafico, hachurada — o que nao
+     pode e' virar conclusao. */
+  const horasFirmes = curva.filter((h) => h.confiavel);
+  if (horasFirmes.length >= MIN_HORAS_CURVA && totMedicoes >= MIN_MEDICOES_CURVA) {
+    const ordenadas = [...horasFirmes].sort((a, b) => b.ritmoMedio - a.ritmoMedio);
     const melhor = ordenadas[0];
     const pior = ordenadas[ordenadas.length - 1];
     const queda = ((melhor.ritmoMedio - pior.ritmoMedio) / melhor.ritmoMedio) * 100;

@@ -3,7 +3,7 @@ import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
   CRITERIOS_CONFERENCIA, conferenciaRapida, faixaHoraria, formatarDuracao,
-  nomeChave, potencialSemParada, resumirConferencias, ritmoPorHoraDoDia, rotuloMotivo,
+  comparativoDeParadas, nomeChave, resumirConferencias, ritmoPorHoraDoDia, rotuloMotivo,
   somarParadas,
 } from '../../domain/cronoanalise.js';
 import { analisarConferencias } from '../../domain/analiseConferencias.js';
@@ -315,14 +315,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
    * como todo o resto da tela — e some quando nao houve parada, porque
    * ai' o que saiu ja' E' o potencial e comparar seria inventar perda.
    */
-  const comparativo = useMemo(
-    () => (painel
-      ? potencialSemParada({
-        pecas: painel.pecasTot, duracaoMs: painel.totalMs, produtivoMs: painel.produtivoMs,
-      })
-      : null),
-    [painel],
-  );
+  const comparativo = useMemo(() => comparativoDeParadas(resumoVisivel), [resumoVisivel]);
 
   /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
      dentro dela pelo mesmo motivo que os produtos foram na lista: e'
@@ -447,7 +440,9 @@ export default function RelatorioConferencias({ aoVoltar }) {
               texto={verArquivadas
                 ? 'O que foi arquivado volta para cá. Nada foi apagado do banco.'
                 : (outras > 0
-                  ? `As ${outras} medições deste relatório estão arquivadas — fora dos cálculos, guardadas no banco. Abra "Arquivadas" para vê-las e restaurar o que precisar.`
+                  ? (outras === 1
+                    ? 'A única medição deste relatório está arquivada — fora dos cálculos, guardada no banco.'
+                    : `As ${outras} medições deste relatório estão arquivadas — fora dos cálculos, guardadas no banco.`)
                   : 'Esta tela mede o ritmo de qualquer posto: no celular, abra Ritmo da máquina, informe máquina, peça e horários, e a medição aparece aqui assim que o aparelho sincroniza. Para cronometrar ciclo a ciclo, com tempo padrão, use um estudo de tempos.')}
               acao={(verArquivadas || outras > 0) ? (
                 <button
@@ -471,7 +466,8 @@ export default function RelatorioConferencias({ aoVoltar }) {
               visivel de qualquer altura da rolagem.
               Com uma janela aberta ela nao aparece: la' o erro sai dentro da
               propria janela, ao lado do botao que falhou. */}
-          {erro && estado === 'pronto' && !editandoParadas && !confirmando && !confirmandoLote && (
+          {erro && estado === 'pronto' && !editandoParadas && !confirmando && !confirmandoLote
+            && !renomeando && (
             <div style={est.avisoFlutuante} role="alert">
               <span style={{ flex: 1, minWidth: 0 }}>{erro}</span>
               <button type="button" style={est.botaoLinha} onClick={() => setErro(null)}>
@@ -488,8 +484,12 @@ export default function RelatorioConferencias({ aoVoltar }) {
                     {
                       rot: 'Ritmo médio',
                       val: painel.ritmoMedio != null ? `${Math.round(painel.ritmoMedio)} pç/h` : '—',
+                      // A BASE junto do numero: sem ela, este cartao mostra
+                      // o mesmo valor do POTENCIAL do quadro abaixo e um
+                      // valor diferente do que saiu — a mesma confusao de
+                      // 10,3 x 13,2, agora dentro de uma tela so'.
                       sub: painel.ritmoMedio != null
-                        ? `${porMinuto(painel.ritmoMedio)} peças por minuto`
+                        ? `${porMinuto(painel.ritmoMedio)} peças por minuto — só o tempo com a máquina rodando`
                         : 'sem tempo de máquina rodando',
                     },
                     { rot: 'Medições', val: String(painel.n), sub: `${painel.maquinas} máquina(s) · ${painel.pecasTot} peças` },
@@ -536,10 +536,23 @@ export default function RelatorioConferencias({ aoVoltar }) {
                     <h2 style={est.comparativoTitulo}>
                       O que a parada custou{filtro ? ` — ${filtro}` : ''}
                     </h2>
+                    {/* O MESMO criterio do cartao da maquina. Sem esta nota,
+                        uma medicao de 6 min afirmava "deixou de sair 21
+                        peças" ao lado de um cartao dizendo "ainda em
+                        medição" — sobre o mesmo dado. Nota discreta, nunca
+                        carimbo: o numero continua valendo, so' avisa que
+                        ainda assenta. */}
+                    {resumoVisivel.some((g) => !g.confiavel) && (
+                      <p style={est.comparativoNota}>
+                        Ainda em medição: com mais medições este número muda.
+                      </p>
+                    )}
                     <p style={est.comparativoDica}>
-                      Mesmo período observado ({formatarDuracao(comparativo.duracaoMs)}), mesmo ritmo
-                      que a máquina já provou com ela rodando. Não é meta nem capacidade de
-                      catálogo: é o que o posto faria sem a parada no meio.
+                      Mesmo período observado ({formatarDuracao(comparativo.duracaoMs)}). A conta é
+                      feita <strong>máquina por máquina</strong> e somada: cada uma no ritmo que ela
+                      própria já provou com ela rodando. Não é meta nem capacidade de catálogo — é o
+                      que {comparativo.maquinas > 1 ? 'esses postos fariam' : 'esse posto faria'} sem
+                      a parada no meio.
                     </p>
                   </div>
 
@@ -568,7 +581,8 @@ export default function RelatorioConferencias({ aoVoltar }) {
                         {Math.round(comparativo.ritmoPotencial)} pç/h · {porMinuto(comparativo.ritmoPotencial)} pç/min
                       </div>
                       <div style={est.comparativoSub}>
-                        o ritmo de {formatarDuracao(comparativo.produtivoMs)} rodando, aplicado ao período inteiro
+                        o ritmo de cada máquina rodando ({formatarDuracao(comparativo.produtivoMs)} no
+                        total), aplicado ao período dela
                       </div>
                     </div>
 
@@ -716,6 +730,16 @@ export default function RelatorioConferencias({ aoVoltar }) {
                 </p>
               )}
 
+              {/* Uma maquina, uma hora medida: nao ha' curva, e quem filtrou
+                  precisa saber que ela existe e o que destrava. */}
+              {!verArquivadas && resumoVisivel.length === 1 && curvaDoDia.length === 1 && (
+                <p style={est.dicaCurva}>
+                  Ainda não dá para montar o <strong>ritmo por hora do dia</strong>: há medições em
+                  uma hora só ({curvaDoDia[0].rotulo}). Meça esta máquina em outro horário — a curva
+                  compara hora contra hora do mesmo posto e é onde aparece a queda de fim de turno.
+                </p>
+              )}
+
               {!verArquivadas && curvaDoDia.length >= 2 && (
                 <section style={est.painelGrafico} aria-label="Ritmo por hora do dia">
                   <GraficoRitmoMaquinas
@@ -724,7 +748,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       nota: h.n > 1 ? `${h.n} medições` : '1 medição',
                     }))}
                     titulo={`Ritmo por hora do dia${filtro ? ` — ${filtro}` : ''}`}
-                    subtitulo="Medições feitas na mesma hora do relógio, de qualquer data — cada uma entra na hora em que começou"
+                    subtitulo="Peças por hora com a máquina rodando, em cada hora do relógio — as medições da mesma hora somam, mesmo de datas diferentes"
                     rotuloOk="Hora medida"
                     rotuloFraco="Menos de 5 min medidos nessa hora"
                     notaFraca="pouco tempo medido"
@@ -810,7 +834,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <th style={est.th}>Horários</th>
                       <th style={est.thNum}>Período</th>
                       <th style={est.thNum}>Parado</th>
-                      <th style={est.thNum}>Rodando</th>
+                      <th style={est.thNum}>Rodando %</th>
                       <th style={est.thNum}>Peças</th>
                       <th style={est.thNum}>Peças/hora</th>
                       <th style={est.thNum}>Peças/min</th>
@@ -907,7 +931,11 @@ export default function RelatorioConferencias({ aoVoltar }) {
         {renomeando && (
           <RenomearPeca
             conferencia={renomeando}
-            linhas={linhas}
+            /* VISIVEIS, nao todas: com a maquina filtrada, o lote alcancava
+               medicao de outra maquina que nao esta na tela. A regra desta
+               tela e' "o que se muda e o que se ve" — vale para arquivar e
+               vale para renomear. */
+            linhas={visiveis}
             erro={erro}
             ocupado={ocupado === renomeando.id}
             aoFechar={() => { setErro(null); setRenomeando(null); }}
@@ -1067,7 +1095,10 @@ function RenomearPeca({ conferencia, linhas, erro, ocupado, aoFechar, aoGravar }
   }, [linhas]);
 
   const limpo = nome.trim();
-  const mudou = limpo !== nomeAtual;
+  // Nome VAZIO nao renomeia: apagar nao e' corrigir. Sem esta trava, limpar
+  // o campo e clicar apagava o nome de ate 500 medicoes de uma vez, sem
+  // volta — a grafia antiga nao fica guardada em lugar nenhum.
+  const mudou = Boolean(limpo) && limpo !== nomeAtual;
   const emLote = tambemAsOutras && irmas.length > 1;
   const outras = irmas.length - 1;
 
@@ -1098,6 +1129,20 @@ function RenomearPeca({ conferencia, linhas, erro, ocupado, aoFechar, aoGravar }
         <datalist id="pecas-ja-medidas">
           {nomesConhecidos.map((n) => <option key={n} value={n} />)}
         </datalist>
+
+        {/* DE -> PARA, escrito: renomear em lote reescreve dado historico e
+            nao tem volta. Ver as duas grafias lado a lado antes de clicar e'
+            o que separa juntar a peca de inventar uma referencia que nunca
+            existiu. */}
+        {mudou && (
+          <p style={est.textoModal}>
+            {emLote
+              ? <>As <strong>{irmas.length} medições</strong> que hoje se chamam «{nomeAtual}» passam
+                a se chamar <strong>«{limpo}»</strong>.</>
+              : <>Esta medição passa de «{nomeAtual || 'sem nome'}» para <strong>«{limpo}»</strong>.</>}
+            {' '}Não há como desfazer.
+          </p>
+        )}
 
         {irmas.length > 1 && (
           <label style={est.rotuloPapel}>
@@ -1431,9 +1476,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
   const ritmoGeral = totalProdutivoMs > 0 ? (totalPecas * 3600000) / totalProdutivoMs : null;
   // O mesmo comparativo da tela — o papel e' o que vai para a reuniao, e e'
   // la' que a pergunta "quanto isso custou?" e' feita.
-  const comparativo = potencialSemParada({
-    pecas: totalPecas, duracaoMs: totalMs, produtivoMs: totalProdutivoMs,
-  });
+  const comparativo = comparativoDeParadas(resumo);
   // A curva do dia no papel e' TABELA, nao grafico: a folha nao tem nenhuma
   // outra imagem, e a hora com o numero ao lado le-se melhor impressa.
   // So' com UMA maquina, pelo mesmo motivo da tela: misturando postos, a
@@ -1503,9 +1546,9 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
           </div>
           <p style={imp.comparativoNota}>
             Período observado de {formatarDuracao(comparativo.duracaoMs)}, com
-            {' '}{formatarDuracao(comparativo.paradaMs)} de máquina parada. O potencial usa o ritmo
-            que a própria máquina fez com ela rodando ({formatarDuracao(comparativo.produtivoMs)}),
-            aplicado ao período inteiro — não é meta nem capacidade de catálogo.
+            {' '}{formatarDuracao(comparativo.paradaMs)} de máquina parada. O potencial é calculado
+            MÁQUINA POR MÁQUINA e somado — cada uma no ritmo que ela própria fez com ela rodando,
+            aplicado ao período dela. Não é meta nem capacidade de catálogo.
           </p>
         </section>
       )}
@@ -1751,7 +1794,7 @@ const est = {
     display: 'flex', flexDirection: 'column', gap: espaco.lg,
   },
   comparativoTopo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
-  comparativoTitulo: { ...tipo('titulo'), margin: 0 },
+  comparativoTitulo: { ...tipo('corpoF'), margin: 0 },
   comparativoDica: { ...tipo('legenda'), color: t.textoMedio, margin: 0, maxWidth: 760 },
   comparativoGrade: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
@@ -1771,13 +1814,17 @@ const est = {
     padding: `${espaco.lg}px ${espaco.xl}px`,
     display: 'flex', flexDirection: 'column', gap: espaco.xs,
   },
-  comparativoRotulo: { ...rotulo(t.textoFraco) },
-  comparativoRotuloDestaque: { ...rotulo(t.critico) },
+  // textoFraco sobre o fundo cinza da caixa dava 4.34:1 (piso 4.5) e o
+  // rotulo do destaque, 4.22:1 — o texto mais fraco era justamente o que
+  // nomeia o numero mais importante. Medido em 31/08.
+  comparativoRotulo: { ...rotulo(t.textoMedio) },
+  comparativoRotuloDestaque: { ...rotulo(t.texto) },
   comparativoValor: { ...tipo('display'), ...numeros, lineHeight: 1.1 },
   comparativoValorDestaque: { ...tipo('display'), ...numeros, lineHeight: 1.1, color: t.critico },
-  comparativoUnidade: { ...tipo('corpo'), color: t.textoFraco, marginLeft: espaco.sm },
-  comparativoSub: { ...tipo('legenda'), color: t.textoMedio },
-  comparativoSubDestaque: { ...tipo('legenda'), color: t.texto },
+  comparativoUnidade: { ...tipo('corpo'), color: t.textoMedio, marginLeft: espaco.sm },
+  comparativoSub: { ...tipo('legenda'), ...numeros, color: t.textoMedio },
+  comparativoSubDestaque: { ...tipo('legenda'), ...numeros, color: t.texto },
+  comparativoNota: { ...tipo('legenda'), color: t.textoMedio, margin: 0 },
 
   /* ---- faixa de numeros do topo ---- */
   kpis: {
@@ -2081,7 +2128,7 @@ const imp = {
     border: '2px solid #000', background: '#EEE', padding: '6px 8px',
   },
   comparativoRotulo: { fontSize: 7.5, textTransform: 'uppercase', letterSpacing: 0.6, color: '#444' },
-  comparativoValor: { fontSize: 15, fontWeight: 700 },
+  comparativoValor: { fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' },
   comparativoSub: { fontSize: 8.5, color: '#333' },
   comparativoNota: { fontSize: 8.5, color: '#333', margin: '5px 0 0', lineHeight: 1.4 },
 

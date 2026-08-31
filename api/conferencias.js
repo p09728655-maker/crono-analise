@@ -49,9 +49,9 @@ const MAX_LOTE = 500;
  * conferir.
  */
 const nadaMudou = () => proibido(
-  'O banco nao alterou nenhuma medicao. Confira se o seu usuario esta com papel '
-  + 'administrador ou analista nesta empresa — a politica de acesso do banco recusa '
-  + 'a alteracao dos demais papeis sem devolver erro.',
+  'Nenhuma medição foi alterada — o seu acesso não permite esta mudança. Peça a um '
+  + 'administrador da empresa para colocar o seu usuário como analista ou administrador '
+  + 'e tente de novo.',
 );
 
 export default handler(async (req, res) => {
@@ -109,9 +109,20 @@ export default handler(async (req, res) => {
     }
     const ids = lista(corpo.ids, 'ids', { max: MAX_LOTE }).map((x, i) => uuid(x, `ids[${i}]`));
     if (!ids.length) throw erroValidacao('Informe ao menos uma medicao em "ids"');
-    // Mesmo teto do que sobe do aparelho: o nome corrigido no PC nao pode
-    // ser maior do que o que a coleta aceita.
-    const peca = temNoLote('peca') ? texto(corpo.peca, 'peca', { max: 120 }) : null;
+    /**
+     * Mesmo teto do que sobe do aparelho: o nome corrigido no PC nao pode
+     * ser maior do que o que a coleta aceita.
+     *
+     * E' OBRIGATORIO ter nome. `texto()` devolve null para vazio, e sem esta
+     * barreira um `peca: ""` — campo limpo na tela, retry que serializa
+     * vazio, bundle antigo no tablet — apagava o nome de ate 500 medicoes
+     * de uma vez, em silencio, sem volta: a grafia original nao fica
+     * guardada em lugar nenhum. Renomear existe para JUNTAR grafias, nunca
+     * para apagar o nome da peca.
+     */
+    const peca = temNoLote('peca')
+      ? texto(corpo.peca, 'peca', { obrigatorio: true, max: 120 })
+      : null;
 
     return auth.rls(async (db) => {
       let alteradas = null;
@@ -154,7 +165,9 @@ export default handler(async (req, res) => {
       // requisicao nao e' uma transacao, entao recusar no meio deixaria
       // metade gravada. Aqui, o que for recusado e' recusado sem ter
       // escrito nada.
-      const pecaNova = tem('peca') ? texto(corpo.peca, 'peca', { max: 120 }) : null;
+      const pecaNova = tem('peca')
+        ? texto(corpo.peca, 'peca', { obrigatorio: true, max: 120 })
+        : null;
 
       // Paradas cadastradas no PC: o analista marcou o setup depois, olhando
       // o apontamento. Mesmo formato do que sobe do aparelho.
@@ -181,7 +194,8 @@ export default handler(async (req, res) => {
         }
       }
 
-      // Correcao do nome digitado no aparelho — ver o cabecalho.
+      // Correcao do nome digitado no aparelho — ver o cabecalho. Nome vazio
+      // e' recusado pelo mesmo motivo do lote: apagar nao e' renomear.
       if (tem('peca')) {
         const alteradas = await db`
           UPDATE conferencias SET peca = ${pecaNova}

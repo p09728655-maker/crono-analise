@@ -217,9 +217,13 @@ describe('analisarConferencias', () => {
    * depois do almoco viram 620 o dia inteiro, e ninguem olha o que muda as
    * 13h. Horario LOCAL de proposito — "7h" e' 7h do chao de fabrica.
    */
+  /* Instante com o FUSO DA FABRICA escrito (-03:00), nunca `new Date(a, m, d,
+     h)`: aquele monta a hora no fuso de quem roda o teste, e a curva passaria
+     em qualquer maquina justamente por nao enxergar o fuso — foi o buraco que
+     a auditoria de 31/08 encontrou. */
   const noRelogio = (hora, pecas, dia = 31) => ({
     maquina: 'F16', peca: 'A', duracaoMs: 30 * MIN, pecas,
-    iniciado_em: new Date(2026, 7, dia, hora, 0).toISOString(),
+    iniciado_em: `2026-08-${String(dia).padStart(2, '0')}T${String(hora).padStart(2, '0')}:00:00-03:00`,
   });
 
   it('aponta a hora fraca do dia contra a mais forte, com a queda em %', () => {
@@ -250,11 +254,11 @@ describe('analisarConferencias', () => {
      */
     const secoes = analisar([
       { maquina: 'F16', peca: 'A', duracaoMs: 30 * MIN, pecas: 350,
-        iniciado_em: new Date(2026, 7, 30, 7, 0).toISOString() },
+        iniciado_em: '2026-08-30T07:00:00-03:00' },
       { maquina: 'F16', peca: 'A', duracaoMs: 30 * MIN, pecas: 350,
-        iniciado_em: new Date(2026, 7, 31, 7, 0).toISOString() },
+        iniciado_em: '2026-08-31T07:00:00-03:00' },
       { maquina: 'F14', peca: 'A', duracaoMs: 30 * MIN, pecas: 200,
-        iniciado_em: new Date(2026, 7, 31, 13, 0).toISOString() },
+        iniciado_em: '2026-08-31T13:00:00-03:00' },
     ]);
     expect(secoes.find((s) => s.titulo === 'Ao longo do dia')).toBeUndefined();
   });

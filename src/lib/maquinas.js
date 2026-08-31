@@ -32,7 +32,10 @@ function gravarCache(cadastro) {
   try { localStorage.setItem(CHAVE, JSON.stringify(cadastro)); } catch { /* segue sem cache */ }
 }
 
-const soAtivas = (cadastro) => (cadastro.maquinas || []).filter((m) => m.ativa !== false);
+// A guarda de `m` nao e' paranoia: um item null no cache (JSON truncado,
+// gravacao interrompida) estourava TypeError no IMPORT do modulo — tela
+// branca, sem mensagem, e o aparelho so' voltava limpando o storage.
+const soAtivas = (cadastro) => (cadastro?.maquinas || []).filter((m) => m && m.ativa !== false);
 
 let catalogo = lerCache() || { maquinas: [], grupos: [] };
 // Guardada, nao filtrada a cada leitura: useSyncExternalStore compara por
@@ -65,15 +68,31 @@ export function useMaquinas() {
  * Falha de rede nao propaga: sem cadastro a tela usa texto livre, que e'
  * exatamente o comportamento de sempre — nenhum erro a mostrar.
  */
+/**
+ * Uma busca de cada vez.
+ *
+ * O campo de maquina virou componente e agora vive em tres telas, cada uma
+ * pedindo o cadastro ao montar — mais o StrictMode, que monta duas vezes em
+ * desenvolvimento. Sem esta trava eram quatro idas ao servidor para abrir a
+ * tela de medir. Quem chegar no meio de uma busca em curso espera a mesma.
+ */
+let emVoo = null;
+
 export async function carregarMaquinas() {
-  try {
-    const cadastro = await listarCadastroMaquinas();
-    gravarCache(cadastro);
-    publicar(cadastro);
-    return cadastro;
-  } catch {
-    return catalogo;
-  }
+  if (emVoo) return emVoo;
+  emVoo = (async () => {
+    try {
+      const cadastro = await listarCadastroMaquinas();
+      gravarCache(cadastro);
+      publicar(cadastro);
+      return cadastro;
+    } catch {
+      return catalogo;
+    } finally {
+      emVoo = null;
+    }
+  })();
+  return emVoo;
 }
 
 /** Adota um cadastro recem-salvo sem uma segunda ida ao servidor. */
