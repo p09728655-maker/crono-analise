@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.50.0',
+    data: '2026-08-31',
+    titulo: 'A análise sai do algoritmo — sem gastar a chave da IA',
+    itens: [
+      'A seção virou ANÁLISE DO PERÍODO e é gerada na hora pelos próprios números do relatório: leitura geral, uma linha por máquina (com o que falta para firmar, em palavras), comparação entre máquinas, peça mais rápida × mais lenta, paradas com o maior motivo e o próximo passo. Sem IA, sem custo, funciona sem internet — e sai igual para os mesmos números.',
+      'A IA continua disponível, mas como OPÇÃO: um botão discreto no fim da análise, para quem quiser uma segunda leitura em texto corrido. Só esse clique usa a chave.',
+      'A análise segue o filtro da lateral: filtrou uma máquina, a leitura é dela.',
+    ],
+  },
+  {
     versao: '2.49.0',
     data: '2026-08-31',
     titulo: 'O relatório das Furadeiras fala português de fábrica',

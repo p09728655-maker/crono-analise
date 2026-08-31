@@ -102,9 +102,14 @@ dos cálculos sem dizer por quê — o botão trava e o servidor recusa.
 
 A tela traz o mesmo tratamento do painel do estudo: **gráfico de ritmo por
 máquina** (a barra ainda em medição leva textura hachurada e rótulo, não só
-cor) e **Análise com IA** — que recebe o resumo por máquina *com* o
-resultado dos critérios, então diz o que ainda não serve de referência em
-vez de tirar conclusão de capacidade de uma medição de um minuto.
+cor) e **Análise do período** — gerada por **algoritmo**
+(`analisarConferencias`, no domínio) a partir dos mesmos resumos da tela:
+leitura geral, uma linha por máquina, comparação entre máquinas e entre
+peças, paradas e o próximo passo. Instantânea, sem custo e offline. A
+**Análise com IA** continua como opção, atrás de um botão discreto — só
+esse clique usa a chave; ela recebe o resumo por máquina *com* o resultado
+dos critérios, então diz o que ainda não serve de referência em vez de
+tirar conclusão de capacidade de uma medição de um minuto.
 
 Cada linha pode ser **arquivada** (sai dos cálculos, continua no banco — o
 caso da medição atípica, turno interrompido) ou **excluída** com

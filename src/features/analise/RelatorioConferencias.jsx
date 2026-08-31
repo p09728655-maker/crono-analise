@@ -5,6 +5,7 @@ import {
   CRITERIOS_CONFERENCIA, conferenciaRapida, faixaHoraria, formatarDuracao,
   nomeChave, resumirConferencias, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
+import { analisarConferencias } from '../../domain/analiseConferencias.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import {
   analisarConferenciasComIa, arquivarConferencia, excluirConferencia, listarCadastroMaquinas,
@@ -448,7 +449,9 @@ export default function RelatorioConferencias({ aoVoltar }) {
                 </div>
               )}
 
-              {!verArquivadas && <AnaliseIaConferencias resumo={resumoVisivel} />}
+              {!verArquivadas && (
+                <AnalisePeriodo resumo={resumoVisivel} resumoPecas={resumoPecasVisivel} />
+              )}
 
               <section style={est.painel} aria-label={verArquivadas ? 'Medições arquivadas' : 'Todas as medições'}>
                 <table style={est.tabela}>
@@ -748,18 +751,26 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
 }
 
 /**
- * Analise com IA das medicoes.
+ * ANALISE DO PERIODO — o algoritmo primeiro, a IA como opcao.
  *
- * Mesma secao do painel do estudo, com um contrato diferente: o que sobe e'
- * o resumo POR MAQUINA — incluindo `confiavel` e os motivos —, entao a IA
- * sabe quais numeros ainda estao em medicao e diz isso em vez de tirar
- * conclusao de capacidade de uma medicao de um minuto. Segue o filtro da
- * lateral: analisa o que esta' na tela.
+ * Ate' 31/08 a leitura dos numeros so' existia via IA: cada clique gastava
+ * a chave do usuario para dizer o que os proprios numeros ja' diziam. A
+ * analise agora e' GERADA POR REGRA (analisarConferencias, no dominio):
+ * aparece na hora, de graca, offline — e identica para os mesmos numeros.
+ *
+ * A IA continua como botao OPCIONAL, discreto, para quem quer uma segunda
+ * leitura em texto corrido: sobe o mesmo resumo por maquina de sempre
+ * (incluindo `confiavel` e os motivos). Ambas seguem o filtro da lateral.
  */
-function AnaliseIaConferencias({ resumo }) {
+function AnalisePeriodo({ resumo, resumoPecas }) {
   const [rodando, setRodando] = useState(false);
   const [resposta, setResposta] = useState(null);
   const [erro, setErro] = useState(null);
+
+  const secoes = useMemo(
+    () => analisarConferencias({ maquinas: resumo, pecas: resumoPecas }),
+    [resumo, resumoPecas],
+  );
 
   async function analisar() {
     setRodando(true);
@@ -792,15 +803,31 @@ function AnaliseIaConferencias({ resumo }) {
   }
 
   return (
-    <section style={est.painelIa} aria-label="Análise com IA das medições">
-      <div style={est.iaTopo}>
-        <div style={{ minWidth: 0 }}>
-          <h2 style={est.iaTitulo}>Análise com IA</h2>
-          <p style={est.iaTexto}>
-            Leitura dos ritmos, diferenças entre máquinas e o que falta medir.
-          </p>
+    <section style={est.painelIa} aria-label="Análise do período">
+      <div style={{ minWidth: 0 }}>
+        <h2 style={est.iaTitulo}>Análise do período</h2>
+        <p style={est.iaTexto}>
+          Gerada na hora pelos números deste relatório — sem IA, sem custo, funciona sem internet.
+        </p>
+      </div>
+
+      {secoes.map((s) => (
+        <div key={s.titulo} style={est.analiseSecao}>
+          <h3 style={est.analiseTitulo}>{s.titulo}</h3>
+          {s.linhas.map((l) => (
+            <p key={l} style={est.analiseLinha}>{l}</p>
+          ))}
         </div>
-        <button type="button" style={est.botaoImprimir} onClick={analisar} disabled={rodando}>
+      ))}
+
+      {/* A IA vira opcao, atras de um botao discreto: quem quiser uma
+          segunda leitura em texto corrido paga o token; ninguem mais
+          precisa da chave para ter analise. */}
+      <div style={est.iaOpcional}>
+        <span style={est.iaTexto}>
+          Quer uma segunda leitura, em texto corrido? Opcional — usa a chave da IA.
+        </span>
+        <button type="button" style={est.botaoSecundario} onClick={analisar} disabled={rodando}>
           {rodando ? 'Analisando...' : 'Analisar com IA'}
         </button>
       </div>
@@ -1155,12 +1182,19 @@ const est = {
     border: `1px solid ${t.borda}`, padding: espaco.xl, marginBottom: espaco.xl,
     display: 'flex', flexDirection: 'column', gap: espaco.md,
   },
-  iaTopo: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    gap: espaco.lg, flexWrap: 'wrap',
-  },
   iaTitulo: { ...tipo('destaque'), margin: 0 },
   iaTexto: { ...tipo('legenda'), color: t.textoFraco, margin: '2px 0 0' },
+  /* ---- analise automatica (por regra, sem IA) ---- */
+  analiseSecao: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  analiseTitulo: { ...rotulo(t.textoFraco), margin: 0 },
+  analiseLinha: { ...tipo('corpo'), color: t.textoMedio, margin: 0, lineHeight: 1.55 },
+  // A opcao de IA fica depois da analise, separada por um fio: presente
+  // para quem quiser, invisivel para quem nao precisa.
+  iaOpcional: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: espaco.lg, flexWrap: 'wrap',
+    paddingTop: espaco.md, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
+  },
   iaErro: {
     padding: espaco.md, background: t.criticoFundo,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.critico,
