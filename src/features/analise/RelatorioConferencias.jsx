@@ -51,6 +51,14 @@ const TODAS = '__todas';
 /** Pecas por minuto a partir do ritmo em pecas/hora — pedido de 31/08. */
 const porMinuto = (pecasPorHora) => (pecasPorHora / 60).toFixed(1);
 
+/* A escolha de levar a analise para o papel fica gravada no navegador:
+   quem imprime com analise hoje quase sempre quer amanha tambem. Sem
+   armazenamento (aba privada), a escolha vale so' enquanto a tela vive. */
+const CHAVE_ANALISE_PAPEL = 'ritmo.analise-na-impressao';
+const lerAnaliseNoPapel = () => {
+  try { return localStorage.getItem(CHAVE_ANALISE_PAPEL) === '1'; } catch { return false; }
+};
+
 export default function RelatorioConferencias({ aoVoltar }) {
   const [linhas, setLinhas] = useState([]);
   const [outras, setOutras] = useState(0);
@@ -62,6 +70,13 @@ export default function RelatorioConferencias({ aoVoltar }) {
   const [confirmando, setConfirmando] = useState(null);
   const [editandoParadas, setEditandoParadas] = useState(null);
   const [ocupado, setOcupado] = useState(null);
+  const [analiseNoPapel, setAnaliseNoPapel] = useState(lerAnaliseNoPapel);
+
+  const alternarAnaliseNoPapel = () => setAnaliseNoPapel((v) => {
+    const novo = !v;
+    try { localStorage.setItem(CHAVE_ANALISE_PAPEL, novo ? '1' : '0'); } catch { /* sem armazenamento */ }
+    return novo;
+  });
 
   useEffect(() => { carregar(verArquivadas); }, [verArquivadas]);
 
@@ -151,6 +166,16 @@ export default function RelatorioConferencias({ aoVoltar }) {
     [resumoPecas, filtro],
   );
 
+  /* A analise e' calculada UMA vez, aqui, porque tem dois leitores: o
+     painel na tela e — quando o usuario marca "Sair na impressão" — a
+     folha A4. Calcular em cada um deixaria os dois divergirem um dia. */
+  const analise = useMemo(
+    () => analisarConferencias({
+      maquinas: resumoVisivel, pecas: resumoPecasVisivel, conferencias: visiveis,
+    }),
+    [resumoVisivel, resumoPecasVisivel, visiveis],
+  );
+
   /**
    * Com a lateral filtrada numa maquina, o grafico abre POR MEDICAO:
    * uma barra por medicao, com a peca embaixo — e' assim que se enxerga
@@ -214,8 +239,12 @@ export default function RelatorioConferencias({ aoVoltar }) {
 
   /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
      dentro dela pelo mesmo motivo que os produtos foram na lista: e'
-     navegacao, nao um controle do conteudo. */
-  const secoes = resumo.length > 1
+     navegacao, nao um controle do conteudo.
+
+     O bloco aparece MESMO com uma maquina so' (mudanca de 31/08): ele
+     sumia com uma unica maquina medida, e o usuario nao achava onde
+     filtrar para imprimir — controle que aparece e some nao se aprende. */
+  const secoes = resumo.length
     ? [{ id: TODAS, rotulo: 'Todas', contador: linhas.length },
        ...resumo.map((g) => ({ id: g.maquina, rotulo: g.maquina, contador: g.n }))]
     : [];
@@ -450,7 +479,12 @@ export default function RelatorioConferencias({ aoVoltar }) {
               )}
 
               {!verArquivadas && (
-                <AnalisePeriodo resumo={resumoVisivel} resumoPecas={resumoPecasVisivel} />
+                <AnalisePeriodo
+                  secoes={analise}
+                  resumo={resumoVisivel}
+                  noPapel={analiseNoPapel}
+                  aoAlternarPapel={alternarAnaliseNoPapel}
+                />
               )}
 
               <section style={est.painel} aria-label={verArquivadas ? 'Medições arquivadas' : 'Todas as medições'}>
@@ -588,6 +622,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
           resumoPecas={resumoPecasVisivel}
           grupoDe={grupoDe}
           filtro={filtro}
+          analise={analiseNoPapel ? analise : null}
         />
       )}
     </div>
@@ -762,15 +797,10 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
  * leitura em texto corrido: sobe o mesmo resumo por maquina de sempre
  * (incluindo `confiavel` e os motivos). Ambas seguem o filtro da lateral.
  */
-function AnalisePeriodo({ resumo, resumoPecas }) {
+function AnalisePeriodo({ secoes, resumo, noPapel, aoAlternarPapel }) {
   const [rodando, setRodando] = useState(false);
   const [resposta, setResposta] = useState(null);
   const [erro, setErro] = useState(null);
-
-  const secoes = useMemo(
-    () => analisarConferencias({ maquinas: resumo, pecas: resumoPecas }),
-    [resumo, resumoPecas],
-  );
 
   async function analisar() {
     setRodando(true);
@@ -804,11 +834,25 @@ function AnalisePeriodo({ resumo, resumoPecas }) {
 
   return (
     <section style={est.painelIa} aria-label="Análise do período">
-      <div style={{ minWidth: 0 }}>
-        <h2 style={est.iaTitulo}>Análise do período</h2>
-        <p style={est.iaTexto}>
-          Gerada na hora pelos números deste relatório — sem IA, sem custo, funciona sem internet.
-        </p>
+      <div style={est.analiseTopo}>
+        <div style={{ minWidth: 0 }}>
+          <h2 style={est.iaTitulo}>Análise do período</h2>
+          <p style={est.iaTexto}>
+            Gerada na hora pelos números deste relatório — sem IA, sem custo, funciona sem internet.
+          </p>
+        </div>
+        {/* A opcao mora ONDE a analise mora: quem le e quer levar para a
+            reuniao marca aqui, e a folha A4 passa a sair com a analise.
+            A escolha fica gravada no navegador. */}
+        <label style={est.rotuloPapel}>
+          <input
+            type="checkbox"
+            checked={noPapel}
+            onChange={aoAlternarPapel}
+            style={est.caixaPapel}
+          />
+          Sair na impressão
+        </label>
       </div>
 
       {secoes.map((s) => (
@@ -860,7 +904,7 @@ function AnalisePeriodo({ resumo, resumoPecas }) {
  * de amostra carimbado. Os numeros sao pecas/hora e pecas/minuto; maquina
  * medida ha' pouco tempo leva uma NOTA em texto corrido, nao um selo.
  */
-function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro }) {
+function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, analise }) {
   // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
   const gruposCobertos = [...new Set(resumo.map((g) => grupoDe?.(g.maquina)).filter(Boolean))].sort();
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -946,6 +990,27 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro })
           {emMedicao.length > 1 ? ' dessas máquinas' : ' desta máquina'} fica mais
           certeiro com mais medições.
         </p>
+      )}
+
+      {/* A ANALISE no papel e' OPCAO, marcada na tela ("Sair na impressão"):
+          o papel circula em reuniao, e a leitura pronta poupa quem le — mas
+          quem quer so' os numeros imprime como sempre. A nota diz que ela e'
+          automatica: leitura de regra, para conferir, nao parecer de gente. */}
+      {analise?.length > 0 && (
+        <>
+          <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Análise do período</h2>
+          <p style={{ ...imp.nota, margin: '0 0 6px' }}>
+            Gerada automaticamente pelos números deste relatório — confira antes de decidir.
+          </p>
+          {analise.map((s) => (
+            <div key={s.titulo} style={imp.analiseBloco}>
+              <div style={imp.analiseTitulo}>{s.titulo}</div>
+              {s.linhas.map((l) => (
+                <p key={l} style={imp.analiseLinha}>{l}</p>
+              ))}
+            </div>
+          ))}
+        </>
       )}
 
       {/* Ritmo por peca: o numero que o PCP leva para dimensionar carga e lote. */}
@@ -1185,6 +1250,17 @@ const est = {
   iaTitulo: { ...tipo('destaque'), margin: 0 },
   iaTexto: { ...tipo('legenda'), color: t.textoFraco, margin: '2px 0 0' },
   /* ---- analise automatica (por regra, sem IA) ---- */
+  analiseTopo: {
+    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+    gap: espaco.lg, flexWrap: 'wrap',
+  },
+  // Alvo de clique generoso: o rotulo inteiro alterna a caixa.
+  rotuloPapel: {
+    display: 'inline-flex', alignItems: 'center', gap: espaco.sm,
+    minHeight: 32, ...tipo('legenda'), color: t.textoMedio,
+    cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
+  },
+  caixaPapel: { width: 16, height: 16, margin: 0, accentColor: t.vermelho, cursor: 'pointer' },
   analiseSecao: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
   analiseTitulo: { ...rotulo(t.textoFraco), margin: 0 },
   analiseLinha: { ...tipo('corpo'), color: t.textoMedio, margin: 0, lineHeight: 1.55 },
@@ -1321,6 +1397,14 @@ const imp = {
   td: { padding: '3px 5px', borderBottom: '1px solid #DDD', verticalAlign: 'top' },
   tdNum: { padding: '3px 5px', borderBottom: '1px solid #DDD', textAlign: 'right',
            fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' },
+
+  /* ---- analise do periodo no papel ---- */
+  analiseBloco: { breakInside: 'avoid', marginBottom: 6 },
+  analiseTitulo: {
+    fontSize: 8, fontWeight: 700, textTransform: 'uppercase',
+    letterSpacing: 0.6, color: '#555', marginBottom: 1,
+  },
+  analiseLinha: { margin: '0 0 3px', fontSize: 9.5, lineHeight: 1.5 },
 
   legenda: { marginTop: 14, border: '1px solid #DDD', padding: 8, breakInside: 'avoid' },
   gradeLegenda: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 16px', marginTop: 6 },

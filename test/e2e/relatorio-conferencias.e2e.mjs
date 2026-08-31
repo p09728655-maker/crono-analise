@@ -162,6 +162,22 @@ await movel.close();
   checar(await analise.getByRole('button', { name: 'Analisar com IA' }).count() === 1,
     'a IA segue disponivel como opcao, num botao discreto');
 
+  /* ----------------------- a analise no papel e' OPCAO, desligada por padrao */
+  const folhaSem = await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
+  checar(!/Análise do período/.test(folhaSem),
+    'por padrao, a folha impressa sai so com os numeros — sem a analise');
+  await analise.getByRole('checkbox', { name: 'Sair na impressão' }).check();
+  const folhaCom = await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
+  checar(/Análise do período/.test(folhaCom) && /Leitura geral/i.test(folhaCom),
+    'marcada a caixa, a analise inteira entra na folha A4');
+  checar(/Gerada automaticamente/.test(folhaCom),
+    'o papel declara que a analise e automatica — leitura de regra, nao parecer');
+  checar(await p2.evaluate(() => localStorage.getItem('ritmo.analise-na-impressao')) === '1',
+    'a escolha fica gravada no navegador para as proximas impressoes');
+  await analise.getByRole('checkbox', { name: 'Sair na impressão' }).uncheck();
+  checar(!/Análise do período/.test(await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '')),
+    'desmarcada, o papel volta a sair so com os numeros');
+
   /* ------------- filtro na lateral abre o grafico por conferencia */
   const grafico = p2.locator('figure').first();
   checar(/Ritmo por máquina/.test(await grafico.textContent()),

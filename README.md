@@ -106,6 +106,8 @@ cor) e **Análise do período** — gerada por **algoritmo**
 (`analisarConferencias`, no domínio) a partir dos mesmos resumos da tela:
 leitura geral, uma linha por máquina, comparação entre máquinas e entre
 peças, paradas e o próximo passo. Instantânea, sem custo e offline. A
+caixinha **"Sair na impressão"** leva a análise para a folha A4 (opcional,
+desligada por padrão; a escolha fica gravada no navegador). A
 **Análise com IA** continua como opção, atrás de um botão discreto — só
 esse clique usa a chave; ela recebe o resumo por máquina *com* o resultado
 dos critérios, então diz o que ainda não serve de referência em vez de
