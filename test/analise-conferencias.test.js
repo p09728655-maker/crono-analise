@@ -190,6 +190,84 @@ describe('analisarConferencias', () => {
     expect(pecas.linhas.join(' ')).toContain('600 a 1200 pç/h');
   });
 
+  /**
+   * DISPONIBILIDADE em portugues. "18 min de 30 min observados" obriga quem
+   * le a dividir de cabeca; o percentual e' o numero que se acompanha no
+   * tempo. A palavra "disponibilidade" nao entra no texto — a regra de
+   * ago/2026 tirou o jargao da tela e o numero voltou sem ele.
+   */
+  it('a leitura geral diz quanto do periodo a maquina rodou, em %', () => {
+    const secoes = analisar([
+      { maquina: 'F16', peca: 'A', duracaoMs: 30 * MIN, pecas: 300,
+        paradas: [{ motivo: 'setup', duracaoMs: 12 * MIN }] },
+    ]);
+    const geral = secoes.find((s) => s.titulo === 'Leitura geral');
+    // 18 min rodando de 30 observados = 60%.
+    expect(geral.linhas.join(' ')).toContain('A máquina rodou 60% do período observado.');
+    expect(texto(secoes)).not.toMatch(/disponibilidade/i);
+  });
+
+  it('sem parada marcada nao ha o que dizer sobre tempo rodando — seria sempre 100%', () => {
+    const secoes = analisar([{ maquina: 'F16', peca: 'A', duracaoMs: 30 * MIN, pecas: 300 }]);
+    expect(texto(secoes)).not.toContain('do período observado');
+  });
+
+  /**
+   * A CURVA DO DIA. A media esconde a hora fraca: 700 pc/h de manha e 500
+   * depois do almoco viram 620 o dia inteiro, e ninguem olha o que muda as
+   * 13h. Horario LOCAL de proposito — "7h" e' 7h do chao de fabrica.
+   */
+  const noRelogio = (hora, pecas, dia = 31) => ({
+    maquina: 'F16', peca: 'A', duracaoMs: 30 * MIN, pecas,
+    iniciado_em: new Date(2026, 7, dia, hora, 0).toISOString(),
+  });
+
+  it('aponta a hora fraca do dia contra a mais forte, com a queda em %', () => {
+    const secoes = analisar([
+      noRelogio(7, 350, 30), noRelogio(7, 350, 31), noRelogio(13, 250),
+    ]);
+    const dia = secoes.find((s) => s.titulo === 'Ao longo do dia');
+    // 700 pc/h as 7h contra 500 as 13h = 29% menor.
+    expect(dia.linhas[0]).toContain('07h 700 pç/h');
+    expect(dia.linhas[0]).toContain('13h 500 pç/h');
+    expect(dia.linhas[1]).toContain('Às 13h o ritmo é 29% menor que às 07h');
+    expect(dia.linhas[1]).toMatch(/troca, abastecimento/);
+  });
+
+  it('horas parecidas nao viram hora fraca — diferenca pequena e ruido de medicao', () => {
+    const secoes = analisar([
+      noRelogio(7, 300, 30), noRelogio(7, 305, 31), noRelogio(13, 295),
+    ]);
+    const dia = secoes.find((s) => s.titulo === 'Ao longo do dia');
+    expect(dia.linhas.join(' ')).toContain('sem hora fraca a investigar');
+  });
+
+  it('com mais de uma maquina a curva nao sai — seria hora contra maquina', () => {
+    /**
+     * As 13h so' a F14 foi medida, e ela e' mais lenta. Sem esta regra, a
+     * analise diria "as 13h o ritmo cai 43%" — e mandaria investigar uma
+     * hora quando o que mudou foi o posto.
+     */
+    const secoes = analisar([
+      { maquina: 'F16', peca: 'A', duracaoMs: 30 * MIN, pecas: 350,
+        iniciado_em: new Date(2026, 7, 30, 7, 0).toISOString() },
+      { maquina: 'F16', peca: 'A', duracaoMs: 30 * MIN, pecas: 350,
+        iniciado_em: new Date(2026, 7, 31, 7, 0).toISOString() },
+      { maquina: 'F14', peca: 'A', duracaoMs: 30 * MIN, pecas: 200,
+        iniciado_em: new Date(2026, 7, 31, 13, 0).toISOString() },
+    ]);
+    expect(secoes.find((s) => s.titulo === 'Ao longo do dia')).toBeUndefined();
+  });
+
+  it('uma hora so, ou poucas medicoes, nao desenha curva nenhuma', () => {
+    // Tres medicoes, mas todas as 7h: nao ha com o que comparar.
+    expect(analisar([noRelogio(7, 300, 29), noRelogio(7, 300, 30), noRelogio(7, 300, 31)])
+      .find((s) => s.titulo === 'Ao longo do dia')).toBeUndefined();
+    // Duas horas, mas so duas medicoes: e uma contra a outra, nao padrao.
+    expect(analisar([noRelogio(7, 300), noRelogio(13, 200)])
+      .find((s) => s.titulo === 'Ao longo do dia')).toBeUndefined();
+  });
+
   it('paradas: nomeia o maior motivo e, com troca dominante, ensina a preparar a troca', () => {
     const secoes = analisar([
       { maquina: 'F16', peca: 'A', duracaoMs: 40 * MIN, pecas: 300,

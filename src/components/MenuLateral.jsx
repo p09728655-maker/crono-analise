@@ -99,22 +99,33 @@ export default function MenuLateral({
         </div>
       )}
 
-      {/* 5. Secoes do estudo aberto — o que antes eram abas horizontais. */}
+      {/* 5. Secoes do estudo aberto — o que antes eram abas horizontais.
+             Um item com `cabecalho: true` nao e' clicavel: e' o nome de um
+             GRUPO, e os itens abaixo dele pertencem a ele. E' assim que o
+             relatorio lista as maquinas debaixo do grupo do cadastro
+             (0002 · FURADEIRA), a mesma leitura que o celular ja' oferece
+             no <optgroup> da escolha da maquina. */}
       {secoes?.length > 0 && (
         <div style={est.bloco} role="group" aria-label={secoesRotulo}>
           <div style={est.grupoRotulo}>{secoesRotulo}</div>
-          {secoes.map((s) => (
+          {secoes.map((s) => (s.cabecalho ? (
+            <div key={s.id} style={est.subgrupoRotulo}>{s.rotulo}</div>
+          ) : (
             <button
               key={s.id}
               type="button"
               onClick={() => aoTrocarSecao(s.id)}
               aria-current={s.id === secaoAtiva ? 'page' : undefined}
-              style={{ ...est.item, ...(s.id === secaoAtiva ? est.itemAtivo : {}) }}
+              style={{
+                ...est.item,
+                ...(s.recuado ? est.itemRecuado : {}),
+                ...(s.id === secaoAtiva ? est.itemAtivo : {}),
+              }}
             >
               <span style={est.itemTexto}>{s.rotulo}</span>
               {s.contador != null && <span style={est.contagem}>{s.contador}</span>}
             </button>
-          ))}
+          )))}
         </div>
       )}
 
@@ -135,7 +146,7 @@ export default function MenuLateral({
         <div style={est.bloco}>
           {/* Os dois blocos sao nomeados pelo POSTO, nao pelo metodo: no chao
               de fabrica a pergunta e' "vim medir a embalagem" ou "vim medir a
-              furadeira", nunca "vim fazer uma conferencia rapida". O metodo
+              maquina", nunca "vim fazer uma conferencia rapida". O metodo
               vem embaixo, como explicacao. */}
           <div style={est.grupoRotulo}>Embalagem e demais postos</div>
           <div style={est.grupoDica}>Estudos de tempo — ciclo a ciclo, com tempo padrão</div>
@@ -187,10 +198,10 @@ export default function MenuLateral({
       {/* 8. A outra natureza de medicao, com peso menor */}
       {aoVerConferencias && (
         <div style={est.bloco}>
-          <div style={est.grupoRotulo}>Furadeiras</div>
-          <div style={est.grupoDica}>Ritmo do posto — peças/hora, sem cadastro</div>
+          <div style={est.grupoRotulo}>Ritmo por máquina</div>
+          <div style={est.grupoDica}>Peças/hora do posto — sem cronometrar ciclo</div>
           <button type="button" style={est.item} onClick={aoVerConferencias}>
-            <span style={est.itemTexto}>Ritmo por máquina</span>
+            <span style={est.itemTexto}>Abrir o relatório</span>
           </button>
         </div>
       )}
@@ -277,6 +288,16 @@ const est = {
     padding: `${espaco.xl}px ${espaco.lg}px`,
     display: 'flex', flexDirection: 'column', gap: espaco.xl,
   },
+
+  // Nome do grupo dentro de um bloco: menor que o rotulo do bloco, para a
+  // hierarquia ficar em tres niveis sem virar tres tamanhos de titulo.
+  subgrupoRotulo: {
+    ...rotulo(t.textoFraco), fontSize: 10,
+    padding: `${espaco.md}px ${espaco.sm}px ${espaco.xs}px`,
+  },
+  // Shorthand inteiro, nao paddingLeft: misturar com o `padding` do
+  // item base deixa o estilo imprevisivel no rerender (ver checar-estilos).
+  itemRecuado: { padding: `0 ${espaco.md}px 0 ${espaco.lg}px` },
 
   marca: { display: 'flex', flexDirection: 'column', gap: 2 },
   // alignSelf flex-start e' o que impede a distorcao: num flex em COLUNA o

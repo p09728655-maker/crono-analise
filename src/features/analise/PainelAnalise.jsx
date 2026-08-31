@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { claro, fonteAnalise } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
+import SeletorMaquina from '../../components/SeletorMaquina.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import { VERSAO } from '../../versao.js';
 import {
@@ -420,8 +421,17 @@ function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCancelar }) {
           </label>
           <label style={est.campo}>
             <span style={est.rotuloCampo}>Recurso / Posto</span>
-            <input style={est.input} value={recurso} onChange={(e) => setRecurso(e.target.value)} />
-            <span style={est.dica}>Ex: Furadeira 03. Sai no relatório impresso.</span>
+            {/* Mesmo campo do Novo estudo e do celular: o posto vem do
+                cadastro. Estudo antigo com o nome digitado continua
+                aparecendo como texto — e' o que esta' gravado. */}
+            <SeletorMaquina
+              valor={recurso}
+              aoTrocar={setRecurso}
+              aria="Recurso / Posto"
+              estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
+              vazio="Escolha o posto…"
+            />
+            <span style={est.dica}>Sai no relatório impresso.</span>
           </label>
         </div>
 
@@ -1741,6 +1751,14 @@ const est = {
   campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
   fieldset: { border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: espaco.sm },
   rotuloCampo: rotulo(claro.textoFraco),
+  // "escolher do cadastro" do SeletorMaquina: volta do texto livre para a
+  // lista. Discreto — o caminho normal e' escolher.
+  linkCadastro: {
+    marginTop: espaco.xs, padding: 0, alignSelf: 'flex-start',
+    background: 'transparent', border: 'none', color: claro.textoFraco,
+    ...tipo('legenda'), fontWeight: 600, textDecoration: 'underline',
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
   dica: { ...tipo('legenda'), color: claro.textoFraco, fontStyle: 'italic' },
   input: {
     minHeight: 44, padding: `0 ${espaco.md}px`, background: claro.fundo,

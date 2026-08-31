@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.55.0',
+    data: '2026-08-31',
+    titulo: 'O relatório é de máquina, não de furadeira — e ganhou disponibilidade e curva do dia',
+    itens: [
+      'O NOME ESTAVA ERRADO: "Ritmo da furadeira" e "Relatório das Furadeiras" vinham de quando só havia furadeira medida. Com FRESADORA e EMBALAGEM no cadastro, quem media uma fresadora não achava onde ver o resultado. Agora é RITMO POR MÁQUINA, em toda parte — celular, PC e folha impressa. No celular, o selo do topo passou a mostrar o GRUPO da máquina escolhida (FURADEIRA, FRESADORA), em vez de dizer sempre "FURADEIRA".',
+      'MENU LATERAL POR GRUPO: no relatório, as máquinas aparecem debaixo do grupo do cadastro (0002 · FURADEIRA, 0004 · FRESADORA), a mesma leitura que o celular já oferecia na escolha da máquina. Máquina sem grupo cai em "Sem grupo", no fim — o cadastro organiza, não trava.',
+      'MÁQUINA RODANDO em %: o cartão do topo passou a mostrar quanto do período a máquina passou produzindo (é a disponibilidade), com os minutos embaixo. O mesmo número entrou no cartão de cada máquina, numa coluna nova da tabela de medições, na folha impressa e na Análise do período. Antes o relatório dizia "18 min de 30 min observados" e quem lia fazia a divisão de cabeça.',
+      'RITMO POR HORA DO DIA: um gráfico novo mostra o ritmo em cada hora do relógio, juntando as medições feitas na mesma hora de qualquer data — é a curva do turno, onde aparece a queda do fim da manhã e o efeito do almoço. A Análise do período aponta a hora fraca contra a mais forte, com a queda em % e o que investigar. Sai também no papel, como tabela.',
+      'A curva só aparece com UMA máquina em vista: misturando postos, a "hora fraca" seria só a hora em que a máquina mais lenta foi medida. Com várias máquinas, a tela diz isso e ensina a filtrar.',
+      'NOVO ESTUDO E EDIÇÃO DO ESTUDO passaram a escolher o posto do CADASTRO DE MÁQUINAS, igual ao celular. Estudo criado com "Furadeira 03" digitado à mão não encontrava a "FURADEIRA 03" da lista, e o mesmo posto virava dois. "Outra máquina…" continua abrindo o texto livre, e estudo antigo continua mostrando o nome que está gravado.',
+    ],
+  },
+  {
     versao: '2.54.0',
     data: '2026-08-31',
     titulo: 'O que a parada custou: comparativo em destaque, na tela, no papel e no celular',
