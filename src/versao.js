@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.49.0',
+    data: '2026-08-31',
+    titulo: 'O relatório das Furadeiras fala português de fábrica',
+    itens: [
+      'O carimbo "AMOSTRA INSUFICIENTE" sumiu da frente dos números. Máquina medida há pouco tempo leva uma nota discreta em cinza — "ainda em medição" — na tela, no gráfico e no papel. O critério continua o mesmo por trás; só parou de gritar.',
+      'Modelo básico, sem jargão: saíram CV%, ciclo do motor, disponibilidade em % e os critérios declarados. Ficou o que qualquer pessoa lê: quantas peças por hora, quanto tempo rodou, quanto ficou parado e por quê.',
+      'PEÇAS POR MINUTO em tudo: nos números do topo, no cartão de cada máquina, no Ritmo por peça, na tabela de medições e na folha impressa — ao lado das peças por hora.',
+      'O filtro por máquina agora vale para IMPRIMIR: escolha a máquina na lateral e o botão vira "Imprimir esta máquina" — a folha A4 sai só com ela, com o nome no título. "Todas" imprime o relatório completo, como antes.',
+      'Os números do topo também seguem o filtro: filtrou a FURADEIRA 16, o ritmo médio, as medições e o tempo parado são os dela.',
+    ],
+  },
+  {
     versao: '2.48.1',
     data: '2026-08-28',
     titulo: 'O relatório ocupa a tela inteira',

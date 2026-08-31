@@ -124,28 +124,29 @@ await movel.close();
   checar(/Grupos de máquina/.test(impresso) && /0002 · FURADEIRA/.test(impresso),
     'a folha impressa identifica os grupos cobertos e o grupo de cada maquina');
 
-  /* -------------------- painel: KPIs, o que falta e proximas acoes */
+  /* -------------------- painel: numeros do topo em portugues de fabrica */
   const kpis = p2.locator('[aria-label="Resumo do período"]');
   const textoKpis = await kpis.innerText();
-  checar(/Referências fechadas/i.test(textoKpis) && /0 de 3/.test(textoKpis),
-    'a faixa de KPIs abre com o numero que importa: referencias fechadas');
-  checar(/Conferências/i.test(textoKpis) && /Disponibilidade/i.test(textoKpis),
-    'os demais KPIs contextualizam: conferencias, tempo, disponibilidade, setup');
+  checar(/Ritmo médio/i.test(textoKpis) && /838 pç\/h/.test(textoKpis),
+    'a faixa abre com o ritmo medio ponderado (740 pc em 53 min = 838 pc/h)');
+  checar(/14\.0 peças por minuto/.test(textoKpis),
+    'o ritmo medio tambem sai em pecas por minuto (838/60 = 14.0)');
+  checar(/Medições/i.test(textoKpis) && /Tempo parado/i.test(textoKpis),
+    'os demais numeros sao em palavras: medicoes, tempo rodando, tempo parado');
+  checar(!/insuficiente/i.test(await p2.locator('main').innerText()),
+    'o carimbo "amostra insuficiente" sumiu da tela — virou nota "ainda em medição"');
+  checar(/[Aa]inda em medição/.test(await p2.locator('[aria-label="Resumo por máquina"]').innerText()),
+    'maquina medida ha pouco tempo leva a nota discreta, nao um selo');
 
-  const acoesPainel = p2.locator('[aria-label="Próximas ações"]');
-  const textoAcoes = await acoesPainel.innerText();
-  checar(/Princesa Fundo/.test(textoAcoes) && /\+2 conferência/.test(textoAcoes),
-    'proximas acoes dizem o caminho por peca (+2 conferencias, minutos)');
-
-  /* --------------------- referencia por peca: criterio aplicado a peca */
-  const refPecas = p2.locator('[aria-label="Referência por peça"]');
+  /* --------------------------- ritmo por peca, com pecas por minuto */
+  const refPecas = p2.locator('[aria-label="Ritmo por peça"]');
   const textoRef = await refPecas.innerText();
   checar(/Princesa Fundo/.test(textoRef) && /Lateral Mesa/.test(textoRef),
-    'referencia por peca lista cada peca de cada maquina');
-  checar(/1\/3 conf/.test(textoRef),
-    'peca com 1 conferencia mostra o que falta: 1/3 conf e os minutos');
+    'ritmo por peca lista cada peca de cada maquina');
   checar(/900/.test(textoRef),
     'o ritmo consolidado da peca aparece (300pc/20min = 900 pc/h)');
+  checar(/15\.0/.test(textoRef),
+    'a peca tambem sai em pecas por minuto (900/60 = 15.0)');
 
   /* ------------- filtro na lateral abre o grafico por conferencia */
   const grafico = p2.locator('figure').first();
@@ -153,18 +154,35 @@ await movel.close();
     'sem filtro, o grafico compara maquinas (uma barra por maquina)');
   await p2.getByRole('button', { name: /^Furadeira 03/ }).click();
   const graficoFiltrado = await grafico.textContent();
-  checar(/Conferências — Furadeira 03/.test(graficoFiltrado),
-    'filtrando a maquina, o grafico abre as conferencias dela');
+  checar(/Medições — Furadeira 03/.test(graficoFiltrado),
+    'filtrando a maquina, o grafico abre as medicoes dela');
   checar(/Lateral Mesa/.test(graficoFiltrado) && /Princesa Fundo/.test(graficoFiltrado),
     'cada barra leva a peca embaixo — da para ver qual puxa o ritmo');
   checar(/840/.test(graficoFiltrado) && /900/.test(graficoFiltrado),
     'os ritmos individuais aparecem (420pc/30min=840 e 300pc/20min=900)');
+
+  /* ------------------- o filtro vale para o relatorio inteiro e o papel */
+  checar(/Imprimir esta máquina/.test(await p2.locator('nav').innerText()),
+    'com a maquina filtrada, o botao diz o que vai sair: "Imprimir esta máquina"');
+  const kpisFiltrados = await kpis.innerText();
+  checar(/864 pç\/h/.test(kpisFiltrados),
+    'os numeros do topo seguem o filtro (720 pc em 50 min = 864 pc/h)');
+  const folhaFiltrada = await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
+  checar(/Ritmo das Furadeiras — Furadeira 03/.test(folhaFiltrada),
+    'a folha impressa sai com o nome da maquina no titulo');
+  checar(!/Furadeira14/.test(folhaFiltrada),
+    'a folha filtrada NAO leva as outras maquinas — imprime so a escolhida');
+
   await p2.getByRole('button', { name: /^Todas/ }).click();
   checar(/Ritmo por máquina/.test(await grafico.textContent()),
     'voltar a Todas devolve a comparacao entre maquinas');
+  checar(/Imprimir todas/.test(await p2.locator('nav').innerText()),
+    'sem filtro, o botao volta a "Imprimir todas"');
+  checar(/Furadeira14/.test(await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '')),
+    'sem filtro, a folha volta a cobrir todas as maquinas');
 
 
-  await p2.getByRole('button', { name: /Excluir conferência de Furadeira14/ }).click();
+  await p2.getByRole('button', { name: /Excluir medição de Furadeira14/ }).click();
   await p2.getByRole('button', { name: /Excluir definitivamente/ }).click();
   await p2.waitForTimeout(600);
   checar(chamadas.includes('DELETE'), 'excluir dispara DELETE no servidor');
@@ -176,7 +194,7 @@ await movel.close();
   await p2.waitForTimeout(800);
   const corpo = await p2.locator('body').innerText();
   checar(!/Furadeira14/.test(corpo), 'excluida some da lista');
-  checar(await p2.locator('[aria-label="Excluir conferência"]').count() === 0, 'modal fecha ao concluir');
+  checar(await p2.locator('[aria-label="Excluir medição"]').count() === 0, 'modal fecha ao concluir');
 
   /* ------------------------------- cadastrar paradas direto no PC */
   /**
@@ -185,12 +203,12 @@ await movel.close();
    * que a maquina rodou, sem precisar arquivar a medicao.
    */
   await p2.getByRole('button', { name: 'Paradas' }).first().click();
-  await p2.locator('[aria-label="Paradas da conferência"]').waitFor({ timeout: 4000 });
+  await p2.locator('[aria-label="Paradas da medição"]').waitFor({ timeout: 4000 });
   checar(true, 'o botao Paradas abre o cadastro da conferencia');
 
   await p2.getByRole('button', { name: '+ Setup / troca' }).click();
   await p2.locator('input[aria-label="Minutos parada — Setup / Troca"]').fill('10');
-  const janela = await p2.locator('[aria-label="Paradas da conferência"]').innerText();
+  const janela = await p2.locator('[aria-label="Paradas da medição"]').innerText();
   checar(/20 min/.test(janela), 'a janela mostra quanto sobra de maquina rodando (30 - 10 = 20 min)');
 
   // Parada do tamanho do periodo: o botao trava antes de chamar o servidor.
@@ -204,7 +222,7 @@ await movel.close();
   const gravada = patches.find((x) => 'paradas' in x);
   checar(!!gravada && gravada.paradas[0].motivo === 'setup' && gravada.paradas[0].duracaoMs === 600000,
     'grava a parada em milissegundos, com o motivo escolhido');
-  checar(await p2.locator('[aria-label="Paradas da conferência"]').count() === 0,
+  checar(await p2.locator('[aria-label="Paradas da medição"]').count() === 0,
     'a janela fecha depois de gravar');
 
   const depois = await p2.locator('body').innerText();

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
-  CRITERIOS_CONFERENCIA, conferenciaRapida, faixaHoraria, formatarDuracao, formatarSegundos,
+  CRITERIOS_CONFERENCIA, conferenciaRapida, faixaHoraria, formatarDuracao,
   nomeChave, resumirConferencias, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
@@ -18,38 +18,37 @@ import { GraficoRitmoMaquinas } from './graficos.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 
 /**
- * RELATORIO DE CONFERENCIAS — o estudo das furadeiras, no PC.
+ * RELATORIO DAS FURADEIRAS — modelo BASICO, no PC.
  *
- * As conferencias rapidas nascem no celular, sobem pela fila offline e
- * chegam aqui para virar leitura de gestao: cada MAQUINA vira um bloco de
- * resumo, e a tabela embaixo guarda o dado bruto, mais recente primeiro.
+ * As medicoes nascem no celular, sobem pela fila offline e chegam aqui.
+ * Redesenho de ago/2026, a pedido de quem usa: o relatorio anterior
+ * carimbava "AMOSTRA INSUFICIENTE" em quase tudo e falava em CV%, ciclo do
+ * motor e criterios — jargao que so' o analista lia. Este aqui responde as
+ * perguntas de qualquer pessoa da fabrica, em portugues:
  *
- * O relatorio se autoavalia pelos CRITERIOS_CONFERENCIA, na tela e no
- * papel: minimo de conferencias, tempo total observado e periodo por
- * conferencia. Desde ago/2026 os NUMEROS vem primeiro — a primeira
- * conferencia ja' aparece como resultado — e a insuficiencia e' uma nota
- * logo depois, nunca um carimbo na frente do que foi medido. O criterio
- * nao mudou nem trava nada: qualifica o numero como indicio, nao
- * referencia. (Mesma filosofia do estudo de ciclos: criterio declarado.)
+ *   - quantas pecas por hora (e POR MINUTO) cada maquina faz;
+ *   - quantas pecas por hora cada PECA faz em cada maquina;
+ *   - quanto tempo a maquina rodou e quanto ficou parada, e por que.
  *
- * O ritmo medio e' ponderado pelo tempo — soma de pecas sobre soma do
- * tempo PRODUTIVO — porque e' esse numero que aguenta decisao de
- * capacidade; media simples de taxas deixaria uma medicao de 5 minutos
- * valer o mesmo que uma de 2 horas.
+ * O criterio de amostra NAO sumiu do calculo (resumirConferencias segue se
+ * autoavaliando) — ele virou uma nota discreta em cinza ("ainda em
+ * medicao"), nunca um carimbo na frente do numero.
  *
- * PARADAS (setup, falta de material, manutencao) saem do tempo produtivo.
- * Elas chegam do aparelho junto com a conferencia, e tambem podem ser
- * CADASTRADAS aqui: quem confere no corredor nem sempre marca o setup na
- * hora, e reconstituir depois — olhando o apontamento — e' trabalho de
- * escritorio. Marcar a parada e' melhor que arquivar a medicao: o ritmo
- * fica certo e o dado continua contando.
+ * O FILTRO por maquina, na lateral, vale para o relatorio INTEIRO:
+ * numeros do topo, cartoes, quadros, grafico E a folha impressa. O que
+ * esta' na tela e' o que sai no papel — e' assim que se imprime o relatorio
+ * de uma maquina so'.
  *
- * A impressao NAO e' a tela no papel: e' um documento proprio (A4), com
- * identificacao, criterios, resumo e o dado bruto — ver ImpressaoConferencias.
+ * O ritmo medio e' ponderado pelo tempo (soma de pecas sobre soma do tempo
+ * com a maquina rodando): media simples de taxas deixaria uma medicao de
+ * 5 minutos valer o mesmo que uma de 2 horas.
  */
 /* Id do item "Todas" na lateral. Filtro nenhum e' `null` no estado; a
    lateral precisa de um id de verdade para marcar o ativo. */
 const TODAS = '__todas';
+
+/** Pecas por minuto a partir do ritmo em pecas/hora — pedido de 31/08. */
+const porMinuto = (pecasPorHora) => (pecasPorHora / 60).toFixed(1);
 
 export default function RelatorioConferencias({ aoVoltar }) {
   const [linhas, setLinhas] = useState([]);
@@ -67,7 +66,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
 
   /**
    * O GRUPO da maquina (0002 · FURADEIRA) vem do cadastro, ligado pelo
-   * nome — a conferencia grava texto, e a ligacao usa a mesma chave
+   * nome — a medicao grava texto, e a ligacao usa a mesma chave
    * normalizada do agrupamento. Falha de carga nao derruba o relatorio:
    * sem cadastro, as maquinas simplesmente aparecem sem grupo.
    */
@@ -126,28 +125,41 @@ export default function RelatorioConferencias({ aoVoltar }) {
   }
 
   const resumo = useMemo(() => resumirConferencias(linhas), [linhas]);
-  // Referencia POR PECA: mesmo calculo e mesmo criterio, agrupado por
-  // peca x maquina — e' o numero que dimensiona carga e lote. Ver o
-  // comentario em resumirConferencias.
+  // Ritmo POR PECA: mesmo calculo, agrupado por peca x maquina — e' o
+  // numero que dimensiona carga e lote. Ver resumirConferencias.
   const resumoPecas = useMemo(() => resumirConferencias(linhas, { porPeca: true }), [linhas]);
+
+  /**
+   * O filtro da lateral corta o relatorio INTEIRO — medicoes, resumos,
+   * numeros do topo e a folha impressa. Uma unica regra ("o que esta' na
+   * tela e' o que imprime") e' mais facil de entender do que um filtro que
+   * vale para umas secoes e nao para outras.
+   */
   const visiveis = useMemo(
     () => (filtro
       ? linhas.filter((c) => nomeChave(String(c.maquina || '').trim() || 'Sem máquina') === nomeChave(filtro))
       : linhas),
     [linhas, filtro],
   );
+  const resumoVisivel = useMemo(
+    () => (filtro ? resumo.filter((g) => nomeChave(g.maquina) === nomeChave(filtro)) : resumo),
+    [resumo, filtro],
+  );
+  const resumoPecasVisivel = useMemo(
+    () => (filtro ? resumoPecas.filter((g) => nomeChave(g.maquina) === nomeChave(filtro)) : resumoPecas),
+    [resumoPecas, filtro],
+  );
 
   /**
-   * Com a lateral filtrada numa maquina, o grafico abre POR CONFERENCIA:
+   * Com a lateral filtrada numa maquina, o grafico abre POR MEDICAO:
    * uma barra por medicao, com a peca embaixo — e' assim que se enxerga
    * qual peca puxa o ritmo para cima ou para baixo. Sem filtro, cada
    * maquina e' uma barra so' (a media ponderada), porque duas barras da
    * mesma maquina nao se comparam com a barra unica da vizinha.
    *
    * Da esquerda para a direita, da mais antiga para a mais recente: e' a
-   * ordem em que o posto foi medido. A hachura aqui marca PERIODO CURTO
-   * (menos de 5 min de maquina rodando), nao amostra insuficiente — a
-   * legenda que vai junto diz isso.
+   * ordem em que o posto foi medido. A hachura aqui marca MEDICAO CURTA
+   * (menos de 5 min de maquina rodando) — a legenda que vai junto diz isso.
    */
   const barrasDoFiltro = useMemo(() => {
     if (!filtro) return null;
@@ -170,76 +182,34 @@ export default function RelatorioConferencias({ aoVoltar }) {
   }, [filtro, visiveis]);
 
   /**
-   * PAINEL — os numeros de cima e o Pareto de paradas do periodo.
-   *
-   * Um dashboard responde, nesta ordem: esta bom ou ruim? onde? o que
-   * fazer? A faixa de KPIs responde a primeira (referencias fechadas e'
-   * O numero — o resto contextualiza); o quadro por peca responde a
-   * segunda; as Proximas acoes, a terceira.
+   * Os numeros do topo, em palavras que qualquer pessoa le: ritmo medio
+   * (pecas/hora E pecas/minuto), quantas medicoes, quanto tempo a maquina
+   * rodou e quanto ficou parada. Seguem o filtro da lateral.
    */
   const painel = useMemo(() => {
-    if (!linhas.length) return null;
-    let totalMs = 0; let paradaMs = 0; let pecasTot = 0; let semPeca = 0;
+    if (!visiveis.length) return null;
+    let totalMs = 0; let paradaMs = 0; let pecasTot = 0;
     const todasParadas = [];
-    for (const c of linhas) {
+    for (const c of visiveis) {
       const dur = Number(c.duracao_ms) || 0;
       const par = somarParadas(c.paradas);
       totalMs += dur;
       paradaMs += Math.min(par.totalMs, dur);
       pecasTot += Number(c.pecas) || 0;
-      if (!String(c.peca || '').trim()) semPeca += 1;
       if (c.paradas?.length) todasParadas.push(...c.paradas);
     }
+    const produtivoMs = totalMs - paradaMs;
     return {
-      n: linhas.length,
-      maquinas: resumo.length,
+      n: visiveis.length,
+      maquinas: resumoVisivel.length,
       pecasTot,
-      semPeca,
       totalMs,
-      produtivoMs: totalMs - paradaMs,
+      produtivoMs,
       paradaMs,
-      disponibilidadePct: totalMs > 0 ? ((totalMs - paradaMs) / totalMs) * 100 : 100,
+      ritmoMedio: produtivoMs > 0 ? (pecasTot * 3600000) / produtivoMs : null,
       pareto: somarParadas(todasParadas),
-      refFechadas: resumoPecas.filter((g) => g.confiavel).length,
-      refTotal: resumoPecas.length,
     };
-  }, [linhas, resumo, resumoPecas]);
-
-  /**
-   * O caminho mais curto para cada referencia, em uma linha por peca.
-   * Ordena por proximidade (quem falta menos vem primeiro) e corta em 6:
-   * lista de acoes maior que isso vira ruido, nao plano.
-   */
-  const proximasAcoes = useMemo(() => {
-    const crit = CRITERIOS_CONFERENCIA;
-    const lista = resumoPecas
-      .filter((g) => !g.confiavel)
-      .map((g) => {
-        const faltamConf = Math.max(0, crit.minConferencias - g.n);
-        const faltamMin = Math.max(0, Math.ceil((crit.minTempoTotalMs - g.totalProdutivoMs) / 60000));
-        const partes = [];
-        if (g.curtas > 0) partes.push(`arquivar ${g.curtas} medição(ões) curta(s)`);
-        if (faltamConf > 0) partes.push(`+${faltamConf} conferência(s)`);
-        if (faltamMin > 0) partes.push(`+${faltamMin} min rodando`);
-        return {
-          chave: `${g.maquina}·${g.peca}`,
-          quem: `${g.peca} · ${g.maquina}`,
-          texto: partes.join(' · '),
-          peso: faltamConf + faltamMin / 15 + g.curtas * 0.5,
-        };
-      })
-      .filter((a) => a.texto)
-      .sort((a, b) => a.peso - b.peso);
-    if (painel?.semPeca > 0) {
-      lista.push({
-        chave: '__sem-peca',
-        quem: `${painel.semPeca} conferência(s) sem nome de peça`,
-        texto: 'ficam fora da referência — preencher a peça ao medir',
-        peso: 99,
-      });
-    }
-    return lista.slice(0, 6);
-  }, [resumoPecas, painel]);
+  }, [visiveis, resumoVisivel]);
 
   /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
      dentro dela pelo mesmo motivo que os produtos foram na lista: e'
@@ -260,10 +230,15 @@ export default function RelatorioConferencias({ aoVoltar }) {
           contexto={{
             rotulo: 'Relatório',
             titulo: 'Furadeiras',
-            subtitulo: 'Ritmo por máquina · peças/hora do posto',
+            subtitulo: 'Ritmo por máquina · peças/hora e peças/minuto',
           }}
           acaoPrimaria={estado === 'pronto' && linhas.length > 0 && !verArquivadas
-            ? { rotulo: 'Imprimir', aoClicar: () => window.print() }
+            ? {
+                // O rotulo diz O QUE vai sair no papel: com uma maquina
+                // escolhida na lateral, imprime so' ela.
+                rotulo: secoes.length ? (filtro ? 'Imprimir esta máquina' : 'Imprimir todas') : 'Imprimir',
+                aoClicar: () => window.print(),
+              }
             : undefined}
           secoes={secoes}
           secoesRotulo="Máquinas"
@@ -280,7 +255,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
 
         <main style={est.conteudoLateral}>
           {estado === 'carregando' && (
-            <EstadoVazio modo="analise" titulo="Carregando conferências" texto="Buscando as conferências sincronizadas." />
+            <EstadoVazio modo="analise" titulo="Carregando medições" texto="Buscando as medições sincronizadas." />
           )}
 
           {estado === 'erro' && (
@@ -299,7 +274,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
           {estado === 'pronto' && !linhas.length && (
             <EstadoVazio
               modo="analise"
-              titulo="Nenhuma conferência sincronizada"
+              titulo="Nenhuma medição sincronizada"
               texto="Esta é a tela das furadeiras: no celular, abra Ritmo da furadeira, informe máquina, peça e horários, e a medição aparece aqui assim que o aparelho sincroniza. Para embalagem — ciclo a ciclo, com tempo padrão — use um estudo de tempos."
             />
           )}
@@ -322,28 +297,23 @@ export default function RelatorioConferencias({ aoVoltar }) {
                 <section style={est.kpis} aria-label="Resumo do período">
                   {[
                     {
-                      rot: 'Referências fechadas',
-                      val: `${painel.refFechadas} de ${painel.refTotal}`,
-                      sub: painel.refTotal > 0 && painel.refFechadas === painel.refTotal
-                        ? 'todas as peças medidas têm referência'
-                        : 'peças ainda em medição — ver Próximas ações',
-                      destaque: true,
-                      fechou: painel.refTotal > 0 && painel.refFechadas === painel.refTotal,
+                      rot: 'Ritmo médio',
+                      val: painel.ritmoMedio != null ? `${Math.round(painel.ritmoMedio)} pç/h` : '—',
+                      sub: painel.ritmoMedio != null
+                        ? `${porMinuto(painel.ritmoMedio)} peças por minuto`
+                        : 'sem tempo de máquina rodando',
                     },
-                    { rot: 'Conferências', val: String(painel.n), sub: `${painel.maquinas} máquina(s) · ${painel.pecasTot} pç medidas` },
+                    { rot: 'Medições', val: String(painel.n), sub: `${painel.maquinas} máquina(s) · ${painel.pecasTot} peças` },
                     { rot: 'Tempo rodando', val: formatarDuracao(painel.produtivoMs), sub: `de ${formatarDuracao(painel.totalMs)} observados` },
                     {
-                      rot: 'Disponibilidade',
-                      val: `${painel.disponibilidadePct.toFixed(0)}%`,
-                      sub: painel.paradaMs > 0 ? `${formatarDuracao(painel.paradaMs)} parados` : 'nenhuma parada marcada',
-                    },
-                    {
-                      rot: 'Setup',
-                      val: painel.pareto.setupMs > 0 ? formatarDuracao(painel.pareto.setupMs) : '—',
-                      sub: painel.pareto.setupMs > 0 ? 'tempo em troca no período' : 'nenhuma troca marcada',
+                      rot: 'Tempo parado',
+                      val: painel.paradaMs > 0 ? formatarDuracao(painel.paradaMs) : '—',
+                      sub: painel.pareto.setupMs > 0
+                        ? `${formatarDuracao(painel.pareto.setupMs)} em troca/setup`
+                        : 'nenhuma parada marcada',
                     },
                   ].map((k) => (
-                    <div key={k.rot} style={{ ...est.kpi, ...(k.destaque ? (k.fechou ? est.kpiOk : est.kpiAtencao) : {}) }}>
+                    <div key={k.rot} style={est.kpi}>
                       <div style={est.kpiRotulo}>{k.rot}</div>
                       <div style={est.kpiValor}>{k.val}</div>
                       <div style={est.kpiSub}>{k.sub}</div>
@@ -353,41 +323,25 @@ export default function RelatorioConferencias({ aoVoltar }) {
               )}
 
               <section style={est.resumoGrade} aria-label="Resumo por máquina">
-                {(filtro ? resumo.filter((g) => g.maquina === filtro) : resumo).map((g) => (
+                {resumoVisivel.map((g) => (
                   <div key={g.maquina} style={est.cartaoMaquina}>
                     <div style={est.cartaoTopo}>
                       <div style={est.cartaoTitulo}>
                         {g.maquina}
                         {grupoDe(g.maquina) && <span style={est.cartaoGrupo}>{grupoDe(g.maquina)}</span>}
                       </div>
-                      <span style={{ ...est.selo, ...(g.confiavel ? est.seloOk : est.seloAtencao) }}>
-                        {g.confiavel ? 'Referência OK' : 'Amostra insuficiente'}
-                      </span>
                     </div>
                     <div style={est.cartaoRitmo}>
                       {Math.round(g.ritmoMedio)}
-                      <span style={est.cartaoRitmoSufixo}>pç/h médio</span>
+                      <span style={est.cartaoRitmoSufixo}>peças por hora</span>
                     </div>
+                    <div style={est.cartaoRitmoMinuto}>{porMinuto(g.ritmoMedio)} peças por minuto</div>
                     <div style={est.cartaoLinhas}>
-                      <span>{g.n} conferência(s) · {g.totalPecas} pç · {formatarDuracao(g.totalMs)}</span>
-                      <span>
-                        Ciclo médio: {formatarSegundos(g.cicloMedioMs)} s/pç
-                        {g.cvPct != null && ` · CV entre conferências: ${g.cvPct.toFixed(1)}% (${g.estabilidade.rotulo.toLowerCase()})`}
-                      </span>
-                      {/* So' quando ha' peca de mais de um ciclo: com tudo
-                          em 1, ciclo do motor e ciclo medio sao o mesmo. */}
-                      {g.totalAcionamentos > g.totalPecas && (
-                        <span>
-                          Furação: {g.totalAcionamentos} acionamentos do motor
-                          {' · '}ciclo do motor {formatarSegundos(g.cicloMotorMs)} s/acion.
-                        </span>
-                      )}
+                      <span>{g.n} medição(ões) · {g.totalPecas} peças · {formatarDuracao(g.totalProdutivoMs)} rodando</span>
                       {g.totalParadaMs > 0 && (
                         <span>
                           Parado: {formatarDuracao(g.totalParadaMs)}
-                          {g.totalSetupMs > 0 && ` (setup ${formatarDuracao(g.totalSetupMs)})`}
-                          {' · '}Disponibilidade: {g.disponibilidadePct.toFixed(0)}%
-                          {' · '}No período: {Math.round(g.ritmoBruto)} pç/h
+                          {g.totalSetupMs > 0 && ` (troca/setup ${formatarDuracao(g.totalSetupMs)})`}
                         </span>
                       )}
                       {g.n >= 2 && g.melhor && (
@@ -397,29 +351,27 @@ export default function RelatorioConferencias({ aoVoltar }) {
                         </span>
                       )}
                     </div>
-                    {/* Nota, nao lista de pendencias: os numeros acima ja'
-                        sao o resultado; aqui so' o que falta para fechar. */}
+                    {/* Nota em cinza, nunca carimbo: o numero ja' e' o
+                        resultado — a nota so' lembra que ele ainda assenta. */}
                     {!g.confiavel && (
-                      <div style={est.motivoNota}>
-                        Para virar referência: {g.motivos.join('; ')}.
+                      <div style={est.notaPoucas}>
+                        Ainda em medição — o número fica mais certeiro com mais medições.
                       </div>
                     )}
                   </div>
                 ))}
               </section>
 
-              {/* Referencia POR PECA — o numero que planeja carga e lote.
-                  So' na visao ativa: referencia nao sai de arquivadas. */}
-              {!verArquivadas && resumoPecas.length > 0 && (
-                <section style={est.painel} aria-label="Referência por peça">
+              {/* Ritmo POR PECA — o numero que planeja carga e lote.
+                  So' na visao ativa: ritmo nao sai de arquivadas. */}
+              {!verArquivadas && resumoPecasVisivel.length > 0 && (
+                <section style={est.painel} aria-label="Ritmo por peça">
                   {/* O mesmo respiro das celulas: sem ele o titulo encosta na
                       borda do cartao e parece cortado (apontado em 28/08). */}
                   <div style={{ padding: `${espaco.lg}px ${espaco.lg}px ${espaco.sm}px` }}>
-                    <h2 style={est.iaTitulo}>Referência por peça</h2>
+                    <h2 style={est.iaTitulo}>Ritmo por peça</h2>
                     <p style={est.iaTexto}>
-                      Ritmo consolidado de cada peça em cada máquina. O critério mínimo
-                      (3 conf. · 30 min rodando) aqui vale para a peça — máquina com o
-                      critério fechado por peças variadas ainda não tem referência de nenhuma.
+                      Quantas peças saem por hora e por minuto, peça a peça, com a máquina rodando.
                     </p>
                   </div>
                   <table style={est.tabela}>
@@ -427,17 +379,15 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <tr>
                         <th style={est.th}>Peça</th>
                         <th style={est.th}>Máquina</th>
-                        <th style={est.thNum}>Conf.</th>
+                        <th style={est.thNum}>Medições</th>
                         <th style={est.thNum}>Peças</th>
-                        <th style={est.thNum}>Rodando</th>
-                        <th style={est.thNum}>Ritmo (pç/h)</th>
-                        <th style={est.thNum}>Ciclo motor (s)</th>
-                        <th style={est.thNum}>CV%</th>
-                        <th style={est.thNum}>Situação</th>
+                        <th style={est.thNum}>Tempo rodando</th>
+                        <th style={est.thNum}>Peças/hora</th>
+                        <th style={est.thNum}>Peças/min</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(filtro ? resumoPecas.filter((g) => nomeChave(g.maquina) === nomeChave(filtro)) : resumoPecas).map((g) => (
+                      {resumoPecasVisivel.map((g) => (
                         <tr key={`${g.maquina}·${g.peca}`}>
                           <td style={est.tdCurto}>{g.peca}</td>
                           <td style={est.tdCurto}>{g.maquina}</td>
@@ -445,23 +395,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                           <td style={est.tdNum}>{g.totalPecas}</td>
                           <td style={est.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
                           <td style={est.tdNumForte}>{Math.round(g.ritmoMedio)}</td>
-                          <td style={est.tdNum}>{formatarSegundos(g.cicloMotorMs)}</td>
-                          <td style={est.tdNum}>
-                            {g.cvPct != null ? `${g.cvPct.toFixed(1)} · ${g.estabilidade.rotulo.toLowerCase()}` : '—'}
-                          </td>
-                          {/* O motivo mora no title: a tabela fica limpa e a
-                              explicacao aparece para quem parar o mouse. */}
-                          {/* Confiavel ganha selo; insuficiente diz O QUE FALTA,
-                              compacto — o detalhe completo segue no title. */}
-                          <td style={est.tdNum} title={g.motivos.join('; ') || undefined}>
-                            {g.confiavel
-                              ? <span style={{ ...est.selo, ...est.seloOk }}>Referência OK</span>
-                              : (
-                                <span style={est.paraFechar}>
-                                  {`${Math.min(g.n, CRITERIOS_CONFERENCIA.minConferencias)}/${CRITERIOS_CONFERENCIA.minConferencias} conf · ${Math.round(g.totalProdutivoMs / 60000)}/${Math.round(CRITERIOS_CONFERENCIA.minTempoTotalMs / 60000)} min${g.curtas > 0 ? ` · ${g.curtas} curta(s)` : ''}`}
-                                </span>
-                              )}
-                          </td>
+                          <td style={est.tdNum}>{porMinuto(g.ritmoMedio)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -469,60 +403,54 @@ export default function RelatorioConferencias({ aoVoltar }) {
                 </section>
               )}
 
-              {!verArquivadas && resumo.length > 0 && (
+              {!verArquivadas && resumoVisivel.length > 0 && (
                 <section style={est.painelGrafico} aria-label="Ritmo por máquina">
                   {filtro && barrasDoFiltro?.length ? (
                     <GraficoRitmoMaquinas
                       maquinas={barrasDoFiltro}
-                      titulo={`Conferências — ${filtro}`}
-                      subtitulo="Peças/hora com a máquina rodando · uma barra por medição, da mais antiga para a mais recente"
-                      rotuloOk="Período válido"
-                      rotuloFraco="Menos de 5 min rodando"
+                      titulo={`Medições — ${filtro}`}
+                      subtitulo="Peças/hora de cada medição, da mais antiga para a mais recente"
+                      rotuloOk="Medição"
+                      rotuloFraco="Medição curta (menos de 5 min rodando)"
+                      notaFraca="medição curta"
                     />
                   ) : (
-                    <GraficoRitmoMaquinas maquinas={filtro ? resumo.filter((g) => nomeChave(g.maquina) === nomeChave(filtro)) : resumo} />
+                    <GraficoRitmoMaquinas
+                      maquinas={resumoVisivel}
+                      subtitulo="Peças por hora de cada máquina, com a máquina rodando"
+                      rotuloOk="Ritmo medido"
+                      rotuloFraco="Ainda em medição"
+                      notaFraca="ainda em medição"
+                    />
                   )}
                 </section>
               )}
 
-              {!verArquivadas && painel && (painel.pareto.totalMs > 0 || proximasAcoes.length > 0) && (
+              {!verArquivadas && painel && painel.pareto.totalMs > 0 && (
                 <div style={est.duasColunas}>
-                  {painel.pareto.totalMs > 0 && (
-                    <section style={est.painelMiolo} aria-label="Paradas do período">
-                      <h2 style={est.iaTitulo}>Paradas</h2>
-                      <p style={est.iaTexto}>{formatarDuracao(painel.pareto.totalMs)} no total — Pareto por motivo</p>
-                      <div style={{ display: 'grid', gap: espaco.md, marginTop: espaco.md }}>
-                        {painel.pareto.porMotivo.map((m) => (
-                          <div key={m.motivo} style={est.paretoLinha}>
-                            <span>{m.rotulo}</span>
-                            <span style={est.paretoTrilha}>
-                              <i style={{ ...est.paretoBarra, width: `${Math.max(4, m.pct)}%` }} />
-                            </span>
-                            <b style={{ whiteSpace: 'nowrap' }}>{formatarDuracao(m.ms)}</b>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-                  {proximasAcoes.length > 0 && (
-                    <section style={est.painelMiolo} aria-label="Próximas ações">
-                      <h2 style={est.iaTitulo}>Próximas ações</h2>
-                      <p style={est.iaTexto}>O caminho mais curto para as referências — quem falta menos vem primeiro.</p>
-                      <ol style={est.listaAcoes}>
-                        {proximasAcoes.map((a) => (
-                          <li key={a.chave} style={est.itemAcao}>
-                            <strong>{a.quem}:</strong> {a.texto}
-                          </li>
-                        ))}
-                      </ol>
-                    </section>
-                  )}
+                  <section style={est.painelMiolo} aria-label="Paradas do período">
+                    <h2 style={est.iaTitulo}>Paradas</h2>
+                    <p style={est.iaTexto}>
+                      {formatarDuracao(painel.pareto.totalMs)} de máquina parada — os maiores motivos primeiro
+                    </p>
+                    <div style={{ display: 'grid', gap: espaco.md, marginTop: espaco.md }}>
+                      {painel.pareto.porMotivo.map((m) => (
+                        <div key={m.motivo} style={est.paretoLinha}>
+                          <span>{m.rotulo}</span>
+                          <span style={est.paretoTrilha}>
+                            <i style={{ ...est.paretoBarra, width: `${Math.max(4, m.pct)}%` }} />
+                          </span>
+                          <b style={{ whiteSpace: 'nowrap' }}>{formatarDuracao(m.ms)}</b>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 </div>
               )}
 
-              {!verArquivadas && <AnaliseIaConferencias resumo={resumo} />}
+              {!verArquivadas && <AnaliseIaConferencias resumo={resumoVisivel} />}
 
-              <section style={est.painel} aria-label={verArquivadas ? 'Conferências arquivadas' : 'Todas as conferências'}>
+              <section style={est.painel} aria-label={verArquivadas ? 'Medições arquivadas' : 'Todas as medições'}>
                 <table style={est.tabela}>
                   <thead>
                     <tr>
@@ -533,9 +461,8 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <th style={est.thNum}>Período</th>
                       <th style={est.thNum}>Parado</th>
                       <th style={est.thNum}>Peças</th>
-                      <th style={est.thNum}>Ciclos/pç</th>
-                      <th style={est.thNum}>Peças/h</th>
-                      <th style={est.thNum}>Ciclo (s/pç)</th>
+                      <th style={est.thNum}>Peças/hora</th>
+                      <th style={est.thNum}>Peças/min</th>
                       <th style={est.th} aria-label="Ações" />
                     </tr>
                   </thead>
@@ -558,10 +485,9 @@ export default function RelatorioConferencias({ aoVoltar }) {
                           <td style={est.tdNum} title={par.porMotivo.map((m) => `${m.rotulo}: ${formatarDuracao(m.ms)}`).join(' · ')}>
                             {par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}
                           </td>
-                          <td style={est.tdNum}>{Number(c.ciclos_por_peca) || 1}</td>
                           <td style={est.tdNum}>{c.pecas}</td>
                           <td style={est.tdNumForte}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
-                          <td style={est.tdNum}>{calc?.cicloMedioMs ? formatarSegundos(calc.cicloMedioMs) : '—'}</td>
+                          <td style={est.tdNum}>{calc ? porMinuto(calc.pecasPorHora) : '—'}</td>
                           <td style={est.tdAcoes}>
                             <button
                               type="button"
@@ -588,7 +514,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                               style={est.botaoExcluir}
                               onClick={() => setConfirmando(c)}
                               disabled={ocupado === c.id}
-                              aria-label={`Excluir conferência de ${c.maquina || 'sem máquina'}`}
+                              aria-label={`Excluir medição de ${c.maquina || 'sem máquina'}`}
                               title="Excluir de vez (registro errado)"
                             >
                               ×
@@ -619,9 +545,9 @@ export default function RelatorioConferencias({ aoVoltar }) {
         )}
 
         {confirmando && (
-          <div style={est.modal} role="dialog" aria-label="Excluir conferência">
+          <div style={est.modal} role="dialog" aria-label="Excluir medição">
             <div style={est.caixaModal}>
-              <h2 style={est.tituloModal}>Excluir conferência?</h2>
+              <h2 style={est.tituloModal}>Excluir medição?</h2>
               <p style={est.textoModal}>
                 <strong>{[confirmando.maquina, confirmando.peca].filter(Boolean).join(' · ') || 'Sem identificação'}</strong>
                 {faixaHoraria(confirmando) ? ` · ${faixaHoraria(confirmando)}` : ''}
@@ -653,25 +579,31 @@ export default function RelatorioConferencias({ aoVoltar }) {
       </div>
 
       {estado === 'pronto' && linhas.length > 0 && (
-        <ImpressaoConferencias linhas={linhas} resumo={resumo} resumoPecas={resumoPecas} grupoDe={grupoDe} />
+        <ImpressaoConferencias
+          linhas={visiveis}
+          resumo={resumoVisivel}
+          resumoPecas={resumoPecasVisivel}
+          grupoDe={grupoDe}
+          filtro={filtro}
+        />
       )}
     </div>
   );
 }
 
 /**
- * CADASTRO DE PARADAS de uma conferencia — no PC.
+ * CADASTRO DE PARADAS de uma medicao — no PC.
  *
  * Quem confere no corredor raramente para para digitar o setup; quem monta
  * o relatorio, sim. Aqui a parada e' reconstituida depois, com o
  * apontamento na mao: motivo, minutos e uma observacao livre.
  *
  * A lista e' gravada INTEIRA (nao incremental): o que esta na tela vira o
- * estado final das paradas daquela conferencia, entao corrigir um numero e
+ * estado final das paradas daquela medicao, entao corrigir um numero e
  * apagar uma linha usam o mesmo caminho e o mesmo botao.
  *
  * A soma nao pode alcancar o periodo: sem tempo de maquina rodando nao ha
- * ritmo, e a conferencia sairia dos calculos sem dizer por que. O aviso
+ * ritmo, e a medicao sairia dos calculos sem dizer por que. O aviso
  * aparece antes de gravar — o servidor recusa igual, mas errar no botao e'
  * pior que errar antes dele.
  */
@@ -707,7 +639,7 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
   const remover = (chave) => setLinhas((l) => l.filter((x) => x.chave !== chave));
 
   return (
-    <div style={est.modal} role="dialog" aria-label="Paradas da conferência">
+    <div style={est.modal} role="dialog" aria-label="Paradas da medição">
       <div style={{ ...est.caixaModal, maxWidth: 620 }}>
         <h2 style={est.tituloModal}>Paradas do período</h2>
         <p style={est.textoModal}>
@@ -816,12 +748,13 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
 }
 
 /**
- * Analise com IA das conferencias.
+ * Analise com IA das medicoes.
  *
  * Mesma secao do painel do estudo, com um contrato diferente: o que sobe e'
  * o resumo POR MAQUINA — incluindo `confiavel` e os motivos —, entao a IA
- * sabe quais numeros ainda nao servem de referencia e diz isso em vez de
- * tirar conclusao de capacidade de uma medicao de um minuto.
+ * sabe quais numeros ainda estao em medicao e diz isso em vez de tirar
+ * conclusao de capacidade de uma medicao de um minuto. Segue o filtro da
+ * lateral: analisa o que esta' na tela.
  */
 function AnaliseIaConferencias({ resumo }) {
   const [rodando, setRodando] = useState(false);
@@ -859,7 +792,7 @@ function AnaliseIaConferencias({ resumo }) {
   }
 
   return (
-    <section style={est.painelIa} aria-label="Análise com IA das conferências">
+    <section style={est.painelIa} aria-label="Análise com IA das medições">
       <div style={est.iaTopo}>
         <div style={{ minWidth: 0 }}>
           <h2 style={est.iaTitulo}>Análise com IA</h2>
@@ -889,24 +822,22 @@ function AnaliseIaConferencias({ resumo }) {
 }
 
 /**
- * FOLHA DE CONFERENCIAS — A4 retrato.
+ * FOLHA DAS FURADEIRAS — A4 retrato, modelo basico.
  *
- * Mesmo documento que a Folha de Analise do estudo: identificacao, resumo,
- * nota de confiabilidade, dado bruto, legenda em palavras e assinaturas.
  * Nao e' a tela no papel — a tela tem filtro, botao e cor de interface; o
- * papel tem contexto e responsavel.
+ * papel tem contexto e responsavel. Recebe os dados JA' FILTRADOS pela
+ * lateral: com uma maquina escolhida, sai a folha daquela maquina, com o
+ * nome dela no titulo e na identificacao.
  *
- * A ordem mudou em ago/2026, a pedido de quem usa o relatorio: a primeira
- * conferencia ja' e' RESULTADO e aparece antes de qualquer ressalva. O
- * criterio minimo continua declarado (identificacao, coluna Situacao e a
- * nota depois do resumo) — ele qualifica o numero, nao o esconde.
+ * Sem jargao (decisao de 31/08): nada de CV%, ciclo do motor ou criterio
+ * de amostra carimbado. Os numeros sao pecas/hora e pecas/minuto; maquina
+ * medida ha' pouco tempo leva uma NOTA em texto corrido, nao um selo.
  */
-function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
+function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro }) {
   // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
   const gruposCobertos = [...new Set(resumo.map((g) => grupoDe?.(g.maquina)).filter(Boolean))].sort();
   const hoje = new Date().toLocaleDateString('pt-BR');
-  const crit = CRITERIOS_CONFERENCIA;
-  const semReferencia = resumo.filter((g) => !g.confiavel);
+  const emMedicao = resumo.filter((g) => !g.confiavel);
 
   const datas = linhas.map((c) => new Date(c.salvo_em)).filter((d) => !Number.isNaN(d.getTime()));
   const periodo = datas.length
@@ -914,35 +845,34 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
     : '—';
   const totalPecas = resumo.reduce((acc, g) => acc + g.totalPecas, 0);
   const totalMs = resumo.reduce((acc, g) => acc + g.totalMs, 0);
+  const totalProdutivoMs = resumo.reduce((acc, g) => acc + g.totalProdutivoMs, 0);
   const totalParadaMs = resumo.reduce((acc, g) => acc + g.totalParadaMs, 0);
   const totalSetupMs = resumo.reduce((acc, g) => acc + g.totalSetupMs, 0);
+  const ritmoGeral = totalProdutivoMs > 0 ? (totalPecas * 3600000) / totalProdutivoMs : null;
 
   return (
     <div className="somente-impressao" style={imp.folha}>
       <header style={imp.cabecalho}>
         <div>
           <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={imp.logo} />
-          <h1 style={imp.titulo}>Ritmo das Furadeiras — Folha por Máquina</h1>
+          <h1 style={imp.titulo}>Ritmo das Furadeiras{filtro ? ` — ${filtro}` : ''}</h1>
         </div>
         <div style={imp.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
       </header>
 
       <section style={imp.identificacao}>
         {[
-          ['Tipo de medição', 'Ritmo do posto (vazão)'],
-          ['Período coberto', periodo],
+          filtro ? ['Máquina', filtro] : ['Máquinas', String(resumo.length)],
           ['Grupos de máquina', gruposCobertos.length ? gruposCobertos.join(' · ') : '—'],
-          ['Máquinas', String(resumo.length)],
-          ['Conferências', String(linhas.length)],
+          ['Período coberto', periodo],
+          ['Medições', String(linhas.length)],
           ['Total de peças', String(totalPecas)],
-          ['Tempo observado', formatarDuracao(totalMs)],
+          ['Tempo rodando', formatarDuracao(totalProdutivoMs)],
           ['Tempo parado', totalParadaMs > 0
-            ? `${formatarDuracao(totalParadaMs)}${totalSetupMs > 0 ? ` (setup ${formatarDuracao(totalSetupMs)})` : ''}`
+            ? `${formatarDuracao(totalParadaMs)}${totalSetupMs > 0 ? ` (troca/setup ${formatarDuracao(totalSetupMs)})` : ''}`
             : 'Nenhuma parada marcada'],
-          ['Critério mínimo', `${crit.minConferencias} conf. · ${formatarDuracao(crit.minTempoTotalMs)}`],
-          ['Período mínimo', formatarDuracao(crit.minPeriodoMs)],
-          ['Referências por peça', resumoPecas?.length
-            ? `${resumoPecas.filter((g) => g.confiavel).length} de ${resumoPecas.length} fechadas`
+          ['Ritmo médio', ritmoGeral != null
+            ? `${Math.round(ritmoGeral)} pç/h · ${porMinuto(ritmoGeral)} pç/min`
             : '—'],
         ].map(([k, v]) => (
           <div key={k} style={imp.campo}>
@@ -952,20 +882,18 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
         ))}
       </section>
 
-      <h2 style={imp.tituloSecao}>Resumo por máquina</h2>
+      <h2 style={imp.tituloSecao}>Ritmo por máquina</h2>
       <table style={imp.tabela}>
         <thead>
           <tr>
             <th style={imp.th}>Máquina</th>
             <th style={imp.th}>Grupo</th>
-            <th style={imp.thNum}>Conf.</th>
+            <th style={imp.thNum}>Medições</th>
             <th style={imp.thNum}>Peças</th>
-            <th style={imp.thNum}>Tempo obs.</th>
+            <th style={imp.thNum}>Tempo rodando</th>
             <th style={imp.thNum}>Parado</th>
-            <th style={imp.thNum}>Ritmo (pç/h)</th>
-            <th style={imp.thNum}>Ciclo (s/pç)</th>
-            <th style={imp.thNum}>CV%</th>
-            <th style={imp.thNum}>Situação</th>
+            <th style={imp.thNum}>Peças/hora</th>
+            <th style={imp.thNum}>Peças/min</th>
           </tr>
         </thead>
         <tbody>
@@ -975,66 +903,38 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
               <td style={imp.td}>{grupoDe?.(g.maquina) || '—'}</td>
               <td style={imp.tdNum}>{g.n}</td>
               <td style={imp.tdNum}>{g.totalPecas}</td>
-              <td style={imp.tdNum}>{formatarDuracao(g.totalMs)}</td>
+              <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
               <td style={imp.tdNum}>{g.totalParadaMs > 0 ? formatarDuracao(g.totalParadaMs) : '—'}</td>
               <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
-              <td style={imp.tdNum}>{formatarSegundos(g.cicloMedioMs)}</td>
-              <td style={imp.tdNum}>{g.cvPct != null ? g.cvPct.toFixed(1) : '—'}</td>
-              <td style={imp.tdNum}>{g.confiavel ? 'Referência' : 'Insuficiente'}</td>
+              <td style={imp.tdNum}>{porMinuto(g.ritmoMedio)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* A nota vem DEPOIS dos numeros (decisao ago/2026): o que ja' foi
-          medido aparece primeiro, desde a primeira conferencia. O criterio
-          nao mudou — segue declarado na identificacao e na coluna Situacao;
-          so' deixou de barrar a leitura do resultado. */}
-      <section style={semReferencia.length ? imp.ressalva : imp.validacao}>
-        <strong>
-          {semReferencia.length
-            ? '⚠ Nota — máquinas com amostra ainda insuficiente'
-            : '✓ Todas as máquinas atendem aos critérios'}
-        </strong>
-        {semReferencia.length ? (
-          <>
-            <p style={imp.ressalvaTexto}>
-              As máquinas abaixo ainda não atingiram os critérios mínimos de amostra. Os ritmos
-              acima valem como primeira medição, mas <strong>não devem embasar
-              dimensionamento de capacidade</strong> enquanto a amostra não fechar.
-            </p>
-            <ul style={imp.ressalvaLista}>
-              {semReferencia.map((g) => (
-                <li key={g.maquina}><strong>{g.maquina}</strong> — {g.motivos.join('; ')}.</li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p style={imp.ressalvaTexto}>
-            Todas as máquinas atingiram o mínimo de conferências, de tempo total observado e
-            de período por conferência. O CV% entre conferências está na tabela como
-            referência de estabilidade do posto.
-          </p>
-        )}
-      </section>
+      {/* Nota em texto corrido, nao carimbo: o numero ja' saiu na tabela. */}
+      {emMedicao.length > 0 && (
+        <p style={{ ...imp.nota, margin: '6px 0 0' }}>
+          Ainda em medição: {emMedicao.map((g) => g.maquina).join(', ')} — o ritmo
+          {emMedicao.length > 1 ? ' dessas máquinas' : ' desta máquina'} fica mais
+          certeiro com mais medições.
+        </p>
+      )}
 
-      {/* Referencia por peca: o criterio aplicado A PECA, nao a maquina.
-          E' a tabela que o PCP leva para dimensionar carga e lote. */}
+      {/* Ritmo por peca: o numero que o PCP leva para dimensionar carga e lote. */}
       {resumoPecas?.length > 0 && (
         <>
-          <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Referência por peça</h2>
+          <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Ritmo por peça</h2>
           <table style={imp.tabela}>
             <thead>
               <tr>
                 <th style={imp.th}>Peça</th>
                 <th style={imp.th}>Máquina</th>
-                <th style={imp.thNum}>Conf.</th>
+                <th style={imp.thNum}>Medições</th>
                 <th style={imp.thNum}>Peças</th>
-                <th style={imp.thNum}>Rodando</th>
-                <th style={imp.thNum}>Ritmo (pç/h)</th>
-                <th style={imp.thNum}>Ciclo motor (s)</th>
-                <th style={imp.thNum}>CV%</th>
-                <th style={imp.thNum}>Situação</th>
+                <th style={imp.thNum}>Tempo rodando</th>
+                <th style={imp.thNum}>Peças/hora</th>
+                <th style={imp.thNum}>Peças/min</th>
               </tr>
             </thead>
             <tbody>
@@ -1046,9 +946,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
                   <td style={imp.tdNum}>{g.totalPecas}</td>
                   <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
                   <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
-                  <td style={imp.tdNum}>{formatarSegundos(g.cicloMotorMs)}</td>
-                  <td style={imp.tdNum}>{g.cvPct != null ? g.cvPct.toFixed(1) : '—'}</td>
-                  <td style={imp.tdNum}>{g.confiavel ? 'Referência' : 'Insuficiente'}</td>
+                  <td style={imp.tdNum}>{porMinuto(g.ritmoMedio)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1056,7 +954,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
         </>
       )}
 
-      <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Conferências registradas ({linhas.length})</h2>
+      <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Medições registradas ({linhas.length})</h2>
       <table style={imp.tabela}>
         <thead>
           <tr>
@@ -1067,9 +965,8 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
             <th style={imp.thNum}>Período</th>
             <th style={imp.thNum}>Parado</th>
             <th style={imp.thNum}>Peças</th>
-            <th style={imp.thNum}>Ciclos/pç</th>
-            <th style={imp.thNum}>Peças/h</th>
-            <th style={imp.thNum}>Ciclo (s/pç)</th>
+            <th style={imp.thNum}>Peças/hora</th>
+            <th style={imp.thNum}>Peças/min</th>
           </tr>
         </thead>
         <tbody>
@@ -1088,9 +985,8 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
                 <td style={imp.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
                 <td style={imp.tdNum}>{par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}</td>
                 <td style={imp.tdNum}>{c.pecas}</td>
-                <td style={imp.tdNum}>{Number(c.ciclos_por_peca) || 1}</td>
                 <td style={{ ...imp.tdNum, fontWeight: 700 }}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
-                <td style={imp.tdNum}>{calc?.cicloMedioMs ? formatarSegundos(calc.cicloMedioMs) : '—'}</td>
+                <td style={imp.tdNum}>{calc ? porMinuto(calc.pecasPorHora) : '—'}</td>
               </tr>
             );
           })}
@@ -1100,21 +996,17 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
       {/* Legenda em PALAVRAS: o documento circula em reuniao e nao pode
           depender de quem escreveu para ser entendido. */}
       <section style={imp.legenda}>
-        <strong>Legenda</strong>
+        <strong>Como ler este relatório</strong>
         <div style={imp.gradeLegenda}>
           {[
-            ['Conferência', 'um período observado no posto: hora inicial, hora final e peças produzidas.'],
-            ['Período', 'tempo decorrido entre a hora inicial e a hora final.'],
-            ['Parado', 'tempo em que a máquina não produziu dentro do período: setup/troca, falta de material, manutenção, ajuste.'],
-            ['Peças/h', 'ritmo com a máquina rodando: peças ÷ (período − parado) × 3.600. Sem parada marcada, é o ritmo do período.'],
-            ['Ritmo médio', 'ponderado pelo tempo: Σ peças ÷ Σ tempo com a máquina rodando — não é a média das taxas.'],
-            ['Ciclo (s/pç)', 'segundos por peça (tempo ÷ peças).'],
-            ['Ciclos/pç', 'acionamentos do motor para furar uma peça (lateral simples fura em 1; motor que sobe e desce, 2; até 3). Peça de mais ciclos rende menos peças/hora sem a máquina estar mais lenta — o ciclo do motor é o número comparável.'],
-            ['CV%', 'variação do ritmo entre conferências da mesma máquina — quanto maior, mais instável.'],
-            ['Referência', 'amostra atende aos critérios mínimos declarados acima.'],
-            ['Referência por peça', 'ritmo consolidado da peça naquela máquina, com o critério mínimo aplicado à própria peça — é o número que dimensiona carga e lote. Conferência sem nome de peça fica fora deste quadro.'],
-            ['Grupo', 'grupo de máquina do cadastro, com o código da fábrica (ex: 0002 · FURADEIRA). Máquina fora do cadastro aparece sem grupo.'],
-            ['Insuficiente', 'amostra ainda não sustenta decisão de capacidade.'],
+            ['Medição', 'um período observado no posto: hora inicial, hora final e as peças produzidas.'],
+            ['Período', 'tempo entre a hora inicial e a hora final.'],
+            ['Parado', 'tempo em que a máquina não produziu dentro do período: troca/setup, falta de material, manutenção.'],
+            ['Peças/hora', 'quantas peças saem em uma hora com a máquina rodando.'],
+            ['Peças/min', 'o mesmo ritmo, em peças por minuto.'],
+            ['Ritmo médio', 'total de peças dividido pelo tempo total com a máquina rodando.'],
+            ['Grupo', 'grupo do cadastro de máquinas, com o código da fábrica (ex: 0002 · FURADEIRA).'],
+            ['Ainda em medição', 'máquina medida poucas vezes ou por pouco tempo — o número pode mudar com mais medições.'],
           ].map(([sigla, texto]) => (
             <div key={sigla} style={imp.itemLegenda}>
               <strong style={{ whiteSpace: 'nowrap' }}>{sigla}:</strong>
@@ -1122,11 +1014,6 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe }) {
             </div>
           ))}
         </div>
-        <p style={imp.nota}>
-          A medição de ritmo do posto mede <strong>vazão</strong> (peças/hora). Não substitui o
-          estudo de tempos, que mede ciclo a ciclo com fator de ritmo e tolerância e produz o
-          tempo padrão.
-        </p>
       </section>
 
       <section style={imp.assinaturas}>
@@ -1167,7 +1054,7 @@ const est = {
     ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa,
   },
 
-  /* ---- faixa de KPIs do painel ---- */
+  /* ---- faixa de numeros do topo ---- */
   kpis: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(172px, 1fr))',
     gap: espaco.md, marginBottom: espaco.xl,
@@ -1177,15 +1064,11 @@ const est = {
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
     padding: `${espaco.lg}px ${espaco.xl}px`,
   },
-  // O KPI que importa leva cor de ESTADO (nunca o vermelho da marca):
-  // ambar enquanto ha referencia em aberto, verde quando todas fecharam.
-  kpiAtencao: { borderColor: '#EAD9A0', background: 'linear-gradient(180deg, #FFFDF4, #FFFFFF)' },
-  kpiOk: { borderColor: '#BFE3CD', background: 'linear-gradient(180deg, #F4FBF7, #FFFFFF)' },
   kpiRotulo: { ...rotulo(t.textoFraco) },
   kpiValor: { ...tipo('display'), ...numeros, lineHeight: 1.15, marginTop: 2 },
   kpiSub: { ...tipo('legenda'), color: t.textoMedio, marginTop: 2 },
 
-  /* ---- paradas (pareto) + proximas acoes ---- */
+  /* ---- paradas (pareto) ---- */
   duasColunas: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
     gap: espaco.lg, marginBottom: espaco.xl,
@@ -1200,10 +1083,6 @@ const est = {
   },
   paretoTrilha: { height: 10, background: '#EDF0F3', borderRadius: raio.pill, overflow: 'hidden' },
   paretoBarra: { display: 'block', height: '100%', borderRadius: raio.pill, background: '#D97706' },
-  listaAcoes: { margin: `${espaco.md}px 0 0`, paddingLeft: 22, display: 'grid', gap: espaco.sm },
-  itemAcao: { ...tipo('corpo'), color: t.textoMedio, lineHeight: 1.45 },
-  // Insuficiente diz o que falta, em numero curto; o title da celula detalha.
-  paraFechar: { ...tipo('legenda'), color: t.textoMedio, whiteSpace: 'nowrap' },
 
   resumoGrade: {
     // auto-FIT, nao auto-fill: com uma maquina filtrada, o cartao ESTICA e
@@ -1225,23 +1104,20 @@ const est = {
     letterSpacing: 1, marginTop: 2,
   },
   cartaoTitulo: { ...tipo('corpoF') },
-  selo: {
-    padding: '2px 10px', borderRadius: raio.pill,
-    ...tipo('micro'), fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
-    borderWidth: 1, borderStyle: 'solid',
-  },
-  seloOk: { color: t.ok, borderColor: t.ok, background: t.okFundo },
-  seloAtencao: { color: t.atencao, borderColor: t.atencao, background: t.atencaoFundo },
   cartaoRitmo: {
     ...tipo('display'), ...numeros,
     display: 'flex', alignItems: 'baseline', gap: espaco.sm,
   },
   cartaoRitmoSufixo: { ...tipo('legenda'), color: t.textoFraco },
+  // Pedido de 31/08: o mesmo ritmo em pecas por MINUTO, logo abaixo do
+  // numero grande — e' a escala em que o posto pensa (contador de pecas).
+  cartaoRitmoMinuto: { ...tipo('corpoF'), ...numeros, color: t.textoMedio },
   cartaoLinhas: {
     display: 'flex', flexDirection: 'column', gap: 2,
     ...tipo('legenda'), color: t.textoMedio,
   },
-  motivoNota: { ...tipo('legenda'), color: t.atencao, lineHeight: 1.5 },
+  // Nota discreta, em cinza: informa sem carimbar o numero de "errado".
+  notaPoucas: { ...tipo('legenda'), color: t.textoFraco, lineHeight: 1.5 },
 
   botaoSecundario: {
     minHeight: 40, padding: `0 ${espaco.lg}px`, background: 'transparent',
@@ -1352,7 +1228,7 @@ const est = {
 
   painel: {
     background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
-    border: `1px solid ${t.borda}`, overflowX: 'auto',
+    border: `1px solid ${t.borda}`, overflowX: 'auto', marginBottom: espaco.xl,
   },
   tabela: { width: '100%', borderCollapse: 'collapse' },
   th: {
@@ -1402,11 +1278,6 @@ const imp = {
   campo: { display: 'flex', flexDirection: 'column', borderBottom: '1px solid #ddd', paddingBottom: 3 },
   campoRotulo: { fontSize: 7.5, textTransform: 'uppercase', letterSpacing: 0.6, color: '#666' },
   campoValor: { fontSize: 10.5, fontWeight: 600 },
-
-  validacao: { border: '1px solid #15803D', background: '#F2F9F4', padding: 8, marginBottom: 12, breakInside: 'avoid' },
-  ressalva: { border: '1px solid #B45309', background: '#FDF6EC', padding: 8, marginBottom: 12, breakInside: 'avoid' },
-  ressalvaTexto: { margin: '4px 0 0', fontSize: 9.5, lineHeight: 1.5 },
-  ressalvaLista: { margin: '4px 0 0', paddingLeft: 16, fontSize: 9.5, lineHeight: 1.5 },
 
   tituloSecao: { fontSize: 12, fontWeight: 700, margin: '0 0 6px', paddingBottom: 3, borderBottom: '1px solid #999' },
 
