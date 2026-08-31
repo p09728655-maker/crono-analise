@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.52.0',
+    data: '2026-08-31',
+    titulo: 'A análise pode sair na folha impressa',
+    itens: [
+      'Caixinha "SAIR NA IMPRESSÃO" no painel da Análise do período: marcada, a análise inteira (leitura geral, por máquina, tendência, entre máquinas e peças, paradas e próximo passo) entra na folha A4, logo depois do Ritmo por máquina — com a nota de que foi gerada automaticamente pelos números.',
+      'Desmarcada (o padrão), o papel sai só com os números, como sempre. A escolha fica gravada no navegador: quem imprime com análise hoje não precisa marcar de novo amanhã.',
+      'A análise impressa respeita o filtro por máquina, como o resto da folha.',
+    ],
+  },
+  {
     versao: '2.51.0',
     data: '2026-08-31',
     titulo: 'A análise fica mais esperta a cada medição',
