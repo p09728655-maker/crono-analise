@@ -539,7 +539,16 @@ export default function ConferenciaRapida({ aoSair }) {
               </div>
               <div style={est.linhaParcial}>
                 <Parcial rotulo="Período" valor={formatarDuracao(duracaoHoras)} />
-                <Parcial rotulo="Peças/min" valor={(resultadoHoras.pecasPorHoraBruto / 60).toFixed(1)} />
+                {/* "Peças/min" sem dizer de qual tempo virou divergencia
+                    entre o celular e o PC: aqui ele sai do PERIODO INTEIRO
+                    (acompanha a manchete), la' sai do tempo com a maquina
+                    rodando. Dois numeros certos, um rotulo so' — o rotulo
+                    e' que estava faltando. O de maquina rodando aparece
+                    logo abaixo, na linha das paradas. */}
+                <Parcial
+                  rotulo={resultadoHoras.paradaMs > 0 ? 'Peças/min no período' : 'Peças/min'}
+                  valor={(resultadoHoras.pecasPorHoraBruto / 60).toFixed(1)}
+                />
                 <Parcial
                   rotulo="Ciclo médio"
                   valor={resultadoHoras.cicloMedioMs ? formatarSegundos(resultadoHoras.cicloMedioMs) : '—'}
@@ -808,7 +817,10 @@ export default function ConferenciaRapida({ aoSair }) {
             <CiclosFuracao valor={ciclosPorPeca} aoTrocar={setCiclosPorPeca} compacto />
 
             <div style={est.linhaParcial}>
-              <Parcial rotulo="Peças/min" valor={(resultado.pecasPorHoraBruto / 60).toFixed(1)} />
+              <Parcial
+                rotulo={resultado.paradaMs > 0 ? 'Peças/min no período' : 'Peças/min'}
+                valor={(resultado.pecasPorHoraBruto / 60).toFixed(1)}
+              />
               <Parcial
                 rotulo="Ciclo médio"
                 valor={resultado.cicloMedioMs ? formatarSegundos(resultado.cicloMedioMs) : '—'}
@@ -1130,6 +1142,15 @@ function ComParadas({ calculado }) {
       <Parcial rotulo="Parado" valor={formatarDuracao(calculado.paradaMs)} />
       <Parcial rotulo="Rodando" valor={formatarDuracao(calculado.produtivoMs)} />
       <Parcial rotulo="Máq. rodando" valor={String(Math.round(calculado.pecasPorHora))} sufixo="pç/h" />
+      {/* O MESMO numero que o relatorio do PC mostra na coluna Peças/min:
+          ritmo com a maquina rodando. Sem ele, o analista comparava o
+          peças/min do periodo (aqui em cima) com o de maquina rodando (la')
+          e concluia, com razao, que os tempos nao batiam. */}
+      <Parcial
+        rotulo="Peças/min rodando"
+        valor={(calculado.pecasPorHora / 60).toFixed(1)}
+        sufixo="pç/min"
+      />
     </div>
   );
 }
@@ -1367,6 +1388,9 @@ const est = {
   },
   linhaParcial: {
     display: 'flex', gap: espaco.xl, justifyContent: 'center',
+    // Quebra de linha: sao ate quatro numeros, e o celular do chao de
+    // fabrica e' estreito. Sem isto, os tres primeiros esmagavam o quarto.
+    flexWrap: 'wrap', rowGap: espaco.md,
     marginTop: espaco.xs, width: '100%',
   },
   parcial: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 0 },

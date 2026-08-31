@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.53.0',
+    data: '2026-08-31',
+    titulo: 'Arquivar por máquina, corrigir o nome da peça — e o peças/min dizendo de qual tempo sai',
+    itens: [
+      'ARQUIVAR POR MÁQUINA: escolha a máquina em MÁQUINAS, na lateral, e o cabeçalho da tabela ganha "Arquivar esta máquina". Sai tudo de uma vez, com uma janela que diz quantas medições saem e lembra que nada é apagado. Em Arquivadas, o mesmo botão vira "Restaurar esta máquina".',
+      'ARQUIVAR VOLTOU A FUNCIONAR NA PRÁTICA: quando o servidor recusava (papel sem permissão, por exemplo), o aviso nascia no TOPO do relatório — mil pixels acima de quem tinha clicado no fim da tabela. O clique parecia não fazer nada. Agora o aviso flutua preso à janela e é lido de onde quer que se clique, com o motivo da recusa.',
+      'E o servidor deixou de responder "deu certo" quando o banco não mudou nada: recusa silenciosa da política de acesso agora vira erro com o que conferir.',
+      'CORRIGIR O NOME DA PEÇA: o nome da peça, na tabela de medições, virou clicável. A janela corrige o texto e, por padrão, corrige junto as outras medições com a mesma grafia — é o que junta a peça numa linha só no Ritmo por peça. A janela ainda oferece os nomes já medidos, para escolher em vez de redigitar (é redigitando que nasce a terceira grafia).',
+      'PEÇAS/MIN QUE BATE: o celular mostrava "PEÇAS/MIN" do período inteiro e o relatório do PC mostrava o de máquina rodando — a mesma medição dava 10,3 num lugar e 13,2 no outro, com o mesmo rótulo. Os dois números continuam (são perguntas diferentes), mas agora dizem de qual tempo saem: no celular, "Peças/min no período" e, na linha das paradas, "Peças/min rodando" — este é o número do relatório. O relatório, por sua vez, declara no cabeçalho da tabela que peças/hora e peças/min saem do tempo com a máquina rodando.',
+      'A lista vazia deixou de mentir: com tudo arquivado ela diz que as medições estão arquivadas (e quantas), em vez de "nenhuma medição sincronizada" — que parecia perda de dado.',
+    ],
+  },
+  {
     versao: '2.52.0',
     data: '2026-08-31',
     titulo: 'A análise pode sair na folha impressa',
