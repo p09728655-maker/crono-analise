@@ -155,6 +155,19 @@ await movel.close();
   checar(/Grupos de máquina/.test(impresso) && /0002 · FURADEIRA/.test(impresso),
     'a folha impressa identifica os grupos cobertos e o grupo de cada maquina');
 
+  /* ------------- COMPARATIVO: o que saiu x o que teria saido */
+  /**
+   * "Perdemos 322" sozinho nao diz de quanto para quanto. O quadro poe os
+   * dois lados na mesma linha e destaca a diferenca — e' o numero que a
+   * reuniao de producao pergunta.
+   *
+   * Aqui: 740 pecas em 53 min observados (838 pc/h rodando). Sem parada
+   * marcada nesta carga, o quadro NAO aparece — comparar seria inventar
+   * perda. Ele entra depois, quando o teste cadastra o setup.
+   */
+  checar(await p2.locator('[aria-label="Comparativo com e sem parada"]').count() === 0,
+    'sem parada marcada, o comparativo nao aparece — nao ha perda a mostrar');
+
   /* -------------------- painel: numeros do topo em portugues de fabrica */
   const kpis = p2.locator('[aria-label="Resumo do período"]');
   const textoKpis = await kpis.innerText();
@@ -292,6 +305,35 @@ await movel.close();
   checar(/1260/.test(depois),
     'o ritmo passa a sair do tempo rodando (420 pc em 20 min = 1260 pc/h)');
   checar(/Paradas \(1\)/.test(depois), 'a linha passa a mostrar que ha parada marcada');
+
+  /* ---- com a parada marcada, o comparativo aparece, na tela e no papel */
+  const quadro = p2.locator('[aria-label="Comparativo com e sem parada"]');
+  await quadro.waitFor({ timeout: 4000 });
+  const textoQuadro = await quadro.innerText();
+  /**
+   * Carga do teste, ja com o setup de 10 min: sobraram as duas medicoes da
+   * Furadeira 03 (420 pc em 30 min e 300 pc em 20 min) = 720 pecas em 50
+   * min de periodo, 40 min rodando = 1080 pc/h. Esticado para os 50 min,
+   * o potencial e' 900 pecas — 180 a mais que as 720 que sairam, 25%.
+   */
+  checar(/Saiu no período/i.test(textoQuadro) && /720/.test(textoQuadro),
+    'o quadro mostra o que SAIU no periodo (720 pc)');
+  checar(/Teria saído no mesmo tempo/i.test(textoQuadro) && /900/.test(textoQuadro),
+    'e o que teria saido no MESMO tempo, sem a parada (900 pc)');
+  checar(/Deixou de sair/i.test(textoQuadro) && /180/.test(textoQuadro),
+    'a diferenca fica em destaque: 180 pecas que deixaram de sair');
+  checar(/1080 pç\/h/.test(textoQuadro) && /18\.0 pç\/min/.test(textoQuadro),
+    'os dois ritmos saem em pecas/hora E pecas/minuto');
+  checar(/25% a mais de produção no mesmo tempo/.test(textoQuadro),
+    'e o ganho em percentual: 180 sobre 720 = 25% a mais no mesmo tempo');
+  checar(/não é meta nem capacidade de catálogo/i.test(textoQuadro),
+    'o quadro declara que o potencial nao e meta — e o ritmo que a maquina ja provou');
+
+  const folhaComparativo = await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
+  checar(/O que a parada custou/.test(folhaComparativo) && /900 peças/.test(folhaComparativo),
+    'o comparativo tambem sai na folha impressa — e o papel que vai para a reuniao');
+  checar(/Coordenador PPCP/.test(folhaComparativo) && !/Supervis/.test(folhaComparativo),
+    'a assinatura do papel e do Coordenador PPCP');
 
   /**
    * A RECUSA PRECISA SER LIDA DE ONDE SE CLICOU.

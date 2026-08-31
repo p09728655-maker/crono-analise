@@ -300,7 +300,9 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             <PainelOperadores estudoId={estudoId} analise={analise} aoDefinirTakt={() => setEditandoEstudo(true)} />
           )}
 
-          {aba === 'paradas' && <PainelParadas resumo={analise.paradas} />}
+          {aba === 'paradas' && (
+            <PainelParadas resumo={analise.paradas} capacidadeLinha={analise.capacidadeLinha} />
+          )}
 
           {aba === 'sugestoes' && <PainelSugestoes sugestoes={leitura.sugestoes} />}
 
@@ -1191,7 +1193,7 @@ function PainelSugestoes({ sugestoes }) {
  * nunca sobre o turno: o estudo nao observou o turno, e usar essa base
  * daria um numero que parece OEE sem ser.
  */
-function PainelParadas({ resumo }) {
+function PainelParadas({ resumo, capacidadeLinha = 0 }) {
   if (!resumo.n) {
     return (
       <section style={est.blocoTabela}>
@@ -1212,6 +1214,18 @@ function PainelParadas({ resumo }) {
 
   const maior = resumo.porMotivo[0]?.ms || 1;
 
+  /**
+   * O CUSTO DA PARADA EM PECAS.
+   *
+   * Minuto parado nao move reuniao; peca que deixou de sair, sim. A conta
+   * usa a capacidade da LINHA — que e' a do gargalo, nao a media das
+   * operacoes: a linha nao entrega mais rapido do que o posto mais lento,
+   * entao e' esse o ritmo que o tempo parado deixou de render.
+   */
+  const perdidas = capacidadeLinha > 0
+    ? Math.round((capacidadeLinha * resumo.totalMs) / 3600000)
+    : 0;
+
   return (
     <section style={est.blocoTabela}>
       <div style={est.cabecalhoSecao}>
@@ -1221,6 +1235,14 @@ function PainelParadas({ resumo }) {
           {resumo.pctDoObservado.toFixed(1)}% do tempo observado
         </span>
       </div>
+
+      {perdidas > 0 && (
+        <p style={est.custoParada} aria-label="Custo da parada em peças">
+          <strong>{perdidas} peças deixaram de sair</strong> nesse tempo parado, ao ritmo da linha
+          ({capacidadeLinha} pç/h · {(capacidadeLinha / 60).toFixed(1)} pç/min — a capacidade do
+          gargalo). É o que esses {formatarDuracao(resumo.totalMs)} custaram em produção.
+        </p>
+      )}
 
       <div style={est.listaMotivos}>
         {resumo.porMotivo.map((m) => (
@@ -1611,6 +1633,15 @@ const est = {
 
   /* ---- paradas do estudo ---- */
   paradasResumo: { ...tipo('legenda'), color: claro.textoMedio },
+  // O custo em peca fica em destaque: e' a unica linha desta aba que uma
+  // reuniao de producao le' sem precisar de traducao.
+  custoParada: {
+    margin: `0 ${espaco.xl}px ${espaco.lg}px`,
+    padding: `${espaco.md}px ${espaco.lg}px`,
+    background: claro.criticoFundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.critico,
+    borderRadius: raio.md, ...tipo('corpo'), color: claro.texto, lineHeight: 1.5,
+  },
   vazioParadas: {
     margin: 0, padding: `${espaco.xl}px`, ...tipo('corpo'),
     color: claro.textoMedio, lineHeight: 1.6, maxWidth: 720,

@@ -431,13 +431,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS grupos_maquina_codigo_unq ON grupos_maquina (e
 CREATE UNIQUE INDEX IF NOT EXISTS grupos_maquina_nome_unq ON grupos_maquina (empresa_id, lower(btrim(nome)));
 
 ALTER TABLE grupos_maquina ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS grupos_maquina_le ON grupos_maquina;
-CREATE POLICY grupos_maquina_le ON grupos_maquina FOR SELECT TO authenticated
-  USING (empresa_id = public.empresa_atual());
-DROP POLICY IF EXISTS grupos_maquina_admin ON grupos_maquina;
-CREATE POLICY grupos_maquina_admin ON grupos_maquina FOR ALL TO authenticated
-  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin')
-  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+-- As POLITICAS de grupos_maquina moram na secao de RLS, la' embaixo: elas
+-- chamam public.empresa_atual(), que so' e' criada depois daqui. Enquanto
+-- viveram neste ponto, a primeira execucao deste arquivo num banco novo
+-- morria com "function public.empresa_atual() does not exist" — e a tabela
+-- ficava com RLS ligada e nenhuma politica, ou seja, invisivel para todos.
 
 -- Excluir um grupo NAO apaga maquina: ela so' fica sem grupo.
 ALTER TABLE maquinas ADD COLUMN IF NOT EXISTS grupo_id uuid REFERENCES grupos_maquina(id) ON DELETE SET NULL;
@@ -471,15 +469,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS maquinas_nome_unq ON maquinas (empresa_id, low
 CREATE INDEX IF NOT EXISTS maquinas_empresa_idx ON maquinas (empresa_id, nome);
 
 ALTER TABLE maquinas ENABLE ROW LEVEL SECURITY;
--- Mesma regra dos motivos: todo mundo le (o celular precisa da lista),
--- so' admin mexe.
-DROP POLICY IF EXISTS maquinas_le ON maquinas;
-CREATE POLICY maquinas_le ON maquinas FOR SELECT TO authenticated
-  USING (empresa_id = public.empresa_atual());
-DROP POLICY IF EXISTS maquinas_admin ON maquinas;
-CREATE POLICY maquinas_admin ON maquinas FOR ALL TO authenticated
-  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin')
-  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+-- Politicas de `maquinas`: idem, na secao de RLS.
 
 -- ------------------------------------------------- passo 3 da migracao
 -- Derruba o formato antigo, DEPOIS de a conversao acima ter rodado e de as
@@ -748,6 +738,26 @@ CREATE POLICY conferencias_atualiza ON conferencias FOR UPDATE TO authenticated
 DROP POLICY IF EXISTS conferencias_admin_apaga ON conferencias;
 CREATE POLICY conferencias_admin_apaga ON conferencias FOR DELETE TO authenticated
   USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+
+-- grupos_maquina e maquinas: o cadastro que padroniza o nome do posto.
+-- Todo mundo le (a coleta precisa da lista), so' admin mexe. As politicas
+-- moram AQUI, e nao junto da tabela la' em cima, porque dependem das
+-- funcoes desta secao.
+DROP POLICY IF EXISTS grupos_maquina_le ON grupos_maquina;
+CREATE POLICY grupos_maquina_le ON grupos_maquina FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS grupos_maquina_admin ON grupos_maquina;
+CREATE POLICY grupos_maquina_admin ON grupos_maquina FOR ALL TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin')
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
+
+DROP POLICY IF EXISTS maquinas_le ON maquinas;
+CREATE POLICY maquinas_le ON maquinas FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS maquinas_admin ON maquinas;
+CREATE POLICY maquinas_admin ON maquinas FOR ALL TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin')
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
 
 -- motivos_parada: todo mundo le (a coleta precisa da lista), so' admin mexe
 -- — e' a lista que da' nome a toda parada ja' registrada.

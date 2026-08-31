@@ -958,10 +958,14 @@ rodar('API — integracao com Postgres', () => {
     await sql`DELETE FROM maquinas WHERE empresa_id = ${EMPRESA}`;
     await sql`DELETE FROM conferencias WHERE empresa_id = ${EMPRESA}`;
     await sql`
-      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas, salvo_em) VALUES
-      (${crypto.randomUUID()}, ${EMPRESA}, 'Furadeira 16',  300000, 10, now() - interval '2 hours'),
-      (${crypto.randomUUID()}, ${EMPRESA}, 'furadeira  16', 300000, 10, now() - interval '1 hour'),
-      (${crypto.randomUUID()}, ${EMPRESA}, 'Furadeira 12',  300000, 10, now())`;
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em) VALUES
+      (${crypto.randomUUID()}, ${EMPRESA}, 'Furadeira 16',  300000, 10,
+       now() - interval '2 hours' - interval '5 minutes', now() - interval '2 hours', now() - interval '2 hours'),
+      (${crypto.randomUUID()}, ${EMPRESA}, 'furadeira  16', 300000, 10,
+       now() - interval '1 hour' - interval '5 minutes', now() - interval '1 hour', now() - interval '1 hour'),
+      (${crypto.randomUUID()}, ${EMPRESA}, 'Furadeira 12',  300000, 10,
+       now() - interval '5 minutes', now(), now())`;
 
     const primeira = fingirRes();
     await maquinasApi(fingirReq({ metodo: 'POST', corpo: { dasConferencias: true } }), primeira);

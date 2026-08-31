@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } from '../../theme/tokens.js';
 import {
   conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao,
-  formatarSegundos, rotuloMotivo, somarParadas,
+  formatarSegundos, potencialSemParada, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import { TOQUE_MINIMO_MS } from '../../domain/estatistica.js';
@@ -565,6 +565,7 @@ export default function ConferenciaRapida({ aoSair }) {
                 )}
               </div>
               <ComParadas calculado={resultadoHoras} />
+              <SemAParada calculado={resultadoHoras} />
               <BotaoSalvar salvo={salvo} aoSalvar={() => salvar(resultadoHoras, true)} />
               {/* A mesma nota do resultado ao vivo: quem salva aqui precisa
                   saber que a medicao SOBE para o PC — sem ela, o recibo era
@@ -836,6 +837,7 @@ export default function ConferenciaRapida({ aoSair }) {
             </div>
 
             <ComParadas calculado={resultado} />
+            <SemAParada calculado={resultado} />
 
             {/* Editavel tambem aqui: parada esquecida no calor da coleta se
                 corrige antes de salvar, sem refazer a conferencia. */}
@@ -1135,6 +1137,40 @@ function CronoSetup({ inicio, aoEncerrar }) {
  * ago/2026: a producao real lidera e o de capacidade e' contexto — antes
  * era o contrario, e o analista lia 505 onde o posto entregou 441.
  */
+/**
+ * O COMPARATIVO no celular: o que saiu x o que teria saido no mesmo tempo.
+ *
+ * E' o numero que o analista leva para a reuniao — e ele nasce aqui, no
+ * corredor, com a parada ainda fresca na memoria. Sem isto ele so' via
+ * "13 min parados" e tinha de fazer a conta depois, no PC.
+ */
+function SemAParada({ calculado }) {
+  const c = potencialSemParada({
+    pecas: calculado?.pecas,
+    duracaoMs: calculado?.duracaoMs,
+    produtivoMs: calculado?.produtivoMs,
+  });
+  if (!c) return null;
+  return (
+    <section style={est.comparativo} aria-label="Sem a parada, no mesmo tempo">
+      <div style={est.comparativoRotulo}>Sem a parada, no mesmo tempo</div>
+      <div style={est.comparativoLinha}>
+        <span style={est.comparativoDe}>{c.pecas}</span>
+        <span style={est.comparativoSeta}>→</span>
+        <span style={est.comparativoPara}>{c.potencial}</span>
+        <span style={est.comparativoUnidade}>peças</span>
+      </div>
+      <div style={est.comparativoSub}>
+        {Math.round(c.ritmoPotencial)} pç/h · {(c.ritmoPotencial / 60).toFixed(1)} pç/min
+      </div>
+      {/* A perda em PECA, nao em minuto: e' o que muda a conversa. */}
+      <div style={est.comparativoPerda}>
+        deixaram de sair {c.perdidas} peças ({Math.round(c.ganhoPct)}% a mais no mesmo tempo)
+      </div>
+    </section>
+  );
+}
+
 function ComParadas({ calculado }) {
   if (!calculado || !calculado.paradaMs) return null;
   return (
@@ -1393,6 +1429,28 @@ const est = {
     flexWrap: 'wrap', rowGap: espaco.md,
     marginTop: espaco.xs, width: '100%',
   },
+  /* ---- comparativo: o que saiu x o que teria saido no mesmo tempo ---- */
+  comparativo: {
+    width: '100%', marginTop: espaco.md,
+    background: cores.superficieAlta, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
+    padding: `${espaco.md}px ${espaco.lg}px`,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+  },
+  comparativoRotulo: {
+    fontSize: 10, letterSpacing: 0.8, color: cores.textoFraco, textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  comparativoLinha: { display: 'flex', alignItems: 'baseline', gap: espaco.sm, flexWrap: 'wrap', justifyContent: 'center' },
+  // O que saiu fica menor e apagado; o potencial e' o numero grande. A
+  // leitura e' "de X para Y" — a seta faz o trabalho sem precisar de texto.
+  comparativoDe: { fontSize: tamanho.titulo, fontFamily: fonte.numero, color: cores.textoFraco },
+  comparativoSeta: { fontSize: tamanho.titulo, color: cores.textoFraco },
+  comparativoPara: { fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero, color: cores.texto },
+  comparativoUnidade: { fontSize: tamanho.legenda, color: cores.textoFraco },
+  comparativoSub: { fontSize: tamanho.legenda, color: cores.textoFraco, fontFamily: fonte.numero },
+  comparativoPerda: { fontSize: tamanho.legenda, color: cores.texto, textAlign: 'center' },
+
   parcial: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 0 },
   parcialRotulo: { fontSize: 10, letterSpacing: 0.8, color: cores.textoFraco, textTransform: 'uppercase' },
   parcialValor: { fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.1 },

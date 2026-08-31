@@ -281,6 +281,19 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
       const perdidas = Math.round((ritmoGeral * totParada) / MS_POR_HORA);
       if (perdidas >= 10) {
         linhas.push(`Ao ritmo médio, esse tempo parado custou cerca de ${perdidas} peças que deixaram de sair.`);
+        // O COMPARATIVO em uma frase: o numero sozinho ("perdemos 322") nao
+        // diz de quanto para quanto. Com os dois lados, a frase serve de
+        // legenda para o quadro em destaque no topo — e sobrevive sozinha,
+        // colada num e-mail.
+        const potencial = totPecas + perdidas;
+        const totMs = totProdutivo + totParada;
+        const ritmoPeriodo = (totPecas * MS_POR_HORA) / totMs;
+        linhas.push(
+          `No MESMO período, sem essa parada, teriam saído cerca de ${potencial} peças em vez de `
+          + `${totPecas} — de ${Math.round(ritmoPeriodo)} pç/h (${pMin(ritmoPeriodo)} pç/min) `
+          + `para ${Math.round(ritmoGeral)} pç/h (${pMin(ritmoGeral)} pç/min), `
+          + `${Math.round((perdidas / totPecas) * 100)}% a mais de produção no mesmo tempo.`,
+        );
       }
     }
     // Troca dominante pede organizacao de troca, nao maquina nova: e' o

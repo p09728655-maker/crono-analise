@@ -270,7 +270,7 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
       </section>
 
       <section style={est.assinaturas}>
-        {['Analista responsável', 'Supervisão / PCP'].map((papel) => (
+        {['Analista responsável', 'Coordenador PPCP'].map((papel) => (
           <div key={papel} style={est.assinatura}>
             <div style={est.linhaAssinatura} />
             <span style={est.papelAssinatura}>{papel}</span>

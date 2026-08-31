@@ -179,7 +179,7 @@ export default function ResumoExecutivo({ estudo, analise, leitura }) {
       )}
 
       <section style={est.assinaturas}>
-        {['Analista responsável', 'Supervisão / PCP'].map((papel) => (
+        {['Analista responsável', 'Coordenador PPCP'].map((papel) => (
           <div key={papel} style={est.assinatura}>
             <div style={est.linhaAssinatura} />
             <span style={est.papelAssinatura}>{papel}</span>

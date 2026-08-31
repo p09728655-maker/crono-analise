@@ -202,6 +202,18 @@ describe('analisarConferencias', () => {
     expect(paradas.linhas[0]).toContain('12 min');
     // O custo em PECAS: 14 min parados ao ritmo medio de 636 pc/h = ~148.
     expect(paradas.linhas.join(' ')).toContain('custou cerca de 148 peças');
+    /**
+     * E o COMPARATIVO, de quanto para quanto: 700 pecas saidas em 80 min
+     * observados (636 pc/h rodando, 525 no periodo). Sem a parada, no mesmo
+     * tempo, sairiam 848 — 21% a mais. "Perdemos 148" sozinho nao diz o
+     * tamanho da perda; com os dois lados, diz.
+     */
+    const textoParadas = paradas.linhas.join(' ');
+    expect(textoParadas).toContain('No MESMO período');
+    expect(textoParadas).toContain('848 peças em vez de 700');
+    expect(textoParadas).toContain('525 pç/h');
+    expect(textoParadas).toContain('636 pç/h');
+    expect(textoParadas).toContain('21% a mais');
     expect(paradas.linhas.join(' ')).toContain('ANTES de parar a máquina');
     // Sem sigla: a acao sai em portugues, nao em SMED.
     expect(texto(secoes)).not.toContain('SMED');

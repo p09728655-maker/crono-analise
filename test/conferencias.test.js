@@ -4,7 +4,7 @@
  * storage corrompido ou indisponivel.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { faixaHoraria } from '../src/domain/cronoanalise.js';
+import { faixaHoraria, potencialSemParada } from '../src/domain/cronoanalise.js';
 import { paraConferencia } from '../src/lib/api.js';
 
 const memoria = new Map();
@@ -144,5 +144,43 @@ describe('paraConferencia — item da fila vira payload do sync', () => {
     expect(corpo.ciclosPorPeca).toBe(1);
     expect(corpo.maquina).toBeNull();
     expect(corpo.paradas).toEqual([]);
+  });
+});
+
+/**
+ * O COMPARATIVO — o que saiu x o que teria saido no mesmo tempo.
+ *
+ * E' a conta que o analista fazia de cabeca (e as vezes errado) para levar
+ * a reuniao: minuto parado nao move ninguem, peca que deixou de sair move.
+ */
+describe('potencialSemParada', () => {
+  it('estica o ritmo de maquina rodando para o periodo inteiro', () => {
+    // 619 pecas em 1 h, com 13 min parados: rodou 47 min a 790 pc/h.
+    // No mesmo periodo, sem parar, teriam saido ~790.
+    const c = potencialSemParada({ pecas: 619, duracaoMs: 3600000, produtivoMs: 2820000 });
+    expect(c.potencial).toBe(790);
+    expect(c.perdidas).toBe(171);
+    expect(Math.round(c.ritmoPotencial)).toBe(790);
+    expect(Math.round(c.ritmoPeriodo)).toBe(619);
+    expect(Math.round(c.ganhoPct)).toBe(28);
+  });
+
+  it('o potencial e sempre o ritmo rodando aplicado ao periodo — nao uma meta', () => {
+    // 206 pecas em 30 min com 12 parados: 18 min rodando a 687 pc/h.
+    const c = potencialSemParada({ pecas: 206, duracaoMs: 1800000, produtivoMs: 1080000 });
+    expect(c.potencial).toBe(343);
+    expect(c.perdidas).toBe(137);
+    // O ritmo do potencial nao inventa nada: e o mesmo da maquina rodando.
+    expect(c.ritmoPotencial).toBeCloseTo((206 * 3600000) / 1080000, 6);
+  });
+
+  it('sem parada nao ha comparativo: o que saiu JA e o potencial', () => {
+    expect(potencialSemParada({ pecas: 100, duracaoMs: 600000, produtivoMs: 600000 })).toBeNull();
+  });
+
+  it('periodo, tempo rodando ou pecas ausentes devolvem null, nunca zero', () => {
+    expect(potencialSemParada({ pecas: 100, duracaoMs: 0, produtivoMs: 0 })).toBeNull();
+    expect(potencialSemParada({ pecas: 0, duracaoMs: 600000, produtivoMs: 300000 })).toBeNull();
+    expect(potencialSemParada({ pecas: 100, duracaoMs: 600000, produtivoMs: 0 })).toBeNull();
   });
 });
