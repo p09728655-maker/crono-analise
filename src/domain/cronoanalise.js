@@ -340,6 +340,51 @@ export function conferenciaRapida({ duracaoMs, pecas, paradas, ciclosPorPeca }) 
 }
 
 /**
+ * O COMPARATIVO: o que saiu x o que teria saido no MESMO TEMPO.
+ *
+ * Minuto parado e' abstrato; peca que deixou de sair, nao. O relatorio ja'
+ * dizia quanto tempo a maquina ficou parada e a que ritmo ela roda — mas
+ * quem le' precisava fazer a conta de cabeca para saber o que aquilo custou
+ * em PECA. Este e' o numero que muda conversa de reuniao: "no mesmo
+ * periodo, sem essa parada, teriam saido 790 em vez de 619".
+ *
+ * A conta e' direta e sem projecao nenhuma: o ritmo que a propria maquina
+ * provou COM ELA RODANDO, aplicado ao periodo INTEIRO que foi observado.
+ * Nao e' meta, nao e' capacidade teorica de catalogo, nao supoe turno nem
+ * ganho de processo — e' o que o posto ja' fez, sem a parada no meio.
+ *
+ * Devolve null quando nao ha' o que comparar: sem periodo, sem tempo
+ * rodando, ou sem parada nenhuma (ai o que saiu JA' e' o potencial).
+ */
+export function potencialSemParada({ pecas, duracaoMs, produtivoMs }) {
+  const dur = Number(duracaoMs) || 0;
+  const rodando = Number(produtivoMs) || 0;
+  const saiu = Math.max(0, Math.floor(Number(pecas) || 0));
+  if (dur <= 0 || rodando <= 0 || rodando >= dur || saiu <= 0) return null;
+
+  const ritmoRodando = (saiu * MS_POR_HORA) / rodando;
+  const ritmoPeriodo = (saiu * MS_POR_HORA) / dur;
+  // O potencial e' o ritmo de maquina rodando esticado para o periodo todo.
+  const potencial = Math.round((ritmoRodando * dur) / MS_POR_HORA);
+  const perdidas = Math.max(0, potencial - saiu);
+
+  return {
+    pecas: saiu,
+    potencial,
+    perdidas,
+    paradaMs: dur - rodando,
+    duracaoMs: dur,
+    produtivoMs: rodando,
+    ritmoPeriodo,
+    // O ritmo do potencial E' o de maquina rodando: mesma conta, outra
+    // pergunta. Fica com nome proprio para a tela nao precisar saber disso.
+    ritmoPotencial: ritmoRodando,
+    // Quanto a producao do periodo cresceria — a leitura de ganho.
+    ganhoPct: saiu > 0 ? (perdidas / saiu) * 100 : 0,
+  };
+}
+
+/**
  * Criterios de confiabilidade do estudo por maquina.
  *
  * Mesma filosofia da meta/Nievel no estudo de ciclos: o criterio nao

@@ -13,6 +13,21 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.54.0',
+    data: '2026-08-31',
+    titulo: 'O que a parada custou: comparativo em destaque, na tela, no papel e no celular',
+    itens: [
+      'COMPARATIVO EM DESTAQUE no relatório das Furadeiras: o que SAIU no período, o que TERIA SAÍDO no mesmo tempo sem a parada, e — em destaque, com borda e cor próprias — quantas peças DEIXARAM DE SAIR, com o ganho em percentual. Cada lado traz peças/hora e peças/minuto.',
+      'O potencial não é meta nem capacidade de catálogo: é o ritmo que a própria máquina fez COM ELA RODANDO, aplicado ao período inteiro que foi observado. O quadro diz isso em letras, para ninguém confundir com projeção.',
+      'O comparativo sai TAMBÉM NA FOLHA IMPRESSA, logo depois da identificação — é o papel que vai para a reunião. Em preto e branco o destaque continua legível: borda grossa e fundo cinza, sem depender de cor.',
+      'No celular, terminada a medição, aparece "SEM A PARADA, NO MESMO TEMPO": de 619 para 790 peças, com o ritmo do potencial por hora e por minuto e quantas peças deixaram de sair. O número da reunião nasce no corredor, com a parada fresca na memória.',
+      'A Análise do período ganhou a frase completa: "no MESMO período, sem essa parada, teriam saído cerca de 1142 peças em vez de 825 — de 550 pç/h para 762 pç/h, 38% a mais de produção no mesmo tempo". Serve colada num e-mail, sem o quadro junto.',
+      'No ESTUDO, a aba Paradas passou a dizer quantas PEÇAS deixaram de sair no tempo parado, ao ritmo da linha (a capacidade do gargalo, porque a linha não entrega mais rápido que o posto mais lento).',
+      'A assinatura do rodapé impresso agora é do COORDENADOR PPCP — no relatório das Furadeiras, no relatório do estudo e no resumo executivo.',
+      'Instalação: o arquivo do banco (db/schema.sql) precisava ser rodado DUAS vezes num banco novo — quatro políticas de acesso de máquinas e grupos vinham antes das funções que elas chamam, e falhavam na primeira passada, deixando o cadastro invisível. Agora uma passada basta.',
+    ],
+  },
+  {
     versao: '2.53.0',
     data: '2026-08-31',
     titulo: 'Arquivar por máquina, corrigir o nome da peça — e o peças/min dizendo de qual tempo sai',

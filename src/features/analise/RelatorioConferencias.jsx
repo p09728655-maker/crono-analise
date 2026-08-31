@@ -3,7 +3,7 @@ import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
   CRITERIOS_CONFERENCIA, conferenciaRapida, faixaHoraria, formatarDuracao,
-  nomeChave, resumirConferencias, rotuloMotivo, somarParadas,
+  nomeChave, potencialSemParada, resumirConferencias, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
 import { analisarConferencias } from '../../domain/analiseConferencias.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
@@ -286,6 +286,21 @@ export default function RelatorioConferencias({ aoVoltar }) {
     };
   }, [visiveis, resumoVisivel]);
 
+  /**
+   * O COMPARATIVO do periodo: o que saiu x o que teria saido no MESMO
+   * tempo, sem parada. Sai do painel, entao segue o filtro da lateral
+   * como todo o resto da tela — e some quando nao houve parada, porque
+   * ai' o que saiu ja' E' o potencial e comparar seria inventar perda.
+   */
+  const comparativo = useMemo(
+    () => (painel
+      ? potencialSemParada({
+        pecas: painel.pecasTot, duracaoMs: painel.totalMs, produtivoMs: painel.produtivoMs,
+      })
+      : null),
+    [painel],
+  );
+
   /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
      dentro dela pelo mesmo motivo que os produtos foram na lista: e'
      navegacao, nao um controle do conteudo.
@@ -434,6 +449,74 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <div style={est.kpiSub}>{k.sub}</div>
                     </div>
                   ))}
+                </section>
+              )}
+
+              {/* O COMPARATIVO, em destaque.
+                  O relatorio ja' dizia o tempo parado e o ritmo, mas quem
+                  le' tinha de fazer a conta de cabeca para saber o que
+                  aquilo custou em PECA. Aqui os dois numeros ficam lado a
+                  lado — o que saiu e o que teria saido no MESMO periodo,
+                  sem a parada — e a diferenca fica em destaque, porque e'
+                  ela que muda a conversa na reuniao.
+                  So' aparece com parada marcada: sem parada, o que saiu ja'
+                  E' o potencial, e o quadro viraria enfeite. */}
+              {!verArquivadas && comparativo && (
+                <section style={est.comparativo} aria-label="Comparativo com e sem parada">
+                  <div style={est.comparativoTopo}>
+                    <h2 style={est.comparativoTitulo}>
+                      O que a parada custou{filtro ? ` — ${filtro}` : ''}
+                    </h2>
+                    <p style={est.comparativoDica}>
+                      Mesmo período observado ({formatarDuracao(comparativo.duracaoMs)}), mesmo ritmo
+                      que a máquina já provou com ela rodando. Não é meta nem capacidade de
+                      catálogo: é o que o posto faria sem a parada no meio.
+                    </p>
+                  </div>
+
+                  <div style={est.comparativoGrade}>
+                    <div style={est.comparativoCaixa}>
+                      <div style={est.comparativoRotulo}>Saiu no período</div>
+                      <div style={est.comparativoValor}>
+                        {comparativo.pecas}
+                        <span style={est.comparativoUnidade}>peças</span>
+                      </div>
+                      <div style={est.comparativoSub}>
+                        {Math.round(comparativo.ritmoPeriodo)} pç/h · {porMinuto(comparativo.ritmoPeriodo)} pç/min
+                      </div>
+                      <div style={est.comparativoSub}>
+                        com {formatarDuracao(comparativo.paradaMs)} de máquina parada dentro do período
+                      </div>
+                    </div>
+
+                    <div style={est.comparativoCaixa}>
+                      <div style={est.comparativoRotulo}>Teria saído no mesmo tempo</div>
+                      <div style={est.comparativoValor}>
+                        {comparativo.potencial}
+                        <span style={est.comparativoUnidade}>peças</span>
+                      </div>
+                      <div style={est.comparativoSub}>
+                        {Math.round(comparativo.ritmoPotencial)} pç/h · {porMinuto(comparativo.ritmoPotencial)} pç/min
+                      </div>
+                      <div style={est.comparativoSub}>
+                        o ritmo de {formatarDuracao(comparativo.produtivoMs)} rodando, aplicado ao período inteiro
+                      </div>
+                    </div>
+
+                    <div style={est.comparativoCaixaDestaque}>
+                      <div style={est.comparativoRotuloDestaque}>Deixou de sair</div>
+                      <div style={est.comparativoValorDestaque}>
+                        {comparativo.perdidas}
+                        <span style={est.comparativoUnidade}>peças</span>
+                      </div>
+                      <div style={est.comparativoSubDestaque}>
+                        {Math.round(comparativo.ganhoPct)}% a mais de produção no mesmo tempo
+                      </div>
+                      <div style={est.comparativoSubDestaque}>
+                        é o que os {formatarDuracao(comparativo.paradaMs)} parados custaram
+                      </div>
+                    </div>
+                  </div>
                 </section>
               )}
 
@@ -1232,6 +1315,11 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
   const totalParadaMs = resumo.reduce((acc, g) => acc + g.totalParadaMs, 0);
   const totalSetupMs = resumo.reduce((acc, g) => acc + g.totalSetupMs, 0);
   const ritmoGeral = totalProdutivoMs > 0 ? (totalPecas * 3600000) / totalProdutivoMs : null;
+  // O mesmo comparativo da tela — o papel e' o que vai para a reuniao, e e'
+  // la' que a pergunta "quanto isso custou?" e' feita.
+  const comparativo = potencialSemParada({
+    pecas: totalPecas, duracaoMs: totalMs, produtivoMs: totalProdutivoMs,
+  });
 
   return (
     <div className="somente-impressao" style={imp.folha}>
@@ -1264,6 +1352,41 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
           </div>
         ))}
       </section>
+
+      {comparativo && (
+        <section style={imp.comparativo}>
+          <h2 style={imp.tituloSecao}>O que a parada custou</h2>
+          <div style={imp.comparativoGrade}>
+            <div style={imp.comparativoCaixa}>
+              <span style={imp.comparativoRotulo}>Saiu no período</span>
+              <span style={imp.comparativoValor}>{comparativo.pecas} peças</span>
+              <span style={imp.comparativoSub}>
+                {Math.round(comparativo.ritmoPeriodo)} pç/h · {porMinuto(comparativo.ritmoPeriodo)} pç/min
+              </span>
+            </div>
+            <div style={imp.comparativoCaixa}>
+              <span style={imp.comparativoRotulo}>Teria saído no mesmo tempo</span>
+              <span style={imp.comparativoValor}>{comparativo.potencial} peças</span>
+              <span style={imp.comparativoSub}>
+                {Math.round(comparativo.ritmoPotencial)} pç/h · {porMinuto(comparativo.ritmoPotencial)} pç/min
+              </span>
+            </div>
+            <div style={imp.comparativoCaixaDestaque}>
+              <span style={imp.comparativoRotulo}>Deixou de sair</span>
+              <span style={imp.comparativoValor}>{comparativo.perdidas} peças</span>
+              <span style={imp.comparativoSub}>
+                {Math.round(comparativo.ganhoPct)}% a mais no mesmo tempo
+              </span>
+            </div>
+          </div>
+          <p style={imp.comparativoNota}>
+            Período observado de {formatarDuracao(comparativo.duracaoMs)}, com
+            {' '}{formatarDuracao(comparativo.paradaMs)} de máquina parada. O potencial usa o ritmo
+            que a própria máquina fez com ela rodando ({formatarDuracao(comparativo.produtivoMs)}),
+            aplicado ao período inteiro — não é meta nem capacidade de catálogo.
+          </p>
+        </section>
+      )}
 
       <h2 style={imp.tituloSecao}>Ritmo por máquina</h2>
       <table style={imp.tabela}>
@@ -1409,6 +1532,8 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
             ['Peças/hora', 'quantas peças saem em uma hora com a máquina rodando.'],
             ['Peças/min', 'o mesmo ritmo, em peças por minuto.'],
             ['Ritmo médio', 'total de peças dividido pelo tempo total com a máquina rodando.'],
+            ['Deixou de sair', 'peças que teriam saído no MESMO período se a máquina não tivesse '
+              + 'parado, ao ritmo que ela própria fez rodando. Não é meta nem capacidade de catálogo.'],
             ['Grupo', 'grupo do cadastro de máquinas, com o código da fábrica (ex: 0002 · FURADEIRA).'],
             ['Ainda em medição', 'máquina medida poucas vezes ou por pouco tempo — o número pode mudar com mais medições.'],
           ].map(([sigla, texto]) => (
@@ -1421,7 +1546,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
       </section>
 
       <section style={imp.assinaturas}>
-        {['Analista responsável', 'Supervisão / PCP'].map((papel) => (
+        {['Analista responsável', 'Coordenador PPCP'].map((papel) => (
           <div key={papel} style={imp.assinatura}>
             <div style={imp.linhaAssinatura} />
             <span style={imp.papelAssinatura}>{papel}</span>
@@ -1457,6 +1582,42 @@ const est = {
     background: t.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
     ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa,
   },
+
+  /* ---- comparativo: o que saiu x o que teria saido no mesmo tempo ---- */
+  comparativo: {
+    background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    padding: espaco.xl, marginBottom: espaco.xl,
+    display: 'flex', flexDirection: 'column', gap: espaco.lg,
+  },
+  comparativoTopo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  comparativoTitulo: { ...tipo('titulo'), margin: 0 },
+  comparativoDica: { ...tipo('legenda'), color: t.textoMedio, margin: 0, maxWidth: 760 },
+  comparativoGrade: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+    gap: espaco.lg, alignItems: 'stretch',
+  },
+  comparativoCaixa: {
+    background: t.fundo, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    padding: `${espaco.lg}px ${espaco.xl}px`,
+    display: 'flex', flexDirection: 'column', gap: espaco.xs,
+  },
+  // O que deixou de sair e' o numero que muda a conversa: fundo, borda e
+  // corpo proprios. Cor nao carrega a informacao sozinha — o rotulo diz.
+  comparativoCaixaDestaque: {
+    background: t.criticoFundo, borderRadius: raio.md,
+    borderWidth: 2, borderStyle: 'solid', borderColor: t.critico,
+    padding: `${espaco.lg}px ${espaco.xl}px`,
+    display: 'flex', flexDirection: 'column', gap: espaco.xs,
+  },
+  comparativoRotulo: { ...rotulo(t.textoFraco) },
+  comparativoRotuloDestaque: { ...rotulo(t.critico) },
+  comparativoValor: { ...tipo('display'), ...numeros, lineHeight: 1.1 },
+  comparativoValorDestaque: { ...tipo('display'), ...numeros, lineHeight: 1.1, color: t.critico },
+  comparativoUnidade: { ...tipo('corpo'), color: t.textoFraco, marginLeft: espaco.sm },
+  comparativoSub: { ...tipo('legenda'), color: t.textoMedio },
+  comparativoSubDestaque: { ...tipo('legenda'), color: t.texto },
 
   /* ---- faixa de numeros do topo ---- */
   kpis: {
@@ -1739,6 +1900,24 @@ const imp = {
   campoValor: { fontSize: 10.5, fontWeight: 600 },
 
   tituloSecao: { fontSize: 12, fontWeight: 700, margin: '0 0 6px', paddingBottom: 3, borderBottom: '1px solid #999' },
+
+  /* Comparativo no papel. O destaque nao pode depender de cor: a folha sai
+     em P&B na maioria das impressoras da fabrica. Quem destaca e' a borda
+     grossa e o fundo cinza — a cor so' reforca. */
+  comparativo: { marginBottom: 14, breakInside: 'avoid' },
+  comparativoGrade: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 },
+  comparativoCaixa: {
+    display: 'flex', flexDirection: 'column', gap: 1,
+    border: '1px solid #999', padding: '6px 8px',
+  },
+  comparativoCaixaDestaque: {
+    display: 'flex', flexDirection: 'column', gap: 1,
+    border: '2px solid #000', background: '#EEE', padding: '6px 8px',
+  },
+  comparativoRotulo: { fontSize: 7.5, textTransform: 'uppercase', letterSpacing: 0.6, color: '#444' },
+  comparativoValor: { fontSize: 15, fontWeight: 700 },
+  comparativoSub: { fontSize: 8.5, color: '#333' },
+  comparativoNota: { fontSize: 8.5, color: '#333', margin: '5px 0 0', lineHeight: 1.4 },
 
   tabela: { width: '100%', borderCollapse: 'collapse', fontSize: 9.5, breakInside: 'avoid' },
   th: { textAlign: 'left', padding: '4px 5px', fontWeight: 700, borderBottom: '1.5px solid #000', whiteSpace: 'nowrap' },

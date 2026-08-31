@@ -166,6 +166,20 @@ checar(/PEÇAS\/MIN NO PERÍODO/i.test(comParada) && comParada.includes('3.3'),
 checar(/PEÇAS\/MIN RODANDO/i.test(comParada) && comParada.includes('5.0'),
   'e o peças/min de maquina rodando aparece junto — o mesmo numero do PC (100 pc / 20 min = 5.0)');
 
+/**
+ * O COMPARATIVO ja no corredor: 100 pecas em 30 min com 10 parados. A 300
+ * pc/h (o ritmo dos 20 min rodando), o mesmo periodo teria rendido 150 —
+ * 50 pecas a mais, 50%. E' o numero que o analista leva para a reuniao, e
+ * ele nasce aqui, com a parada fresca na memoria.
+ */
+const semParada = await p.locator('[aria-label="Sem a parada, no mesmo tempo"]').innerText();
+checar(/100/.test(semParada) && /150/.test(semParada),
+  'o celular mostra de quanto para quanto: 100 → 150 pecas no mesmo tempo');
+checar(/deixaram de sair 50 peças/.test(semParada),
+  'e diz quanto deixou de sair, em PECA — nao so em minuto parado');
+checar(/300 pç\/h/.test(semParada) && /5\.0 pç\/min/.test(semParada),
+  'com o ritmo do potencial por hora e por minuto');
+
 // Parada maior que o periodo: avisa, nao some com a conta nem divide por zero.
 await minutosSetup.fill('40');
 await painelHoras.waitFor({ state: 'detached', timeout: 4000 });

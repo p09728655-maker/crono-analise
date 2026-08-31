@@ -136,6 +136,15 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(/kanban/i.test(painelParadas), 'cada motivo vem com a acao que ele pede');
   checar(/% do tempo observado/.test(painelParadas), 'declara a base do percentual');
   checar(/não entra/i.test(painelParadas), 'diz que o tempo parado nao infla o tempo observado');
+  /**
+   * O CUSTO EM PECA. Minuto parado nao move reuniao de producao; peca que
+   * deixou de sair, sim. A conta usa a capacidade da LINHA (a do gargalo),
+   * porque a linha nao entrega mais rapido que o posto mais lento.
+   */
+  checar(/deixaram de sair/.test(painelParadas),
+    'o tempo parado do estudo aparece tambem em PECAS que deixaram de sair');
+  checar(/ao ritmo da linha/i.test(painelParadas) && /capacidade do\s+gargalo/i.test(painelParadas),
+    'e declara a base da conta: o ritmo da linha, que e a capacidade do gargalo');
 
   // Tabela de operacoes mostra o parado por operacao.
   await p.locator('[aria-label="Análise"] button', { hasText: 'Operações' }).click();
