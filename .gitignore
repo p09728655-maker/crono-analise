@@ -6,3 +6,8 @@ dist/
 .env.*.local
 *.log
 .DS_Store
+
+# Scripts descartaveis de verificacao (playwright, conferencia de conta).
+# Nascem durante o trabalho e nao pertencem ao repositorio.
+*-tmp.mjs
+rev-tmp-*.mjs
