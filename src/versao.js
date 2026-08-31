@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.57.0',
+    data: '2026-08-31',
+    titulo: 'Três buracos que perdiam dado na coleta',
+    itens: [
+      'A VÍRGULA VOLTOU A VALER. No campo de minutos de parada, "1,25" virava 125 — cem vezes o valor. O campo era numérico e o navegador simplesmente descartava a vírgula que o teclado brasileiro entrega, sem aviso nenhum: em período de 30 min o resultado quebrava e alguém percebia; em período de 4 h passava liso e ia para o relatório. Vale no celular e no editor de paradas do PC (o teclado numérico do computador também manda vírgula).',
+      'DESFAZER AGORA DESFAZ MESMO. O ciclo entra na fila de envio no instante em que é registrado — é o que garante que nada se perde se o aparelho morrer —, mas "Desfazer" e "Descartar ciclo" só tiravam da tela: você via 4 ciclos e o PC recebia 5, e o ciclo atípico que você acabou de descartar entrava na média do estudo. Agora sai da fila junto. Se ele já tiver subido, a tela diz isso em vez de fingir que desfez.',
+      'A MEDIÇÃO SOBREVIVE AO CELULAR APAGAR. O fluxo da tela é "marca 7:00, segue o caminho da fábrica, volta às 7:10" — e nesses dez minutos o aparelho apaga e o sistema recolhe a aba. Você voltava para um formulário em branco, com a hora inicial perdida (e hora não se refaz: ou se lembra, ou se mede tudo de novo). Agora máquina, peça, horários, peças e paradas são guardados a cada mudança e voltam sozinhos. O rascunho some quando a medição é salva.',
+    ],
+  },
+  {
     versao: '2.56.0',
     data: '2026-08-31',
     titulo: 'Auditoria: dois números estavam errados e um clique apagava nome de peça',

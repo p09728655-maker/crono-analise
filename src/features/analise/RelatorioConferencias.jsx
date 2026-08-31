@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
-  CRITERIOS_CONFERENCIA, conferenciaRapida, faixaHoraria, formatarDuracao,
-  comparativoDeParadas, nomeChave, resumirConferencias, ritmoPorHoraDoDia, rotuloMotivo,
-  somarParadas,
+  CRITERIOS_CONFERENCIA, comparativoDeParadas, conferenciaRapida, faixaHoraria,
+  formatarDuracao, nomeChave, numeroDecimal, resumirConferencias, ritmoPorHoraDoDia,
+  rotuloMotivo, somarParadas, textoDecimal,
 } from '../../domain/cronoanalise.js';
 import { analisarConferencias } from '../../domain/analiseConferencias.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
@@ -1213,7 +1213,7 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
   const limpas = linhas
     .map((l) => ({
       motivo: l.motivo,
-      duracaoMs: Math.round((Number(String(l.minutos).replace(',', '.')) || 0) * 60000),
+      duracaoMs: Math.round(numeroDecimal(l.minutos) * 60000),
       observacao: l.observacao.trim() || null,
     }))
     .filter((l) => l.duracaoMs > 0);
@@ -1278,12 +1278,14 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
                     <option key={m.codigo} value={m.codigo}>{m.rotulo}</option>
                   ))}
                 </select>
+                {/* TEXTO, nao `type="number"`: o teclado numerico brasileiro
+                    manda VIRGULA e o campo numerico a descarta em silencio —
+                    "1,25" virava 125. Mesma correcao do celular. */}
                 <input
-                  type="number"
-                  min="0"
-                  step="0.5"
+                  type="text"
+                  inputMode="decimal"
                   value={l.minutos}
-                  onChange={(ev) => alterar(l.chave, 'minutos', ev.target.value)}
+                  onChange={(ev) => alterar(l.chave, 'minutos', textoDecimal(ev.target.value))}
                   style={est.inputMinutos}
                   aria-label={`Minutos parada — ${rotuloMotivo(l.motivo)}`}
                 />

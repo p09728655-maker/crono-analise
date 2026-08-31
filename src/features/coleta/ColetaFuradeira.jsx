@@ -3,7 +3,7 @@ import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } f
 import { calcularOperacao, formatarCronometro, formatarSegundos, rotuloMotivo } from '../../domain/cronoanalise.js';
 import { useMotivosParada } from '../../lib/motivosParada.js';
 import { TOQUE_MINIMO_MS, ultimaObservacaoAtipica } from '../../domain/estatistica.js';
-import { enfileirar, novoId } from '../../lib/filaOffline.js';
+import { enfileirar, listarFila, novoId, removerDaFila } from '../../lib/filaOffline.js';
 import { useCronometro, useOnline, useWakeLock, vibrar } from '../../lib/hooks.js';
 
 /**
@@ -27,6 +27,9 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar 
   const [tempos, setTempos] = useState(() => operacao?.tempos ?? []);
   const [rodada, setRodada] = useState(1);
   const [aviso, setAviso] = useState(null);
+  /* Os ids dos ciclos que estao na fila, na ordem em que foram registrados —
+     e' por eles que o desfazer alcanca a fila (ver desfazerUltimo). */
+  const idsNaFila = useRef([]);
   const [pausa, setPausa] = useState(null);
   const [pulso, setPulso] = useState(0);
 
@@ -110,6 +113,9 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar 
     };
     try {
       await enfileirar(item);
+      // O id fica guardado para o DESFAZER poder alcancar a fila: sem isto,
+      // o ciclo saia da tela e continuava subindo para o PC.
+      idsNaFila.current.push(item.clientId);
       aoRegistrar?.(item);
     } catch {
       setAviso({ tipo: 'critico', texto: 'Falha ao gravar localmente — verifique o dispositivo' });
@@ -140,11 +146,37 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar 
     }
   }, [pausa, somarPausa, operacao]);
 
-  const desfazerUltimo = useCallback(() => {
+  /**
+   * DESFAZER TIRA DA FILA TAMBEM.
+   *
+   * O ciclo e' enfileirado no instante em que se registra — e' o que garante
+   * que nada se perde se o aparelho morrer. Mas o desfazer so' mexia na
+   * TELA: o analista via 4 ciclos e o servidor recebia 5, e o ciclo atipico
+   * que ele acabou de descartar entrava na media do estudo, no PC.
+   *
+   * Se a fila ja' tiver subido (sincronizacao roda sozinha), nao ha' o que
+   * remover — e a tela DIZ isso, em vez de fingir que desfez.
+   */
+  const desfazerUltimo = useCallback(async () => {
     if (!tempos.length) return;
     setTempos((t) => t.slice(0, -1));
     vibrar([25, 40, 25]);
-    setAviso({ tipo: 'atencao', texto: 'Ultimo ciclo removido da tela' });
+
+    const clientId = idsNaFila.current.pop();
+    if (!clientId) {
+      setAviso({ tipo: 'atencao', texto: 'Ultimo ciclo removido da tela' });
+      return;
+    }
+    try {
+      const fila = await listarFila();
+      const aindaNaFila = fila.some((x) => x.clientId === clientId);
+      await removerDaFila([clientId]);
+      setAviso(aindaNaFila
+        ? { tipo: 'atencao', texto: 'Ultimo ciclo removido — nao vai para o PC' }
+        : { tipo: 'atencao', texto: 'Ciclo removido da tela, mas ja tinha subido para o PC — descarte-o na analise' });
+    } catch {
+      setAviso({ tipo: 'atencao', texto: 'Ultimo ciclo removido da tela' });
+    }
   }, [tempos.length]);
 
   // Barra de espaco espelha o botao: alguns analistas usam teclado bluetooth.

@@ -105,6 +105,30 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   }));
   const totalRegistrado = await p.evaluate(() => window.__registrados.length);
   checar(naFila === totalRegistrado, `${naFila} ciclos gravados no IndexedDB antes de qualquer rede`);
+
+  /**
+   * DESFAZER TIRA DA FILA TAMBEM.
+   *
+   * O ciclo entra na fila no instante em que se registra — e' o que garante
+   * que nada se perde se o aparelho morrer. Mas o desfazer so' mexia na
+   * TELA: o analista via 4 ciclos e o servidor recebia 5, e o ciclo atipico
+   * que ele acabou de descartar entrava na media do estudo, la' no PC.
+   */
+  const contarFila = () => p.evaluate(() => new Promise((res) => {
+    const r = indexedDB.open('ritmoprod', 1);
+    r.onsuccess = (e) => {
+      const req = e.target.result.transaction('fila', 'readonly').objectStore('fila').count();
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => res(-1);
+    };
+    r.onerror = () => res(-1);
+  }));
+  await p.getByRole('button', { name: /Desfazer/i }).first().click();
+  await p.waitForTimeout(500);
+  checar(await contarFila() === naFila - 1,
+    'desfazer tira o ciclo da FILA, nao so da tela — o descartado nao sobe para o PC');
+  checar(/nao vai para o PC/i.test(await p.locator('body').innerText()),
+    'e a tela diz que ele nao vai subir');
   checar(erros.length === 0, `sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
   await ctx.close();
 }
