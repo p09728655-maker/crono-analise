@@ -7,6 +7,16 @@
  * por regra: e' instantanea, gratuita, funciona offline e sai identica para
  * os mesmos numeros — da' para conferir na calculadora.
  *
+ * A ANALISE CRESCE COM OS DADOS (pedido de 31/08, parte 2): cada leitura
+ * tem um minimo de medicoes para destravar, entao o texto fica mais
+ * completo a cada medicao registrada —
+ *   1 medicao   -> leitura geral e o que falta para firmar;
+ *   2+ pecas    -> peca mais rapida x mais lenta;
+ *   2+ maquinas -> comparacao entre maquinas;
+ *   3+ medicoes -> ate onde o posto chega (melhor periodo x media);
+ *   4+ medicoes -> tendencia (o ritmo esta subindo ou caindo no tempo);
+ *   3+ da peca  -> peca cujo ritmo nao se repete.
+ *
  * Mesmas regras de projeto de sugerirMelhorias:
  *  1. Toda conclusao vem com o numero que a motivou.
  *  2. Linguagem de fabrica, sem jargao (modelo basico de 31/08): nada de
@@ -14,15 +24,23 @@
  *     troca", "ainda em medicao".
  *
  * Funcao pura: recebe os resumos ja' calculados (resumirConferencias, por
- * maquina e por peca), devolve secoes de texto. Nao conhece React nem tela.
+ * maquina e por peca) e as medicoes cruas (para ordenar no tempo), devolve
+ * secoes de texto. Nao conhece React nem tela.
  *
- * @param maquinas  resultado de resumirConferencias(linhas)
- * @param pecas     resultado de resumirConferencias(linhas, { porPeca: true })
+ * @param maquinas      resultado de resumirConferencias(linhas)
+ * @param pecas         resultado de resumirConferencias(linhas, { porPeca: true })
+ * @param conferencias  as medicoes cruas (opcional) — so' a tendencia usa,
+ *                      porque o resumo nao guarda a ordem no tempo
  * @returns [{ titulo, linhas: [string] }] — secoes na ordem de leitura
  */
-import { CRITERIOS_CONFERENCIA, formatarDuracao } from './cronoanalise.js';
+import { CRITERIOS_CONFERENCIA, formatarDuracao, nomeChave, somarParadas } from './cronoanalise.js';
 
 const MS_POR_HORA = 3600000;
+
+/** Minimo de medicoes da mesma maquina para falar de tendencia no tempo. */
+const MIN_TENDENCIA = 4;
+/** Variacao (em %) abaixo da qual tendencia e comparacao viram ruido. */
+const RUIDO_PCT = 8;
 
 const pMin = (pecasPorHora) => (pecasPorHora / 60).toFixed(1);
 const ritmoTexto = (pph) => `${Math.round(pph)} pç/h (${pMin(pph)} pç/min)`;
@@ -55,7 +73,55 @@ function variacaoTexto(g) {
   return 'o ritmo varia muito entre as medições — vale olhar o que muda (peça, operador, abastecimento)';
 }
 
-export function analisarConferencias({ maquinas = [], pecas = [] } = {}) {
+/**
+ * Tendencia do ritmo NO TEMPO, por maquina: metade mais antiga contra
+ * metade mais recente, cada metade ponderada pelo tempo rodando (a mesma
+ * conta do ritmo medio, entao uma medicao curta nao inverte a leitura).
+ * Precisa de MIN_TENDENCIA medicoes; abaixo de RUIDO_PCT nao ha tendencia.
+ */
+function tendenciaDaMaquina(conferencias, chaveMaquina) {
+  const validas = [];
+  for (const c of conferencias || []) {
+    const nome = String(c.maquina || '').trim() || 'Sem máquina';
+    if (nomeChave(nome) !== chaveMaquina) continue;
+    const dur = Number(c.duracaoMs ?? c.duracao_ms) || 0;
+    const pecas = Number(c.pecas) || 0;
+    if (dur <= 0 || pecas <= 0) continue;
+    const par = somarParadas(c.paradas);
+    const produtivoMs = dur - Math.min(par.totalMs, dur);
+    if (produtivoMs <= 0) continue;
+    // O primeiro instante que PARSEIA vale; medicao sem instante valido
+    // fica FORA da tendencia. A ordem da lista nao serve de fallback: o
+    // servidor manda o mais recente primeiro, e assumir ordem inverteria
+    // a direcao — melhor nao afirmar tendencia do que afirmar ao contrario.
+    let ts = NaN;
+    for (const candidato of [c.iniciado_em, c.iniciadoEm, c.salvo_em, c.salvoEm]) {
+      if (candidato == null) continue;
+      ts = new Date(candidato).getTime();
+      if (Number.isFinite(ts)) break;
+    }
+    if (!Number.isFinite(ts)) continue;
+    validas.push({ ts, pecas, produtivoMs });
+  }
+  if (validas.length < MIN_TENDENCIA) return null;
+
+  validas.sort((a, b) => a.ts - b.ts);
+  const corte = Math.floor(validas.length / 2);
+  const ritmoDe = (fatia) => {
+    const p = fatia.reduce((acc, x) => acc + x.pecas, 0);
+    const t = fatia.reduce((acc, x) => acc + x.produtivoMs, 0);
+    return t > 0 ? (p * MS_POR_HORA) / t : null;
+  };
+  const antes = ritmoDe(validas.slice(0, corte));
+  const agora = ritmoDe(validas.slice(corte));
+  if (antes == null || agora == null || antes <= 0) return null;
+
+  const pct = Math.round(((agora / antes) - 1) * 100);
+  if (Math.abs(pct) < RUIDO_PCT) return { direcao: 'estavel', pct, antes, agora };
+  return { direcao: pct > 0 ? 'subindo' : 'caindo', pct, antes, agora };
+}
+
+export function analisarConferencias({ maquinas = [], pecas = [], conferencias = [] } = {}) {
   const secoes = [];
   if (!maquinas.length) return secoes;
 
@@ -96,7 +162,30 @@ export function analisarConferencias({ maquinas = [], pecas = [] } = {}) {
   });
   secoes.push({ titulo: 'Por máquina', linhas: porMaquina });
 
-  /* ------------------------------------------- 3. comparacao entre maquinas */
+  /* ------------------------------------------------- 3. tendencia no tempo */
+  // Destrava com 4+ medicoes da mesma maquina: e' a leitura que so' o
+  // historico da' — o relatorio fica mais esperto a cada medicao nova.
+  const linhasTendencia = [];
+  for (const g of maquinas) {
+    const t = tendenciaDaMaquina(conferencias, nomeChave(g.maquina));
+    if (!t) continue;
+    if (t.direcao === 'estavel') {
+      linhasTendencia.push(`${g.maquina}: o ritmo se mantém no tempo (diferença de ${Math.abs(t.pct)}% entre as medições mais antigas e as mais recentes).`);
+    } else if (t.direcao === 'subindo') {
+      linhasTendencia.push(
+        `${g.maquina}: o ritmo está subindo — as medições mais recentes rodam ${t.pct}% acima das primeiras `
+        + `(${Math.round(t.antes)} → ${Math.round(t.agora)} pç/h). O que melhorou ali vale virar padrão.`,
+      );
+    } else {
+      linhasTendencia.push(
+        `${g.maquina}: o ritmo está caindo — as medições mais recentes rodam ${Math.abs(t.pct)}% abaixo das primeiras `
+        + `(${Math.round(t.antes)} → ${Math.round(t.agora)} pç/h). Vale olhar broca, abastecimento e ajustes antes que vire perda.`,
+      );
+    }
+  }
+  if (linhasTendencia.length) secoes.push({ titulo: 'Tendência', linhas: linhasTendencia });
+
+  /* ------------------------------------------- 4. comparacao entre maquinas */
   if (maquinas.length >= 2) {
     const ordenadas = [...maquinas].sort((a, b) => b.ritmoMedio - a.ritmoMedio);
     const rapida = ordenadas[0];
@@ -123,7 +212,7 @@ export function analisarConferencias({ maquinas = [], pecas = [] } = {}) {
     }
   }
 
-  /* ------------------------------------------------- 4. entre pecas */
+  /* ------------------------------------------------- 5. entre pecas */
   const pecasPorMaquina = new Map();
   for (const p of pecas) {
     if (!pecasPorMaquina.has(p.maquina)) pecasPorMaquina.set(p.maquina, []);
@@ -144,9 +233,34 @@ export function analisarConferencias({ maquinas = [], pecas = [] } = {}) {
       + 'Para planejar carga e lote, use o ritmo da peça, não a média da máquina.',
     );
   }
+  // Peca cujo ritmo NAO se repete entre as proprias medicoes: destrava com
+  // 3+ medicoes da peca — antes disso a "variacao" seria so' duas leituras.
+  for (const p of pecas) {
+    if (p.n >= 3 && p.cvPct != null && p.cvPct > 20 && p.melhor && p.pior && p.pior.ritmo > 0) {
+      linhasPecas.push(
+        `O ritmo de ${p.peca} na ${p.maquina} não se repete: foi de ${Math.round(p.pior.ritmo)} a ${Math.round(p.melhor.ritmo)} pç/h `
+        + 'entre as medições. Vale conferir o que mudou entre elas (gabarito, lote, operador).',
+      );
+    }
+  }
   if (linhasPecas.length) secoes.push({ titulo: 'Entre peças', linhas: linhasPecas });
 
-  /* ------------------------------------------------- 5. paradas */
+  /* ------------------------------------------------- 6. ate onde da para chegar */
+  // O melhor periodo e' meta que o proprio posto ja' provou ser possivel.
+  // Destrava com 3+ medicoes e so' quando a diferenca e' de verdade (15%+).
+  const linhasChegar = [];
+  for (const g of maquinas) {
+    if (g.n < 3 || !g.melhor || !(g.ritmoMedio > 0)) continue;
+    const pct = Math.round(((g.melhor.ritmo / g.ritmoMedio) - 1) * 100);
+    if (pct < 15) continue;
+    linhasChegar.push(
+      `O melhor período da ${g.maquina} fez ${Math.round(g.melhor.ritmo)} pç/h${g.melhor.peca ? ` (${g.melhor.peca})` : ''} — `
+      + `${pct}% acima da média dela. O posto alcança esse ritmo: vale olhar o que estava diferente ali e repetir.`,
+    );
+  }
+  if (linhasChegar.length) secoes.push({ titulo: 'Até onde dá para chegar', linhas: linhasChegar });
+
+  /* ------------------------------------------------- 7. paradas */
   if (totParada > 0) {
     const porMotivo = new Map();
     for (const g of maquinas) {
@@ -161,6 +275,14 @@ export function analisarConferencias({ maquinas = [], pecas = [] } = {}) {
       const [rotulo, ms] = maiores[0];
       linhas.push(`O maior motivo de parada foi ${rotulo}: ${formatarDuracao(ms)} de ${formatarDuracao(totParada)} parados.`);
     }
+    // O custo da parada em PECAS: minutos parados sao abstratos, pecas que
+    // deixaram de sair sao concretas — e' o numero que muda conversa.
+    if (ritmoGeral != null && totParada >= 5 * 60000) {
+      const perdidas = Math.round((ritmoGeral * totParada) / MS_POR_HORA);
+      if (perdidas >= 10) {
+        linhas.push(`Ao ritmo médio, esse tempo parado custou cerca de ${perdidas} peças que deixaram de sair.`);
+      }
+    }
     // Troca dominante pede organizacao de troca, nao maquina nova: e' o
     // ganho que nao custa investimento. Dito sem a sigla SMED.
     if (totSetup >= totParada / 2 && totSetup >= 10 * 60000) {
@@ -171,16 +293,21 @@ export function analisarConferencias({ maquinas = [], pecas = [] } = {}) {
     secoes.push({ titulo: 'Paradas', linhas });
   }
 
-  /* ------------------------------------------------- 6. proximo passo */
+  /* ------------------------------------------------- 8. proximo passo */
   const pendentes = maquinas.filter((g) => !g.confiavel);
   if (pendentes.length) {
-    secoes.push({
-      titulo: 'Próximo passo',
-      linhas: [
-        `Medir de novo: ${pendentes.map((g) => g.maquina).join(', ')}. `
-        + `Períodos de ${formatarDuracao(CRITERIOS_CONFERENCIA.minPeriodoMs)} ou mais, de preferência em horários e operadores diferentes — é isso que firma o número.`,
-      ],
-    });
+    const linhas = [
+      `Medir de novo: ${pendentes.map((g) => g.maquina).join(', ')}. `
+      + `Períodos de ${formatarDuracao(CRITERIOS_CONFERENCIA.minPeriodoMs)} ou mais, de preferência em horários e operadores diferentes — é isso que firma o número.`,
+    ];
+    // A analise diz o que ela mesma ganha com mais dados: com 4+ medicoes
+    // por maquina, destrava a tendencia no tempo.
+    if (maquinas.some((g) => g.n < MIN_TENDENCIA)) {
+      linhas.push(
+        `Esta análise cresce com os dados: a partir de ${MIN_TENDENCIA} medições por máquina ela passa a mostrar também a tendência — se o ritmo está subindo ou caindo no tempo.`,
+      );
+    }
+    secoes.push({ titulo: 'Próximo passo', linhas });
   }
 
   return secoes;

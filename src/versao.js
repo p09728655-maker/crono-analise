@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.51.0',
+    data: '2026-08-31',
+    titulo: 'A análise fica mais esperta a cada medição',
+    itens: [
+      'A Análise do período agora CRESCE com os dados — cada leitura destrava com um mínimo de medições: com 3+ por máquina, mostra ATÉ ONDE DÁ PARA CHEGAR (o melhor período contra a média — meta que o próprio posto já provou); com 4+, mostra a TENDÊNCIA (o ritmo está subindo ou caindo no tempo, comparando as medições mais antigas com as mais recentes); com 3+ da mesma peça, aponta a peça cujo ritmo não se repete.',
+      'As paradas ganharam o número que muda conversa: quantas PEÇAS deixaram de sair no tempo parado, ao ritmo médio.',
+      'A própria análise diz o que destrava a seguir ("a partir de 4 medições por máquina, mostra a tendência") — dá para ver o relatório ficando mais completo a cada medição registrada.',
+      'O bloco MÁQUINAS da lateral (onde se filtra e se escolhe o que imprimir) agora aparece SEMPRE — antes ele sumia quando só uma máquina tinha medição, e o filtro ficava impossível de achar.',
+    ],
+  },
+  {
     versao: '2.50.0',
     data: '2026-08-31',
     titulo: 'A análise sai do algoritmo — sem gastar a chave da IA',

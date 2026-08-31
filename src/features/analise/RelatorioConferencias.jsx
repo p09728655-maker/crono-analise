@@ -214,8 +214,12 @@ export default function RelatorioConferencias({ aoVoltar }) {
 
   /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
      dentro dela pelo mesmo motivo que os produtos foram na lista: e'
-     navegacao, nao um controle do conteudo. */
-  const secoes = resumo.length > 1
+     navegacao, nao um controle do conteudo.
+
+     O bloco aparece MESMO com uma maquina so' (mudanca de 31/08): ele
+     sumia com uma unica maquina medida, e o usuario nao achava onde
+     filtrar para imprimir — controle que aparece e some nao se aprende. */
+  const secoes = resumo.length
     ? [{ id: TODAS, rotulo: 'Todas', contador: linhas.length },
        ...resumo.map((g) => ({ id: g.maquina, rotulo: g.maquina, contador: g.n }))]
     : [];
@@ -450,7 +454,11 @@ export default function RelatorioConferencias({ aoVoltar }) {
               )}
 
               {!verArquivadas && (
-                <AnalisePeriodo resumo={resumoVisivel} resumoPecas={resumoPecasVisivel} />
+                <AnalisePeriodo
+                  resumo={resumoVisivel}
+                  resumoPecas={resumoPecasVisivel}
+                  conferencias={visiveis}
+                />
               )}
 
               <section style={est.painel} aria-label={verArquivadas ? 'Medições arquivadas' : 'Todas as medições'}>
@@ -762,14 +770,14 @@ function EditorParadas({ conferencia, erro, ocupado, aoFechar, aoGravar }) {
  * leitura em texto corrido: sobe o mesmo resumo por maquina de sempre
  * (incluindo `confiavel` e os motivos). Ambas seguem o filtro da lateral.
  */
-function AnalisePeriodo({ resumo, resumoPecas }) {
+function AnalisePeriodo({ resumo, resumoPecas, conferencias }) {
   const [rodando, setRodando] = useState(false);
   const [resposta, setResposta] = useState(null);
   const [erro, setErro] = useState(null);
 
   const secoes = useMemo(
-    () => analisarConferencias({ maquinas: resumo, pecas: resumoPecas }),
-    [resumo, resumoPecas],
+    () => analisarConferencias({ maquinas: resumo, pecas: resumoPecas, conferencias }),
+    [resumo, resumoPecas, conferencias],
   );
 
   async function analisar() {
