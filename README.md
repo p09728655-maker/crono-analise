@@ -82,11 +82,16 @@ antes da sincronização existir sobem sozinhas na próxima abertura da tela
 (backfill pela marca `enviada`).
 
 No PC, o botão **Conferências** no topo da Análise abre o relatório
-(`/analise/conferencias`): resumo por máquina — medições, ritmo médio
-**ponderado pelo tempo** (Σ peças / Σ tempo rodando, não média de taxas),
-tempo parado com o setup destacado, disponibilidade, melhor e pior registro
-com a peça — mais a tabela completa, filtro por máquina e impressão em
-**documento A4 próprio** (não a tela no papel).
+(`/analise/conferencias`), em **modelo básico** (redesenho de 31/08, a
+pedido de quem usa — o anterior falava em CV%, ciclo do motor e critérios,
+e carimbava "amostra insuficiente" em quase tudo): ritmo por máquina e por
+peça em **peças/hora e peças/minuto**, ritmo médio **ponderado pelo tempo**
+(Σ peças / Σ tempo rodando, não média de taxas), tempo rodando, tempo
+parado com o setup destacado, melhor e pior registro com a peça — mais a
+tabela completa e impressão em **documento A4 próprio** (não a tela no
+papel). O **filtro por máquina** da lateral vale para o relatório inteiro,
+**folha impressa incluída**: com uma máquina escolhida o botão vira
+"Imprimir esta máquina" e o A4 sai só com ela, com o nome no título.
 
 O botão **Paradas** de cada linha abre o cadastro no PC: quem confere no
 corredor raramente para para digitar o setup, e reconstituir depois — com o
@@ -96,8 +101,8 @@ período: sem tempo de máquina rodando não há ritmo, e a conferência sairia
 dos cálculos sem dizer por quê — o botão trava e o servidor recusa.
 
 A tela traz o mesmo tratamento do painel do estudo: **gráfico de ritmo por
-máquina** (a barra de amostra insuficiente leva textura hachurada e rótulo,
-não só cor) e **Análise com IA** — que recebe o resumo por máquina *com* o
+máquina** (a barra ainda em medição leva textura hachurada e rótulo, não só
+cor) e **Análise com IA** — que recebe o resumo por máquina *com* o
 resultado dos critérios, então diz o que ainda não serve de referência em
 vez de tirar conclusão de capacidade de uma medição de um minuto.
 
@@ -107,17 +112,18 @@ confirmação (o caso do registro errado, hora digitada errada). É a mesma
 distinção do estudo, pelo mesmo motivo. Setup no meio do período deixou de
 ser motivo para arquivar: marca-se a parada e a medição continua contando.
 
-O relatório **se autoavalia** pelos `CRITERIOS_CONFERENCIA`, declarados
-antes dos números, na tela e impressos: mínimo de 3 conferências por
-máquina, 30 min de tempo total observado, nenhum período menor que 5 min.
-Os dois critérios de tempo olham o **tempo produtivo**: meia hora de relógio
-com 27 min de setup deixa 3 min de ritmo medido, e é isso que a amostra
-tem.
-Fora do critério, a máquina aparece carimbada de "amostra insuficiente" —
-o número continua visível, nunca passa por referência. Registro oficial,
-com FR, tolerância e tempo padrão, continua sendo papel do estudo. Por não
-depender de rede, o atalho na lista de coleta fica visível mesmo com a API
-fora do ar.
+O relatório **se autoavalia** pelos `CRITERIOS_CONFERENCIA` (mínimo de 3
+conferências por máquina, 30 min de tempo total observado, nenhum período
+menor que 5 min; os critérios de tempo olham o **tempo produtivo** — meia
+hora de relógio com 27 min de setup deixa 3 min de ritmo medido). Desde
+31/08 o critério **não carimba mais**: máquina fora dele leva uma nota
+discreta em cinza — "ainda em medição — o número fica mais certeiro com
+mais medições" — na tela, no gráfico e no papel. O cálculo é o mesmo; o
+que mudou foi a linguagem: o relatório circula na fábrica e precisa ser
+lido por qualquer pessoa, não só por quem sabe o que é amostra. Registro
+oficial, com FR, tolerância e tempo padrão, continua sendo papel do
+estudo. Por não depender de rede, o atalho na lista de coleta fica visível
+mesmo com a API fora do ar.
 
 As duas naturezas de coleta são nomeadas pelo **posto**, nunca pelo método:
 no menu do PC, **Embalagem e demais postos** (estudos de tempo, ciclo a

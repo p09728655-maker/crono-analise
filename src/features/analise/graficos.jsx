@@ -342,25 +342,28 @@ const est = {
  * O relatorio de conferencias precisava do mesmo tratamento do estudo: numero
  * sozinho numa tabela nao mostra que uma maquina roda ao dobro da outra.
  *
- * Identidade nunca depende so' de cor: a barra de amostra insuficiente leva
- * TEXTURA hachurada e o rotulo "amostra insuficiente" embaixo do valor —
- * continua legivel em impressao P&B e para quem tem daltonismo. E' a mesma
- * regra do Yamazumi, e aqui ela importa mais ainda: e' exatamente a barra
- * que NAO pode ser lida como referencia.
+ * Identidade nunca depende so' de cor: a barra ainda em medicao leva
+ * TEXTURA hachurada e um rotulo em palavras embaixo do valor — continua
+ * legivel em impressao P&B e para quem tem daltonismo. E' a mesma regra do
+ * Yamazumi, e aqui ela importa mais ainda: e' exatamente a barra que ainda
+ * nao assentou como referencia.
+ *
+ * Os textos sao em portugues de fabrica (decisao de 31/08): "amostra
+ * insuficiente" virou "ainda em medicao" — mesmo criterio, sem jargao.
  */
 export function GraficoRitmoMaquinas({
   maquinas, altura = 300,
   /* A MESMA moldura serve para duas leituras: por maquina (padrao) e, com a
-     lateral filtrada, uma barra POR CONFERENCIA da maquina escolhida. Os
+     lateral filtrada, uma barra POR MEDICAO da maquina escolhida. Os
      textos viram props para a legenda nao mentir na segunda leitura — la'
-     a hachura marca periodo curto, nao amostra insuficiente. Cada item
+     a hachura marca medicao curta, nao poucas medicoes. Cada item
      aceita `rotulo` (padrao: maquina), `nota` (linha pequena sob o rotulo;
      padrao: aviso quando nao confiavel) e `chave` (padrao: maquina). */
   titulo = 'Ritmo por máquina',
-  subtitulo = 'Peças/hora médias, ponderadas pelo tempo observado',
-  rotuloOk = 'Referência OK',
-  rotuloFraco = 'Amostra insuficiente',
-  notaFraca = 'amostra insuficiente',
+  subtitulo = 'Peças por hora com a máquina rodando',
+  rotuloOk = 'Ritmo medido',
+  rotuloFraco = 'Ainda em medição',
+  notaFraca = 'ainda em medição',
 }) {
   const id = useId().replace(/:/g, '');
   const [refContainer, larguraContainer] = useLarguraContainer(360);
