@@ -148,6 +148,20 @@ await movel.close();
   checar(/15\.0/.test(textoRef),
     'a peca tambem sai em pecas por minuto (900/60 = 15.0)');
 
+  /* ------------------- analise do periodo, gerada pelo algoritmo */
+  const analise = p2.locator('[aria-label="Análise do período"]');
+  const textoAnalise = await analise.innerText();
+  checar(/sem IA, sem custo/i.test(textoAnalise),
+    'a analise aparece na hora, gerada pelos numeros — sem gastar a chave');
+  checar(/Por máquina/i.test(textoAnalise) && /ainda em medição/i.test(textoAnalise),
+    'uma linha por maquina, com o que falta dito em palavras');
+  checar(/Entre máquinas/i.test(textoAnalise) && /116%/.test(textoAnalise),
+    'compara as maquinas pelo ritmo (864 contra 400 pc/h = 116% mais rapida)');
+  checar(/Próximo passo/i.test(textoAnalise) && /Furadeira14/.test(textoAnalise),
+    'diz o proximo passo: quais maquinas medir de novo');
+  checar(await analise.getByRole('button', { name: 'Analisar com IA' }).count() === 1,
+    'a IA segue disponivel como opcao, num botao discreto');
+
   /* ------------- filtro na lateral abre o grafico por conferencia */
   const grafico = p2.locator('figure').first();
   checar(/Ritmo por máquina/.test(await grafico.textContent()),
