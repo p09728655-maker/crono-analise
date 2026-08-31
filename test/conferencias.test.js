@@ -193,8 +193,12 @@ describe('potencialSemParada', () => {
  * vai olhar o que muda as 13h.
  */
 describe('ritmoPorHoraDoDia', () => {
+  /* O fuso da FABRICA vai escrito no instante (-03:00). Montar com
+     `new Date(ano, mes, dia, hora)` usaria o fuso de quem roda o teste, e a
+     suite passaria em qualquer maquina sem nunca provar que a leitura usa o
+     relogio do chao de fabrica — foi assim que o erro de fuso passou. */
   const em = (hora, { duracaoMs = 1800000, pecas = 300, paradas = [], dia = 31 } = {}) => ({
-    iniciado_em: new Date(2026, 7, dia, hora, 0).toISOString(),
+    iniciado_em: `2026-08-${String(dia).padStart(2, '0')}T${String(hora).padStart(2, '0')}:00:00-03:00`,
     duracao_ms: duracaoMs, pecas, paradas,
   });
 
@@ -222,10 +226,38 @@ describe('ritmoPorHoraDoDia', () => {
   it('a medicao entra na hora em que COMECOU, mesmo atravessando a hora', () => {
     // 07:40 + 40 min termina as 08:20 — e uma medicao das 7h.
     const curva = ritmoPorHoraDoDia([{
-      iniciado_em: new Date(2026, 7, 31, 7, 40).toISOString(),
+      iniciado_em: '2026-08-31T07:40:00-03:00',
       duracao_ms: 2400000, pecas: 400, paradas: [],
     }]);
     expect(curva.map((h) => h.rotulo)).toEqual(['07h']);
+  });
+
+  /**
+   * A hora e' a da FABRICA, nao a de quem abre o relatorio.
+   *
+   * O servidor grava o instante com America/Sao_Paulo fixo. Se a leitura
+   * usasse o fuso do navegador, a mesma medicao apareceria as 07h no PC da
+   * fabrica e as 10h numa maquina em UTC — e o papel sairia apontando uma
+   * hora que nao existe no turno.
+   */
+  it('a hora nao muda com o fuso de quem le', () => {
+    const medicao = [{
+      iniciado_em: '2026-08-31T07:00:00-03:00', duracao_ms: 1800000, pecas: 300, paradas: [],
+    }];
+    const antes = process.env.TZ;
+    for (const fuso of ['UTC', 'America/Sao_Paulo', 'Europe/Lisbon', 'America/Los_Angeles']) {
+      process.env.TZ = fuso;
+      expect(ritmoPorHoraDoDia(medicao)[0].rotulo, fuso).toBe('07h');
+    }
+    process.env.TZ = antes;
+  });
+
+  it('medicao antiga, so com o horario de salvamento, deduz o inicio pelo fim menos a duracao', () => {
+    // Salva as 18:20 depois de 30 min medidos: comecou as 17:50, e' das 17h.
+    const curva = ritmoPorHoraDoDia([{
+      salvo_em: '2026-08-31T18:20:00-03:00', duracao_ms: 1800000, pecas: 300, paradas: [],
+    }]);
+    expect(curva.map((h) => h.rotulo)).toEqual(['17h']);
   });
 
   it('hora com menos de 5 min medidos existe, mas vem marcada como fraca', () => {

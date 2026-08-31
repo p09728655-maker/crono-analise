@@ -564,7 +564,7 @@ export default function ConferenciaRapida({ aoSair }) {
                     e' que estava faltando. O de maquina rodando aparece
                     logo abaixo, na linha das paradas. */}
                 <Parcial
-                  rotulo={resultadoHoras.paradaMs > 0 ? 'Peças/min no período' : 'Peças/min'}
+                  rotulo={resultadoHoras.paradaMs > 0 ? 'Pç/min período' : 'Peças/min'}
                   valor={(resultadoHoras.pecasPorHoraBruto / 60).toFixed(1)}
                 />
                 <Parcial
@@ -837,7 +837,7 @@ export default function ConferenciaRapida({ aoSair }) {
 
             <div style={est.linhaParcial}>
               <Parcial
-                rotulo={resultado.paradaMs > 0 ? 'Peças/min no período' : 'Peças/min'}
+                rotulo={resultado.paradaMs > 0 ? 'Pç/min período' : 'Peças/min'}
                 valor={(resultado.pecasPorHoraBruto / 60).toFixed(1)}
               />
               <Parcial
@@ -1033,7 +1033,7 @@ function CampoMaquina({ valor, aoTrocar }) {
 function CiclosFuracao({ valor, aoTrocar, compacto }) {
   return (
     <div style={est.blocoCiclos}>
-      <span style={est.rotuloCampo}>CICLOS DE FURAÇÃO POR PEÇA</span>
+      <span style={est.rotuloCampo}>ACIONAMENTOS DO MOTOR POR PEÇA</span>
       <div style={est.linhaCiclos} role="radiogroup" aria-label="Ciclos de furação por peça">
         {[1, 2, 3].map((n) => (
           <button
@@ -1118,14 +1118,17 @@ function SemAParada({ calculado }) {
         <span style={est.comparativoDe}>{c.pecas}</span>
         <span style={est.comparativoSeta}>→</span>
         <span style={est.comparativoPara}>{c.potencial}</span>
-        <span style={est.comparativoUnidade}>peças</span>
+        {/* A perda em PECA, nao em minuto: e' o que muda a conversa. Na
+            MESMA linha do numero grande — cada linha a mais empurra o
+            SALVAR para baixo da dobra, e rolar de luva custa caro. */}
+        <span style={est.comparativoUnidade}>peças (+{c.perdidas})</span>
       </div>
       <div style={est.comparativoSub}>
         {Math.round(c.ritmoPotencial)} pç/h · {(c.ritmoPotencial / 60).toFixed(1)} pç/min
+        {' · '}{Math.round(c.ganhoPct)}% a mais
       </div>
-      {/* A perda em PECA, nao em minuto: e' o que muda a conversa. */}
       <div style={est.comparativoPerda}>
-        deixaram de sair {c.perdidas} peças ({Math.round(c.ganhoPct)}% a mais no mesmo tempo)
+        é o ritmo que esta máquina fez rodando, no mesmo período — não é meta
       </div>
     </section>
   );
@@ -1136,14 +1139,17 @@ function ComParadas({ calculado }) {
   return (
     <div style={est.linhaParcial}>
       <Parcial rotulo="Parado" valor={formatarDuracao(calculado.paradaMs)} />
-      <Parcial rotulo="Rodando" valor={formatarDuracao(calculado.produtivoMs)} />
-      <Parcial rotulo="Máq. rodando" valor={String(Math.round(calculado.pecasPorHora))} sufixo="pç/h" />
+      <Parcial rotulo="Tempo rodando" valor={formatarDuracao(calculado.produtivoMs)} />
+      {/* "Máq. rodando" batia de frente com o "Máquina rodando %" do
+          relatorio, que e' disponibilidade: mesmo nome, 800 num lado e 87 no
+          outro. O nome diz a unidade. */}
+      <Parcial rotulo="Pç/h rodando" valor={String(Math.round(calculado.pecasPorHora))} sufixo="pç/h" />
       {/* O MESMO numero que o relatorio do PC mostra na coluna Peças/min:
           ritmo com a maquina rodando. Sem ele, o analista comparava o
           peças/min do periodo (aqui em cima) com o de maquina rodando (la')
           e concluia, com razao, que os tempos nao batiam. */}
       <Parcial
-        rotulo="Peças/min rodando"
+        rotulo="Pç/min rodando"
         valor={(calculado.pecasPorHora / 60).toFixed(1)}
         sufixo="pç/min"
       />
@@ -1406,8 +1412,13 @@ const est = {
   // leitura e' "de X para Y" — a seta faz o trabalho sem precisar de texto.
   comparativoDe: { fontSize: tamanho.titulo, fontFamily: fonte.numero, color: cores.textoFraco },
   comparativoSeta: { fontSize: tamanho.titulo, color: cores.textoFraco },
-  comparativoPara: { fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero, color: cores.texto },
-  comparativoUnidade: { fontSize: tamanho.legenda, color: cores.textoFraco },
+  comparativoPara: { fontSize: tamanho.titulo, fontWeight: 700, fontFamily: fonte.numero, color: cores.texto },
+  // A PERDA e' o que salta, como no PC — nao o potencial. A manchete desta
+  // tela e' a producao real (decisao de ago/2026, 20 linhas acima); deixar o
+  // potencial como maior numero do bloco contrariava a mesma regra.
+  // O destaque e' TAMANHO e PESO, nao cor: o ambar de atencao da paleta da
+  // 2.65:1 sobre a superficie escura desta tela (medido), abaixo do piso.
+  comparativoUnidade: { fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero, color: cores.texto },
   comparativoSub: { fontSize: tamanho.legenda, color: cores.textoFraco, fontFamily: fonte.numero },
   comparativoPerda: { fontSize: tamanho.legenda, color: cores.texto, textAlign: 'center' },
 

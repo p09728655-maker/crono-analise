@@ -302,7 +302,12 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           )}
 
           {aba === 'paradas' && (
-            <PainelParadas resumo={analise.paradas} capacidadeLinha={analise.capacidadeLinha} />
+            <PainelParadas
+              resumo={analise.paradas}
+              capacidadeLinha={analise.capacidadeLinha}
+              gargalo={analise.gargalo}
+              operacoes={analise.comDados}
+            />
           )}
 
           {aba === 'sugestoes' && <PainelSugestoes sugestoes={leitura.sugestoes} />}
@@ -1203,7 +1208,7 @@ function PainelSugestoes({ sugestoes }) {
  * nunca sobre o turno: o estudo nao observou o turno, e usar essa base
  * daria um numero que parece OEE sem ser.
  */
-function PainelParadas({ resumo, capacidadeLinha = 0 }) {
+function PainelParadas({ resumo, capacidadeLinha = 0, gargalo = null, operacoes = [] }) {
   if (!resumo.n) {
     return (
       <section style={est.blocoTabela}>
@@ -1225,16 +1230,33 @@ function PainelParadas({ resumo, capacidadeLinha = 0 }) {
   const maior = resumo.porMotivo[0]?.ms || 1;
 
   /**
-   * O CUSTO DA PARADA EM PECAS.
+   * O CUSTO DA PARADA EM PECAS — so' o do GARGALO.
    *
-   * Minuto parado nao move reuniao; peca que deixou de sair, sim. A conta
-   * usa a capacidade da LINHA — que e' a do gargalo, nao a media das
-   * operacoes: a linha nao entrega mais rapido do que o posto mais lento,
-   * entao e' esse o ritmo que o tempo parado deixou de render.
+   * Minuto parado nao move reuniao; peca que deixou de sair, sim. Mas a
+   * conta so' fecha para o posto que MANDA no ritmo da linha: parada em
+   * operacao folgada e' absorvida pela folga dela e nao tira peca nenhuma
+   * do fim da linha.
+   *
+   * Somar as paradas de todas as operacoes e multiplicar pela capacidade da
+   * linha — como estava ate' a auditoria de 31/08 — errava duas vezes: dava
+   * a folgada o ritmo do gargalo e somava tempos observados em MOMENTOS
+   * diferentes (o analista cronometra um posto por vez). Num estudo de
+   * exemplo, 55 pecas contra as 9 reais.
+   *
+   * O custo de cada operacao continua visivel na tabela abaixo, cada uma na
+   * capacidade dela — e' o dado de quem vai tratar aquele posto.
    */
-  const perdidas = capacidadeLinha > 0
-    ? Math.round((capacidadeLinha * resumo.totalMs) / 3600000)
+  const paradaDoGargalo = gargalo
+    ? (resumo.porOperacao.find((o) => o.id === gargalo.id)?.ms || 0)
     : 0;
+  const perdidas = capacidadeLinha > 0 && paradaDoGargalo > 0
+    ? Math.round((capacidadeLinha * paradaDoGargalo) / 3600000)
+    : 0;
+
+  /* Capacidade de cada operacao, para o custo linha a linha da tabela. */
+  const capPorOperacao = new Map(
+    (operacoes || []).map((o) => [o.id, o.resultado?.cap || 0]),
+  );
 
   return (
     <section style={est.blocoTabela}>
@@ -1248,9 +1270,11 @@ function PainelParadas({ resumo, capacidadeLinha = 0 }) {
 
       {perdidas > 0 && (
         <p style={est.custoParada} aria-label="Custo da parada em peças">
-          <strong>{perdidas} peças deixaram de sair</strong> nesse tempo parado, ao ritmo da linha
-          ({capacidadeLinha} pç/h · {(capacidadeLinha / 60).toFixed(1)} pç/min — a capacidade do
-          gargalo). É o que esses {formatarDuracao(resumo.totalMs)} custaram em produção.
+          <strong>{perdidas} peças deixaram de sair da linha</strong> nos
+          {' '}{formatarDuracao(paradaDoGargalo)} em que <strong>{gargalo.nome}</strong> ficou parada
+          — é o posto que manda no ritmo ({capacidadeLinha} pç/h ·
+          {' '}{(capacidadeLinha / 60).toFixed(1)} pç/min). Parada nas outras operações é absorvida
+          pela folga delas: o custo de cada uma está na tabela abaixo.
         </p>
       )}
 
@@ -1282,6 +1306,7 @@ function PainelParadas({ resumo, capacidadeLinha = 0 }) {
                 <th style={est.th}>Operação</th>
                 <th style={est.thNum}>Paradas</th>
                 <th style={est.thNum}>Tempo parado</th>
+                <th style={est.thNum}>Peças do posto</th>
               </tr>
             </thead>
             <tbody>
@@ -1290,6 +1315,14 @@ function PainelParadas({ resumo, capacidadeLinha = 0 }) {
                   <td style={est.td}>{o.nome}</td>
                   <td style={est.tdNum}>{o.n}</td>
                   <td style={est.tdNum}>{formatarDuracao(o.ms)}</td>
+                  {/* Cada operacao na capacidade DELA: e' quanto aquele posto
+                      deixou de processar, nao quanto a linha deixou de
+                      entregar (so' o gargalo tira peca do fim da linha). */}
+                  <td style={est.tdNum}>
+                    {capPorOperacao.get(o.id)
+                      ? Math.round((capPorOperacao.get(o.id) * o.ms) / 3600000)
+                      : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -109,8 +109,29 @@ export const arquivarConferencia = (id, arquivada = true) =>
 // Arquivar/restaurar VARIAS numa ida — e' o "por maquina" do relatorio.
 // Quem escolhe as medicoes e' a tela (ela ja agrupa por maquina); aqui vai
 // a lista de ids, entao o que se arquiva e' exatamente o que estava na tela.
+/**
+ * O servidor aceita 500 ids por requisicao (MAX_LOTE) e o relatorio carrega
+ * ate 1000 medicoes. Sem fatiar, um posto muito medido caia num beco: o
+ * botao existia e sempre devolvia 400. Aqui o lote vai em partes, e quem
+ * chama nao precisa saber do teto.
+ */
+const LOTE_MAX = 500;
+const emPartes = async (ids, enviar) => {
+  const lista = [...(ids || [])];
+  let atualizadas = 0;
+  for (let i = 0; i < lista.length; i += LOTE_MAX) {
+    // Em serie, de proposito: sao escritas no mesmo conjunto de linhas, e
+    // paralelizar so' aumentaria a chance de uma metade passar e a outra nao.
+    const r = await enviar(lista.slice(i, i + LOTE_MAX));
+    atualizadas += Number(r?.atualizadas) || 0;
+  }
+  return { atualizadas };
+};
+
 export const arquivarConferencias = (ids, arquivada = true) =>
-  requisitar('/conferencias', { metodo: 'PATCH', corpo: { ids, arquivada } });
+  emPartes(ids, (parte) => requisitar('/conferencias', {
+    metodo: 'PATCH', corpo: { ids: parte, arquivada },
+  }));
 /**
  * Corrige o NOME DA PECA — o texto que o aparelho digitou na medicao.
  * Duas grafias da mesma peca viram duas linhas no Ritmo por peca; renomear
@@ -120,7 +141,9 @@ export const arquivarConferencias = (ids, arquivada = true) =>
 export const renomearPecaConferencia = (id, peca) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { peca } });
 export const renomearPecaConferencias = (ids, peca) =>
-  requisitar('/conferencias', { metodo: 'PATCH', corpo: { ids, peca } });
+  emPartes(ids, (parte) => requisitar('/conferencias', {
+    metodo: 'PATCH', corpo: { ids: parte, peca },
+  }));
 // Paradas cadastradas no PC (setup marcado depois, olhando o apontamento).
 // A lista vai INTEIRA — e' o estado final das paradas daquela conferencia,
 // nao um acrescimo: assim corrigir e apagar usam o mesmo caminho.

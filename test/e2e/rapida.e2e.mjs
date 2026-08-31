@@ -161,9 +161,9 @@ checar(comParada.includes('10 min'), 'o tempo parado aparece no resultado');
  * aparece tambem aqui: 100 pc em 30 min = 3.3/min no periodo; com 10 de
  * setup, 100 pc em 20 min = 5.0/min com a maquina rodando.
  */
-checar(/PEÇAS\/MIN NO PERÍODO/i.test(comParada) && comParada.includes('3.3'),
+checar(/PÇ\/MIN PERÍODO/i.test(comParada) && comParada.includes('3.3'),
   'o peças/min do periodo diz que e do periodo (100 pc / 30 min = 3.3)');
-checar(/PEÇAS\/MIN RODANDO/i.test(comParada) && comParada.includes('5.0'),
+checar(/PÇ\/MIN RODANDO/i.test(comParada) && comParada.includes('5.0'),
   'e o peças/min de maquina rodando aparece junto — o mesmo numero do PC (100 pc / 20 min = 5.0)');
 
 /**
@@ -175,8 +175,10 @@ checar(/PEÇAS\/MIN RODANDO/i.test(comParada) && comParada.includes('5.0'),
 const semParada = await p.locator('[aria-label="Sem a parada, no mesmo tempo"]').innerText();
 checar(/100/.test(semParada) && /150/.test(semParada),
   'o celular mostra de quanto para quanto: 100 → 150 pecas no mesmo tempo');
-checar(/deixaram de sair 50 peças/.test(semParada),
+checar(/\(\+50\)/.test(semParada),
   'e diz quanto deixou de sair, em PECA — nao so em minuto parado');
+checar(/não é meta/.test(semParada),
+  'com a protecao contra ler o potencial como meta: a foto disto vai para o WhatsApp sozinha');
 checar(/300 pç\/h/.test(semParada) && /5\.0 pç\/min/.test(semParada),
   'com o ritmo do potencial por hora e por minuto');
 

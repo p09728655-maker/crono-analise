@@ -137,14 +137,24 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(/% do tempo observado/.test(painelParadas), 'declara a base do percentual');
   checar(/não entra/i.test(painelParadas), 'diz que o tempo parado nao infla o tempo observado');
   /**
-   * O CUSTO EM PECA. Minuto parado nao move reuniao de producao; peca que
-   * deixou de sair, sim. A conta usa a capacidade da LINHA (a do gargalo),
-   * porque a linha nao entrega mais rapido que o posto mais lento.
+   * O CUSTO EM PECA — so' o do GARGALO.
+   *
+   * Minuto parado nao move reuniao de producao; peca que deixou de sair,
+   * sim. Mas so' a parada do posto que MANDA no ritmo tira peca do fim da
+   * linha: parada em operacao folgada e' absorvida pela folga dela. Somar as
+   * paradas de todas as operacoes e multiplicar pela capacidade da linha
+   * dava 6 vezes o valor real (auditoria de 31/08).
    */
-  checar(/deixaram de sair/.test(painelParadas),
-    'o tempo parado do estudo aparece tambem em PECAS que deixaram de sair');
-  checar(/ao ritmo da linha/i.test(painelParadas) && /capacidade do\s+gargalo/i.test(painelParadas),
-    'e declara a base da conta: o ritmo da linha, que e a capacidade do gargalo');
+  // 3 min de parada no gargalo (Trocar broca, 222 pc/h) = 11 pecas. Antes
+  // da auditoria a conta somava os 19 min de TODAS as operacoes e dizia 70.
+  checar(/11 peças deixaram de sair da linha/.test(painelParadas),
+    'o custo em peca sai do tempo parado do GARGALO, nao da soma de todas as operacoes');
+  checar(/é o posto que manda no ritmo/.test(painelParadas),
+    'a conta e do GARGALO, nao a soma das paradas de todas as operacoes');
+  checar(/absorvida\s+pela folga delas/.test(painelParadas),
+    'a tela explica por que parada em operacao folgada nao entra na conta');
+  checar(/peças do posto/i.test(painelParadas),
+    'e cada operacao mostra o custo dela, na capacidade dela, na tabela');
 
   // Tabela de operacoes mostra o parado por operacao.
   await p.locator('[aria-label="Análise"] button', { hasText: 'Operações' }).click();
