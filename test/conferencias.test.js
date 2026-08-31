@@ -4,7 +4,7 @@
  * storage corrompido ou indisponivel.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { faixaHoraria, potencialSemParada } from '../src/domain/cronoanalise.js';
+import { faixaHoraria, potencialSemParada, ritmoPorHoraDoDia } from '../src/domain/cronoanalise.js';
 import { paraConferencia } from '../src/lib/api.js';
 
 const memoria = new Map();
@@ -182,5 +182,73 @@ describe('potencialSemParada', () => {
     expect(potencialSemParada({ pecas: 100, duracaoMs: 0, produtivoMs: 0 })).toBeNull();
     expect(potencialSemParada({ pecas: 0, duracaoMs: 600000, produtivoMs: 300000 })).toBeNull();
     expect(potencialSemParada({ pecas: 100, duracaoMs: 600000, produtivoMs: 0 })).toBeNull();
+  });
+});
+
+/**
+ * A CURVA DO DIA — o ritmo por hora do relogio.
+ *
+ * A media do periodo esconde a hora fraca: o posto que faz 700 pc/h de
+ * manha e 500 depois do almoco aparece como 620 o dia inteiro, e ninguem
+ * vai olhar o que muda as 13h.
+ */
+describe('ritmoPorHoraDoDia', () => {
+  const em = (hora, { duracaoMs = 1800000, pecas = 300, paradas = [], dia = 31 } = {}) => ({
+    iniciado_em: new Date(2026, 7, dia, hora, 0).toISOString(),
+    duracao_ms: duracaoMs, pecas, paradas,
+  });
+
+  it('junta as medicoes da MESMA hora, mesmo de dias diferentes', () => {
+    // 300 + 340 pecas em 1 h de maquina rodando = 640 pc/h as 7h.
+    const curva = ritmoPorHoraDoDia([
+      em(7, { pecas: 300, dia: 30 }),
+      em(7, { pecas: 340, dia: 31 }),
+      em(10, { pecas: 250 }),
+    ]);
+    expect(curva.map((h) => h.rotulo)).toEqual(['07h', '10h']);
+    expect(curva[0].n).toBe(2);
+    expect(curva[0].ritmoMedio).toBe(640);
+    expect(curva[1].ritmoMedio).toBe(500);
+  });
+
+  it('pondera pelo tempo rodando, e a parada sai da conta', () => {
+    // 300 pc em 30 min com 10 parados: 20 min rodando = 900 pc/h.
+    const [h] = ritmoPorHoraDoDia([em(8, { paradas: [{ motivo: 'setup', duracaoMs: 600000 }] })]);
+    expect(Math.round(h.ritmoMedio)).toBe(900);
+    expect(h.produtivoMs).toBe(1200000);
+    expect(h.totalMs).toBe(1800000);
+  });
+
+  it('a medicao entra na hora em que COMECOU, mesmo atravessando a hora', () => {
+    // 07:40 + 40 min termina as 08:20 — e uma medicao das 7h.
+    const curva = ritmoPorHoraDoDia([{
+      iniciado_em: new Date(2026, 7, 31, 7, 40).toISOString(),
+      duracao_ms: 2400000, pecas: 400, paradas: [],
+    }]);
+    expect(curva.map((h) => h.rotulo)).toEqual(['07h']);
+  });
+
+  it('hora com menos de 5 min medidos existe, mas vem marcada como fraca', () => {
+    const [h] = ritmoPorHoraDoDia([em(14, { duracaoMs: 240000, pecas: 30 })]);
+    expect(h.confiavel).toBe(false);
+    // 4 min tambem descreve alguma coisa: some do selo, nao do relatorio.
+    expect(Math.round(h.ritmoMedio)).toBe(450);
+  });
+
+  it('vem em ordem do relogio, nao de volume — e a curva de um dia', () => {
+    const curva = ritmoPorHoraDoDia([em(15), em(7), em(7), em(11)]);
+    expect(curva.map((h) => h.hora)).toEqual([7, 11, 15]);
+  });
+
+  it('sem horario, sem peca ou sem periodo, a medicao fica de fora', () => {
+    expect(ritmoPorHoraDoDia([
+      { duracao_ms: 600000, pecas: 100 },                       // sem iniciado_em
+      em(9, { pecas: 0 }),                                      // sem peca
+      em(9, { duracaoMs: 0 }),                                  // sem periodo
+      // Parada do tamanho do periodo: nao sobra maquina rodando.
+      em(9, { paradas: [{ motivo: 'setup', duracaoMs: 1800000 }] }),
+    ])).toEqual([]);
+    expect(ritmoPorHoraDoDia([])).toEqual([]);
+    expect(ritmoPorHoraDoDia(undefined)).toEqual([]);
   });
 });

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } from '../../theme/tokens.js';
 import {
   conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao,
-  formatarSegundos, potencialSemParada, rotuloMotivo, somarParadas,
+  formatarSegundos, nomeChave, potencialSemParada, rotuloMotivo, somarParadas,
 } from '../../domain/cronoanalise.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import { TOQUE_MINIMO_MS } from '../../domain/estatistica.js';
@@ -11,6 +11,7 @@ import { listarConferencias, marcarEnviadas, removerConferencia, salvarConferenc
 import { enfileirar, listarFila, novoId } from '../../lib/filaOffline.js';
 import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
 import { carregarMaquinas, useMaquinas } from '../../lib/maquinas.js';
+import SeletorMaquina from '../../components/SeletorMaquina.jsx';
 
 /**
  * CONFERENCIA RAPIDA — hora inicial, hora final, pecas. Sem cadastro.
@@ -70,6 +71,20 @@ export default function ConferenciaRapida({ aoSair }) {
 
   // Maquina, peca e memoria deste aparelho.
   const [maquina, setMaquina] = useState('');
+  /**
+   * O SELO do cabecalho nomeia o POSTO — o grupo da maquina escolhida no
+   * cadastro (FURADEIRA, FRESADORA, EMBALAGEM). Antes ele dizia sempre
+   * "FURADEIRA", o que passou a ser mentira no dia em que o cadastro
+   * ganhou outros grupos. Sem maquina escolhida, ou sem grupo, o selo nao
+   * aparece: melhor nada do que um posto errado.
+   */
+  const cadastroDeMaquinas = useMaquinas();
+  const seloDoPosto = useMemo(() => {
+    const alvo = nomeChave(maquina);
+    if (!alvo) return null;
+    const m = cadastroDeMaquinas.find((x) => nomeChave(x.nome) === alvo);
+    return m?.grupo_nome ? String(m.grupo_nome).toUpperCase() : null;
+  }, [cadastroDeMaquinas, maquina]);
   const [peca, setPeca] = useState('');
   // Ciclos de FURACAO da peca: 1 acionamento do motor (lateral simples),
   // 2 (sobe e desce) ou 3. E' dado da PECA, por isso mora ao lado dela.
@@ -418,12 +433,15 @@ export default function ConferenciaRapida({ aoSair }) {
           ←
         </button>
         <div style={{ minWidth: 0, flex: 1 }}>
-          {/* O posto vem no selo a direita, nao no titulo: "Conferência
-              rápida · Furadeiras" nao cabe em tela de celular e sai cortado. */}
-          <div style={est.titulo}>Ritmo da furadeira</div>
-          <div style={est.subtitulo}>Peças/hora por posto · sem cadastro</div>
+          {/* "Ritmo da FURADEIRA" era um nome errado desde que o cadastro
+              passou a ter fresadora, embalagem e o que mais vier: a tela
+              mede o ritmo de QUALQUER posto — o que ela nao faz e'
+              cronometrar ciclo a ciclo. O selo a direita nomeia o GRUPO da
+              maquina escolhida, que e' o posto de verdade. */}
+          <div style={est.titulo}>Ritmo da máquina</div>
+          <div style={est.subtitulo}>Peças/hora do posto · sem cronometrar ciclo</div>
         </div>
-        <span style={est.selo}>FURADEIRA</span>
+        {seloDoPosto && <span style={est.selo}>{seloDoPosto}</span>}
       </header>
 
       {fase === 'pronto' && (
@@ -571,7 +589,7 @@ export default function ConferenciaRapida({ aoSair }) {
                   saber que a medicao SOBE para o PC — sem ela, o recibo era
                   a unica pista e ja' induziu leitura errada uma vez. */}
               <section style={est.aviso}>
-                Salvar envia esta conferência para o relatório das Furadeiras, no PC,
+                Salvar envia esta conferência para o relatório Ritmo por máquina, no PC,
                 e guarda uma cópia neste aparelho. Para registrar ciclos e calcular
                 o tempo padrão, crie um estudo.
               </section>
@@ -863,7 +881,7 @@ export default function ConferenciaRapida({ aoSair }) {
               saber disso antes de tocar em Salvar, nao depois de ver a
               medicao de teste aparecer no relatorio da furadeira. */}
           <section style={est.aviso}>
-            Salvar envia esta conferência para o relatório das Furadeiras, no PC,
+            Salvar envia esta conferência para o relatório Ritmo por máquina, no PC,
             e guarda uma cópia neste aparelho. Para registrar ciclos e calcular
             o tempo padrão, crie um estudo.
           </section>
@@ -986,78 +1004,20 @@ function Paradas({ motivos, paradas, resumo, duracaoMs, setupCrono, aoIniciarSet
 }
 
 /**
- * Campo da MAQUINA — escolha quando ha cadastro, texto quando nao ha.
- *
- * O nome digitado foi o que dividiu a mesma peca em linhas que nao somam
- * (28/08). Com o cadastro preenchido no PC (Ferramentas > Maquinas), o
- * celular OFERECE a lista e digitar vira excecao — mas nunca tranca:
- * "Outra maquina..." abre o texto livre, e sem cadastro (ou sem rede e sem
- * cache) o campo e' o de sempre. O aria-label do texto livre nao muda: e'
- * o mesmo campo de todo o historico.
+ * O campo da maquina desta tela — a regra mora em SeletorMaquina, que o
+ * Novo estudo tambem usa; aqui vao so' os estilos da coleta (tema escuro,
+ * alvo de dedo) e a vibracao que confirma a escolha sem olhar.
  */
 function CampoMaquina({ valor, aoTrocar }) {
-  const maquinas = useMaquinas();
-  const [digitando, setDigitando] = useState(false);
-  const noCadastro = maquinas.some((m) => m.nome === valor);
-  // Valor fora do cadastro (historico, "outra") mantem o texto visivel:
-  // um select sem a opcao esconderia o que vai ser gravado.
-  const livre = digitando || maquinas.length === 0 || (Boolean(valor) && !noCadastro);
-
-  if (livre) {
-    return (
-      <>
-        <input
-          type="text"
-          placeholder="Ex: Furadeira 03"
-          value={valor}
-          onChange={(ev) => aoTrocar(ev.target.value)}
-          style={est.inputTexto}
-          aria-label="Nome da máquina"
-        />
-        {maquinas.length > 0 && (
-          <button
-            type="button" style={est.linkCadastro}
-            onClick={() => { setDigitando(false); aoTrocar(''); }}
-          >
-            ▾ escolher do cadastro
-          </button>
-        )}
-      </>
-    );
-  }
-
-  // Agrupadas pelo GRUPO do cadastro (Furadeiras juntas, Seccionadoras
-  // juntas). A lista ja vem ordenada do servidor; aqui so' se fatia. Sem
-  // grupo, ficam soltas no fim — o cadastro organiza, nao trava.
-  const grupos = [];
-  for (const m of maquinas) {
-    const rotuloGrupo = m.grupo_codigo ? `${m.grupo_codigo} · ${m.grupo_nome}` : null;
-    const ultimo = grupos[grupos.length - 1];
-    if (ultimo && ultimo.grupo === rotuloGrupo) ultimo.itens.push(m);
-    else grupos.push({ grupo: rotuloGrupo, itens: [m] });
-  }
-
   return (
-    <select
-      value={valor}
-      onChange={(ev) => {
-        if (ev.target.value === '__outra') { setDigitando(true); aoTrocar(''); return; }
-        aoTrocar(ev.target.value);
-        if (ev.target.value) vibrar(30);
-      }}
-      style={est.selectMaquina}
-      aria-label="Máquina"
-    >
-      <option value="">Escolha a máquina…</option>
-      {grupos.map((g) => (g.grupo ? (
-        <optgroup key={g.grupo} label={g.grupo}>
-          {g.itens.map((m) => <option key={m.id} value={m.nome}>{m.nome}</option>)}
-        </optgroup>
-      ) : (
-        g.itens.map((m) => <option key={m.id} value={m.nome}>{m.nome}</option>)
-      )))}
-      <option value="__outra">Outra máquina…</option>
-    </select>
+    <SeletorMaquina
+      valor={valor}
+      aoTrocar={aoTrocar}
+      aria="Máquina"
+      ariaTexto="Nome da máquina"
+      estilos={{ input: est.inputTexto, select: est.selectMaquina, link: est.linkCadastro }}
+      aoEscolher={() => vibrar(30)}
+    />
   );
 }
 

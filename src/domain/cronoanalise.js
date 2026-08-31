@@ -548,6 +548,66 @@ export function resumirConferencias(conferencias, { porPeca = false } = {}) {
 }
 
 /**
+ * A CURVA DO DIA — ritmo por hora do relogio.
+ *
+ * O relatorio sabia dizer quanto um posto rende, mas nao QUANDO ele rende.
+ * E' na hora do dia que aparece o que a media esconde: a queda depois do
+ * almoco, o fim de turno mais lento, a hora em que a troca sempre cai.
+ *
+ * Junta as medicoes feitas na MESMA hora do relogio, de qualquer data —
+ * com um turno so', isso e' a curva do turno. Duas medicoes das 7h de dias
+ * diferentes somam; e' o unico jeito de a curva existir com o volume de
+ * medicao que uma fabrica realmente faz.
+ *
+ * A medicao entra na hora em que COMECOU. Ratear uma medicao que atravessa
+ * a hora daria uma precisao que o dado nao tem — o contador e' lido no fim
+ * do periodo, entao nem se sabe quantas pecas sairam em cada metade.
+ *
+ * A hora e' a LOCAL de quem le': o PC do analista fica na mesma fabrica que
+ * a maquina, e "7h" precisa ser 7h do chao de fabrica, nao UTC.
+ *
+ * Mesma ponderacao do resto do relatorio: soma de pecas sobre soma do tempo
+ * rodando, nunca media de taxas.
+ */
+export function ritmoPorHoraDoDia(conferencias) {
+  const horas = new Map();
+
+  for (const c of conferencias || []) {
+    const inicio = new Date(c.iniciadoEm ?? c.iniciado_em ?? c.salvoEm ?? c.salvo_em ?? NaN);
+    if (Number.isNaN(inicio.getTime())) continue;
+
+    const calc = conferenciaRapida({
+      duracaoMs: Number(c.duracaoMs ?? c.duracao_ms),
+      pecas: c.pecas,
+      paradas: c.paradas,
+      ciclosPorPeca: c.ciclosPorPeca ?? c.ciclos_por_peca,
+    });
+    if (!calc) continue;
+
+    const hora = inicio.getHours();
+    if (!horas.has(hora)) horas.set(hora, { hora, n: 0, pecas: 0, produtivoMs: 0, totalMs: 0 });
+    const g = horas.get(hora);
+    g.n += 1;
+    g.pecas += calc.pecas;
+    g.produtivoMs += calc.produtivoMs;
+    g.totalMs += calc.duracaoMs;
+  }
+
+  return [...horas.values()]
+    .filter((g) => g.produtivoMs > 0 && g.pecas > 0)
+    .map((g) => ({
+      ...g,
+      chave: `h${g.hora}`,
+      rotulo: `${String(g.hora).padStart(2, '0')}h`,
+      ritmoMedio: (g.pecas * MS_POR_HORA) / g.produtivoMs,
+      // Mesmo criterio que ja' marca medicao curta no resto do relatorio:
+      // uma hora com 4 min medidos nao descreve hora nenhuma.
+      confiavel: g.produtivoMs >= CRITERIOS_CONFERENCIA.minPeriodoMs,
+    }))
+    .sort((a, b) => a.hora - b.hora);
+}
+
+/**
  * Duracao entre dois horarios de relogio ("HH:MM"), em ms.
  *
  * E' assim que a conferencia acontece de verdade: o analista passa pela

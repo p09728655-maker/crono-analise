@@ -3,7 +3,8 @@ import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
   CRITERIOS_CONFERENCIA, conferenciaRapida, faixaHoraria, formatarDuracao,
-  nomeChave, potencialSemParada, resumirConferencias, rotuloMotivo, somarParadas,
+  nomeChave, potencialSemParada, resumirConferencias, ritmoPorHoraDoDia, rotuloMotivo,
+  somarParadas,
 } from '../../domain/cronoanalise.js';
 import { analisarConferencias } from '../../domain/analiseConferencias.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
@@ -20,7 +21,12 @@ import { GraficoRitmoMaquinas } from './graficos.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 
 /**
- * RELATORIO DAS FURADEIRAS — modelo BASICO, no PC.
+ * RELATORIO RITMO POR MAQUINA — modelo BASICO, no PC.
+ *
+ * Chamava-se "Furadeiras" de quando so' havia furadeira medida. O cadastro
+ * ganhou fresadora, embalagem e o que mais entrar: o nome passou a mentir
+ * sobre o que a tela cobre, e quem media uma fresadora nao achava onde ver
+ * o resultado. O relatorio e' de POSTO, seja ele qual for.
  *
  * As medicoes nascem no celular, sobem pela fila offline e chegam aqui.
  * Redesenho de ago/2026, a pedido de quem usa: o relatorio anterior
@@ -287,6 +293,23 @@ export default function RelatorioConferencias({ aoVoltar }) {
   }, [visiveis, resumoVisivel]);
 
   /**
+   * A CURVA DO DIA: o ritmo por hora do relogio, juntando as medicoes
+   * feitas na mesma hora de qualquer data. Segue o filtro da lateral como
+   * o resto — filtrou a maquina, e' a curva dela.
+   */
+  /**
+   * So' com UMA maquina em vista. Misturando postos, a hora "fraca" pode
+   * ser so' a hora em que a maquina mais lenta foi medida — a curva diria
+   * "as 9h rende menos" quando o que mudou foi a maquina, nao a hora. Com
+   * uma maquina (filtrada na lateral, ou porque so' ha' uma), a comparacao
+   * e' hora contra hora do mesmo posto.
+   */
+  const curvaDoDia = useMemo(
+    () => (resumoVisivel.length === 1 ? ritmoPorHoraDoDia(visiveis) : []),
+    [visiveis, resumoVisivel.length],
+  );
+
+  /**
    * O COMPARATIVO do periodo: o que saiu x o que teria saido no MESMO
    * tempo, sem parada. Sai do painel, entao segue o filtro da lateral
    * como todo o resto da tela — e some quando nao houve parada, porque
@@ -308,10 +331,43 @@ export default function RelatorioConferencias({ aoVoltar }) {
      O bloco aparece MESMO com uma maquina so' (mudanca de 31/08): ele
      sumia com uma unica maquina medida, e o usuario nao achava onde
      filtrar para imprimir — controle que aparece e some nao se aprende. */
-  const secoes = resumo.length
-    ? [{ id: TODAS, rotulo: 'Todas', contador: linhas.length },
-       ...resumo.map((g) => ({ id: g.maquina, rotulo: g.maquina, contador: g.n }))]
-    : [];
+  /**
+   * A lateral lista as maquinas DEBAIXO DO GRUPO do cadastro
+   * (0002 · FURADEIRA, 0004 · FRESADORA), a mesma leitura que o celular ja'
+   * oferece na escolha da maquina. Com postos de naturezas diferentes
+   * medidos no mesmo relatorio, uma lista corrida de nomes obrigava a
+   * decorar qual maquina e' de qual grupo.
+   *
+   * Maquina sem grupo no cadastro nao some: cai em "Sem grupo", no fim — o
+   * cadastro organiza, nao trava, como no celular.
+   */
+  const secoes = useMemo(() => {
+    if (!resumo.length) return [];
+    const porGrupo = new Map();
+    for (const g of resumo) {
+      const grupo = grupoDe(g.maquina) || 'Sem grupo';
+      if (!porGrupo.has(grupo)) porGrupo.set(grupo, []);
+      porGrupo.get(grupo).push(g);
+    }
+    // Grupos em ordem de codigo (0002 antes de 0004); "Sem grupo" por ultimo.
+    const grupos = [...porGrupo.keys()].sort((a, b) => {
+      if (a === 'Sem grupo') return 1;
+      if (b === 'Sem grupo') return -1;
+      return a.localeCompare(b, 'pt-BR');
+    });
+
+    const itens = [{ id: TODAS, rotulo: 'Todas', contador: linhas.length }];
+    // Com um grupo so' o cabecalho nao organiza nada: repetiria o obvio
+    // acima de uma lista que ja' e' toda dele.
+    const nomearGrupos = grupos.length > 1;
+    for (const grupo of grupos) {
+      if (nomearGrupos) itens.push({ id: `grupo:${grupo}`, rotulo: grupo, cabecalho: true });
+      for (const g of porGrupo.get(grupo)) {
+        itens.push({ id: g.maquina, rotulo: g.maquina, contador: g.n, recuado: nomearGrupos });
+      }
+    }
+    return itens;
+  }, [resumo, linhas.length, mapaGrupos]);
 
   /* O lote de UMA maquina: os ids das linhas que estao na tela sob aquele
      nome. So' existe com a maquina escolhida na lateral — "arquivar tudo"
@@ -330,8 +386,11 @@ export default function RelatorioConferencias({ aoVoltar }) {
           voltarRotulo="Estudos"
           contexto={{
             rotulo: 'Relatório',
-            titulo: 'Furadeiras',
-            subtitulo: 'Ritmo por máquina · peças/hora e peças/minuto',
+            // "Furadeiras" era o nome de quando so' havia furadeira medida.
+            // Com fresadora e embalagem no cadastro, o nome do relatorio
+            // passou a mentir sobre o que ele cobre.
+            titulo: 'Ritmo por máquina',
+            subtitulo: 'Peças/hora e peças/minuto de cada posto',
           }}
           acaoPrimaria={estado === 'pronto' && linhas.length > 0 && !verArquivadas
             ? {
@@ -389,7 +448,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                 ? 'O que foi arquivado volta para cá. Nada foi apagado do banco.'
                 : (outras > 0
                   ? `As ${outras} medições deste relatório estão arquivadas — fora dos cálculos, guardadas no banco. Abra "Arquivadas" para vê-las e restaurar o que precisar.`
-                  : 'Esta é a tela das furadeiras: no celular, abra Ritmo da furadeira, informe máquina, peça e horários, e a medição aparece aqui assim que o aparelho sincroniza. Para embalagem — ciclo a ciclo, com tempo padrão — use um estudo de tempos.')}
+                  : 'Esta tela mede o ritmo de qualquer posto: no celular, abra Ritmo da máquina, informe máquina, peça e horários, e a medição aparece aqui assim que o aparelho sincroniza. Para cronometrar ciclo a ciclo, com tempo padrão, use um estudo de tempos.')}
               acao={(verArquivadas || outras > 0) ? (
                 <button
                   type="button"
@@ -434,7 +493,17 @@ export default function RelatorioConferencias({ aoVoltar }) {
                         : 'sem tempo de máquina rodando',
                     },
                     { rot: 'Medições', val: String(painel.n), sub: `${painel.maquinas} máquina(s) · ${painel.pecasTot} peças` },
-                    { rot: 'Tempo rodando', val: formatarDuracao(painel.produtivoMs), sub: `de ${formatarDuracao(painel.totalMs)} observados` },
+                    {
+                      // O PERCENTUAL na frente, a duracao embaixo: e' a
+                      // disponibilidade do periodo, e percentual e' o que se
+                      // acompanha no tempo. "18 min de 30" obrigava quem le'
+                      // a dividir de cabeca para chegar no mesmo numero.
+                      rot: 'Máquina rodando',
+                      val: painel.totalMs > 0
+                        ? `${Math.round((painel.produtivoMs / painel.totalMs) * 100)}%`
+                        : '—',
+                      sub: `${formatarDuracao(painel.produtivoMs)} de ${formatarDuracao(painel.totalMs)} observados`,
+                    },
                     {
                       rot: 'Tempo parado',
                       val: painel.paradaMs > 0 ? formatarDuracao(painel.paradaMs) : '—',
@@ -536,6 +605,13 @@ export default function RelatorioConferencias({ aoVoltar }) {
                     <div style={est.cartaoRitmoMinuto}>{porMinuto(g.ritmoMedio)} peças por minuto</div>
                     <div style={est.cartaoLinhas}>
                       <span>{g.n} medição(ões) · {g.totalPecas} peças · {formatarDuracao(g.totalProdutivoMs)} rodando</span>
+                      {/* O percentual ja' vem pronto de resumirConferencias
+                          (disponibilidadePct) — a tela nao refaz a conta. Sem
+                          parada marcada seria sempre 100%, e a linha viraria
+                          ruido: por isso so' aparece com parada. */}
+                      {g.totalParadaMs > 0 && (
+                        <span>Máquina rodando: {Math.round(g.disponibilidadePct)}% do período observado</span>
+                      )}
                       {g.totalParadaMs > 0 && (
                         <span>
                           Parado: {formatarDuracao(g.totalParadaMs)}
@@ -624,6 +700,38 @@ export default function RelatorioConferencias({ aoVoltar }) {
                 </section>
               )}
 
+              {/* A CURVA DO DIA.
+                  A media do periodo esconde a hora fraca: o posto que faz
+                  700 pc/h de manha e 500 depois do almoco aparece como 620
+                  o dia inteiro, e ninguem vai olhar o que muda as 13h.
+                  Com UMA hora medida nao ha curva — uma barra sozinha nao
+                  compara com nada, entao o quadro so' aparece com duas. */}
+              {/* Com varias maquinas medidas, a curva nao aparece — e a tela
+                  diz por que e o que fazer, em vez de sumir em silencio. */}
+              {!verArquivadas && resumoVisivel.length > 1 && (
+                <p style={est.dicaCurva}>
+                  Para ver o <strong>ritmo por hora do dia</strong> — onde aparece a queda de fim de
+                  turno —, escolha uma máquina em MÁQUINAS, ao lado. Com postos diferentes juntos, a
+                  hora fraca seria só a hora em que a máquina mais lenta foi medida.
+                </p>
+              )}
+
+              {!verArquivadas && curvaDoDia.length >= 2 && (
+                <section style={est.painelGrafico} aria-label="Ritmo por hora do dia">
+                  <GraficoRitmoMaquinas
+                    maquinas={curvaDoDia.map((h) => ({
+                      ...h,
+                      nota: h.n > 1 ? `${h.n} medições` : '1 medição',
+                    }))}
+                    titulo={`Ritmo por hora do dia${filtro ? ` — ${filtro}` : ''}`}
+                    subtitulo="Medições feitas na mesma hora do relógio, de qualquer data — cada uma entra na hora em que começou"
+                    rotuloOk="Hora medida"
+                    rotuloFraco="Menos de 5 min medidos nessa hora"
+                    notaFraca="pouco tempo medido"
+                  />
+                </section>
+              )}
+
               {!verArquivadas && painel && painel.pareto.totalMs > 0 && (
                 <div style={est.duasColunas}>
                   <section style={est.painelMiolo} aria-label="Paradas do período">
@@ -702,6 +810,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <th style={est.th}>Horários</th>
                       <th style={est.thNum}>Período</th>
                       <th style={est.thNum}>Parado</th>
+                      <th style={est.thNum}>Rodando</th>
                       <th style={est.thNum}>Peças</th>
                       <th style={est.thNum}>Peças/hora</th>
                       <th style={est.thNum}>Peças/min</th>
@@ -740,6 +849,11 @@ export default function RelatorioConferencias({ aoVoltar }) {
                           <td style={est.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
                           <td style={est.tdNum} title={par.porMotivo.map((m) => `${m.rotulo}: ${formatarDuracao(m.ms)}`).join(' · ')}>
                             {par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}
+                          </td>
+                          {/* Quanto do periodo a maquina passou produzindo —
+                              o mesmo numero do cartao, medicao a medicao. */}
+                          <td style={est.tdNum} title="Quanto do período a máquina passou produzindo">
+                            {calc ? `${Math.round(calc.disponibilidadePct)}%` : '—'}
                           </td>
                           <td style={est.tdNum}>{c.pecas}</td>
                           <td style={est.tdNumForte}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
@@ -1288,7 +1402,7 @@ function AnalisePeriodo({ secoes, resumo, noPapel, aoAlternarPapel }) {
 }
 
 /**
- * FOLHA DAS FURADEIRAS — A4 retrato, modelo basico.
+ * FOLHA DO RITMO POR MAQUINA — A4 retrato, modelo basico.
  *
  * Nao e' a tela no papel — a tela tem filtro, botao e cor de interface; o
  * papel tem contexto e responsavel. Recebe os dados JA' FILTRADOS pela
@@ -1320,13 +1434,18 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
   const comparativo = potencialSemParada({
     pecas: totalPecas, duracaoMs: totalMs, produtivoMs: totalProdutivoMs,
   });
+  // A curva do dia no papel e' TABELA, nao grafico: a folha nao tem nenhuma
+  // outra imagem, e a hora com o numero ao lado le-se melhor impressa.
+  // So' com UMA maquina, pelo mesmo motivo da tela: misturando postos, a
+  // hora fraca seria a hora da maquina mais lenta, nao uma hora fraca.
+  const curvaDoDia = resumo.length === 1 ? ritmoPorHoraDoDia(linhas) : [];
 
   return (
     <div className="somente-impressao" style={imp.folha}>
       <header style={imp.cabecalho}>
         <div>
           <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={imp.logo} />
-          <h1 style={imp.titulo}>Ritmo das Furadeiras{filtro ? ` — ${filtro}` : ''}</h1>
+          <h1 style={imp.titulo}>Ritmo por Máquina{filtro ? ` — ${filtro}` : ''}</h1>
         </div>
         <div style={imp.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
       </header>
@@ -1342,6 +1461,9 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
           ['Tempo parado', totalParadaMs > 0
             ? `${formatarDuracao(totalParadaMs)}${totalSetupMs > 0 ? ` (troca/setup ${formatarDuracao(totalSetupMs)})` : ''}`
             : 'Nenhuma parada marcada'],
+          ['Máquina rodando', totalMs > 0
+            ? `${Math.round((totalProdutivoMs / totalMs) * 100)}% do período observado`
+            : '—'],
           ['Ritmo médio', ritmoGeral != null
             ? `${Math.round(ritmoGeral)} pç/h · ${porMinuto(ritmoGeral)} pç/min`
             : '—'],
@@ -1398,6 +1520,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
             <th style={imp.thNum}>Peças</th>
             <th style={imp.thNum}>Tempo rodando</th>
             <th style={imp.thNum}>Parado</th>
+            <th style={imp.thNum}>Rodando %</th>
             <th style={imp.thNum}>Peças/hora</th>
             <th style={imp.thNum}>Peças/min</th>
           </tr>
@@ -1411,6 +1534,7 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
               <td style={imp.tdNum}>{g.totalPecas}</td>
               <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
               <td style={imp.tdNum}>{g.totalParadaMs > 0 ? formatarDuracao(g.totalParadaMs) : '—'}</td>
+              <td style={imp.tdNum}>{Math.round(g.disponibilidadePct)}%</td>
               <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
               <td style={imp.tdNum}>{porMinuto(g.ritmoMedio)}</td>
             </tr>
@@ -1451,6 +1575,40 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
       {/* Ritmo por peca: o numero que o PCP leva para dimensionar carga e lote. */}
       {resumoPecas?.length > 0 && (
         <>
+          {curvaDoDia.length >= 2 && (
+            <>
+              <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Ritmo por hora do dia</h2>
+              <table style={imp.tabela}>
+                <thead>
+                  <tr>
+                    <th style={imp.th}>Hora</th>
+                    <th style={imp.thNum}>Medições</th>
+                    <th style={imp.thNum}>Peças</th>
+                    <th style={imp.thNum}>Tempo rodando</th>
+                    <th style={imp.thNum}>Peças/hora</th>
+                    <th style={imp.thNum}>Peças/min</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {curvaDoDia.map((h) => (
+                    <tr key={h.chave}>
+                      <td style={imp.td}>{h.rotulo}</td>
+                      <td style={imp.tdNum}>{h.n}</td>
+                      <td style={imp.tdNum}>{h.pecas}</td>
+                      <td style={imp.tdNum}>{formatarDuracao(h.produtivoMs)}</td>
+                      <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(h.ritmoMedio)}</td>
+                      <td style={imp.tdNum}>{porMinuto(h.ritmoMedio)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={imp.nota}>
+                Cada medição entra na hora em que começou, e as medições da mesma hora somam
+                entre si, mesmo de datas diferentes — é a curva do turno.
+              </p>
+            </>
+          )}
+
           <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Ritmo por peça</h2>
           <table style={imp.tabela}>
             <thead>
@@ -1532,6 +1690,8 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
             ['Peças/hora', 'quantas peças saem em uma hora com a máquina rodando.'],
             ['Peças/min', 'o mesmo ritmo, em peças por minuto.'],
             ['Ritmo médio', 'total de peças dividido pelo tempo total com a máquina rodando.'],
+            ['Máquina rodando', 'quanto do período observado a máquina passou produzindo. '
+              + 'É a DISPONIBILIDADE do período — 100% menos o tempo parado.'],
             ['Deixou de sair', 'peças que teriam saído no MESMO período se a máquina não tivesse '
               + 'parado, ao ritmo que ela própria fez rodando. Não é meta nem capacidade de catálogo.'],
             ['Grupo', 'grupo do cadastro de máquinas, com o código da fábrica (ex: 0002 · FURADEIRA).'],
@@ -1848,6 +2008,12 @@ const est = {
   // A nota encolhe; o botao fica na direita, na mesma linha do titulo. Sem
   // isto o texto ocupava a largura toda e empurrava o botao para baixo.
   painelTopoTexto: { flex: '1 1 320px', minWidth: 0 },
+  dicaCurva: {
+    ...tipo('legenda'), color: t.textoMedio, margin: `0 0 ${espaco.xl}px`,
+    padding: `${espaco.md}px ${espaco.lg}px`, background: t.papel,
+    borderRadius: raio.md, borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    lineHeight: 1.5,
+  },
   painelTitulo: { ...tipo('corpoF'), margin: 0 },
   painelDica: { ...tipo('legenda'), color: t.textoFraco, margin: `2px 0 0` },
   tabela: { width: '100%', borderCollapse: 'collapse' },

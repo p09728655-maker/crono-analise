@@ -34,7 +34,7 @@ const faixa = () => p.locator('[aria-label="Aviso de atualização"]');
 
 /* -------------------------------------------- 1. primeira visita: silencio */
 await p.goto(`${BASE}/coleta`);
-await p.getByRole('button', { name: /Ritmo da furadeira/ }).waitFor({ timeout: 8000 });
+await p.getByRole('button', { name: /Ritmo da máquina/ }).waitFor({ timeout: 8000 });
 checar(await faixa().count() === 0, 'primeira visita nao mostra faixa');
 checar(
   await p.evaluate((k) => localStorage.getItem(k), CHAVE) === VERSAO,
@@ -54,7 +54,7 @@ checar(await faixa().count() === 0, 'abrir as novidades ja recolhe a faixa');
 await p.getByRole('button', { name: 'Fechar histórico' }).tap();
 
 await p.reload();
-await p.getByRole('button', { name: /Ritmo da furadeira/ }).waitFor({ timeout: 8000 });
+await p.getByRole('button', { name: /Ritmo da máquina/ }).waitFor({ timeout: 8000 });
 checar(await faixa().count() === 0, 'vista uma vez, a faixa nao volta ao recarregar');
 
 /* ------------------------------------------------- 3. dispensar pelo × */
@@ -65,7 +65,7 @@ await p.getByRole('button', { name: 'Dispensar aviso de atualização' }).tap();
 checar(await faixa().count() === 0, 'dispensar pelo × recolhe a faixa');
 
 await p.reload();
-await p.getByRole('button', { name: /Ritmo da furadeira/ }).waitFor({ timeout: 8000 });
+await p.getByRole('button', { name: /Ritmo da máquina/ }).waitFor({ timeout: 8000 });
 checar(await faixa().count() === 0, 'dispensada tambem conta como vista apos recarregar');
 
 /* ---------------- 4. versao NOVA no ar enquanto o app esta aberto */
@@ -84,7 +84,7 @@ checar(await faixa().count() === 0, 'dispensada tambem conta como vista apos rec
   }));
   await p.evaluate(([k, v]) => localStorage.setItem(k, v), [CHAVE, VERSAO]);
   await p.reload();
-  await p.getByRole('button', { name: /Ritmo da furadeira/ }).waitFor({ timeout: 8000 });
+  await p.getByRole('button', { name: /Ritmo da máquina/ }).waitFor({ timeout: 8000 });
   await p.waitForTimeout(600);
   checar(await faixaNova.count() === 0, 'versao igual a do servidor: sem aviso');
 
@@ -112,7 +112,7 @@ checar(await faixa().count() === 0, 'dispensada tambem conta como vista apos rec
   await p.unroute('**/versao.json**');
   await p.route('**/versao.json**', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><html></html>' }));
   await p.reload();
-  await p.getByRole('button', { name: /Ritmo da furadeira/ }).waitFor({ timeout: 8000 });
+  await p.getByRole('button', { name: /Ritmo da máquina/ }).waitFor({ timeout: 8000 });
   await p.waitForTimeout(600);
   checar(await faixaNova.count() === 0, 'resposta que nao e JSON: cala a boca em vez de inventar');
 }

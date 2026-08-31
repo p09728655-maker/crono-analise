@@ -33,12 +33,22 @@
  *                      porque o resumo nao guarda a ordem no tempo
  * @returns [{ titulo, linhas: [string] }] — secoes na ordem de leitura
  */
-import { CRITERIOS_CONFERENCIA, formatarDuracao, nomeChave, somarParadas } from './cronoanalise.js';
+import {
+  CRITERIOS_CONFERENCIA, formatarDuracao, nomeChave, ritmoPorHoraDoDia, somarParadas,
+} from './cronoanalise.js';
 
 const MS_POR_HORA = 3600000;
 
 /** Minimo de medicoes da mesma maquina para falar de tendencia no tempo. */
 const MIN_TENDENCIA = 4;
+/**
+ * Minimos da CURVA DO DIA. Duas horas medidas e tres medicoes no total: com
+ * menos que isso, "as 10h rende menos" e' uma medicao contra outra, nao um
+ * padrao do dia — e apontar hora fraca sem padrao manda gente investigar
+ * ruido.
+ */
+const MIN_HORAS_CURVA = 2;
+const MIN_MEDICOES_CURVA = 3;
 /** Variacao (em %) abaixo da qual tendencia e comparacao viram ruido. */
 const RUIDO_PCT = 8;
 
@@ -146,6 +156,15 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
       + (totSetup > 0 ? `, sendo ${formatarDuracao(totSetup)} em troca/setup` : '')
       + '. Esse tempo não conta no ritmo — mas é produção que deixou de sair.',
     );
+    // Quanto do periodo a maquina passou produzindo. E' a disponibilidade,
+    // dita em portugues: o percentual e o numero que se acompanha no tempo,
+    // enquanto "18 min de 30" obriga quem le a dividir de cabeca.
+    const totObservado = totProdutivo + totParada;
+    if (totObservado > 0) {
+      geral.push(
+        `A máquina rodou ${Math.round((totProdutivo / totObservado) * 100)}% do período observado.`,
+      );
+    }
   }
   secoes.push({ titulo: 'Leitura geral', linhas: geral });
 
@@ -306,7 +325,39 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
     secoes.push({ titulo: 'Paradas', linhas });
   }
 
-  /* ------------------------------------------------- 8. proximo passo */
+  /* ------------------------------------------------- 8. curva do dia */
+  /**
+   * A HORA FRACA. A media do periodo esconde a hora ruim: o posto que faz
+   * 700 pc/h de manha e 500 depois do almoco aparece como 620 o dia
+   * inteiro, e ninguem vai olhar o que muda as 13h. Aqui a diferenca entre
+   * a melhor e a pior hora vira uma frase — com a pergunta que ela pede.
+   */
+  /* So' com UMA maquina: com postos diferentes juntos, a hora "fraca" pode
+     ser apenas a hora em que a maquina mais lenta foi medida — a frase
+     mandaria investigar a hora quando o que mudou foi o posto. */
+  const curva = maquinas.length === 1 ? ritmoPorHoraDoDia(conferencias) : [];
+  if (curva.length >= MIN_HORAS_CURVA && totMedicoes >= MIN_MEDICOES_CURVA) {
+    const ordenadas = [...curva].sort((a, b) => b.ritmoMedio - a.ritmoMedio);
+    const melhor = ordenadas[0];
+    const pior = ordenadas[ordenadas.length - 1];
+    const queda = ((melhor.ritmoMedio - pior.ritmoMedio) / melhor.ritmoMedio) * 100;
+    const linhas = [
+      `Horas medidas: ${curva.map((h) => `${h.rotulo} ${Math.round(h.ritmoMedio)} pç/h`).join(' · ')}.`,
+    ];
+    // Diferenca pequena entre horas e ruido de medicao, nao padrao do dia.
+    if (queda >= RUIDO_PCT) {
+      linhas.push(
+        `Às ${pior.rotulo} o ritmo é ${Math.round(queda)}% menor que às ${melhor.rotulo} — `
+        + `${Math.round(pior.ritmoMedio)} contra ${Math.round(melhor.ritmoMedio)} pç/h. `
+        + 'Vale olhar o que muda nessa hora: troca, abastecimento, revezamento ou fadiga.',
+      );
+    } else {
+      linhas.push('O ritmo se mantém parecido nas horas medidas — sem hora fraca a investigar.');
+    }
+    secoes.push({ titulo: 'Ao longo do dia', linhas });
+  }
+
+  /* ------------------------------------------------- 9. proximo passo */
   const pendentes = maquinas.filter((g) => !g.confiavel);
   if (pendentes.length) {
     const linhas = [

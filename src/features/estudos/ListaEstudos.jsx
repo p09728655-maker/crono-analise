@@ -13,6 +13,7 @@ import ChaveIa from '../../components/ChaveIa.jsx';
 import Cabecalho from '../../components/Cabecalho.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import MenuLateral from '../../components/MenuLateral.jsx';
+import SeletorMaquina from '../../components/SeletorMaquina.jsx';
 import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../components/RitmoDemanda.jsx';
 import ConfirmarSaida from '../../components/SairDoSistema.jsx';
 import MotivosParada from '../analise/MotivosParada.jsx';
@@ -196,16 +197,19 @@ export default function ListaEstudos({
             analista que so' quer conferir um ritmo nao pode ficar refem da
             rede nem de cadastro. */}
         {!analise && aoConferirRapido && (
-          /* O rotulo FURADEIRAS vive DENTRO do botao, nao num cabecalho
-             acima dele: a secao inteira e' este unico atalho, e um titulo
-             separado so' repetiria em duas linhas o que a primeira ja' diz. */
+          /* O rotulo vive DENTRO do botao, nao num cabecalho acima dele: a
+             secao inteira e' este unico atalho, e um titulo separado so'
+             repetiria em duas linhas o que a primeira ja' diz.
+             Nao se chama mais "Furadeiras": o cadastro tem fresadora,
+             embalagem e o que mais entrar, e o atalho serve a todos. */
           <button type="button" style={est.atalhoRapida} onClick={aoConferirRapido}>
             <Simbolo tipo="cronometro" cor={t.vermelho} tamanho={28} />
             <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
-              <span style={est.atalhoRotulo}>Furadeiras</span>
-              <div style={est.atalhoTitulo}>Ritmo da furadeira</div>
+              <span style={est.atalhoRotulo}>Ritmo por máquina</span>
+              <div style={est.atalhoTitulo}>Ritmo da máquina</div>
               <div style={est.atalhoTexto}>
-                Peças/hora do posto: horários, peças e as paradas (setup, falta de peça). Sem cadastro.
+                Peças/hora de qualquer posto: horários, peças e as paradas (setup, falta de peça).
+                Sem cronometrar ciclo.
               </div>
             </div>
             <span style={est.atalhoSeta} aria-hidden="true">→</span>
@@ -214,9 +218,9 @@ export default function ListaEstudos({
 
         {/* A segunda seção da coleta. No tablet as duas coisas moram na
             mesma tela e o analista precisa saber, sem perguntar, qual delas
-            e' a dele: a furadeira se confere por vazao (peças/hora), a
-            embalagem se estuda ciclo a ciclo. O rotulo diz o posto; o titulo
-            diz o metodo. */}
+            e' a dele: um posto se confere por vazao (peças/hora), outro se
+            estuda ciclo a ciclo. O rotulo diz a natureza da medicao; o
+            titulo diz o metodo. */}
         {!analise && (
           <SecaoColeta
             est={est}
@@ -1115,8 +1119,20 @@ function FormularioEstudo({
                     {setores.map((nome) => <option key={nome} value={nome} />)}
                   </datalist>
                 </Campo>
-                <Campo est={est} label="Recurso / Posto" dica="Ex: Furadeira 03">
-                  <input style={est.input} {...campo('recurso')} />
+                {/* O posto vem do CADASTRO, como no celular: estudo criado
+                    com "Furadeira 03" digitado a mao nao encontra a
+                    "FURADEIRA 03" da lista, e o mesmo posto vira dois em
+                    todo relatorio que cruzar os dois lados. Quem ainda nao
+                    cadastrou (ou mede um posto novo) usa "Outra máquina…". */}
+                <Campo est={est} label="Recurso / Posto"
+                       dica="Do cadastro de máquinas. Não achou? Use “Outra máquina…”.">
+                  <SeletorMaquina
+                    valor={dados.recurso || ''}
+                    aoTrocar={(v) => setDados((d) => ({ ...d, recurso: v }))}
+                    aria="Recurso / Posto"
+                    estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
+                    vazio="Escolha o posto…"
+                  />
                 </Campo>
                 <Campo est={est} label="Produto / Referência"
                        dica={produtos.length ? 'Escolha um já usado para agrupar corretamente.' : 'Ex: Mesa Cabeceira Sleep'}>
@@ -1709,6 +1725,14 @@ function estilos(t, analise) {
     etapaRotuloAtivo: { color: t.texto },
 
     campo: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
+    // "escolher do cadastro" do SeletorMaquina: volta do texto livre para a
+    // lista. Discreto de proposito — o caminho normal e' escolher.
+    linkCadastro: {
+      marginTop: espaco.xs, padding: 0, alignSelf: 'flex-start',
+      background: 'transparent', border: 'none', color: t.fraco,
+      ...tipo('legenda'), fontWeight: 600, textDecoration: 'underline',
+      cursor: 'pointer', fontFamily: 'inherit',
+    },
     rotuloCampo: rotulo(t.fraco),
     obrigatorio: { color: t.critico },
     dica: { ...tipo('legenda'), color: t.fraco, fontStyle: 'italic' },

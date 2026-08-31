@@ -26,12 +26,15 @@ const erros = [];
 p.on('pageerror', (e) => erros.push(e.message));
 
 await p.goto(`${BASE}/analise/conferencias`);
-await p.getByText('Furadeiras').first().waitFor({ timeout: 8000 });
+await p.getByText('Ritmo por máquina').first().waitFor({ timeout: 8000 });
 checar(true, 'PC: /analise/conferencias abre o relatorio');
-// O subtitulo precisa dizer PARA QUE serve: era a duvida do usuario —
-// onde fica a parte das furadeiras e onde fica a da embalagem.
-checar(await p.getByText(/Ritmo por máquina/).count() > 0,
-  'subtitulo diz o que a tela mede — e o titulo, de qual posto');
+/**
+ * O relatorio se chamava "Furadeiras", de quando so' havia furadeira
+ * medida. Com fresadora e embalagem no cadastro o nome passou a mentir
+ * sobre o que ele cobre — quem media uma fresadora nao achava onde ver.
+ */
+checar(await p.getByText(/Peças\/hora e peças\/minuto de cada posto/).count() > 0,
+  'o titulo e do POSTO, seja ele qual for — nao mais "Furadeiras"');
 
 await p.getByText('Não foi possível carregar').waitFor({ timeout: 8000 });
 checar(await p.getByRole('button', { name: 'Tentar de novo' }).count() === 1,
@@ -242,7 +245,7 @@ await movel.close();
   checar(/864 pç\/h/.test(kpisFiltrados),
     'os numeros do topo seguem o filtro (720 pc em 50 min = 864 pc/h)');
   const folhaFiltrada = await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
-  checar(/Ritmo das Furadeiras — Furadeira 03/.test(folhaFiltrada),
+  checar(/Ritmo por Máquina — Furadeira 03/.test(folhaFiltrada),
     'a folha impressa sai com o nome da maquina no titulo');
   checar(!/Furadeira14/.test(folhaFiltrada),
     'a folha filtrada NAO leva as outras maquinas — imprime so a escolhida');
