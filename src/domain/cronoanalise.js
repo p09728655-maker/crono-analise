@@ -823,6 +823,34 @@ export function oee({ disponibilidade, desempenho, qualidade }) {
   return { disponibilidade: d, desempenho: p, qualidade: q, oee: d * p * q };
 }
 
+/**
+ * O QUE PODE ENTRAR NUM CAMPO DECIMAL DIGITADO.
+ *
+ * `<input type="number">` parece a escolha obvia e e' uma armadilha aqui: o
+ * teclado numerico brasileiro entrega VIRGULA, e o navegador simplesmente
+ * descarta o caractere que nao pertence ao formato dele. O analista digita
+ * "1,25" no campo de minutos de parada e fica gravado 125 — cem vezes o
+ * valor, sem aviso nenhum. Em periodo curto o resultado quebra e alguem
+ * percebe; em periodo de 4 h passa liso (auditoria de 31/08).
+ *
+ * Entao o campo e' de TEXTO, com inputMode decimal (o teclado continua o
+ * numerico), e o que se digita passa por aqui: sobram digitos e UM separador,
+ * virgula ou ponto. A conversao para numero continua sendo de quem calcula.
+ */
+export function textoDecimal(valor) {
+  const so = String(valor ?? '').replace(/[^\d.,]/g, '');
+  // Segundo separador em diante nao entra: "1,2,5" nao e' numero nenhum.
+  const i = so.search(/[.,]/);
+  if (i === -1) return so;
+  return so.slice(0, i + 1) + so.slice(i + 1).replace(/[.,]/g, '');
+}
+
+/** Numero a partir do que foi digitado num campo decimal (aceita virgula). */
+export function numeroDecimal(valor) {
+  const n = Number(String(valor ?? '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
 /** Formata ms como segundos com casas decimais — uso exclusivo de apresentacao. */
 export function formatarSegundos(ms, casas = 1) {
   if (!Number.isFinite(ms)) return '—';

@@ -4,7 +4,9 @@
  * storage corrompido ou indisponivel.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { faixaHoraria, potencialSemParada, ritmoPorHoraDoDia } from '../src/domain/cronoanalise.js';
+import {
+  faixaHoraria, numeroDecimal, potencialSemParada, ritmoPorHoraDoDia, textoDecimal,
+} from '../src/domain/cronoanalise.js';
 import { paraConferencia } from '../src/lib/api.js';
 
 const memoria = new Map();
@@ -282,5 +284,39 @@ describe('ritmoPorHoraDoDia', () => {
     ])).toEqual([]);
     expect(ritmoPorHoraDoDia([])).toEqual([]);
     expect(ritmoPorHoraDoDia(undefined)).toEqual([]);
+  });
+});
+
+/**
+ * O CAMPO DECIMAL DIGITADO.
+ *
+ * `type="number"` DESCARTA a virgula que o teclado brasileiro entrega:
+ * "1,25" no campo de minutos de parada virava 125 — cem vezes o valor, sem
+ * aviso nenhum. Em periodo de 4 h passava liso (auditoria de 31/08).
+ */
+describe('textoDecimal e numeroDecimal', () => {
+  it('a virgula do teclado brasileiro sobrevive', () => {
+    expect(textoDecimal('1,25')).toBe('1,25');
+    expect(numeroDecimal('1,25')).toBe(1.25);
+  });
+
+  it('o ponto tambem, para quem digita no teclado do PC', () => {
+    expect(textoDecimal('1.25')).toBe('1.25');
+    expect(numeroDecimal('1.25')).toBe(1.25);
+  });
+
+  it('letra e sinal nao entram, e o separador e UM so', () => {
+    expect(textoDecimal('abc12,5x')).toBe('12,5');
+    expect(textoDecimal('1,2,5')).toBe('1,25');
+    expect(textoDecimal('-3')).toBe('3');
+  });
+
+  it('campo em branco e entrada estranha valem ZERO, nunca NaN', () => {
+    expect(textoDecimal('')).toBe('');
+    expect(numeroDecimal('')).toBe(0);
+    expect(numeroDecimal('abc')).toBe(0);
+    expect(numeroDecimal(null)).toBe(0);
+    expect(numeroDecimal(undefined)).toBe(0);
+    expect(numeroDecimal(',')).toBe(0);
   });
 });

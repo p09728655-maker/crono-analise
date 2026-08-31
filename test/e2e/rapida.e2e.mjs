@@ -140,6 +140,23 @@ const minutosSetup = p.locator('input[aria-label="Minutos parada — Setup / Tro
 await minutosSetup.waitFor({ timeout: 4000 });
 const medido = parseFloat((await minutosSetup.inputValue()).replace(',', '.'));
 checar(medido > 0 && medido < 1, `o tempo medido cai na lista em minutos (${medido})`);
+/**
+ * A VIRGULA DO TECLADO BRASILEIRO.
+ *
+ * O campo era `type="number"` e o navegador DESCARTAVA a virgula: "1,25"
+ * virava 125 minutos — cem vezes o valor, sem aviso. Em periodo de 30 min o
+ * resultado quebra e alguem percebe; em periodo de 4 h passa liso.
+ */
+await minutosSetup.fill('1,25');
+checar(await minutosSetup.inputValue() === '1,25',
+  'o campo de minutos aceita virgula — o teclado brasileiro manda virgula');
+await p.waitForTimeout(300);
+const comVirgula = await painelHoras.innerText();
+// 30 min de periodo menos 1,25 de parada = 28,75 -> "29 min" rodando. Com o
+// campo numerico de antes seriam 125 min de parada e o painel viraria aviso.
+checar(/29 min/.test(comVirgula) && !/125/.test(comVirgula),
+  'e 1,25 vale um minuto e pouco, nao 125 minutos');
+
 await minutosSetup.fill('10');
 // A manchete e' o que SAIU do posto: marcar setup nao muda a producao do
 // periodo (100 pc em 30 min = 200 pc/h). O ritmo de maquina rodando (300)
@@ -277,6 +294,37 @@ checar(!textoSalvas.includes('Porta Ripada') && textoSalvas.includes('Lateral Me
 await p.reload();
 await salvas.waitFor({ timeout: 8000 });
 checar(!(await salvas.innerText()).includes('Porta Ripada'), 'remocao tambem sobrevive ao recarregar');
+
+/* ------------------------- RASCUNHO: a medicao sobrevive ao aparelho */
+/**
+ * O fluxo desta tela e' "marca 7:00, segue o caminho da fabrica, volta as
+ * 7:10". Nesses dez minutos o celular apaga e o sistema recolhe a aba — e o
+ * analista voltava para um formulario EM BRANCO, com a hora inicial perdida.
+ * O periodo nao se refaz: ou se lembra da hora, ou se mede tudo de novo.
+ */
+{
+  const ctxR = await navegador.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const pr = await ctxR.newPage();
+  await semearSessao(pr);
+  await pr.route('**/api/**', (rota) => rota.fulfill({ json: { motivos: [], maquinas: [], grupos: [] } }));
+  await pr.goto(`${BASE}/coleta/rapida`);
+  await pr.locator('input[aria-label="Nome da máquina"]').fill('FURADEIRA 16');
+  await pr.locator('input[aria-label="Hora inicial"]').fill('07:00');
+  await pr.locator('input[aria-label="Peças no período"]').fill('206');
+  await pr.waitForTimeout(800);
+
+  // O sistema recolhe a aba: nada de recarregar: a pagina morre e volta.
+  await pr.goto('about:blank');
+  await pr.goto(`${BASE}/coleta/rapida`);
+  await pr.waitForTimeout(1200);
+  checar(await pr.locator('input[aria-label="Hora inicial"]').inputValue() === '07:00',
+    'a hora inicial volta depois de a aba morrer — e o numero que nao se refaz');
+  checar(await pr.locator('input[aria-label="Nome da máquina"]').inputValue() === 'FURADEIRA 16',
+    'a maquina volta junto');
+  checar(await pr.locator('input[aria-label="Peças no período"]').inputValue() === '206',
+    'e as pecas contadas tambem');
+  await ctxR.close();
+}
 
 checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})`);
 

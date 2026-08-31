@@ -2,13 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } from '../../theme/tokens.js';
 import {
   conferenciaRapida, duracaoEntreHoras, formatarCronometro, formatarDuracao,
-  formatarSegundos, nomeChave, potencialSemParada, rotuloMotivo, somarParadas,
+  formatarSegundos, nomeChave, numeroDecimal, potencialSemParada, rotuloMotivo, somarParadas,
+  textoDecimal,
 } from '../../domain/cronoanalise.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import { TOQUE_MINIMO_MS } from '../../domain/estatistica.js';
 import { sincronizar } from '../../lib/api.js';
 import { listarConferencias, marcarEnviadas, removerConferencia, salvarConferencia } from '../../lib/conferencias.js';
-import { enfileirar, listarFila, novoId } from '../../lib/filaOffline.js';
+import {
+  enfileirar, limparRascunho, lerRascunho, listarFila, novoId, salvarRascunho,
+} from '../../lib/filaOffline.js';
 import { useCronometro, useWakeLock, vibrar } from '../../lib/hooks.js';
 import { carregarMaquinas, useMaquinas } from '../../lib/maquinas.js';
 import SeletorMaquina from '../../components/SeletorMaquina.jsx';
@@ -43,6 +46,9 @@ import SeletorMaquina from '../../components/SeletorMaquina.jsx';
  *  - Mesma ergonomia da coleta: alvo gigante, vibracao, tema escuro,
  *    tela acesa enquanto cronometra.
  */
+/* Uma medicao em andamento por aparelho: a tela mede um posto por vez. */
+const CHAVE_RASCUNHO = 'conferencia-em-andamento';
+
 export default function ConferenciaRapida({ aoSair }) {
   // A lista vem do cadastro da fabrica (Ferramentas > Motivos de parada) e
   // cai nos motivos de fabrica quando ainda nao ha cadastro nem cache.
@@ -116,6 +122,55 @@ export default function ConferenciaRapida({ aoSair }) {
     setSalvo(null);
   }, [maquina, peca, ciclosPorPeca, horaInicial, horaFinal, pecasPeriodo, pecasFinais, paradas, fase]);
 
+  /**
+   * RASCUNHO — a medicao em andamento sobrevive ao aparelho.
+   *
+   * O fluxo desta tela e' "marca 7:00, segue o caminho da fabrica, volta as
+   * 7:10". Nesses dez minutos o celular apaga, o sistema recolhe a memoria e
+   * a aba morre — e o analista voltava para um formulario EM BRANCO, com a
+   * hora inicial perdida. O periodo nao se refaz: ou se lembra da hora, ou
+   * se mede tudo de novo.
+   *
+   * Grava no IndexedDB (a mesma base da fila, que ja' aguenta o aparelho
+   * morrer) a cada mudanca. Falha de escrita nao interrompe a medicao: sem
+   * rascunho a tela e' a de sempre.
+   */
+  const rascunhoLido = useRef(false);
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const r = await lerRascunho(CHAVE_RASCUNHO);
+        if (!vivo || !r) return;
+        // Cada campo so' e' restaurado se ainda estiver vazio: a leitura e'
+        // assincrona, e nada do rascunho pode passar por cima do que o
+        // analista ja' comecou a digitar enquanto ela vinha.
+        setMaquina((v) => v || r.maquina || '');
+        setPeca((v) => v || r.peca || '');
+        setCiclosPorPeca((v) => (v > 1 ? v : Number(r.ciclosPorPeca) || 1));
+        setHoraInicial((v) => v || r.horaInicial || '');
+        setHoraFinal((v) => v || r.horaFinal || '');
+        setPecasPeriodo((v) => v || r.pecasPeriodo || '');
+        setParadas((v) => (v.length ? v : (Array.isArray(r.paradas) ? r.paradas : [])));
+      } catch { /* sem rascunho neste navegador: a tela e' a de sempre */ }
+      finally { rascunhoLido.current = true; }
+    })();
+    return () => { vivo = false; };
+  }, []);
+
+  useEffect(() => {
+    // So' depois de tentar ler: senao o estado vazio da montagem apagaria o
+    // rascunho antes de ele chegar na tela.
+    if (!rascunhoLido.current) return;
+    const vazio = !maquina && !peca && !horaInicial && !horaFinal && !pecasPeriodo && !paradas.length;
+    const guardar = vazio
+      ? limparRascunho(CHAVE_RASCUNHO)
+      : salvarRascunho(CHAVE_RASCUNHO, {
+        maquina, peca, ciclosPorPeca, horaInicial, horaFinal, pecasPeriodo, paradas,
+      });
+    guardar?.catch?.(() => {});
+  }, [maquina, peca, ciclosPorPeca, horaInicial, horaFinal, pecasPeriodo, paradas]);
+
   // BACKFILL: conferencias salvas antes da sincronizacao existir (ou num
   // navegador em que a fila falhou) nao tem a marca `enviada`. Ao abrir a
   // tela elas entram na fila — o client_id torna qualquer repeticao
@@ -167,7 +222,7 @@ export default function ConferenciaRapida({ aoSair }) {
   const paradasEmMs = useMemo(() => paradas
     .map((p) => ({
       motivo: p.motivo,
-      duracaoMs: Math.round((Number(String(p.minutos).replace(',', '.')) || 0) * 60000),
+      duracaoMs: Math.round(numeroDecimal(p.minutos) * 60000),
     }))
     .filter((p) => p.duracaoMs > 0), [paradas]);
   const totalParada = useMemo(() => somarParadas(paradasEmMs), [paradasEmMs]);
@@ -358,6 +413,9 @@ export default function ConferenciaRapida({ aoSair }) {
     setHistorico(listarConferencias());
     setSalvo('ok');
     vibrar(45);
+    // A medicao ja' esta guardada e na fila: o rascunho cumpriu o papel dele
+    // e sai de cena, para nao ressuscitar na proxima abertura da tela.
+    limparRascunho(CHAVE_RASCUNHO)?.catch?.(() => {});
 
     // Mesmo padrao da coleta: disco primeiro, rede depois. O id local vira
     // clientId — reenvio nao duplica no servidor. Sem rede, fica na fila e a
@@ -968,14 +1026,17 @@ function Paradas({ motivos, paradas, resumo, duracaoMs, setupCrono, aoIniciarSet
                   <option key={m.codigo} value={m.codigo}>{m.rotulo}</option>
                 ))}
               </select>
+              {/* TEXTO, nao `type="number"`: o teclado brasileiro entrega
+                  virgula e o campo numerico a DESCARTA em silencio — "1,25"
+                  virava 125, cem vezes o valor, e em periodo longo passava
+                  liso. O inputMode mantem o teclado numerico; textoDecimal
+                  deixa passar digitos e um separador so'. */}
               <input
-                type="number"
-                min="0"
-                step="0.5"
+                type="text"
                 inputMode="decimal"
                 placeholder="min"
                 value={p.minutos}
-                onChange={(ev) => aoAlterar(p.id, 'minutos', ev.target.value)}
+                onChange={(ev) => aoAlterar(p.id, 'minutos', textoDecimal(ev.target.value))}
                 style={est.inputMinutos}
                 aria-label={`Minutos parada — ${rotuloMotivo(p.motivo)}`}
               />
