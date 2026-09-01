@@ -474,6 +474,11 @@ export function resumirConferencias(conferencias, { porPeca = false } = {}) {
         n: 0, totalPecas: 0, totalAcionamentos: 0, totalMs: 0,
         totalProdutivoMs: 0, totalParadaMs: 0, totalSetupMs: 0, paradasPorMotivo: new Map(),
         curtas: 0, ritmos: [], melhor: null, pior: null,
+        // Quais valores de ciclo por peca apareceram nas medicoes deste
+        // grupo. E' o que permite dizer "esta peca e' de 1 ciclo" — e
+        // detectar a peca gravada ora com 1, ora com 2 (erro de coleta ou
+        // peca que mudou), em que a media de acionamentos mentiria.
+        ciclosVistos: new Set(),
       });
     }
     const g = grupos.get(chave);
@@ -487,6 +492,7 @@ export function resumirConferencias(conferencias, { porPeca = false } = {}) {
     g.n += 1;
     g.totalPecas += pecas;
     g.totalAcionamentos += pecas * ciclos;
+    g.ciclosVistos.add(ciclos);
     g.totalMs += duracao;
     g.totalProdutivoMs += produtivoMs;
     g.totalParadaMs += paradaMs;
@@ -530,6 +536,18 @@ export function resumirConferencias(conferencias, { porPeca = false } = {}) {
         // Tempo de um acionamento do motor, ponderado como o ritmo. So'
         // difere do ciclo medio quando alguma peca fura em mais de um ciclo.
         cicloMotorMs: g.totalProdutivoMs / g.totalAcionamentos,
+        /**
+         * O CICLO DA PECA — quantos acionamentos do motor ela pede.
+         *
+         * So' existe quando todas as medicoes do grupo concordam. Peca
+         * gravada ora com 1 ciclo, ora com 2, devolve null e `ciclosMistos`:
+         * a media daria 1,5 acionamento, que nao e' nada — e a leitura por
+         * classe de ciclo precisa saber que ali ha' dado a corrigir, nao uma
+         * peca de 1,5 ciclo.
+         */
+        ciclosPorPeca: g.ciclosVistos.size === 1 ? [...g.ciclosVistos][0] : null,
+        ciclosMistos: g.ciclosVistos.size > 1,
+        ciclosVistos: [...g.ciclosVistos].sort((a, b) => a - b),
         paradasPorMotivo: [...g.paradasPorMotivo.entries()]
           .map(([motivo, ms]) => ({ motivo, rotulo: rotuloMotivo(motivo), ms }))
           .sort((a, b) => b.ms - a.ms),

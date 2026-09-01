@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.59.0',
+    data: '2026-09-01',
+    titulo: 'O acionamento do motor voltou — é ele que compara peças diferentes',
+    itens: [
+      'VOLTOU O QUE FOI TIRADO POR ENGANO. A versão de 31/08 limpou o jargão do relatório e levou junto uma coisa que não é jargão: quantas vezes o motor é acionado para fazer uma peça. O dado continuou sendo perguntado no celular, gravado e calculado — só sumiu de onde a pessoa lê. Sem ele, o relatório dizia "as peças são diferentes, não dá para comparar" tendo em mãos exatamente o que resolvia isso.',
+      'RITMO POR ACIONAMENTO DO MOTOR, quadro novo na tela e no papel: as peças de cada máquina agrupadas por quantos acionamentos pedem. Peças da mesma classe deveriam sair em ritmo parecido — a furação é a mesma. O quadro mostra a faixa observada ("as peças de um acionamento saem entre 14,0 e 15,0 pç/min") e aponta quem foge dela, com quanto.',
+      'A PEÇA FORA DA FAIXA GANHOU ENDEREÇO. Quando uma peça de um acionamento sai 43% abaixo das outras, o motor fez o mesmo trabalho: o tempo foi para o MANUSEIO — tamanho da peça, gabarito, batente, abastecimento. O relatório diz isso, e não acusa a máquina de lenta. Peça grande demora mais para posicionar sem nada de errado com o posto: quem conhece a peça é que decide se é problema.',
+      'A COMPARAÇÃO ENTRE MÁQUINAS DESTRAVOU. Sem a mesma peça medida nas duas, o comparativo se recusava a responder. Agora, se as duas mediram peças de mesmo acionamento, ele compara — com a ressalva do manuseio junto, e sempre atrás da comparação da mesma peça, que continua sendo a única sem ressalva.',
+      'A tabela Ritmo por peça voltou a trazer os ACIONAMENTOS de cada peça e o tempo POR ACIONAMENTO — o número comparável entre peças de furação diferente. Peça gravada ora com 1 acionamento, ora com 2, aparece marcada: o mesmo produto não pode pedir dois números, e isso é dado a corrigir na medição.',
+      'A coluna Constância passou a avisar, com um asterisco, quando a máquina mediu peças diferentes: parte daquela variação é do mix, não do posto. Sem a marca, a máquina que mede quatro peças diferentes aparecia "variando muito" e a que mede uma só, "repetindo bem" — sem nada distinguir as duas de verdade.',
+    ],
+  },
+  {
     versao: '2.58.1',
     data: '2026-09-01',
     titulo: 'O menu lateral em uma régua só',

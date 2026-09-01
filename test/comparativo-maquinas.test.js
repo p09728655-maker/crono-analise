@@ -269,14 +269,39 @@ describe('lerGrupo', () => {
   });
 
   it('mix incomparavel: RECUSA o veredito e diz o que medir', () => {
+    // Pecas diferentes E de ciclos diferentes: nem a peca nem o acionamento
+    // do motor ligam as duas maquinas. E' o unico caso sem saida.
     const [frases] = ler([
-      ...medicoes('F16', 'Peca de 4 furos', 225),
-      ...medicoes('F12', 'Peca de 12 furos', 150),
+      ...medicoes('F16', 'Peca de 1 ciclo', 225),
+      ...medicoes('F12', 'Peca de 2 ciclos', 150, { ciclosPorPeca: 2 }),
     ]);
     expect(frases[0]).toContain('Não dá para dizer qual rende mais');
     expect(frases.join(' ')).toContain('meça a MESMA peça nas duas');
     // E nunca aponta vencedor por baixo da recusa.
     expect(frases.join(' ')).not.toContain('é a que mais rende');
+  });
+
+  /**
+   * A SEGUNDA REGUA. Sem a mesma peca nas duas, o relatorio parava na
+   * recusa — mesmo quando as pecas medidas pediam o MESMO numero de
+   * acionamentos do motor, que e' o que iguala a furacao. Agora ele
+   * compara, com a ressalva do manuseio junto.
+   */
+  it('pecas diferentes de MESMO ciclo destravam a comparacao, com ressalva', () => {
+    const [frases] = ler([
+      ...medicoes('F16', 'Lateral', 225),   // 900 pc/h = 15 pc/min, 1 ciclo
+      ...medicoes('F12', 'Fundo', 150),     // 600 pc/h = 10 pc/min, 1 ciclo
+    ]);
+    const tudo = frases.join(' ');
+    expect(tudo).toContain('Nenhuma peça foi medida nas duas máquinas');
+    expect(tudo).toContain('peças de um acionamento do motor');
+    expect(tudo).toContain('15.0 pç/min');
+    expect(tudo).toContain('contra 10.0 da F12');
+    // A ressalva viaja junto: o que sobra de diferenca e' manuseio.
+    expect(tudo).toContain('MANUSEIO');
+    expect(tudo).toContain('não a velocidade da máquina');
+    // E ainda assim nao vira veredito de "melhor maquina".
+    expect(tudo).not.toContain('é a que mais rende');
   });
 
   it('o duelo da peca em comum qualifica o veredito, com o numero', () => {
@@ -301,7 +326,7 @@ describe('lerGrupo', () => {
       ...medicoes('F12', 'B', 150, { ciclosPorPeca: 2 }),
     ]);
     // Aqui os ciclos NAO empatam (900 x 1200), entao nao ha desmentido.
-    expect(frases.join(' ')).not.toContain('acionamentos do motor');
+    expect(frases.join(' ')).not.toContain('rodam praticamente igual');
 
     // Agora empatando: F16 900 pc/h x 1 ciclo, F12 450 pc/h x 2 ciclos.
     const [comEmpate] = ler([

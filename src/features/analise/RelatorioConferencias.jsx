@@ -8,6 +8,7 @@ import {
 } from '../../domain/cronoanalise.js';
 import { analisarConferencias } from '../../domain/analiseConferencias.js';
 import { compararMaquinas, constanciaTexto, lerGrupo } from '../../domain/comparativoMaquinas.js';
+import { classesDeCiclo, lerClasse } from '../../domain/ritmoPorCiclo.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import {
   analisarConferenciasComIa, arquivarConferencia, arquivarConferencias, excluirConferencia,
@@ -20,6 +21,7 @@ import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import { GraficoRitmoMaquinas } from './graficos.jsx';
 import ComparativoMaquinas from './ComparativoMaquinas.jsx';
+import RitmoPorCiclo from './RitmoPorCiclo.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 
 /**
@@ -339,6 +341,14 @@ export default function RelatorioConferencias({ aoVoltar }) {
     () => compararMaquinas({ maquinas: resumoVisivel, pecas: resumoPecasVisivel, grupoDe }),
     [resumoVisivel, resumoPecasVisivel, mapaGrupos],
   );
+
+  /**
+   * AS CLASSES DE CICLO — pecas agrupadas por quantos acionamentos do motor
+   * pedem. E' a leitura que responde "as pecas sao diferentes, e dai'?": com
+   * a mesma furacao, o ritmo deveria bater, e quem foge da faixa aponta para
+   * o manuseio. Segue o filtro da lateral como todo o resto.
+   */
+  const porCiclo = useMemo(() => classesDeCiclo(resumoPecasVisivel), [resumoPecasVisivel]);
 
   /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
      dentro dela pelo mesmo motivo que os produtos foram na lista: e'
@@ -679,6 +689,11 @@ export default function RelatorioConferencias({ aoVoltar }) {
                   ritmo, tempo rodando e constancia: ver ComparativoMaquinas. */}
               {!verArquivadas && <ComparativoMaquinas comparativo={entreMaquinas} />}
 
+              {/* A REGUA DO CICLO. Vem depois do comparativo porque e' ele
+                  que levanta a duvida ("as pecas sao diferentes") que este
+                  quadro responde. Ver RitmoPorCiclo. */}
+              {!verArquivadas && <RitmoPorCiclo classes={porCiclo.classes} mistas={porCiclo.mistas} />}
+
               {/* Ritmo POR PECA — o numero que planeja carga e lote.
                   So' na visao ativa: ritmo nao sai de arquivadas. */}
               {!verArquivadas && resumoPecasVisivel.length > 0 && (
@@ -689,6 +704,9 @@ export default function RelatorioConferencias({ aoVoltar }) {
                     <h2 style={est.iaTitulo}>Ritmo por peça</h2>
                     <p style={est.iaTexto}>
                       Quantas peças saem por hora e por minuto, peça a peça, com a máquina rodando.
+                      A coluna <strong>Acion.</strong> diz quantas vezes o motor é acionado para
+                      fazer uma peça: peça de mais acionamentos rende menos peças/hora sem a
+                      máquina estar mais lenta.
                     </p>
                   </div>
                   <table style={est.tabela}>
@@ -696,11 +714,21 @@ export default function RelatorioConferencias({ aoVoltar }) {
                       <tr>
                         <th style={est.th}>Peça</th>
                         <th style={est.th}>Máquina</th>
+                        {/* A coluna que o redesenho de 31/08 tirou junto com o
+                            jargao. Sem ela, duas linhas com ritmos diferentes
+                            nao tinham como ser explicadas — e a explicacao
+                            estava gravada na medicao o tempo todo. */}
+                        <th style={est.thNum} title="Acionamentos do motor para fazer uma peça">
+                          Acion.
+                        </th>
                         <th style={est.thNum}>Medições</th>
                         <th style={est.thNum}>Peças</th>
                         <th style={est.thNum}>Tempo rodando</th>
                         <th style={est.thNum}>Peças/hora</th>
                         <th style={est.thNum}>Peças/min</th>
+                        <th style={est.thNum} title="Tempo de um acionamento do motor — comparável entre peças de furação diferente">
+                          Por acion.
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -708,11 +736,20 @@ export default function RelatorioConferencias({ aoVoltar }) {
                         <tr key={`${g.maquina}·${g.peca}`}>
                           <td style={est.tdCurto}>{g.peca}</td>
                           <td style={est.tdCurto}>{g.maquina}</td>
+                          <td
+                            style={est.tdNum}
+                            title={g.ciclosMistos
+                              ? `Gravada com ${g.ciclosVistos.join(' e ')} acionamentos — corrija na medição`
+                              : undefined}
+                          >
+                            {g.ciclosMistos ? `${g.ciclosVistos.join('/')} ⚠` : g.ciclosPorPeca}
+                          </td>
                           <td style={est.tdNum}>{g.n}</td>
                           <td style={est.tdNum}>{g.totalPecas}</td>
                           <td style={est.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
                           <td style={est.tdNumForte}>{Math.round(g.ritmoMedio)}</td>
                           <td style={est.tdNum}>{porMinuto(g.ritmoMedio)}</td>
+                          <td style={est.tdNum}>{(g.cicloMotorMs / 1000).toFixed(1)}s</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1076,6 +1113,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
           filtro={filtro}
           analise={analiseNoPapel ? analise : null}
           entreMaquinas={entreMaquinas}
+          porCiclo={porCiclo}
         />
       )}
     </div>
@@ -1490,7 +1528,7 @@ function AnalisePeriodo({ secoes, resumo, noPapel, aoAlternarPapel }) {
  * de amostra carimbado. Os numeros sao pecas/hora e pecas/minuto; maquina
  * medida ha' pouco tempo leva uma NOTA em texto corrido, nao um selo.
  */
-function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, analise, entreMaquinas }) {
+function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, analise, entreMaquinas, porCiclo }) {
   // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
   const gruposCobertos = [...new Set(resumo.map((g) => grupoDe?.(g.maquina)).filter(Boolean))].sort();
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -1783,11 +1821,13 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
               <tr>
                 <th style={imp.th}>Peça</th>
                 <th style={imp.th}>Máquina</th>
+                <th style={imp.thNum}>Acion.</th>
                 <th style={imp.thNum}>Medições</th>
                 <th style={imp.thNum}>Peças</th>
                 <th style={imp.thNum}>Tempo rodando</th>
                 <th style={imp.thNum}>Peças/hora</th>
                 <th style={imp.thNum}>Peças/min</th>
+                <th style={imp.thNum}>Por acion.</th>
               </tr>
             </thead>
             <tbody>
@@ -1795,15 +1835,54 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
                 <tr key={`${g.maquina}·${g.peca}`}>
                   <td style={imp.td}>{g.peca}</td>
                   <td style={imp.td}>{g.maquina}</td>
+                  <td style={imp.tdNum}>{g.ciclosMistos ? g.ciclosVistos.join('/') : g.ciclosPorPeca}</td>
                   <td style={imp.tdNum}>{g.n}</td>
                   <td style={imp.tdNum}>{g.totalPecas}</td>
                   <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
                   <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
                   <td style={imp.tdNum}>{porMinuto(g.ritmoMedio)}</td>
+                  <td style={imp.tdNum}>{(g.cicloMotorMs / 1000).toFixed(1)}s</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <p style={imp.nota}>
+            ACION.: quantas vezes o motor é acionado para fazer uma peça. Peça de mais
+            acionamentos rende menos peças/hora sem a máquina estar mais lenta — POR ACION. é o
+            número comparável entre peças de furação diferente.
+          </p>
+
+          {/* A REGUA DO CICLO no papel: pecas de mesmo acionamento deveriam
+              sair na mesma faixa, e quem foge dela aponta para o manuseio.
+              As frases sao as mesmas da tela (lerClasse, no dominio). */}
+          {porCiclo?.classes.some((c) => c.temFaixa) && (
+            <>
+              <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Ritmo por acionamento do motor</h2>
+              {porCiclo.classes.filter((c) => c.temFaixa).map((c) => (
+                <div key={`${c.maquina}-${c.ciclos}`} style={imp.grupoBloco}>
+                  <div style={imp.grupoNome}>
+                    {c.maquina} · {c.ciclos === 1 ? '1 acionamento' : `${c.ciclos} acionamentos`} por peça
+                  </div>
+                  {lerClasse(c).map((frase) => (
+                    <p key={frase} style={imp.analiseLinha}>{frase}</p>
+                  ))}
+                </div>
+              ))}
+              <p style={imp.nota}>
+                Peça fora da faixa da própria classe não é peça errada: o tempo de uma peça é
+                MANUSEIO mais FURAÇÃO, e só a furação depende do acionamento. Peça grande demora
+                mais para posicionar sem a máquina ter culpa — é aí que se procura primeiro.
+              </p>
+            </>
+          )}
+
+          {porCiclo?.mistas.length > 0 && (
+            <p style={imp.nota}>
+              Fora da leitura por acionamento:{' '}
+              {porCiclo.mistas.map((m) => `${m.peca} na ${m.maquina} (gravada com ${m.ciclosVistos.join(' e ')})`).join(', ')}
+              {' — '}o mesmo produto não pode pedir dois números de acionamento; corrija na medição.
+            </p>
+          )}
         </>
       )}
 
