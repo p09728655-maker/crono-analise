@@ -24,6 +24,7 @@ export const HISTORICO = [
       'Esse número vem por um resumo do servidor — duas contagens, sem trazer nenhuma medição. Carregar a lista inteira para exibir um total seria megabytes de tráfego para mostrar um algarismo, e passado o teto de mil linhas o número ainda sairia errado.',
       'OS QUATRO CARTÕES DA TELA DE ENTRADA ganharam ícones cheios, dentro de um disco vermelho claro. Em traço fino eles sumiam entre o título e a descrição, e a fileira lia-se como quatro caixas de texto com um risco em cima — são a primeira coisa colorida que quem chega vê, e precisam ter peso. No menu lateral o traço fino continua: lá o ícone acompanha um rótulo numa lista de dez, e peso viraria ruído.',
       'ABRIR O SISTEMA CAI NO INÍCIO. Quem digitava o endereço (ou entrava depois do login) era mandado para a lista de estudos: a tela nova só aparecia para quem clicasse em "Início". No celular nada muda — lá a tarefa é uma só e a entrada continua sendo a lista.',
+      '"SEM ESTUDO" DEIXOU DE SIGNIFICAR "SEM NADA". A fábrica com dez medições de ritmo da furadeira e nenhum estudo cadastrado abria o Início e lia "Nenhum estudo ainda" num painel de zeros — o próprio trabalho negado pela tela. Agora ela diz o que existe ("o que há é medição de ritmo", com quantas e em quantas máquinas) e traz o botão do relatório ali mesmo, em vez de mandar procurar.',
     ],
   },
   {
