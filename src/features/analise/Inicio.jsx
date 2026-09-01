@@ -8,6 +8,7 @@ import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import ChaveIa from '../../components/ChaveIa.jsx';
 import Cronometro from '../../components/Cronometro.jsx';
+import { RECURSOS } from '../../components/iconesRecursos.jsx';
 import MotivosParada from './MotivosParada.jsx';
 import Maquinas from './Maquinas.jsx';
 import Analistas from './Analistas.jsx';
@@ -121,6 +122,22 @@ export default function Inicio({
             <Cronometro tamanho={92} />
           </span>
         </header>
+
+        {/* O QUE O SISTEMA FAZ, em quatro palavras do chao de fabrica.
+            Estava so' na porta de entrada — e quem ja' tem sessao aberta
+            nunca mais passa por la'. A apresentacao do sistema nao pode
+            morar num lugar que o usuario diario nao ve'.
+            Fica ABAIXO da capa e ACIMA dos numeros: e' o mapa do que ha',
+            e o mapa vem antes da contagem. */}
+        <section style={est.recursos} aria-label="O que o sistema faz">
+          {RECURSOS.map((r) => (
+            <div key={r.titulo} style={est.recurso}>
+              <r.Icone />
+              <span style={est.recursoTitulo}>{r.titulo}</span>
+              <span style={est.recursoTexto}>{r.texto}</span>
+            </div>
+          ))}
+        </section>
 
         {erro && <div style={est.erro} role="alert">Não foi possível carregar os estudos: {erro}</div>}
 
@@ -325,6 +342,21 @@ const est = {
   capaTitulo: { ...tipo('titulo'), color: t.texto, margin: 0 },
   capaDica: { ...tipo('corpo'), color: t.textoMedio, margin: 0 },
   capaMarca: { flexShrink: 0, opacity: 0.9 },
+
+  recursos: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: espaco.md,
+  },
+  recurso: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: espaco.xs,
+    padding: `${espaco.lg}px ${espaco.md}px`, background: t.papel, borderRadius: raio.lg,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    boxShadow: elevacao.baixa, textAlign: 'center',
+  },
+  // Sem a reserva de duas linhas que a PORTA precisa: la' os cartoes sao
+  // estreitos e o titulo quebra; aqui eles sao largos e cabe numa linha —
+  // a reserva so' abriria um vao entre o titulo e a descricao.
+  recursoTitulo: { ...tipo('corpoF'), color: t.texto },
+  recursoTexto: { ...tipo('legenda'), color: t.textoFraco, lineHeight: 1.45 },
 
   erro: {
     padding: espaco.md, background: t.criticoFundo,

@@ -21,6 +21,7 @@ export const HISTORICO = [
       'CADA CAMINHO PASSOU A TER A AÇÃO DELE, no próprio cartão: "Estudos de tempo" traz + Novo estudo e Ver os estudos (com quantos existem); "Ritmo por máquina" traz Abrir o relatório (com quantas medições) e diz que medição nova vem do celular — evita procurar no PC um botão que não existe, e não deve existir, porque medir é no posto.',
       'Na lista de estudos o botão continua onde estava: ali criar estudo é, de fato, a ação da tela.',
       'O botão do relatório saiu de dentro do texto de "nenhum estudo": o cartão do ritmo, logo abaixo, já o traz com a contagem. Dois botões vermelhos para o mesmo destino, a um palmo um do outro, só fazem perguntar qual é a diferença entre eles.',
+      'OS QUATRO CARTÕES DO SISTEMA — Cronometragem, Análise de dados, Padronização e Produtividade — passaram a aparecer no Início. Eles existiam só na tela de entrada, e quem tem sessão aberta nunca mais passa por lá: a apresentação do sistema estava num lugar que o usuário diário não vê.',
     ],
   },
   {
