@@ -87,6 +87,66 @@ describe('analisarConferencias', () => {
     expect(entre.linhas[0]).toContain('ritmo parecido');
   });
 
+  /**
+   * A comparacao entre maquinas segue o GRUPO do cadastro.
+   *
+   * Sem isto, a leitura media a furadeira contra a seccionadora e afirmava
+   * que uma "roda 400% mais rapido" que a outra — comparacao entre postos de
+   * naturezas diferentes, que so' o grupo do cadastro sabe separar.
+   */
+  describe('comparacao dentro do grupo', () => {
+    const comGrupo = (linhas, grupoDe) => analisarConferencias({
+      maquinas: resumirConferencias(linhas),
+      pecas: resumirConferencias(linhas, { porPeca: true }),
+      conferencias: linhas,
+      grupoDe,
+    });
+    const grupoDe = (n) => (n.startsWith('F') ? '0002 · FURADEIRA' : '0001 · SECCIONADORA');
+
+    it('NUNCA compara maquinas de grupos diferentes', () => {
+      const linhas = [];
+      for (let i = 0; i < 3; i++) {
+        linhas.push({ maquina: 'F16', peca: 'A', duracaoMs: 15 * MIN, pecas: 225 });   // 900/h
+        linhas.push({ maquina: 'F12', peca: 'A', duracaoMs: 15 * MIN, pecas: 150 });   // 600/h
+        linhas.push({ maquina: 'SEC 1', peca: 'Chapa', duracaoMs: 15 * MIN, pecas: 40 }); // 160/h
+        linhas.push({ maquina: 'SEC 2', peca: 'Chapa', duracaoMs: 15 * MIN, pecas: 50 }); // 200/h
+      }
+      const entre = comGrupo(linhas, grupoDe).find((s) => s.titulo === 'Entre máquinas');
+      const tudo = entre.linhas.join(' ');
+      // Cada grupo com sua propria comparacao, nomeada.
+      expect(tudo).toContain('0002 · FURADEIRA');
+      expect(tudo).toContain('0001 · SECCIONADORA');
+      // E jamais a furadeira medida contra a seccionadora: 900 x 160 seriam
+      // 463% — o numero que a leitura antiga produzia.
+      expect(tudo).not.toContain('463%');
+      expect(tudo).not.toMatch(/F16 está rodando \d+% mais rápido que SEC/);
+    });
+
+    it('uma maquina por grupo: diz que nao ha comparacao, em vez de sumir', () => {
+      const linhas = [];
+      for (let i = 0; i < 3; i++) {
+        linhas.push({ maquina: 'F16', peca: 'A', duracaoMs: 15 * MIN, pecas: 225 });
+        linhas.push({ maquina: 'SEC 1', peca: 'Chapa', duracaoMs: 15 * MIN, pecas: 40 });
+      }
+      const entre = comGrupo(linhas, grupoDe).find((s) => s.titulo === 'Entre máquinas');
+      expect(entre.linhas[0]).toContain('grupos diferentes');
+      expect(entre.linhas[0]).toContain('meça outra máquina do mesmo grupo');
+    });
+
+    it('sem cadastro de grupo, a leitura sai como sempre saiu', () => {
+      const linhas = [];
+      for (let i = 0; i < 3; i++) {
+        linhas.push({ maquina: 'F16', peca: 'A', duracaoMs: 15 * MIN, pecas: 225 });
+        linhas.push({ maquina: 'F12', peca: 'B', duracaoMs: 15 * MIN, pecas: 150 });
+      }
+      const entre = comGrupo(linhas, undefined).find((s) => s.titulo === 'Entre máquinas');
+      expect(entre.linhas[0]).toContain('F16 está rodando 50% mais rápido que F12');
+      // Com um grupo so' na leitura, o nome do grupo nao aparece: repetiria
+      // o que as maquinas ja' dizem.
+      expect(entre.linhas[0]).not.toContain('Sem grupo');
+    });
+  });
+
   it('na mesma maquina, aponta a peca mais rapida e a mais lenta — e manda planejar pela peca', () => {
     const linhas = [];
     for (let i = 0; i < 2; i++) {

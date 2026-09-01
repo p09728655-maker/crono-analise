@@ -7,6 +7,7 @@ import {
   rotuloMotivo, somarParadas, textoDecimal,
 } from '../../domain/cronoanalise.js';
 import { analisarConferencias } from '../../domain/analiseConferencias.js';
+import { compararMaquinas, constanciaTexto, lerGrupo } from '../../domain/comparativoMaquinas.js';
 import { codigoPreferido, useMotivosParada } from '../../lib/motivosParada.js';
 import {
   analisarConferenciasComIa, arquivarConferencia, arquivarConferencias, excluirConferencia,
@@ -18,6 +19,7 @@ import { VERSAO } from '../../versao.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import { GraficoRitmoMaquinas } from './graficos.jsx';
+import ComparativoMaquinas from './ComparativoMaquinas.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 
 /**
@@ -226,9 +228,11 @@ export default function RelatorioConferencias({ aoVoltar }) {
      folha A4. Calcular em cada um deixaria os dois divergirem um dia. */
   const analise = useMemo(
     () => analisarConferencias({
-      maquinas: resumoVisivel, pecas: resumoPecasVisivel, conferencias: visiveis,
+      maquinas: resumoVisivel, pecas: resumoPecasVisivel, conferencias: visiveis, grupoDe,
     }),
-    [resumoVisivel, resumoPecasVisivel, visiveis],
+    // mapaGrupos, nao grupoDe: a funcao e' recriada a cada render e
+    // reiniciaria a analise a toa. O que muda a leitura e' o cadastro.
+    [resumoVisivel, resumoPecasVisivel, visiveis, mapaGrupos],
   );
 
   /**
@@ -316,6 +320,25 @@ export default function RelatorioConferencias({ aoVoltar }) {
    * ai' o que saiu ja' E' o potencial e comparar seria inventar perda.
    */
   const comparativo = useMemo(() => comparativoDeParadas(resumoVisivel), [resumoVisivel]);
+
+  /**
+   * O COMPARATIVO ENTRE MAQUINAS — "qual esta' melhor?".
+   *
+   * Calculado aqui, uma vez, pelo mesmo motivo da analise: a tela e o PAPEL
+   * leem os dois, e dois calculos divergem um dia.
+   *
+   * Usa o GRUPO do cadastro para saber quais maquinas podem ser comparadas
+   * entre si — por isso depende de mapaGrupos, e nao da funcao grupoDe (que
+   * e' recriada a cada render e reiniciaria a conta a toa).
+   *
+   * Com uma maquina escolhida na lateral nao ha' com quem comparar: o
+   * quadro simplesmente nao aparece (compararMaquinas devolve grupo nenhum
+   * com uma maquina so').
+   */
+  const entreMaquinas = useMemo(
+    () => compararMaquinas({ maquinas: resumoVisivel, pecas: resumoPecasVisivel, grupoDe }),
+    [resumoVisivel, resumoPecasVisivel, mapaGrupos],
+  );
 
   /* A mesma lateral da lista e do estudo. O filtro por maquina vai para
      dentro dela pelo mesmo motivo que os produtos foram na lista: e'
@@ -649,6 +672,12 @@ export default function RelatorioConferencias({ aoVoltar }) {
                   </div>
                 ))}
               </section>
+
+              {/* QUAL MAQUINA ESTA' MELHOR — depois dos cartoes, porque a
+                  comparacao pressupoe ter visto cada maquina sozinha.
+                  Compara dentro do GRUPO do cadastro e separa a pergunta em
+                  ritmo, tempo rodando e constancia: ver ComparativoMaquinas. */}
+              {!verArquivadas && <ComparativoMaquinas comparativo={entreMaquinas} />}
 
               {/* Ritmo POR PECA — o numero que planeja carga e lote.
                   So' na visao ativa: ritmo nao sai de arquivadas. */}
@@ -1046,6 +1075,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
           grupoDe={grupoDe}
           filtro={filtro}
           analise={analiseNoPapel ? analise : null}
+          entreMaquinas={entreMaquinas}
         />
       )}
     </div>
@@ -1460,7 +1490,7 @@ function AnalisePeriodo({ secoes, resumo, noPapel, aoAlternarPapel }) {
  * de amostra carimbado. Os numeros sao pecas/hora e pecas/minuto; maquina
  * medida ha' pouco tempo leva uma NOTA em texto corrido, nao um selo.
  */
-function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, analise }) {
+function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, analise, entreMaquinas }) {
   // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
   const gruposCobertos = [...new Set(resumo.map((g) => grupoDe?.(g.maquina)).filter(Boolean))].sort();
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -1594,6 +1624,88 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
           {emMedicao.length > 1 ? ' dessas máquinas' : ' desta máquina'} fica mais
           certeiro com mais medições.
         </p>
+      )}
+
+      {/* QUAL MAQUINA ESTA' MELHOR, no papel.
+          E' a pergunta que a reuniao faz diante da folha, e a folha precisa
+          responder sozinha — inclusive a RECUSA, quando o mix de pecas nao
+          deixa comparar. As frases sao as mesmas da tela (lerGrupo, no
+          dominio): papel e tela dizendo coisas diferentes sobre os mesmos
+          numeros e' o comeco de uma discussao inutil na reuniao. */}
+      {entreMaquinas?.grupos.length > 0 && (
+        <section style={imp.entreMaquinas}>
+          <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Comparativo entre máquinas</h2>
+          <p style={{ ...imp.nota, margin: '0 0 6px' }}>
+            Comparação feita DENTRO DE CADA GRUPO do cadastro — máquinas que fazem a mesma
+            coisa. Postos de grupos diferentes não disputam peças/hora.
+          </p>
+
+          {entreMaquinas.grupos.map((g) => (
+            <div key={g.grupo} style={imp.grupoBloco}>
+              <div style={imp.grupoNome}>{g.grupo}</div>
+              {lerGrupo(g).map((frase) => (
+                <p key={frase} style={imp.analiseLinha}>{frase}</p>
+              ))}
+              <table style={{ ...imp.tabela, marginTop: 4 }}>
+                <thead>
+                  <tr>
+                    <th style={imp.th}>Máquina</th>
+                    <th style={imp.thNum}>Medições</th>
+                    <th style={imp.thNum}>Peças/hora</th>
+                    <th style={imp.thNum}>vs. líder</th>
+                    {g.temCiclos && <th style={imp.thNum}>Ciclos/hora</th>}
+                    <th style={imp.thNum}>Rodando %</th>
+                    <th style={imp.th}>Constância</th>
+                    <th style={imp.thNum}>Do próprio melhor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {g.linhas.map((l) => (
+                    <tr key={l.maquina}>
+                      <td style={imp.td}>
+                        {l.maquina}
+                        {!l.confiavel && ' (ainda em medição)'}
+                      </td>
+                      <td style={imp.tdNum}>{l.n}</td>
+                      <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(l.ritmoMedio)}</td>
+                      {/* Mesmo motivo da tela: grupo incomparavel nao
+                          imprime indice — o numero desmentiria a ressalva. */}
+                      <td style={imp.tdNum}>
+                        {g.comparavel && l.indicePct != null ? `${Math.round(l.indicePct)}%` : '—'}
+                      </td>
+                      {g.temCiclos && (
+                        <td style={imp.tdNum}>{l.ciclosPorHora != null ? Math.round(l.ciclosPorHora) : '—'}</td>
+                      )}
+                      <td style={imp.tdNum}>{Math.round(l.disponibilidadePct)}%</td>
+                      <td style={imp.td}>{constanciaTexto(l.cvPct) || '—'}</td>
+                      <td style={imp.tdNum}>
+                        {l.aproveitamentoPct != null ? `${Math.round(l.aproveitamentoPct)}%` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {g.duelos.length > 0 && (
+                <p style={{ ...imp.nota, margin: '5px 0 0' }}>
+                  <strong>Mesma peça nas duas</strong> (comparação sem ressalva):{' '}
+                  {g.duelos.map((d) => (
+                    `${d.peca} — ${d.linhas.map((l) => `${l.maquina} ${Math.round(l.ritmoMedio)} pç/h`).join(' x ')}`
+                    + `${d.empate ? ' (praticamente igual)' : ` (${d.lider.maquina} ${Math.round(d.difPct)}% mais rápido)`}`
+                  )).join(' · ')}
+                </p>
+              )}
+            </div>
+          ))}
+
+          {entreMaquinas.semPar.length > 0 && (
+            <p style={{ ...imp.nota, margin: '5px 0 0' }}>
+              Fora do comparativo:{' '}
+              {entreMaquinas.semPar.map((s) => `${s.maquina} (única medida em ${s.grupo})`).join(', ')}
+              {' — '}comparação só existe com outra máquina do mesmo grupo.
+            </p>
+          )}
+        </section>
       )}
 
       {/* A ANALISE no papel e' OPCAO, marcada na tela ("Sair na impressão"):
@@ -2150,6 +2262,16 @@ const imp = {
   td: { padding: '3px 5px', borderBottom: '1px solid #DDD', verticalAlign: 'top' },
   tdNum: { padding: '3px 5px', borderBottom: '1px solid #DDD', textAlign: 'right',
            fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' },
+
+  /* ---- comparativo entre maquinas no papel ---- */
+  entreMaquinas: { marginBottom: 10 },
+  // Um grupo nao se parte entre duas folhas: a tabela sem a leitura que a
+  // explica (ou o contrario) e' pior do que uma folha com mais respiro.
+  grupoBloco: { breakInside: 'avoid', marginBottom: 8 },
+  grupoNome: {
+    fontSize: 8, fontWeight: 700, textTransform: 'uppercase',
+    letterSpacing: 0.6, color: '#555', marginBottom: 2,
+  },
 
   /* ---- analise do periodo no papel ---- */
   analiseBloco: { breakInside: 'avoid', marginBottom: 6 },
