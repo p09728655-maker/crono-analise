@@ -104,6 +104,13 @@ export const listarConferenciasServidor = ({ maquina, arquivadas = false } = {})
   const busca = q.toString();
   return requisitar(`/conferencias${busca ? `?${busca}` : ''}`);
 };
+/**
+ * So' os contadores das medicoes de ritmo — o Inicio nao precisa da lista.
+ * Ver o ?resumo=1 em api/conferencias.js: dois counts, sem trazer as
+ * medicoes nem as paradas de cada uma.
+ */
+export const resumoConferencias = () => requisitar('/conferencias?resumo=1');
+
 export const arquivarConferencia = (id, arquivada = true) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { arquivada } });
 // Arquivar/restaurar VARIAS numa ida — e' o "por maquina" do relatorio.

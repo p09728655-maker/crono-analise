@@ -13,6 +13,21 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.62.0',
+    data: '2026-09-01',
+    titulo: 'Menu lateral escuro, com ícones — e o ritmo entrou na visão geral',
+    itens: [
+      'O MENU LATERAL FICOU ESCURO em todo o PC — Início, estudos, relatório e estudo aberto. A regra do tema claro continua valendo para o CONTEÚDO, porque o que aparece no monitor é o que sai na impressora; o menu nunca vai para a impressora. Escurecer separa navegação de trabalho com a coisa mais barata que existe, a cor do fundo, e devolve o branco inteiro para os números.',
+      'CADA ITEM DO MENU GANHOU ÍCONE. O ícone não substitui o nome — os dois andam juntos: sozinho, ele obriga a decorar, e "Motivos de parada" não tem desenho universal nenhum. Serve para bater o olho e achar mais rápido o item que você já conhece.',
+      'O "Início" era o último item do menu no relatório, embaixo da lista de máquinas — o ponto de partida no fim da lista. Agora é o primeiro item da navegação em qualquer tela: de onde se parte vem antes de onde se está.',
+      'MEDIÇÕES DE RITMO entrou na visão geral do Início, ao lado dos estudos: quantas medições de peças/hora já chegaram do celular e em quantas máquinas. O sistema tem dois caminhos, e um painel que só contasse estudos daria a entender que o ritmo por máquina é acessório.',
+      'Esse número vem por um resumo do servidor — duas contagens, sem trazer nenhuma medição. Carregar a lista inteira para exibir um total seria megabytes de tráfego para mostrar um algarismo, e passado o teto de mil linhas o número ainda sairia errado.',
+      'OS QUATRO CARTÕES DA TELA DE ENTRADA ganharam ícones cheios, dentro de um disco vermelho claro. Em traço fino eles sumiam entre o título e a descrição, e a fileira lia-se como quatro caixas de texto com um risco em cima — são a primeira coisa colorida que quem chega vê, e precisam ter peso. No menu lateral o traço fino continua: lá o ícone acompanha um rótulo numa lista de dez, e peso viraria ruído.',
+      'ABRIR O SISTEMA CAI NO INÍCIO. Quem digitava o endereço (ou entrava depois do login) era mandado para a lista de estudos: a tela nova só aparecia para quem clicasse em "Início". No celular nada muda — lá a tarefa é uma só e a entrada continua sendo a lista.',
+      '"SEM ESTUDO" DEIXOU DE SIGNIFICAR "SEM NADA". A fábrica com dez medições de ritmo da furadeira e nenhum estudo cadastrado abria o Início e lia "Nenhum estudo ainda" num painel de zeros — o próprio trabalho negado pela tela. Agora ela diz o que existe ("o que há é medição de ritmo", com quantas e em quantas máquinas) e traz o botão do relatório ali mesmo, em vez de mandar procurar.',
+    ],
+  },
+  {
     versao: '2.61.0',
     data: '2026-09-01',
     titulo: 'O sistema ganhou uma casa: a tela de Início',

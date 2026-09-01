@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { VERSAO } from '../../versao.js';
-import { listarEstudos, quemSouEu } from '../../lib/api.js';
+import { listarEstudos, quemSouEu, resumoConferencias } from '../../lib/api.js';
 import { proximasAcoes, situacao } from '../../domain/proximasAcoes.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
@@ -42,6 +42,10 @@ export default function Inicio({
   const [estudos, setEstudos] = useState(null);
   const [erro, setErro] = useState(null);
   const [eu, setEu] = useState(null);
+  // As medicoes de RITMO sao a outra natureza de medicao do sistema. Vem
+  // por um resumo (dois counts), nao pela lista: contar mil linhas com as
+  // paradas de cada uma para exibir um numero seria trafego a toa.
+  const [ritmo, setRitmo] = useState(null);
 
   const [verVersoes, setVerVersoes] = useState(false);
   const [verChaveIa, setVerChaveIa] = useState(false);
@@ -56,6 +60,9 @@ export default function Inicio({
     // Falha em silencio, como na lista: nao saber quem esta' no PC nao pode
     // impedir de ver o que precisa de medicao.
     quemSouEu().then(setEu).catch(() => {});
+    // Falha em silencio: o relatorio de ritmo tem tela propria, e nao
+    // saber o total dele nao pode esconder os estudos.
+    resumoConferencias().then(setRitmo).catch(() => {});
   }, []);
 
   const vivos = (estudos || []).filter((e) => e.status !== 'arquivado');
@@ -66,6 +73,10 @@ export default function Inicio({
     pendencias: vivos.filter((e) => situacao(e) === 'pendente').length,
   };
   const { itens, restantes } = proximasAcoes(vivos);
+  // O outro caminho do sistema existe? E' o que separa "a casa esta
+  // vazia" de "a casa nao tem ESTUDO" — duas frases bem diferentes
+  // para quem mede ritmo todo dia.
+  const temRitmo = (ritmo?.medicoes || 0) > 0;
 
   return (
     <div style={est.telaComLateral}>
@@ -114,14 +125,23 @@ export default function Inicio({
             ['Estudos', numeros.estudos, 'cadastrados'],
             ['Ciclos', numeros.ciclos, 'cronometrados'],
             ['Operações', numeros.operacoes, 'nos estudos'],
+            /* A outra natureza de medicao, ao lado da primeira: o sistema
+               tem dois caminhos, e o painel que so' contasse estudos daria
+               a entender que o ritmo por maquina e' acessorio. */
+            ['Medições de ritmo', ritmo?.medicoes, ritmo?.maquinas != null
+              ? `em ${ritmo.maquinas} ${ritmo.maquinas === 1 ? 'máquina' : 'máquinas'}`
+              : 'peças/hora dos postos'],
             ['Pendências', numeros.pendencias, 'sem nenhum ciclo'],
           ].map(([rot, val, sub], i) => (
             <div key={rot} style={est.numero}>
               <span style={est.numeroRotulo}>{rot}</span>
               {/* Pendencia so' ganha cor quando existe: "0" colorido treina
                   o olho a ignorar a cor. Mesma regra do painel da lista. */}
-              <span style={i === 3 && val > 0 ? est.numeroValorAtencao : est.numeroValor}>
-                {estudos == null ? '—' : val}
+              <span style={i === 4 && val > 0 ? est.numeroValorAtencao : est.numeroValor}>
+                {/* Cada numero espera o SEU carregamento: o de ritmo vem
+                    de outra chamada, e prende-lo a dos estudos deixaria um
+                    traco onde ja' ha' resposta. */}
+                {val == null ? '—' : val}
               </span>
               <span style={est.numeroSub}>{sub}</span>
             </div>
@@ -178,17 +198,43 @@ export default function Inicio({
 
         {/* Nada pendente nao e' tela vazia: e' a boa noticia, e ela precisa
             ser dita. Sem isto, quem abre com tudo em dia acha que a tela
-            nao carregou. */}
+            nao carregou.
+
+            E "sem estudo" NAO E' "sem nada". O sistema tem dois caminhos, e
+            este bloco so' olhava um: a fabrica com dez medicoes de ritmo da
+            furadeira e nenhum estudo cadastrado lia "Nenhum estudo ainda"
+            num painel de zeros, como se nunca tivesse medido nada. Quem usa
+            principalmente o ritmo por maquina abria a casa e via o proprio
+            trabalho negado. */}
         {estudos != null && !itens.length && (
           <section style={est.painel} aria-label="Próximas ações">
             <h2 style={est.painelTitulo}>
-              {numeros.estudos === 0 ? 'Nenhum estudo ainda' : 'Nada esperando medição'}
+              {numeros.estudos > 0
+                ? 'Nada esperando medição'
+                : (temRitmo
+                  ? 'Nenhum estudo de tempos — o que há é medição de ritmo'
+                  : 'Nenhum estudo ainda')}
             </h2>
             <p style={est.painelDica}>
-              {numeros.estudos === 0
-                ? 'Comece criando um estudo de tempos, ou abra o relatório de ritmo por máquina — ele vive das medições que o celular envia, sem precisar de estudo cadastrado.'
-                : 'Todos os estudos cadastrados já têm ciclos cronometrados. O próximo passo é analisar.'}
+              {numeros.estudos > 0
+                ? 'Todos os estudos cadastrados já têm ciclos cronometrados. O próximo passo é analisar.'
+                : (temRitmo
+                  ? `${ritmo.medicoes} ${ritmo.medicoes === 1 ? 'medição de ritmo já chegou' : 'medições de ritmo já chegaram'} do celular`
+                    + `${ritmo.maquinas ? `, em ${ritmo.maquinas} ${ritmo.maquinas === 1 ? 'máquina' : 'máquinas'}` : ''}`
+                    + ' — o relatório de peças/hora já responde por elas, sem precisar de estudo cadastrado. '
+                    + 'O estudo de tempos é a outra medição: ciclo a ciclo, com fator de ritmo e tolerância, para chegar ao tempo padrão.'
+                  : 'Comece criando um estudo de tempos, ou meça o ritmo de um posto pelo celular — o relatório de peças/hora vive dessas medições, sem precisar de estudo cadastrado.')}
             </p>
+            {/* Com medicao de ritmo na casa, o caminho para ela vem junto do
+                texto: mandar "abrir o relatorio" e deixar o botao tres
+                blocos abaixo e' mandar procurar. */}
+            {numeros.estudos === 0 && temRitmo && (
+              <div>
+                <button type="button" style={est.botaoPrimario} onClick={aoAbrirRelatorio}>
+                  Abrir o relatório de ritmo
+                </button>
+              </div>
+            )}
           </section>
         )}
 
