@@ -81,8 +81,12 @@ export default function ComparativoMaquinas({ comparativo }) {
 
           {/* O veredito — ou a recusa dele. Vem ANTES da tabela: quem abre o
               relatorio quer a resposta, e so' depois os numeros que a
-              sustentam. As frases sao as MESMAS que saem no papel. */}
-          <div style={g.comparavel ? est.leitura : est.leituraRessalva}>
+              sustentam. As frases sao as MESMAS que saem no papel.
+
+              O ambar e' da RECUSA, nao da ressalva: comparacao pela classe
+              de ciclo e' uma resposta valida (com a ressalva dentro do
+              texto), e pinta-la de alerta ensinaria a ignorar o alerta. */}
+          <div style={g.comparavel || g.comparavelPorCiclo ? est.leitura : est.leituraRessalva}>
             {lerGrupo(g).map((frase) => (
               <p key={frase} style={est.leituraLinha}>{frase}</p>
             ))}
@@ -150,8 +154,22 @@ export default function ComparativoMaquinas({ comparativo }) {
                       <td style={l.maquina === g.liderDisponibilidade?.maquina ? est.tdNumForte : est.tdNum}>
                         {Math.round(l.disponibilidadePct)}%
                       </td>
+                      {/* CONSTANCIA COM RESSALVA. O numero mede a variacao
+                          entre MEDICOES, e medicoes de pecas diferentes
+                          variam por natureza: a maquina que mede uma peca
+                          so' aparece "repetindo bem" e a que mede quatro,
+                          "variando muito" — sem nada de errado com ela. Com
+                          mais de uma peca medida, a leitura vem marcada. */}
                       <td style={est.td}>
                         {constanciaTexto(l.cvPct) || <span style={est.vazio}>1 medição</span>}
+                        {l.pecas.length > 1 && constanciaTexto(l.cvPct) && (
+                          <span
+                            style={est.nota}
+                            title={`Mediu ${l.pecas.length} peças diferentes — parte dessa variação é do mix, não do posto`}
+                          >
+                            *
+                          </span>
+                        )}
                       </td>
                       <td style={est.tdNum}>
                         {l.aproveitamentoPct != null
@@ -186,6 +204,16 @@ export default function ComparativoMaquinas({ comparativo }) {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* O asterisco da constancia precisa de legenda onde ele aparece:
+              nota de rodape em outra tela nao e' legenda, e' adivinhacao. */}
+          {g.linhas.some((l) => l.pecas.length > 1 && l.cvPct != null) && (
+            <p style={est.dica}>
+              * Máquina que mediu peças diferentes: parte da variação entre medições é do mix de
+              peças, não do posto. A constância limpa é a de cada peça — veja o ritmo por
+              acionamento, abaixo.
+            </p>
           )}
 
           {/* Sem nenhuma peca em comum o quadro se recusou a eleger vencedor
@@ -290,6 +318,7 @@ const est = {
     color: t.textoFraco, ...tipo('micro'), whiteSpace: 'nowrap',
   },
   vazio: { color: t.textoFraco },
+  nota: { color: t.atencao, fontWeight: 700, cursor: 'help', marginLeft: 2 },
 
   duelos: {
     display: 'flex', flexDirection: 'column', gap: espaco.sm,

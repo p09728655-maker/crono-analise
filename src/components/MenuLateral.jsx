@@ -37,6 +37,10 @@ export default function MenuLateral({
   acoes = [], acoesRotulo = 'Este estudo',
   // --- lista de estudos ---
   busca, aoBuscar, grupos = [], filtro, aoFiltrar,
+  // Navegacao entre as telas da analise. `inicioAtivo` e `estudosAtivo`
+  // marcam onde se esta': a lateral e' o menu do sistema, e menu que nao
+  // diz onde voce esta' obriga a olhar o conteudo para descobrir.
+  aoVerInicio, inicioAtivo, aoVerEstudos, estudosAtivo,
   aoNovoEstudo, aoImportar, aoVerConferencias, aoVerArquivados, arquivados = 0,
   aoVerChaveIa, aoVerMotivos, aoVerMaquinas, aoVerAnalistas, usuario, aoTrocarModo,
 }) {
@@ -141,6 +145,22 @@ export default function MenuLateral({
         </div>
       )}
 
+      {/* 6.5. A CASA. Primeiro item do menu porque e' de onde se parte, e
+             o unico que existe nas duas telas de conteudo — e' por ele que
+             se volta ao ponto de partida sem usar o botao do navegador. */}
+      {aoVerInicio && (
+        <div style={est.bloco}>
+          <button
+            type="button"
+            onClick={aoVerInicio}
+            aria-current={inicioAtivo ? 'page' : undefined}
+            style={{ ...est.item, ...(inicioAtivo ? est.itemAtivo : {}) }}
+          >
+            <span style={est.itemTexto}>Início</span>
+          </button>
+        </div>
+      )}
+
       {/* 7. Quais estudos ja existem */}
       {aoNovoEstudo && (
         <div style={est.bloco}>
@@ -186,6 +206,20 @@ export default function MenuLateral({
               ))}
             </div>
           )}
+          {/* Do INICIO, o bloco e' um caminho: leva a lista. Dentro da
+              lista, aoVerEstudos nao vem — e o que aparece aqui e' o filtro
+              por produto, que so' faz sentido diante da tabela. */}
+          {aoVerEstudos && (
+            <button
+              type="button"
+              onClick={aoVerEstudos}
+              aria-current={estudosAtivo ? 'page' : undefined}
+              style={{ ...est.item, ...(estudosAtivo ? est.itemAtivo : {}) }}
+            >
+              <span style={est.itemTexto}>Ver os estudos</span>
+            </button>
+          )}
+
           {arquivados > 0 && (
             <button type="button" style={est.item} onClick={aoVerArquivados}>
               <span style={est.itemTexto}>Estudos arquivados</span>

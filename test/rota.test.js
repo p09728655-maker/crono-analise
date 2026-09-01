@@ -34,12 +34,40 @@ describe('conferencia rapida na URL', () => {
     expect(r.padrao).toBeUndefined();
     // Ancora tambem nao pode derrubar a rota.
     expect(analisarCaminho('/coleta/rapida#topo').tela).toBe('rapida');
-    expect(analisarCaminho('/analise?utm=x').tela).toBe('lista');
+    expect(analisarCaminho('/analise?utm=x').tela).toBe('inicio');
   });
 
   it('nao engole a lista nem a rota de estudo', () => {
     expect(analisarCaminho('/coleta').tela).toBe('lista');
     const id = 'b17e849c-da3f-4d8c-a262-81e8748c589b';
     expect(analisarCaminho(`/coleta/estudo/${id}`).tela).toBe('estudo');
+  });
+
+  /**
+   * A CASA DA ANALISE. /analise abre o INICIO e a lista ganhou caminho
+   * proprio — antes o app abria direto no conteudo, e a lista fazia de casa
+   * mudando de cara conforme houvesse ou nao estudo.
+   */
+  describe('inicio da analise', () => {
+    it('/analise abre o inicio; a lista mora em /analise/estudos', () => {
+      expect(analisarCaminho('/analise').tela).toBe('inicio');
+      expect(analisarCaminho('/analise/').tela).toBe('inicio');
+      expect(analisarCaminho('/analise/estudos').tela).toBe('lista');
+      expect(analisarCaminho('/analise/estudos/').tela).toBe('lista');
+      expect(analisarCaminho('/Analise/Estudos').tela).toBe('lista');
+    });
+
+    it('o inicio nao engole as rotas que vinham depois de /analise', () => {
+      expect(analisarCaminho('/analise/conferencias').tela).toBe('conferencias');
+      const id = 'b17e849c-da3f-4d8c-a262-81e8748c589b';
+      expect(analisarCaminho(`/analise/estudo/${id}`).tela).toBe('estudo');
+    });
+
+    it('a COLETA nao tem inicio: /coleta e a lista, e caminhos respeita isso', () => {
+      expect(analisarCaminho('/coleta').tela).toBe('lista');
+      expect(caminhos.lista('coleta')).toBe('/coleta');
+      expect(caminhos.lista('analise')).toBe('/analise/estudos');
+      expect(caminhos.inicio()).toBe('/analise');
+    });
   });
 });

@@ -13,6 +13,43 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.61.0',
+    data: '2026-09-01',
+    titulo: 'O sistema ganhou uma casa: a tela de Início',
+    itens: [
+      'AGORA HÁ UM PONTO DE PARTIDA. O app abria direto no conteúdo: a lista de estudos fazia de casa, e mudava de cara conforme houvesse ou não estudo — ora uma tabela, ora um convite a criar o primeiro. Nunca a mesma tela duas vezes, e nenhum lugar estável de onde começar. A lista acumulava três papéis (ser a casa, listar e resumir) e não fazia bem nenhum dos três.',
+      'O MENU LATERAL VIROU O MENU DE VERDADE: escolheu ali, abriu a tela. Início, os estudos de tempo, o ritmo por máquina e as ferramentas — de qualquer tela dá para voltar ao Início por ele, sem usar o botão do navegador. A lista de estudos passou a ter endereço próprio (/analise/estudos); /analise abre o Início.',
+      'A CASA NÃO É UM CARTAZ. Ela abre com a identidade da cronoanálise, mas o que ocupa a tela é o trabalho: quantos estudos, ciclos, operações e pendências existem, e a fila do que precisa de você — com o botão que resolve cada item ao lado. Tela de abertura que só cumprimenta cobraria um clique por dia e sumiria da atenção em duas semanas.',
+      'Com tudo em dia, o Início diz isso em vez de ficar vazio: quem abre e não vê nada pendente precisa saber que é a boa notícia, e não que a tela falhou ao carregar.',
+      'O botão "+ Novo estudo" do Início cai direto no formulário, e não na lista com o formulário fechado — clicar em "novo" e chegar numa tabela obriga a procurar o mesmo botão outra vez.',
+      'No celular nada muda: lá a tarefa é uma só, e a tela pequena não comporta um passo antes do trabalho.',
+    ],
+  },
+  {
+    versao: '2.60.0',
+    data: '2026-09-01',
+    titulo: 'A porta do sistema deixou de ser um formulário seco',
+    itens: [
+      'A TELA DE ENTRADA DO PC ganhou a identidade do sistema: logo, o nome do método, o que o RitmoPatrimar faz em quatro palavras e o cronômetro que é a cara da cronoanálise. O que havia era um cartão com dois campos e um botão — funcionava, mas não dizia a quem estava chegando em que sistema ele entrou.',
+      'A APRESENTAÇÃO MORA NA PORTA, e não numa tela de boas-vindas própria, de propósito. A porta já existe e já custa um passo: vestir ela não cobra nada a mais de quem abre o sistema todo dia. Uma tela de abertura DEPOIS do login cobraria um clique diário para sempre — e clique diário para ler o que já se sabe vira atrito em duas semanas.',
+      'A tela NÃO mostra contadores de estudos, ciclos ou desempenho. Ali ninguém se identificou ainda, e número da fábrica antes da senha é informação entregue a quem não entrou. Indicador vive do outro lado da porta, onde há sessão e há a quem responder.',
+      'O desenho é vetor, não foto: a primeira tela que abre não deve baixar centenas de KB de imagem na rede da empresa. Em janela estreita o painel do cronômetro sai da frente e o formulário fica inteiro.',
+    ],
+  },
+  {
+    versao: '2.59.0',
+    data: '2026-09-01',
+    titulo: 'O acionamento do motor voltou — é ele que compara peças diferentes',
+    itens: [
+      'VOLTOU O QUE FOI TIRADO POR ENGANO. A versão de 31/08 limpou o jargão do relatório e levou junto uma coisa que não é jargão: quantas vezes o motor é acionado para fazer uma peça. O dado continuou sendo perguntado no celular, gravado e calculado — só sumiu de onde a pessoa lê. Sem ele, o relatório dizia "as peças são diferentes, não dá para comparar" tendo em mãos exatamente o que resolvia isso.',
+      'RITMO POR ACIONAMENTO DO MOTOR, quadro novo na tela e no papel: as peças de cada máquina agrupadas por quantos acionamentos pedem. Peças da mesma classe deveriam sair em ritmo parecido — a furação é a mesma. O quadro mostra a faixa observada ("as peças de um acionamento saem entre 14,0 e 15,0 pç/min") e aponta quem foge dela, com quanto.',
+      'A PEÇA FORA DA FAIXA GANHOU ENDEREÇO. Quando uma peça de um acionamento sai 43% abaixo das outras, o motor fez o mesmo trabalho: o tempo foi para o MANUSEIO — tamanho da peça, gabarito, batente, abastecimento. O relatório diz isso, e não acusa a máquina de lenta. Peça grande demora mais para posicionar sem nada de errado com o posto: quem conhece a peça é que decide se é problema.',
+      'A COMPARAÇÃO ENTRE MÁQUINAS DESTRAVOU. Sem a mesma peça medida nas duas, o comparativo se recusava a responder. Agora, se as duas mediram peças de mesmo acionamento, ele compara — com a ressalva do manuseio junto, e sempre atrás da comparação da mesma peça, que continua sendo a única sem ressalva.',
+      'A tabela Ritmo por peça voltou a trazer os ACIONAMENTOS de cada peça e o tempo POR ACIONAMENTO — o número comparável entre peças de furação diferente. Peça gravada ora com 1 acionamento, ora com 2, aparece marcada: o mesmo produto não pode pedir dois números, e isso é dado a corrigir na medição.',
+      'A coluna Constância passou a avisar, com um asterisco, quando a máquina mediu peças diferentes: parte daquela variação é do mix, não do posto. Sem a marca, a máquina que mede quatro peças diferentes aparecia "variando muito" e a que mede uma só, "repetindo bem" — sem nada distinguir as duas de verdade.',
+    ],
+  },
+  {
     versao: '2.58.1',
     data: '2026-09-01',
     titulo: 'O menu lateral em uma régua só',

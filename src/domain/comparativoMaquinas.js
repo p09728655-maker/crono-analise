@@ -45,6 +45,7 @@
  */
 import { MS_POR_HORA } from './estatistica.js';
 import { nomeChave } from './cronoanalise.js';
+import { duelosDeCiclo } from './ritmoPorCiclo.js';
 
 /**
  * Diferenca abaixo da qual duas maquinas estao EMPATADAS.
@@ -288,11 +289,28 @@ export function compararMaquinas({ maquinas = [], pecas = [], grupoDe } = {}) {
       // Constancia: MENOR variacao entre medicoes e' a melhor.
       liderConstancia: melhorPor('cvPct', false),
       duelos: [],
+      duelosCiclo: [],
     });
   }
 
   const duelos = montarDuelos(pecas, grupoPorMaquina);
-  for (const g of grupos) g.duelos = duelos.filter((d) => d.grupo === g.grupo);
+  /**
+   * A SEGUNDA REGUA: pecas DIFERENTES que pedem o mesmo numero de
+   * acionamentos do motor.
+   *
+   * Sem a mesma peca nas duas maquinas, este relatorio se recusava a
+   * comparar — e parava ai'. Mas a coleta guarda quantos ciclos cada peca
+   * pede, e com isso pecas diferentes de mesmo ciclo ja' comparam: o que
+   * varia entre elas e' o manuseio, nao a furacao. E' comparacao com
+   * ressalva, sempre atras do duelo da mesma peca — nunca no lugar dele.
+   */
+  const porCiclo = duelosDeCiclo(pecas, (m) => grupoPorMaquina.get(nomeChave(m)));
+  for (const g of grupos) {
+    g.duelos = duelos.filter((d) => d.grupo === g.grupo);
+    g.duelosCiclo = porCiclo.filter((d) => d.grupo === g.grupo);
+    // Peca em comum continua mandando; o ciclo entra quando ela nao existe.
+    g.comparavelPorCiclo = !g.comparavel && g.duelosCiclo.length > 0;
+  }
 
   // Grupos na ordem do codigo do cadastro (0002 antes de 0004); sem grupo
   // por ultimo, como na lateral do relatorio.
@@ -314,6 +332,7 @@ export function compararMaquinas({ maquinas = [], pecas = [], grupoDe } = {}) {
 
 const pph = (v) => `${Math.round(v)} pç/h`;
 const pct = (v) => `${Math.round(v)}%`;
+const umDecimal = (v) => v.toFixed(1);
 
 /**
  * A CONSTANCIA em palavras — a mesma regua da analise automatica.
@@ -361,15 +380,36 @@ export function lerGrupo(g) {
   const frases = [];
   const { lider, lanterna } = g;
 
-  if (!g.comparavel) {
+  if (!g.comparavel && g.comparavelPorCiclo) {
+    /**
+     * Sem a mesma peca nas duas, mas com pecas de MESMO CICLO: da' para
+     * comparar, com ressalva. O que o ciclo iguala e' a furacao; o que
+     * sobra de diferenca e' manuseio — e manuseio tambem e' trabalho a
+     * melhorar, so' nao e' velocidade de maquina.
+     */
+    const d = g.duelosCiclo[0];
+    const acionamento = d.ciclos === 1 ? 'um acionamento' : `${d.ciclos} acionamentos`;
     frases.push(
-      `Não dá para dizer qual rende mais em peças/hora: as máquinas deste grupo mediram peças `
-      + `diferentes e nenhuma peça foi medida em duas delas. A diferença que aparece na tabela `
-      + `pode ser toda do mix — peça com mais furação rende menos sem a máquina ser mais lenta.`,
+      `Nenhuma peça foi medida nas duas máquinas, mas as duas mediram peças de ${acionamento} do `
+      + `motor — e essas comparam: ${d.lider.maquina} faz ${umDecimal(d.lider.pecasPorMinuto)} pç/min `
+      + `contra ${umDecimal(d.lanterna.pecasPorMinuto)} da ${d.lanterna.maquina} `
+      + `(${pct(d.difPct)} de diferença) nessa classe de peça.`,
     );
     frases.push(
-      `Para comparar de verdade: meça a MESMA peça nas duas máquinas. Enquanto isso, o que já `
-      + `compara aqui é o tempo rodando e a constância — esses não dependem da peça.`,
+      'Com a mesma furação, o que ainda pode explicar a diferença é o MANUSEIO — tamanho da peça, '
+      + 'gabarito, batente, abastecimento —, não a velocidade da máquina. Uma medição da mesma '
+      + 'peça nas duas fecharia a conta de vez.',
+    );
+  } else if (!g.comparavel) {
+    frases.push(
+      `Não dá para dizer qual rende mais em peças/hora: as máquinas deste grupo mediram peças `
+      + `diferentes, nenhuma peça foi medida em duas delas e nem os acionamentos do motor batem `
+      + `entre as peças medidas. A diferença que aparece na tabela pode ser toda do mix.`,
+    );
+    frases.push(
+      `Para comparar de verdade: meça a MESMA peça nas duas máquinas — ou, ao menos, peças que `
+      + `peçam o mesmo número de acionamentos. Enquanto isso, o que já compara aqui é o tempo `
+      + `rodando e a constância: esses não dependem da peça.`,
     );
   } else if (g.empate) {
     frases.push(

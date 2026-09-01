@@ -5,6 +5,7 @@ import ColetaFuradeira from './features/coleta/ColetaFuradeira.jsx';
 import ConferenciaRapida from './features/coleta/ConferenciaRapida.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import RelatorioConferencias from './features/analise/RelatorioConferencias.jsx';
+import Inicio from './features/analise/Inicio.jsx';
 import BarraSincronizacao from './components/BarraSincronizacao.jsx';
 import { SistemaEncerrado } from './components/SairDoSistema.jsx';
 import EntrarNoPc from './features/analise/EntrarNoPc.jsx';
@@ -59,6 +60,7 @@ export default function App() {
   const [encerrado, setEncerrado] = useState(false);
 
   const irParaLista = useCallback(() => navegar(caminhos.lista(modo)), [navegar, modo]);
+  const irParaInicio = useCallback(() => navegar(caminhos.inicio()), [navegar]);
   const abrirEstudo = useCallback((id) => navegar(caminhos.estudo(modo, id)), [navegar, modo]);
   const editarEstudo = useCallback(
     (id) => navegar(`${caminhos.estudo('analise', id)}?editar=1`),
@@ -142,6 +144,19 @@ export default function App() {
         </div>
       )}
 
+      {/* A CASA DA ANALISE. So' existe no PC: no tablet a tarefa e' uma so'
+          e a tela pequena nao comporta um passo antes do trabalho. */}
+      {tela === 'inicio' && (
+        <Inicio
+          aoAbrirEstudos={irParaLista}
+          aoAbrirRelatorio={() => navegar(caminhos.conferencias())}
+          aoNovoEstudo={() => navegar(`${caminhos.lista('analise')}?novo=1`)}
+          aoMedir={medirEstudo}
+          aoAnalisar={abrirEstudo}
+          aoTrocarModo={desktop ? trocarModo : undefined}
+        />
+      )}
+
       {/* Sem alternador de modo no aparelho de toque: coleta e' o unico modo la. */}
       {tela === 'lista' && (
         <ListaEstudos
@@ -153,6 +168,7 @@ export default function App() {
           aoConferirRapido={() => navegar(caminhos.rapida())}
           aoSairDoSistema={desktop ? undefined : () => setEncerrado(true)}
           aoVerConferencias={() => navegar(caminhos.conferencias())}
+          aoVerInicio={desktop ? irParaInicio : undefined}
         />
       )}
 
@@ -161,7 +177,10 @@ export default function App() {
       )}
 
       {tela === 'conferencias' && (
-        <RelatorioConferencias aoVoltar={() => navegar(caminhos.lista('analise'))} />
+        <RelatorioConferencias
+          aoVoltar={() => navegar(caminhos.lista('analise'))}
+          aoVerInicio={irParaInicio}
+        />
       )}
 
       {tela === 'estudo' && (
