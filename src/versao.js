@@ -22,6 +22,8 @@ export const HISTORICO = [
       'O "Início" era o último item do menu no relatório, embaixo da lista de máquinas — o ponto de partida no fim da lista. Agora é o primeiro item da navegação em qualquer tela: de onde se parte vem antes de onde se está.',
       'MEDIÇÕES DE RITMO entrou na visão geral do Início, ao lado dos estudos: quantas medições de peças/hora já chegaram do celular e em quantas máquinas. O sistema tem dois caminhos, e um painel que só contasse estudos daria a entender que o ritmo por máquina é acessório.',
       'Esse número vem por um resumo do servidor — duas contagens, sem trazer nenhuma medição. Carregar a lista inteira para exibir um total seria megabytes de tráfego para mostrar um algarismo, e passado o teto de mil linhas o número ainda sairia errado.',
+      'OS QUATRO CARTÕES DA TELA DE ENTRADA ganharam ícones cheios, dentro de um disco vermelho claro. Em traço fino eles sumiam entre o título e a descrição, e a fileira lia-se como quatro caixas de texto com um risco em cima — são a primeira coisa colorida que quem chega vê, e precisam ter peso. No menu lateral o traço fino continua: lá o ícone acompanha um rótulo numa lista de dez, e peso viraria ruído.',
+      'ABRIR O SISTEMA CAI NO INÍCIO. Quem digitava o endereço (ou entrava depois do login) era mandado para a lista de estudos: a tela nova só aparecia para quem clicasse em "Início". No celular nada muda — lá a tarefa é uma só e a entrada continua sendo a lista.',
     ],
   },
   {

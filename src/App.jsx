@@ -106,9 +106,19 @@ export default function App() {
    */
   useEffect(() => { carregarMotivos(); }, []);
 
-  // A URL canonica evita que "/" fique no historico e confunda o Voltar.
+  /**
+   * A URL canonica evita que "/" fique no historico e confunda o Voltar.
+   *
+   * No PC ela e' o INICIO, nao a lista: quem digita o endereco do sistema
+   * (ou entra depois do login) tem de cair na casa. Estava indo para
+   * /analise/estudos, e o efeito era o app abrir na tabela de estudos como
+   * antes de a casa existir — a tela nova so' aparecia para quem clicasse
+   * em "Inicio". No tablet a canonica continua sendo a lista: la nao ha
+   * casa, a tarefa e' uma so'.
+   */
   useEffect(() => {
-    if (rota.padrao) navegar(caminhos.lista(modo), { substituir: true });
+    if (!rota.padrao) return;
+    navegar(modo === 'analise' ? caminhos.inicio() : caminhos.lista(modo), { substituir: true });
   }, [rota.padrao, modo, navegar]);
 
   // Celular e tablet SO abrem a coleta. Analise e' trabalho de PC — no
