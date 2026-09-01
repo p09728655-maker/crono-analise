@@ -297,11 +297,18 @@ const est = {
   // da cor, nao de um tamanho novo.
   subgrupoRotulo: {
     ...rotulo(t.textoFraco),
-    padding: `${espaco.md}px ${espaco.sm}px ${espaco.xs}px`,
+    // Na regua da lateral, como o rotulo do bloco: o que separa os dois e' o
+    // respiro acima, nao um recuo — quem recua e' o que esta' DENTRO dele.
+    padding: `${espaco.md}px 0 ${espaco.xs}px`,
   },
   // Shorthand inteiro, nao paddingLeft: misturar com o `padding` do
   // item base deixa o estilo imprevisivel no rerender (ver checar-estilos).
-  itemRecuado: { padding: `0 ${espaco.md}px 0 ${espaco.lg}px` },
+  // O sangramento do item (marginLeft -16) entra na conta: 32 de padding
+  // deixam o texto 16px a' direita da regua — um degrau de recuo, igual ao
+  // que separa a maquina do grupo dela no cadastro.
+  itemRecuado: {
+    padding: `0 ${espaco.lg}px 0 ${espaco.lg + espaco.lg}px`,
+  },
 
   marca: { display: 'flex', flexDirection: 'column', gap: 2 },
   // alignSelf flex-start e' o que impede a distorcao: num flex em COLUNA o
@@ -329,11 +336,19 @@ const est = {
     transition: `background ${transicao.rapida}`,
   },
 
+  /**
+   * Barra vermelha a esquerda: marca o que esta' aberto sem gastar uma linha
+   * divisoria a mais numa lateral estreita.
+   *
+   * Sangra ate' a borda da lateral, como o realce do item ativo — a barra do
+   * que esta' ABERTO e a barra do que esta' SELECIONADO nascem no mesmo x, e
+   * o texto cai na regua dos rotulos: o padding esquerdo e' o recuo cheio
+   * MENOS a espessura da barra (16 - 3), que e' o que ela ja' ocupa.
+   */
   contexto: {
     display: 'flex', flexDirection: 'column', gap: 2,
-    paddingLeft: espaco.md,
-    // Barra vermelha a esquerda: marca o que esta' aberto sem gastar uma
-    // linha divisoria a mais numa lateral estreita.
+    marginLeft: -espaco.lg,
+    padding: `0 ${espaco.lg}px 0 ${espaco.lg - 3}px`,
     borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: t.vermelho,
   },
   contextoRotulo: rotulo(t.textoFraco),
@@ -365,10 +380,27 @@ const est = {
     fontFamily: 'inherit', outline: 'none',
   },
 
+  /**
+   * UMA REGUA SO' na lateral: todo texto comeca no mesmo x.
+   *
+   * O item tinha `padding: 0 12px` e o rotulo do bloco nao tinha nenhum.
+   * O resultado eram duas colunas de texto na mesma lista — "FERRAMENTAS"
+   * a 16px da borda e "Analistas" a 28px, "RITMO POR MÁQUINA" a 16 e
+   * "Abrir o relatório" a 28. Ninguem nomeia o defeito, mas a lateral
+   * parece torta, e foi assim que ele apareceu.
+   *
+   * A correcao nao e' empurrar o rotulo para 28: ele ficaria fora da regua
+   * da MARCA e das caixas (busca, botao), que sao ancoradas na margem. E'
+   * o item que volta para 16 — e, para o texto nao encostar na borda do
+   * realce, o realce SANGRA ate' a borda da lateral. Ganha-se de brinde o
+   * lugar certo da barra vermelha do item ativo: colada na lateral, nao
+   * flutuando 16px dentro dela.
+   */
   item: {
-    width: '100%', minHeight: 36, padding: `0 ${espaco.md}px`,
+    width: `calc(100% + ${espaco.lg * 2}px)`, marginLeft: -espaco.lg,
+    minHeight: 36, padding: `0 ${espaco.lg}px`,
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: espaco.sm,
-    background: 'transparent', border: 'none', borderRadius: raio.md,
+    background: 'transparent', border: 'none', borderRadius: 0,
     color: t.textoMedio, ...tipo('corpo'), textAlign: 'left',
     cursor: 'pointer', fontFamily: 'inherit',
     transition: `background ${transicao.rapida}, color ${transicao.rapida}`,
@@ -392,10 +424,12 @@ const est = {
     ...tipo('destaque'), cursor: 'pointer', fontFamily: 'inherit',
     boxShadow: elevacao.baixa,
   },
+  // Mesma regua e mesmo sangramento do item — o rodape nao e' outra lista.
   itemDiscreto: {
-    width: '100%', minHeight: 34, padding: `0 ${espaco.md}px`,
+    width: `calc(100% + ${espaco.lg * 2}px)`, marginLeft: -espaco.lg,
+    minHeight: 34, padding: `0 ${espaco.lg}px`,
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: espaco.sm,
-    background: 'transparent', border: 'none', borderRadius: raio.md,
+    background: 'transparent', border: 'none', borderRadius: 0,
     color: t.textoFraco, ...tipo('legenda'), textAlign: 'left',
     cursor: 'pointer', fontFamily: 'inherit',
   },

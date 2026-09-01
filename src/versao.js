@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.58.1',
+    data: '2026-09-01',
+    titulo: 'O menu lateral em uma régua só',
+    itens: [
+      'O MENU LATERAL ESTAVA TORTO e ninguém tinha como nomear o defeito: os títulos de seção ("EMBALAGEM E DEMAIS POSTOS", "RITMO POR MÁQUINA", "FERRAMENTAS") começavam 12 pixels à esquerda de todos os itens clicáveis abaixo deles ("Abrir o relatório", "Analistas", "Máquinas"). Eram duas colunas de texto na mesma lista. Agora tudo começa no mesmo ponto — títulos, descrições, itens, produtos e o bloco do relatório aberto.',
+      'A MARCA DO ITEM SELECIONADO passou a encostar na borda da lateral, em vez de flutuar 16 pixels dentro dela — é a mesma linha vermelha que marca o relatório aberto, agora nascendo no mesmo lugar.',
+      'No relatório, as máquinas continuam recuadas debaixo do código do grupo (0002 · FURADEIRA), com um degrau de recuo só — o grupo alinhado com o resto do menu e as máquinas dele visivelmente dentro.',
+    ],
+  },
+  {
     versao: '2.58.0',
     data: '2026-09-01',
     titulo: 'Qual máquina está rendendo mais — comparada com quem dá para comparar',
