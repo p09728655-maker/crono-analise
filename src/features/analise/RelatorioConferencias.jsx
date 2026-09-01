@@ -70,7 +70,7 @@ const lerAnaliseNoPapel = () => {
   try { return localStorage.getItem(CHAVE_ANALISE_PAPEL) === '1'; } catch { return false; }
 };
 
-export default function RelatorioConferencias({ aoVoltar }) {
+export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const [linhas, setLinhas] = useState([]);
   const [outras, setOutras] = useState(0);
   const [estado, setEstado] = useState('carregando');
@@ -410,6 +410,7 @@ export default function RelatorioConferencias({ aoVoltar }) {
           aoVerVersao={() => setVerVersoes(true)}
           aoVoltar={aoVoltar}
           voltarRotulo="Estudos"
+          aoVerInicio={aoVerInicio}
           contexto={{
             rotulo: 'Relatório',
             // "Furadeiras" era o nome de quando so' havia furadeira medida.

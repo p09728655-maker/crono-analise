@@ -65,12 +65,25 @@ export function analisarCaminho(caminho) {
   if (/^\/coleta\/?$/i.test(p)) return { modo: 'coleta', tela: 'lista', estudoId: null, operacaoId: null };
   if (/^\/analise\/conferencias\/?$/i.test(p)) return { modo: 'analise', tela: 'conferencias', estudoId: null, operacaoId: null };
 
-  if (/^\/analise\/?$/i.test(p)) return { modo: 'analise', tela: 'lista', estudoId: null, operacaoId: null };
+  /**
+   * A CASA DA ANALISE. /analise abre o INICIO, e a lista de estudos ganhou
+   * caminho proprio (/analise/estudos).
+   *
+   * Antes o app abria direto no conteudo: a lista era a home, e mudava de
+   * cara conforme houvesse ou nao estudo — ora uma tabela, ora um convite a
+   * criar o primeiro. Nao havia um lugar estavel de onde partir, e a lista
+   * acumulava tres papeis (ser a casa, listar e resumir).
+   *
+   * O tablet NAO tem inicio: la' a tarefa e' uma so' e a tela pequena nao
+   * comporta um passo a mais antes do trabalho.
+   */
+  if (/^\/analise\/estudos\/?$/i.test(p)) return { modo: 'analise', tela: 'lista', estudoId: null, operacaoId: null };
+  if (/^\/analise\/?$/i.test(p)) return { modo: 'analise', tela: 'inicio', estudoId: null, operacaoId: null };
 
   // Raiz (ou caminho desconhecido): manda para a experiencia do aparelho.
   return {
     modo: ehDesktop() ? 'analise' : 'coleta',
-    tela: 'lista',
+    tela: ehDesktop() ? 'inicio' : 'lista',
     estudoId: null,
     operacaoId: null,
     padrao: true,
@@ -102,7 +115,10 @@ export function useRota() {
 
 /** Monta caminhos num lugar so', para nao espalhar string pelo codigo. */
 export const caminhos = {
-  lista: (modo) => `/${modo}`,
+  // A coleta nao tem inicio: `/coleta` E' a lista. Na analise, a lista
+  // ganhou caminho proprio e `/analise` virou a casa.
+  inicio: () => '/analise',
+  lista: (modo) => (modo === 'analise' ? '/analise/estudos' : `/${modo}`),
   rapida: () => '/coleta/rapida',
   conferencias: () => '/analise/conferencias',
   estudo: (modo, estudoId) => `/${modo}/estudo/${estudoId}`,

@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.61.0',
+    data: '2026-09-01',
+    titulo: 'O sistema ganhou uma casa: a tela de Início',
+    itens: [
+      'AGORA HÁ UM PONTO DE PARTIDA. O app abria direto no conteúdo: a lista de estudos fazia de casa, e mudava de cara conforme houvesse ou não estudo — ora uma tabela, ora um convite a criar o primeiro. Nunca a mesma tela duas vezes, e nenhum lugar estável de onde começar. A lista acumulava três papéis (ser a casa, listar e resumir) e não fazia bem nenhum dos três.',
+      'O MENU LATERAL VIROU O MENU DE VERDADE: escolheu ali, abriu a tela. Início, os estudos de tempo, o ritmo por máquina e as ferramentas — de qualquer tela dá para voltar ao Início por ele, sem usar o botão do navegador. A lista de estudos passou a ter endereço próprio (/analise/estudos); /analise abre o Início.',
+      'A CASA NÃO É UM CARTAZ. Ela abre com a identidade da cronoanálise, mas o que ocupa a tela é o trabalho: quantos estudos, ciclos, operações e pendências existem, e a fila do que precisa de você — com o botão que resolve cada item ao lado. Tela de abertura que só cumprimenta cobraria um clique por dia e sumiria da atenção em duas semanas.',
+      'Com tudo em dia, o Início diz isso em vez de ficar vazio: quem abre e não vê nada pendente precisa saber que é a boa notícia, e não que a tela falhou ao carregar.',
+      'O botão "+ Novo estudo" do Início cai direto no formulário, e não na lista com o formulário fechado — clicar em "novo" e chegar numa tabela obriga a procurar o mesmo botão outra vez.',
+      'No celular nada muda: lá a tarefa é uma só, e a tela pequena não comporta um passo antes do trabalho.',
+    ],
+  },
+  {
     versao: '2.60.0',
     data: '2026-09-01',
     titulo: 'A porta do sistema deixou de ser um formulário seco',

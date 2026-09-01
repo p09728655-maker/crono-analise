@@ -31,7 +31,7 @@ import { VERSAO } from '../../versao.js';
  */
 export default function ListaEstudos({
   aoAbrir, aoEditar, aoMedir, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias,
-  aoSairDoSistema,
+  aoSairDoSistema, aoVerInicio,
 }) {
   const [estudos, setEstudos] = useState([]);
   const [estado, setEstado] = useState('carregando');
@@ -59,6 +59,22 @@ export default function ListaEstudos({
   const est = estilos(t, analise);
 
   useEffect(() => { carregar(); }, []);
+
+  /**
+   * `?novo=1` abre o criador direto.
+   *
+   * O botao "+ Novo estudo" do INICIO precisa cair no formulario, nao na
+   * lista com o formulario fechado — clicar em "novo" e chegar numa tabela
+   * obriga a procurar o mesmo botao de novo. A query e' limpa da URL logo em
+   * seguida: recarregar a pagina depois de fechar o formulario nao pode
+   * reabri-lo.
+   */
+  useEffect(() => {
+    if (!analise) return;
+    if (new URLSearchParams(window.location.search).get('novo') !== '1') return;
+    setCriando(true);
+    window.history.replaceState({}, '', window.location.pathname);
+  }, [analise]);
 
   const carregarIdentificacao = useCallback(() => {
     if (!analise) return;
@@ -121,6 +137,7 @@ export default function ListaEstudos({
     <MenuLateral
       versao={VERSAO}
       aoVerVersao={() => setVerVersoes(true)}
+      aoVerInicio={aoVerInicio}
       busca={busca}
       aoBuscar={setBusca}
       grupos={grupos}
