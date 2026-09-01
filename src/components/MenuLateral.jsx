@@ -1,6 +1,10 @@
-import { claro } from '../theme/tokensAnalise.js';
+import { cores as escuro } from '../theme/tokens.js';
 import { elevacao, espaco, raio, rotulo, tipo, transicao } from '../theme/escala.js';
 import { LOGO_PATRIMAR } from '../theme/logo.js';
+import {
+  IconeAnalistas, IconeArquivados, IconeChave, IconeEstudos, IconeImportar,
+  IconeInicio, IconeMaquinas, IconeParadas, IconeRitmo,
+} from './icones.jsx';
 
 /**
  * Menu lateral — so' no PC (Analise).
@@ -103,6 +107,28 @@ export default function MenuLateral({
         </div>
       )}
 
+      {/* 5. A CASA — o primeiro item da NAVEGACAO, antes de tudo que e'
+             conteudo. Estava depois das secoes, e no relatorio isso o jogava
+             para o fim do menu, embaixo da lista de maquinas: o ponto de
+             partida como ultimo item da lista. De onde se parte vem antes de
+             onde se esta'. */
+      }
+      {aoVerInicio && (
+        <div style={est.bloco}>
+          <button
+            type="button"
+            onClick={aoVerInicio}
+            aria-current={inicioAtivo ? 'page' : undefined}
+            style={{ ...est.item, ...(inicioAtivo ? est.itemAtivo : {}) }}
+          >
+            <span style={est.itemComIcone}>
+              <IconeInicio />
+              <span style={est.itemTexto}>Início</span>
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* 5. Secoes do estudo aberto — o que antes eram abas horizontais.
              Um item com `cabecalho: true` nao e' clicavel: e' o nome de um
              GRUPO, e os itens abaixo dele pertencem a ele. E' assim que o
@@ -142,22 +168,6 @@ export default function MenuLateral({
               <span style={est.itemTexto}>{a.rotulo}</span>
             </button>
           ))}
-        </div>
-      )}
-
-      {/* 6.5. A CASA. Primeiro item do menu porque e' de onde se parte, e
-             o unico que existe nas duas telas de conteudo — e' por ele que
-             se volta ao ponto de partida sem usar o botao do navegador. */}
-      {aoVerInicio && (
-        <div style={est.bloco}>
-          <button
-            type="button"
-            onClick={aoVerInicio}
-            aria-current={inicioAtivo ? 'page' : undefined}
-            style={{ ...est.item, ...(inicioAtivo ? est.itemAtivo : {}) }}
-          >
-            <span style={est.itemTexto}>Início</span>
-          </button>
         </div>
       )}
 
@@ -216,13 +226,19 @@ export default function MenuLateral({
               aria-current={estudosAtivo ? 'page' : undefined}
               style={{ ...est.item, ...(estudosAtivo ? est.itemAtivo : {}) }}
             >
-              <span style={est.itemTexto}>Ver os estudos</span>
+              <span style={est.itemComIcone}>
+                <IconeEstudos />
+                <span style={est.itemTexto}>Ver os estudos</span>
+              </span>
             </button>
           )}
 
           {arquivados > 0 && (
             <button type="button" style={est.item} onClick={aoVerArquivados}>
-              <span style={est.itemTexto}>Estudos arquivados</span>
+              <span style={est.itemComIcone}>
+                <IconeArquivados />
+                <span style={est.itemTexto}>Estudos arquivados</span>
+              </span>
               <span style={est.contagem}>{arquivados}</span>
             </button>
           )}
@@ -235,7 +251,10 @@ export default function MenuLateral({
           <div style={est.grupoRotulo}>Ritmo por máquina</div>
           <div style={est.grupoDica}>Peças/hora do posto — sem cronometrar ciclo</div>
           <button type="button" style={est.item} onClick={aoVerConferencias}>
-            <span style={est.itemTexto}>Abrir o relatório</span>
+            <span style={est.itemComIcone}>
+              <IconeRitmo />
+              <span style={est.itemTexto}>Abrir o relatório</span>
+            </span>
           </button>
         </div>
       )}
@@ -259,27 +278,42 @@ export default function MenuLateral({
           )}
           {aoImportar && (
             <button type="button" style={est.item} onClick={aoImportar}>
-              <span style={est.itemTexto}>Importar PDF ou planilha</span>
+              <span style={est.itemComIcone}>
+                <IconeImportar />
+                <span style={est.itemTexto}>Importar PDF ou planilha</span>
+              </span>
             </button>
           )}
           {aoVerAnalistas && (
             <button type="button" style={est.item} onClick={aoVerAnalistas}>
-              <span style={est.itemTexto}>Analistas</span>
+              <span style={est.itemComIcone}>
+                <IconeAnalistas />
+                <span style={est.itemTexto}>Analistas</span>
+              </span>
             </button>
           )}
           {aoVerMotivos && (
             <button type="button" style={est.item} onClick={aoVerMotivos}>
-              <span style={est.itemTexto}>Motivos de parada</span>
+              <span style={est.itemComIcone}>
+                <IconeParadas />
+                <span style={est.itemTexto}>Motivos de parada</span>
+              </span>
             </button>
           )}
           {aoVerMaquinas && (
             <button type="button" style={est.item} onClick={aoVerMaquinas}>
-              <span style={est.itemTexto}>Máquinas</span>
+              <span style={est.itemComIcone}>
+                <IconeMaquinas />
+                <span style={est.itemTexto}>Máquinas</span>
+              </span>
             </button>
           )}
           {aoVerChaveIa && (
             <button type="button" style={est.item} onClick={aoVerChaveIa}>
-              <span style={est.itemTexto}>Chave da IA</span>
+              <span style={est.itemComIcone}>
+                <IconeChave />
+                <span style={est.itemTexto}>Chave da IA</span>
+              </span>
             </button>
           )}
         </div>
@@ -312,13 +346,40 @@ export default function MenuLateral({
   );
 }
 
-const t = claro;
+/**
+ * A PALETA DA LATERAL — escura, e por que.
+ *
+ * O menu deixou de ser claro. A regra do tema claro na analise existe para
+ * o CONTEUDO ("o que aparece no monitor e' o que sai na impressora"), e ela
+ * continua valendo: tabelas, graficos e numeros seguem no papel branco. O
+ * menu nunca vai para a impressora — escurece-lo separa navegacao de
+ * conteudo com a coisa mais barata que existe, a cor do fundo, e devolve o
+ * branco inteiro para o trabalho.
+ *
+ * Sai da mesma paleta escura da coleta (theme/tokens.js), nao de uma nova:
+ * duas escalas de cinza escuro no mesmo produto e' o comeco de um segundo
+ * sistema visual.
+ *
+ * Os apelidos abaixo existem porque o tema escuro nao tem `papel` nem
+ * `textoMedio` — mapea-los aqui, uma vez, evita `escuro.superficie` espalhado
+ * por trinta regras sem ninguem lembrar por que.
+ */
+const t = {
+  ...escuro,
+  // O fundo da lateral e' o mais escuro; caixas por cima usam a superficie.
+  papel: escuro.fundo,
+  caixa: escuro.superficie,
+  // Texto de item em repouso: legivel sem competir com o item ativo, que e'
+  // branco puro. Medido sobre #14171A: 8,9:1.
+  textoMedio: '#C3CBD4',
+  bordaForte: escuro.borda,
+};
 
 const est = {
   lateral: {
     position: 'sticky', top: 0, alignSelf: 'flex-start',
     width: 248, flexShrink: 0, height: '100dvh', overflowY: 'auto',
-    background: t.papel, borderRight: `1px solid ${t.borda}`,
+    background: t.papel, borderRight: `1px solid ${t.borda}`, color: t.texto,
     padding: `${espaco.xl}px ${espaco.lg}px`,
     display: 'flex', flexDirection: 'column', gap: espaco.xl,
   },
@@ -409,7 +470,7 @@ const est = {
   grupoDica: { ...tipo('micro'), color: t.textoFraco, marginBottom: espaco.xs, textTransform: 'none', letterSpacing: 0, fontWeight: 400 },
   busca: {
     width: '100%', minHeight: 38, padding: `0 ${espaco.md}px`,
-    background: t.fundo, borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    background: t.caixa, borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
     borderRadius: raio.md, color: t.texto, ...tipo('corpo'),
     fontFamily: 'inherit', outline: 'none',
   },
@@ -441,13 +502,16 @@ const est = {
   },
   // Barra vermelha a esquerda: a marcacao nao depende so' da cor do texto.
   itemAtivo: {
-    background: '#F8F9FB', color: t.texto, fontWeight: 700,
+    background: escuro.superficieAlta, color: t.texto, fontWeight: 700,
     boxShadow: `inset 3px 0 0 ${t.vermelho}`,
   },
+  // Icone e rotulo andam juntos e encolhem juntos: o icone nunca se separa
+  // do nome dele quando a largura aperta.
+  itemComIcone: { display: 'flex', alignItems: 'center', gap: espaco.md, minWidth: 0 },
   itemTexto: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   contagem: {
     flexShrink: 0, minWidth: 20, padding: '0 6px', textAlign: 'center',
-    borderRadius: raio.pill, background: t.fundo, color: t.textoFraco, ...tipo('micro'),
+    borderRadius: raio.pill, background: t.caixa, color: t.textoFraco, ...tipo('micro'),
   },
   seta: { flexShrink: 0, color: t.textoFraco },
 

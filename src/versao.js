@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.62.0',
+    data: '2026-09-01',
+    titulo: 'Menu lateral escuro, com ícones — e o ritmo entrou na visão geral',
+    itens: [
+      'O MENU LATERAL FICOU ESCURO em todo o PC — Início, estudos, relatório e estudo aberto. A regra do tema claro continua valendo para o CONTEÚDO, porque o que aparece no monitor é o que sai na impressora; o menu nunca vai para a impressora. Escurecer separa navegação de trabalho com a coisa mais barata que existe, a cor do fundo, e devolve o branco inteiro para os números.',
+      'CADA ITEM DO MENU GANHOU ÍCONE. O ícone não substitui o nome — os dois andam juntos: sozinho, ele obriga a decorar, e "Motivos de parada" não tem desenho universal nenhum. Serve para bater o olho e achar mais rápido o item que você já conhece.',
+      'O "Início" era o último item do menu no relatório, embaixo da lista de máquinas — o ponto de partida no fim da lista. Agora é o primeiro item da navegação em qualquer tela: de onde se parte vem antes de onde se está.',
+      'MEDIÇÕES DE RITMO entrou na visão geral do Início, ao lado dos estudos: quantas medições de peças/hora já chegaram do celular e em quantas máquinas. O sistema tem dois caminhos, e um painel que só contasse estudos daria a entender que o ritmo por máquina é acessório.',
+      'Esse número vem por um resumo do servidor — duas contagens, sem trazer nenhuma medição. Carregar a lista inteira para exibir um total seria megabytes de tráfego para mostrar um algarismo, e passado o teto de mil linhas o número ainda sairia errado.',
+    ],
+  },
+  {
     versao: '2.61.0',
     data: '2026-09-01',
     titulo: 'O sistema ganhou uma casa: a tela de Início',

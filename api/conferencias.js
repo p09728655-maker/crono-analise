@@ -65,6 +65,28 @@ export default handler(async (req, res) => {
     // ?arquivadas=1 inverte o filtro, como na lista de estudos.
     const soArquivadas = String(req.query?.arquivadas ?? '') === '1';
 
+    /**
+     * ?resumo=1 — SO' OS CONTADORES.
+     *
+     * O Inicio precisa dizer quantas medicoes de ritmo existem, e nada
+     * mais. Carregar a lista inteira (ate MAX_LINHAS, com as paradas de
+     * cada uma em subconsulta) para contar linhas seria trazer megabytes
+     * para exibir um numero — e, passado o teto, o numero ainda sairia
+     * errado, porque a lista vem cortada e a contagem nao.
+     *
+     * Dois counts, sem trafego de dado nenhum.
+     */
+    if (String(req.query?.resumo ?? '') === '1') {
+      return auth.rls(async (db) => {
+        const [r] = await db`
+          SELECT count(*)::int AS medicoes,
+                 count(DISTINCT c.maquina)::int AS maquinas
+            FROM conferencias c
+           WHERE c.empresa_id = ${empresaId} AND c.arquivada = false`;
+        return json(res, 200, { medicoes: r.medicoes, maquinas: r.maquinas });
+      });
+    }
+
     return auth.rls(async (db) => {
       // As paradas vem da TABELA, montadas no mesmo formato que o app sempre
       // recebeu ({motivo, duracaoMs, observacao}). A tela nao precisa saber

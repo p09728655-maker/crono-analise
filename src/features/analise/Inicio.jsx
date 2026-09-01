@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { VERSAO } from '../../versao.js';
-import { listarEstudos, quemSouEu } from '../../lib/api.js';
+import { listarEstudos, quemSouEu, resumoConferencias } from '../../lib/api.js';
 import { proximasAcoes, situacao } from '../../domain/proximasAcoes.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
@@ -42,6 +42,10 @@ export default function Inicio({
   const [estudos, setEstudos] = useState(null);
   const [erro, setErro] = useState(null);
   const [eu, setEu] = useState(null);
+  // As medicoes de RITMO sao a outra natureza de medicao do sistema. Vem
+  // por um resumo (dois counts), nao pela lista: contar mil linhas com as
+  // paradas de cada uma para exibir um numero seria trafego a toa.
+  const [ritmo, setRitmo] = useState(null);
 
   const [verVersoes, setVerVersoes] = useState(false);
   const [verChaveIa, setVerChaveIa] = useState(false);
@@ -56,6 +60,9 @@ export default function Inicio({
     // Falha em silencio, como na lista: nao saber quem esta' no PC nao pode
     // impedir de ver o que precisa de medicao.
     quemSouEu().then(setEu).catch(() => {});
+    // Falha em silencio: o relatorio de ritmo tem tela propria, e nao
+    // saber o total dele nao pode esconder os estudos.
+    resumoConferencias().then(setRitmo).catch(() => {});
   }, []);
 
   const vivos = (estudos || []).filter((e) => e.status !== 'arquivado');
@@ -114,14 +121,23 @@ export default function Inicio({
             ['Estudos', numeros.estudos, 'cadastrados'],
             ['Ciclos', numeros.ciclos, 'cronometrados'],
             ['Operações', numeros.operacoes, 'nos estudos'],
+            /* A outra natureza de medicao, ao lado da primeira: o sistema
+               tem dois caminhos, e o painel que so' contasse estudos daria
+               a entender que o ritmo por maquina e' acessorio. */
+            ['Medições de ritmo', ritmo?.medicoes, ritmo?.maquinas != null
+              ? `em ${ritmo.maquinas} ${ritmo.maquinas === 1 ? 'máquina' : 'máquinas'}`
+              : 'peças/hora dos postos'],
             ['Pendências', numeros.pendencias, 'sem nenhum ciclo'],
           ].map(([rot, val, sub], i) => (
             <div key={rot} style={est.numero}>
               <span style={est.numeroRotulo}>{rot}</span>
               {/* Pendencia so' ganha cor quando existe: "0" colorido treina
                   o olho a ignorar a cor. Mesma regra do painel da lista. */}
-              <span style={i === 3 && val > 0 ? est.numeroValorAtencao : est.numeroValor}>
-                {estudos == null ? '—' : val}
+              <span style={i === 4 && val > 0 ? est.numeroValorAtencao : est.numeroValor}>
+                {/* Cada numero espera o SEU carregamento: o de ritmo vem
+                    de outra chamada, e prende-lo a dos estudos deixaria um
+                    traco onde ja' ha' resposta. */}
+                {val == null ? '—' : val}
               </span>
               <span style={est.numeroSub}>{sub}</span>
             </div>
