@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.60.0',
+    data: '2026-09-01',
+    titulo: 'A porta do sistema deixou de ser um formulário seco',
+    itens: [
+      'A TELA DE ENTRADA DO PC ganhou a identidade do sistema: logo, o nome do método, o que o RitmoPatrimar faz em quatro palavras e o cronômetro que é a cara da cronoanálise. O que havia era um cartão com dois campos e um botão — funcionava, mas não dizia a quem estava chegando em que sistema ele entrou.',
+      'A APRESENTAÇÃO MORA NA PORTA, e não numa tela de boas-vindas própria, de propósito. A porta já existe e já custa um passo: vestir ela não cobra nada a mais de quem abre o sistema todo dia. Uma tela de abertura DEPOIS do login cobraria um clique diário para sempre — e clique diário para ler o que já se sabe vira atrito em duas semanas.',
+      'A tela NÃO mostra contadores de estudos, ciclos ou desempenho. Ali ninguém se identificou ainda, e número da fábrica antes da senha é informação entregue a quem não entrou. Indicador vive do outro lado da porta, onde há sessão e há a quem responder.',
+      'O desenho é vetor, não foto: a primeira tela que abre não deve baixar centenas de KB de imagem na rede da empresa. Em janela estreita o painel do cronômetro sai da frente e o formulário fica inteiro.',
+    ],
+  },
+  {
     versao: '2.59.0',
     data: '2026-09-01',
     titulo: 'O acionamento do motor voltou — é ele que compara peças diferentes',
