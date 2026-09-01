@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.62.1',
+    data: '2026-09-01',
+    titulo: 'O "+ Novo estudo" saiu do lugar errado',
+    itens: [
+      'O BOTÃO VERMELHO DA LATERAL É "A AÇÃO DESTA TELA": na lista de estudos é criar estudo, no relatório é imprimir. No Início não existe UMA ação — existem duas, e o único elemento vermelho do menu elegia uma delas. Para quem só mede ritmo por máquina, "+ Novo estudo" ficava fixo no lugar mais nobre da tela chamando para algo que ele nunca usa.',
+      'CADA CAMINHO PASSOU A TER A AÇÃO DELE, no próprio cartão: "Estudos de tempo" traz + Novo estudo e Ver os estudos (com quantos existem); "Ritmo por máquina" traz Abrir o relatório (com quantas medições) e diz que medição nova vem do celular — evita procurar no PC um botão que não existe, e não deve existir, porque medir é no posto.',
+      'Na lista de estudos o botão continua onde estava: ali criar estudo é, de fato, a ação da tela.',
+      'O botão do relatório saiu de dentro do texto de "nenhum estudo": o cartão do ritmo, logo abaixo, já o traz com a contagem. Dois botões vermelhos para o mesmo destino, a um palmo um do outro, só fazem perguntar qual é a diferença entre eles.',
+    ],
+  },
+  {
     versao: '2.62.0',
     data: '2026-09-01',
     titulo: 'Menu lateral escuro, com ícones — e o ritmo entrou na visão geral',
