@@ -1686,6 +1686,17 @@ function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, a
                 </tbody>
               </table>
 
+              {/* O que medir para destravar — a folha e' o que vai para a
+                  mao de quem mede. Sem esta linha, o papel dizia "nao da'
+                  para comparar" e nao dizia o caminho: quem le' fica sabendo
+                  do problema e nao da solucao. */}
+              {!g.comparavel && (
+                <p style={{ ...imp.nota, margin: '4px 0 0' }}>
+                  Uma medição da mesma peça em cada máquina deste grupo já destrava a comparação
+                  direta — é a medição de maior retorno para o relatório agora.
+                </p>
+              )}
+
               {g.duelos.length > 0 && (
                 <p style={{ ...imp.nota, margin: '5px 0 0' }}>
                   <strong>Mesma peça nas duas</strong> (comparação sem ressalva):{' '}
