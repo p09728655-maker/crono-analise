@@ -31,6 +31,10 @@
  * @param pecas         resultado de resumirConferencias(linhas, { porPeca: true })
  * @param conferencias  as medicoes cruas (opcional) — so' a tendencia usa,
  *                      porque o resumo nao guarda a ordem no tempo
+ * @param grupoDe       (nomeDaMaquina) => grupo do cadastro (opcional). E' o
+ *                      que autoriza a comparacao entre maquinas: sem ele,
+ *                      todas caem em "Sem grupo" e a leitura sai como antes
+ *                      do cadastro existir.
  * @returns [{ titulo, linhas: [string] }] — secoes na ordem de leitura
  */
 import {
@@ -52,6 +56,16 @@ const MIN_HORAS_CURVA = 2;
 const MIN_MEDICOES_CURVA = 3;
 /** Variacao (em %) abaixo da qual tendencia e comparacao viram ruido. */
 const RUIDO_PCT = 8;
+/**
+ * Entre MAQUINAS o corte e' menor: 8% no tempo da mesma maquina pode ser o
+ * dia; 5% entre duas maquinas ja' e' diferenca de posto que vale olhar. E'
+ * o mesmo corte do quadro comparativo (EMPATE_PCT), de proposito — os dois
+ * saem no mesmo relatorio e nao podem discordar sobre o mesmo par.
+ */
+const RUIDO_ENTRE_MAQUINAS_PCT = 5;
+
+/** Maquina sem grupo no cadastro — o mesmo rotulo da lateral e do quadro. */
+const SEM_GRUPO = 'Sem grupo';
 
 const pMin = (pecasPorHora) => (pecasPorHora / 60).toFixed(1);
 const ritmoTexto = (pph) => `${Math.round(pph)} pç/h (${pMin(pph)} pç/min)`;
@@ -132,7 +146,7 @@ function tendenciaDaMaquina(conferencias, chaveMaquina) {
   return { direcao: pct > 0 ? 'subindo' : 'caindo', pct, antes, agora };
 }
 
-export function analisarConferencias({ maquinas = [], pecas = [], conferencias = [] } = {}) {
+export function analisarConferencias({ maquinas = [], pecas = [], conferencias = [], grupoDe } = {}) {
   const secoes = [];
   if (!maquinas.length) return secoes;
 
@@ -206,21 +220,49 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
   if (linhasTendencia.length) secoes.push({ titulo: 'Tendência', linhas: linhasTendencia });
 
   /* ------------------------------------------- 4. comparacao entre maquinas */
+  /**
+   * DENTRO DO GRUPO, sempre.
+   *
+   * Esta secao comparava a maquina mais rapida com a mais lenta da lista
+   * inteira. Enquanto so' havia furadeira medida, funcionava. Com o cadastro
+   * ganhando seccionadora, fresadora e embalagem, a mesma frase passou a
+   * dizer que "a furadeira roda 400% mais rapido que a seccionadora" — que
+   * nao e' comparacao, e' comparar coisas diferentes: uma corta chapa, a
+   * outra fura peca. O grupo do cadastro e' o que declara quais maquinas
+   * fazem a mesma coisa, e por isso e' ele que autoriza a comparacao.
+   *
+   * Sem cadastro de grupo (`grupoDe` ausente ou vazio) tudo cai em "Sem
+   * grupo" e a leitura sai como sempre saiu — a fabrica que ainda nao
+   * cadastrou grupos nao perde a secao.
+   */
   if (maquinas.length >= 2) {
-    const ordenadas = [...maquinas].sort((a, b) => b.ritmoMedio - a.ritmoMedio);
-    const rapida = ordenadas[0];
-    const lenta = ordenadas[ordenadas.length - 1];
-    if (lenta.ritmoMedio > 0) {
+    const porGrupo = new Map();
+    for (const g of maquinas) {
+      const grupo = grupoDe?.(g.maquina) || SEM_GRUPO;
+      if (!porGrupo.has(grupo)) porGrupo.set(grupo, []);
+      porGrupo.get(grupo).push(g);
+    }
+    const comparaveis = [...porGrupo.entries()].filter(([, lista]) => lista.length >= 2);
+    // Nomear o grupo so' quando ha' mais de uma comparacao: com uma so', o
+    // titulo repetiria o que as maquinas ja' dizem.
+    const nomearGrupo = comparaveis.length > 1;
+
+    const linhas = [];
+    for (const [grupo, lista] of comparaveis) {
+      const ordenadas = [...lista].sort((a, b) => b.ritmoMedio - a.ritmoMedio);
+      const rapida = ordenadas[0];
+      const lenta = ordenadas[ordenadas.length - 1];
+      if (!(lenta.ritmoMedio > 0)) continue;
+      const prefixo = nomearGrupo && grupo !== SEM_GRUPO ? `${grupo} — ` : '';
       const pct = Math.round(((rapida.ritmoMedio / lenta.ritmoMedio) - 1) * 100);
-      const linhas = [];
-      if (pct >= 5) {
+      if (pct >= RUIDO_ENTRE_MAQUINAS_PCT) {
         linhas.push(
-          `${rapida.maquina} está rodando ${pct}% mais rápido que ${lenta.maquina} `
+          `${prefixo}${rapida.maquina} está rodando ${pct}% mais rápido que ${lenta.maquina} `
           + `(${Math.round(rapida.ritmoMedio)} contra ${Math.round(lenta.ritmoMedio)} pç/h). `
           + 'Antes de concluir que uma máquina é melhor, confira se as duas mediram peças parecidas — peça com mais furação rende menos sem a máquina ser mais lenta.',
         );
       } else {
-        linhas.push(`As máquinas estão rodando em ritmo parecido (diferença de ${pct}%).`);
+        linhas.push(`${prefixo}As máquinas estão rodando em ritmo parecido (diferença de ${pct}%).`);
       }
       const emMedicao = [rapida, lenta].filter((g) => !g.confiavel);
       if (emMedicao.length) {
@@ -228,8 +270,19 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
           `${emMedicao.map((g) => g.maquina).join(' e ')} ainda em medição — compare de novo quando o número firmar.`,
         );
       }
-      secoes.push({ titulo: 'Entre máquinas', linhas });
     }
+
+    /* Todas as maquinas medidas em grupos DIFERENTES: nao ha' comparacao a
+       fazer, e dizer isso e' melhor do que a secao sumir — sem a frase, quem
+       le' procura a comparacao que nunca vai aparecer. */
+    if (!linhas.length && porGrupo.size > 1) {
+      linhas.push(
+        `As ${maquinas.length} máquinas medidas são de grupos diferentes `
+        + `(${[...porGrupo.keys()].join(', ')}) — uma de cada. Postos de naturezas diferentes não `
+        + 'disputam peças/hora entre si: para comparar, meça outra máquina do mesmo grupo.',
+      );
+    }
+    if (linhas.length) secoes.push({ titulo: 'Entre máquinas', linhas });
   }
 
   /* ------------------------------------------------- 5. entre pecas */

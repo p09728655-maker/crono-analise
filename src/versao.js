@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.58.0',
+    data: '2026-09-01',
+    titulo: 'Qual máquina está rendendo mais — comparada com quem dá para comparar',
+    itens: [
+      'COMPARATIVO ENTRE MÁQUINAS, no relatório e na folha impressa. Ele responde a pergunta que se faz na reunião ("qual está melhor?") e responde comparando só quem dá para comparar: máquinas do MESMO GRUPO do cadastro. Seccionadora não disputa peças/hora com furadeira — uma corta chapa, a outra fura peça —, e o ranking corrido que juntava as duas elegia como "melhor" apenas quem fazia a peça mais fácil.',
+      'RENDIMENTO NÃO É UMA PERGUNTA SÓ, são quatro, e o quadro traz as quatro lado a lado: peças/hora com a máquina rodando, acionamentos do motor por hora, quanto do período ela passou rodando e o quanto o ritmo dela se repete. É comum a máquina que ganha em ritmo perder em tempo parado — e é justamente aí que está a leitura: ritmo baixo se trata na máquina, tempo parado se trata na parada.',
+      'O MIX DE PEÇAS DEIXOU DE PASSAR POR DIFERENÇA DE MÁQUINA. Quando as duas mediram a MESMA peça, o quadro mostra esse duelo separado — é a comparação sem ressalva. Quando o número da mesma peça discorda do número da tabela, o relatório diz qual vale e por quê. E quando nenhuma peça foi medida nas duas, ele NÃO elege vencedor: diz que não dá para comparar e diz o que medir para passar a dar.',
+      'DISTÂNCIA DO PRÓPRIO MELHOR: cada máquina também aparece comparada com ela mesma — quanto a média dela está abaixo do melhor período que ela própria já fez. É a folga que existe sem trocar máquina, e é o único número de ritmo que compara postos de naturezas diferentes.',
+      'A ANÁLISE DO PERÍODO PAROU DE COMPARAR MÁQUINAS DE GRUPOS DIFERENTES. Ela media a mais rápida contra a mais lenta da lista inteira: com furadeira e seccionadora no mesmo relatório, escrevia que uma "roda 400% mais rápido" que a outra. Agora compara dentro do grupo e, quando cada máquina está sozinha no seu, diz que não há comparação a fazer em vez de inventar uma.',
+    ],
+  },
+  {
     versao: '2.57.1',
     data: '2026-08-31',
     titulo: 'Últimos acertos da revisão visual',
