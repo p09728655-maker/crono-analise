@@ -171,8 +171,12 @@ export default function MenuLateral({
         </div>
       )}
 
-      {/* 7. Quais estudos ja existem */}
-      {aoNovoEstudo && (
+      {/* 7. Quais estudos ja existem.
+             Aparece com `aoVerEstudos` (do Inicio, onde e' caminho) ou com
+             `aoNovoEstudo` (da lista, onde e' filtro): o bloco dependia so'
+             do segundo, e tirar o botao de criar do Inicio levava junto o
+             caminho para os estudos. */}
+      {(aoNovoEstudo || aoVerEstudos) && (
         <div style={est.bloco}>
           {/* Os dois blocos sao nomeados pelo POSTO, nao pelo metodo: no chao
               de fabrica a pergunta e' "vim medir a embalagem" ou "vim medir a

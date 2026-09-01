@@ -8,6 +8,7 @@ import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import ChaveIa from '../../components/ChaveIa.jsx';
 import Cronometro from '../../components/Cronometro.jsx';
+import { RECURSOS } from '../../components/iconesRecursos.jsx';
 import MotivosParada from './MotivosParada.jsx';
 import Maquinas from './Maquinas.jsx';
 import Analistas from './Analistas.jsx';
@@ -89,7 +90,13 @@ export default function Inicio({
         aoVerInicio={() => {}}
         aoVerEstudos={aoAbrirEstudos}
         aoVerConferencias={aoAbrirRelatorio}
-        aoNovoEstudo={aoNovoEstudo}
+        /* SEM acao primaria aqui — de proposito. O botao vermelho da lateral
+           e' "a acao desta tela": na lista e' criar estudo, no relatorio e'
+           imprimir. No Inicio nao ha' UMA acao — ha' duas, e o unico
+           elemento vermelho da tela elegia uma delas. Para quem so' mede
+           ritmo por maquina, "+ Novo estudo" ficava fixo no lugar mais
+           nobre do menu chamando para algo que ele nunca usa. Cada caminho
+           passou a ter a acao dele no proprio cartao, abaixo. */
         aoVerChaveIa={() => setVerChaveIa(true)}
         aoVerMotivos={() => setVerMotivos(true)}
         aoVerMaquinas={() => setVerMaquinas(true)}
@@ -115,6 +122,22 @@ export default function Inicio({
             <Cronometro tamanho={92} />
           </span>
         </header>
+
+        {/* O QUE O SISTEMA FAZ, em quatro palavras do chao de fabrica.
+            Estava so' na porta de entrada — e quem ja' tem sessao aberta
+            nunca mais passa por la'. A apresentacao do sistema nao pode
+            morar num lugar que o usuario diario nao ve'.
+            Fica ABAIXO da capa e ACIMA dos numeros: e' o mapa do que ha',
+            e o mapa vem antes da contagem. */}
+        <section style={est.recursos} aria-label="O que o sistema faz">
+          {RECURSOS.map((r) => (
+            <div key={r.titulo} style={est.recurso}>
+              <r.Icone />
+              <span style={est.recursoTitulo}>{r.titulo}</span>
+              <span style={est.recursoTexto}>{r.texto}</span>
+            </div>
+          ))}
+        </section>
 
         {erro && <div style={est.erro} role="alert">Não foi possível carregar os estudos: {erro}</div>}
 
@@ -225,41 +248,55 @@ export default function Inicio({
                     + 'O estudo de tempos é a outra medição: ciclo a ciclo, com fator de ritmo e tolerância, para chegar ao tempo padrão.'
                   : 'Comece criando um estudo de tempos, ou meça o ritmo de um posto pelo celular — o relatório de peças/hora vive dessas medições, sem precisar de estudo cadastrado.')}
             </p>
-            {/* Com medicao de ritmo na casa, o caminho para ela vem junto do
-                texto: mandar "abrir o relatorio" e deixar o botao tres
-                blocos abaixo e' mandar procurar. */}
-            {numeros.estudos === 0 && temRitmo && (
-              <div>
-                <button type="button" style={est.botaoPrimario} onClick={aoAbrirRelatorio}>
-                  Abrir o relatório de ritmo
-                </button>
-              </div>
-            )}
+            {/* Sem botao aqui: o cartao do RITMO, logo abaixo, ja' traz
+                "Abrir o relatorio" com a contagem. Dois botoes vermelhos
+                para o mesmo destino, a um palmo um do outro, so' fazem
+                perguntar qual e' a diferenca entre eles. */}
           </section>
         )}
 
-        {/* OS DOIS CAMINHOS. As duas naturezas de medicao do sistema, lado a
-            lado e nomeadas pelo POSTO — a mesma leitura da lateral. */}
+        {/* OS DOIS CAMINHOS, com a acao de cada um dentro dele.
+            Sao as duas naturezas de medicao do sistema, nomeadas pelo POSTO
+            — a mesma leitura da lateral — e com o MESMO peso: nenhuma e' a
+            principal. O botao de criar estudo mora aqui, no caminho a que
+            ele pertence, e nao no lugar unico e vermelho do menu. */}
         <section style={est.caminhos} aria-label="Por onde começar">
-          <button type="button" style={est.caminho} onClick={aoAbrirEstudos}>
+          <div style={est.caminho}>
             <span style={est.caminhoRotulo}>Embalagem e demais postos</span>
             <span style={est.caminhoTitulo}>Estudos de tempo</span>
             <span style={est.caminhoTexto}>
               Ciclo a ciclo, com fator de ritmo e tolerância — é o que vira tempo padrão,
               capacidade e balanceamento de linha.
             </span>
-            <span style={est.caminhoSeta} aria-hidden="true">→</span>
-          </button>
+            <div style={est.caminhoAcoes}>
+              <button type="button" style={est.botaoPrimario} onClick={aoNovoEstudo}>
+                + Novo estudo
+              </button>
+              <button type="button" style={est.botaoSecundario} onClick={aoAbrirEstudos}>
+                Ver os estudos
+                {numeros.estudos > 0 && <span style={est.contagem}>{numeros.estudos}</span>}
+              </button>
+            </div>
+          </div>
 
-          <button type="button" style={est.caminho} onClick={aoAbrirRelatorio}>
+          <div style={est.caminho}>
             <span style={est.caminhoRotulo}>Ritmo por máquina</span>
             <span style={est.caminhoTitulo}>Peças por hora do posto</span>
             <span style={est.caminhoTexto}>
               Sem cronometrar ciclo: horários, peças e paradas. Responde quanto o posto rende,
               quanto ficou parado e qual máquina do grupo está melhor.
             </span>
-            <span style={est.caminhoSeta} aria-hidden="true">→</span>
-          </button>
+            <div style={est.caminhoAcoes}>
+              <button type="button" style={est.botaoPrimario} onClick={aoAbrirRelatorio}>
+                Abrir o relatório
+                {temRitmo && <span style={est.contagem}>{ritmo.medicoes}</span>}
+              </button>
+              {/* A medicao de ritmo NASCE no celular: dizer isso aqui evita a
+                  procura por um botao de "nova medicao" que nao existe no PC
+                  — e nao deve existir, porque medir e' no posto. */}
+              <span style={est.caminhoNota}>Novas medições vêm do celular</span>
+            </div>
+          </div>
         </section>
       </main>
 
@@ -305,6 +342,21 @@ const est = {
   capaTitulo: { ...tipo('titulo'), color: t.texto, margin: 0 },
   capaDica: { ...tipo('corpo'), color: t.textoMedio, margin: 0 },
   capaMarca: { flexShrink: 0, opacity: 0.9 },
+
+  recursos: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: espaco.md,
+  },
+  recurso: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: espaco.xs,
+    padding: `${espaco.lg}px ${espaco.md}px`, background: t.papel, borderRadius: raio.lg,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    boxShadow: elevacao.baixa, textAlign: 'center',
+  },
+  // Sem a reserva de duas linhas que a PORTA precisa: la' os cartoes sao
+  // estreitos e o titulo quebra; aqui eles sao largos e cabe numa linha —
+  // a reserva so' abriria um vao entre o titulo e a descricao.
+  recursoTitulo: { ...tipo('corpoF'), color: t.texto },
+  recursoTexto: { ...tipo('legenda'), color: t.textoFraco, lineHeight: 1.45 },
 
   erro: {
     padding: espaco.md, background: t.criticoFundo,
@@ -380,19 +432,22 @@ const est = {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: espaco.lg,
   },
   caminho: {
-    position: 'relative', textAlign: 'left',
     background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-    padding: `${espaco.xl}px ${espaco.xxl}px ${espaco.xl}px ${espaco.xl}px`,
+    padding: espaco.xl,
     display: 'flex', flexDirection: 'column', gap: espaco.xs,
-    cursor: 'pointer', fontFamily: 'inherit',
     transition: `box-shadow ${transicao.normal}, border-color ${transicao.normal}`,
   },
   caminhoRotulo: rotulo(t.textoFraco),
   caminhoTitulo: { ...tipo('destaque'), color: t.texto },
   caminhoTexto: { ...tipo('corpo'), color: t.textoMedio },
-  caminhoSeta: {
-    position: 'absolute', top: espaco.xl, right: espaco.lg,
-    ...tipo('destaque'), color: t.vermelho,
+  caminhoAcoes: {
+    display: 'flex', alignItems: 'center', gap: espaco.md,
+    flexWrap: 'wrap', marginTop: espaco.md,
+  },
+  caminhoNota: { ...tipo('legenda'), color: t.textoFraco },
+  contagem: {
+    marginLeft: espaco.sm, padding: '0 7px', borderRadius: raio.pill,
+    background: 'rgba(255, 255, 255, 0.22)', ...tipo('micro'), ...numeros,
   },
 };
