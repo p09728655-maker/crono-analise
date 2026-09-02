@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.62.3',
+    data: '2026-09-02',
+    titulo: 'A tela Ritmo da máquina foi reorganizada por dentro',
+    itens: [
+      'NADA MUDA NO TRABALHO DE QUEM USA: horários, Agora, paradas, setup cronometrado, cronômetro ao vivo, salvar e a lista salva no aparelho continuam exatamente como eram — tela por tela, comparada antes e depois.',
+      'O QUE MUDOU É COMO A TELA É MONTADA: cada responsabilidade (paradas do período, cronômetro ao vivo, medições salvas e o rascunho que sobrevive ao celular apagar) ficou separada, e o número grande do resultado passou a sair de um lugar só para os dois caminhos — antes era o mesmo trecho copiado duas vezes.',
+    ],
+  },
+  {
     versao: '2.62.2',
     data: '2026-09-02',
     titulo: 'O relatório Ritmo por máquina foi reorganizado por dentro',
