@@ -58,7 +58,8 @@ await p.route('**/api/estudos**', (r) => {
 });
 await p.route('**/api/config**', (r) => r.fulfill({ json: { chaveIa: { configurada: false } } }));
 
-await p.goto(`${BASE}/analise`);
+// A lista mora em /analise/estudos: /analise e' o Inicio.
+await p.goto(`${BASE}/analise/estudos`);
 await p.getByText('EMBALGEM 01').first().waitFor({ timeout: 8000 });
 checar(await p.getByRole('button', { name: 'Editar', exact: true }).count() === 1,
   'lista oferece Editar na linha do estudo');
