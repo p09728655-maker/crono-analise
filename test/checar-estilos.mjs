@@ -4,7 +4,7 @@
  * aparece sem estilo nenhum. E' um bug silencioso — foi assim que dois
  * botoes ficaram com 21px de altura.
  */
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { dirname, join } from 'path';
 
 function arquivos(dir, acc = []) {
@@ -144,11 +144,26 @@ function fundoQueNaoCobre(src) {
  * importado; sem isso, o arquivo que importa ficaria fora da verificacao
  * justamente por nao ter `const est =` — e o bug silencioso voltaria.
  */
+let problemas = 0;
+
 function fonteDeEstilos(arq, src) {
-  if (/const est\s*=|function estilos/.test(src)) return src;
-  const m = /import\s*\{[^}]*\b(?:est|imp)\b[^}]*\}\s*from\s*['"](\.[^'"]+)['"]/.exec(src);
-  if (!m) return null;
-  return readFileSync(join(dirname(arq), m[1]), 'utf8');
+  // Objeto LITERAL (`const est = {`) ou a fabrica de estilos: e' este
+  // arquivo. `const est = estilos(t)` ou `useMemo(...)` nao declara nada —
+  // as chaves estao em quem exporta `estilos`.
+  if (/const est\s*=\s*\{|function estilos/.test(src)) return src;
+  const m = /import\s*\{[^}]*\b(?:est|imp|estilos)\b[^}]*\}\s*from\s*['"](\.[^'"]+)['"]/.exec(src);
+  if (m) return readFileSync(join(dirname(arq), m[1]), 'utf8');
+  // Terceiro caso: o quadro RECEBE `est` como prop (a lista de estudos tem
+  // dois temas, e o container calcula o objeto uma vez). O objeto mora no
+  // estilos.js da mesma pasta — e' a convencao que o torna conferivel.
+  if (!/\best\./.test(src)) return null;
+  const irmao = join(dirname(arq), 'estilos.js');
+  if (existsSync(irmao) && irmao !== arq) return readFileSync(irmao, 'utf8');
+  // Usa est.X e nao ha' de onde tirar as chaves: e' exatamente o bug
+  // silencioso que este verificador existe para pegar.
+  console.log(`${arq}\n   usa est.X sem declarar, importar ou ter um estilos.js ao lado`);
+  problemas += 1;
+  return null;
 }
 
 /**
@@ -178,7 +193,6 @@ function chavesDoObjeto(fonte, nome) {
   return null;
 }
 
-let problemas = 0;
 for (const arq of arquivos('src')) {
   const src = readFileSync(arq, 'utf8');
   const fonte = fonteDeEstilos(arq, src);

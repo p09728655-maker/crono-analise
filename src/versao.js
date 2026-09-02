@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.62.5',
+    data: '2026-09-02',
+    titulo: 'A lista de estudos foi reorganizada por dentro',
+    itens: [
+      'NADA MUDA NO TRABALHO DE QUEM USA: a lista no PC e no celular, a busca, o filtro por produto, novo estudo, importar roteiro, arquivados, próximas ações e o painel de resumo continuam exatamente como eram.',
+      'O QUE MUDOU É COMO A TELA É MONTADA: os dados (estudos, arquivados, analistas e quem está no PC) ficaram separados da tela, e cada quadro virou uma peça própria — o mesmo arranjo do relatório, da tela Ritmo da máquina e do estudo aberto. É o fim da série: as quatro telas grandes do sistema agora seguem o mesmo padrão.',
+    ],
+  },
+  {
     versao: '2.62.4',
     data: '2026-09-02',
     titulo: 'O estudo aberto foi reorganizado por dentro',
