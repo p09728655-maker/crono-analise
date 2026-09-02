@@ -1,4 +1,3 @@
-
 /**
  * Cabecalho de secao da COLETA.
  *

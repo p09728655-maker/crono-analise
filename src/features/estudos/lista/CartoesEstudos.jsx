@@ -1,4 +1,3 @@
-
 export default function CartoesEstudos({ estudos, est, aoAbrir, aoRemover }) {
   return (
     <ul style={est.lista}>

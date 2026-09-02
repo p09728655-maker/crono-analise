@@ -63,7 +63,6 @@ export default function ListaEstudos({
     estudos, arquivados, estado, erro, carregar, analistas, eu, setEu, carregarIdentificacao,
   } = useEstudos({ analise });
 
-
   /**
    * `?novo=1` abre o criador direto.
    *
@@ -89,7 +88,6 @@ export default function ListaEstudos({
     // cheio de avisos de amostra vazia so' estranha. Fica na lista, com o
     // estudo aparecendo no grupo do produto.
     if (!analise) aoAbrir?.(r.estudo.id);
-
   }
 
   const temEstudos = estado === 'pronto' && estudos.length > 0;
