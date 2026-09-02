@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.62.4',
+    data: '2026-09-02',
+    titulo: 'O estudo aberto foi reorganizado por dentro',
+    itens: [
+      'NADA MUDA NO TRABALHO DE QUEM USA: Yamazumi, operações, operadores, paradas, sugestões, edição do estudo, análise com IA e as duas folhas impressas continuam exatamente como eram.',
+      'O QUE MUDOU É COMO O PAINEL É MONTADO: as contas do estudo — gargalo por tempo POR PEÇA, soma dos TP, capacidade da linha, operadores pelo Takt, pendências de amostra e paradas da coleta — saíram de dentro da tela e ganharam testes conferidos na mão. Cada quadro do painel virou uma peça separada.',
+    ],
+  },
+  {
     versao: '2.62.3',
     data: '2026-09-02',
     titulo: 'A tela Ritmo da máquina foi reorganizada por dentro',
