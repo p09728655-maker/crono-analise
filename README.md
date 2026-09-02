@@ -576,6 +576,9 @@ src/
   features/
     coleta/      tela de cronometragem no posto (celular)
     analise/     painel, gráficos SVG e relatório A4 (PC)
+      conferencias/  o relatório Ritmo por máquina em peças: dois hooks
+                     (dados/ações e leituras), um quadro por arquivo, a
+                     folha A4 e um único objeto de estilos compartilhado
     estudos/     lista e detalhe de estudo
 api/
   _lib/          db, auth, validação, helpers HTTP
@@ -585,6 +588,21 @@ api/
   ai/analisar.js proxy da análise com Claude
 db/schema.sql
 ```
+
+### Como um relatório grande é organizado
+
+`RelatorioConferencias.jsx` é o modelo: o arquivo que fica na rota é só o
+**arranjo** — a ordem dos quadros, o que abre e fecha, onde cada erro é
+mostrado. Quem carrega e grava é `useConferencias`; quem decide quando
+recalcular é `useLeitura`; as contas moram no domínio
+(`domain/relatorioConferencias.js` para os números do topo, as barras por
+medição e a lateral por grupo). Cada quadro da tela é um componente sem
+estado próprio, e todos importam o mesmo `est` de `estilos.js` — o
+verificador `test/checar-estilos.mjs` segue esse import e confere as chaves
+usadas contra o módulo compartilhado.
+
+`npm run lint` cobre o que o build não pega: variável ou componente usado
+sem ter sido importado. Rodar antes de commitar.
 
 ### Por que a coleta grava local antes da rede
 

@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.62.2',
+    data: '2026-09-02',
+    titulo: 'O relatório Ritmo por máquina foi reorganizado por dentro',
+    itens: [
+      'NADA MUDA NO TRABALHO DE QUEM USA: números, quadros, folha impressa, filtro da lateral, arquivar, renomear peça e cadastro de paradas continuam exatamente como eram.',
+      'O QUE MUDOU É COMO O RELATÓRIO É MONTADO. Os números do topo, o gráfico por medição e a lateral por grupo eram calculados dentro da própria tela, sem teste; agora são contas separadas, conferidas na mão (ritmo ponderado pelo tempo, parada maior que o período, medição sem ritmo fora do gráfico). É o que garante que o número da tela e o da folha continuem saindo da mesma conta.',
+    ],
+  },
+  {
     versao: '2.62.1',
     data: '2026-09-01',
     titulo: 'O "+ Novo estudo" saiu do lugar errado',

@@ -1,6 +1,6 @@
 import { claro } from '../theme/tokensAnalise.js';
 import { cores as escuro } from '../theme/tokens.js';
-import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../theme/escala.js';
+import { elevacao, espaco, numeros, raio, tipo } from '../theme/escala.js';
 import { HISTORICO } from '../versao.js';
 
 /**
