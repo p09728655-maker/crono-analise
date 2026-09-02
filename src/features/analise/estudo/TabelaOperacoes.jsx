@@ -1,6 +1,18 @@
 import { formatarDuracao, formatarSegundos } from '../../../domain/cronoanalise.js';
 import { corNivel, est } from './estilos.js';
 
+/**
+ * A TABELA DE OPERACOES — a evidencia por tras da resposta.
+ *
+ * Uma linha por operacao, com o caminho do numero a' vista: TO (o que o
+ * cronometro mediu), TN (com o fator de ritmo), TP (com a tolerancia) e a
+ * capacidade que sai dele. E' aqui que o analista confere de onde veio o
+ * tempo padrao — por isso as colunas seguem a ordem da conta, e nao a
+ * ordem de importancia.
+ *
+ * A estabilidade vem por COR e por palavra: a folha impressa sai em P&B,
+ * e cor sozinha nao informa nada em preto e branco.
+ */
 export default function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemover, aoColetar, estudo }) {
   return (
     <section style={est.blocoTabela}>

@@ -43,7 +43,7 @@ describe('analisarEstudo', () => {
 
   it('as pendencias sao as operacoes abaixo da meta, com o motivo em palavras', () => {
     expect(a.pendencias.map((p) => p.op.id)).toEqual(['b', 'c']);
-    expect(a.pendencias[0].s.motivo).toBe('Faltam 1 observações para a meta');
+    expect(a.pendencias[0].s.motivo).toBe('Falta 1 observação para a meta');
     expect(a.pendencias[1].s.motivo).toBe('Sem observações');
   });
 
@@ -76,7 +76,14 @@ describe('lerEstudo', () => {
     expect(l.capacidade.esperado).toBe(180);
     expect(l.capacidade.real).toBe(272);
     expect(l.capacidade.diferenca).toBe(92);
-    expect(Array.isArray(l.sugestoes)).toBe(true);
+  });
+
+  /* A ligacao com sugerirMelhorias precisa ser afirmada pelo EFEITO: sem
+     isto, apagar `paradas` da chamada some com a sugestao da tela, do
+     contador do menu e das duas folhas — e a suite passa igual. */
+  it('leva gargalo, Takt e paradas para as sugestoes — o setup de 1 min vira sugestao', () => {
+    const l = lerEstudo(analisarEstudo({ estudo, operacoes }));
+    expect(l.sugestoes.map((s) => s.titulo)).toContain('Parada: Setup / Troca');
   });
 
   it('sem analise nao ha leitura', () => {

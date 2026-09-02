@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.62.6',
+    data: '2026-09-02',
+    titulo: 'Duas correções que a reorganização deixou à vista',
+    itens: [
+      'REMOVER UMA OPERAÇÃO QUE O SERVIDOR RECUSA agora avisa. A recusa (falta de permissão, servidor fora) morria em silêncio: a linha continuava na tabela e não havia nada na tela — o mesmo defeito que já tinha acontecido com o arquivar do relatório. Agora o aviso aparece flutuando sobre a página, perto de onde se clicou.',
+      'O AVISO DE AMOSTRA parou de escrever "Faltam 1 observações". Com uma só, agora diz "Falta 1 observação" — na tela do estudo e na folha impressa.',
+    ],
+  },
+  {
     versao: '2.62.5',
     data: '2026-09-02',
     titulo: 'A lista de estudos foi reorganizada por dentro',

@@ -33,6 +33,22 @@ export const est = {
   },
 
   /* --- ressalva de amostra: uma linha, detalhe sob demanda --- */
+  /* Flutua sobre a pagina, presa a' JANELA e nao ao topo do documento: a
+     recusa de um clique dado no fim da tabela precisa ser lida sem rolar
+     a tela inteira para cima. Mesmo padrao do relatorio Ritmo por
+     maquina, onde "o arquivar nao funciona" nasceu de um erro guardado
+     em estado e nunca renderizado. */
+  avisoFlutuante: {
+    position: 'fixed', zIndex: 40,
+    left: '50%', bottom: espaco.xl, transform: 'translateX(-50%)',
+    width: 'max-content', maxWidth: 'min(760px, calc(100vw - 32px))',
+    display: 'flex', alignItems: 'center', gap: espaco.md,
+    padding: `${espaco.md}px ${espaco.lg}px`,
+    background: claro.criticoFundo, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.critico,
+    boxShadow: elevacao.alta, ...tipo('corpo'), color: claro.texto,
+  },
+
   avisoAmostra: {
     maxWidth: 1400, margin: `0 auto ${espaco.lg}px`, padding: `${espaco.md}px ${espaco.lg}px`,
     ...tipo('corpo'), background: claro.atencaoFundo,

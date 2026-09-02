@@ -50,7 +50,12 @@ export function analisarEstudo(dados) {
     comDados,
     somaTp,
     gargalo,
-    // Capacidade da linha e' ditada pelo gargalo, nao pela media.
+    /* Capacidade da linha e' ditada pelo gargalo, nao pela media.
+       Sem gargalo o valor e' 0, e nao null como manda a regra do dominio,
+       porque `gargalo` ao lado ja' diz que nao ha' o que medir: quem le'
+       (o quadro Resposta) troca o numero por uma frase antes de exibir,
+       e comparativoCapacidade espera numero. Trocar por null aqui mudaria
+       a tela, nao so' o dominio. */
     capacidadeLinha: gargalo ? gargalo.resultado.cap : 0,
     operadores: taktMs > 0 ? operadoresNecessarios(somaTp, taktMs) : null,
     totalCiclos: comDados.reduce((acc, o) => acc + o.resultado.n, 0),

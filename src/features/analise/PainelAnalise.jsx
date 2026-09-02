@@ -45,6 +45,11 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
   const [estado, setEstado] = useState('carregando');
   const [erro, setErro] = useState(null);
   const [adicionandoOp, setAdicionandoOp] = useState(false);
+  /* Falha de uma ACAO (remover operacao) e' diferente de falha ao
+     CARREGAR: a tela continua de pe' e cheia de dados, entao a recusa nao
+     pode substituir o painel — ela flutua sobre a pagina, visivel de
+     qualquer altura da rolagem, perto de quem clicou. */
+  const [erroAcao, setErroAcao] = useState(null);
 
   /**
    * Dois documentos, um botao cada.
@@ -241,8 +246,16 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
               aoColetar={aoColetar}
               aoRemover={async (op) => {
                 if (!window.confirm(`Remover a operação "${op.nome}" e todos os seus ciclos?`)) return;
-                await removerOperacao(op.id);
-                carregar();
+                setErroAcao(null);
+                try {
+                  await removerOperacao(op.id);
+                  await carregar();
+                } catch (e) {
+                  // Sem isto a recusa do servidor morria no console: a
+                  // linha continuava na tabela e o analista concluia que o
+                  // botao nao fazia nada.
+                  setErroAcao(e.message);
+                }
               }}
             />
           )}
@@ -266,6 +279,15 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             </>
           )}
         </main>
+
+        {erroAcao && (
+          <div style={est.avisoFlutuante} role="alert">
+            <span style={{ flex: 1, minWidth: 0 }}>{erroAcao}</span>
+            <button type="button" style={est.botaoSecundario} onClick={() => setErroAcao(null)}>
+              Fechar
+            </button>
+          </div>
+        )}
 
         {verVersoes && (
           <HistoricoVersoes modo="analise" aoFechar={() => setVerVersoes(false)} />

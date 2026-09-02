@@ -277,7 +277,16 @@ export function amostraSuficiente(resultado, metaObs) {
   if (!resultado) return { ok: false, motivo: 'Sem observações' };
   const meta = Number(metaObs) || 0;
   if (meta > 0 && resultado.n < meta) {
-    return { ok: false, motivo: `Faltam ${meta - resultado.n} observações para a meta` };
+    // Concordancia: uma observacao FALTA, varias FALTAM. A frase sai na
+    // tela (lista de pendencias) e na folha A4 — "Faltam 1 observações"
+    // trava o olho de quem le' no meio da leitura.
+    const faltam = meta - resultado.n;
+    return {
+      ok: false,
+      motivo: faltam === 1
+        ? 'Falta 1 observação para a meta'
+        : `Faltam ${faltam} observações para a meta`,
+    };
   }
   return { ok: true, motivo: 'Meta de ciclos atingida' };
 }
