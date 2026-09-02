@@ -4,8 +4,8 @@
  * aparece sem estilo nenhum. E' um bug silencioso — foi assim que dois
  * botoes ficaram com 21px de altura.
  */
-import { readFileSync, readdirSync, statSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { dirname, join } from 'path';
 
 function arquivos(dir, acc = []) {
   for (const nome of readdirSync(dir)) {
@@ -70,7 +70,7 @@ function blocosDeEstilo(src) {
   return blocos;
 }
 
-function conflitosShorthand(src) {
+function conflitosShorthand(src, fonte = src) {
   const achados = [];
 
   for (const bloco of blocosDeEstilo(src)) {
@@ -79,7 +79,7 @@ function conflitosShorthand(src) {
     const refs = [...bloco.matchAll(/est\.([a-zA-Z0-9]+)/g)].map((m) => m[1]);
     if (refs.length < 1) continue;
 
-    const corpos = refs.map((r) => ({ nome: r, corpo: corpoDoEstilo(src, r) }));
+    const corpos = refs.map((r) => ({ nome: r, corpo: corpoDoEstilo(fonte, r) }));
     // Props escritas direto no bloco tambem contam como longhand aplicado.
     const direto = bloco.replace(/est\.[a-zA-Z0-9]+/g, '');
 
@@ -134,24 +134,116 @@ function fundoQueNaoCobre(src) {
   return achados;
 }
 
+/**
+ * Onde mora o objeto de estilos que vale para este arquivo.
+ *
+ * Ou ele declara o proprio `est` (o caso comum), ou importa um `est`
+ * compartilhado de um modulo vizinho — e' assim que os quadros do
+ * relatorio de conferencias dividem botao, tabela e janela sem cada um
+ * carregar uma copia. Nesse caso as chaves sao conferidas contra o modulo
+ * importado; sem isso, o arquivo que importa ficaria fora da verificacao
+ * justamente por nao ter `const est =` — e o bug silencioso voltaria.
+ */
 let problemas = 0;
+
+/** Um modulo e' fonte de estilos se declara `est`/`imp` ou a fabrica. */
+const declaraEstilos = (src) => /const (?:est|imp)\s*=\s*\{|function estilos/.test(src);
+
+function fonteDeEstilos(arq, src) {
+  // Objeto LITERAL (`const est = {`) ou a fabrica de estilos: e' este
+  // arquivo. `const est = estilos(t)` ou `useMemo(...)` nao declara nada —
+  // as chaves estao em quem exporta `estilos`.
+  if (declaraEstilos(src)) return src;
+
+  /* Importa de um vizinho. Percorre TODOS os imports relativos e fica com
+     o primeiro que de fato declara estilos: parar no primeiro import que
+     por acaso traga um simbolo chamado `est` conferiria as chaves contra o
+     arquivo errado, e os typos passariam calados. */
+  for (const m of src.matchAll(/import\s*\{[^}]*\b(?:est|imp|estilos)\b[^}]*\}\s*from\s*['"](\.[^'"]+)['"]/g)) {
+    const caminho = join(dirname(arq), m[1]);
+    if (!existsSync(caminho)) continue;
+    const vizinho = readFileSync(caminho, 'utf8');
+    if (declaraEstilos(vizinho)) return vizinho;
+  }
+
+  // Terceiro caso: o quadro RECEBE `est` como prop (a lista de estudos tem
+  // dois temas, e o container calcula o objeto uma vez). O objeto mora no
+  // estilos.js da mesma pasta — e' a convencao que o torna conferivel.
+  // Vale para `imp` tambem: a folha A4 e' justamente onde estilo quebrado
+  // menos se ve', porque so' aparece ao imprimir.
+  if (!/\b(?:est|imp)\./.test(src)) return null;
+  const irmao = join(dirname(arq), 'estilos.js');
+  if (existsSync(irmao) && irmao !== arq) return readFileSync(irmao, 'utf8');
+  // Usa est.X (ou imp.X) e nao ha' de onde tirar as chaves: e' exatamente o
+  // bug silencioso que este verificador existe para pegar.
+  console.log(`${arq}\n   usa est.X/imp.X sem declarar, importar ou ter um estilos.js ao lado`);
+  problemas += 1;
+  return null;
+}
+
+/**
+ * As chaves de UM objeto de estilos (`const est = {` ou `const imp = {`),
+ * so' as dele. Quando `est` e `imp` moram no mesmo modulo e os dois tem
+ * `tabela`, `th` e `tdNum`, conferir `imp.tdNum` contra a uniao das chaves
+ * deixaria passar um rename feito so' num dos lados — e a folha A4 e' onde
+ * estilo quebrado menos se ve', porque so' aparece ao imprimir.
+ * Sem o objeto (arquivo que declara `est` de outro jeito), devolve null e
+ * a conferencia cai na uniao de todas as chaves do arquivo, como antes.
+ */
+function chavesDoObjeto(fonte, nome) {
+  /* `const est = {` e' o caso comum. Quando o modulo exporta a FABRICA
+     (`function estilos(t, analise)`, das telas de tema duplo), o objeto
+     e' o `return {` dela — e so' ele: `tema()` mora no mesmo arquivo e
+     tem chaves proprias (fundo, borda, vermelho). Sem separar os dois, a
+     conferencia caia na uniao e `est.vermelho` — que existe em tema() e
+     nao em estilos() — passava calado. */
+  let m = new RegExp(`const ${nome}\\s*=\\s*\\{`).exec(fonte);
+  if (!m && nome === 'est') {
+    const fabrica = /function estilos\s*\([^)]*\)\s*\{/.exec(fonte);
+    if (fabrica) m = /\n\s*return \{/.exec(fonte.slice(fabrica.index))
+      && Object.assign(/\n\s*return \{/.exec(fonte.slice(fabrica.index)), {
+        index: fabrica.index + /\n\s*return \{/.exec(fonte.slice(fabrica.index)).index,
+      });
+  }
+  if (!m) return null;
+  let nivel = 0;
+  const inicio = m.index + m[0].length - 1;
+  for (let j = inicio; j < fonte.length; j++) {
+    if (fonte[j] === '{') nivel++;
+    else if (fonte[j] === '}') {
+      nivel--;
+      if (nivel === 0) {
+        const corpo = fonte.slice(inicio, j + 1);
+        return new Set([...corpo.matchAll(/^\s{2,4}([a-zA-Z][a-zA-Z0-9]*):\s*\S/gm)].map((k) => k[1]));
+      }
+    }
+  }
+  return null;
+}
+
 for (const arq of arquivos('src')) {
   const src = readFileSync(arq, 'utf8');
-  if (!/const est\s*=|function estilos/.test(src)) continue;
+  const fonte = fonteDeEstilos(arq, src);
+  if (!fonte) continue;
 
   // Chaves declaradas no(s) objeto(s) de estilo (nivel raso, com indentacao).
-  const declaradas = new Set([...src.matchAll(/^\s{2,4}([a-zA-Z][a-zA-Z0-9]*):\s*\S/gm)].map((m) => m[1]));
-  // Referencias est.X no JSX.
-  const usadas = new Set([...src.matchAll(/\best\.([a-zA-Z][a-zA-Z0-9]*)/g)].map((m) => m[1]));
-
-  const faltando = [...usadas].filter((k) => !declaradas.has(k));
-  const conflitos = conflitosShorthand(src);
-  const descobertos = fundoQueNaoCobre(src);
+  const declaradas = new Set([...fonte.matchAll(/^\s{2,4}([a-zA-Z][a-zA-Z0-9]*):\s*\S/gm)].map((m) => m[1]));
+  // Referencias est.X e imp.X no JSX, conferidas contra o objeto certo.
+  const faltando = [];
+  for (const objeto of ['est', 'imp']) {
+    const usadas = new Set([...src.matchAll(new RegExp(`\\b${objeto}\\.([a-zA-Z][a-zA-Z0-9]*)`, 'g'))].map((m) => m[1]));
+    const chaves = chavesDoObjeto(fonte, objeto) || declaradas;
+    for (const k of usadas) if (!chaves.has(k)) faltando.push(`${objeto}.${k}`);
+  }
+  const conflitos = conflitosShorthand(src, fonte);
+  // O fundo que nao cobre e' defeito do objeto, nao de quem o usa: e'
+  // apontado uma vez, no arquivo que o declara.
+  const descobertos = fonte === src ? fundoQueNaoCobre(src) : [];
 
   if (faltando.length || conflitos.length || descobertos.length) {
     problemas += faltando.length + conflitos.length + descobertos.length;
     console.log(`${arq}`);
-    faltando.forEach((k) => console.log(`   est.${k} usado mas nao definido`));
+    faltando.forEach((k) => console.log(`   ${k} usado mas nao definido`));
     conflitos.forEach((c) => console.log(`   ${c}`));
     descobertos.forEach((d) => console.log(`   ${d}`));
   }

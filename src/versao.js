@@ -13,6 +13,51 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.62.6',
+    data: '2026-09-02',
+    titulo: 'Duas correções que a reorganização deixou à vista',
+    itens: [
+      'REMOVER UMA OPERAÇÃO QUE O SERVIDOR RECUSA agora avisa. A recusa (falta de permissão, servidor fora) morria em silêncio: a linha continuava na tabela e não havia nada na tela — o mesmo defeito que já tinha acontecido com o arquivar do relatório. Agora o aviso aparece flutuando sobre a página, perto de onde se clicou.',
+      'O AVISO DE AMOSTRA parou de escrever "Faltam 1 observações". Com uma só, agora diz "Falta 1 observação" — na tela do estudo e na folha impressa.',
+    ],
+  },
+  {
+    versao: '2.62.5',
+    data: '2026-09-02',
+    titulo: 'A lista de estudos foi reorganizada por dentro',
+    itens: [
+      'NADA MUDA NO TRABALHO DE QUEM USA: a lista no PC e no celular, a busca, o filtro por produto, novo estudo, importar roteiro, arquivados, próximas ações e o painel de resumo continuam exatamente como eram.',
+      'O QUE MUDOU É COMO A TELA É MONTADA: os dados (estudos, arquivados, analistas e quem está no PC) ficaram separados da tela, e cada quadro virou uma peça própria — o mesmo arranjo do relatório, da tela Ritmo da máquina e do estudo aberto. É o fim da série: as quatro telas grandes do sistema agora seguem o mesmo padrão.',
+    ],
+  },
+  {
+    versao: '2.62.4',
+    data: '2026-09-02',
+    titulo: 'O estudo aberto foi reorganizado por dentro',
+    itens: [
+      'NADA MUDA NO TRABALHO DE QUEM USA: Yamazumi, operações, operadores, paradas, sugestões, edição do estudo, análise com IA e as duas folhas impressas continuam exatamente como eram.',
+      'O QUE MUDOU É COMO O PAINEL É MONTADO: as contas do estudo — gargalo por tempo POR PEÇA, soma dos TP, capacidade da linha, operadores pelo Takt, pendências de amostra e paradas da coleta — saíram de dentro da tela e ganharam testes conferidos na mão. Cada quadro do painel virou uma peça separada.',
+    ],
+  },
+  {
+    versao: '2.62.3',
+    data: '2026-09-02',
+    titulo: 'A tela Ritmo da máquina foi reorganizada por dentro',
+    itens: [
+      'NADA MUDA NO TRABALHO DE QUEM USA: horários, Agora, paradas, setup cronometrado, cronômetro ao vivo, salvar e a lista salva no aparelho continuam exatamente como eram — tela por tela, comparada antes e depois.',
+      'O QUE MUDOU É COMO A TELA É MONTADA: cada responsabilidade (paradas do período, cronômetro ao vivo, medições salvas e o rascunho que sobrevive ao celular apagar) ficou separada, e o número grande do resultado passou a sair de um lugar só para os dois caminhos — antes era o mesmo trecho copiado duas vezes.',
+    ],
+  },
+  {
+    versao: '2.62.2',
+    data: '2026-09-02',
+    titulo: 'O relatório Ritmo por máquina foi reorganizado por dentro',
+    itens: [
+      'NADA MUDA NO TRABALHO DE QUEM USA: números, quadros, folha impressa, filtro da lateral, arquivar, renomear peça e cadastro de paradas continuam exatamente como eram.',
+      'O QUE MUDOU É COMO O RELATÓRIO É MONTADO. Os números do topo, o gráfico por medição e a lateral por grupo eram calculados dentro da própria tela, sem teste; agora são contas separadas, conferidas na mão (ritmo ponderado pelo tempo, parada maior que o período, medição sem ritmo fora do gráfico). É o que garante que o número da tela e o da folha continuem saindo da mesma conta.',
+    ],
+  },
+  {
     versao: '2.62.1',
     data: '2026-09-01',
     titulo: 'O "+ Novo estudo" saiu do lugar errado',

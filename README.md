@@ -575,8 +575,19 @@ src/
   theme/         tokens de design (paleta Patrimar)
   features/
     coleta/      tela de cronometragem no posto (celular)
+      rapida/    a tela Ritmo da máquina em peças: quatro hooks (paradas,
+                 cronômetro ao vivo, histórico local, rascunho) e uma
+                 seção por arquivo
     analise/     painel, gráficos SVG e relatório A4 (PC)
+      conferencias/  o relatório Ritmo por máquina em peças: dois hooks
+                     (dados/ações e leituras), um quadro por arquivo, a
+                     folha A4 e um único objeto de estilos compartilhado
+      estudo/        o estudo aberto em peças; as contas moram em
+                     domain/analiseEstudo.js
     estudos/     lista e detalhe de estudo
+      lista/     a lista em peças: useEstudos (dados), um quadro por
+                 arquivo, tema duplo (coleta escura / análise clara) em
+                 estilos.js, passado aos quadros como prop `est`
 api/
   _lib/          db, auth, validação, helpers HTTP
   estudos.js     CRUD de estudos
@@ -585,6 +596,25 @@ api/
   ai/analisar.js proxy da análise com Claude
 db/schema.sql
 ```
+
+### Como um relatório grande é organizado
+
+`RelatorioConferencias.jsx` é o modelo: o arquivo que fica na rota é só o
+**arranjo** — a ordem dos quadros, o que abre e fecha, onde cada erro é
+mostrado. Quem carrega e grava é `useConferencias`; quem decide quando
+recalcular é `useLeitura`; as contas moram no domínio
+(`domain/relatorioConferencias.js` para os números do topo, as barras por
+medição e a lateral por grupo). Cada quadro da tela é um componente sem
+estado próprio, e todos importam o mesmo `est` de `estilos.js` — o
+verificador `test/checar-estilos.mjs` segue esse import e confere as chaves
+usadas contra o módulo compartilhado. As outras três telas grandes
+(`ConferenciaRapida`, `PainelAnalise`, `ListaEstudos`) seguem o mesmo
+arranjo, cada uma com a sua pasta. Quando o quadro recebe `est` por prop
+(a lista tem dois temas e calcula o objeto uma vez), o verificador procura
+o `estilos.js` da mesma pasta.
+
+`npm run lint` cobre o que o build não pega: variável ou componente usado
+sem ter sido importado. Rodar antes de commitar.
 
 ### Por que a coleta grava local antes da rede
 

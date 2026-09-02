@@ -40,10 +40,11 @@ await p.getByText('Não foi possível carregar').waitFor({ timeout: 8000 });
 checar(await p.getByRole('button', { name: 'Tentar de novo' }).count() === 1,
   'API fora: erro honesto com "Tentar de novo"');
 
-// Voltar leva para a lista de analise.
+// Voltar leva para a lista de analise — que desde o Inicio mora em
+// /analise/estudos (`/analise` virou a casa).
 await p.getByRole('button', { name: /Voltar para a lista/ }).click();
-await p.waitForFunction(() => location.pathname === '/analise', { timeout: 8000 });
-checar(true, 'voltar leva para /analise');
+await p.waitForFunction(() => location.pathname === '/analise/estudos', { timeout: 8000 });
+checar(true, 'voltar leva para /analise/estudos');
 
 // No celular, /analise/conferencias nao existe: cai na coleta.
 const movel = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });

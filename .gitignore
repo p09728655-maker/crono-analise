@@ -11,3 +11,6 @@ dist/
 # Nascem durante o trabalho e nao pertencem ao repositorio.
 *-tmp.mjs
 rev-tmp-*.mjs
+
+# Worktrees temporarias dos agentes de revisao.
+.claude/worktrees/

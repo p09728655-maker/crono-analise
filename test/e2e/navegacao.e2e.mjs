@@ -30,14 +30,19 @@ checar(r.tela === 'coleta' && r.estudoId === ID_A && r.operacaoId === ID_B, 'rot
 r = analisarCaminho('/coleta');
 checar(r.modo === 'coleta' && r.tela === 'lista', 'rota de lista em coleta');
 
+// No PC a raiz e' o INICIO (a casa da analise); a lista ganhou caminho
+// proprio em /analise/estudos.
 r = analisarCaminho('/');
-checar(r.tela === 'lista' && r.padrao === true, 'raiz cai no padrao do aparelho');
+checar(r.tela === 'inicio' && r.padrao === true, 'raiz cai no padrao do aparelho');
 
 r = analisarCaminho('/analise/estudo/nao-e-uuid');
-checar(r.tela === 'lista', 'id invalido nao vira tela de estudo');
+checar(r.tela === 'inicio', 'id invalido nao vira tela de estudo');
 
 r = analisarCaminho('/analise/');
-checar(r.modo === 'analise' && r.tela === 'lista', 'barra final nao quebra a rota');
+checar(r.modo === 'analise' && r.tela === 'inicio', 'barra final nao quebra a rota');
+
+r = analisarCaminho('/analise/estudos/');
+checar(r.modo === 'analise' && r.tela === 'lista', 'a lista de estudos tem caminho proprio');
 
 checar(caminhos.estudo('analise', ID_A) === `/analise/estudo/${ID_A}`, 'monta caminho de estudo');
 checar(caminhos.coletar(ID_A, ID_B) === `/coleta/estudo/${ID_A}/operacao/${ID_B}`, 'monta caminho de coleta');
@@ -73,9 +78,9 @@ await p.route('**/api/estudos*', (rota) => {
   });
 });
 
-await p.goto('http://localhost:5199/analise');
+await p.goto('http://localhost:5199/analise/estudos');
 await p.waitForSelector('text=Furação lateral', { timeout: 10000 });
-checar(true, 'lista carregou em /analise');
+checar(true, 'lista carregou em /analise/estudos');
 
 // O NOME do estudo e' a porta da analise: o botao "Analisar" da linha saiu
 // quando a area de Proximas acoes passou a oferecer o mesmo destino.
@@ -86,7 +91,7 @@ checar(p.url().includes(`/analise/estudo/${ID_A}`), `URL virou ${new URL(p.url()
 // O que estava quebrado: Voltar do navegador.
 await p.goBack();
 await p.waitForTimeout(400);
-checar(new URL(p.url()).pathname === '/analise', 'Voltar do navegador retorna a lista');
+checar(new URL(p.url()).pathname === '/analise/estudos', 'Voltar do navegador retorna a lista');
 
 await p.goForward();
 await p.waitForTimeout(400);
