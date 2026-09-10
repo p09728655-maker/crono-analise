@@ -328,7 +328,11 @@ export function GraficoTendencia({ operacoes, altura = 150, larguraFixa, colunas
   }
 
   return (
-    <figure style={est.figura}>
+    /* A figura PODE quebrar de pagina: cada quadro segura a propria quebra
+       (est.miniTendencia). Com 9+ operacoes o bloco inteiro passa de uma
+       folha A4, e o "nao quebrar figura" global do index.html o empurraria
+       para uma pagina nova e ainda o partiria. */
+    <figure style={est.figuraQuebravel}>
       <figcaption style={est.titulo}>
         Tendência ao longo da coleta
         <span style={est.subtitulo}>
@@ -368,8 +372,10 @@ function MiniTendencia({ operacao, altura, larguraFixa }) {
   /* Dominio do eixo Y: a faixa dos ciclos com folga, nunca desde zero (ver
      o comentario do grafico). A folga minima e' 10% da media, para uma
      serie quase constante nao virar serra por causa de 50 ms de ruido. */
-  const minC = Math.min(...ciclos);
-  const maxC = Math.max(...ciclos);
+  // A reta entra no dominio: ajustada, ela pode passar dos pontos (toque
+  // acidental no fim de ciclos longos) e sumiria cortada pelo viewBox.
+  const minC = Math.min(...ciclos, ...(reta ? [reta.inicio, reta.fim] : []));
+  const maxC = Math.max(...ciclos, ...(reta ? [reta.inicio, reta.fim] : []));
   const media = ciclos.reduce((a, v) => a + v, 0) / n;
   const faixa = Math.max(maxC - minC, media * 0.1);
   const lo = Math.max(0, minC - faixa * 0.2);
@@ -392,7 +398,7 @@ function MiniTendencia({ operacao, altura, larguraFixa }) {
     grades.push(Number((k * passo).toFixed(casas)));
   }
 
-  const pct = Math.round(s.pct);
+  const pct = Math.round(s.pctExibida);
   const sinal = pct > 0 ? '+' : pct < 0 ? '−' : '';
   const corTom = COR_TOM[leitura.tom] || claro.neutro;
 
@@ -503,6 +509,10 @@ const est = {
   vazio: {
     padding: 40, textAlign: 'center', color: claro.textoFraco, fontSize: 13,
     background: claro.papel, border: `1px dashed ${claro.borda}`, borderRadius: 10,
+  },
+  figuraQuebravel: {
+    margin: 0, background: claro.papel, border: `1px solid ${claro.borda}`, borderRadius: 10, padding: 20,
+    breakInside: 'auto', pageBreakInside: 'auto',
   },
   gradeTendencia: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14,

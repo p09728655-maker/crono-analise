@@ -170,13 +170,16 @@ const navegador = await chromium.launch({ executablePath: EXEC });
     'cada quadro diz em palavras o que a curva mostra');
   checar(/1º ciclo/.test(textoTendencia) && /14º/.test(textoTendencia),
     'o eixo diz de qual ciclo a qual ciclo a curva vai');
+  // Contra a CELULA do grid (o cartao, com 12px de padding de cada lado),
+  // nao contra o div de onde a largura foi medida — essa razao daria 1 por
+  // construcao e nao pegaria o letterbox.
   const larguraMini = await p.evaluate(() => {
     const svg = document.querySelector('[aria-label="Tendência ao longo da coleta"] svg');
-    const cont = svg?.parentElement;
-    if (!svg || !cont) return 0;
-    return svg.getBoundingClientRect().width / cont.getBoundingClientRect().width;
+    const cartao = svg?.parentElement?.parentElement;
+    if (!svg || !cartao) return 0;
+    return svg.getBoundingClientRect().width / (cartao.getBoundingClientRect().width - 24);
   });
-  checar(larguraMini > 0.9, `quadro de tendencia ocupa ${(larguraMini * 100).toFixed(0)}% da largura da celula`);
+  checar(larguraMini > 0.95, `quadro de tendencia ocupa ${(larguraMini * 100).toFixed(0)}% da largura da celula`);
 
   // Tabela de operacoes mostra o parado por operacao.
   await p.locator('[aria-label="Análise"] button', { hasText: 'Operações' }).click();

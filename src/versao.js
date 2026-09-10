@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.63.1',
+    data: '2026-09-10',
+    titulo: 'A tendência parou de afirmar direção com poucos ciclos',
+    itens: [
+      'COM 3 A 6 CICLOS o quadro de tendência (e a sugestão "tempos subindo") afirmava fadiga ou aprendizado em cima de ruído: três pontos quase sempre cabem numa reta. Agora a inclinação precisa se distinguir do acaso para o número de ciclos da coleta — com 3 ciclos exige uma reta quase perfeita; com 10, bem menos. Abaixo disso o quadro diz "sem direção" e explica se é dispersão ou poucos ciclos para afirmar.',
+      'A PORCENTAGEM DO QUADRO agora é a que o olho vê: compara o fim da reta com o início, e a frase escreve os dois valores em segundos ao lado. Antes a base era o ciclo médio, e uma reta de 7,5 s a 10,0 s saía como +29% quando do início ao fim é +33%. Vale na tela e na folha impressa.',
+      'NA FOLHA IMPRESSA os quadros de tendência passam a quebrar de página um a um. Com muitas operações o bloco inteiro não cabia em página nenhuma e a impressão saía com folha em branco no meio.',
+    ],
+  },
+  {
     versao: '2.63.0',
     data: '2026-09-10',
     titulo: 'A tendência da coleta ganhou gráfico — na tela e no papel',

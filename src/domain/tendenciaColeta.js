@@ -10,12 +10,20 @@
  * os pontos, a reta e a leitura de um lugar so', para tela e folha A4
  * dizerem a mesma coisa sobre os mesmos ciclos.
  *
- * As frases seguem o mesmo criterio das sugestoes (sugestoes.js): direcao
- * so' com |variacao| >= 5% E r2 >= 0,3. Abaixo disso a reta continua
- * desenhada — e' o que mostra que a variacao e' ruido —, mas a leitura diz
- * "sem direcao" em vez de inventar tendencia.
+ * As frases seguem o mesmo criterio das sugestoes (sugestoes.js), que e' o
+ * de tendencia(): direcao so' com |variacao| >= 5% do ciclo medio E
+ * inclinacao distinguivel do acaso a 95% para o n da coleta. Abaixo disso
+ * a reta continua desenhada — e' o que mostra que a variacao e' ruido —,
+ * mas a leitura diz "sem direcao" em vez de inventar tendencia.
+ *
+ * A PORCENTAGEM EXIBIDA compara o fim da reta com o inicio (fim ÷ inicio),
+ * que e' o que o olho ve' no quadro: reta de 7,5 s a 10,0 s e' +33%. O
+ * criterio de direcao usa outra base (o ciclo medio, simetrica) e por isso
+ * a frase escreve os dois extremos ao lado da porcentagem — o numero
+ * declara de onde sai.
  */
 import { temposValidos, tendencia } from './estatistica.js';
+import { formatarSegundos } from './cronoanalise.js';
 
 /** Minimo de ciclos validos para a regressao existir (mesmo de tendencia()). */
 export const MIN_CICLOS_TENDENCIA = 3;
@@ -38,13 +46,19 @@ export function serieDeTendencia(tempos) {
   const reta = n >= MIN_CICLOS_TENDENCIA
     ? { inicio: t.intercepto, fim: t.intercepto + t.slope * (n - 1) }
     : null;
+  // Variacao do inicio ao fim DA RETA. Com inicio nao positivo (so'
+  // acontece com toque acidental misturado a ciclos longos) nao ha' base
+  // para a razao: cai na base do ciclo medio, que e' a de tendencia().
+  const pctExibida = reta && reta.inicio > 0 ? ((reta.fim / reta.inicio) - 1) * 100 : t.pct;
   return {
     n,
     ciclos,
     reta,
     direcao: t.direcao,
     pct: t.pct,
+    pctExibida,
     r2: t.r2,
+    r2Minimo: t.r2Minimo,
   };
 }
 
@@ -57,8 +71,9 @@ export function serieDeTendencia(tempos) {
  * isso faz com o tempo padrao.
  */
 export function lerTendencia(serie) {
-  const { n, direcao, pct, r2 } = serie;
-  const variacao = Math.abs(Math.round(pct));
+  const { n, direcao, pct, pctExibida, r2, r2Minimo, reta } = serie;
+  const variacao = Math.abs(Math.round(pctExibida));
+  const extremos = reta ? `de ${formatarSegundos(reta.inicio)} s a ${formatarSegundos(reta.fim)} s` : '';
 
   if (n < MIN_CICLOS_TENDENCIA) {
     return {
@@ -74,7 +89,7 @@ export function lerTendencia(serie) {
     return {
       rotulo: 'Ciclos subindo',
       tom: 'atencao',
-      frase: `Os ciclos ficaram ${variacao}% mais lentos do início ao fim da coleta. `
+      frase: `A reta sobe ${extremos} do primeiro ao último ciclo: ${variacao}% mais lentos. `
         + 'Verificar fadiga, vida útil da ferramenta e abastecimento do posto — '
         + 'fadiga entra na tolerância, não no tempo normal.',
     };
@@ -84,20 +99,32 @@ export function lerTendencia(serie) {
     return {
       rotulo: 'Ciclos caindo',
       tom: 'ok',
-      frase: `Os ciclos ficaram ${variacao}% mais rápidos do início ao fim da coleta: `
+      frase: `A reta cai ${extremos} do primeiro ao último ciclo: ${variacao}% mais rápidos, `
         + 'curva de aprendizado. A média da coleta inteira puxa o tempo padrão para cima; '
         + 'vale cronometrar de novo com o operador já aquecido.',
     };
   }
 
-  // Variacao grande mas reta que explica pouco: os ciclos sobem e descem
-  // sem direcao. E' dispersao (CV%), nao tendencia — dizer "estavel" aqui
-  // esconderia a instabilidade.
-  if (variacao >= RUIDO_PCT && r2 < 0.3) {
+  /* Variacao que importa, mas inclinacao que nao se distingue do acaso.
+     O limiar compara o pct SEM arredondar: e' o mesmo criterio de
+     tendencia(), e arredondar antes faria 4,6% virar "5%" na frase.
+     Dois motivos, duas frases: a reta explica pouco (os ciclos sobem e
+     descem — dispersao, CV%) ou explica bem mas sao poucos ciclos para
+     afirmar (r2 alto que ainda nao chega ao minimo deste n). Nenhuma das
+     duas cobra ciclo: a meta de amostra e' decisao do analista. */
+  if (Math.abs(pct) >= RUIDO_PCT && r2 < r2Minimo) {
+    if (r2 >= 0.3) {
+      return {
+        rotulo: 'Sem direção',
+        tom: 'neutro',
+        frase: `A reta inclina ${variacao}% (${extremos}), mas com ${n} ciclos isso ainda não se `
+          + 'distingue do acaso: não é tendência confirmada.',
+      };
+    }
     return {
       rotulo: 'Sem direção',
       tom: 'neutro',
-      frase: `Do início ao fim a reta varia ${variacao}%, mas os ciclos sobem e descem sem padrão: `
+      frase: `A reta inclina ${variacao}% (${extremos}), mas os ciclos sobem e descem sem padrão: `
         + 'é dispersão, não tendência. Olhar o CV% da operação, não a ordem dos ciclos.',
     };
   }
