@@ -4,6 +4,7 @@ import { elevacao, espaco, raio, rotulo, tipo } from '../../theme/escala.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
 import { entrar } from '../../lib/api.js';
+import { pedirRecuperacao } from '../../lib/supabase.js';
 import { Cronometro, RECURSOS } from '../../components/iconesRecursos.jsx';
 
 /**
@@ -29,11 +30,21 @@ import { Cronometro, RECURSOS } from '../../components/iconesRecursos.jsx';
  * indicadores vivem do outro lado da porta, onde ha' sessao e ha' a quem
  * responder.
  */
-export default function EntrarNoPc({ aoEntrar }) {
+export default function EntrarNoPc({ aoEntrar, aviso }) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [erro, setErro] = useState(null);
+  const [erro, setErro] = useState(aviso || null);
   const [ocupado, setOcupado] = useState(false);
+  /**
+   * 'entrar' e' a porta; 'recuperar' e' o pedido de link por e-mail.
+   *
+   * Os dois modos moram na MESMA tela de proposito: o que muda entre eles
+   * e' um campo a menos e o texto do botao. Uma rota propria para
+   * recuperar custaria arquivo, endereco e caminho de volta — e ninguem
+   * chega ali por link direto, so' por este botao.
+   */
+  const [modo, setModo] = useState('entrar');
+  const [enviado, setEnviado] = useState(false);
 
   async function enviar(ev) {
     ev.preventDefault();
@@ -46,6 +57,25 @@ export default function EntrarNoPc({ aoEntrar }) {
       setErro(e.message);
       setOcupado(false);
     }
+  }
+
+  async function recuperar(ev) {
+    ev.preventDefault();
+    setOcupado(true);
+    setErro(null);
+    try {
+      await pedirRecuperacao(email.trim());
+      setEnviado(true);
+    } catch (e) {
+      setErro(e.message);
+    }
+    setOcupado(false);
+  }
+
+  function irPara(destino) {
+    setModo(destino);
+    setErro(null);
+    setEnviado(false);
   }
 
   return (
@@ -97,8 +127,48 @@ export default function EntrarNoPc({ aoEntrar }) {
             ))}
           </div>
 
-          <form style={est.form} onSubmit={enviar} aria-label="Entrar no sistema">
-            <div style={est.campos}>
+          {modo === 'entrar' ? (
+            <form style={est.form} onSubmit={enviar} aria-label="Entrar no sistema">
+              <div style={est.campos}>
+                <label style={est.campo}>
+                  <span style={est.rotulo}>E-mail</span>
+                  <input
+                    style={est.input} type="email" autoComplete="username" autoFocus
+                    value={email} onChange={(ev2) => setEmail(ev2.target.value)}
+                  />
+                </label>
+                <label style={est.campo}>
+                  <span style={est.rotulo}>Senha</span>
+                  <input
+                    style={est.input} type="password" autoComplete="current-password"
+                    value={senha} onChange={(ev2) => setSenha(ev2.target.value)}
+                  />
+                </label>
+              </div>
+
+              {erro && <p style={est.erro} role="alert">{erro}</p>}
+
+              <button type="submit" style={est.botao} disabled={ocupado || !email.trim() || !senha}>
+                {ocupado ? 'Entrando...' : 'Iniciar sessão'}
+                <span aria-hidden="true" style={est.seta}>→</span>
+              </button>
+
+              <button type="button" style={est.link} onClick={() => irPara('recuperar')}>
+                Esqueci minha senha
+              </button>
+
+              <p style={est.rodapeForm}>
+                Sem acesso? Peça ao administrador para cadastrar você em
+                Ferramentas → Analistas, com e-mail e senha.
+              </p>
+            </form>
+          ) : (
+            <form style={est.form} onSubmit={recuperar} aria-label="Recuperar senha">
+              <p style={est.textoForm}>
+                Informe o e-mail do seu cadastro. Enviamos um link para você criar uma
+                senha nova — ele vale por uma hora.
+              </p>
+
               <label style={est.campo}>
                 <span style={est.rotulo}>E-mail</span>
                 <input
@@ -106,27 +176,29 @@ export default function EntrarNoPc({ aoEntrar }) {
                   value={email} onChange={(ev2) => setEmail(ev2.target.value)}
                 />
               </label>
-              <label style={est.campo}>
-                <span style={est.rotulo}>Senha</span>
-                <input
-                  style={est.input} type="password" autoComplete="current-password"
-                  value={senha} onChange={(ev2) => setSenha(ev2.target.value)}
-                />
-              </label>
-            </div>
 
-            {erro && <p style={est.erro} role="alert">{erro}</p>}
+              {/* Nunca "enviamos para voce": o servidor responde igual para
+                  e-mail cadastrado e nao cadastrado, e a tela nao pode
+                  afirmar o que ela nao sabe — nem entregar, pela diferenca
+                  de resposta, quem tem acesso ao sistema. */}
+              {enviado && (
+                <p style={est.sucesso} role="status">
+                  Se este e-mail estiver cadastrado, o link já está a caminho.
+                  Verifique também a caixa de spam.
+                </p>
+              )}
+              {erro && <p style={est.erro} role="alert">{erro}</p>}
 
-            <button type="submit" style={est.botao} disabled={ocupado || !email.trim() || !senha}>
-              {ocupado ? 'Entrando...' : 'Iniciar sessão'}
-              <span aria-hidden="true" style={est.seta}>→</span>
-            </button>
+              <button type="submit" style={est.botao} disabled={ocupado || !email.trim()}>
+                {ocupado ? 'Enviando...' : 'Enviar link de recuperação'}
+                <span aria-hidden="true" style={est.seta}>→</span>
+              </button>
 
-            <p style={est.rodapeForm}>
-              Sem acesso? Peça ao administrador para cadastrar você em
-              Ferramentas → Analistas, com e-mail e senha.
-            </p>
-          </form>
+              <button type="button" style={est.link} onClick={() => irPara('entrar')}>
+                Voltar para a entrada
+              </button>
+            </form>
+          )}
         </main>
 
         <aside className="entrada-arte" style={est.arte} aria-hidden="true">
@@ -279,7 +351,12 @@ const est = {
     borderWidth: 1, borderStyle: 'solid', borderColor: t.bordaForte, borderRadius: raio.sm,
     color: t.texto, ...tipo('corpo'), fontFamily: 'inherit', outline: 'none',
   },
+  textoForm: { ...tipo('corpo'), color: t.textoMedio, margin: 0 },
   erro: { ...tipo('corpoF'), color: t.critico, margin: 0 },
+  sucesso: {
+    ...tipo('corpo'), color: t.ok, margin: 0,
+    padding: `${espaco.md}px`, background: t.okFundo, borderRadius: raio.sm,
+  },
   botao: {
     minHeight: 48, border: 'none', borderRadius: raio.md,
     background: t.vermelho, color: '#fff', ...tipo('corpoF'),
@@ -287,6 +364,13 @@ const est = {
     cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa,
   },
   seta: { fontSize: 18, lineHeight: 1 },
+  // Acao secundaria com cara de link: quem entra todo dia digita a senha e
+  // nem olha para ela — so' quem esqueceu procura, e ai' precisa achar.
+  link: {
+    alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none',
+    color: t.vermelho, ...tipo('corpoF'), fontFamily: 'inherit',
+    cursor: 'pointer', textDecoration: 'underline',
+  },
   rodapeForm: { ...tipo('legenda'), color: t.textoFraco, margin: 0 },
 
   arte: { background: t.fundo, position: 'relative', overflow: 'hidden' },

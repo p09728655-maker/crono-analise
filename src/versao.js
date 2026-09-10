@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.65.0',
+    data: '2026-09-10',
+    titulo: 'Esqueci minha senha: entrar deixou de depender do administrador',
+    itens: [
+      'NOVO "ESQUECI MINHA SENHA" NA TELA DE ENTRADA. Quem esqueceu informa o e-mail do cadastro e recebe um link para criar uma senha nova. O link vale uma hora e serve uma vez só. Antes, senha esquecida parava o trabalho até o administrador estar disponível — e quando quem esquecia ERA o administrador, a saída era mexer no banco.',
+      'A TELA NUNCA DIZ SE O E-MAIL EXISTE. A resposta é a mesma para e-mail cadastrado e não cadastrado, de propósito: responder "este e-mail não está cadastrado" entregaria de graça a lista de quem tem acesso ao sistema. Por isso a confirmação diz "SE este e-mail estiver cadastrado".',
+      'QUANDO O ENVIO FALHA, A TELA DIZ QUE FALHOU. Projeto sem servidor de e-mail próprio configurado não manda link nenhum, e prometer um e-mail que não saiu é pior que não ter o botão: a pessoa fica esperando em vez de chamar o administrador. A mensagem manda chamar.',
+      'LINK VENCIDO EXPLICA POR QUE NÃO ABRIU. Abrir um link de mais de uma hora leva à tela de entrada com o aviso do vencimento e o caminho para pedir outro, em vez de simplesmente não fazer nada.',
+      'O CAMINHO CURTO CONTINUA EXISTINDO: o administrador redefine a senha de qualquer analista na hora, em Ferramentas → Analistas, sem depender de e-mail.',
+    ],
+  },
+  {
     versao: '2.64.0',
     data: '2026-09-10',
     titulo: 'O relatório Ritmo por máquina ganhou o gráfico de tendência',

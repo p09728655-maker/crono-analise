@@ -463,6 +463,46 @@ Desde a v2.34 a segurança mora no banco, não na tela:
   velho em cache funcionando. Apagar `API_TOKEN` e `VITE_API_TOKEN` do
   ambiente encerra a transição; nenhum bundle novo embute segredo algum.
 
+### Esqueci minha senha
+
+A tela de entrada tem **"Esqueci minha senha"**: informa-se o e-mail do
+cadastro e o Supabase envia um link que abre o app em "Definir nova senha"
+(`src/features/analise/DefinirNovaSenha.jsx`). O link vale uma hora e serve
+uma vez.
+
+Três decisões que não aparecem na tela:
+
+- **A resposta é a mesma para e-mail cadastrado e não cadastrado.** É a
+  mesma razão da mensagem única de credencial errada: distinguir entregaria
+  a lista de quem tem acesso. Por isso a confirmação diz "SE este e-mail
+  estiver cadastrado".
+- **Falha de envio não vira promessa.** Sem servidor de e-mail configurado o
+  GoTrue responde com erro, e a tela diz que o envio não funcionou e manda
+  chamar o administrador — em vez de deixar a pessoa esperando um e-mail que
+  nunca sai.
+- **A sessão só é guardada DEPOIS que a senha muda.** Guardar antes deixaria
+  quem abriu o link dentro do sistema sem trocar nada: o link viraria porta
+  lateral de entrada, válida por uma hora. O token chega no FRAGMENTO da URL
+  (`#access_token=...`), que não vai para servidor nenhum, e é apagado da
+  barra de endereço assim que é lido.
+
+**O que precisa estar configurado no projeto Supabase** — sem isto o botão
+existe e reporta falha honestamente, mas nenhum e-mail sai:
+
+1. **SMTP próprio** em Authentication → Emails → SMTP Settings. O serviço de
+   e-mail embutido do Supabase é para desenvolvimento: tem limite de poucos
+   envios por hora e não se destina a produção.
+2. **URL do app na lista de redirecionamento** (Authentication → URL
+   Configuration → Site URL e Redirect URLs). Fora da lista, o link chega
+   apontando para outro endereço.
+3. Opcional: o **template de recuperação** em português (Authentication →
+   Emails → Templates).
+
+O caminho curto continua existindo e não depende de e-mail: o administrador
+redefine a senha de qualquer analista em **Ferramentas → Analistas**. O que
+a recuperação por e-mail resolve é o caso em que não há administrador
+disponível — inclusive quando quem esqueceu a senha é o próprio.
+
 ### `client_id` não é o aparelho
 
 Já foi lido como identificador de dispositivo. Não é: é uma chave de

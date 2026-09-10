@@ -10,9 +10,10 @@ import BarraSincronizacao from './components/BarraSincronizacao.jsx';
 import { SistemaEncerrado } from './components/SairDoSistema.jsx';
 import EntrarNoPc from './features/analise/EntrarNoPc.jsx';
 import PrepararAparelho from './features/coleta/PrepararAparelho.jsx';
+import DefinirNovaSenha from './features/analise/DefinirNovaSenha.jsx';
 import { caminhos, ehDesktop, useRota } from './lib/dispositivo.js';
 import { obterEstudo } from './lib/api.js';
-import { aparelhoPareado, temSessao } from './lib/supabase.js';
+import { aparelhoPareado, recuperacaoPendente, temSessao } from './lib/supabase.js';
 import { carregarMotivos } from './lib/motivosParada.js';
 import { cores as escuro } from './theme/tokens.js';
 
@@ -58,6 +59,16 @@ export default function App() {
    * inteiro — nao e' um modal de uma tela.
    */
   const [encerrado, setEncerrado] = useState(false);
+
+  /**
+   * Recuperacao de senha em curso, lida do fragmento da URL na abertura.
+   *
+   * Fica em estado, e nao numa consulta a cada render, porque o fragmento e'
+   * apagado da barra de endereco assim que e' lido: depois disso so' esta
+   * variavel sabe que ha' um token de recuperacao na mao. Zerar quando a
+   * senha nova e' salva e' o que devolve a tela ao fluxo normal.
+   */
+  const [recuperacao, setRecuperacao] = useState(recuperacaoPendente);
 
   const irParaLista = useCallback(() => navegar(caminhos.lista(modo)), [navegar, modo]);
   const irParaInicio = useCallback(() => navegar(caminhos.inicio()), [navegar]);
@@ -143,7 +154,13 @@ export default function App() {
    * a unica tela possivel e' a de parear. As duas condicoes reagem ao
    * useSessaoViva la' de cima: entrar/sair troca a tela na hora.
    */
-  if (desktop && !temSessao()) return <EntrarNoPc />;
+  // Antes de qualquer porta: quem chega com link de recuperacao valido vem
+  // trocar a senha, seja PC ou tablet. Link vencido nao abre tela nenhuma —
+  // vira o aviso que explica, na propria entrada, por que nao abriu.
+  if (recuperacao?.access) {
+    return <DefinirNovaSenha dados={recuperacao} aoConcluir={() => setRecuperacao(null)} />;
+  }
+  if (desktop && !temSessao()) return <EntrarNoPc aviso={recuperacao?.erro} />;
   if (!desktop && !temSessao() && !aparelhoPareado()) return <PrepararAparelho />;
 
   return (

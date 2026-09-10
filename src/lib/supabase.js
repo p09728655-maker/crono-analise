@@ -50,9 +50,11 @@ export const aparelhoPareado = () => Boolean(ler(GUARDA_APARELHO)?.email);
 
 /* ------------------------------------------------------ conversa GoTrue */
 
-async function chamarAuth(caminho, { corpo, token } = {}) {
+async function chamarAuth(caminho, {
+  corpo, token, metodo = 'POST', mensagem400 = 'E-mail ou senha nao confere',
+} = {}) {
   const resposta = await fetch(`${URL_SUPABASE}/auth/v1${caminho}`, {
-    method: 'POST',
+    method: metodo,
     headers: {
       'Content-Type': 'application/json',
       apikey: CHAVE_PUBLICAVEL,
@@ -63,13 +65,17 @@ async function chamarAuth(caminho, { corpo, token } = {}) {
   let dados = {};
   try { dados = await resposta.json(); } catch { /* logout devolve corpo vazio */ }
   if (!resposta.ok) {
+    // O status e o codigo viajam junto com a mensagem: quem chama precisa
+    // distinguir 'senha errada' de 'o servidor de e-mail nao respondeu' —
+    // sao dois problemas com donos diferentes.
+    const codigo = dados.error_code || dados.error || '';
+    const erro = (m) => Object.assign(new ErroDeEntrada(m), { status: resposta.status, codigo });
     // Uma mensagem so' para credencial errada, como sempre foi: distinguir
     // entregaria de graca quais e-mails existem.
-    const codigo = dados.error_code || dados.error || '';
     if (resposta.status === 400 || codigo === 'invalid_credentials' || codigo === 'invalid_grant') {
-      throw new ErroDeEntrada('E-mail ou senha nao confere');
+      throw erro(mensagem400);
     }
-    throw new ErroDeEntrada(dados.msg || dados.error_description || 'Nao deu para entrar agora. Tente de novo.');
+    throw erro(dados.msg || dados.error_description || 'Nao deu para entrar agora. Tente de novo.');
   }
   return dados;
 }
@@ -99,6 +105,126 @@ export async function sairDaConta() {
   if (sessao?.access) {
     try { await chamarAuth('/logout', { token: sessao.access }); } catch { /* segue */ }
   }
+}
+
+/* ------------------------------------------------- esqueci minha senha */
+
+/**
+ * Pede o e-mail com o link de recuperacao.
+ *
+ * O GoTrue responde OK mesmo para e-mail que nao existe, de proposito — e'
+ * a mesma razao da mensagem unica de credencial errada: responder "este
+ * e-mail nao esta cadastrado" entregaria de graca a lista de quem tem
+ * acesso. Por isso a tela promete "SE estiver cadastrado", nunca "enviamos".
+ *
+ * O que ele nao esconde e' falha no ENVIO. Projeto sem servidor de e-mail
+ * proprio responde com erro aqui, e a tela tem de dizer isso: prometer um
+ * e-mail que nunca sai e' pior que nao ter o botao — a pessoa fica
+ * esperando em vez de chamar o administrador.
+ *
+ * O `redirect_to` precisa estar na lista de URLs autorizadas do projeto
+ * (Authentication > URL Configuration). Fora da lista, o GoTrue manda o
+ * link para a Site URL e a pessoa cai em outro endereco.
+ */
+export async function pedirRecuperacao(email) {
+  const destino = `${window.location.origin}/`;
+  try {
+    await chamarAuth(`/recover?redirect_to=${encodeURIComponent(destino)}`, {
+      corpo: { email },
+      mensagem400: 'E-mail invalido',
+    });
+  } catch (e) {
+    if (e.status === 429) {
+      throw new ErroDeEntrada('Um link ja foi pedido ha pouco. Espere alguns minutos e tente de novo.');
+    }
+    if (e.status >= 500) {
+      throw new ErroDeEntrada(
+        'O envio de e-mail nao esta funcionando. Peca ao administrador para redefinir sua senha.',
+      );
+    }
+    throw e;
+  }
+}
+
+/**
+ * A volta do link, lida do FRAGMENTO da URL (#access_token=...).
+ *
+ * Fragmento nao vai para servidor nenhum — nem para o nosso, nem para o
+ * proxy da empresa, nem para o log do Vercel. E' por isso que o GoTrue
+ * devolve a sessao ali e nao em parametro de consulta.
+ *
+ * Lido UMA vez por carregamento e apagado da barra de endereco na hora:
+ * token em URL vira historico do navegador e print de tela em grupo de
+ * mensagem. A leitura fica memorizada porque o React chama o componente
+ * duas vezes em desenvolvimento — na segunda o fragmento ja' nao existe.
+ *
+ * Devolve `{ access, refresh, exp }` quando o link vale, `{ erro }` quando
+ * o proprio GoTrue recusou (link vencido ou ja' usado) e null quando nao ha
+ * recuperacao nenhuma em curso.
+ */
+let recuperacao;
+
+export function recuperacaoPendente() {
+  if (recuperacao !== undefined) return recuperacao;
+  recuperacao = null;
+  try {
+    const bruto = window.location.hash || '';
+    const p = new URLSearchParams(bruto.startsWith('#') ? bruto.slice(1) : bruto);
+    const limpar = () => window.history.replaceState(
+      null, '', window.location.pathname + window.location.search,
+    );
+    if (p.get('type') === 'recovery' && p.get('access_token')) {
+      recuperacao = {
+        access: p.get('access_token'),
+        refresh: p.get('refresh_token'),
+        exp: Math.floor(Date.now() / 1000) + Number(p.get('expires_in') || 3600),
+      };
+      limpar();
+    } else if (p.get('error') || p.get('error_code')) {
+      // Link vencido e' o caso comum: o de recuperacao vale uma hora. Sem
+      // esta mensagem a pessoa cai na tela de entrada sem entender por que
+      // o link "nao fez nada".
+      recuperacao = {
+        erro: p.get('error_code') === 'otp_expired'
+          ? 'O link expirou. Peca um novo em "Esqueci minha senha".'
+          : 'O link nao vale mais. Peca um novo em "Esqueci minha senha".',
+      };
+      limpar();
+    }
+  } catch { /* sem DOM (teste) ou fragmento malformado: nao ha recuperacao */ }
+  return recuperacao;
+}
+
+/**
+ * Troca a senha com o token que veio no link.
+ *
+ * A sessao so' e' guardada DEPOIS que a senha muda. Guardar antes deixaria
+ * quem abriu o link dentro do sistema sem trocar nada — o link de
+ * recuperacao viraria uma porta lateral de entrada, valida por uma hora.
+ */
+export async function definirSenhaComToken(dados, senha) {
+  try {
+    await chamarAuth('/user', {
+      metodo: 'PUT',
+      token: dados.access,
+      corpo: { password: senha },
+      mensagem400: 'Nao deu para trocar a senha. Peca um link novo.',
+    });
+  } catch (e) {
+    if (e.codigo === 'same_password') {
+      throw new ErroDeEntrada('A senha nova precisa ser diferente da atual.');
+    }
+    // O minimo do projeto pode ser maior que o da tela; a recusa vem em
+    // ingles do GoTrue e nao serve para quem esta' na fabrica.
+    if (e.codigo === 'weak_password') {
+      throw new ErroDeEntrada('Senha fraca demais. Use uma senha mais longa.');
+    }
+    if (e.status === 401 || e.status === 403) {
+      throw new ErroDeEntrada('O link expirou. Peca um novo em "Esqueci minha senha".');
+    }
+    throw e;
+  }
+  guardar(GUARDA_SESSAO, { access: dados.access, refresh: dados.refresh, exp: dados.exp });
 }
 
 /* --------------------------------------------------- token para a API */
