@@ -1,7 +1,7 @@
 import { claro } from '../../theme/tokensAnalise.js';
 import { formatarDuracao, formatarSegundos } from '../../domain/cronoanalise.js';
 import { PRIORIDADES } from '../../domain/sugestoes.js';
-import { GraficoYamazumi } from './graficos.jsx';
+import { GraficoTendencia, GraficoYamazumi } from './graficos.jsx';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
 
@@ -235,6 +235,15 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
       <div style={est.grafico}>
         <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} altura={300} />
       </div>
+      {/* TENDENCIA — a ordem dos ciclos, que o TO (media) apaga.
+          Vai no papel porque e' a evidencia da sugestao "tempos subindo":
+          quem discute um tempo padrao seis meses depois precisa ver se a
+          coleta foi de ritmo constante ou de operador cansando. Duas
+          colunas de largura fixa: o container esta' oculto na tela, entao a
+          medicao automatica devolveria zero. */}
+      <div style={est.grafico}>
+        <GraficoTendencia operacoes={analise.comDados} altura={120} larguraFixa={312} colunas={2} />
+      </div>
       {/* Legenda em PALAVRAS, nao so formula: o relatorio circula em reuniao
           com gente que nao vive de cronoanalise — "TO (s)" precisa dizer o
           que e' sem ninguem perguntar. A formula vai junto, entre parenteses,
@@ -254,6 +263,7 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
             ['Parado', 'Tempo parado', 'tempo registrado com a produção parada (setup, falta de material, manutenção). Descontado do ciclo: não entra no TO.'],
             ['Σ TP', 'Soma dos tempos padrão', 'tempo padrão total do produto neste posto, somando as operações.'],
             ['Takt Time', 'Ritmo da demanda', 'tempo disponível por peça para atender a produção do dia (tempo ÷ quantidade). Operadores = Σ TP ÷ Takt.'],
+            ['Tendência', 'Reta sobre os ciclos', 'reta ajustada aos ciclos na ordem da coleta; a % é quanto ela sobe ou cai do primeiro ao último. Só conta como tendência com 5% ou mais e ciclos que seguem a reta — abaixo disso é dispersão (CV%).'],
           ].map(([sigla, nome, texto]) => (
             <div key={sigla} style={est.itemLegenda}>
               <span style={est.legendaSigla}>{sigla}</span>

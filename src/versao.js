@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.63.0',
+    data: '2026-09-10',
+    titulo: 'A tendência da coleta ganhou gráfico — na tela e no papel',
+    itens: [
+      'NOVA SEÇÃO "TENDÊNCIA" NO ESTUDO ABERTO: um quadro por operação com cada ciclo na ordem em que foi cronometrado e a reta de tendência por cima. Antes a sugestão "tempos subindo" dizia só a porcentagem; agora dá para ver ONDE o ritmo mudou — se o operador foi cansando do meio para o fim (fadiga), se só os primeiros ciclos foram lentos (aquecimento) ou se é dispersão que a reta resume mal.',
+      'CADA QUADRO DIZ EM PALAVRAS o que a curva mostra: ciclos subindo, ciclos caindo, estável ou sem direção — e o que fazer com isso. "Sem direção" é novidade: variação grande que não segue a reta é dispersão (CV%), não tendência, e o sistema não chama isso de estável.',
+      'A FOLHA DE ANÁLISE IMPRESSA leva os mesmos quadros, em duas colunas, logo abaixo do Yamazumi, e a legenda explica como a reta é lida. É a evidência de que uma coleta foi de ritmo constante — ou não — quando o tempo padrão for discutido meses depois. O Resumo Executivo de uma página continua como era.',
+    ],
+  },
+  {
     versao: '2.62.6',
     data: '2026-09-02',
     titulo: 'Duas correções que a reorganização deixou à vista',

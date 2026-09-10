@@ -266,6 +266,9 @@ export const est = {
     margin: 0, padding: `${espaco.xl}px`, ...tipo('corpo'),
     color: claro.textoMedio, lineHeight: 1.6, maxWidth: 720,
   },
+  // O grafico de tendencia ja' traz moldura propria (figure): aqui so' o
+  // respiro ate' a borda do bloco.
+  corpoTendencia: { padding: `0 ${espaco.xl}px ${espaco.xl}px` },
   listaMotivos: {
     display: 'flex', flexDirection: 'column', gap: espaco.lg,
     padding: `${espaco.lg}px ${espaco.xl}px`,
