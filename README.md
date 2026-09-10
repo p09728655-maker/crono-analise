@@ -470,37 +470,57 @@ cadastro e o Supabase envia um link que abre o app em "Definir nova senha"
 (`src/features/analise/DefinirNovaSenha.jsx`). O link vale uma hora e serve
 uma vez.
 
-Três decisões que não aparecem na tela:
+O pedido **não vai do navegador para o Supabase**, como entrar e sair vão:
+passa por `api/recuperar-senha.js`. A razão é uma só, e é de controle de
+acesso: o `/recover` do GoTrue manda link para qualquer conta que exista,
+inclusive a do analista cadastrado **sem senha** — que por decisão do sistema
+é identidade e não abre login. Sem o filtro, essa pessoa criaria a própria
+senha pelo link e entraria com o papel dela. Quem sabe distinguir isso é o
+banco. Pelo mesmo motivo ficam de fora o usuário inativo e o tablet (papel
+`coletor`), que se recupera pareando de novo no PC.
 
-- **A resposta é a mesma para e-mail cadastrado e não cadastrado.** É a
-  mesma razão da mensagem única de credencial errada: distinguir entregaria
-  a lista de quem tem acesso. Por isso a confirmação diz "SE este e-mail
-  estiver cadastrado".
-- **Falha de envio não vira promessa.** Sem servidor de e-mail configurado o
-  GoTrue responde com erro, e a tela diz que o envio não funcionou e manda
-  chamar o administrador — em vez de deixar a pessoa esperando um e-mail que
-  nunca sai.
-- **A sessão só é guardada DEPOIS que a senha muda.** Guardar antes deixaria
-  quem abriu o link dentro do sistema sem trocar nada: o link viraria porta
-  lateral de entrada, válida por uma hora. O token chega no FRAGMENTO da URL
-  (`#access_token=...`), que não vai para servidor nenhum, e é apagado da
+Outras três decisões que não aparecem na tela:
+
+- **A resposta é a mesma para e-mail cadastrado e não cadastrado** — e
+  também quando o envio falha. É a mesma razão da mensagem única de
+  credencial errada: distinguir entregaria a lista de quem tem acesso. O
+  preço é que falha de SMTP não chega a quem clicou; por isso a confirmação
+  já traz a saída alternativa ("peça ao administrador") e a falha fica no log
+  do servidor.
+- **A sessão só é guardada DEPOIS que a senha muda** — e nunca no tablet
+  pareado. Guardar antes deixaria quem abriu o link dentro do sistema sem
+  trocar nada; guardar no tablet faria o aparelho compartilhado passar a
+  operar com o papel de quem abriu o e-mail. O token chega no FRAGMENTO da
+  URL (`#access_token=...`), que não vai para servidor nenhum, e é apagado da
   barra de endereço assim que é lido.
+- **Trocar a senha derruba as outras sessões** (`/logout?scope=others`), como
+  `api/_lib/contas.js` já faz na troca pelo administrador.
 
 **O que precisa estar configurado no projeto Supabase** — sem isto o botão
-existe e reporta falha honestamente, mas nenhum e-mail sai:
+existe, responde normalmente e nenhum e-mail sai:
 
 1. **SMTP próprio** em Authentication → Emails → SMTP Settings. O serviço de
    e-mail embutido do Supabase é para desenvolvimento: tem limite de poucos
    envios por hora e não se destina a produção.
 2. **URL do app na lista de redirecionamento** (Authentication → URL
-   Configuration → Site URL e Redirect URLs). Fora da lista, o link chega
-   apontando para outro endereço.
+   Configuration → Site URL e Redirect URLs). Fora da lista, o GoTrue ignora
+   o `redirect_to` e manda o link para a Site URL.
 3. Opcional: o **template de recuperação** em português (Authentication →
    Emails → Templates).
 
+Depois de configurar, **teste com um e-mail real**: como a resposta é sempre a
+mesma, um SMTP quebrado não aparece na tela.
+
+**Dois casos que gastam o link antes da pessoa:** filtro de e-mail
+corporativo que pré-visita links (o Safe Links do Microsoft 365 é o caso
+comum) consome o token ao varrer a mensagem; e recarregar a tela "Definir
+nova senha" antes de salvar perde o fragmento, que já foi apagado da URL. Nos
+dois casos a saída é pedir outro link — ou o administrador em Ferramentas →
+Analistas.
+
 O caminho curto continua existindo e não depende de e-mail: o administrador
-redefine a senha de qualquer analista em **Ferramentas → Analistas**. O que
-a recuperação por e-mail resolve é o caso em que não há administrador
+redefine a senha de qualquer analista em **Ferramentas → Analistas**. O que a
+recuperação por e-mail resolve é o caso em que não há administrador
 disponível — inclusive quando quem esqueceu a senha é o próprio.
 
 ### `client_id` não é o aparelho

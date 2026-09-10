@@ -13,7 +13,7 @@ import PrepararAparelho from './features/coleta/PrepararAparelho.jsx';
 import DefinirNovaSenha from './features/analise/DefinirNovaSenha.jsx';
 import { caminhos, ehDesktop, useRota } from './lib/dispositivo.js';
 import { obterEstudo } from './lib/api.js';
-import { aparelhoPareado, recuperacaoPendente, temSessao } from './lib/supabase.js';
+import { aparelhoPareado, limparRecuperacao, recuperacaoPendente, temSessao } from './lib/supabase.js';
 import { carregarMotivos } from './lib/motivosParada.js';
 import { cores as escuro } from './theme/tokens.js';
 
@@ -154,13 +154,19 @@ export default function App() {
    * a unica tela possivel e' a de parear. As duas condicoes reagem ao
    * useSessaoViva la' de cima: entrar/sair troca a tela na hora.
    */
-  // Antes de qualquer porta: quem chega com link de recuperacao valido vem
-  // trocar a senha, seja PC ou tablet. Link vencido nao abre tela nenhuma —
-  // vira o aviso que explica, na propria entrada, por que nao abriu.
-  if (recuperacao?.access) {
-    return <DefinirNovaSenha dados={recuperacao} aoConcluir={() => setRecuperacao(null)} />;
+  /**
+   * Antes de qualquer porta: quem chegou por link de recuperacao resolve
+   * isso primeiro, em qualquer aparelho.
+   *
+   * Vale tambem para o link VENCIDO. Antes o aviso so' aparecia no PC sem
+   * sessao; quem abrisse o e-mail no celular — o caso comum — caia na
+   * coleta sem uma palavra sobre o link que acabou de clicar.
+   */
+  if (recuperacao) {
+    const encerrar = () => { limparRecuperacao(); setRecuperacao(null); };
+    return <DefinirNovaSenha dados={recuperacao} aoConcluir={encerrar} />;
   }
-  if (desktop && !temSessao()) return <EntrarNoPc aviso={recuperacao?.erro} />;
+  if (desktop && !temSessao()) return <EntrarNoPc />;
   if (!desktop && !temSessao() && !aparelhoPareado()) return <PrepararAparelho />;
 
   return (

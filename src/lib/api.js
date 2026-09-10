@@ -237,6 +237,22 @@ export const entrar = async (email, senha) => {
 };
 export const sair = () => sairDaConta();
 
+/**
+ * "Esqueci minha senha" — o pedido passa pela NOSSA API, nao pelo Supabase.
+ *
+ * O /recover do GoTrue manda link para qualquer conta que exista, inclusive
+ * a do analista cadastrado SEM senha, que por decisao do sistema nao entra.
+ * Quem sabe distinguir isso e' o banco; ver api/recuperar-senha.js.
+ *
+ * O `destino` diz de qual endereco o pedido saiu — a mesma instalacao atende
+ * producao e pre-visualizacao, e o link tem de voltar para onde a pessoa
+ * estava.
+ */
+export const pedirRecuperacao = (email) => requisitar('/recuperar-senha', {
+  metodo: 'POST',
+  corpo: { email, destino: `${window.location.origin}/` },
+});
+
 /* ---------------------------------------------- pareamento do tablet */
 export const gerarCodigoPareamento = () =>
   requisitar('/dispositivos', { metodo: 'POST', corpo: { acao: 'codigo' } });

@@ -51,7 +51,7 @@ export const aparelhoPareado = () => Boolean(ler(GUARDA_APARELHO)?.email);
 /* ------------------------------------------------------ conversa GoTrue */
 
 async function chamarAuth(caminho, {
-  corpo, token, metodo = 'POST', mensagem400 = 'E-mail ou senha nao confere',
+  corpo, token, metodo = 'POST', mensagem400 = 'E-mail ou senha não confere',
 } = {}) {
   const resposta = await fetch(`${URL_SUPABASE}/auth/v1${caminho}`, {
     method: metodo,
@@ -75,7 +75,7 @@ async function chamarAuth(caminho, {
     if (resposta.status === 400 || codigo === 'invalid_credentials' || codigo === 'invalid_grant') {
       throw erro(mensagem400);
     }
-    throw erro(dados.msg || dados.error_description || 'Nao deu para entrar agora. Tente de novo.');
+    throw erro(dados.msg || dados.error_description || 'Não deu para entrar agora. Tente de novo.');
   }
   return dados;
 }
@@ -110,41 +110,14 @@ export async function sairDaConta() {
 /* ------------------------------------------------- esqueci minha senha */
 
 /**
- * Pede o e-mail com o link de recuperacao.
+ * O PEDIDO do link nao mora aqui: mora em api/recuperar-senha.js.
  *
- * O GoTrue responde OK mesmo para e-mail que nao existe, de proposito — e'
- * a mesma razao da mensagem unica de credencial errada: responder "este
- * e-mail nao esta cadastrado" entregaria de graca a lista de quem tem
- * acesso. Por isso a tela promete "SE estiver cadastrado", nunca "enviamos".
- *
- * O que ele nao esconde e' falha no ENVIO. Projeto sem servidor de e-mail
- * proprio responde com erro aqui, e a tela tem de dizer isso: prometer um
- * e-mail que nunca sai e' pior que nao ter o botao — a pessoa fica
- * esperando em vez de chamar o administrador.
- *
- * O `redirect_to` precisa estar na lista de URLs autorizadas do projeto
- * (Authentication > URL Configuration). Fora da lista, o GoTrue manda o
- * link para a Site URL e a pessoa cai em outro endereco.
+ * Chamar o /recover do GoTrue daqui mandaria link para qualquer conta que
+ * exista — inclusive a do analista cadastrado SEM senha, que por decisao do
+ * sistema nao entra. Filtrar isso exige consultar o banco, e o navegador nao
+ * consulta. O que sobrou neste arquivo e' a VOLTA do link, que e' conversa
+ * direta com o GoTrue como entrar e sair.
  */
-export async function pedirRecuperacao(email) {
-  const destino = `${window.location.origin}/`;
-  try {
-    await chamarAuth(`/recover?redirect_to=${encodeURIComponent(destino)}`, {
-      corpo: { email },
-      mensagem400: 'E-mail invalido',
-    });
-  } catch (e) {
-    if (e.status === 429) {
-      throw new ErroDeEntrada('Um link ja foi pedido ha pouco. Espere alguns minutos e tente de novo.');
-    }
-    if (e.status >= 500) {
-      throw new ErroDeEntrada(
-        'O envio de e-mail nao esta funcionando. Peca ao administrador para redefinir sua senha.',
-      );
-    }
-    throw e;
-  }
-}
 
 /**
  * A volta do link, lida do FRAGMENTO da URL (#access_token=...).
@@ -163,6 +136,17 @@ export async function pedirRecuperacao(email) {
  * recuperacao nenhuma em curso.
  */
 let recuperacao;
+
+/**
+ * Encerra a recuperacao em curso.
+ *
+ * O memo guarda o token ate' a aba fechar; sem isto, remontar o App (recarga
+ * a quente em desenvolvimento) reabriria "Definir nova senha" com um token
+ * ja' gasto.
+ */
+export function limparRecuperacao() {
+  recuperacao = null;
+}
 
 export function recuperacaoPendente() {
   if (recuperacao !== undefined) return recuperacao;
@@ -186,8 +170,8 @@ export function recuperacaoPendente() {
       // o link "nao fez nada".
       recuperacao = {
         erro: p.get('error_code') === 'otp_expired'
-          ? 'O link expirou. Peca um novo em "Esqueci minha senha".'
-          : 'O link nao vale mais. Peca um novo em "Esqueci minha senha".',
+          ? 'O link expirou. Peça um novo em "Esqueci minha senha".'
+          : 'O link não vale mais. Peça um novo em "Esqueci minha senha".',
       };
       limpar();
     }
@@ -208,7 +192,7 @@ export async function definirSenhaComToken(dados, senha) {
       metodo: 'PUT',
       token: dados.access,
       corpo: { password: senha },
-      mensagem400: 'Nao deu para trocar a senha. Peca um link novo.',
+      mensagem400: 'Não deu para trocar a senha. Peça um link novo.',
     });
   } catch (e) {
     if (e.codigo === 'same_password') {
@@ -220,11 +204,32 @@ export async function definirSenhaComToken(dados, senha) {
       throw new ErroDeEntrada('Senha fraca demais. Use uma senha mais longa.');
     }
     if (e.status === 401 || e.status === 403) {
-      throw new ErroDeEntrada('O link expirou. Peca um novo em "Esqueci minha senha".');
+      throw new ErroDeEntrada('O link expirou. Peça um novo em "Esqueci minha senha".');
     }
     throw e;
   }
+  /**
+   * As outras sessoes caem junto — a mesma regra que a troca de senha pelo
+   * administrador ja' segue (api/_lib/contas.js): quem troca a senha esta'
+   * desconfiando dela, e o que estava aberto por ai' nao pode continuar.
+   * Melhor esforco: se o GoTrue desta versao nao aceitar o escopo, a senha
+   * nova ja' foi gravada e e' isso que importa.
+   */
+  try { await chamarAuth('/logout?scope=others', { token: dados.access }); } catch { /* segue */ }
+
+  /**
+   * TABLET PAREADO NAO ADOTA A SESSAO PESSOAL.
+   *
+   * O aparelho do chao de fabrica tem conta propria, de papel 'coletor', e
+   * e' assim que ele coleta tudo e administra nada. Guardar aqui a sessao de
+   * quem abriu o e-mail deixaria o tablet compartilhado rodando com o papel
+   * dessa pessoa — admin, possivelmente — ate' alguem perceber. A senha nova
+   * vale; entrar com ela e' no PC.
+   */
+  if (aparelhoPareado()) return { entrou: false };
+
   guardar(GUARDA_SESSAO, { access: dados.access, refresh: dados.refresh, exp: dados.exp });
+  return { entrou: true };
 }
 
 /* --------------------------------------------------- token para a API */

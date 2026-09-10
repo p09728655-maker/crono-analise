@@ -3,8 +3,7 @@ import { claro, fonteAnalise } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, raio, rotulo, tipo } from '../../theme/escala.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
-import { entrar } from '../../lib/api.js';
-import { pedirRecuperacao } from '../../lib/supabase.js';
+import { entrar, pedirRecuperacao } from '../../lib/api.js';
 import { Cronometro, RECURSOS } from '../../components/iconesRecursos.jsx';
 
 /**
@@ -30,10 +29,10 @@ import { Cronometro, RECURSOS } from '../../components/iconesRecursos.jsx';
  * indicadores vivem do outro lado da porta, onde ha' sessao e ha' a quem
  * responder.
  */
-export default function EntrarNoPc({ aoEntrar, aviso }) {
+export default function EntrarNoPc({ aoEntrar }) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [erro, setErro] = useState(aviso || null);
+  const [erro, setErro] = useState(null);
   const [ocupado, setOcupado] = useState(false);
   /**
    * 'entrar' e' a porta; 'recuperar' e' o pedido de link por e-mail.
@@ -180,11 +179,19 @@ export default function EntrarNoPc({ aoEntrar, aviso }) {
               {/* Nunca "enviamos para voce": o servidor responde igual para
                   e-mail cadastrado e nao cadastrado, e a tela nao pode
                   afirmar o que ela nao sabe — nem entregar, pela diferenca
-                  de resposta, quem tem acesso ao sistema. */}
+                  de resposta, quem tem acesso ao sistema.
+
+                  A saida alternativa vem JUNTO da confirmacao, e nao depois
+                  de a pessoa esperar: como a resposta e' sempre a mesma,
+                  falha no envio (projeto sem SMTP, e-mail barrado) chega
+                  aqui como silencio. Quem esta' sem entrar precisa saber,
+                  desde ja', que existe um caminho que nao depende de
+                  e-mail. */}
               {enviado && (
                 <p style={est.sucesso} role="status">
-                  Se este e-mail estiver cadastrado, o link já está a caminho.
-                  Verifique também a caixa de spam.
+                  Se este e-mail estiver cadastrado, o link já está a caminho —
+                  verifique também a caixa de spam. Se não chegar em alguns
+                  minutos, peça ao administrador para redefinir sua senha.
                 </p>
               )}
               {erro && <p style={est.erro} role="alert">{erro}</p>}
