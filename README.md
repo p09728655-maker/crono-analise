@@ -100,6 +100,28 @@ apontamento na mão — é trabalho de escritório. A lista é gravada inteira
 período: sem tempo de máquina rodando não há ritmo, e a conferência sairia
 dos cálculos sem dizer por quê — o botão trava e o servidor recusa.
 
+**Tendência do ritmo no tempo** (`src/domain/tendenciaPeriodo.js`): um quadro
+por máquina com cada medição na data em que foi feita e a reta do período. É
+a deriva que a média esconde — o posto que fazia 780 pç/h e faz 700 aparece
+como 740 no número único. O eixo X é o tempo REAL, não a ordem da medição:
+quatro medições numa manhã e uma dez dias depois não são cinco passos iguais.
+
+A armadilha que este quadro existe para evitar: peça diferente rende diferente
+na mesma máquina (18% entre a mais rápida e a mais lenta, no relatório de
+setembro). Uma reta sobre o ritmo bruto acusa "a máquina está caindo" quando o
+que mudou foi o que ela está furando. Por isso a **direção só é afirmada
+depois de dividir cada medição pela média da própria peça naquela máquina** —
+sobra o que é do tempo. O gráfico continua desenhando o ritmo bruto, que é o
+número que o analista conhece, e a reta sai **tracejada** enquanto a tendência
+não é confirmada. Quando a variação acompanha a peça, a leitura diz isso e
+manda para o quadro Ritmo por peça.
+
+Normalizar não é de graça: as médias de peça são estimadas nos mesmos dados,
+e cada uma custa um grau de liberdade. O R² mínimo é cobrado sobre
+`n − k − 1`, não sobre `n − 2` — com 9 medições de 4 peças, exige 0,66 em vez
+de 0,44. No extremo em que cada peça foi medida uma vez só, não sobra nada
+para o tempo explicar e nada é afirmado.
+
 A tela traz o mesmo tratamento do painel do estudo: **gráfico de ritmo por
 máquina** (a barra ainda em medição leva textura hachurada e rótulo, não só
 cor) e **Análise do período** — gerada por **algoritmo**
@@ -659,7 +681,8 @@ reenviar o mesmo lote não duplica nada.
 | CV% | desvio padrão amostral ÷ média × 100 |
 | Nievel | n = (1,96 × CV% / 5)² — 95 % de confiança, ±5 % de erro |
 | Takt | tempo disponível ÷ quantidade |
-| Tendência | regressão linear sobre a ordem dos ciclos; % (critério) = inclinação × (n−1) ÷ média; direção só com \|%\| ≥ 5 e R² ≥ t²₉₅/(t²₉₅+n−2). No quadro, a % exibida é fim ÷ início da reta |
+| Tendência (estudo) | regressão linear sobre a ordem dos ciclos; % (critério) = inclinação × (n−1) ÷ média; direção só com \|%\| ≥ 5 e R² ≥ t²₉₅/(t²₉₅+n−2). No quadro, a % exibida é fim ÷ início da reta |
+| Tendência (período) | regressão do ritmo (pç/h) sobre a DATA, em dias; direção só com \|%\| ≥ 8 e R² ≥ t²₉₅/(t²₉₅+df) na regressão do ritmo dividido pela média da própria peça, com df = n − k − 1 (k = peças medidas: cada média estimada custa um grau de liberdade) |
 | Nº operadores | Σ TP ÷ Takt |
 | OEE | Disponibilidade × Desempenho × Qualidade |
 

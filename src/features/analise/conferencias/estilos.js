@@ -395,6 +395,9 @@ export const imp = {
 
   /* ---- comparativo entre maquinas no papel ---- */
   entreMaquinas: { marginBottom: 10 },
+  // Quebra POR QUADRO, nao em bloco: com muitas maquinas o conjunto passa
+  // de uma folha A4 e o "nao quebrar figura" global o partiria no meio.
+  tendencia: { marginBottom: 10 },
   // Um grupo nao se parte entre duas folhas: a tabela sem a leitura que a
   // explica (ou o contrario) e' pior do que uma folha com mais respiro.
   grupoBloco: { breakInside: 'avoid', marginBottom: 8 },

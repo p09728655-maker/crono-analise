@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.64.0',
+    data: '2026-09-10',
+    titulo: 'O relatório Ritmo por máquina ganhou o gráfico de tendência',
+    itens: [
+      'NOVO QUADRO "TENDÊNCIA DO RITMO NO TEMPO", um por máquina: cada medição aparece na DATA em que foi feita, com a reta do período por cima. É a leitura que responde "esta furadeira está rendendo menos que semana passada?" — a média do período esconde isso, porque um posto que fazia 780 pç/h e faz 700 agora aparece como 740 o tempo todo.',
+      'O QUADRO NÃO CONFUNDE MÁQUINA COM PEÇA. Peça diferente rende diferente no mesmo posto, e antes uma queda no gráfico podia ser só troca de peça entre uma data e outra. Agora a direção só é afirmada depois de descontar o efeito da peça: quando a queda acompanha a peça medida, o quadro diz isso com todas as letras e manda para o Ritmo por peça, em vez de acusar a máquina.',
+      'A RETA SAI TRACEJADA enquanto a tendência não é confirmada, e cheia quando é. Reta cheia é afirmação; tracejada é só o que os pontos fazem.',
+      'A EXIGÊNCIA CRESCE COM O NÚMERO DE PEÇAS medidas: comparar peça com peça consome parte da informação, e o quadro cobra isso antes de afirmar. Duas medições de cada peça não sustentam conclusão, por mais limpa que a queda pareça no gráfico.',
+      'A TENDÊNCIA VAI PARA A FOLHA IMPRESSA como gráfico, sem depender da chave "levar a análise ao papel" — antes ela existia só como frase, dentro da análise, e sumia do papel quando a chave estava desligada.',
+      'NO ESTUDO DE TEMPOS, o selo do quadro de tendência parou de escrever "Estável · −7%": porcentagem ao lado da palavra estável dizia uma coisa e o contrário na mesma linha.',
+    ],
+  },
+  {
     versao: '2.63.1',
     data: '2026-09-10',
     titulo: 'A tendência parou de afirmar direção com poucos ciclos',
