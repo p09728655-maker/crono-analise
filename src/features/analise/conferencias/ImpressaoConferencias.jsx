@@ -170,9 +170,11 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
           dia): aqui a forma da linha E' a informacao, um numero por data nao
           mostra deriva. Largura fixa porque na tela o bloco esta' oculto e a
           medicao automatica devolveria zero. */}
+      {/* Sem <h2> proprio: o grafico ja' traz o titulo no figcaption, e os
+          dois juntos imprimiam "Tendencia do ritmo no tempo" duas vezes
+          seguidas. Mesmo arranjo do irmao no estudo. */}
       {resumo.length > 0 && (
         <section style={imp.tendencia}>
-          <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Tendência do ritmo no tempo</h2>
           <GraficoTendenciaPeriodo
             conferencias={linhas}
             resumo={resumo}

@@ -522,16 +522,21 @@ await movel.close();
   checar(true, 'tendencia no tempo aparece no relatorio');
 
   const texto = await quadro.innerText();
-  checar(/Efeito da peça/.test(texto),
-    'queda que e so troca de peca NAO vira "a maquina esta caindo"');
-  checar(/acompanha a peça medida/.test(texto) && /Ritmo por peça/.test(texto),
-    'o quadro nomeia a causa e manda para o quadro certo');
-  // O selo NAO carrega porcentagem quando nada foi confirmado sobre a
-  // linha — mas aqui foi ("Efeito da peca" explica os 20% brutos).
+  // As pecas nao se sobrepoem no tempo: nao da' para dizer se caiu a
+  // maquina ou se mudou a peca. O quadro tem de recusar os DOIS lados —
+  // dizer "e' a peca" aqui absolveria uma maquina que pode estar caindo.
+  checar(/Não dá para separar/.test(texto),
+    'sem peca acompanhada no periodo, o quadro nao escolhe lado');
+  checar(/pode ser a máquina rendendo menos/.test(texto),
+    'a queda continua na mesa: o quadro nao absolve a maquina');
+  checar(/Meça a MESMA peça outra vez/.test(texto),
+    'e diz o que fazer para sair desse estado');
+  checar(!/acompanha a peça medida/.test(texto),
+    'NAO afirma que a variacao e da peca sem ter como saber');
   // O numero e' o da RETA ajustada, nao a razao entre a primeira e a
   // ultima medicao — fixar o valor exato aqui quebraria a cada ajuste do
   // vao da reta. O que importa e' que o selo diz que a linha CAI.
-  checar(/Efeito da peça · −\d+%/.test(texto), 'o selo traz o quanto a linha bruta cai');
+  checar(/Não dá para separar · −\d+%/.test(texto), 'o selo traz o quanto a linha bruta cai');
   checar(await quadro.locator('svg[aria-label^="Tendência no tempo"]').count() === 1,
     'um quadro por maquina medida');
   // A reta so' e cheia quando a direcao foi confirmada.
@@ -560,7 +565,11 @@ await movel.close();
   });
   checar(/Tendência do ritmo no tempo/.test(papel.texto), 'a tendencia sai na folha impressa');
   checar(papel.graficos === 1, 'o grafico vai ao papel, nao so o texto');
-  checar(/acompanha a peça medida/.test(papel.texto), 'a folha traz a mesma ressalva da tela');
+  checar(/Meça a MESMA peça outra vez/.test(papel.texto), 'a folha traz a mesma ressalva da tela');
+  // O grafico ja' traz o titulo no figcaption: um <h2> por cima imprimia a
+  // mesma frase duas vezes seguidas.
+  checar((papel.texto.match(/Tendência do ritmo no tempo/g) || []).length === 1,
+    'o titulo da tendencia sai UMA vez na folha, nao duplicado');
   checar(!papel.estoura, 'a folha cabe na largura util do A4');
   checar(errosT.length === 0, `sem erro de pagina na tendencia (${errosT.join('; ') || 'nenhum'})`);
 

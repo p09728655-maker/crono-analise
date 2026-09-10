@@ -113,14 +113,32 @@ que mudou foi o que ela está furando. Por isso a **direção só é afirmada
 depois de dividir cada medição pela média da própria peça naquela máquina** —
 sobra o que é do tempo. O gráfico continua desenhando o ritmo bruto, que é o
 número que o analista conhece, e a reta sai **tracejada** enquanto a tendência
-não é confirmada. Quando a variação acompanha a peça, a leitura diz isso e
-manda para o quadro Ritmo por peça.
+não é confirmada.
 
-Normalizar não é de graça: as médias de peça são estimadas nos mesmos dados,
-e cada uma custa um grau de liberdade. O R² mínimo é cobrado sobre
+**E a armadilha da armadilha.** Descontar a peça só é possível quando alguma
+peça foi medida em datas diferentes — é comparando a peça consigo mesma que se
+enxerga o que é do tempo. Sem isso a série normalizada vira uma reta de 1,0,
+não porque a máquina esteja constante, mas porque não há o que comparar.
+Tratar esse vazio como "é a peça" faria o relatório **absolver uma máquina em
+queda**: 900 → 450 pç/h, uma peça diferente por data, saindo no papel como
+"acompanha a peça medida, não o tempo". Por isso há **três respostas**:
+
+| Resposta | Quando |
+|---|---|
+| Ritmo subindo / caindo | a peça foi acompanhada no período e, comparada consigo mesma, o ritmo mudou |
+| Efeito da peça | a peça foi acompanhada e, comparada consigo mesma, **não** mudou — o que mudou foi o mix |
+| Não dá para separar | ninguém mediu a mesma peça em datas distantes o bastante; pode ser a máquina, pode ser a peça |
+
+O gate é a **cobertura interna**: o maior vão entre a primeira e a última
+medição da mesma peça, dividido pelo vão do período. Abaixo de 0,5 nada é
+atribuído a lado nenhum, e a leitura diz o que destrava (medir a mesma peça
+outra vez, em outra data). Nos dados de setembro a cobertura é de 1% — cada
+peça foi medida dentro de um único dia, num período de dez dias.
+
+Normalizar também não é de graça: as médias de peça são estimadas nos mesmos
+dados, e cada uma custa um grau de liberdade. O R² mínimo é cobrado sobre
 `n − k − 1`, não sobre `n − 2` — com 9 medições de 4 peças, exige 0,66 em vez
-de 0,44. No extremo em que cada peça foi medida uma vez só, não sobra nada
-para o tempo explicar e nada é afirmado.
+de 0,44.
 
 A tela traz o mesmo tratamento do painel do estudo: **gráfico de ritmo por
 máquina** (a barra ainda em medição leva textura hachurada e rótulo, não só

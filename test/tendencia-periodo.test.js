@@ -97,12 +97,69 @@ describe('a armadilha da peca', () => {
     expect(s.misturaPecas).toBe(true);
   });
 
-  it('a leitura nomeia a causa e manda para o quadro certo', () => {
+  it('sem peca acompanhada no periodo, a leitura recusa os DOIS lados', () => {
+    // As pecas nao se sobrepoem no tempo: nao da' para dizer se caiu a
+    // maquina ou mudou a peca. Absolver a maquina aqui seria o pior erro.
     const l = lerTendenciaPeriodo(serieDoPeriodo(trocaDePeca, 'FURADEIRA 16'));
+    expect(l.rotulo).toBe('Não dá para separar');
+    expect(l.frase).toMatch(/pode ser a máquina rendendo menos/);
+    expect(l.frase).toMatch(/Meça a MESMA peça outra vez/);
+    expect(l.tom).toBe('atencao');
+  });
+
+  it('"Efeito da peça" so e afirmado com uma peca acompanhada no periodo', () => {
+    // RAPIDA medida do primeiro ao ultimo dia e plana; LENTA entra no
+    // meio e puxa a linha bruta para baixo. Aqui a causa E conhecida.
+    const s = serieDoPeriodo([
+      ritmo('2026-09-01T07:00:00', 'RAPIDA', 900, 1),
+      ritmo('2026-09-11T07:00:00', 'RAPIDA', 900, 2),
+      ritmo('2026-09-21T07:00:00', 'RAPIDA', 900, 3),
+      ritmo('2026-09-12T07:00:00', 'LENTA', 600, 4),
+      ritmo('2026-09-16T07:00:00', 'LENTA', 600, 5),
+      ritmo('2026-09-20T07:00:00', 'LENTA', 600, 6),
+    ], 'FURADEIRA 16');
+    expect(s.podeSeparar).toBe(true);
+    const l = lerTendenciaPeriodo(s);
     expect(l.rotulo).toBe('Efeito da peça');
-    expect(l.frase).toMatch(/acompanha a peça medida/);
+    expect(l.frase).toMatch(/comparando cada peça consigo mesma/);
     expect(l.frase).toMatch(/Ritmo por peça/);
-    expect(l.frase).not.toMatch(/broca|abastecimento/);
+    expect(l.frase).not.toMatch(/broca/);
+  });
+
+  it('a maquina caindo com uma peca por data NAO e absolvida', () => {
+    // O defeito que este ramo existe para impedir: 900 -> 450 pç/h, cada
+    // data com uma peca diferente. O quadro chegou a escrever "acompanha a
+    // peca medida, nao o tempo" — o relatorio negando uma queda de metade
+    // da capacidade.
+    const s = serieDoPeriodo([
+      ritmo('2026-09-01T07:00:00', 'P1', 900, 1),
+      ritmo('2026-09-05T07:00:00', 'P2', 810, 2),
+      ritmo('2026-09-09T07:00:00', 'P3', 720, 3),
+      ritmo('2026-09-13T07:00:00', 'P4', 630, 4),
+      ritmo('2026-09-17T07:00:00', 'P5', 540, 5),
+      ritmo('2026-09-21T07:00:00', 'P6', 450, 6),
+    ], 'FURADEIRA 16');
+    const l = lerTendenciaPeriodo(s);
+    expect(l.rotulo).toBe('Não dá para separar');
+    expect(l.frase).not.toMatch(/acompanha a peça medida/);
+    expect(l.frase).not.toMatch(/não a máquina/);
+    expect(l.tom).toBe('atencao');
+  });
+
+  it('uma medicao de outra peca no fim nao vira "e a peca"', () => {
+    // Cinco medicoes da mesma peca caindo 25%, mais UMA de outra peca no
+    // ultimo dia. A queda continua la': o quadro pode nao confirmar, mas
+    // nao pode dizer que a variacao e' da peca.
+    const s = serieDoPeriodo([
+      ritmo('2026-09-01T07:00:00', 'A', 800, 1),
+      ritmo('2026-09-06T07:00:00', 'A', 750, 2),
+      ritmo('2026-09-11T07:00:00', 'A', 700, 3),
+      ritmo('2026-09-16T07:00:00', 'A', 650, 4),
+      ritmo('2026-09-21T07:00:00', 'A', 600, 5),
+      { ...ritmo('2026-09-21T07:00:00', 'B', 900, 6), iniciado_em: '2026-09-21T10:00:00-03:00', salvo_em: '2026-09-21T10:00:00-03:00' },
+    ], 'FURADEIRA 16');
+    expect(lerTendenciaPeriodo(s).rotulo).not.toBe('Efeito da peça');
+    expect(lerTendenciaPeriodo(s).rotulo).not.toBe('Ritmo estável');
   });
 
   it('queda REAL na mesma peca continua sendo acusada', () => {
@@ -117,6 +174,10 @@ describe('a armadilha da peca', () => {
     expect(l.rotulo).toBe('Ritmo caindo');
     expect(l.tom).toBe('atencao');
     expect(l.frase).toMatch(/broca/);
+    // Cada numero diz de qual serie sai: o % com a peca descontada, os
+    // extremos da linha que esta' desenhada.
+    expect(l.frase).toMatch(/Comparando cada peça consigo mesma/);
+    expect(l.frase).toMatch(/No gráfico a linha vai de .* sem esse desconto/);
   });
 
   it('subida real na mesma peca vira "vale virar padrao"', () => {
@@ -136,10 +197,10 @@ describe('a armadilha da peca', () => {
     const s = serieDoPeriodo([
       ritmo('2026-09-01T07:00:00', 'RAPIDA', 880, 1),
       ritmo('2026-09-02T07:00:00', 'LENTA', 704, 2),
-      ritmo('2026-09-06T07:00:00', 'RAPIDA', 800, 3),
-      ritmo('2026-09-07T07:00:00', 'LENTA', 640, 4),
-      ritmo('2026-09-11T07:00:00', 'RAPIDA', 720, 5),
-      ritmo('2026-09-12T07:00:00', 'LENTA', 576, 6),
+      ritmo('2026-09-11T07:00:00', 'RAPIDA', 800, 3),
+      ritmo('2026-09-12T07:00:00', 'LENTA', 640, 4),
+      ritmo('2026-09-21T07:00:00', 'RAPIDA', 720, 5),
+      ritmo('2026-09-22T07:00:00', 'LENTA', 576, 6),
     ], 'FURADEIRA 16');
     expect(s.direcao).toBe('caindo');
   });
@@ -182,8 +243,11 @@ describe('os graus de liberdade que a normalizacao consome', () => {
     ], 'FURADEIRA 16');
     expect(s.nEfetivo).toBe(1);
     expect(s.r2Minimo).toBe(1);
+    expect(s.podeSeparar).toBe(false);
     expect(s.direcao).toBe('estavel');
-    expect(lerTendenciaPeriodo(s).rotulo).toBe('Efeito da peça');
+    // "Nao da' para separar", NUNCA "e' a peca": nao ha' informacao para
+    // atribuir causa a lado nenhum.
+    expect(lerTendenciaPeriodo(s).rotulo).toBe('Não dá para separar');
   });
 });
 
@@ -205,7 +269,10 @@ describe('lerTendenciaPeriodo', () => {
     ], 'FURADEIRA 16');
     const l = lerTendenciaPeriodo(s);
     expect(l.rotulo).toBe('Ritmo estável');
-    expect(l.frase).toMatch(/referência de capacidade/);
+    // Nao promete "serve como referencia de capacidade": a serie passou no
+    // teste de nao-movimento, nao num teste de capacidade.
+    expect(l.frase).toMatch(/não subiu nem caiu/);
+    expect(l.frase).not.toMatch(/referência de capacidade/);
   });
 });
 
