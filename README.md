@@ -206,9 +206,16 @@ abas respondem **e agora**:
   (média) apaga. O eixo de cada quadro não parte do zero — o que se lê é a
   inclinação, e um eixo desde zero achataria uma subida de 12% a um fio —,
   por isso os valores ficam escritos no eixo. A leitura em palavras segue o
-  critério das sugestões: só é tendência com |variação| ≥ 5% **e** R² ≥ 0,3;
-  variação grande que não segue a reta é "sem direção" (dispersão, olhar o
-  CV%), nunca "estável".
+  critério das sugestões: só é tendência com |variação| ≥ 5% do ciclo médio
+  **e** inclinação que se distingue do acaso a 95% para o n da coleta
+  (`r2MinimoParaTendencia`: R² ≥ t²/(t²+n−2), o teste t da inclinação —
+  0,99 com 3 ciclos, 0,40 com 10, 0,20 com 20). Um R² fixo não segurava
+  amostra curta: com 3 ciclos afirmava direção em mais da metade das coletas
+  de ruído puro. Variação grande sem esse respaldo é "sem direção"
+  (dispersão, olhar o CV%, ou poucos ciclos para afirmar), nunca "estável".
+  A % escrita no quadro compara o fim da reta com o início (o que o olho vê);
+  a frase traz os dois extremos em segundos ao lado, para o número declarar
+  de onde sai.
 - **Operadores** — a fórmula `Σ TP ÷ Takt` fica escrita na tela, com a conta
   do estudo e o arredondamento para cima explicado (meio operador não existe
   no posto). Abaixo, a contribuição de cada operação e o campo *"quantos
@@ -652,7 +659,7 @@ reenviar o mesmo lote não duplica nada.
 | CV% | desvio padrão amostral ÷ média × 100 |
 | Nievel | n = (1,96 × CV% / 5)² — 95 % de confiança, ±5 % de erro |
 | Takt | tempo disponível ÷ quantidade |
-| Tendência | regressão linear sobre a ordem dos ciclos; % = inclinação × (n−1) ÷ média; direção só com \|%\| ≥ 5 e R² ≥ 0,3 |
+| Tendência | regressão linear sobre a ordem dos ciclos; % (critério) = inclinação × (n−1) ÷ média; direção só com \|%\| ≥ 5 e R² ≥ t²₉₅/(t²₉₅+n−2). No quadro, a % exibida é fim ÷ início da reta |
 | Nº operadores | Σ TP ÷ Takt |
 | OEE | Disponibilidade × Desempenho × Qualidade |
 

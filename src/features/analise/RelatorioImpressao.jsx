@@ -241,7 +241,7 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
           coleta foi de ritmo constante ou de operador cansando. Duas
           colunas de largura fixa: o container esta' oculto na tela, entao a
           medicao automatica devolveria zero. */}
-      <div style={est.grafico}>
+      <div style={est.graficoQuebravel}>
         <GraficoTendencia operacoes={analise.comDados} altura={120} larguraFixa={312} colunas={2} />
       </div>
       {/* Legenda em PALAVRAS, nao so formula: o relatorio circula em reuniao
@@ -263,7 +263,7 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
             ['Parado', 'Tempo parado', 'tempo registrado com a produção parada (setup, falta de material, manutenção). Descontado do ciclo: não entra no TO.'],
             ['Σ TP', 'Soma dos tempos padrão', 'tempo padrão total do produto neste posto, somando as operações.'],
             ['Takt Time', 'Ritmo da demanda', 'tempo disponível por peça para atender a produção do dia (tempo ÷ quantidade). Operadores = Σ TP ÷ Takt.'],
-            ['Tendência', 'Reta sobre os ciclos', 'reta ajustada aos ciclos na ordem da coleta; a % é quanto ela sobe ou cai do primeiro ao último. Só conta como tendência com 5% ou mais e ciclos que seguem a reta — abaixo disso é dispersão (CV%).'],
+            ['Tendência', 'Reta sobre os ciclos', 'reta ajustada aos ciclos na ordem da coleta; a % compara o fim da reta com o início (último ÷ primeiro ciclo ajustado). Só conta como tendência com 5% ou mais do ciclo médio e inclinação que se distingue do acaso a 95% para o número de ciclos — abaixo disso é dispersão (CV%) ou amostra curta.'],
           ].map(([sigla, nome, texto]) => (
             <div key={sigla} style={est.itemLegenda}>
               <span style={est.legendaSigla}>{sigla}</span>
@@ -320,6 +320,8 @@ const est = {
   tdNum: { padding: '4px 6px', borderBottom: '1px solid #ddd', textAlign: 'right', fontFamily: "'Consolas', monospace" },
   quebraPagina: { breakBefore: 'page', pageBreakBefore: 'always' },
   grafico: { marginBottom: 12, breakInside: 'avoid', pageBreakInside: 'avoid' },
+  // A tendencia quebra POR QUADRO, nao em bloco: ver GraficoTendencia.
+  graficoQuebravel: { marginBottom: 12 },
   formulas: { border: '1px solid #ccc', padding: 9, marginBottom: 16, breakInside: 'avoid' },
   gradeLegenda: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 16px', marginTop: 6 },
   itemLegenda: { display: 'flex', gap: 6, fontSize: 9, lineHeight: 1.45, breakInside: 'avoid' },

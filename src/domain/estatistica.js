@@ -101,12 +101,45 @@ export function foraDeControle(valores) {
 }
 
 /**
+ * t critico bicaudal a 95% por graus de liberdade (1..30). Acima de 30,
+ * 2,04 — a cauda ja' quase nao muda.
+ */
+const T_95 = [
+  12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+  2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+  2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042,
+];
+
+/**
+ * R2 minimo para a inclinacao ser distinguivel de zero a 95%, dado n.
+ *
+ * Um R2 fixo nao segura amostra pequena: tres pontos quase sempre caem
+ * perto de uma reta, e com R2 >= 0,3 o sistema afirmava "tempos subindo"
+ * em mais da metade das coletas de ruido puro com 3 ciclos (simulacao de
+ * 30 mil coletas, set/2026). O teste t da inclinacao resolve isso por
+ * construcao: t = r·sqrt((n−2)/(1−r2)), entao r2 >= t2/(t2 + n − 2) e' a
+ * fronteira de 5% de falso positivo em qualquer n. Com 3 ciclos exige
+ * R2 de 0,99; com 10, 0,40; com 20, 0,20.
+ */
+export function r2MinimoParaTendencia(n) {
+  const df = n - 2;
+  if (df < 1) return 1;
+  const t = T_95[Math.min(df, T_95.length) - 1];
+  return (t * t) / (t * t + df);
+}
+
+/**
  * Tendencia por regressao linear simples sobre a ordem das observacoes.
  * Serve para detectar curva de aprendizado (tempos caindo) ou fadiga (subindo).
+ *
+ * `pct` e' a subida da reta do primeiro ao ultimo ciclo DIVIDIDA PELO CICLO
+ * MEDIO — base simetrica (subir 10% e cair 10% pesam igual), usada no
+ * criterio de direcao e no peso das sugestoes. Quem exibe a variacao "do
+ * inicio ao fim" usa os extremos da propria reta (ver tendenciaColeta).
  */
 export function tendencia(valores) {
   const n = valores.length;
-  if (n < 3) return { slope: 0, intercepto: 0, r2: 0, direcao: 'estavel', pct: 0 };
+  if (n < 3) return { slope: 0, intercepto: 0, r2: 0, r2Minimo: 1, direcao: 'estavel', pct: 0 };
 
   const somaX = (n * (n - 1)) / 2;
   const somaXX = (n * (n - 1) * (2 * n - 1)) / 6;
@@ -114,7 +147,7 @@ export function tendencia(valores) {
   const somaXY = valores.reduce((acc, v, i) => acc + i * v, 0);
 
   const denominador = n * somaXX - somaX * somaX;
-  if (denominador === 0) return { slope: 0, intercepto: 0, r2: 0, direcao: 'estavel', pct: 0 };
+  if (denominador === 0) return { slope: 0, intercepto: 0, r2: 0, r2Minimo: 1, direcao: 'estavel', pct: 0 };
 
   const slope = (n * somaXY - somaX * somaY) / denominador;
   const mediaY = somaY / n;
@@ -127,12 +160,16 @@ export function tendencia(valores) {
   const variacaoTotal = slope * (n - 1);
   const pct = mediaY === 0 ? 0 : (variacaoTotal / mediaY) * 100;
 
+  // Direcao so' com variacao que importa (5% do ciclo medio) E inclinacao
+  // que se distingue do acaso para este n. Os dois criterios sao os
+  // publicados no README e na legenda da folha impressa.
+  const r2Minimo = r2MinimoParaTendencia(n);
   let direcao = 'estavel';
-  if (Math.abs(pct) >= 5 && r2 >= 0.3) direcao = slope < 0 ? 'aprendizado' : 'degradacao';
+  if (Math.abs(pct) >= 5 && r2 >= r2Minimo) direcao = slope < 0 ? 'aprendizado' : 'degradacao';
 
   // O intercepto sai junto para quem DESENHA a reta: com slope e intercepto
   // o grafico traca a tendencia sem refazer a regressao por conta propria.
-  return { slope, intercepto, r2, direcao, pct };
+  return { slope, intercepto, r2, r2Minimo, direcao, pct };
 }
 
 /** Mediana. Base dos indicadores robustos. */
