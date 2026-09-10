@@ -232,6 +232,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
                   filtro={filtro}
                   barrasDoFiltro={barrasDoFiltro}
                   curvaDoDia={curvaDoDia}
+                  conferencias={visiveis}
                 />
               )}
 

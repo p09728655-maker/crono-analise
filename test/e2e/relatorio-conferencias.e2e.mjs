@@ -474,6 +474,108 @@ await movel.close();
   await ctx2.close();
 }
 
+/* --------------------------------------- tendencia do ritmo no tempo */
+/**
+ * O quadro que responde "a maquina esta' rendendo menos que semana
+ * passada?". O caso montado aqui e' o que ele existe para NAO deixar
+ * passar: o ritmo bruto cai 20%, mas a queda inteira e' troca de peca —
+ * as rapidas medidas no comeco, as lentas no fim. O quadro tem de recusar
+ * a conclusao, e recusar POR ESCRITO.
+ */
+{
+  const ctx3 = await navegador.newContext({ viewport: { width: 1440, height: 1200 } });
+  const p3 = await ctx3.newPage();
+  await semearSessao(p3);
+  const errosT = [];
+  p3.on('pageerror', (e) => errosT.push(e.message));
+
+  const dia = (d, hhmm) => `2026-09-${String(d).padStart(2, '0')}T${hhmm}:00-03:00`;
+  // 60 min sem parada: pecas medidas = pecas/hora, entao o numero da linha
+  // e' o proprio ritmo e a conta se confere de cabeca.
+  const medir = (id, maquina, peca, data, pecas) => ({
+    id, maquina, peca, pecas, ciclos_por_peca: 1, arquivada: false, paradas: [],
+    duracao_ms: 3600000, iniciado_em: dia(data, '07:00'), finalizado_em: dia(data, '08:00'),
+    salvo_em: dia(data, '08:00'),
+  });
+
+  await p3.route('**/api/maquinas**', (rota) => rota.fulfill({
+    json: {
+      maquinas: [{ id: 'm1', nome: 'FURADEIRA 16', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' }],
+      grupos: [{ id: 'g2', codigo: '0002', nome: 'FURADEIRA' }],
+    },
+  }));
+  await p3.route('**/api/conferencias**', (rota) => rota.fulfill({
+    json: {
+      conferencias: [
+        medir('t1', 'FURADEIRA 16', 'SLEEP TAMPO', 1, 800),
+        medir('t2', 'FURADEIRA 16', 'SLEEP TAMPO', 2, 800),
+        medir('t3', 'FURADEIRA 16', 'LIVREITO PRAT', 8, 640),
+        medir('t4', 'FURADEIRA 16', 'LIVREITO PRAT', 9, 640),
+      ],
+    },
+  }));
+
+  await p3.goto(`${BASE}/analise/conferencias`);
+  const quadro = p3.locator('[aria-label="Tendência do ritmo no tempo"]').first();
+  await quadro.waitFor({ timeout: 10000 });
+  await p3.waitForTimeout(500);
+  checar(true, 'tendencia no tempo aparece no relatorio');
+
+  const texto = await quadro.innerText();
+  // As pecas nao se sobrepoem no tempo: nao da' para dizer se caiu a
+  // maquina ou se mudou a peca. O quadro tem de recusar os DOIS lados —
+  // dizer "e' a peca" aqui absolveria uma maquina que pode estar caindo.
+  checar(/Não dá para separar/.test(texto),
+    'sem peca acompanhada no periodo, o quadro nao escolhe lado');
+  checar(/pode ser a máquina rendendo menos/.test(texto),
+    'a queda continua na mesa: o quadro nao absolve a maquina');
+  checar(/Meça a MESMA peça outra vez/.test(texto),
+    'e diz o que fazer para sair desse estado');
+  checar(!/acompanha a peça medida/.test(texto),
+    'NAO afirma que a variacao e da peca sem ter como saber');
+  // O numero e' o da RETA ajustada, nao a razao entre a primeira e a
+  // ultima medicao — fixar o valor exato aqui quebraria a cada ajuste do
+  // vao da reta. O que importa e' que o selo diz que a linha CAI.
+  checar(/Não dá para separar · −\d+%/.test(texto), 'o selo traz o quanto a linha bruta cai');
+  checar(await quadro.locator('svg[aria-label^="Tendência no tempo"]').count() === 1,
+    'um quadro por maquina medida');
+  // A reta so' e cheia quando a direcao foi confirmada.
+  const tracejada = await quadro.locator('svg line[stroke-dasharray]').count();
+  checar(tracejada >= 1, 'reta tracejada enquanto a tendencia nao e confirmada');
+
+  const preenche = await p3.evaluate(() => {
+    const svg = document.querySelector('[aria-label="Tendência do ritmo no tempo"] svg');
+    const cartao = svg?.parentElement?.parentElement;
+    if (!svg || !cartao) return 0;
+    return svg.getBoundingClientRect().width / (cartao.getBoundingClientRect().width - 24);
+  });
+  checar(preenche > 0.95, `o quadro ocupa ${(preenche * 100).toFixed(0)}% da celula`);
+
+  // E no PAPEL, que e' o que circula na reuniao.
+  await p3.setViewportSize({ width: 703, height: 1200 });
+  await p3.emulateMedia({ media: 'print' });
+  await p3.waitForTimeout(700);
+  const papel = await p3.evaluate(() => {
+    const rel = document.querySelector('.somente-impressao');
+    return {
+      texto: rel.innerText,
+      graficos: rel.querySelectorAll('svg[aria-label^="Tendência no tempo"]').length,
+      estoura: rel.scrollWidth > document.documentElement.clientWidth + 1,
+    };
+  });
+  checar(/Tendência do ritmo no tempo/.test(papel.texto), 'a tendencia sai na folha impressa');
+  checar(papel.graficos === 1, 'o grafico vai ao papel, nao so o texto');
+  checar(/Meça a MESMA peça outra vez/.test(papel.texto), 'a folha traz a mesma ressalva da tela');
+  // O grafico ja' traz o titulo no figcaption: um <h2> por cima imprimia a
+  // mesma frase duas vezes seguidas.
+  checar((papel.texto.match(/Tendência do ritmo no tempo/g) || []).length === 1,
+    'o titulo da tendencia sai UMA vez na folha, nao duplicado');
+  checar(!papel.estoura, 'a folha cabe na largura util do A4');
+  checar(errosT.length === 0, `sem erro de pagina na tendencia (${errosT.join('; ') || 'nenhum'})`);
+
+  await ctx3.close();
+}
+
 checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})`);
 
 await navegador.close();

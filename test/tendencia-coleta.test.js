@@ -164,3 +164,16 @@ describe('lerTendencia', () => {
     expect(l.frase).toMatch(/CV%/);
   });
 });
+
+describe('o selo do quadro', () => {
+  it('"Estável" e "Poucos ciclos" nao carregam porcentagem', () => {
+    expect(lerTendencia(serieDeTendencia([1000, 1000, 1000, 1000])).mostrarPct).toBe(false);
+    expect(lerTendencia(serieDeTendencia([1000])).mostrarPct).toBe(false);
+  });
+
+  it('subida, queda e "sem direcao" carregam', () => {
+    expect(lerTendencia(serieDeTendencia([7500, 8000, 8500, 9000, 9500, 10000])).mostrarPct).toBe(true);
+    expect(lerTendencia(serieDeTendencia([10000, 9500, 9000, 8500, 8000, 7500])).mostrarPct).toBe(true);
+    expect(lerTendencia(serieDeTendencia([1000, 1600, 900, 1700, 950, 1650, 1000, 1750])).mostrarPct).toBe(true);
+  });
+});

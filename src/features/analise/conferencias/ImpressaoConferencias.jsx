@@ -5,6 +5,7 @@ import {
 import { constanciaTexto, lerGrupo } from '../../../domain/comparativoMaquinas.js';
 import { lerClasse } from '../../../domain/ritmoPorCiclo.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
+import { GraficoTendenciaPeriodo } from '../graficos.jsx';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
 import { VERSAO } from '../../../versao.js';
 import { imp } from './estilos.js';
@@ -41,8 +42,9 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
   // O mesmo comparativo da tela — o papel e' o que vai para a reuniao, e e'
   // la' que a pergunta "quanto isso custou?" e' feita.
   const comparativo = comparativoDeParadas(resumo);
-  // A curva do dia no papel e' TABELA, nao grafico: a folha nao tem nenhuma
-  // outra imagem, e a hora com o numero ao lado le-se melhor impressa.
+  // A curva do dia no papel e' TABELA, nao grafico: a hora com o numero ao
+  // lado le-se melhor impressa, e sao poucas linhas. (A folha tem UMA
+  // imagem, a tendencia no tempo — la' a forma da linha e' a informacao.)
   // So' com UMA maquina, pelo mesmo motivo da tela: misturando postos, a
   // hora fraca seria a hora da maquina mais lenta, nao uma hora fraca.
   const curvaDoDia = resumo.length === 1 ? ritmoPorHoraDoDia(linhas) : [];
@@ -156,6 +158,31 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
           {emMedicao.length > 1 ? ' dessas máquinas' : ' desta máquina'} fica mais
           certeiro com mais medições.
         </p>
+      )}
+
+      {/* A TENDENCIA NO TEMPO, no papel.
+          A tabela acima da' UM numero por maquina — a media do periodo. Ela
+          esconde a deriva: o posto que fazia 780 pc/h em agosto e faz 700
+          agora sai como 740, e a queda so' aparece medicao contra medicao,
+          na data de cada uma. E' a leitura que sustenta "a furadeira esta'
+          caindo" numa reuniao, entao precisa estar na folha que circula.
+          UNICA imagem do documento (o resto e' tabela, inclusive a curva do
+          dia): aqui a forma da linha E' a informacao, um numero por data nao
+          mostra deriva. Largura fixa porque na tela o bloco esta' oculto e a
+          medicao automatica devolveria zero. */}
+      {/* Sem <h2> proprio: o grafico ja' traz o titulo no figcaption, e os
+          dois juntos imprimiam "Tendencia do ritmo no tempo" duas vezes
+          seguidas. Mesmo arranjo do irmao no estudo. */}
+      {resumo.length > 0 && (
+        <section style={imp.tendencia}>
+          <GraficoTendenciaPeriodo
+            conferencias={linhas}
+            resumo={resumo}
+            altura={130}
+            larguraFixa={resumo.length > 1 ? 312 : 640}
+            colunas={resumo.length > 1 ? 2 : 1}
+          />
+        </section>
       )}
 
       {/* QUAL MAQUINA ESTA' MELHOR, no papel.

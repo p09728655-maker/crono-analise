@@ -1,4 +1,4 @@
-import { GraficoRitmoMaquinas } from '../graficos.jsx';
+import { GraficoRitmoMaquinas, GraficoTendenciaPeriodo } from '../graficos.jsx';
 import { est } from './estilos.js';
 
 /**
@@ -10,6 +10,12 @@ import { est } from './estilos.js';
  * medicao, com a peca embaixo; e' assim que se enxerga qual peca puxa o
  * ritmo para cima ou para baixo. A hachura marca medicao curta.
  *
+ * A TENDENCIA NO TEMPO: a media do periodo tambem esconde a DERIVA — o
+ * posto que fazia 780 pc/h em agosto e faz 700 agora aparece como 740 no
+ * numero unico, e a queda so' se ve' medicao contra medicao, na data em
+ * que cada uma foi feita. Um quadro por maquina, sempre que houver
+ * medicao: com poucas ele diz que ainda nao da' para afirmar.
+ *
  * A CURVA DO DIA: a media do periodo esconde a hora fraca — o posto que
  * faz 700 pc/h de manha e 500 depois do almoco aparece como 620 o dia
  * inteiro, e ninguem vai olhar o que muda as 13h. So' com UMA maquina em
@@ -17,7 +23,7 @@ import { est } from './estilos.js';
  * nao compara com nada. Nos dois casos em que a curva nao aparece, a tela
  * diz por que e o que fazer, em vez de sumir em silencio.
  */
-export default function GraficosRitmo({ resumo, filtro, barrasDoFiltro, curvaDoDia }) {
+export default function GraficosRitmo({ resumo, filtro, barrasDoFiltro, curvaDoDia, conferencias }) {
   return (
     <>
       {resumo.length > 0 && (
@@ -40,6 +46,12 @@ export default function GraficosRitmo({ resumo, filtro, barrasDoFiltro, curvaDoD
               notaFraca="ainda em medição"
             />
           )}
+        </section>
+      )}
+
+      {resumo.length > 0 && (
+        <section style={est.painelGrafico} aria-label="Tendência do ritmo no tempo">
+          <GraficoTendenciaPeriodo conferencias={conferencias} resumo={resumo} />
         </section>
       )}
 

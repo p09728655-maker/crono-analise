@@ -69,6 +69,10 @@ export function serieDeTendencia(tempos) {
  * Nunca fala em R2: quem le' e' supervisor e encarregado. O que importa
  * para eles e' se os ciclos subiram, cairam ou so' oscilaram — e o que
  * isso faz com o tempo padrao.
+ *
+ * `mostrarPct` diz se o selo do quadro pode carregar a porcentagem. Com a
+ * leitura "Estavel" ela nao pode: "Estavel · −7%" se contradiz na mesma
+ * linha, e quem le' fica sem saber qual metade vale.
  */
 export function lerTendencia(serie) {
   const { n, direcao, pct, pctExibida, r2, r2Minimo, reta } = serie;
@@ -79,6 +83,7 @@ export function lerTendencia(serie) {
     return {
       rotulo: 'Poucos ciclos',
       tom: 'neutro',
+      mostrarPct: false,
       frase: n === 1
         ? 'Com 1 ciclo não há tendência a ler: são precisos pelo menos 3.'
         : `Com ${n} ciclos não há tendência a ler: são precisos pelo menos 3.`,
@@ -89,6 +94,7 @@ export function lerTendencia(serie) {
     return {
       rotulo: 'Ciclos subindo',
       tom: 'atencao',
+      mostrarPct: true,
       frase: `A reta sobe ${extremos} do primeiro ao último ciclo: ${variacao}% mais lentos. `
         + 'Verificar fadiga, vida útil da ferramenta e abastecimento do posto — '
         + 'fadiga entra na tolerância, não no tempo normal.',
@@ -99,6 +105,7 @@ export function lerTendencia(serie) {
     return {
       rotulo: 'Ciclos caindo',
       tom: 'ok',
+      mostrarPct: true,
       frase: `A reta cai ${extremos} do primeiro ao último ciclo: ${variacao}% mais rápidos, `
         + 'curva de aprendizado. A média da coleta inteira puxa o tempo padrão para cima; '
         + 'vale cronometrar de novo com o operador já aquecido.',
@@ -117,6 +124,7 @@ export function lerTendencia(serie) {
       return {
         rotulo: 'Sem direção',
         tom: 'neutro',
+        mostrarPct: true,
         frase: `A reta inclina ${variacao}% (${extremos}), mas com ${n} ciclos isso ainda não se `
           + 'distingue do acaso: não é tendência confirmada.',
       };
@@ -124,6 +132,7 @@ export function lerTendencia(serie) {
     return {
       rotulo: 'Sem direção',
       tom: 'neutro',
+      mostrarPct: true,
       frase: `A reta inclina ${variacao}% (${extremos}), mas os ciclos sobem e descem sem padrão: `
         + 'é dispersão, não tendência. Olhar o CV% da operação, não a ordem dos ciclos.',
     };
@@ -132,6 +141,7 @@ export function lerTendencia(serie) {
   return {
     rotulo: 'Estável',
     tom: 'ok',
+    mostrarPct: false,
     frase: 'Os ciclos não mudaram de forma consistente do início ao fim da coleta: '
       + 'o tempo padrão representa a coleta inteira.',
   };
