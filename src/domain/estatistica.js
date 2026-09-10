@@ -106,7 +106,7 @@ export function foraDeControle(valores) {
  */
 export function tendencia(valores) {
   const n = valores.length;
-  if (n < 3) return { slope: 0, r2: 0, direcao: 'estavel', pct: 0 };
+  if (n < 3) return { slope: 0, intercepto: 0, r2: 0, direcao: 'estavel', pct: 0 };
 
   const somaX = (n * (n - 1)) / 2;
   const somaXX = (n * (n - 1) * (2 * n - 1)) / 6;
@@ -114,7 +114,7 @@ export function tendencia(valores) {
   const somaXY = valores.reduce((acc, v, i) => acc + i * v, 0);
 
   const denominador = n * somaXX - somaX * somaX;
-  if (denominador === 0) return { slope: 0, r2: 0, direcao: 'estavel', pct: 0 };
+  if (denominador === 0) return { slope: 0, intercepto: 0, r2: 0, direcao: 'estavel', pct: 0 };
 
   const slope = (n * somaXY - somaX * somaY) / denominador;
   const mediaY = somaY / n;
@@ -130,7 +130,9 @@ export function tendencia(valores) {
   let direcao = 'estavel';
   if (Math.abs(pct) >= 5 && r2 >= 0.3) direcao = slope < 0 ? 'aprendizado' : 'degradacao';
 
-  return { slope, r2, direcao, pct };
+  // O intercepto sai junto para quem DESENHA a reta: com slope e intercepto
+  // o grafico traca a tendencia sem refazer a regressao por conta propria.
+  return { slope, intercepto, r2, direcao, pct };
 }
 
 /** Mediana. Base dos indicadores robustos. */

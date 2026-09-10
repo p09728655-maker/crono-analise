@@ -156,6 +156,28 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(/peças do posto/i.test(painelParadas),
     'e cada operacao mostra o custo dela, na capacidade dela, na tabela');
 
+  /* ----------------------------------------------------------- tendencia */
+  // Um quadro por operacao com dados, cada um com a propria reta e a
+  // leitura em palavras — nunca so' a cor.
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Tendência' }).click();
+  await p.waitForTimeout(400);
+  const secaoTendencia = p.locator('[aria-label="Tendência ao longo da coleta"]');
+  checar(await secaoTendencia.count() === 1, 'secao Tendencia presente');
+  checar(await secaoTendencia.locator('svg[aria-label^="Tendência de"]').count() === 4,
+    'um quadro de tendencia por operacao com ciclos');
+  const textoTendencia = await secaoTendencia.innerText();
+  checar(/Estável|Ciclos subindo|Ciclos caindo|Sem direção/.test(textoTendencia),
+    'cada quadro diz em palavras o que a curva mostra');
+  checar(/1º ciclo/.test(textoTendencia) && /14º/.test(textoTendencia),
+    'o eixo diz de qual ciclo a qual ciclo a curva vai');
+  const larguraMini = await p.evaluate(() => {
+    const svg = document.querySelector('[aria-label="Tendência ao longo da coleta"] svg');
+    const cont = svg?.parentElement;
+    if (!svg || !cont) return 0;
+    return svg.getBoundingClientRect().width / cont.getBoundingClientRect().width;
+  });
+  checar(larguraMini > 0.9, `quadro de tendencia ocupa ${(larguraMini * 100).toFixed(0)}% da largura da celula`);
+
   // Tabela de operacoes mostra o parado por operacao.
   await p.locator('[aria-label="Análise"] button', { hasText: 'Operações' }).click();
   await p.waitForTimeout(300);
@@ -204,6 +226,11 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(/Falta de material/.test(folha) && /kanban/i.test(folha),
     'folha traz motivo e acao recomendada');
   checar(/Ação recomendada/.test(folha), 'a coluna de acao esta na folha');
+  // A tendencia vai no papel com a leitura em palavras e a legenda da reta.
+  checar(/Tendência ao longo da coleta/.test(folha), 'folha impressa tem a tendencia por operacao');
+  checar(await p.locator('.somente-impressao svg[aria-label^="Tendência de"]').count() === 4,
+    'um quadro de tendencia por operacao na folha');
+  checar(/Reta sobre os ciclos/.test(folha), 'a legenda explica como a reta e lida');
 
   /* ------------------------------------------------ tela que nao treme */
   /**

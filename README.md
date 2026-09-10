@@ -199,6 +199,16 @@ abas respondem **e agora**:
   tipo, e o peso só desempata dentro do mesmo tipo. **Nenhuma sugestão manda
   coletar mais ciclos** (fixado em teste): a meta de amostra é decisão do
   analista.
+- **Tendência** — um quadro por operação com os ciclos na ordem em que
+  foram cronometrados e a reta de regressão por cima (`serieDeTendencia`,
+  `lerTendencia` em `src/domain/tendenciaColeta.js`). É a evidência da
+  sugestão "tempos subindo": mostra **onde** o ritmo mudou, coisa que o TO
+  (média) apaga. O eixo de cada quadro não parte do zero — o que se lê é a
+  inclinação, e um eixo desde zero achataria uma subida de 12% a um fio —,
+  por isso os valores ficam escritos no eixo. A leitura em palavras segue o
+  critério das sugestões: só é tendência com |variação| ≥ 5% **e** R² ≥ 0,3;
+  variação grande que não segue a reta é "sem direção" (dispersão, olhar o
+  CV%), nunca "estável".
 - **Operadores** — a fórmula `Σ TP ÷ Takt` fica escrita na tela, com a conta
   do estudo e o arredondamento para cima explicado (meio operador não existe
   no posto). Abaixo, a contribuição de cada operação e o campo *"quantos
@@ -214,7 +224,7 @@ abas respondem **e agora**:
 
 | Documento | Para quê |
 |---|---|
-| **Folha de Análise** (Imprimir relatório) | O técnico: identificação, base estatística, resultado por operação, paradas, sugestões, evidência gráfica, fórmulas e assinatura. É o que se arquiva e o que sustenta uma revisão de tempo padrão seis meses depois. |
+| **Folha de Análise** (Imprimir relatório) | O técnico: identificação, base estatística, resultado por operação, paradas, sugestões, evidência gráfica (Yamazumi e tendência por operação), fórmulas e assinatura. É o que se arquiva e o que sustenta uma revisão de tempo padrão seis meses depois. |
 | **Resumo Executivo** | Uma página, para a reunião de dez minutos: entrega × demanda, o veredito em uma frase, tempo padrão por operação e as 3 ações de alta prioridade. |
 
 Só um dos dois é renderizado por vez — o outro nem existe no DOM, para não
@@ -464,6 +474,11 @@ Os gráficos são SVG inline — imprimem com nitidez de vetor. A série de
 tolerância leva textura hachurada, então continua distinguível em impressão
 preto e branco e para quem tem daltonismo.
 
+A **tendência por operação** sai em duas colunas abaixo do Yamazumi. No
+papel o container está oculto na tela, então a medição automática de largura
+devolveria zero: o relatório passa a largura fixa (`larguraFixa`), calculada
+para a coluna útil do A4.
+
 ## Rodando localmente
 
 ```bash
@@ -637,6 +652,7 @@ reenviar o mesmo lote não duplica nada.
 | CV% | desvio padrão amostral ÷ média × 100 |
 | Nievel | n = (1,96 × CV% / 5)² — 95 % de confiança, ±5 % de erro |
 | Takt | tempo disponível ÷ quantidade |
+| Tendência | regressão linear sobre a ordem dos ciclos; % = inclinação × (n−1) ÷ média; direção só com \|%\| ≥ 5 e R² ≥ 0,3 |
 | Nº operadores | Σ TP ÷ Takt |
 | OEE | Disponibilidade × Desempenho × Qualidade |
 

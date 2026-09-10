@@ -19,6 +19,7 @@ import AnaliseIa from './estudo/AnaliseIa.jsx';
 import { CapacidadeEsperadoReal } from './estudo/Capacidade.jsx';
 import PainelOperadores from './estudo/PainelOperadores.jsx';
 import PainelSugestoes from './estudo/PainelSugestoes.jsx';
+import PainelTendencia from './estudo/PainelTendencia.jsx';
 import PainelParadas from './estudo/PainelParadas.jsx';
 import TabelaOperacoes from './estudo/TabelaOperacoes.jsx';
 
@@ -33,7 +34,7 @@ import TabelaOperacoes from './estudo/TabelaOperacoes.jsx';
  *   2. Onde esta o gargalo?
  *   3. Quantos operadores a linha precisa — e como isso se compara com o
  *      time que existe hoje?
- *   4. Qual operacao esta instavel e por que?
+ *   4. Qual operacao esta instavel e por que? (CV%, tendencia, paradas)
  *   5. O que fazer com isso (sugestoes com acao, priorizadas).
  *
  * Este arquivo e' o ARRANJO: carga do estudo, a aba na URL, os dois
@@ -93,7 +94,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
   // Aba na URL: recarregar e compartilhar link preservam a vista.
   const [aba, setAba] = useState(() => {
     const q = new URLSearchParams(window.location.search).get('aba');
-    return ['yamazumi', 'operacoes', 'operadores', 'paradas', 'sugestoes'].includes(q) ? q : 'yamazumi';
+    return ['yamazumi', 'operacoes', 'operadores', 'tendencia', 'paradas', 'sugestoes'].includes(q) ? q : 'yamazumi';
   });
 
   const trocarAba = useCallback((id) => {
@@ -154,6 +155,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             { id: 'yamazumi', rotulo: 'Yamazumi' },
             { id: 'operacoes', rotulo: 'Operações', contador: analise.operacoes.length },
             { id: 'operadores', rotulo: 'Operadores' },
+            { id: 'tendencia', rotulo: 'Tendência' },
             { id: 'paradas', rotulo: 'Paradas', contador: analise.paradas.n },
             { id: 'sugestoes', rotulo: 'Sugestões', contador: leitura.sugestoes.length },
           ] : []}
@@ -263,6 +265,8 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           {aba === 'operadores' && (
             <PainelOperadores estudoId={estudoId} analise={analise} aoDefinirTakt={() => setEditandoEstudo(true)} />
           )}
+
+          {aba === 'tendencia' && <PainelTendencia operacoes={analise.comDados} />}
 
           {aba === 'paradas' && (
             <PainelParadas
