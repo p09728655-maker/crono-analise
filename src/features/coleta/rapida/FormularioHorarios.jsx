@@ -1,5 +1,6 @@
 import { vibrar } from '../../../lib/hooks.js';
 import Paradas from './Paradas.jsx';
+import Observacao from './Observacao.jsx';
 import { CampoMaquina, CiclosFuracao, FuracaoPassante } from './CamposDaPeca.jsx';
 import { est } from './estilos.js';
 import { agoraHM } from './formato.js';
@@ -18,6 +19,7 @@ export default function FormularioHorarios({
   furacaoPassante, aoTrocarPassante,
   horaInicial, aoTrocarHoraInicial, horaFinal, aoTrocarHoraFinal,
   pecasPeriodo, aoTrocarPecas, duracaoMs, motivos, paradas,
+  observacao, aoTrocarObservacao, jaSalva,
 }) {
   return (
     <section style={est.formHoras} aria-label="Conferência por horários">
@@ -95,6 +97,9 @@ export default function FormularioHorarios({
         aoAlterar={paradas.alterar}
         aoRemover={paradas.remover}
       />
+
+      {/* Por ultimo: primeiro o que se mede, depois o que se explica. */}
+      <Observacao valor={observacao} aoTrocar={aoTrocarObservacao} jaSalva={jaSalva} />
     </section>
   );
 }

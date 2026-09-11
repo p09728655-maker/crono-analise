@@ -31,6 +31,7 @@ const paraFila = (c) => ({
   pecas: c.pecas,
   ciclosPorPeca: c.ciclosPorPeca || 1,
   furacaoPassante: Boolean(c.furacaoPassante),
+  observacao: c.observacao || null,
   paradas: c.paradas || [],
   salvoEm: c.salvoEm,
 });
@@ -77,7 +78,7 @@ export function useHistoricoLocal({ aoGuardar } = {}) {
     })();
   }, []);
 
-  const salvar = useCallback(async ({ calculado, maquina, peca, horaInicial, horaFinal, paradas }) => {
+  const salvar = useCallback(async ({ calculado, maquina, peca, horaInicial, horaFinal, paradas, observacao }) => {
     const registro = salvarConferencia({
       maquina: maquina.trim(),
       peca: peca.trim(),
@@ -87,6 +88,8 @@ export function useHistoricoLocal({ aoGuardar } = {}) {
       pecas: calculado.pecas,
       ciclosPorPeca: calculado.ciclosPorPeca,
       furacaoPassante: Boolean(calculado.furacaoPassante),
+      // Nota de campo, aparada: espaco em branco nao e' observacao.
+      observacao: String(observacao || '').trim() || null,
       paradas,
       pecasPorHora: calculado.pecasPorHora,
       pecasPorHoraBruto: calculado.pecasPorHoraBruto,

@@ -367,6 +367,9 @@ export const paraConferencia = (x) => ({
   // desta versao nao tem o campo — vai como falso, que era o unico valor
   // que existia.
   furacaoPassante: Boolean(x.furacaoPassante),
+  // Observacao do analista sobre a medicao. Item enfileirado antes desta
+  // versao nao tem o campo — vai vazio.
+  observacao: x.observacao ?? null,
   // Paradas do periodo. Conferencia enfileirada antes desta versao nao tem
   // o campo — vai como lista vazia e continua valendo.
   paradas: (x.paradas || []).map((p) => ({

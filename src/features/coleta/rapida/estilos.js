@@ -118,6 +118,18 @@ export const est = {
     borderRadius: raio.sm, color: cores.texto,
     fontSize: tamanho.corpo, fontWeight: 600, fontFamily: 'inherit', outline: 'none',
   },
+  // Observacao: a mesma cara do campo de texto, com duas linhas de altura
+  // e quebra de linha — e' nota, nao nome.
+  inputObservacao: {
+    width: '100%', minHeight: 64, maxHeight: '30vh', padding: `${espaco.sm}px ${espaco.md}px`,
+    background: cores.fundo, borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
+    borderRadius: raio.sm, color: cores.texto, resize: 'vertical',
+    fontSize: tamanho.corpo, lineHeight: 1.4, fontFamily: 'inherit', outline: 'none',
+  },
+  dicaObservacao: { fontSize: tamanho.legenda, color: cores.textoFraco, lineHeight: 1.4 },
+  // Medicao salva: o campo TRAVA. Fundo da superficie (nao o do formulario)
+  // para se ler como "isto ja' foi", sem sumir com o texto salvo.
+  inputObservacaoTravada: { background: cores.superficieAlta, color: cores.textoFraco },
   botaoSalvar: {
     width: '100%', minHeight: ALVO_MINIMO,
     background: cores.vermelho, border: 'none', borderRadius: raio.md,
@@ -406,6 +418,13 @@ export const est = {
     cursor: 'pointer', fontFamily: 'inherit',
   },
   chipSetup: { borderColor: cores.atencao },
+
+  // A observacao de uma medicao salva: linha propria, quebra onde o texto
+  // quebrou, e nunca vaza a largura com uma palavra comprida.
+  itemObservacao: {
+    marginTop: 4, fontSize: tamanho.pequeno, lineHeight: 1.35, color: cores.texto, opacity: 0.85,
+    whiteSpace: 'pre-line', overflowWrap: 'anywhere',
+  },
 
   rodape: { flexShrink: 0, height: espaco.md },
 };

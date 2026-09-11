@@ -97,8 +97,10 @@ export function useCronometroAoVivo({ paradas }) {
   useEffect(() => {
     const aoTeclar = (ev) => {
       if (ev.code !== 'Space' || ev.repeat) return;
-      // Sem preventDefault com um input focado: espaco tambem e' digitacao.
-      if (ev.target?.tagName === 'INPUT') return;
+      // Sem preventDefault com um campo focado: espaco tambem e' digitacao.
+      // TEXTAREA e' a observacao — sem esta guarda, um espaco no meio de
+      // "operador novo" iniciava o cronometro ao vivo.
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target?.tagName)) return;
       ev.preventDefault();
       if (escolhendoMotivo) return;
       if (rodando) contarPeca();

@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import {
   conferenciaRapida, faixaHoraria, formatarDuracao, somarParadas,
 } from '../../../domain/cronoanalise.js';
@@ -80,7 +81,8 @@ export default function TabelaMedicoes({
             const par = somarParadas(c.paradas);
             const travada = ocupado === c.id;
             return (
-              <tr key={c.id}>
+              <Fragment key={c.id}>
+              <tr>
                 <td style={est.tdFraco}>{formatarDataHora(c.salvo_em)}</td>
                 <td style={est.tdCurto}>{c.maquina || '—'}</td>
                 {/* O NOME DA PECA e' clicavel: e' texto digitado no aparelho,
@@ -151,6 +153,18 @@ export default function TabelaMedicoes({
                   </button>
                 </td>
               </tr>
+              {/* A observacao escrita no aparelho, numa linha propria: e' o
+                  contexto da medicao ("operador novo", "broca gasta"), e uma
+                  12a coluna nao cabe. Fica embaixo, onde o olho ja' esta'. */}
+              {c.observacao && (
+                <tr>
+                  <td style={est.tdObservacao} colSpan={11}>
+                    <span style={est.rotuloObservacao}>Obs.</span>
+                    {c.observacao}
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </tbody>
