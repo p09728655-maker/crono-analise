@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import {
   comparativoDeParadas, conferenciaRapida, faixaHoraria, formatarDuracao, ritmoPorHoraDoDia,
   somarParadas,
@@ -432,18 +433,31 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
               ciclosPorPeca: c.ciclos_por_peca,
             });
             const par = somarParadas(c.paradas);
+            // No papel nao ha' cor para agrupar a nota com a medicao dela: os
+            // dois filetes iguais faziam a observacao parecer nota da linha de
+            // BAIXO. Com observacao, a medicao nao fecha o proprio filete — o
+            // par inteiro fecha no fim da nota.
+            const td = c.observacao ? { ...imp.td, borderBottom: 'none' } : imp.td;
+            const tdNum = c.observacao ? { ...imp.tdNum, borderBottom: 'none' } : imp.tdNum;
             return (
-              <tr key={c.id}>
-                <td style={imp.td}>{formatarDataHora(c.salvo_em)}</td>
-                <td style={imp.td}>{c.maquina || '—'}</td>
-                <td style={imp.td}>{c.peca || '—'}</td>
-                <td style={imp.td}>{faixaHoraria(c) || '—'}</td>
-                <td style={imp.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
-                <td style={imp.tdNum}>{par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}</td>
-                <td style={imp.tdNum}>{c.pecas}</td>
-                <td style={{ ...imp.tdNum, fontWeight: 700 }}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
-                <td style={imp.tdNum}>{calc ? porMinuto(calc.pecasPorHora) : '—'}</td>
+              <Fragment key={c.id}>
+              <tr>
+                <td style={td}>{formatarDataHora(c.salvo_em)}</td>
+                <td style={td}>{c.maquina || '—'}</td>
+                <td style={td}>{c.peca || '—'}</td>
+                <td style={td}>{faixaHoraria(c) || '—'}</td>
+                <td style={tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
+                <td style={tdNum}>{par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}</td>
+                <td style={tdNum}>{c.pecas}</td>
+                <td style={{ ...tdNum, fontWeight: 700 }}>{calc ? Math.round(calc.pecasPorHora) : '—'}</td>
+                <td style={tdNum}>{calc ? porMinuto(calc.pecasPorHora) : '—'}</td>
               </tr>
+              {c.observacao && (
+                <tr>
+                  <td style={imp.tdObservacao} colSpan={9}>Obs.: {c.observacao}</td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </tbody>
@@ -467,6 +481,7 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
               + 'parado, ao ritmo que ela própria fez rodando. Não é meta nem capacidade de catálogo.'],
             ['Grupo', 'grupo do cadastro de máquinas, com o código da fábrica (ex: 0002 · FURADEIRA).'],
             ['Ainda em medição', 'máquina medida poucas vezes ou por pouco tempo — o número pode mudar com mais medições.'],
+            ['Obs.', 'observação escrita pelo analista no aparelho, na hora da medição: o que o contador não registra.'],
           ].map(([sigla, texto]) => (
             <div key={sigla} style={imp.itemLegenda}>
               <strong style={{ whiteSpace: 'nowrap' }}>{sigla}:</strong>

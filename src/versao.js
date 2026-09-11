@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.70.0',
+    data: '2026-09-11',
+    titulo: 'Observação na conferência rápida',
+    itens: [
+      'CAMPO "OBSERVAÇÃO" NA TELA RITMO DA MÁQUINA (tablet e celular), embaixo das paradas — e também no resultado do cronômetro ao vivo. É onde se escreve o que o contador não registra: operador novo, broca no fim da vida, abastecimento aos trancos. Opcional e sem efeito nas contas.',
+      'A OBSERVAÇÃO SOBE JUNTO COM A MEDIÇÃO, pela mesma fila: sem wifi, fica guardada e vai quando a rede voltar. No PC, aparece numa linha própria embaixo da medição em "Todas as medições" e sai na folha impressa do Ritmo por máquina.',
+      'ESCREVA ANTES DE SALVAR: depois de salva, a medição trava a observação e a tela avisa que a próxima nota é da próxima medição. É de propósito — campo editável depois de salvo reabria o botão e o segundo toque gravava uma SEGUNDA medição do mesmo período, com o dobro de peças e de tempo rodando no relatório.',
+      'A LISTA "SALVAS NESTE APARELHO" mostra a observação de cada medição, e o rascunho guarda o texto se o aparelho apagar no meio.',
+      '"COMEÇAR OUTRA PEÇA", "MAIS UM PERÍODO" E "NOVA CONFERÊNCIA" LIMPAM A OBSERVAÇÃO: ela é do período que acabou. Uma nota que valha de novo se escreve de novo — melhor isso do que um "faltou material" repetido em três medições sem ter faltado.',
+      'ESPAÇO DENTRO DA OBSERVAÇÃO É TEXTO. A barra de espaço do teclado bluetooth inicia o cronômetro ao vivo; enquanto se escreve, ela escreve espaço.',
+    ],
+  },
+  {
     versao: '2.69.0',
     data: '2026-09-11',
     titulo: 'Painel de análise com cara de software de engenharia',

@@ -70,6 +70,9 @@ export default function ConferenciaRapida({ aoSair }) {
   // Furacao passante: a broca atravessa a peca. Tambem dado da PECA — ver
   // FuracaoPassante em rapida/CamposDaPeca.jsx.
   const [furacaoPassante, setFuracaoPassante] = useState(false);
+  // Observacao da MEDICAO (nao da peca): o que o contador nao registra.
+  // Ver rapida/Observacao.jsx.
+  const [observacao, setObservacao] = useState('');
 
   /**
    * O SELO do cabecalho nomeia o POSTO — o grupo da maquina escolhida no
@@ -93,7 +96,7 @@ export default function ConferenciaRapida({ aoSair }) {
   const paradas = useParadasDoPeriodo(motivos);
   const crono = useCronometroAoVivo({ paradas });
   const rascunho = useRascunho({
-    campos: { maquina, peca, ciclosPorPeca, furacaoPassante, horaInicial, horaFinal, pecasPeriodo, paradas: paradas.paradas },
+    campos: { maquina, peca, ciclosPorPeca, furacaoPassante, horaInicial, horaFinal, pecasPeriodo, paradas: paradas.paradas, observacao },
     aoRestaurar: (r) => {
       setMaquina((v) => v || r.maquina || '');
       setPeca((v) => v || r.peca || '');
@@ -102,6 +105,7 @@ export default function ConferenciaRapida({ aoSair }) {
       setHoraInicial((v) => v || r.horaInicial || '');
       setHoraFinal((v) => v || r.horaFinal || '');
       setPecasPeriodo((v) => v || r.pecasPeriodo || '');
+      setObservacao((v) => v || r.observacao || '');
       paradas.restaurar(r.paradas);
     },
   });
@@ -109,6 +113,11 @@ export default function ConferenciaRapida({ aoSair }) {
 
   // Mudou qualquer dado, a conferencia na tela ja' e' outra: libera salvar
   // de novo em vez de fingir que a alteracao tambem esta' guardada.
+  //
+  // A OBSERVACAO fica FORA desta lista de proposito. Liberar o botao por
+  // causa dela fazia a segunda gravacao virar uma medicao DUPLICADA do mesmo
+  // periodo — dobro de pecas e de tempo rodando no relatorio do PC. Depois
+  // de salvar o campo trava (ver rapida/Observacao.jsx).
   useEffect(() => {
     historico.invalidar();
   }, [maquina, peca, ciclosPorPeca, furacaoPassante, horaInicial, horaFinal, pecasPeriodo, crono.pecasFinais, paradas.paradas, crono.fase]);
@@ -154,10 +163,21 @@ export default function ConferenciaRapida({ aoSair }) {
 
   /* --------------------------------------- de um periodo ao proximo */
   const salvar = (calculado, horarios) => historico.salvar({
-    calculado, maquina, peca, paradas: paradas.emMs,
+    calculado, maquina, peca, paradas: paradas.emMs, observacao,
     horaInicial: horarios ? horaInicial : null,
     horaFinal: horarios ? horaFinal : null,
   });
+
+  /**
+   * O campo trava quando a medicao esta' salva — ver rapida/Observacao.jsx.
+   * `salvo` volta a null sozinho assim que qualquer campo muda, que e'
+   * quando a tela passa a descrever outra medicao.
+   */
+  const camposDaObservacao = {
+    observacao,
+    aoTrocarObservacao: setObservacao,
+    jaSalva: historico.salvo === 'ok',
+  };
 
   /**
    * Proxima peca na MESMA maquina: emenda o periodo (a nova hora inicial
@@ -172,11 +192,38 @@ export default function ConferenciaRapida({ aoSair }) {
     // volta ao padrao.
     setCiclosPorPeca(1);
     setFuracaoPassante(false);
+    // A observacao e' do periodo que acabou, como a parada.
+    setObservacao('');
     setHoraInicial(horaFinal || '');
     setHoraFinal('');
     paradas.limpar();
     vibrar(30);
   }, [horaFinal, paradas.limpar]);
+
+  /**
+   * OS QUATRO COMECOS DE PERIODO limpam a observacao, e pelo mesmo motivo
+   * que `crono.comecar` ja' limpa as paradas: a nota descreve o periodo que
+   * ACABOU. Sem isto, "faltou material na esteira" seguia colado na proxima
+   * medicao — que nao teve falta nenhuma — e no PC o ritmo baixo aparecia
+   * explicado por uma parada que nunca houve.
+   *
+   * CRONOMETRAR AO VIVO e' um deles, mas SO' depois de salvar: quem nao
+   * salvou ainda nao fechou periodo nenhum — digitou a nota, olhou a
+   * maquina e decidiu contar peca a peca em vez de marcar horario. Apagar
+   * ali seria jogar fora o que o analista acabou de escrever, sobre a mesma
+   * peca no mesmo posto. Depois de salvo, a nota e' do periodo que acabou e
+   * sai, como sai em "Outra peca" e "Mais um periodo".
+   */
+  const comecarAoVivo = useCallback(() => {
+    if (historico.salvo === 'ok') setObservacao('');
+    crono.comecar();
+  }, [crono.comecar, historico.salvo]);
+
+  /** NOVA CONFERENCIA, no fim do caminho ao vivo: medicao do zero. */
+  const novaConferencia = useCallback(() => {
+    setObservacao('');
+    crono.novaConferencia();
+  }, [crono.novaConferencia]);
 
   /**
    * Mais um periodo da MESMA peca.
@@ -189,6 +236,10 @@ export default function ConferenciaRapida({ aoSair }) {
    */
   const maisUmPeriodo = useCallback(() => {
     setPecasPeriodo('');
+    // A observacao LIMPA mesmo com a peca igual: "faltou material" e' do
+    // periodo que acabou, e repetida em tres medicoes viraria dado falso.
+    // Nota que valha de novo se escreve de novo.
+    setObservacao('');
     setHoraInicial(horaFinal || '');
     setHoraFinal('');
     paradas.limpar();
@@ -223,6 +274,7 @@ export default function ConferenciaRapida({ aoSair }) {
             horaInicial={horaInicial} aoTrocarHoraInicial={setHoraInicial}
             horaFinal={horaFinal} aoTrocarHoraFinal={setHoraFinal}
             pecasPeriodo={pecasPeriodo} aoTrocarPecas={setPecasPeriodo}
+            {...camposDaObservacao}
             duracaoMs={duracaoHoras}
             motivos={motivos}
             paradas={paradas}
@@ -249,7 +301,7 @@ export default function ConferenciaRapida({ aoSair }) {
               toque que ainda nao terminou cairia no botao que aparecer
               embaixo do dedo — "Parou" ou, pior, "Encerrar". Aqui uns
               milissegundos a mais nao custam nada: o periodo tem minutos. */}
-          <button type="button" onClick={crono.comecar} style={{ ...est.botaoGrande, ...est.botaoIniciar, ...est.botaoVivo }}>
+          <button type="button" onClick={comecarAoVivo} style={{ ...est.botaoGrande, ...est.botaoIniciar, ...est.botaoVivo }}>
             <span style={est.rotuloBotao}>▶ CRONOMETRAR AO VIVO</span>
           </button>
 
@@ -280,6 +332,8 @@ export default function ConferenciaRapida({ aoSair }) {
           peca={peca} aoTrocarPeca={setPeca}
           ciclosPorPeca={ciclosPorPeca} aoTrocarCiclos={setCiclosPorPeca}
           furacaoPassante={furacaoPassante} aoTrocarPassante={setFuracaoPassante}
+          {...camposDaObservacao}
+          aoNovaConferencia={novaConferencia}
           salvo={historico.salvo}
           aoSalvar={() => salvar(resultado, false)}
           aoSair={aoSair}

@@ -299,7 +299,8 @@ rodar('API — integracao com Postgres', () => {
       conferencias: [{
         clientId, maquina: 'Furadeira 03', peca: 'Lateral Mesa Sleep',
         horaInicial: '07:00', horaFinal: '07:10',
-        duracaoMs: 600000, pecas: 150, ciclosPorPeca: 2, salvoEm: new Date().toISOString(),
+        duracaoMs: 600000, pecas: 150, ciclosPorPeca: 2, observacao: '  Broca no fim da vida  ',
+        salvoEm: new Date().toISOString(),
       }],
     };
 
@@ -318,6 +319,36 @@ rodar('API — integracao com Postgres', () => {
     expect(Number(linha.duracao_ms)).toBe(600000);
     // Ciclos de furacao da peca (2 = motor sobe e desce) chegam ao banco.
     expect(Number(linha.ciclos_por_peca)).toBe(2);
+    // A observacao chega aparada, e a lista do PC a devolve.
+    expect(linha.observacao).toBe('Broca no fim da vida');
+    const lista = fingirRes();
+    await conferenciasApi(fingirReq({}), lista);
+    expect(lista.corpo.conferencias.find((c) => c.id === linha.id)?.observacao).toBe('Broca no fim da vida');
+  });
+
+  it('conferencia SEM observacao grava no mesmo lote de uma COM observacao', async () => {
+    const comNota = crypto.randomUUID();
+    const semNota = crypto.randomUUID();
+    const res = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          { clientId: comNota, maquina: 'Furadeira 03', horaInicial: '07:00', horaFinal: '07:10',
+            duracaoMs: 600000, pecas: 150, observacao: 'Abastecimento aos trancos',
+            salvoEm: new Date().toISOString() },
+          // Aparelho na versao antiga: o campo nem existe no payload.
+          { clientId: semNota, maquina: 'Furadeira 03', horaInicial: '07:10', horaFinal: '07:20',
+            duracaoMs: 600000, pecas: 150, salvoEm: new Date().toISOString() },
+        ],
+      },
+    }), res);
+
+    expect(res.corpo.novos).toBe(2);
+    const [a] = await sql`SELECT observacao FROM conferencias WHERE client_id = ${comNota}`;
+    const [b] = await sql`SELECT observacao FROM conferencias WHERE client_id = ${semNota}`;
+    expect(a.observacao).toBe('Abastecimento aos trancos');
+    expect(b.observacao).toBeNull();
   });
 
   it('conferencia com horario invalido leva 400 antes de tocar o banco', async () => {

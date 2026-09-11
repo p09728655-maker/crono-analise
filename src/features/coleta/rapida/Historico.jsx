@@ -41,6 +41,9 @@ export default function Historico({ historico, naFila, aoRemover }) {
                 noPc(c) ? 'no PC' : 'aguardando envio',
               ].filter(Boolean).join(' · ')}
             </div>
+            {c.observacao && (
+              <div style={est.itemObservacao}>Obs.: {c.observacao}</div>
+            )}
           </div>
           <div style={est.itemRitmo}>
             {/* O mesmo numero da manchete do resultado: producao do

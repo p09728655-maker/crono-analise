@@ -337,6 +337,11 @@ ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS ciclos_por_peca integer NOT NU
 -- parecer lenta sem a maquina ter mudado.
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS furacao_passante boolean NOT NULL DEFAULT false;
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS paradas jsonb NOT NULL DEFAULT '[]'::jsonb;
+-- OBSERVACAO do analista sobre a medicao: o que o contador nao registra
+-- (operador novo, broca gasta, abastecimento aos trancos). Texto livre e
+-- opcional, digitado no aparelho na hora; sai na tabela de medicoes do PC e
+-- na folha impressa. Nao entra em calculo nenhum.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS observacao text;
 
 -- Converte o horario de texto para instante. A data vem de salvo_em lida no
 -- fuso da fabrica — "07:00" e' 07:00 no chao de fabrica, nao em UTC. Roda uma

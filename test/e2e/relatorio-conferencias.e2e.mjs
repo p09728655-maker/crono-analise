@@ -75,7 +75,8 @@ await movel.close();
       iniciado_em: inicio, finalizado_em: hoje,
       duracao_ms: 180000, pecas: 20, salvo_em: hoje, arquivada: false, paradas: [] },
     { id: 'c2', maquina: 'Furadeira 03', peca: 'Lateral Mesa', hora_inicial: '07:00', hora_final: '07:30',
-      duracao_ms: 1800000, pecas: 420, salvo_em: hoje, arquivada: false, paradas: [] },
+      duracao_ms: 1800000, pecas: 420, salvo_em: hoje, arquivada: false, paradas: [],
+      observacao: 'Operador novo no posto' },
     // Segunda medicao da MESMA maquina: e' ela que faz o filtro da lateral
     // abrir o grafico por conferencia, com a peca embaixo de cada barra.
     { id: 'c3', maquina: 'Furadeira 03', peca: 'Princesa Fundo', hora_inicial: '07:30', hora_final: '07:50',
@@ -158,6 +159,14 @@ await movel.close();
   const impresso = await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
   checar(/Grupos de máquina/.test(impresso) && /0002 · FURADEIRA/.test(impresso),
     'a folha impressa identifica os grupos cobertos e o grupo de cada maquina');
+
+  /* ------------------- observacao da medicao: na tabela e no papel */
+  // O rotulo "Obs." vai em caixa alta pelo estilo, e innerText devolve o
+  // texto como se ve: por isso o /i.
+  checar(/Obs\.\s*Operador novo no posto/i.test(await p2.locator('section[aria-label="Todas as medições"]').innerText()),
+    'a observacao escrita no aparelho aparece embaixo da medicao no PC');
+  checar(/Obs\.: Operador novo no posto/.test(impresso),
+    'a observacao sai na folha impressa, junto da medicao');
 
   /* ------------- COMPARATIVO: o que saiu x o que teria saido */
   /**

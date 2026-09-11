@@ -343,6 +343,14 @@ export const est = {
     padding: espaco.lg, ...tipo('legenda'), color: t.textoFraco,
     borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
   },
+  // A observacao da medicao, na linha de baixo: fundo do cabecalho, para
+  // ler-se como nota da linha de cima e nao como medicao nova.
+  tdObservacao: {
+    padding: `${espaco.sm}px ${espaco.lg}px ${espaco.md}px`, ...tipo('legenda'), color: t.textoMedio,
+    background: '#F8F9FB', borderBottom: `1px solid ${t.borda}`,
+    whiteSpace: 'pre-line', overflowWrap: 'anywhere',
+  },
+  rotuloObservacao: { ...rotulo(t.textoFraco), marginRight: espaco.sm },
   tdNum: {
     padding: espaco.lg, textAlign: 'right', ...tipo('corpo'), ...numeros,
     color: t.textoMedio, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
@@ -395,6 +403,13 @@ export const imp = {
   th: { textAlign: 'left', padding: '4px 5px', fontWeight: 700, borderBottom: '1.5px solid #000', whiteSpace: 'nowrap' },
   thNum: { textAlign: 'right', padding: '4px 5px', fontWeight: 700, borderBottom: '1.5px solid #000', whiteSpace: 'nowrap' },
   td: { padding: '3px 5px', borderBottom: '1px solid #DDD', verticalAlign: 'top' },
+  // overflowWrap OBRIGATORIO: o campo aceita 2000 caracteres e um codigo de
+  // OP colado sem espaco empurrava a tabela para fora da largura util do A4,
+  // levando as colunas da direita para fora do papel.
+  tdObservacao: {
+    padding: '1px 5px 4px', borderBottom: '1px solid #DDD',
+    fontSize: 9, color: '#333', whiteSpace: 'pre-line', overflowWrap: 'anywhere',
+  },
   tdNum: { padding: '3px 5px', borderBottom: '1px solid #DDD', textAlign: 'right',
            fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' },
 

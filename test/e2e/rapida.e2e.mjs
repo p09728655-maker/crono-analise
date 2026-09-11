@@ -66,6 +66,21 @@ checar(!/CICLO MOTOR/i.test(await painelHoras.innerText()),
 /* ------------------------------- salvar com maquina e nome da peca */
 await p.locator('input[aria-label="Nome da máquina"]').fill('Furadeira 03');
 await p.locator('input[aria-label="Nome da peça"]').fill('Lateral Mesa Sleep');
+// A OBSERVACAO: o que o contador nao registra, escrito na hora.
+const campoObs = p.locator('textarea[aria-label="Observação da medição"]');
+await campoObs.fill('Operador novo no posto');
+
+// Espaco dentro da observacao e' TEXTO: a barra de espaco do teclado
+// bluetooth inicia o cronometro ao vivo, e um "operador novo" nao pode
+// trocar o formulario pela tela de contagem no meio da palavra. Antes de
+// salvar, que e' quando se escreve — depois o campo trava.
+await campoObs.focus();
+await p.keyboard.press('Space');
+checar(await p.locator('input[aria-label="Hora inicial"]').count() === 1,
+  'espaco na observacao nao dispara o cronometro ao vivo');
+checar((await campoObs.inputValue()).endsWith(' '), 'e o espaco e digitado');
+await campoObs.fill('Operador novo no posto');
+
 await p.getByRole('button', { name: 'SALVAR CONFERÊNCIA' }).tap();
 await p.getByRole('button', { name: /SALVA — VAI PARA O RELATÓRIO DO PC/ }).waitFor({ timeout: 4000 });
 checar(true, 'o recibo diz para onde a medicao vai: relatorio do PC');
@@ -76,6 +91,34 @@ checar(
   textoSalvas.includes('Furadeira 03') && textoSalvas.includes('Lateral Mesa Sleep') && textoSalvas.includes('900'),
   'conferencia salva aparece na lista com maquina, peca e ritmo',
 );
+checar(textoSalvas.includes('Operador novo no posto'), 'a observacao aparece na medicao salva');
+const guardada = await p.evaluate(() => JSON.parse(localStorage.getItem('ritmopatrimar.conferencias'))[0]);
+checar(guardada?.observacao === 'Operador novo no posto',
+  'a observacao vai no registro que sobe para o PC, nao so na tela');
+
+/**
+ * O CAMPO TRAVA DEPOIS DE SALVAR.
+ *
+ * A observacao faz parte da medicao. Deixa-la editavel reabria o botao de
+ * salvar, e o segundo toque gravava uma SEGUNDA medicao do mesmo periodo:
+ * o PC passava a contar 2 medicoes, 300 pecas e 20 min rodando onde houve
+ * 1, 150 e 10 — e o criterio de amostra da maquina fechava com medicao que
+ * nao existiu. Travado, o campo mostra o que foi salvo e nao reabre nada.
+ */
+checar(await campoObs.getAttribute('readonly') !== null,
+  'medicao salva trava a observacao');
+// Nao basta o rotulo dizer "SALVA": o botao precisa RECUSAR o toque. Toque
+// forcado (o navegador ignora o disabled) e a contagem depois provam o efeito.
+const botaoSalvo = p.getByRole('button', { name: /SALVA — VAI PARA O RELATÓRIO DO PC/ });
+checar(await botaoSalvo.isDisabled(), 'o botao de salvar fica desabilitado com a medicao salva');
+await botaoSalvo.tap({ force: true });
+await p.waitForTimeout(250);
+checar((await p.evaluate(() => JSON.parse(localStorage.getItem('ritmopatrimar.conferencias')))).length === 1,
+  'e tocar de novo nao grava a mesma medicao duas vezes');
+checar(/próxima nota é da próxima medição/.test(await p.locator('[aria-label="Conferência por horários"]').innerText()),
+  'a tela diz para onde vai a proxima nota, em vez de perder o texto em silencio');
+checar((await p.evaluate(() => JSON.parse(localStorage.getItem('ritmopatrimar.conferencias')))).length === 1,
+  'uma medicao salva, nao duas');
 
 /* ------------------------------ proxima peca na mesma maquina, emendada */
 await p.getByRole('button', { name: /COMEÇAR OUTRA PEÇA/ }).tap();
@@ -89,6 +132,8 @@ checar(await p.locator('input[aria-label="Nome da máquina"]').inputValue() === 
 // ao padrao (nao passante) — a peca nova pode furar de outro jeito.
 checar(await p.getByRole('radio', { name: 'Não passante' }).getAttribute('aria-checked') === 'true',
   'outra peca: a furacao volta a nao passante');
+checar(await campoObs.inputValue() === '',
+  'outra peca: a observacao limpa — era do periodo que acabou');
 
 /* --------------- caminho da referencia: mesma peca, mais um periodo */
 // O criterio da maquina fecha com 3 conferencias e 30 min rodando — e o
@@ -304,6 +349,77 @@ await p.reload();
 await salvas.waitFor({ timeout: 8000 });
 checar(!(await salvas.innerText()).includes('Porta Ripada'), 'remocao tambem sobrevive ao recarregar');
 
+/**
+ * CAMINHO AO VIVO — a observacao existe nos DOIS caminhos da tela, e a nota
+ * do periodo que acabou nao pode seguir colada na proxima medicao: "faltou
+ * material na esteira" repetido numa medicao que nao teve falta e' dado
+ * falso no relatorio.
+ *
+ * CRONOMETRAR AO VIVO e' um COMECO DE PERIODO como "Outra peca" e "Mais um
+ * periodo" — e era o unico que nao limpava a nota. Quem salvava pelo
+ * formulario e emendava no cronometro levava a observacao antiga junto, e
+ * no PC o ritmo baixo aparecia explicado por uma parada que nunca houve.
+ */
+{
+  const ctxV = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const pv = await ctxV.newPage();
+  await semearSessao(pv);
+  await pv.route('**/api/**', (rota) => rota.fulfill({ json: { motivos: [], maquinas: [], grupos: [] } }));
+  await pv.addInitScript(() => localStorage.removeItem('ritmopatrimar.conferencias'));
+  await pv.goto(`${BASE}/coleta/rapida`);
+
+  // Primeiro uma medicao pelo formulario, COM nota.
+  await pv.locator('input[aria-label="Nome da máquina"]').fill('Furadeira 07');
+  await pv.locator('input[aria-label="Hora inicial"]').fill('07:00');
+  await pv.locator('input[aria-label="Hora final"]').fill('07:10');
+  await pv.locator('input[aria-label="Peças no período"]').fill('150');
+  await pv.locator('textarea[aria-label="Observação da medição"]').fill('FALTOU MATERIAL NA ESTEIRA');
+  await pv.getByRole('button', { name: 'SALVAR CONFERÊNCIA' }).tap();
+  await pv.getByRole('button', { name: /SALVA — VAI PARA O RELATÓRIO DO PC/ }).waitFor({ timeout: 4000 });
+
+  // E emenda no cronometro ao vivo, que e' outro periodo.
+  await pv.getByRole('button', { name: /CRONOMETRAR AO VIVO/ }).tap();
+  const contarVivo = pv.getByRole('button', { name: /Contar uma peça/ });
+  await contarVivo.tap();
+  await pv.waitForTimeout(250);
+  await contarVivo.tap();
+  await pv.getByRole('button', { name: /Encerrar/ }).tap();
+
+  const obsVivo = pv.locator('textarea[aria-label="Observação da medição"]');
+  await obsVivo.waitFor({ timeout: 4000 });
+  checar(true, 'o resultado do cronometro tambem oferece a observacao');
+  checar(await obsVivo.inputValue() === '',
+    'cronometrar ao vivo limpa a nota do periodo anterior — ela nao cola na medicao nova');
+  checar(await obsVivo.getAttribute('readonly') === null,
+    'e o campo volta destravado: a medicao e outra');
+
+  await obsVivo.fill('Broca trocada no meio');
+  await pv.getByRole('button', { name: 'SALVAR CONFERÊNCIA' }).tap();
+  await pv.waitForTimeout(300);
+  const duas = await pv.evaluate(() => JSON.parse(localStorage.getItem('ritmopatrimar.conferencias')));
+  checar(duas.length === 2, `as duas medicoes ficam salvas (${duas.length})`);
+  checar(duas[0]?.observacao === 'Broca trocada no meio' && duas[1]?.observacao === 'FALTOU MATERIAL NA ESTEIRA',
+    'cada medicao com a SUA nota, sem a do periodo anterior colada');
+
+  await pv.getByRole('button', { name: /Nova conferência/ }).tap();
+  await pv.locator('input[aria-label="Hora inicial"]').waitFor({ timeout: 4000 });
+  checar(await pv.locator('textarea[aria-label="Observação da medição"]').inputValue() === '',
+    'nova conferencia limpa a observacao — ela era do periodo que acabou');
+  // O OUTRO LADO: quem NAO salvou ainda nao fechou periodo nenhum. Digitou a
+  // nota, olhou a maquina e resolveu contar peca a peca — o texto tem de
+  // seguir junto, nao ser jogado fora.
+  await pv.locator('input[aria-label="Nome da máquina"]').fill('Furadeira 07');
+  await pv.locator('textarea[aria-label="Observação da medição"]').fill('Gabarito folgado');
+  await pv.getByRole('button', { name: /CRONOMETRAR AO VIVO/ }).tap();
+  await pv.getByRole('button', { name: /Contar uma peça/ }).tap();
+  await pv.getByRole('button', { name: /Encerrar/ }).tap();
+  await pv.locator('textarea[aria-label="Observação da medição"]').waitFor({ timeout: 4000 });
+  checar(await pv.locator('textarea[aria-label="Observação da medição"]').inputValue() === 'Gabarito folgado',
+    'nota ainda NAO salva segue para o cronometro — nao se joga fora o que acabou de ser escrito');
+
+  await ctxV.close();
+}
+
 /* ------------------------- RASCUNHO: a medicao sobrevive ao aparelho */
 /**
  * O fluxo desta tela e' "marca 7:00, segue o caminho da fabrica, volta as
@@ -320,6 +436,7 @@ checar(!(await salvas.innerText()).includes('Porta Ripada'), 'remocao tambem sob
   await pr.locator('input[aria-label="Nome da máquina"]').fill('FURADEIRA 16');
   await pr.locator('input[aria-label="Hora inicial"]').fill('07:00');
   await pr.locator('input[aria-label="Peças no período"]').fill('206');
+  await pr.locator('textarea[aria-label="Observação da medição"]').fill('Broca gasta');
   await pr.waitForTimeout(800);
 
   // O sistema recolhe a aba: nada de recarregar: a pagina morre e volta.
@@ -332,6 +449,8 @@ checar(!(await salvas.innerText()).includes('Porta Ripada'), 'remocao tambem sob
     'a maquina volta junto');
   checar(await pr.locator('input[aria-label="Peças no período"]').inputValue() === '206',
     'e as pecas contadas tambem');
+  checar(await pr.locator('textarea[aria-label="Observação da medição"]').inputValue() === 'Broca gasta',
+    'a observacao escrita tambem sobrevive');
   await ctxR.close();
 }
 

@@ -1,5 +1,6 @@
 import { formatarCronometro, formatarDuracao } from '../../../domain/cronoanalise.js';
 import Paradas from './Paradas.jsx';
+import Observacao from './Observacao.jsx';
 import { CampoMaquina, CiclosFuracao, FuracaoPassante } from './CamposDaPeca.jsx';
 import { AvisoSalvar, BotaoSalvar, ComParadas, RitmoDoPeriodo, SemAParada } from './Indicadores.jsx';
 import { est } from './estilos.js';
@@ -14,9 +15,10 @@ export default function ResultadoAoVivo({
   crono, resultado, excede, totalParadaMs, motivos, paradas,
   maquina, aoTrocarMaquina, peca, aoTrocarPeca, ciclosPorPeca, aoTrocarCiclos,
   furacaoPassante, aoTrocarPassante,
-  salvo, aoSalvar, aoSair,
+  observacao, aoTrocarObservacao, jaSalva,
+  aoNovaConferencia, salvo, aoSalvar, aoSair,
 }) {
-  const { duracaoFinal, pecasFinais, setPecasFinais, novaConferencia } = crono;
+  const { duracaoFinal, pecasFinais, setPecasFinais } = crono;
 
   const editorParadas = (
     <Paradas
@@ -100,6 +102,8 @@ export default function ResultadoAoVivo({
             corrige antes de salvar, sem refazer a conferencia. */}
         {editorParadas}
 
+        <Observacao valor={observacao} aoTrocar={aoTrocarObservacao} jaSalva={jaSalva} />
+
         {resultado.pecas > 0 && <BotaoSalvar salvo={salvo} aoSalvar={aoSalvar} />}
       </section>
 
@@ -113,7 +117,7 @@ export default function ResultadoAoVivo({
         <button
           type="button"
           style={{ ...est.botaoBarra, ...est.botaoNova }}
-          onClick={novaConferencia}
+          onClick={aoNovaConferencia}
         >
           <span style={est.iconeBarra}>▶</span>
           Nova conferência
