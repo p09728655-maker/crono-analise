@@ -43,7 +43,7 @@ export default handler(async (req, res) => {
         UPDATE operacoes SET
           nome      = COALESCE(${texto(c.nome, 'nome', { max: 200 })}, nome),
           descricao = COALESCE(${texto(c.descricao, 'descricao', { max: 1000 })}, descricao),
-          anotacao  = CASE WHEN ${temAnotacao} THEN ${anotacao} ELSE anotacao END,
+          anotacao  = CASE WHEN ${temAnotacao}::boolean THEN ${anotacao}::text ELSE anotacao END,
           fr_pct    = COALESCE(${decimal(c.frPct, 'frPct', { min: 1, max: 200 })}, fr_pct),
           ciclos_por_peca = COALESCE(${inteiro(c.ciclosPorPeca, 'ciclosPorPeca', { min: 1, max: 999 })}, ciclos_por_peca),
           ordem     = COALESCE(${inteiro(c.ordem, 'ordem', { min: 0, max: 9999 })}, ordem)

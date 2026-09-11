@@ -389,9 +389,13 @@ export function lerGrupo(g) {
      */
     const d = g.duelosCiclo[0];
     const acionamento = d.ciclos === 1 ? 'um acionamento' : `${d.ciclos} acionamentos`;
+    // A classe e' acionamentos E furacao: sem nomear a passante, a frase
+    // aponta para uma linha que a tabela "Ritmo por acionamento" ja' tem em
+    // duas versoes.
+    const furacao = d.passante ? ' e furação passante' : '';
     frases.push(
       `Nenhuma peça foi medida nas duas máquinas, mas as duas mediram peças de ${acionamento} do `
-      + `motor — e essas comparam: ${d.lider.maquina} faz ${umDecimal(d.lider.pecasPorMinuto)} pç/min `
+      + `motor${furacao} — e essas comparam: ${d.lider.maquina} faz ${umDecimal(d.lider.pecasPorMinuto)} pç/min `
       + `contra ${umDecimal(d.lanterna.pecasPorMinuto)} da ${d.lanterna.maquina} `
       + `(${pct(d.difPct)} de diferença) nessa classe de peça.`,
     );

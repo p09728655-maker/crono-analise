@@ -252,7 +252,7 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar,
         />
       )}
 
-      {aviso && <Faixa tipo={aviso.tipo} icone={aviso.tipo === 'critico' ? '×' : '!'} texto={aviso.texto} />}
+      {aviso && <Faixa tipo={aviso.tipo} icone={aviso.tipo === 'critico' ? '×' : aviso.tipo === 'ok' ? '✓' : '!'} texto={aviso.texto} />}
 
       {metaAtingida && !metaDispensada && !pausa && (
         <Faixa
@@ -489,7 +489,9 @@ function BarraInferior({
         </button>
         <button type="button" style={est.botaoBarra} onClick={aoTrocarRodada} disabled={!temTempos}>
           <span style={est.iconeBarra}>⚑</span>
-          Rodada {rodada}
+          {/* Espaco que nao quebra: a 360px, com cinco botoes, "Rodada" e o
+              numero caiam em duas linhas. */}
+          {`Rodada\u00a0${rodada}`}
         </button>
         {/* Sempre disponivel, cronometro rodando ou nao: a observacao
             costuma vir ANTES do primeiro ciclo ("operador novo hoje"). A
@@ -679,11 +681,15 @@ const est = {
 
   barraInferior: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: espaco.sm, flexShrink: 0 },
   botaoBarra: {
-    minHeight: ALVO_MINIMO,
+    minHeight: ALVO_MINIMO, minWidth: 0, padding: 0,
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
     background: cores.superficie, borderRadius: raio.md,
     borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
     color: cores.texto, fontSize: tamanho.legenda, fontWeight: 600,
+    // Cinco botoes a 360px dao ~61px cada: o rotulo fica numa linha e o
+    // e2e mede que ele tambem cabe na largura — quebrar ou vazar sem
+    // ninguem ver e' o que se quer evitar.
+    whiteSpace: 'nowrap',
     cursor: 'pointer', fontFamily: 'inherit',
   },
   botaoEncerrar: { borderColor: cores.critico, color: cores.critico },

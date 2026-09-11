@@ -47,8 +47,12 @@ export default function Historico({ historico, naFila, aoRemover }) {
                 periodo. Registro antigo, sem o bruto, mostra o que tem. */}
             {Math.round(c.pecasPorHoraBruto ?? c.pecasPorHora)}
             <span style={est.itemRitmoSufixo}>pç/h</span>
+            {/* O mesmo tempo do numero de cima: o periodo inteiro. Com parada
+                marcada o rotulo diz isso, como o resultado ja' faz — senao o
+                analista compara com o "rodando" do PC e acha que um errou. */}
             <div style={est.itemRitmoMinuto}>
               {((c.pecasPorHoraBruto ?? c.pecasPorHora) / 60).toFixed(1)} pç/min
+              {c.paradaMs > 0 ? ' período' : ''}
             </div>
           </div>
           <button

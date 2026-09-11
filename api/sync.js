@@ -143,7 +143,14 @@ export default handler(async (req, res) => {
     }
 
     for (const a of anotLimpas) {
-      await tx`UPDATE operacoes SET anotacao = ${a.texto} WHERE id = ${a.operacaoId}`;
+      // RETURNING, como todo write deste arquivo: UPDATE que a RLS filtra
+      // nao levanta erro, so' nao acha linha — e a nota sumiria da fila do
+      // tablet com cara de gravada.
+      const r = await tx`
+        UPDATE operacoes SET anotacao = ${a.texto} WHERE id = ${a.operacaoId} RETURNING id`;
+      if (!r.length) {
+        throw new ErroHttp(404, 'Operacao inexistente ou sem permissao para anotar', { operacao: a.operacaoId });
+      }
     }
 
     for (const c of confLimpas) {

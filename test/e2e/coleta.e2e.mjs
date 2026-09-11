@@ -249,10 +249,31 @@ for (const t of TELAS) {
       chips: rect('[aria-label="Ultimos ciclos"]')?.bottom,
       barra: rect('[aria-label="Acoes da coleta"]')?.bottom,
       botao: rect('button[aria-label="Registrar fim do ciclo"]')?.height,
+      // Cinco botoes na barra: a 360px cada um tem ~61px, e um rotulo que
+      // quebra em duas linhas nao move nenhuma das medidas acima (o botao
+      // tem altura minima). Mede-se o texto de cada botao, do primeiro ao
+      // ultimo no', numa linha so'.
+      botoesBarra: document.querySelectorAll('[aria-label="Acoes da coleta"] button').length,
+      rotulosQuebrados: [...document.querySelectorAll('[aria-label="Acoes da coleta"] button')]
+        .filter((b) => {
+          const nos = [...b.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+          if (!nos.length) return false;
+          const r = document.createRange();
+          r.setStartBefore(nos[0]);
+          r.setEndAfter(nos[nos.length - 1]);
+          const rr = r.getBoundingClientRect();
+          // Duas linhas OU texto vazando do botao: os dois sao rotulo que
+          // nao coube, e com nowrap o segundo e' o unico jeito de falhar.
+          return rr.height > 20 || rr.width > b.getBoundingClientRect().width + 2;
+        })
+        .map((b) => b.textContent.trim()),
     };
   });
 
   checar(!m.rolagem, `${t.nome}: sem rolagem vertical`);
+  checar(m.botoesBarra === 5, `${t.nome}: os cinco botoes da barra estao na tela`);
+  checar(m.rotulosQuebrados.length === 0,
+    `${t.nome}: nenhum rotulo da barra quebra em duas linhas${m.rotulosQuebrados.length ? ` (${m.rotulosQuebrados.join(', ')})` : ''}`);
   checar(m.chips <= m.janela + 1, `${t.nome}: ultimos ciclos visiveis`);
   checar(m.barra <= m.janela + 1, `${t.nome}: barra de acoes visivel`);
   // Alvo minimo para uso com luva.

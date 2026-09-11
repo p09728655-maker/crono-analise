@@ -326,3 +326,17 @@ describe('classesDeCiclo — furação passante', () => {
     expect(duelosDeCiclo(pecas, () => 'FURADEIRA')).toEqual([]);
   });
 });
+
+describe('classesDeCiclo — peça mista nos dois eixos', () => {
+  it('diz os dois motivos, senão o analista corrige um e ela continua fora', () => {
+    const pecas = porPeca([
+      ...medicoes('F16', 'Lateral', 150, { ciclosPorPeca: 1, furacaoPassante: false }),
+      ...medicoes('F16', 'Lateral', 150, { ciclosPorPeca: 2, furacaoPassante: true }),
+    ]);
+    const { classes, mistas } = classesDeCiclo(pecas);
+    expect(classes).toEqual([]);
+    expect(mistas).toHaveLength(1);
+    expect(mistas[0].motivo).toMatch(/1 e 2 acionamentos/);
+    expect(mistas[0].motivo).toMatch(/passante/);
+  });
+});
