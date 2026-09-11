@@ -154,7 +154,7 @@ export default function Inicio({
             ['Medições de ritmo', ritmo?.medicoes, ritmo?.maquinas != null
               ? `em ${ritmo.maquinas} ${ritmo.maquinas === 1 ? 'máquina' : 'máquinas'}`
               : 'peças/hora dos postos'],
-            ['Pendências', numeros.pendencias, 'sem nenhum ciclo'],
+            ['Sem medição', numeros.pendencias, 'sem nenhum ciclo'],
           ].map(([rot, val, sub], i) => (
             <div key={rot} style={est.numero}>
               <span style={est.numeroRotulo}>{rot}</span>

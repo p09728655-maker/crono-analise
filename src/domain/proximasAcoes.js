@@ -37,7 +37,33 @@ const porRecencia = (a, b) => quando(b) - quando(a);
 export function situacao(estudo) {
   if (ciclosDe(estudo) === 0) return 'pendente';
   if (estudo.status === 'concluido') return 'concluido';
+  if (medicaoCompleta(estudo)) return 'pronto';
   return 'andamento';
+}
+
+/**
+ * Toda operacao bateu a meta de ciclos — a medicao acabou, ainda que
+ * ninguem tenha tirado o estudo do tablet.
+ *
+ * O total do estudo NAO responde isso: 80 ciclos em 8 operacoes tanto pode
+ * ser 10 em cada quanto 80 numa e zero em sete. Quem decide se a amostra
+ * basta e' a operacao, uma a uma — e' o que amostraSuficiente faz no painel
+ * e na folha impressa. A conta vem do servidor em `operacoes_abaixo_da_meta`
+ * (api/estudos.js), porque so' o banco ve os ciclos por operacao.
+ *
+ * TRES CAUTELAS, e todas dizem "nao afirme":
+ *  - sem meta cadastrada nao ha' criterio nenhum de suficiencia;
+ *  - sem operacao nao ha' o que medir;
+ *  - sem o campo — bundle novo falando com API antiga, ou lista montada de
+ *    outra fonte — nao se inventa conclusao: o estudo segue em andamento,
+ *    que e' o que ele era antes desta regra existir.
+ */
+function medicaoCompleta(estudo) {
+  const abaixo = estudo.operacoes_abaixo_da_meta;
+  if (abaixo == null) return false;
+  if (metaDe(estudo) <= 0) return false;
+  if ((Number(estudo.total_operacoes) || 0) === 0) return false;
+  return Number(abaixo) === 0;
 }
 
 const RECEITA = {
@@ -54,6 +80,21 @@ const RECEITA = {
     acaoRotulo: 'Continuar medição',
     acao: 'medir',
     tom: 'atencao',
+  },
+  /**
+   * Medido ate' a meta, mas ainda na lista do tablet.
+   *
+   * Antes disto o cartao continuava dizendo "Continuar medicao" para um
+   * estudo em que todas as operacoes ja' tinham a amostra que o proprio
+   * sistema exige — mandando o analista refazer trabalho pronto. O estudo
+   * NAO e' fechado por conta disso: tirar da coleta e' decisao de quem
+   * coordena, e o botao Só no PC continua sendo o unico que faz isso.
+   */
+  pronto: {
+    rotulo: 'Medição completa',
+    acaoRotulo: 'Analisar',
+    acao: 'analisar',
+    tom: 'ok',
   },
   concluido: {
     rotulo: 'Último estudo concluído',
@@ -107,15 +148,30 @@ export function proximasAcoes(estudos, { limite = LIMITE } = {}) {
 
   const pendentes = vivos.filter((e) => situacao(e) === 'pendente').sort(porRecencia);
   const andamento = vivos.filter((e) => situacao(e) === 'andamento').sort(porRecencia);
+  const prontos = vivos.filter((e) => situacao(e) === 'pronto').sort(porRecencia);
   const concluidos = vivos.filter((e) => situacao(e) === 'concluido').sort(porRecencia);
 
-  const fila = [...pendentes, ...andamento, ...concluidos.slice(0, 1)];
+  // Pronto vem ANTES do que ainda esta' sendo medido, pelo mesmo criterio
+  // que ja' punha o sem-ciclo na frente: o que esta' PARADO esperando
+  // alguem vem antes do que ja' anda. Medicao completa esta' parada — falta
+  // um clique para virar tempo padrao — enquanto o estudo em andamento tem
+  // alguem cronometrando. Ordena-lo depois tambem o empurrava para fora dos
+  // quatro cartoes, que e' o mesmo que nao existir.
+  const fila = [...pendentes, ...prontos, ...andamento, ...concluidos.slice(0, 1)];
   const itens = fila.slice(0, limite).map(cartao);
 
   // "e mais N" conta so' o que exige acao. Estudo concluido que ficou de
   // fora nao e' pendencia escondida — e' historico, e vive na tabela.
   const mostrados = itens.filter((i) => i.tipo !== 'concluido').length;
-  const restantes = Math.max(0, pendentes.length + andamento.length - mostrados);
+  const restantes = Math.max(
+    0, pendentes.length + andamento.length + prontos.length - mostrados,
+  );
 
-  return { itens, restantes, pendentes: pendentes.length, emAndamento: andamento.length };
+  return {
+    itens,
+    restantes,
+    pendentes: pendentes.length,
+    emAndamento: andamento.length,
+    prontos: prontos.length,
+  };
 }

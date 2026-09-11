@@ -274,7 +274,13 @@ window.fetch = async (url, opts = {}) => {
     : RESPOSTA;
   const extras = comConcluido
     ? [{ id: 'e9', nome: 'Estudo pronto', recurso: 'Furadeira 03', produto: 'Sleep Base',
-         analista: 'Oderli', total_operacoes: 2, total_observacoes: 40, status: 'concluido' }]
+         analista: 'Oderli', total_operacoes: 2, total_observacoes: 40, status: 'concluido' },
+       // Medido ate' a meta em TODAS as operacoes, e ainda na lista do
+       // tablet: o caso do RACK XXXXXX, que a area insistia em mandar
+       // continuar medindo.
+       { id: 'e10', nome: 'Rack medido ate a meta', recurso: 'EMBALAGEM', produto: 'Sleep Base',
+         analista: 'Adriano', total_operacoes: 8, total_observacoes: 80, status: 'coletando',
+         meta_obs: 10, operacoes_abaixo_da_meta: 0 }]
     : [];
   return new Response(JSON.stringify({ estudos: [...base.estudos, ...extras, ...restaurados] }), {
     status: 200, headers: { 'Content-Type': 'application/json' },

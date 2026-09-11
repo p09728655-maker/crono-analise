@@ -45,11 +45,14 @@ export default function PainelResumo({ estudos, est }) {
             menor que o rotulo embaixo dele. A pendencia so' ganha cor quando
             existe — "0" colorido treinaria o olho a ignorar a cor. */}
         <div style={est.painelNumeros}>
+          {/* "Pendências" foi lido como "operacoes que faltam bater a meta"
+              — que e' outra conta, e mora no painel do estudo. Este numero
+              conta ESTUDO sem nenhum ciclo, e o rotulo agora diz isso. */}
           {[
             ['Estudos', estudos.length, false],
             ['Ciclos', totalCiclos, false],
             ['Operações', totalOperacoes, false],
-            ['Pendências', pendencias, pendencias > 0],
+            ['Sem medição', pendencias, pendencias > 0],
           ].map(([k, v, alerta]) => (
             <div key={k} style={est.painelNumero}>
               <span style={alerta ? est.painelValorAtencao : est.painelValor}>{v}</span>

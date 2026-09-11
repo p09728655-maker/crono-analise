@@ -52,6 +52,19 @@ const b = await chromium.launch({ executablePath: EXEC });
   checar(texto.includes('MEDIÇÃO EM ANDAMENTO'), 'estudo com ciclos aparece como em andamento');
   checar(texto.includes('Continuar medição'), 'estudo em andamento oferece continuar');
 
+  // MEDICAO COMPLETA: toda operacao bateu a meta, o estudo continua na
+  // lista do tablet, e a area NAO pode mandar continuar medindo — era o que
+  // ela fazia com o RACK XXXXXX, 8 operacoes e 10 ciclos em cada.
+  const completo = secao.locator('> div > div', { hasText: 'Rack medido ate a meta' });
+  checar(await completo.count() === 1, 'estudo medido ate a meta aparece na area');
+  const textoCompleto = await completo.innerText();
+  checar(textoCompleto.includes('MEDIÇÃO COMPLETA'),
+    'medido ate a meta aparece como completo, nao como em andamento');
+  checar(!textoCompleto.includes('Continuar medição'),
+    'e nao manda continuar medindo o que ja tem a amostra exigida');
+  checar(await completo.locator('button', { hasText: 'Analisar' }).count() === 1,
+    'a acao oferecida e analisar');
+
   // O destino da analise existe UMA vez por estudo: no nome, na tabela.
   // O botao "Analisar" da linha saiu para nao repetir, ao lado, o mesmo
   // alvo que os cartoes ja oferecem.
@@ -65,7 +78,8 @@ const b = await chromium.launch({ executablePath: EXEC });
 
   // Pendencias tambem viram indicador na Visao geral.
   const painel = p.locator('aside[aria-label="Visão geral"]');
-  checar((await painel.innerText()).includes('Pendências'), 'a Visao geral mostra pendencias de medicao');
+  checar((await painel.innerText()).includes('Sem medição'),
+    'a Visao geral diz o que conta: estudo sem nenhum ciclo');
 
   // Nada empurra a pagina para os lados.
   const vazando = await p.evaluate(
