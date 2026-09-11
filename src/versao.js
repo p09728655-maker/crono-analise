@@ -13,6 +13,20 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.65.0',
+    data: '2026-09-10',
+    titulo: 'Esqueci minha senha: entrar deixou de depender do administrador',
+    itens: [
+      'NOVO "ESQUECI MINHA SENHA" NA TELA DE ENTRADA. Quem esqueceu informa o e-mail do cadastro e recebe um link para criar uma senha nova. O link vale uma hora e serve uma vez só. Antes, senha esquecida parava o trabalho até o administrador estar disponível — e quando quem esquecia ERA o administrador, a saída era mexer no banco.',
+      'SÓ RECEBE LINK QUEM JÁ PODIA ENTRAR. Analista cadastrado SEM senha existe para ser escolhido na lista de estudos e não abre login; se o link chegasse nele, ele criaria a própria senha e entraria sozinho, sem ninguém autorizar. O pedido passa pelo servidor, que confere isso antes de mandar — e deixa de fora também quem foi desativado e o tablet, que se recupera pareando de novo no PC.',
+      'A TELA NUNCA DIZ SE O E-MAIL EXISTE. A resposta é a mesma para e-mail cadastrado e não cadastrado, de propósito: responder "este e-mail não está cadastrado" entregaria de graça a lista de quem tem acesso. Por isso a confirmação diz "SE este e-mail estiver cadastrado" — e já vem com a saída alternativa: não chegou em alguns minutos, peça ao administrador para redefinir.',
+      'LINK VENCIDO EXPLICA POR QUE NÃO ABRIU — em qualquer aparelho, inclusive no celular, que é onde a maioria abre o e-mail. Antes de existir esse aviso, o link de mais de uma hora simplesmente não fazia nada.',
+      'NO TABLET DA COLETA A SENHA MUDA, MAS O APARELHO CONTINUA SENDO O APARELHO. Ele tem conta própria, que coleta tudo e administra nada; adotar ali a sessão de quem abriu o e-mail deixaria o tablet compartilhado rodando com o papel dessa pessoa até alguém perceber.',
+      'TROCAR A SENHA DERRUBA AS SESSÕES ABERTAS, como já acontece quando o administrador troca: quem troca a senha está desconfiando dela.',
+      'O CAMINHO CURTO CONTINUA EXISTINDO: o administrador redefine a senha de qualquer analista na hora, em Ferramentas → Analistas, sem depender de e-mail.',
+    ],
+  },
+  {
     versao: '2.64.0',
     data: '2026-09-10',
     titulo: 'O relatório Ritmo por máquina ganhou o gráfico de tendência',

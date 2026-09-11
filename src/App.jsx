@@ -10,9 +10,10 @@ import BarraSincronizacao from './components/BarraSincronizacao.jsx';
 import { SistemaEncerrado } from './components/SairDoSistema.jsx';
 import EntrarNoPc from './features/analise/EntrarNoPc.jsx';
 import PrepararAparelho from './features/coleta/PrepararAparelho.jsx';
+import DefinirNovaSenha from './features/analise/DefinirNovaSenha.jsx';
 import { caminhos, ehDesktop, useRota } from './lib/dispositivo.js';
 import { obterEstudo } from './lib/api.js';
-import { aparelhoPareado, temSessao } from './lib/supabase.js';
+import { aparelhoPareado, limparRecuperacao, recuperacaoPendente, temSessao } from './lib/supabase.js';
 import { carregarMotivos } from './lib/motivosParada.js';
 import { cores as escuro } from './theme/tokens.js';
 
@@ -58,6 +59,16 @@ export default function App() {
    * inteiro — nao e' um modal de uma tela.
    */
   const [encerrado, setEncerrado] = useState(false);
+
+  /**
+   * Recuperacao de senha em curso, lida do fragmento da URL na abertura.
+   *
+   * Fica em estado, e nao numa consulta a cada render, porque o fragmento e'
+   * apagado da barra de endereco assim que e' lido: depois disso so' esta
+   * variavel sabe que ha' um token de recuperacao na mao. Zerar quando a
+   * senha nova e' salva e' o que devolve a tela ao fluxo normal.
+   */
+  const [recuperacao, setRecuperacao] = useState(recuperacaoPendente);
 
   const irParaLista = useCallback(() => navegar(caminhos.lista(modo)), [navegar, modo]);
   const irParaInicio = useCallback(() => navegar(caminhos.inicio()), [navegar]);
@@ -143,6 +154,18 @@ export default function App() {
    * a unica tela possivel e' a de parear. As duas condicoes reagem ao
    * useSessaoViva la' de cima: entrar/sair troca a tela na hora.
    */
+  /**
+   * Antes de qualquer porta: quem chegou por link de recuperacao resolve
+   * isso primeiro, em qualquer aparelho.
+   *
+   * Vale tambem para o link VENCIDO. Antes o aviso so' aparecia no PC sem
+   * sessao; quem abrisse o e-mail no celular — o caso comum — caia na
+   * coleta sem uma palavra sobre o link que acabou de clicar.
+   */
+  if (recuperacao) {
+    const encerrar = () => { limparRecuperacao(); setRecuperacao(null); };
+    return <DefinirNovaSenha dados={recuperacao} aoConcluir={encerrar} />;
+  }
   if (desktop && !temSessao()) return <EntrarNoPc />;
   if (!desktop && !temSessao() && !aparelhoPareado()) return <PrepararAparelho />;
 

@@ -156,7 +156,7 @@ window.fetch = async (url, opts = {}) => {
     if (metodo === 'POST') {
       const u = usuarios.find((x) => x.email && x.email.toLowerCase() === String(corpo.email).toLowerCase());
       if (!u || !u.tem_senha) {
-        return new Response(JSON.stringify({ erro: 'E-mail ou senha nao confere' }), {
+        return new Response(JSON.stringify({ erro: 'E-mail ou senha não confere' }), {
           status: 401, headers: { 'Content-Type': 'application/json' },
         });
       }

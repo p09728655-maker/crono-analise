@@ -237,6 +237,25 @@ export const entrar = async (email, senha) => {
 };
 export const sair = () => sairDaConta();
 
+/**
+ * "Esqueci minha senha" — o pedido passa pela NOSSA API, nao pelo Supabase.
+ *
+ * O /recover do GoTrue manda link para qualquer conta que exista, inclusive
+ * a do analista cadastrado SEM senha, que por decisao do sistema nao entra.
+ * Quem sabe distinguir isso e' o banco; ver api/sessao.js, onde o pedido e'
+ * atendido antes de autenticar — quem esqueceu a senha nao tem sessao. Ele
+ * mora la', e nao num endpoint proprio, por limite de plano da Vercel (12
+ * funcoes serverless por deploy); o motivo esta escrito no proprio arquivo.
+ *
+ * O `destino` diz de qual endereco o pedido saiu — a mesma instalacao atende
+ * producao e pre-visualizacao, e o link tem de voltar para onde a pessoa
+ * estava.
+ */
+export const pedirRecuperacao = (email) => requisitar('/sessao', {
+  metodo: 'POST',
+  corpo: { acao: 'recuperar-senha', email, destino: `${window.location.origin}/` },
+});
+
 /* ---------------------------------------------- pareamento do tablet */
 export const gerarCodigoPareamento = () =>
   requisitar('/dispositivos', { metodo: 'POST', corpo: { acao: 'codigo' } });
