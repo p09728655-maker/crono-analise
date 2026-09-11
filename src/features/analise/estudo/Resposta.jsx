@@ -1,4 +1,5 @@
 import { formatarSegundos } from '../../../domain/cronoanalise.js';
+import { IconeAnalistas, IconeCapacidade } from '../../../components/icones.jsx';
 import { est } from './estilos.js';
 
 /**
@@ -32,7 +33,10 @@ export default function Resposta({ analise }) {
   return (
     <section style={est.resposta} aria-label="Resultado do estudo">
       <div style={est.respostaBloco}>
-        <span style={est.respostaRotulo}>Capacidade da linha</span>
+        <span style={est.respostaRotulo}>
+          <span style={est.respostaIcone} aria-hidden="true"><IconeCapacidade /></span>
+          Capacidade da linha
+        </span>
         <div style={est.respostaNumeroLinha}>
           <span style={est.respostaNumero}>{capacidadeLinha}</span>
           <span style={est.respostaUnidade}>peças/hora</span>
@@ -52,7 +56,10 @@ export default function Resposta({ analise }) {
       <div style={est.respostaDivisor} />
 
       <div style={est.respostaBloco}>
-        <span style={est.respostaRotulo}>Operadores necessários</span>
+        <span style={est.respostaRotulo}>
+          <span style={est.respostaIcone} aria-hidden="true"><IconeAnalistas /></span>
+          Operadores necessários
+        </span>
         {operadores !== null ? (
           <>
             <div style={est.respostaNumeroLinha}>

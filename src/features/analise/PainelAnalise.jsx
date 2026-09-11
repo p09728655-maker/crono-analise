@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { tipo } from '../../theme/escala.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
+import {
+  IconeAnalistas, IconeEditar, IconeOperacoes, IconeParadas, IconeResumo, IconeSugestoes,
+  IconeTendencia, IconeYamazumi,
+} from '../../components/icones.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import { VERSAO } from '../../versao.js';
 import { formatarDuracao, formatarSegundos } from '../../domain/cronoanalise.js';
@@ -173,18 +177,18 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           }}
           acaoPrimaria={{ rotulo: 'Imprimir relatório', aoClicar: () => imprimir('folha') }}
           secoes={analise.operacoes.length ? [
-            { id: 'yamazumi', rotulo: 'Yamazumi' },
-            { id: 'operacoes', rotulo: 'Operações', contador: analise.operacoes.length },
-            { id: 'operadores', rotulo: 'Operadores' },
-            { id: 'tendencia', rotulo: 'Tendência' },
-            { id: 'paradas', rotulo: 'Paradas', contador: analise.paradas.n },
-            { id: 'sugestoes', rotulo: 'Sugestões', contador: leitura.sugestoes.length },
+            { id: 'yamazumi', rotulo: 'Yamazumi', icone: IconeYamazumi },
+            { id: 'operacoes', rotulo: 'Operações', contador: analise.operacoes.length, icone: IconeOperacoes },
+            { id: 'operadores', rotulo: 'Operadores', icone: IconeAnalistas },
+            { id: 'tendencia', rotulo: 'Tendência', icone: IconeTendencia },
+            { id: 'paradas', rotulo: 'Paradas', contador: analise.paradas.n, icone: IconeParadas },
+            { id: 'sugestoes', rotulo: 'Sugestões', contador: leitura.sugestoes.length, icone: IconeSugestoes },
           ] : []}
           secaoAtiva={aba}
           aoTrocarSecao={trocarAba}
           acoes={[
-            { rotulo: 'Editar estudo', aoClicar: () => setEditandoEstudo(true) },
-            { rotulo: 'Resumo executivo', aoClicar: () => imprimir('resumo') },
+            { rotulo: 'Editar estudo', aoClicar: () => setEditandoEstudo(true), icone: IconeEditar },
+            { rotulo: 'Resumo executivo', aoClicar: () => imprimir('resumo'), icone: IconeResumo },
           ]}
         />
 
@@ -229,17 +233,27 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             <>
           <Resposta analise={analise} />
 
+          {/* Indicadores compactos: rotulo em cima, valor em destaque, a
+              unidade separada e um fio entre um e outro. Era uma linha
+              corrida "rotulo valor rotulo valor", que o olho lia como
+              texto — e numero que se le como texto nao se compara. */}
           <section style={est.contexto} aria-label="Números de apoio">
             {[
               ['Operações', analise.operacoes.length, ''],
               ['Ciclos coletados', analise.totalCiclos, ''],
-              ['Σ TP por peça', formatarSegundos(analise.somaTp), ' s'],
-              ['Takt Time', analise.taktMs ? formatarSegundos(analise.taktMs) : '—', analise.taktMs ? ' s' : ''],
+              ['Σ TP por peça', formatarSegundos(analise.somaTp), 's'],
+              ['Takt Time', analise.taktMs ? formatarSegundos(analise.taktMs) : '—', analise.taktMs ? 's' : ''],
               ['Tempo parado', analise.paradas.totalMs ? formatarDuracao(analise.paradas.totalMs) : '—', ''],
-            ].map(([rot, valor, sufixo]) => (
-              <div key={rot} style={est.contextoItem}>
+            ].map(([rot, valor, unidade], i, lista) => (
+              <div
+                key={rot}
+                style={{ ...est.contextoItem, ...(i < lista.length - 1 ? est.contextoDivisor : {}) }}
+              >
                 <span style={est.contextoRotulo}>{rot}</span>
-                <span style={est.contextoValor}>{valor}{sufixo}</span>
+                <span style={est.contextoValorLinha}>
+                  <span style={est.contextoValor}>{valor}</span>
+                  {unidade && <>{' '}<span style={est.contextoUnidade}>{unidade}</span></>}
+                </span>
               </div>
             ))}
           </section>

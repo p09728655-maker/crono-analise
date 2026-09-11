@@ -93,7 +93,9 @@ export const est = {
   },
   respostaBloco: { flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: espaco.xs },
   respostaDivisor: { width: 1, alignSelf: 'stretch', background: claro.borda },
-  respostaRotulo: rotulo(claro.textoFraco),
+  respostaRotulo: { ...rotulo(claro.textoFraco), display: 'flex', alignItems: 'center', gap: espaco.sm },
+  // O icone e' discreto de proposito: cinza do rotulo, nunca a cor da marca.
+  respostaIcone: { display: 'inline-flex', color: claro.textoFraco },
   respostaNumeroLinha: { display: 'flex', alignItems: 'baseline', gap: espaco.sm },
   respostaNumero: { ...tipo('display'), ...numeros, fontFamily: fonteAnalise.numero },
   respostaUnidade: { ...tipo('corpo'), color: claro.textoMedio },
@@ -102,13 +104,20 @@ export const est = {
 
   /* --- numeros de apoio --- */
   contexto: {
-    maxWidth: LARGURA_MAXIMA, margin: `0 auto ${espaco.xl}px`, padding: `${espaco.md}px ${espaco.xl}px`,
-    display: 'flex', gap: espaco.xxl, flexWrap: 'wrap',
+    maxWidth: LARGURA_MAXIMA, margin: `0 auto ${espaco.xl}px`, padding: `${espaco.sm}px 0`,
+    display: 'flex', flexWrap: 'wrap', alignItems: 'stretch',
     borderTop: `1px solid ${claro.borda}`, borderBottom: `1px solid ${claro.borda}`,
   },
-  contextoItem: { display: 'flex', alignItems: 'baseline', gap: espaco.sm },
-  contextoRotulo: { ...tipo('legenda'), color: claro.textoFraco },
-  contextoValor: { ...tipo('corpoF'), ...numeros, fontFamily: fonteAnalise.numero },
+  contextoItem: {
+    display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0,
+    padding: `${espaco.sm}px ${espaco.xl}px`,
+  },
+  // Fio entre um indicador e o proximo — o ultimo nao tem (ver o map).
+  contextoDivisor: { borderRight: `1px solid ${claro.borda}` },
+  contextoRotulo: { ...rotulo(claro.textoFraco) },
+  contextoValorLinha: { display: 'flex', alignItems: 'baseline', gap: espaco.xs },
+  contextoValor: { ...tipo('destaque'), ...numeros, fontFamily: fonteAnalise.numero, color: claro.texto },
+  contextoUnidade: { ...tipo('legenda'), color: claro.textoFraco },
 
   /* --- primeiro passo --- */
   primeiroPasso: {
@@ -126,10 +135,12 @@ export const est = {
     borderRadius: raio.lg, boxShadow: elevacao.baixa, border: `1px solid ${claro.borda}`,
     overflow: 'hidden',
   },
+  // Faixa levemente mais escura que o corpo do bloco: e' o mesmo cinza do
+  // cabecalho das tabelas, e diz "aqui comeca uma secao" sem mais uma linha.
   cabecalhoSecao: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     gap: espaco.md, padding: `${espaco.lg}px ${espaco.xl}px`,
-    borderBottom: `1px solid ${claro.borda}`,
+    background: '#F8F9FB', borderBottom: `1px solid ${claro.borda}`,
   },
   tituloSecao: { ...tipo('destaque'), margin: 0 },
   tabela: { width: '100%', borderCollapse: 'collapse' },

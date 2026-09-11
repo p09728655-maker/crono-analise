@@ -90,3 +90,46 @@ export const IconeChave = () => (
     <path d="M11.5 12H20M17 12v3M14.5 12v2.5" />
   </Icone>
 );
+
+/* ---- secoes e acoes do estudo aberto: mesmo grid, mesmo traco ---- */
+
+/** Barras de altura diferente — o Yamazumi. */
+export const IconeYamazumi = () => (
+  <Icone><path d="M5 20v-8M12 20V5M19 20v-5" /><path d="M3 20h18" /></Icone>
+);
+
+/** Lista — as operacoes, uma por linha. */
+export const IconeOperacoes = () => (
+  <Icone><path d="M8 6h12M8 12h12M8 18h12" /><path d="M4 6h.5M4 12h.5M4 18h.5" /></Icone>
+);
+
+/** Reta subindo — a tendencia ao longo da coleta. */
+export const IconeTendencia = () => (
+  <Icone><path d="M3 17l5-5 4 4 8-8" /><path d="M14 8h6v6" /></Icone>
+);
+
+/** Lampada — as sugestoes. */
+export const IconeSugestoes = () => (
+  <Icone>
+    <path d="M9 18h6M10 21h4" />
+    <path d="M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.3 1 2.5h6c0-1.2.4-1.9 1-2.5A6 6 0 0 0 12 3z" />
+  </Icone>
+);
+
+/** Lapis — editar o estudo. */
+export const IconeEditar = () => (
+  <Icone><path d="M4 20h4L18 10l-4-4L4 16z" /><path d="M13 7l4 4" /></Icone>
+);
+
+/** Folha com dobra — o resumo executivo, uma pagina. */
+export const IconeResumo = () => (
+  <Icone>
+    <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+    <path d="M14 3v5h5M9 13h6M9 17h6" />
+  </Icone>
+);
+
+/** Velocimetro — a capacidade da linha. */
+export const IconeCapacidade = () => (
+  <Icone><path d="M4 15a8 8 0 0 1 16 0" /><path d="M12 15l4-5" /><path d="M12 15h.01" /></Icone>
+);

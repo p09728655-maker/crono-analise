@@ -36,7 +36,7 @@ export default function PainelTendencia({ operacoes }) {
       </p>
 
       <div style={est.corpoTendencia}>
-        <GraficoTendencia operacoes={comDados} altura={170} />
+        <GraficoTendencia operacoes={comDados} altura={190} />
       </div>
     </section>
   );
