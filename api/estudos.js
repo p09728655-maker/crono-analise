@@ -71,7 +71,19 @@ export default handler(async (req, res) => {
                (SELECT count(*) FROM operacoes o WHERE o.estudo_id = e.id) AS total_operacoes,
                (SELECT count(*) FROM observacoes ob
                   JOIN operacoes o2 ON o2.id = ob.operacao_id
-                 WHERE o2.estudo_id = e.id AND NOT ob.descartada) AS total_observacoes
+                 WHERE o2.estudo_id = e.id AND NOT ob.descartada) AS total_observacoes,
+               /* Quantas operacoes ainda nao bateram a meta de ciclos.
+                  O TOTAL do estudo nao responde isso: 80 ciclos em 8
+                  operacoes pode ser 10 em cada — ou 80 numa e zero em
+                  sete. Quem decide se a amostra basta e' a operacao, uma
+                  a uma (a mesma regra de amostraSuficiente no dominio), e
+                  sem esta conta a lista nao tem como saber que a medicao
+                  acabou. */
+               (SELECT count(*) FROM operacoes o3
+                 WHERE o3.estudo_id = e.id
+                   AND (SELECT count(*) FROM observacoes ob2
+                         WHERE ob2.operacao_id = o3.id AND NOT ob2.descartada)
+                       < COALESCE(e.meta_obs, 0)) AS operacoes_abaixo_da_meta
           FROM estudos e
           LEFT JOIN usuarios u ON u.id = e.analista_id
          WHERE e.empresa_id = ${empresaId}

@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.67.0',
+    data: '2026-09-11',
+    titulo: 'O sistema reconhece quando a medição acabou',
+    itens: [
+      'ESTUDO COM TODAS AS OPERAÇÕES NA META AGORA APARECE COMO "MEDIÇÃO COMPLETA", e o cartão oferece ANALISAR em vez de "Continuar medição". Antes ele mandava seguir medindo um estudo que já tinha a amostra que o próprio sistema exige — no caso medido, 8 operações com 10 ciclos cada e meta de 10.',
+      'A CONTA É POR OPERAÇÃO, NÃO PELO TOTAL DO ESTUDO. 80 ciclos em 8 operações tanto pode ser 10 em cada quanto 80 numa e zero em sete; só a primeira significa medição completa. É a mesma regra que o painel do estudo já usava para dizer "faltam N observações para a meta".',
+      'O ESTUDO NÃO É FECHADO POR CONTA DISSO. Ele continua na lista do tablet até alguém clicar em "Só no PC" — tirar da coleta é decisão de quem coordena, não do sistema.',
+      'MEDIÇÃO COMPLETA VEM ANTES DO QUE AINDA ESTÁ SENDO MEDIDO na fila de Próximas ações, pelo mesmo critério que já valia: o que está parado esperando alguém vem antes do que já anda. Falta um clique para virar tempo padrão.',
+      'SEM META CADASTRADA, NADA MUDA: sem meta não há critério de suficiência, e o estudo continua em andamento.',
+      'O NÚMERO "PENDÊNCIAS" DA VISÃO GERAL VIROU "SEM MEDIÇÃO". Ele sempre contou estudos sem nenhum ciclo, mas o rótulo antigo era lido como "operações que faltam bater a meta" — que é outra conta e mora no painel do estudo.',
+    ],
+  },
+  {
     versao: '2.66.0',
     data: '2026-09-11',
     titulo: 'Imprimir a Folha de Análise voltou a ter botão',

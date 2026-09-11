@@ -35,6 +35,72 @@ describe('situacao', () => {
   it('estudo sem status, sem ciclo, conta como pendente', () => {
     expect(situacao({ id: 'a' })).toBe('pendente');
   });
+
+  /**
+   * O caso medido em producao: RACK XXXXXX, 8 operacoes, meta 10, e
+   * exatamente 10 ciclos em CADA uma — a medicao acabou. O cartao continuava
+   * dizendo "Continuar medicao", mandando o analista refazer trabalho
+   * pronto, porque 'concluido' no banco so' quer dizer "saiu do tablet".
+   */
+  it('toda operacao na meta: a medicao esta completa', () => {
+    expect(situacao(estudo('a', {
+      total_observacoes: 80, meta_obs: 10, operacoes_abaixo_da_meta: 0,
+    }))).toBe('pronto');
+  });
+
+  it('uma operacao abaixo da meta ainda e andamento — o total nao decide', () => {
+    // 80 ciclos podem ser 80 numa operacao e zero em sete.
+    expect(situacao(estudo('a', {
+      total_observacoes: 80, meta_obs: 10, operacoes_abaixo_da_meta: 7,
+    }))).toBe('andamento');
+  });
+
+  it('sem meta cadastrada nao ha criterio de suficiencia', () => {
+    expect(situacao(estudo('a', {
+      total_observacoes: 80, meta_obs: 0, operacoes_abaixo_da_meta: 0,
+    }))).toBe('andamento');
+  });
+
+  it('sem o campo do servidor, nao inventa conclusao', () => {
+    // Bundle novo contra API antiga: o estudo segue sendo o que era.
+    expect(situacao(estudo('a', { total_observacoes: 80, meta_obs: 10 }))).toBe('andamento');
+  });
+
+  it('tirado do tablet continua concluido, nao pronto', () => {
+    expect(situacao(estudo('a', {
+      status: 'concluido', total_observacoes: 80, meta_obs: 10, operacoes_abaixo_da_meta: 0,
+    }))).toBe('concluido');
+  });
+});
+
+describe('medicao completa na fila do dia', () => {
+  const completo = (id, extra = {}) => estudo(id, {
+    total_observacoes: 80, meta_obs: 10, operacoes_abaixo_da_meta: 0, ...extra,
+  });
+
+  it('o cartao manda ANALISAR, nao continuar medindo', () => {
+    const { itens } = proximasAcoes([completo('a')]);
+    expect(itens[0].tipo).toBe('pronto');
+    expect(itens[0].acao).toBe('analisar');
+    expect(itens[0].acaoRotulo).toBe('Analisar');
+    expect(itens[0].rotulo).toBe('Medição completa');
+  });
+
+  it('vem antes do que ainda esta sendo medido: parado antes de andando', () => {
+    const { itens } = proximasAcoes([
+      estudo('concluido', { status: 'concluido', total_observacoes: 40 }),
+      completo('pronto'),
+      estudo('andamento', { total_observacoes: 5, meta_obs: 10, operacoes_abaixo_da_meta: 3 }),
+      estudo('pendente'),
+    ]);
+    expect(itens.map((i) => i.id)).toEqual(['pendente', 'pronto', 'andamento', 'concluido']);
+  });
+
+  it('conta separado de quem ainda esta medindo', () => {
+    const r = proximasAcoes([completo('a'), estudo('b', { total_observacoes: 3 })]);
+    expect(r.prontos).toBe(1);
+    expect(r.emAndamento).toBe(1);
+  });
 });
 
 describe('proximasAcoes', () => {
@@ -97,7 +163,9 @@ describe('proximasAcoes', () => {
   });
 
   it('lista vazia nao quebra e nao inventa item', () => {
-    expect(proximasAcoes([])).toEqual({ itens: [], restantes: 0, pendentes: 0, emAndamento: 0 });
+    expect(proximasAcoes([])).toEqual({
+      itens: [], restantes: 0, pendentes: 0, emAndamento: 0, prontos: 0,
+    });
     expect(proximasAcoes(null).itens).toEqual([]);
   });
 

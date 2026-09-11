@@ -14,7 +14,7 @@ import { plural } from './formato.js';
  * secao vazia com titulo e' pior que secao nenhuma.
  */
 export default function ProximasAcoes({ estudos, est, t, aoMedir, aoAnalisar }) {
-  const { itens, restantes, pendentes, emAndamento } = proximasAcoes(estudos);
+  const { itens, restantes, pendentes, emAndamento, prontos } = proximasAcoes(estudos);
   if (!itens.length) return null;
 
   // Resumo da direita: so' o que exige acao. Se nada exige, a linha some em
@@ -22,6 +22,7 @@ export default function ProximasAcoes({ estudos, est, t, aoMedir, aoAnalisar }) 
   const resumo = [
     pendentes > 0 && `${pendentes} aguardando medição`,
     emAndamento > 0 && `${emAndamento} em andamento`,
+    prontos > 0 && `${prontos} pronto(s) para analisar`,
   ].filter(Boolean).join(' · ');
 
   return (
