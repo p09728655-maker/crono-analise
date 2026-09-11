@@ -118,6 +118,27 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  /**
+   * Chegou da lista pedindo o papel (?imprimir=folha).
+   *
+   * Espera o estudo estar NA TELA: disparado antes, o navegador imprimiria
+   * a folha vazia, que e' pior que nao imprimir — sai do papel parecendo um
+   * relatorio de estudo sem dados. E o pedido sai da URL depois de atendido,
+   * senao recarregar a pagina reabriria a caixa de impressao para sempre.
+   */
+  const [papelPedido, setPapelPedido] = useState(
+    () => new URLSearchParams(window.location.search).get('imprimir') === 'folha',
+  );
+
+  useEffect(() => {
+    if (!papelPedido || estado !== 'pronto') return;
+    setPapelPedido(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('imprimir');
+    window.history.replaceState({}, '', url);
+    imprimir('folha');
+  }, [papelPedido, estado, imprimir]);
+
   const analise = useMemo(() => analisarEstudo(dados), [dados]);
   const leitura = useMemo(() => lerEstudo(analise), [analise]);
 
