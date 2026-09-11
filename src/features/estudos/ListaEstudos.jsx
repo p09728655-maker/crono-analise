@@ -39,7 +39,7 @@ import VazioAnalise from './lista/VazioAnalise.jsx';
  * container calcula uma vez para o modo em que esta'.
  */
 export default function ListaEstudos({
-  aoAbrir, aoEditar, aoMedir, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias,
+  aoAbrir, aoEditar, aoMedir, aoImprimir, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias,
   aoSairDoSistema, aoVerInicio,
 }) {
   const [criando, setCriando] = useState(false);
@@ -289,7 +289,7 @@ export default function ListaEstudos({
                   {analise
                     ? <TabelaEstudos
                         estudos={grupo.estudos} est={est} aoAbrir={aoAbrir}
-                        aoEditar={aoEditar} aoRemover={setRemovendo}
+                        aoEditar={aoEditar} aoRemover={setRemovendo} aoImprimir={aoImprimir}
                         aoTrocarColeta={async (e) => {
                           await atualizarEstudo(e.id, { status: e.status === 'coletando' ? 'concluido' : 'coletando' });
                           await carregar();

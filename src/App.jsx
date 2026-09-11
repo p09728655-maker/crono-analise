@@ -77,6 +77,17 @@ export default function App() {
     (id) => navegar(`${caminhos.estudo('analise', id)}?editar=1`),
     [navegar],
   );
+  /**
+   * Imprimir da lista: abre o painel ja' pedindo o papel.
+   *
+   * Mesmo mecanismo do ?editar=1 — o pedido viaja na URL, e quem sabe
+   * imprimir e' o painel, que e' onde o documento existe. Da lista nao
+   * daria: a folha e' montada a partir do estudo carregado.
+   */
+  const imprimirEstudo = useCallback(
+    (id) => navegar(`${caminhos.estudo('analise', id)}?imprimir=folha`),
+    [navegar],
+  );
   const coletar = useCallback(
     (estudo, operacao) => navegar(caminhos.coletar(estudo.id, operacao.id)),
     [navegar],
@@ -196,6 +207,7 @@ export default function App() {
           aoAbrir={abrirEstudo}
           aoEditar={editarEstudo}
           aoMedir={medirEstudo}
+          aoImprimir={imprimirEstudo}
           modo={modo}
           aoTrocarModo={desktop ? trocarModo : undefined}
           aoConferirRapido={() => navegar(caminhos.rapida())}

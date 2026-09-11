@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.66.0',
+    data: '2026-09-11',
+    titulo: 'Imprimir a Folha de Análise voltou a ter botão',
+    itens: [
+      'NOVO BOTÃO "IMPRIMIR" NA LINHA DE CADA ESTUDO, junto de Editar e Só no PC. Um clique abre a Folha de Análise já indo para o papel.',
+      'O QUE ESTAVA ERRADO: para estudo EM MEDIÇÃO não havia botão nenhum que levasse ao relatório. O "Analisar" tinha sido tirado da linha porque a área de Próximas ações oferecia o mesmo destino — só que ela oferece "Analisar" apenas para estudo CONCLUÍDO; em andamento ela diz "Continuar medição". Quem quisesse o papel de um estudo ainda sendo medido precisava adivinhar que o nome do estudo era clicável.',
+      'O BOTÃO APARECE EM TODA LINHA, medida ou não. Botão que aparece e some conforme o estado do estudo é exatamente o que fez a impressão virar adivinhação.',
+      'O NOME DO ESTUDO CONTINUA ABRINDO A ANÁLISE, para quem quer ver antes de imprimir — e o Resumo Executivo continua no painel, ao lado da Folha.',
+      'A IMPRESSÃO SÓ DISPARA DEPOIS QUE O ESTUDO ESTÁ NA TELA. Disparada antes, sairia uma folha em branco com cara de relatório sem dados.',
+    ],
+  },
+  {
     versao: '2.65.0',
     data: '2026-09-10',
     titulo: 'Esqueci minha senha: entrar deixou de depender do administrador',

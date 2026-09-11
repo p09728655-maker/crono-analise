@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { formatarData } from './formato.js';
 
-export default function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarColeta }) {
+export default function TabelaEstudos({
+  estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarColeta, aoImprimir,
+}) {
   const [sobre, setSobre] = useState(null);
 
   return (
@@ -21,11 +23,11 @@ export default function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemov
           <col style={{ width: 100 }} />
           <col style={{ width: 84 }} />
           <col style={{ width: 112 }} />
-          {/* Acoes: eram quatro botoes em 320px. "Analisar" mudou-se para o
-              proprio nome do estudo, na primeira coluna, e os tres que
-              sobraram cabem com folga em 240 — a largura que sobra vai para
-              o nome, que e' o texto que de fato cresce. */}
-          <col style={{ width: 240 }} />
+          {/* Acoes: quatro botoes de novo, e por isso de volta a 320px.
+              Em 240 o quarto quebrava para a linha de baixo e cada linha da
+              tabela ficava com uma altura. O nome fica com o que sobra — ele
+              corta com reticencias e tem o texto inteiro no title. */}
+          <col style={{ width: 320 }} />
         </colgroup>
         <thead>
           <tr>
@@ -46,12 +48,16 @@ export default function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemov
               onMouseEnter={() => setSobre(e.id)}
               onMouseLeave={() => setSobre(null)}
             >
-              {/* O NOME e' o caminho para a analise — nao um botao a mais na
-                  ponta da linha. O botao "Analisar" saiu daqui quando a area
-                  de Proximas acoes passou a oferecer o mesmo destino logo
-                  abaixo: eram dois alvos identicos para o mesmo estudo. Mas
-                  a area so' mostra os primeiros; sem isto, todo estudo fora
-                  dela ficaria sem porta de entrada.
+              {/* O NOME abre a analise. Continua sendo o caminho de quem
+                  quer VER o estudo — o botao Imprimir, na ponta da linha,
+                  e' o de quem quer o PAPEL.
+
+                  Ja' houve um "Analisar" aqui, removido porque Proximas
+                  acoes oferecia o mesmo destino. So' que oferecia apenas
+                  para estudo CONCLUIDO: em andamento o cartao mostra
+                  "Continuar medicao", e o estudo ficava sem nenhum botao
+                  que levasse ao relatorio — era preciso adivinhar que o
+                  nome era clicavel.
 
                   title: com largura fixa o nome longo corta com reticencias,
                   e o texto inteiro tem de continuar alcancavel. */}
@@ -72,6 +78,19 @@ export default function TabelaEstudos({ estudos, est, aoAbrir, aoEditar, aoRemov
               <td style={est.tdFraco}>{formatarData(e.atualizado_em)}</td>
               <td style={est.tdAcoes}>
                 <span style={est.acoesLinha}>
+                {/* A FOLHA DE ANALISE em um clique: abre o painel com a
+                    impressao ja' disparada. Fica em todas as linhas, medido
+                    ou nao — botao que aparece e some conforme o estado e'
+                    justamente o que fez a impressao virar adivinhacao. Quem
+                    quer o Resumo Executivo o encontra no painel, ao lado. */}
+                <button
+                  type="button"
+                  style={est.botaoLinha}
+                  onClick={() => aoImprimir?.(e.id)}
+                  title={`Imprimir a Folha de Análise de ${e.nome}`}
+                >
+                  Imprimir
+                </button>
                 {/* Editar leva ao mesmo painel com a edicao ja aberta: nome
                     digitado errado tinha de ser descoberto la dentro. */}
                 <button type="button" style={est.botaoLinha} onClick={() => aoEditar?.(e.id)}>
