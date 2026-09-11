@@ -53,6 +53,18 @@ export default function MenuLateral({
 
   return (
     <nav style={est.lateral} aria-label="Navegação">
+      {/* Estado de mouse por classe: estilo inline nao faz :hover. O item
+          ativo fica fora do hover — ele ja' esta' marcado, e escurecer por
+          cima confundiria "aqui" com "por cima". !important porque o fundo
+          em repouso vem inline. O FOCO de teclado fica com a regra global do
+          index.html (anel areia, 3px): uma regra local em vermelho sumia
+          sobre o botao vermelho e usava a cor de identidade como sinal. */}
+      <style>{`
+        .menu-lateral-item:not([aria-current]):hover { background: ${escuro.superficie} !important; color: ${t.texto} !important; }
+        .menu-lateral-primario:hover { background: ${t.bordeaux} !important; }
+        .menu-lateral-voltar:hover { background: ${escuro.superficie} !important; }
+      `}</style>
+
       {/* 1. Onde estou */}
       <div style={est.marca}>
         <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={est.logo} />
@@ -72,6 +84,7 @@ export default function MenuLateral({
       {aoVoltar && (
         <button
           type="button"
+          className="menu-lateral-voltar"
           style={est.voltar}
           onClick={aoVoltar}
           aria-label="Voltar para a lista de estudos"
@@ -99,6 +112,7 @@ export default function MenuLateral({
         <div style={est.bloco}>
           <button
             type="button"
+            className="menu-lateral-primario"
             style={est.botaoPrimario}
             onClick={acaoPrimaria ? acaoPrimaria.aoClicar : aoNovoEstudo}
           >
@@ -117,6 +131,7 @@ export default function MenuLateral({
         <div style={est.bloco}>
           <button
             type="button"
+            className="menu-lateral-item"
             onClick={aoVerInicio}
             aria-current={inicioAtivo ? 'page' : undefined}
             style={{ ...est.item, ...(inicioAtivo ? est.itemAtivo : {}) }}
@@ -144,6 +159,7 @@ export default function MenuLateral({
             <button
               key={s.id}
               type="button"
+              className="menu-lateral-item"
               onClick={() => aoTrocarSecao(s.id)}
               aria-current={s.id === secaoAtiva ? 'page' : undefined}
               style={{
@@ -152,7 +168,17 @@ export default function MenuLateral({
                 ...(s.id === secaoAtiva ? est.itemAtivo : {}),
               }}
             >
-              <span style={est.itemTexto}>{s.rotulo}</span>
+              {/* O icone e' opcional e vem de quem monta as secoes: a lateral
+                  nao sabe o que e' um Yamazumi. Com ele, o item fica igual
+                  aos da lista — desenho e nome, nunca so' o desenho. */}
+              {s.icone ? (
+                <span style={est.itemComIcone}>
+                  <s.icone />
+                  <span style={est.itemTexto}>{s.rotulo}</span>
+                </span>
+              ) : (
+                <span style={est.itemTexto}>{s.rotulo}</span>
+              )}
               {s.contador != null && <span style={est.contagem}>{s.contador}</span>}
             </button>
           )))}
@@ -164,8 +190,15 @@ export default function MenuLateral({
         <div style={est.bloco}>
           <div style={est.grupoRotulo}>{acoesRotulo}</div>
           {acoes.map((a) => (
-            <button key={a.rotulo} type="button" style={est.item} onClick={a.aoClicar}>
-              <span style={est.itemTexto}>{a.rotulo}</span>
+            <button key={a.rotulo} type="button" className="menu-lateral-item" style={est.item} onClick={a.aoClicar}>
+              {a.icone ? (
+                <span style={est.itemComIcone}>
+                  <a.icone />
+                  <span style={est.itemTexto}>{a.rotulo}</span>
+                </span>
+              ) : (
+                <span style={est.itemTexto}>{a.rotulo}</span>
+              )}
             </button>
           ))}
         </div>
@@ -196,6 +229,7 @@ export default function MenuLateral({
             <div style={est.bloco} role="group" aria-label="Filtrar por produto">
               <button
                 type="button"
+                className="menu-lateral-item"
                 onClick={() => aoFiltrar(null)}
                 aria-current={filtro === null ? 'true' : undefined}
                 style={{ ...est.item, ...(filtro === null ? est.itemAtivo : {}) }}
@@ -209,6 +243,7 @@ export default function MenuLateral({
                 <button
                   key={g.chave}
                   type="button"
+                  className="menu-lateral-item"
                   onClick={() => aoFiltrar(g.chave === filtro ? null : g.chave)}
                   aria-current={g.chave === filtro ? 'true' : undefined}
                   style={{ ...est.item, ...(g.chave === filtro ? est.itemAtivo : {}) }}
@@ -227,6 +262,7 @@ export default function MenuLateral({
             <button
               type="button"
               onClick={aoVerEstudos}
+              className="menu-lateral-item"
               aria-current={estudosAtivo ? 'page' : undefined}
               style={{ ...est.item, ...(estudosAtivo ? est.itemAtivo : {}) }}
             >
@@ -238,7 +274,7 @@ export default function MenuLateral({
           )}
 
           {arquivados > 0 && (
-            <button type="button" style={est.item} onClick={aoVerArquivados}>
+            <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerArquivados}>
               <span style={est.itemComIcone}>
                 <IconeArquivados />
                 <span style={est.itemTexto}>Estudos arquivados</span>
@@ -254,7 +290,7 @@ export default function MenuLateral({
         <div style={est.bloco}>
           <div style={est.grupoRotulo}>Ritmo por máquina</div>
           <div style={est.grupoDica}>Peças/hora do posto — sem cronometrar ciclo</div>
-          <button type="button" style={est.item} onClick={aoVerConferencias}>
+          <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerConferencias}>
             <span style={est.itemComIcone}>
               <IconeRitmo />
               <span style={est.itemTexto}>Abrir o relatório</span>
@@ -281,7 +317,7 @@ export default function MenuLateral({
             />
           )}
           {aoImportar && (
-            <button type="button" style={est.item} onClick={aoImportar}>
+            <button type="button" className="menu-lateral-item" style={est.item} onClick={aoImportar}>
               <span style={est.itemComIcone}>
                 <IconeImportar />
                 <span style={est.itemTexto}>Importar PDF ou planilha</span>
@@ -289,7 +325,7 @@ export default function MenuLateral({
             </button>
           )}
           {aoVerAnalistas && (
-            <button type="button" style={est.item} onClick={aoVerAnalistas}>
+            <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerAnalistas}>
               <span style={est.itemComIcone}>
                 <IconeAnalistas />
                 <span style={est.itemTexto}>Analistas</span>
@@ -297,7 +333,7 @@ export default function MenuLateral({
             </button>
           )}
           {aoVerMotivos && (
-            <button type="button" style={est.item} onClick={aoVerMotivos}>
+            <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerMotivos}>
               <span style={est.itemComIcone}>
                 <IconeParadas />
                 <span style={est.itemTexto}>Motivos de parada</span>
@@ -305,7 +341,7 @@ export default function MenuLateral({
             </button>
           )}
           {aoVerMaquinas && (
-            <button type="button" style={est.item} onClick={aoVerMaquinas}>
+            <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerMaquinas}>
               <span style={est.itemComIcone}>
                 <IconeMaquinas />
                 <span style={est.itemTexto}>Máquinas</span>
@@ -313,7 +349,7 @@ export default function MenuLateral({
             </button>
           )}
           {aoVerChaveIa && (
-            <button type="button" style={est.item} onClick={aoVerChaveIa}>
+            <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerChaveIa}>
               <span style={est.itemComIcone}>
                 <IconeChave />
                 <span style={est.itemTexto}>Chave da IA</span>
@@ -329,7 +365,7 @@ export default function MenuLateral({
         <div style={est.rodape}>
           {aoVerAnalistas && (
             <button
-              type="button" style={est.itemDiscreto} onClick={aoVerAnalistas}
+              type="button" className="menu-lateral-item" style={est.itemDiscreto} onClick={aoVerAnalistas}
               title={usuario ? 'Trocar quem está usando este computador' : 'Dizer quem está usando este computador'}
             >
               <span style={est.itemTexto}>
@@ -339,7 +375,7 @@ export default function MenuLateral({
             </button>
           )}
           {aoTrocarModo && (
-            <button type="button" style={est.itemDiscreto} onClick={aoTrocarModo} title="Tela de coleta (celular)">
+            <button type="button" className="menu-lateral-item" style={est.itemDiscreto} onClick={aoTrocarModo} title="Tela de coleta (celular)">
               <span style={est.itemTexto}>Ir para a Coleta</span>
               <span aria-hidden="true" style={est.seta}>→</span>
             </button>

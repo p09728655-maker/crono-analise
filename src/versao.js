@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.69.0',
+    data: '2026-09-11',
+    titulo: 'Painel de análise com cara de software de engenharia',
+    itens: [
+      'MENU LATERAL COM ÍCONES em cada seção e ação, realce ao passar o mouse e a seção aberta marcada com clareza. Os itens, a ordem e os destinos são os mesmos.',
+      'CAPACIDADE E OPERADORES NO TOPO ganharam um ícone ao lado do rótulo, no cinza do texto — ajuda o olho a achar o bloco sem disputar com o número.',
+      'A FAIXA DE INDICADORES (operações, ciclos coletados, Σ TP por peça, takt time, tempo parado) virou uma linha compacta de rótulo em cima e valor embaixo, com divisórias, em vez de texto corrido.',
+      'OS QUADROS DE TENDÊNCIA ficaram maiores na tela, com a leitura separada do gráfico por um fio e sombra leve sob o mouse. Contagem, dados e leitura dos gráficos não mudaram.',
+      'NADA MUDOU DE FUNÇÃO: cálculos, coleta e sincronização são os de sempre, e o relatório impresso sai com o mesmo conteúdo e a mesma paginação. Foi uma passada de acabamento visual, não de regra.',
+    ],
+  },
+  {
     versao: '2.68.0',
     data: '2026-09-11',
     titulo: 'Observação do cronoanalista, furação passante e mais tela no PC',

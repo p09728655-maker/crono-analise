@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { claro, referencia, serie } from '../../theme/tokensAnalise.js';
+import { elevacao } from '../../theme/escala.js';
 import { formatarSegundos } from '../../domain/cronoanalise.js';
 import { lerTendencia, serieDeTendencia } from '../../domain/tendenciaColeta.js';
 import { lerTendenciaPeriodo, tendenciasDoPeriodo } from '../../domain/tendenciaPeriodo.js';
@@ -349,6 +350,7 @@ export function GraficoTendencia({ operacoes, altura = 150, larguraFixa, colunas
         ]}
       />
 
+      <style>{ESTILO_TELA_MINI}</style>
       <div style={{ ...est.gradeTendencia, ...(colunas ? { gridTemplateColumns: `repeat(${colunas}, 1fr)` } : {}) }}>
         {dados.map((op) => (
           <MiniTendencia key={op.id} operacao={op} altura={altura} larguraFixa={larguraFixa} />
@@ -361,6 +363,23 @@ export function GraficoTendencia({ operacoes, altura = 150, larguraFixa, colunas
 const EIXO_MINI = { esq: 40, dir: 12, topo: 10, base: 22 };
 
 const COR_TOM = { ok: claro.ok, atencao: claro.atencao, neutro: claro.neutro };
+
+/* Acabamento SO' DE TELA dos quadros de tendencia. Os estilos inline abaixo
+   sao os mesmos que a folha A4 usa (RelatorioImpressao e ImpressaoConferencias
+   importam este mesmo componente), entao qualquer pixel a mais aqui mudaria a
+   paginacao do relatorio. Por classe e sob @media screen, a folha nao ve nada
+   disto. !important onde o inline ja' define a mesma propriedade. */
+const ESTILO_TELA_MINI = `
+  @media screen {
+    .mini-tendencia { border-radius: 10px !important; transition: box-shadow 160ms ease; }
+    .mini-tendencia:hover { box-shadow: ${elevacao.media}; }
+    .mini-tendencia .mini-topo { margin-bottom: 8px !important; }
+    .mini-tendencia .mini-selo { font-size: 11px !important; padding: 2px 9px !important; }
+    .mini-tendencia .mini-leitura {
+      margin-top: 10px !important; padding-top: 10px; border-top: 1px solid ${claro.borda};
+    }
+  }
+`;
 
 function MiniTendencia({ operacao, altura, larguraFixa }) {
   const [refContainer, larguraMedida] = useLarguraContainer(240);
@@ -404,11 +423,11 @@ function MiniTendencia({ operacao, altura, larguraFixa }) {
   const corTom = COR_TOM[leitura.tom] || claro.neutro;
 
   return (
-    <div style={est.miniTendencia}>
-      <div style={est.miniTopo}>
+    <div style={est.miniTendencia} className="mini-tendencia">
+      <div style={est.miniTopo} className="mini-topo">
         <span style={est.miniNome} title={operacao.nome}>{operacao.nome}</span>
         {/* Selo de TEXTO com o numero: cor sozinha nao informa. */}
-        <span style={{ ...est.miniSelo, color: corTom, borderColor: corTom }}>
+        <span style={{ ...est.miniSelo, color: corTom, borderColor: corTom }} className="mini-selo">
           {leitura.rotulo}{reta && leitura.mostrarPct ? ` · ${sinal}${Math.abs(pct)}%` : ''}
         </span>
       </div>
@@ -476,7 +495,7 @@ function MiniTendencia({ operacao, altura, larguraFixa }) {
         </svg>
       </div>
 
-      <p style={est.miniLeitura}>{leitura.frase}</p>
+      <p style={est.miniLeitura} className="mini-leitura">{leitura.frase}</p>
     </div>
   );
 }
@@ -525,6 +544,7 @@ export function GraficoTendenciaPeriodo({ conferencias, resumo, altura = 160, la
         ]}
       />
 
+      <style>{ESTILO_TELA_MINI}</style>
       <div style={{ ...est.gradeTendencia, ...(colunas ? { gridTemplateColumns: `repeat(${colunas}, 1fr)` } : {}) }}>
         {series.map((s) => (
           <MiniPeriodo key={s.maquina} serie={s} altura={altura} larguraFixa={larguraFixa} />
@@ -573,10 +593,10 @@ function MiniPeriodo({ serie: s, altura, larguraFixa }) {
   const corTom = COR_TOM[leitura.tom] || claro.neutro;
 
   return (
-    <div style={est.miniTendencia}>
-      <div style={est.miniTopo}>
+    <div style={est.miniTendencia} className="mini-tendencia">
+      <div style={est.miniTopo} className="mini-topo">
         <span style={est.miniNome} title={s.maquina}>{s.maquina}</span>
-        <span style={{ ...est.miniSelo, color: corTom, borderColor: corTom }}>
+        <span style={{ ...est.miniSelo, color: corTom, borderColor: corTom }} className="mini-selo">
           {leitura.rotulo}{reta && leitura.mostrarPct ? ` · ${sinal}${Math.abs(pct)}%` : ''}
         </span>
       </div>
@@ -640,7 +660,7 @@ function MiniPeriodo({ serie: s, altura, larguraFixa }) {
         </svg>
       </div>
 
-      <p style={est.miniLeitura}>{leitura.frase}</p>
+      <p style={est.miniLeitura} className="mini-leitura">{leitura.frase}</p>
     </div>
   );
 }
@@ -685,9 +705,11 @@ const est = {
   gradeTendencia: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14,
   },
+  /* Geometria compartilhada com a folha A4 — o que e' so' de tela esta' em
+     ESTILO_TELA_MINI. padding 12 e' contrato com o e2e (desconta 24 da celula). */
   miniTendencia: {
     borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, borderRadius: 8,
-    padding: 12, minWidth: 0, breakInside: 'avoid', pageBreakInside: 'avoid',
+    padding: 12, minWidth: 0, background: claro.papel, breakInside: 'avoid', pageBreakInside: 'avoid',
   },
   miniTopo: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
