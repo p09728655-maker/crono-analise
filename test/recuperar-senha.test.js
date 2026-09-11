@@ -99,14 +99,14 @@ function fingirRes() {
 }
 
 async function pedirNoServidor(corpo, metodo) {
-  const { default: endpoint } = await import('../api/recuperar-senha.js');
+  const { default: endpoint } = await import('../api/sessao.js');
   const res = fingirRes();
   await endpoint(fingirReq(corpo, metodo), res);
   return res;
 }
 
-describe('pedir o link (api/recuperar-senha.js)', () => {
-  const PEDIDO = { email: 'ppcp@patrimarmoveis.com.br', destino: `${ORIGEM}/` };
+describe('pedir o link (api/sessao.js)', () => {
+  const PEDIDO = { acao: 'recuperar-senha', email: 'ppcp@patrimarmoveis.com.br', destino: `${ORIGEM}/` };
 
   it('conta que ja podia entrar recebe o link, com a volta para o proprio site', async () => {
     banco.resultado = [{ id: 'u1' }];
@@ -156,16 +156,22 @@ describe('pedir o link (api/recuperar-senha.js)', () => {
   });
 
   it('pedido sem e-mail nao consulta banco nem envia nada', async () => {
-    const res = await pedirNoServidor({});
+    const res = await pedirNoServidor({ acao: 'recuperar-senha' });
 
     expect(res.statusCode).toBe(200);
     expect(banco.consultas).toHaveLength(0);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('so aceita POST', async () => {
-    const res = await pedirNoServidor(PEDIDO, 'GET');
-    expect(res.statusCode).toBe(405);
+  it('o caminho publico so abre para a acao de recuperar', async () => {
+    // POST sem a acao continua sendo o bundle velho pedindo login aqui — e
+    // continua levando 410. Sem isto, dobrar a recuperacao dentro do
+    // endpoint de sessao teria aberto uma porta sem autenticacao.
+    const res = await pedirNoServidor({ email: 'ppcp@patrimarmoveis.com.br' });
+
+    expect(res.statusCode).toBe(410);
+    expect(banco.consultas).toHaveLength(0);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
 

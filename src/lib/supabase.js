@@ -110,7 +110,7 @@ export async function sairDaConta() {
 /* ------------------------------------------------- esqueci minha senha */
 
 /**
- * O PEDIDO do link nao mora aqui: mora em api/recuperar-senha.js.
+ * O PEDIDO do link nao mora aqui: mora no servidor (api/sessao.js).
  *
  * Chamar o /recover do GoTrue daqui mandaria link para qualquer conta que
  * exista — inclusive a do analista cadastrado SEM senha, que por decisao do

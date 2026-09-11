@@ -471,7 +471,7 @@ cadastro e o Supabase envia um link que abre o app em "Definir nova senha"
 uma vez.
 
 O pedido **não vai do navegador para o Supabase**, como entrar e sair vão:
-passa por `api/recuperar-senha.js`. A razão é uma só, e é de controle de
+passa pelo servidor, em `api/sessao.js`. A razão é uma só, e é de controle de
 acesso: o `/recover` do GoTrue manda link para qualquer conta que exista,
 inclusive a do analista cadastrado **sem senha** — que por decisão do sistema
 é identidade e não abre login. Sem o filtro, essa pessoa criaria a própria
@@ -493,6 +493,14 @@ Outras três decisões que não aparecem na tela:
   operar com o papel de quem abriu o e-mail. O token chega no FRAGMENTO da
   URL (`#access_token=...`), que não vai para servidor nenhum, e é apagado da
   barra de endereço assim que é lido.
+**Por que dentro de `api/sessao.js`, e não num endpoint com o nome da
+função:** o plano Hobby da Vercel aceita **12 funções serverless por deploy**,
+e o projeto já estava exatamente nas 12. Um arquivo `api/recuperar-senha.js`
+virava a 13ª e derrubava o deploy inteiro — não só o endpoint novo, o app
+todo parava de publicar. O assunto de `sessao.js` é quem está tentando entrar,
+que é exatamente o caso de quem esqueceu a senha. Migrar para o plano Pro é o
+que devolve a liberdade de separar.
+
 - **Trocar a senha derruba as outras sessões** (`/logout?scope=others`), como
   `api/_lib/contas.js` já faz na troca pelo administrador.
 
