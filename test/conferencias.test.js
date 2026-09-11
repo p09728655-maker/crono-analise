@@ -130,10 +130,13 @@ describe('paraConferencia — item da fila vira payload do sync', () => {
       duracaoMs: 300000,
       pecas: 60,
       ciclosPorPeca: 2,
+      furacaoPassante: true,
       paradas: [{ motivo: 'setup', duracaoMs: 60000 }],
       salvoEm: '2026-08-28T11:53:53.448Z',
     });
     expect(corpo.ciclosPorPeca).toBe(2);
+    // Mesmo mapeador que ja' perdeu os ciclos uma vez: a furacao passa aqui.
+    expect(corpo.furacaoPassante).toBe(true);
     expect(corpo.pecas).toBe(60);
     expect(corpo.maquina).toBe('Furadeira 16');
     expect(corpo.horaInicial).toBe('08:47');
@@ -144,6 +147,7 @@ describe('paraConferencia — item da fila vira payload do sync', () => {
   it('conferencia enfileirada por versao antiga, sem o campo, vai como 1 ciclo', () => {
     const corpo = paraConferencia({ clientId: 'x', duracaoMs: 60000, pecas: 10 });
     expect(corpo.ciclosPorPeca).toBe(1);
+    expect(corpo.furacaoPassante).toBe(false);
     expect(corpo.maquina).toBeNull();
     expect(corpo.paradas).toEqual([]);
   });

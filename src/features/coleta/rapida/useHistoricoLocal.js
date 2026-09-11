@@ -30,6 +30,7 @@ const paraFila = (c) => ({
   duracaoMs: Math.round(c.duracaoMs),
   pecas: c.pecas,
   ciclosPorPeca: c.ciclosPorPeca || 1,
+  furacaoPassante: Boolean(c.furacaoPassante),
   paradas: c.paradas || [],
   salvoEm: c.salvoEm,
 });
@@ -85,6 +86,7 @@ export function useHistoricoLocal({ aoGuardar } = {}) {
       duracaoMs: calculado.duracaoMs,
       pecas: calculado.pecas,
       ciclosPorPeca: calculado.ciclosPorPeca,
+      furacaoPassante: Boolean(calculado.furacaoPassante),
       paradas,
       pecasPorHora: calculado.pecasPorHora,
       pecasPorHoraBruto: calculado.pecasPorHoraBruto,

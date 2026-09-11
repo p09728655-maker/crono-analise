@@ -248,3 +248,95 @@ describe('lerClasse', () => {
     expect(frases[0]).toContain('peças de 2 acionamentos');
   });
 });
+
+/**
+ * FURACAO PASSANTE E' OUTRA CLASSE.
+ *
+ * Com o mesmo numero de acionamentos, a broca que atravessa a peca gasta
+ * mais tempo em cada um. Na mesma classe da cega, a passante apareceria
+ * "fora da faixa" apontando manuseio — quando o que mudou foi a furacao.
+ * O relatorio so' compara passante com passante, e a peca gravada dos dois
+ * jeitos fica de fora, nomeada, ate' alguem corrigir.
+ */
+describe('classesDeCiclo — furação passante', () => {
+  it('passante e não passante com os mesmos acionamentos são classes separadas', () => {
+    const pecas = porPeca([
+      ...medicoes('F16', 'Lateral cega', 225),
+      ...medicoes('F16', 'Porta cega', 210),
+      ...medicoes('F16', 'Tampo passante', 150, { furacaoPassante: true }),
+      ...medicoes('F16', 'Fundo passante', 140, { furacaoPassante: true }),
+    ]);
+    const { classes, mistas } = classesDeCiclo(pecas);
+
+    expect(mistas).toEqual([]);
+    expect(classes).toHaveLength(2);
+    const [cega, passante] = classes;
+    expect(cega.passante).toBe(false);
+    expect(cega.itens.map((i) => i.peca).sort()).toEqual(['Lateral cega', 'Porta cega']);
+    expect(passante.passante).toBe(true);
+    expect(passante.itens.map((i) => i.peca).sort()).toEqual(['Fundo passante', 'Tampo passante']);
+    // Sem a separacao, as duas passantes (~9,5 pc/min) sairiam "fora da
+    // faixa" das cegas (~14,5 pc/min). Separadas, ninguem esta fora.
+    expect(cega.foraDaFaixa).toEqual([]);
+    expect(passante.foraDaFaixa).toEqual([]);
+  });
+
+  it('a leitura da classe diz que é passante', () => {
+    const pecas = porPeca([
+      ...medicoes('F16', 'Tampo', 150, { furacaoPassante: true }),
+      ...medicoes('F16', 'Fundo', 140, { furacaoPassante: true }),
+    ]);
+    const [c] = classesDeCiclo(pecas).classes;
+    expect(lerClasse(c).join(' ')).toMatch(/furação passante/);
+  });
+
+  it('peça gravada ora passante, ora não, fica fora — com o motivo em palavras', () => {
+    const pecas = porPeca([
+      ...medicoes('F16', 'Confusa', 150, { furacaoPassante: true }),
+      ...medicoes('F16', 'Confusa', 150, { furacaoPassante: false }),
+    ]);
+    const [p] = pecas;
+    expect(p.furacaoPassante).toBeNull();
+    expect(p.passanteMista).toBe(true);
+
+    const { classes, mistas } = classesDeCiclo(pecas);
+    expect(classes).toEqual([]);
+    expect(mistas).toHaveLength(1);
+    expect(mistas[0].motivo).toMatch(/passante/);
+  });
+
+  it('medição antiga, sem o campo, é não passante — continua comparável com as cegas novas', () => {
+    const pecas = porPeca([
+      ...medicoes('F16', 'Antiga', 225),
+      ...medicoes('F16', 'Nova cega', 210, { furacaoPassante: false }),
+    ]);
+    const { classes } = classesDeCiclo(pecas);
+    expect(classes).toHaveLength(1);
+    expect(classes[0].itens).toHaveLength(2);
+  });
+
+  it('entre máquinas, o duelo só junta classes de mesma furação', () => {
+    const pecas = porPeca([
+      ...medicoes('F16', 'A', 225),
+      ...medicoes('F16', 'B', 210),
+      ...medicoes('F12', 'C', 150, { furacaoPassante: true }),
+      ...medicoes('F12', 'D', 140, { furacaoPassante: true }),
+    ]);
+    // Mesmo grupo, mesmos acionamentos, furacoes diferentes: sem duelo.
+    expect(duelosDeCiclo(pecas, () => 'FURADEIRA')).toEqual([]);
+  });
+});
+
+describe('classesDeCiclo — peça mista nos dois eixos', () => {
+  it('diz os dois motivos, senão o analista corrige um e ela continua fora', () => {
+    const pecas = porPeca([
+      ...medicoes('F16', 'Lateral', 150, { ciclosPorPeca: 1, furacaoPassante: false }),
+      ...medicoes('F16', 'Lateral', 150, { ciclosPorPeca: 2, furacaoPassante: true }),
+    ]);
+    const { classes, mistas } = classesDeCiclo(pecas);
+    expect(classes).toEqual([]);
+    expect(mistas).toHaveLength(1);
+    expect(mistas[0].motivo).toMatch(/1 e 2 acionamentos/);
+    expect(mistas[0].motivo).toMatch(/passante/);
+  });
+});

@@ -8,12 +8,14 @@ const operacao = { id: '33333333-3333-3333-3333-333333333333', nome: 'Furar late
 
 // Expoe os ciclos registrados para o teste inspecionar.
 window.__registrados = [];
+window.__anotacoes = [];
 
 createRoot(document.getElementById('raiz')).render(
   <ColetaFuradeira
     estudo={estudo}
     operacao={operacao}
     aoRegistrar={(item) => window.__registrados.push(item)}
+    aoAnotar={(item) => window.__anotacoes.push(item)}
     aoSair={() => { window.__saiu = true; }}
   />,
 );

@@ -61,6 +61,18 @@ export function dataIso(valor, campo, { padrao = null } = {}) {
   return d.toISOString();
 }
 
+/**
+ * Booleano vindo de JSON. Aceita true/false e as strings 'true'/'false'
+ * (formulario velho manda texto); qualquer outra coisa e' erro, nao "falso"
+ * — silenciar um valor estranho aqui gravaria dado errado sem ninguem ver.
+ */
+export function booleano(valor, campo, { padrao = false } = {}) {
+  if (valor == null || valor === '') return padrao;
+  if (valor === true || valor === 'true') return true;
+  if (valor === false || valor === 'false') return false;
+  throw erroValidacao(`Campo "${campo}" deve ser verdadeiro ou falso`);
+}
+
 export function lista(valor, campo, { max = 500 } = {}) {
   if (!Array.isArray(valor)) throw erroValidacao(`Campo "${campo}" deve ser uma lista`);
   if (valor.length > max) {

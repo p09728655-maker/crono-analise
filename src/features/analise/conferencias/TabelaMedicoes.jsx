@@ -97,6 +97,11 @@ export default function TabelaMedicoes({
                   >
                     {c.peca || 'Sem nome'}
                   </button>
+                  {/* Passante e' atributo da peca e muda a classe de
+                      comparacao: precisa ser visivel na medicao, senao a
+                      peca que "sumiu" da faixa dos 2 acionamentos e' um
+                      misterio. */}
+                  {c.furacao_passante && <span style={est.tagPassante}>passante</span>}
                 </td>
                 <td style={est.tdFraco}>
                   {faixaHoraria(c) || '—'}

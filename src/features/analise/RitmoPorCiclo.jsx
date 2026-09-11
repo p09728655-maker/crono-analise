@@ -40,10 +40,11 @@ export default function RitmoPorCiclo({ classes, mistas }) {
       </div>
 
       {comFaixa.map((c) => (
-        <div key={`${c.maquina}-${c.ciclos}`} style={est.classe}>
+        <div key={`${c.maquina}-${c.ciclos}-${c.passante}`} style={est.classe}>
           <div style={est.classeTopo}>
             <span style={est.classeNome}>
               {c.maquina} · {c.ciclos === 1 ? '1 acionamento' : `${c.ciclos} acionamentos`} por peça
+              {c.passante ? ' · furação passante' : ''}
             </span>
             <span style={est.classeFaixa}>
               {c.faixaPorMinuto.min.toFixed(1)} a {c.faixaPorMinuto.max.toFixed(1)} pç/min
@@ -102,14 +103,15 @@ export default function RitmoPorCiclo({ classes, mistas }) {
         </div>
       ))}
 
-      {/* Peca gravada ora com 1 acionamento, ora com 2: nao entra em classe
-          nenhuma ate' o dado ser corrigido. Sumir com ela em silencio faria
-          o analista procurar uma peca que o relatorio engoliu. */}
+      {/* Peca gravada ora com 1 acionamento, ora com 2 — ou ora passante,
+          ora nao: nao entra em classe nenhuma ate' o dado ser corrigido.
+          Sumir com ela em silencio faria o analista procurar uma peca que o
+          relatorio engoliu. O motivo vem do dominio, o mesmo do papel. */}
       {mistas?.length > 0 && (
         <p style={est.rodape}>
           Fora desta leitura:{' '}
-          {mistas.map((m) => `${m.peca} na ${m.maquina} (gravada com ${m.ciclosVistos.join(' e ')} acionamentos)`).join(', ')}
-          {' — '}o mesmo produto não pode pedir dois números de acionamento. Corrija na medição
+          {mistas.map((m) => `${m.peca} na ${m.maquina} (${m.motivo})`).join(', ')}
+          {' — '}o mesmo produto não pode estar gravado de dois jeitos. Corrija na medição
           para a peça entrar na comparação.
         </p>
       )}

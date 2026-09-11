@@ -196,6 +196,33 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
         </p>
       )}
 
+      {/* OBSERVACOES DO CRONOANALISTA — o que o cronometro nao registra.
+          Escritas na coleta, na frente da maquina: "operador novo",
+          "gabarito folgado". E' o contexto que explica um CV alto seis
+          meses depois. So' aparece quando existe — ausencia de nota nao e'
+          achado, ao contrario da parada. */}
+      {analise.operacoes.some((op) => op.anotacao) && (
+        <>
+          <h2 style={{ ...est.tituloSecao, marginTop: 12 }}>Observações do cronoanalista</h2>
+          <table style={est.tabela}>
+            <thead>
+              <tr>
+                <th style={est.th}>Operação</th>
+                <th style={est.th}>Observação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {analise.operacoes.filter((op) => op.anotacao).map((op) => (
+                <tr key={op.id}>
+                  <td style={est.td}>{op.nome}</td>
+                  <td style={{ ...est.td, whiteSpace: 'pre-wrap' }}>{op.anotacao}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
       {/* SUGESTOES — o que fazer com os numeros.
           Vai no papel porque o relatorio circula em reuniao e "CV de 130%"
           nao move ninguem; "revisar o MOP e treinar no metodo padrao" move.

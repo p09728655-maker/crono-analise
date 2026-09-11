@@ -299,7 +299,7 @@ export function amostraSuficiente(resultado, metaObs) {
  * por ciclo — e' uma medicao de vazao, nao um estudo de tempos. Por isso o
  * resultado fala em pecas/hora e ciclo MEDIO, nunca em TO/TN/TP.
  */
-export function conferenciaRapida({ duracaoMs, pecas, paradas, ciclosPorPeca }) {
+export function conferenciaRapida({ duracaoMs, pecas, paradas, ciclosPorPeca, furacaoPassante }) {
   const dur = Number(duracaoMs) || 0;
   if (dur <= 0) return null;
 
@@ -342,6 +342,10 @@ export function conferenciaRapida({ duracaoMs, pecas, paradas, ciclosPorPeca }) 
     // Sem peca nao ha ciclo: null obriga o chamador a mostrar vazio, nao 0.
     cicloMedioMs: qtd > 0 ? produtivoMs / qtd : null,
     ciclosPorPeca: ciclos,
+    // Furacao passante atravessa a peca inteira: mesmo numero de
+    // acionamentos, mais tempo em cada um. Passa adiante como dado da peca
+    // — quem compara e' o relatorio, por classe de ciclo.
+    furacaoPassante: Boolean(furacaoPassante),
     // Tempo de UM acionamento do motor. E' o numero comparavel entre pecas:
     // a peca de 2 ciclos leva o dobro do tempo sem a furadeira estar lenta.
     cicloMotorMs: qtd > 0 ? produtivoMs / (qtd * ciclos) : null,
@@ -488,6 +492,8 @@ export function resumirConferencias(conferencias, { porPeca = false } = {}) {
         // detectar a peca gravada ora com 1, ora com 2 (erro de coleta ou
         // peca que mudou), em que a media de acionamentos mentiria.
         ciclosVistos: new Set(),
+        // Mesma ideia para a furacao passante: a peca e' de um jeito so'.
+        passanteVistos: new Set(),
       });
     }
     const g = grupos.get(chave);
@@ -502,6 +508,7 @@ export function resumirConferencias(conferencias, { porPeca = false } = {}) {
     g.totalPecas += pecas;
     g.totalAcionamentos += pecas * ciclos;
     g.ciclosVistos.add(ciclos);
+    g.passanteVistos.add(Boolean(c.furacaoPassante ?? c.furacao_passante));
     g.totalMs += duracao;
     g.totalProdutivoMs += produtivoMs;
     g.totalParadaMs += paradaMs;
@@ -557,6 +564,14 @@ export function resumirConferencias(conferencias, { porPeca = false } = {}) {
         ciclosPorPeca: g.ciclosVistos.size === 1 ? [...g.ciclosVistos][0] : null,
         ciclosMistos: g.ciclosVistos.size > 1,
         ciclosVistos: [...g.ciclosVistos].sort((a, b) => a - b),
+        /**
+         * A FURACAO da peca: passante ou nao. Mesma regra dos ciclos — so'
+         * existe quando as medicoes concordam; gravada ora como passante,
+         * ora como nao, devolve null e `passanteMista`, e a peca fica fora
+         * da classe ate' alguem corrigir.
+         */
+        furacaoPassante: g.passanteVistos.size === 1 ? [...g.passanteVistos][0] : null,
+        passanteMista: g.passanteVistos.size > 1,
         paradasPorMotivo: [...g.paradasPorMotivo.entries()]
           .map(([motivo, ms]) => ({ motivo, rotulo: rotuloMotivo(motivo), ms }))
           .sort((a, b) => b.ms - a.ms),

@@ -254,6 +254,11 @@ export const est = {
   },
   /* O nome da peca na tabela e' BOTAO, mas nao pode parecer um: e' o dado
      da linha. A pista de que da' para clicar e' o sublinhado pontilhado. */
+  tagPassante: {
+    marginLeft: espaco.sm, padding: `1px ${espaco.sm}px`, borderRadius: raio.sm,
+    ...tipo('legenda'), color: claro.textoMedio, background: claro.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: claro.borda, whiteSpace: 'nowrap',
+  },
   botaoNome: {
     padding: 0, background: 'transparent', border: 'none', textAlign: 'left',
     color: t.texto, ...tipo('corpo'), fontFamily: 'inherit', cursor: 'pointer',

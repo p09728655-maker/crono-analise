@@ -176,6 +176,60 @@ const navegador = await chromium.launch({ executablePath: EXEC });
 }
 
 /* -------------------------------------------------------------- layout */
+/* ------------------------------------------ observacao do cronoanalista */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 420, height: 860 }, hasTouch: true });
+  const p = await ctx.newPage();
+  const erros = [];
+  p.on('pageerror', (e) => erros.push(e.message));
+  await p.goto(PAGINA);
+
+  const obs = p.getByRole('button', { name: /^Observação/ });
+  checar(await obs.count() === 1, 'a barra oferece Obs. antes mesmo do primeiro ciclo');
+
+  await p.locator('button[aria-label="Iniciar cronometragem"]').click();
+  await obs.click();
+  const campo = p.locator('textarea[aria-label="Texto da observação"]');
+  await campo.waitFor({ timeout: 4000 });
+
+  // Espaco dentro do texto e' texto. Sem a guarda no atalho de teclado,
+  // cada palavra digitada registrava um ciclo — "operador novo no posto"
+  // viraria tres ciclos falsos no estudo.
+  const antes = await p.evaluate(() => window.__registrados.length);
+  await campo.pressSequentially('operador novo no posto', { delay: 15 });
+  await p.waitForTimeout(250);
+  checar(await p.evaluate(() => window.__registrados.length) === antes,
+    'digitar espacos na observacao nao registra ciclo');
+
+  await p.getByRole('button', { name: 'Salvar observação' }).click();
+  await p.waitForTimeout(300);
+  const notas = await p.evaluate(() => window.__anotacoes);
+  checar(notas.length === 1 && notas[0].tipo === 'anotacao' && notas[0].texto === 'operador novo no posto',
+    'salvar enfileira a observacao com o texto');
+  checar(await campo.count() === 0, 'a folha fecha ao salvar — a coleta volta a ser a unica coisa na tela');
+  checar(await p.getByRole('button', { name: 'Observação (com texto)' }).count() === 1,
+    'o botao passa a dizer que ha texto guardado');
+
+  // Salvar de novo substitui, nao empilha: uma nota pendente por operacao.
+  await p.getByRole('button', { name: 'Observação (com texto)' }).click();
+  await campo.fill('operador novo — gabarito folgado');
+  await p.getByRole('button', { name: 'Salvar observação' }).click();
+  await p.waitForTimeout(300);
+  const pendentes = await p.evaluate(() => new Promise((res) => {
+    const r = indexedDB.open('ritmoprod', 1);
+    r.onsuccess = (e) => {
+      const req = e.target.result.transaction('fila', 'readonly').objectStore('fila').getAll();
+      req.onsuccess = () => res(req.result.filter((x) => x.tipo === 'anotacao').length);
+      req.onerror = () => res(-1);
+    };
+    r.onerror = () => res(-1);
+  }));
+  checar(pendentes === 1, `so uma observacao pendente na fila por operacao (${pendentes})`);
+
+  checar(erros.length === 0, `sem erros de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+
 for (const t of TELAS) {
   const ctx = await navegador.newContext({ viewport: { width: t.width, height: t.height }, hasTouch: true });
   const p = await ctx.newPage();
@@ -195,10 +249,31 @@ for (const t of TELAS) {
       chips: rect('[aria-label="Ultimos ciclos"]')?.bottom,
       barra: rect('[aria-label="Acoes da coleta"]')?.bottom,
       botao: rect('button[aria-label="Registrar fim do ciclo"]')?.height,
+      // Cinco botoes na barra: a 360px cada um tem ~61px, e um rotulo que
+      // quebra em duas linhas nao move nenhuma das medidas acima (o botao
+      // tem altura minima). Mede-se o texto de cada botao, do primeiro ao
+      // ultimo no', numa linha so'.
+      botoesBarra: document.querySelectorAll('[aria-label="Acoes da coleta"] button').length,
+      rotulosQuebrados: [...document.querySelectorAll('[aria-label="Acoes da coleta"] button')]
+        .filter((b) => {
+          const nos = [...b.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+          if (!nos.length) return false;
+          const r = document.createRange();
+          r.setStartBefore(nos[0]);
+          r.setEndAfter(nos[nos.length - 1]);
+          const rr = r.getBoundingClientRect();
+          // Duas linhas OU texto vazando do botao: os dois sao rotulo que
+          // nao coube, e com nowrap o segundo e' o unico jeito de falhar.
+          return rr.height > 20 || rr.width > b.getBoundingClientRect().width + 2;
+        })
+        .map((b) => b.textContent.trim()),
     };
   });
 
   checar(!m.rolagem, `${t.nome}: sem rolagem vertical`);
+  checar(m.botoesBarra === 5, `${t.nome}: os cinco botoes da barra estao na tela`);
+  checar(m.rotulosQuebrados.length === 0,
+    `${t.nome}: nenhum rotulo da barra quebra em duas linhas${m.rotulosQuebrados.length ? ` (${m.rotulosQuebrados.join(', ')})` : ''}`);
   checar(m.chips <= m.janela + 1, `${t.nome}: ultimos ciclos visiveis`);
   checar(m.barra <= m.janela + 1, `${t.nome}: barra de acoes visivel`);
   // Alvo minimo para uso com luva.

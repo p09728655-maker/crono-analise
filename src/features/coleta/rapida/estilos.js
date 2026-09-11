@@ -164,6 +164,13 @@ export const est = {
     fontVariantNumeric: 'tabular-nums',
   },
   itemRitmoSufixo: { fontSize: tamanho.legenda, color: cores.textoFraco, marginLeft: 3, fontWeight: 400 },
+  // A mesma producao em pecas por MINUTO, embaixo do pc/h: e' a unidade em
+  // que o chao de fabrica fala ("sai 11 por minuto"), e a conta de cabeca
+  // dividindo por 60 na frente da maquina errava.
+  itemRitmoMinuto: {
+    fontSize: tamanho.legenda, color: cores.textoFraco, fontWeight: 400,
+    fontFamily: fonte.numero, textAlign: 'right', marginTop: 2,
+  },
   itemRemover: {
     flexShrink: 0, width: 40, height: 40,
     background: 'transparent', border: 'none', borderRadius: raio.sm,
@@ -323,6 +330,7 @@ export const est = {
   /* ---- ciclos de furacao ---- */
   blocoCiclos: { display: 'flex', flexDirection: 'column', gap: espaco.sm, minWidth: 0 },
   linhaCiclos: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: espaco.sm },
+  linhaPassante: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.sm },
   botaoCiclo: {
     minHeight: 48, padding: `0 ${espaco.sm}px`,
     background: cores.superficieAlta,

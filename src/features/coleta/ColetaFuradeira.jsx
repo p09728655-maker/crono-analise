@@ -23,8 +23,13 @@ import { useCronometro, useOnline, useWakeLock, vibrar } from '../../lib/hooks.j
  *  - O ciclo e' gravado em disco ANTES de tentar a rede.
  *  - Ciclo atipico e' sinalizado na hora, enquanto ainda da' para descartar.
  */
-export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar }) {
+export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar, aoAnotar }) {
   const [tempos, setTempos] = useState(() => operacao?.tempos ?? []);
+  /* A observacao do cronoanalista para ESTA operacao. Comeca com o que ja'
+     esta' no estudo (escrita antes, no tablet ou no PC) e vive aqui ate'
+     ser salva de novo. */
+  const [anotacao, setAnotacao] = useState(() => operacao?.anotacao ?? '');
+  const [anotando, setAnotando] = useState(false);
   const [rodada, setRodada] = useState(1);
   const [aviso, setAviso] = useState(null);
   /* Os ids dos ciclos que estao na fila, na ordem em que foram registrados —
@@ -179,10 +184,45 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar 
     }
   }, [tempos.length]);
 
+  /**
+   * SALVAR A OBSERVACAO passa pela mesma fila dos ciclos: o tablet perde
+   * wifi, e a nota escrita na frente da maquina nao pode depender de rede.
+   * Uma nota pendente por operacao — salvar de novo substitui a anterior na
+   * fila em vez de empilhar, e o servidor recebe so' a ultima versao.
+   * Texto vazio tambem sobe: e' como a nota errada se apaga.
+   */
+  const salvarAnotacao = useCallback(async (texto) => {
+    const limpo = String(texto ?? '').trim();
+    setAnotacao(limpo);
+    setAnotando(false);
+    const item = {
+      tipo: 'anotacao',
+      clientId: novoId(),
+      operacaoId: operacao.id,
+      texto: limpo || null,
+      anotadoEm: new Date().toISOString(),
+    };
+    try {
+      const fila = await listarFila();
+      const anteriores = fila
+        .filter((x) => x.tipo === 'anotacao' && x.operacaoId === operacao.id)
+        .map((x) => x.clientId);
+      await removerDaFila(anteriores);
+      await enfileirar(item);
+      aoAnotar?.(item);
+      setAviso({ tipo: 'ok', texto: limpo ? 'Observação guardada' : 'Observação removida' });
+    } catch {
+      setAviso({ tipo: 'critico', texto: 'Falha ao gravar a observação — verifique o dispositivo' });
+    }
+  }, [operacao, aoAnotar]);
+
   // Barra de espaco espelha o botao: alguns analistas usam teclado bluetooth.
   useEffect(() => {
     const aoTeclar = (ev) => {
       if (ev.code !== 'Space' || ev.repeat) return;
+      // Espaco dentro de um campo de texto e' texto: a observacao tem
+      // espacos. Sem esta guarda, cada palavra digitada registrava um ciclo.
+      if (/^(INPUT|TEXTAREA)$/.test(ev.target?.tagName)) return;
       ev.preventDefault();
       if (rodando) registrar(); else iniciar();
     };
@@ -212,7 +252,7 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar 
         />
       )}
 
-      {aviso && <Faixa tipo={aviso.tipo} icone={aviso.tipo === 'critico' ? '×' : '!'} texto={aviso.texto} />}
+      {aviso && <Faixa tipo={aviso.tipo} icone={aviso.tipo === 'critico' ? '×' : aviso.tipo === 'ok' ? '✓' : '!'} texto={aviso.texto} />}
 
       {metaAtingida && !metaDispensada && !pausa && (
         <Faixa
@@ -237,11 +277,21 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar 
         />
       )}
 
+      {anotando && (
+        <FolhaAnotacao
+          inicial={anotacao}
+          aoSalvar={salvarAnotacao}
+          aoCancelar={() => setAnotando(false)}
+        />
+      )}
+
       <BarraInferior
         rodando={rodando}
         pausado={Boolean(pausa)}
         temTempos={tempos.length > 0}
         rodada={rodada}
+        temAnotacao={Boolean(anotacao)}
+        aoAnotar={() => setAnotando(true)}
         aoPausar={iniciarPausa}
         aoDesfazer={desfazerUltimo}
         aoTrocarRodada={() => {
@@ -357,7 +407,44 @@ function PainelPausa({ pausa, aoEncerrar }) {
   );
 }
 
-function BarraInferior({ rodando, pausado, temTempos, rodada, aoPausar, aoDesfazer, aoTrocarRodada, aoEncerrar }) {
+/**
+ * A OBSERVACAO DO CRONOANALISTA — o que o cronometro nao registra.
+ *
+ * "Operador novo", "gabarito folgado", "peca com rebarba": e' o contexto
+ * que explica um CV alto seis meses depois, e ate' aqui morava num post-it.
+ * Abre por cima da tela, como o motivo da parada, e some ao salvar: a
+ * coleta continua a tarefa unica. Sai na Folha de Analise, junto da
+ * operacao.
+ */
+function FolhaAnotacao({ inicial, aoSalvar, aoCancelar }) {
+  const [texto, setTexto] = useState(inicial || '');
+  return (
+    <div style={est.menuMotivos} role="dialog" aria-label="Observação do cronoanalista">
+      <div style={est.menuTitulo}>Observação</div>
+      <textarea
+        style={est.campoAnotacao}
+        value={texto}
+        onChange={(ev) => setTexto(ev.target.value)}
+        placeholder="O que o cronômetro não registra: operador, gabarito, peça, abastecimento..."
+        aria-label="Texto da observação"
+        autoFocus
+        maxLength={2000}
+      />
+      <span style={est.dicaAnotacao}>Sai na Folha de Análise impressa, junto desta operação.</span>
+      <button type="button" style={est.botaoSalvarAnotacao} onClick={() => aoSalvar(texto)}>
+        Salvar observação
+      </button>
+      <button type="button" style={est.botaoSecundario} onClick={aoCancelar}>
+        Cancelar
+      </button>
+    </div>
+  );
+}
+
+function BarraInferior({
+  rodando, pausado, temTempos, rodada, temAnotacao,
+  aoAnotar, aoPausar, aoDesfazer, aoTrocarRodada, aoEncerrar,
+}) {
   const motivos = useMotivosParada();
   const [menuAberto, setMenuAberto] = useState(false);
 
@@ -402,7 +489,21 @@ function BarraInferior({ rodando, pausado, temTempos, rodada, aoPausar, aoDesfaz
         </button>
         <button type="button" style={est.botaoBarra} onClick={aoTrocarRodada} disabled={!temTempos}>
           <span style={est.iconeBarra}>⚑</span>
-          Rodada {rodada}
+          {/* Espaco que nao quebra: a 360px, com cinco botoes, "Rodada" e o
+              numero caiam em duas linhas. */}
+          {`Rodada\u00a0${rodada}`}
+        </button>
+        {/* Sempre disponivel, cronometro rodando ou nao: a observacao
+            costuma vir ANTES do primeiro ciclo ("operador novo hoje"). A
+            borda verde diz que ja' ha' texto guardado. */}
+        <button
+          type="button"
+          style={{ ...est.botaoBarra, ...(temAnotacao ? est.botaoBarraAtivo : {}) }}
+          onClick={aoAnotar}
+          aria-label={temAnotacao ? 'Observação (com texto)' : 'Observação'}
+        >
+          <span style={est.iconeBarra}>✎</span>
+          Obs.
         </button>
         <button type="button" style={{ ...est.botaoBarra, ...est.botaoEncerrar }} onClick={aoEncerrar}>
           <span style={est.iconeBarra}>■</span>
@@ -578,16 +679,21 @@ const est = {
     fontSize: tamanho.corpo, fontWeight: 700, letterSpacing: 1, cursor: 'pointer', fontFamily: 'inherit',
   },
 
-  barraInferior: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: espaco.sm, flexShrink: 0 },
+  barraInferior: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: espaco.sm, flexShrink: 0 },
   botaoBarra: {
-    minHeight: ALVO_MINIMO,
+    minHeight: ALVO_MINIMO, minWidth: 0, padding: 0,
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
     background: cores.superficie, borderRadius: raio.md,
     borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
     color: cores.texto, fontSize: tamanho.legenda, fontWeight: 600,
+    // Cinco botoes a 360px dao ~61px cada: o rotulo fica numa linha e o
+    // e2e mede que ele tambem cabe na largura — quebrar ou vazar sem
+    // ninguem ver e' o que se quer evitar.
+    whiteSpace: 'nowrap',
     cursor: 'pointer', fontFamily: 'inherit',
   },
   botaoEncerrar: { borderColor: cores.critico, color: cores.critico },
+  botaoBarraAtivo: { borderColor: cores.ok, color: cores.ok },
   iconeBarra: { fontSize: 18, lineHeight: 1 },
 
   menuMotivos: {
@@ -601,6 +707,18 @@ const est = {
     minHeight: ALVO_MINIMO, padding: `0 ${espaco.lg}px`, textAlign: 'left',
     background: cores.superficie, border: `1px solid ${cores.borda}`, borderRadius: raio.md,
     color: cores.texto, fontSize: tamanho.corpo, cursor: 'pointer', fontFamily: 'inherit',
+  },
+  campoAnotacao: {
+    minHeight: 120, maxHeight: '40vh', padding: espaco.md, resize: 'vertical',
+    background: cores.superficie,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda, borderRadius: raio.md,
+    color: cores.texto, fontSize: tamanho.corpo, lineHeight: 1.5,
+    fontFamily: 'inherit', outline: 'none',
+  },
+  dicaAnotacao: { fontSize: tamanho.legenda, color: cores.textoFraco, textAlign: 'center' },
+  botaoSalvarAnotacao: {
+    minHeight: ALVO_MINIMO, background: cores.ok, border: 'none', borderRadius: raio.md,
+    color: '#fff', fontSize: tamanho.corpo, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
   },
   botaoSecundario: {
     minHeight: ALVO_MINIMO, background: 'transparent', border: `1px solid ${cores.borda}`,

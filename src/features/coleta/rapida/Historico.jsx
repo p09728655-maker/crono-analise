@@ -35,6 +35,7 @@ export default function Historico({ historico, naFila, aoRemover }) {
                 formatarDuracao(c.duracaoMs),
                 `${c.pecas} pç`,
                 c.ciclosPorPeca > 1 ? `${c.ciclosPorPeca} ciclos/pç` : null,
+                c.furacaoPassante ? 'passante' : null,
                 c.paradaMs > 0 ? `${formatarDuracao(c.paradaMs)} parada` : null,
                 dataCurta(c.salvoEm),
                 noPc(c) ? 'no PC' : 'aguardando envio',
@@ -46,6 +47,13 @@ export default function Historico({ historico, naFila, aoRemover }) {
                 periodo. Registro antigo, sem o bruto, mostra o que tem. */}
             {Math.round(c.pecasPorHoraBruto ?? c.pecasPorHora)}
             <span style={est.itemRitmoSufixo}>pç/h</span>
+            {/* O mesmo tempo do numero de cima: o periodo inteiro. Com parada
+                marcada o rotulo diz isso, como o resultado ja' faz — senao o
+                analista compara com o "rodando" do PC e acha que um errou. */}
+            <div style={est.itemRitmoMinuto}>
+              {((c.pecasPorHoraBruto ?? c.pecasPorHora) / 60).toFixed(1)} pç/min
+              {c.paradaMs > 0 ? ' período' : ''}
+            </div>
           </div>
           <button
             type="button"

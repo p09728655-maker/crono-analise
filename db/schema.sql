@@ -220,6 +220,13 @@ CREATE TABLE IF NOT EXISTS operacoes (
 );
 CREATE INDEX IF NOT EXISTS operacoes_estudo_idx ON operacoes (estudo_id, ordem);
 
+-- Observacao do cronoanalista, escrita na tela de coleta (tablet) e impressa
+-- na Folha de Analise. Chama-se `anotacao`, e nao `observacao`, de
+-- proposito: neste schema "observacao" e' o CICLO cronometrado (tabela
+-- observacoes), e uma coluna observacao ao lado de uma lista observacoes
+-- seria armadilha para quem le o codigo depois.
+ALTER TABLE operacoes ADD COLUMN IF NOT EXISTS anotacao text;
+
 -- ------------------------------------------------------------ observacoes
 -- Uma linha por ciclo cronometrado. Guardamos o dado BRUTO; nenhuma media,
 -- TN ou TP e' persistido — indicador derivado se recalcula, dado bruto nao.
@@ -323,6 +330,12 @@ ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS hora_inicial text;
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS hora_final   text;
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS ciclos_por_peca integer NOT NULL DEFAULT 1
   CHECK (ciclos_por_peca > 0 AND ciclos_por_peca <= 99);
+-- Furacao PASSANTE: a broca atravessa a peca, em vez de furar cego. E' dado
+-- da PECA, como ciclos_por_peca, e pelo mesmo motivo: com o mesmo numero de
+-- acionamentos, a passante gasta mais tempo por acionamento. Misturar as
+-- duas na mesma classe de ciclo faria a cega parecer rapida e a passante
+-- parecer lenta sem a maquina ter mudado.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS furacao_passante boolean NOT NULL DEFAULT false;
 ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS paradas jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 -- Converte o horario de texto para instante. A data vem de salvo_em lida no

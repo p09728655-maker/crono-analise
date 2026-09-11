@@ -177,6 +177,69 @@ rodar('API — integracao com Postgres', () => {
     expect(linhas[0].n).toBe(0);
   });
 
+  /**
+   * OBSERVACAO DO CRONOANALISTA — a metade de servidor.
+   *
+   * Nao e' insercao: e' o valor ATUAL da nota. As garantias que os ciclos
+   * ja' tem valem para ela — clientId de volta para a fila limpar, outra
+   * empresa barrada antes de escrever — mais duas so' dela: texto vazio
+   * APAGA, e a ultima escrita vale pela hora da escrita, nao pela ordem em
+   * que a fila entregou (o IndexedDB devolve por chave, que e' um UUID).
+   */
+  const anotacao = (operacaoId, texto, anotadoEm = new Date().toISOString()) => ({
+    clientId: crypto.randomUUID(), operacaoId, texto, anotadoEm,
+  });
+
+  it('anotacao grava o texto na operacao e devolve o clientId para a fila limpar', async () => {
+    const { operacaoId } = await criarEstudoComOperacao();
+    const item = anotacao(operacaoId, 'operador novo no posto');
+    const res = fingirRes();
+    await sync(fingirReq({ metodo: 'POST', corpo: { anotacoes: [item] } }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.corpo.clientIds).toContain(item.clientId);
+    expect(res.corpo.anotacoesGravadas).toBe(1);
+    const [op] = await sql`SELECT anotacao FROM operacoes WHERE id = ${operacaoId}`;
+    expect(op.anotacao).toBe('operador novo no posto');
+  });
+
+  it('anotacao com texto vazio APAGA a nota — e como se desfaz sem rede', async () => {
+    const { operacaoId } = await criarEstudoComOperacao();
+    await sync(fingirReq({ metodo: 'POST', corpo: { anotacoes: [anotacao(operacaoId, 'errada')] } }), fingirRes());
+    await sync(fingirReq({ metodo: 'POST', corpo: { anotacoes: [anotacao(operacaoId, '')] } }), fingirRes());
+
+    const [op] = await sql`SELECT anotacao FROM operacoes WHERE id = ${operacaoId}`;
+    expect(op.anotacao).toBeNull();
+  });
+
+  it('a ultima anotacao vale pela hora da escrita, nao pela ordem da fila', async () => {
+    const { operacaoId } = await criarEstudoComOperacao();
+    const res = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        anotacoes: [
+          anotacao(operacaoId, 'segunda', '2026-09-11T10:05:00.000Z'),
+          anotacao(operacaoId, 'primeira', '2026-09-11T10:00:00.000Z'),
+        ],
+      },
+    }), res);
+
+    expect(res.statusCode).toBe(200);
+    const [op] = await sql`SELECT anotacao FROM operacoes WHERE id = ${operacaoId}`;
+    expect(op.anotacao).toBe('segunda');
+  });
+
+  it('anotacao em operacao de OUTRA empresa e barrada antes de escrever', async () => {
+    const alheia = await criarEstudoComOperacao(OUTRA_EMPRESA);
+    const res = fingirRes();
+    await sync(fingirReq({ metodo: 'POST', corpo: { anotacoes: [anotacao(alheia.operacaoId, 'invasao')] } }), res);
+
+    expect(res.statusCode).toBe(404);
+    const [op] = await sql`SELECT anotacao FROM operacoes WHERE id = ${alheia.operacaoId}`;
+    expect(op.anotacao).toBeNull();
+  });
+
   it('o lote e ATOMICO: um item invalido nao grava os demais', async () => {
     const { operacaoId } = await criarEstudoComOperacao();
     const bom = crypto.randomUUID();

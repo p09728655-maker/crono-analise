@@ -39,7 +39,7 @@ export function useRascunho({ campos, aoRestaurar }) {
     return () => { vivo = false; };
   }, []);
 
-  const { maquina, peca, ciclosPorPeca, horaInicial, horaFinal, pecasPeriodo, paradas } = campos;
+  const { maquina, peca, ciclosPorPeca, furacaoPassante, horaInicial, horaFinal, pecasPeriodo, paradas } = campos;
   useEffect(() => {
     // So' depois de tentar ler: senao o estado vazio da montagem apagaria o
     // rascunho antes de ele chegar na tela.
@@ -48,10 +48,10 @@ export function useRascunho({ campos, aoRestaurar }) {
     const guardar = vazio
       ? limparRascunho(CHAVE_RASCUNHO)
       : salvarRascunho(CHAVE_RASCUNHO, {
-        maquina, peca, ciclosPorPeca, horaInicial, horaFinal, pecasPeriodo, paradas,
+        maquina, peca, ciclosPorPeca, furacaoPassante, horaInicial, horaFinal, pecasPeriodo, paradas,
       });
     guardar?.catch?.(() => {});
-  }, [maquina, peca, ciclosPorPeca, horaInicial, horaFinal, pecasPeriodo, paradas]);
+  }, [maquina, peca, ciclosPorPeca, furacaoPassante, horaInicial, horaFinal, pecasPeriodo, paradas]);
 
   /** A medicao ja' esta' guardada e na fila: o rascunho cumpriu o papel dele
       e sai de cena, para nao ressuscitar na proxima abertura da tela. */

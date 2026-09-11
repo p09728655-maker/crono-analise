@@ -196,6 +196,25 @@ rede) e oferece enviar antes. Confirmado, o app mostra **Sistema encerrado**
 e tenta fechar a janela; `window.close()` nem sempre é permitido, então a
 tela é a saída de verdade e o fechamento é um bônus.
 
+### Furação passante
+
+Ao lado dos **acionamentos do motor por peça**, a conferência rápida pergunta
+se a furação é **passante** (a broca atravessa a peça) ou não. É dado da
+peça, como os acionamentos, e pelo mesmo motivo entra na **classe de
+comparação** (`classesDeCiclo` em `src/domain/ritmoPorCiclo.js`): com o
+mesmo número de acionamentos, a passante gasta mais tempo em cada um. Na
+mesma classe, a cega pareceria rápida e a passante lenta sem a máquina ter
+mudado — e a faixa da classe deixaria de apontar manuseio para apontar
+furação.
+
+Peça gravada ora como passante, ora como não fica fora da leitura,
+nomeada, até alguém corrigir (`passanteMista`) — a mesma regra dos
+acionamentos. Medição anterior ao campo é não passante, que era o único
+valor que existia; por isso continua comparável com as cegas novas.
+
+Coluna `conferencias.furacao_passante` (boolean, padrão false), gravada
+pelo `/api/sync` e devolvida pelo `/api/conferencias`.
+
 ### Primeira tela: hierarquia pelo fluxo
 
 A tela inicial responde, nesta ordem: **onde estou** (identidade), **o que
@@ -371,6 +390,33 @@ diferentes.
 O motivo é gravado pelo **código** (`setup`), não pelo rótulo: revisar o
 texto na tela não pode quebrar o agrupamento de relatório antigo — e o
 rótulo antigo continua sendo reconhecido.
+
+### Observação do cronoanalista
+
+A tela de cronometrar (tablet e celular) tem o botão **Obs.**: um texto
+livre por operação — "operador novo", "gabarito folgado", "peça com
+rebarba" — que é o contexto que explica um CV alto seis meses depois e até
+aqui morava num post-it. Sai na **Folha de Análise** impressa, na seção
+"Observações do cronoanalista" (só quando existe: ausência de nota não é
+achado, ao contrário da parada), e embaixo do nome da operação na aba
+Operações do PC.
+
+Três decisões:
+
+- **Passa pela fila offline**, como os ciclos (`tipo: 'anotacao'`): o tablet
+  perde wifi, e a nota escrita na frente da máquina não pode depender de
+  rede. Uma nota pendente por operação — salvar de novo substitui a
+  anterior na fila; o servidor aplica em ordem de escrita e a última vale.
+  Texto vazio sobe e **apaga**: é como se desfaz uma nota errada sem rede.
+- **Espaço dentro do texto é texto.** O atalho da barra de espaço registra
+  ciclo (teclado bluetooth); dentro de um campo de texto ele é ignorado.
+  Sem isso cada palavra digitada registrava um ciclo.
+- **A coluna chama-se `anotacao`**, não `observacao`: neste schema
+  "observação" é o ciclo cronometrado (tabela `observacoes`), e uma coluna
+  `observacao` ao lado de uma lista `observacoes` seria armadilha.
+
+`PATCH /api/operacoes` também aceita `anotacao` (a chave presente é o que
+distingue "apagar" de "não mandei").
 
 ### Uma fonte só para parada
 

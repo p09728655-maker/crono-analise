@@ -59,3 +59,42 @@ export function CiclosFuracao({ valor, aoTrocar, compacto }) {
   );
 }
 
+
+/**
+ * Furacao PASSANTE — a broca atravessa a peca, em vez de furar cego.
+ *
+ * E' dado da PECA, como os acionamentos, e pelo mesmo motivo mora ao lado
+ * deles: com o mesmo numero de acionamentos, a passante gasta mais tempo em
+ * cada um. Sem registrar, a peca cega parece rapida e a passante parece
+ * lenta na mesma maquina — e o relatorio apontaria manuseio onde o que
+ * mudou foi a furacao. Dois botoes, de luva. O padrao e' "nao passante":
+ * era o unico valor que existia antes deste campo, entao toda medicao
+ * antiga continua comparavel com as novas que forem cegas.
+ */
+export function FuracaoPassante({ valor, aoTrocar, compacto }) {
+  return (
+    <div style={est.blocoCiclos}>
+      <span style={est.rotuloCampo}>FURAÇÃO</span>
+      <div style={est.linhaPassante} role="radiogroup" aria-label="Furação passante">
+        {[[false, 'Não passante'], [true, 'Passante']].map(([v, rotulo]) => (
+          <button
+            key={rotulo}
+            type="button"
+            role="radio"
+            aria-checked={valor === v}
+            style={{ ...est.botaoCiclo, ...(valor === v ? est.botaoCicloAtivo : {}) }}
+            onClick={() => { aoTrocar(v); vibrar(30); }}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+      {!compacto && (
+        <span style={est.dicaParada}>
+          Passante é quando a broca atravessa a peça. Com o mesmo número de acionamentos
+          ela demora mais — o relatório compara passante com passante.
+        </span>
+      )}
+    </div>
+  );
+}

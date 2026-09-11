@@ -13,7 +13,7 @@
  */
 import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, handler, json, lerCorpo, permitir } from './_lib/http.js';
-import { dataIso, hora, inteiro, lista, paradasDaConferencia, texto, uuid } from './_lib/validar.js';
+import { booleano, dataIso, hora, inteiro, lista, paradasDaConferencia, texto, uuid } from './_lib/validar.js';
 
 const MAX_ITENS = 500;
 
@@ -38,8 +38,9 @@ export default handler(async (req, res) => {
   const observacoes = lista(corpo.observacoes || [], 'observacoes', { max: MAX_ITENS });
   const paradas = lista(corpo.paradas || [], 'paradas', { max: MAX_ITENS });
   const conferencias = lista(corpo.conferencias || [], 'conferencias', { max: MAX_ITENS });
+  const anotacoes = lista(corpo.anotacoes || [], 'anotacoes', { max: MAX_ITENS });
 
-  if (!observacoes.length && !paradas.length && !conferencias.length) {
+  if (!observacoes.length && !paradas.length && !conferencias.length && !anotacoes.length) {
     return json(res, 200, { observacoesGravadas: 0, paradasGravadas: 0, clientIds: [] });
   }
 
@@ -71,6 +72,20 @@ export default handler(async (req, res) => {
   // paradas em linhas e' o servidor. Isso e' de proposito — a fila offline e'
   // o caminho mais critico do sistema, e mexer no formato dela obrigaria o
   // tablet que passou dias sem rede a falar uma lingua que ele nao conhece.
+  /**
+   * Observacao do cronoanalista para uma operacao. Nao e' insercao: e' o
+   * VALOR ATUAL da nota — a ultima escrita vale, texto vazio apaga. Por isso
+   * o reenvio da fila e' inofensivo (grava o mesmo de novo) e por isso as
+   * notas sao aplicadas em ordem de escrita, nao na ordem em que a fila
+   * as entrega (o IndexedDB devolve por chave, que e' um UUID).
+   */
+  const anotLimpas = anotacoes.map((a, i) => ({
+    clientId: uuid(a.clientId, `anotacoes[${i}].clientId`),
+    operacaoId: uuid(a.operacaoId, `anotacoes[${i}].operacaoId`),
+    texto: texto(a.texto, `anotacoes[${i}].texto`, { max: 2000 }),
+    anotadoEm: dataIso(a.anotadoEm, `anotacoes[${i}].anotadoEm`, { padrao: new Date().toISOString() }),
+  })).sort((a, b) => a.anotadoEm.localeCompare(b.anotadoEm));
+
   const confLimpas = conferencias.map((c, i) => ({
     clientId: uuid(c.clientId, `conferencias[${i}].clientId`),
     maquina: texto(c.maquina, `conferencias[${i}].maquina`, { max: 120 }),
@@ -82,6 +97,7 @@ export default handler(async (req, res) => {
     // Acionamentos do motor por peca (1 a 3 no processo de hoje; 99 e' folga
     // de validacao, nao meta). Aparelho antigo nao manda — vira 1.
     ciclosPorPeca: inteiro(c.ciclosPorPeca, `conferencias[${i}].ciclosPorPeca`, { min: 1, max: 99, padrao: 1 }),
+    furacaoPassante: booleano(c.furacaoPassante, `conferencias[${i}].furacaoPassante`),
     // Paradas do periodo (setup, falta de material...). Sobem NA conferencia,
     // no mesmo INSERT: o dado nasceu junto e nao pode chegar pela metade.
     paradas: paradasDaConferencia(c.paradas, `conferencias[${i}]`),
@@ -95,7 +111,7 @@ export default handler(async (req, res) => {
     // Toda operacao referenciada precisa pertencer a esta empresa. Sem esta
     // checagem, um token valido conseguiria escrever no estudo de outro cliente.
     // (Conferencias ficam fora: pertencem direto a' empresa autenticada.)
-    const operacaoIds = [...new Set([...obsLimpas, ...parLimpas].map((x) => x.operacaoId))];
+    const operacaoIds = [...new Set([...obsLimpas, ...parLimpas, ...anotLimpas].map((x) => x.operacaoId))];
     const permitidas = await tx`
       SELECT o.id FROM operacoes o
         JOIN estudos e ON e.id = o.estudo_id
@@ -124,6 +140,17 @@ export default handler(async (req, res) => {
         ON CONFLICT (client_id) DO NOTHING
         RETURNING client_id`;
       inseridos += r.length;
+    }
+
+    for (const a of anotLimpas) {
+      // RETURNING, como todo write deste arquivo: UPDATE que a RLS filtra
+      // nao levanta erro, so' nao acha linha — e a nota sumiria da fila do
+      // tablet com cara de gravada.
+      const r = await tx`
+        UPDATE operacoes SET anotacao = ${a.texto} WHERE id = ${a.operacaoId} RETURNING id`;
+      if (!r.length) {
+        throw new ErroHttp(404, 'Operacao inexistente ou sem permissao para anotar', { operacao: a.operacaoId });
+      }
     }
 
     for (const c of confLimpas) {
@@ -161,12 +188,12 @@ export default handler(async (req, res) => {
         )
         INSERT INTO conferencias
           (client_id, empresa_id, maquina, peca,
-           iniciado_em, finalizado_em, duracao_ms, pecas, ciclos_por_peca, salvo_em)
+           iniciado_em, finalizado_em, duracao_ms, pecas, ciclos_por_peca, furacao_passante, salvo_em)
         SELECT ${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca},
                p.ini,
                -- Periodo que atravessa a meia-noite: o fim caiu no dia seguinte.
                CASE WHEN p.fim < p.ini THEN p.fim + interval '1 day' ELSE p.fim END,
-               ${c.duracaoMs}, ${c.pecas}, ${c.ciclosPorPeca}, ${c.salvoEm}
+               ${c.duracaoMs}, ${c.pecas}, ${c.ciclosPorPeca}, ${c.furacaoPassante}, ${c.salvoEm}
           FROM periodo p
         ON CONFLICT (client_id) DO NOTHING
         RETURNING id`;
@@ -191,12 +218,15 @@ export default handler(async (req, res) => {
   // Devolvemos TODOS os clientIds recebidos, nao apenas os recem-inseridos.
   // Um item ja existente tambem esta confirmado no servidor, e o app precisa
   // limpar a fila local nos dois casos — senao reenviaria para sempre.
-  const clientIds = [...obsLimpas, ...parLimpas, ...confLimpas].map((x) => x.clientId);
+  const clientIds = [...obsLimpas, ...parLimpas, ...confLimpas, ...anotLimpas].map((x) => x.clientId);
 
+  // Nota nao e' linha nova: entra em `recebidos` e em `clientIds` (para a
+  // fila limpar), mas nao na conta de novos x duplicados, que e' de insercao.
   return json(res, 200, {
     recebidos: clientIds.length,
     novos,
-    duplicadosIgnorados: clientIds.length - novos,
+    duplicadosIgnorados: clientIds.length - anotLimpas.length - novos,
+    anotacoesGravadas: anotLimpas.length,
     clientIds,
   });
 });

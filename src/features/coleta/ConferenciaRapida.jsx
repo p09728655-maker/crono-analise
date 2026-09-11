@@ -67,6 +67,9 @@ export default function ConferenciaRapida({ aoSair }) {
   // Ciclos de FURACAO da peca: 1 acionamento do motor (lateral simples),
   // 2 (sobe e desce) ou 3. E' dado da PECA, por isso mora ao lado dela.
   const [ciclosPorPeca, setCiclosPorPeca] = useState(1);
+  // Furacao passante: a broca atravessa a peca. Tambem dado da PECA — ver
+  // FuracaoPassante em rapida/CamposDaPeca.jsx.
+  const [furacaoPassante, setFuracaoPassante] = useState(false);
 
   /**
    * O SELO do cabecalho nomeia o POSTO — o grupo da maquina escolhida no
@@ -90,11 +93,12 @@ export default function ConferenciaRapida({ aoSair }) {
   const paradas = useParadasDoPeriodo(motivos);
   const crono = useCronometroAoVivo({ paradas });
   const rascunho = useRascunho({
-    campos: { maquina, peca, ciclosPorPeca, horaInicial, horaFinal, pecasPeriodo, paradas: paradas.paradas },
+    campos: { maquina, peca, ciclosPorPeca, furacaoPassante, horaInicial, horaFinal, pecasPeriodo, paradas: paradas.paradas },
     aoRestaurar: (r) => {
       setMaquina((v) => v || r.maquina || '');
       setPeca((v) => v || r.peca || '');
       setCiclosPorPeca((v) => (v > 1 ? v : Number(r.ciclosPorPeca) || 1));
+      setFuracaoPassante((v) => v || Boolean(r.furacaoPassante));
       setHoraInicial((v) => v || r.horaInicial || '');
       setHoraFinal((v) => v || r.horaFinal || '');
       setPecasPeriodo((v) => v || r.pecasPeriodo || '');
@@ -107,7 +111,7 @@ export default function ConferenciaRapida({ aoSair }) {
   // de novo em vez de fingir que a alteracao tambem esta' guardada.
   useEffect(() => {
     historico.invalidar();
-  }, [maquina, peca, ciclosPorPeca, horaInicial, horaFinal, pecasPeriodo, crono.pecasFinais, paradas.paradas, crono.fase]);
+  }, [maquina, peca, ciclosPorPeca, furacaoPassante, horaInicial, horaFinal, pecasPeriodo, crono.pecasFinais, paradas.paradas, crono.fase]);
 
   // Tela acesa tambem durante o setup cronometrado: o analista esta' de
   // maos ocupadas na troca, e o aparelho apagando pausaria a medicao.
@@ -125,12 +129,12 @@ export default function ConferenciaRapida({ aoSair }) {
 
   /* ------------------------------------------------------ as contas */
   const parcial = useMemo(
-    () => conferenciaRapida({ duracaoMs: crono.decorrido, pecas: crono.pecas, paradas: paradas.emMs, ciclosPorPeca }),
-    [crono.decorrido, crono.pecas, paradas.emMs, ciclosPorPeca],
+    () => conferenciaRapida({ duracaoMs: crono.decorrido, pecas: crono.pecas, paradas: paradas.emMs, ciclosPorPeca, furacaoPassante }),
+    [crono.decorrido, crono.pecas, paradas.emMs, ciclosPorPeca, furacaoPassante],
   );
   const resultado = useMemo(
-    () => conferenciaRapida({ duracaoMs: crono.duracaoFinal, pecas: crono.pecasFinais, paradas: paradas.emMs, ciclosPorPeca }),
-    [crono.duracaoFinal, crono.pecasFinais, paradas.emMs, ciclosPorPeca],
+    () => conferenciaRapida({ duracaoMs: crono.duracaoFinal, pecas: crono.pecasFinais, paradas: paradas.emMs, ciclosPorPeca, furacaoPassante }),
+    [crono.duracaoFinal, crono.pecasFinais, paradas.emMs, ciclosPorPeca, furacaoPassante],
   );
   // A conta dos horarios sai a cada tecla: preencheu, apareceu.
   const duracaoHoras = useMemo(
@@ -139,9 +143,9 @@ export default function ConferenciaRapida({ aoSair }) {
   );
   const resultadoHoras = useMemo(
     () => (duracaoHoras > 0
-      ? conferenciaRapida({ duracaoMs: duracaoHoras, pecas: pecasPeriodo, paradas: paradas.emMs, ciclosPorPeca })
+      ? conferenciaRapida({ duracaoMs: duracaoHoras, pecas: pecasPeriodo, paradas: paradas.emMs, ciclosPorPeca, furacaoPassante })
       : null),
-    [duracaoHoras, pecasPeriodo, paradas.emMs, ciclosPorPeca],
+    [duracaoHoras, pecasPeriodo, paradas.emMs, ciclosPorPeca, furacaoPassante],
   );
   // Paradas maiores que o periodo: sobra zero de maquina rodando e nao ha
   // ritmo a calcular. A tela diz isso em vez de sumir com o resultado.
@@ -164,8 +168,10 @@ export default function ConferenciaRapida({ aoSair }) {
   const outraPeca = useCallback(() => {
     setPeca('');
     setPecasPeriodo('');
-    // Peca nova pode furar em outro numero de ciclos: volta ao padrao.
+    // Peca nova pode furar em outro numero de ciclos, e de outro jeito:
+    // volta ao padrao.
     setCiclosPorPeca(1);
+    setFuracaoPassante(false);
     setHoraInicial(horaFinal || '');
     setHoraFinal('');
     paradas.limpar();
@@ -213,6 +219,7 @@ export default function ConferenciaRapida({ aoSair }) {
             maquina={maquina} aoTrocarMaquina={setMaquina}
             peca={peca} aoTrocarPeca={setPeca}
             ciclosPorPeca={ciclosPorPeca} aoTrocarCiclos={setCiclosPorPeca}
+            furacaoPassante={furacaoPassante} aoTrocarPassante={setFuracaoPassante}
             horaInicial={horaInicial} aoTrocarHoraInicial={setHoraInicial}
             horaFinal={horaFinal} aoTrocarHoraFinal={setHoraFinal}
             pecasPeriodo={pecasPeriodo} aoTrocarPecas={setPecasPeriodo}
@@ -272,6 +279,7 @@ export default function ConferenciaRapida({ aoSair }) {
           maquina={maquina} aoTrocarMaquina={setMaquina}
           peca={peca} aoTrocarPeca={setPeca}
           ciclosPorPeca={ciclosPorPeca} aoTrocarCiclos={setCiclosPorPeca}
+          furacaoPassante={furacaoPassante} aoTrocarPassante={setFuracaoPassante}
           salvo={historico.salvo}
           aoSalvar={() => salvar(resultado, false)}
           aoSair={aoSair}

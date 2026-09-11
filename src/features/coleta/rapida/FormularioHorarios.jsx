@@ -1,6 +1,6 @@
 import { vibrar } from '../../../lib/hooks.js';
 import Paradas from './Paradas.jsx';
-import { CampoMaquina, CiclosFuracao } from './CamposDaPeca.jsx';
+import { CampoMaquina, CiclosFuracao, FuracaoPassante } from './CamposDaPeca.jsx';
 import { est } from './estilos.js';
 import { agoraHM } from './formato.js';
 
@@ -15,6 +15,7 @@ import { agoraHM } from './formato.js';
  */
 export default function FormularioHorarios({
   maquina, aoTrocarMaquina, peca, aoTrocarPeca, ciclosPorPeca, aoTrocarCiclos,
+  furacaoPassante, aoTrocarPassante,
   horaInicial, aoTrocarHoraInicial, horaFinal, aoTrocarHoraFinal,
   pecasPeriodo, aoTrocarPecas, duracaoMs, motivos, paradas,
 }) {
@@ -39,6 +40,7 @@ export default function FormularioHorarios({
       </div>
 
       <CiclosFuracao valor={ciclosPorPeca} aoTrocar={aoTrocarCiclos} />
+      <FuracaoPassante valor={furacaoPassante} aoTrocar={aoTrocarPassante} />
 
       <div style={est.linhaHoras}>
         {[
