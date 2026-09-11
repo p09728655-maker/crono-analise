@@ -343,6 +343,7 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
                 <th style={imp.th}>Peça</th>
                 <th style={imp.th}>Máquina</th>
                 <th style={imp.thNum}>Acion.</th>
+                <th style={imp.th}>Furação</th>
                 <th style={imp.thNum}>Medições</th>
                 <th style={imp.thNum}>Peças</th>
                 <th style={imp.thNum}>Tempo rodando</th>
@@ -357,6 +358,7 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
                   <td style={imp.td}>{g.peca}</td>
                   <td style={imp.td}>{g.maquina}</td>
                   <td style={imp.tdNum}>{g.ciclosMistos ? g.ciclosVistos.join('/') : g.ciclosPorPeca}</td>
+                  <td style={imp.td}>{g.passanteMista ? 'mista' : g.furacaoPassante ? 'passante' : '—'}</td>
                   <td style={imp.tdNum}>{g.n}</td>
                   <td style={imp.tdNum}>{g.totalPecas}</td>
                   <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
@@ -380,9 +382,10 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
             <>
               <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Ritmo por acionamento do motor</h2>
               {porCiclo.classes.filter((c) => c.temFaixa).map((c) => (
-                <div key={`${c.maquina}-${c.ciclos}`} style={imp.grupoBloco}>
+                <div key={`${c.maquina}-${c.ciclos}-${c.passante}`} style={imp.grupoBloco}>
                   <div style={imp.grupoNome}>
                     {c.maquina} · {c.ciclos === 1 ? '1 acionamento' : `${c.ciclos} acionamentos`} por peça
+                    {c.passante ? ' · furação passante' : ''}
                   </div>
                   {lerClasse(c).map((frase) => (
                     <p key={frase} style={imp.analiseLinha}>{frase}</p>
@@ -400,8 +403,8 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
           {porCiclo?.mistas.length > 0 && (
             <p style={imp.nota}>
               Fora da leitura por acionamento:{' '}
-              {porCiclo.mistas.map((m) => `${m.peca} na ${m.maquina} (gravada com ${m.ciclosVistos.join(' e ')})`).join(', ')}
-              {' — '}o mesmo produto não pode pedir dois números de acionamento; corrija na medição.
+              {porCiclo.mistas.map((m) => `${m.peca} na ${m.maquina} (${m.motivo})`).join(', ')}
+              {' — '}o mesmo produto não pode estar gravado de dois jeitos; corrija na medição.
             </p>
           )}
         </>

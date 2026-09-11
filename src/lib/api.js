@@ -295,6 +295,7 @@ export async function sincronizar({ aoProgresso } = {}) {
       observacoes: fatia.filter((x) => x.tipo === 'observacao').map(paraObservacao),
       paradas: fatia.filter((x) => x.tipo === 'parada').map(paraParada),
       conferencias: fatia.filter((x) => x.tipo === 'conferencia').map(paraConferencia),
+      anotacoes: fatia.filter((x) => x.tipo === 'anotacao').map(paraAnotacao),
     };
 
     let ultimoErro = null;
@@ -337,6 +338,18 @@ const paraParada = (x) => ({
   iniciadoEm: x.iniciadoEm,
 });
 
+/**
+ * Observacao do cronoanalista: o valor atual da nota de uma operacao.
+ * Texto vazio vai como null e APAGA no servidor — e' a unica forma de a
+ * pessoa desfazer uma nota escrita por engano, sem rede.
+ */
+export const paraAnotacao = (x) => ({
+  clientId: x.clientId,
+  operacaoId: x.operacaoId,
+  texto: x.texto ?? null,
+  anotadoEm: x.anotadoEm,
+});
+
 export const paraConferencia = (x) => ({
   clientId: x.clientId,
   maquina: x.maquina ?? null,
@@ -350,6 +363,10 @@ export const paraConferencia = (x) => ({
   // envio descartava e o servidor gravava o padrao 1 (Furadeira 16,
   // 28/08). Exportado para o teste travar o contrato do payload.
   ciclosPorPeca: x.ciclosPorPeca || 1,
+  // Furacao passante: dado da peca, como os ciclos. Item enfileirado antes
+  // desta versao nao tem o campo — vai como falso, que era o unico valor
+  // que existia.
+  furacaoPassante: Boolean(x.furacaoPassante),
   // Paradas do periodo. Conferencia enfileirada antes desta versao nao tem
   // o campo — vai como lista vazia e continua valendo.
   paradas: (x.paradas || []).map((p) => ({

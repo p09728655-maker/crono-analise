@@ -13,6 +13,20 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.68.0',
+    data: '2026-09-11',
+    titulo: 'Observação do cronoanalista, furação passante e mais tela no PC',
+    itens: [
+      'NOVO BOTÃO "OBS." NA TELA DE CRONOMETRAR (tablet e celular). O cronoanalista escreve o que o cronômetro não registra — operador novo, gabarito folgado, peça com rebarba — e a observação sai na FOLHA DE ANÁLISE impressa, junto da operação, e na aba Operações do PC. Passa pela mesma fila dos ciclos: sem wifi, fica guardada e sobe quando a rede voltar.',
+      'ESPAÇO DENTRO DA OBSERVAÇÃO É TEXTO. A barra de espaço do teclado bluetooth registra ciclo; enquanto se escreve a observação ela escreve espaço. Sem essa guarda, "operador novo no posto" viraria três ciclos falsos.',
+      'FURAÇÃO PASSANTE no Ritmo da máquina, ao lado dos acionamentos do motor. Passante é quando a broca atravessa a peça: com o mesmo número de acionamentos, cada um demora mais. O relatório passou a comparar passante com passante — antes a peça cega parecia rápida e a passante lenta na mesma faixa, e a leitura apontava manuseio onde o que mudou foi a furação.',
+      'PEÇA GRAVADA ORA COMO PASSANTE, ORA COMO NÃO fica fora da comparação, nomeada, até alguém corrigir — a mesma regra que já valia para os acionamentos.',
+      'MEDIÇÃO ANTIGA CONTINUA VALENDO: sem o campo, é não passante, que era o único jeito que existia.',
+      'A LISTA "SALVAS NESTE APARELHO" MOSTRA PEÇAS POR MINUTO embaixo de peças por hora. É a unidade em que o chão de fábrica fala, e a conta de cabeça na frente da máquina errava.',
+      'O PAINEL DE ANÁLISE USA A TELA INTEIRA DO PC. Num monitor de 1920 sobrava um terço em branco à direita dos gráficos; o conteúdo passa a ir até 1720 px. Em laptop nada muda — ali o limite já era a tela.',
+    ],
+  },
+  {
     versao: '2.67.0',
     data: '2026-09-11',
     titulo: 'O sistema reconhece quando a medição acabou',

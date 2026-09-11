@@ -1,6 +1,6 @@
 import { formatarCronometro, formatarDuracao } from '../../../domain/cronoanalise.js';
 import Paradas from './Paradas.jsx';
-import { CampoMaquina, CiclosFuracao } from './CamposDaPeca.jsx';
+import { CampoMaquina, CiclosFuracao, FuracaoPassante } from './CamposDaPeca.jsx';
 import { AvisoSalvar, BotaoSalvar, ComParadas, RitmoDoPeriodo, SemAParada } from './Indicadores.jsx';
 import { est } from './estilos.js';
 
@@ -13,6 +13,7 @@ import { est } from './estilos.js';
 export default function ResultadoAoVivo({
   crono, resultado, excede, totalParadaMs, motivos, paradas,
   maquina, aoTrocarMaquina, peca, aoTrocarPeca, ciclosPorPeca, aoTrocarCiclos,
+  furacaoPassante, aoTrocarPassante,
   salvo, aoSalvar, aoSair,
 }) {
   const { duracaoFinal, pecasFinais, setPecasFinais, novaConferencia } = crono;
@@ -90,6 +91,7 @@ export default function ResultadoAoVivo({
             paradas. O periodo nao repete aqui — esta' no TEMPO CRONOMETRADO. */}
         <RitmoDoPeriodo calculado={resultado}>
           <CiclosFuracao valor={ciclosPorPeca} aoTrocar={aoTrocarCiclos} compacto />
+          <FuracaoPassante valor={furacaoPassante} aoTrocar={aoTrocarPassante} compacto />
         </RitmoDoPeriodo>
         <ComParadas calculado={resultado} />
         <SemAParada calculado={resultado} />

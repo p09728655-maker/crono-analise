@@ -33,6 +33,9 @@ export default function TabelaRitmoPorPeca({ resumoPecas }) {
             <th style={est.thNum} title="Acionamentos do motor para fazer uma peça">
               Acion.
             </th>
+            <th style={est.th} title="Passante: a broca atravessa a peça. Só compara com passante.">
+              Furação
+            </th>
             <th style={est.thNum}>Medições</th>
             <th style={est.thNum}>Peças</th>
             <th style={est.thNum}>Tempo rodando</th>
@@ -55,6 +58,14 @@ export default function TabelaRitmoPorPeca({ resumoPecas }) {
                   : undefined}
               >
                 {g.ciclosMistos ? `${g.ciclosVistos.join('/')} ⚠` : g.ciclosPorPeca}
+              </td>
+              <td
+                style={est.tdCurto}
+                title={g.passanteMista
+                  ? 'Gravada ora como passante, ora como não passante — corrija na medição'
+                  : undefined}
+              >
+                {g.passanteMista ? 'mista ⚠' : g.furacaoPassante ? 'passante' : '—'}
               </td>
               <td style={est.tdNum}>{g.n}</td>
               <td style={est.tdNum}>{g.totalPecas}</td>

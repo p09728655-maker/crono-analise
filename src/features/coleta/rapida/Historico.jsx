@@ -35,6 +35,7 @@ export default function Historico({ historico, naFila, aoRemover }) {
                 formatarDuracao(c.duracaoMs),
                 `${c.pecas} pç`,
                 c.ciclosPorPeca > 1 ? `${c.ciclosPorPeca} ciclos/pç` : null,
+                c.furacaoPassante ? 'passante' : null,
                 c.paradaMs > 0 ? `${formatarDuracao(c.paradaMs)} parada` : null,
                 dataCurta(c.salvoEm),
                 noPc(c) ? 'no PC' : 'aguardando envio',
@@ -46,6 +47,9 @@ export default function Historico({ historico, naFila, aoRemover }) {
                 periodo. Registro antigo, sem o bruto, mostra o que tem. */}
             {Math.round(c.pecasPorHoraBruto ?? c.pecasPorHora)}
             <span style={est.itemRitmoSufixo}>pç/h</span>
+            <div style={est.itemRitmoMinuto}>
+              {((c.pecasPorHoraBruto ?? c.pecasPorHora) / 60).toFixed(1)} pç/min
+            </div>
           </div>
           <button
             type="button"

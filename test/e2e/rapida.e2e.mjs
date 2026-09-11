@@ -85,6 +85,10 @@ checar(await p.locator('input[aria-label="Nome da peça"]').inputValue() === '',
   'outra peca: campo da peca limpa para a proxima');
 checar(await p.locator('input[aria-label="Nome da máquina"]').inputValue() === 'Furadeira 03',
   'outra peca: maquina fica — trocar de peca nao e trocar de posto');
+// FURACAO PASSANTE e' dado da peca, como os acionamentos: "outra peca" volta
+// ao padrao (nao passante) — a peca nova pode furar de outro jeito.
+checar(await p.getByRole('radio', { name: 'Não passante' }).getAttribute('aria-checked') === 'true',
+  'outra peca: a furacao volta a nao passante');
 
 /* --------------- caminho da referencia: mesma peca, mais um periodo */
 // O criterio da maquina fecha com 3 conferencias e 30 min rodando — e o
@@ -92,6 +96,7 @@ checar(await p.locator('input[aria-label="Nome da máquina"]').inputValue() === 
 // preserva peca e ciclos, sem a redigitacao que "outra peca" exige.
 await p.locator('input[aria-label="Nome da peça"]').fill('Lateral Mesa Sleep');
 await p.getByRole('radio', { name: '2 ciclos' }).tap();
+await p.getByRole('radio', { name: 'Passante', exact: true }).tap();
 await p.locator('input[aria-label="Hora final"]').fill('07:20');
 await p.locator('input[aria-label="Peças no período"]').fill('80');
 await painelHoras.waitFor({ timeout: 4000 });
@@ -100,6 +105,8 @@ checar(await p.locator('input[aria-label="Nome da peça"]').inputValue() === 'La
   'mesma peca: o nome da peca fica');
 checar(await p.getByRole('radio', { name: '2 ciclos' }).getAttribute('aria-checked') === 'true',
   'mesma peca: os ciclos de furacao ficam');
+checar(await p.getByRole('radio', { name: 'Passante', exact: true }).getAttribute('aria-checked') === 'true',
+  'mesma peca: a furacao passante fica, porque a peca e a mesma');
 checar(await p.locator('input[aria-label="Hora inicial"]').inputValue() === '07:20',
   'mesma peca: a hora inicial emenda na final do periodo anterior');
 checar(await p.locator('input[aria-label="Peças no período"]').inputValue() === '',
@@ -109,6 +116,8 @@ await p.getByRole('radio', { name: '1 ciclo' }).tap();
 await p.reload();
 await salvas.waitFor({ timeout: 8000 });
 textoSalvas = await salvas.innerText();
+checar(/\d+[.,]\d pç\/min/.test(textoSalvas),
+  'cada medicao salva mostra tambem pecas por minuto, a unidade do chao de fabrica');
 checar(textoSalvas.includes('Lateral Mesa Sleep') && textoSalvas.includes('07:00–07:10'),
   'salva sobrevive ao recarregar, com os horarios');
 

@@ -52,6 +52,14 @@ export default function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemov
                   <td style={est.td}>
                     {op.nome}
                     {ehGargalo && <span style={est.selo}>GARGALO</span>}
+                    {/* A observacao escrita na coleta, embaixo do nome: e' o
+                        contexto do numero ao lado, e o analista no PC nao
+                        pode precisar do tablet para le-la. */}
+                    {op.anotacao && (
+                      <div style={est.anotacaoOperacao} title="Observação do cronoanalista, escrita na coleta">
+                        {op.anotacao}
+                      </div>
+                    )}
                   </td>
                   <td style={est.tdNum}>
                     {r ? r.n : 0}

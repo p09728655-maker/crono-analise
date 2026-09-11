@@ -11,12 +11,23 @@ export const corNivel = (n) => ({ estavel: claro.ok, atencao: claro.atencao, cri
 
 
 
+/**
+ * LARGURA DO CONTEUDO no PC.
+ *
+ * Era 1400px, e num monitor de 1920 sobrava um terco da tela em branco a
+ * direita dos graficos — a lateral de 248px mais 1400 nao chega na borda.
+ * 1720 preenche o 1920 (lateral + conteudo + respiro) e em laptop de 1366
+ * ou 1536 nao muda nada: ali a tela e' o limite, nao este numero. O texto
+ * corrido continua com o proprio teto (720px), que e' o da leitura.
+ */
+const LARGURA_MAXIMA = 1720;
+
 export const est = {
   tela: { minHeight: '100vh', background: claro.fundo, color: claro.texto, fontFamily: fonteAnalise.familia },
   // Lateral fixa + conteudo rolando — mesmo esqueleto da lista de estudos.
   telaComLateral: { minHeight: '100dvh', display: 'flex', alignItems: 'flex-start' },
   conteudoLateral: {
-    flex: 1, minWidth: 0, maxWidth: 1400,
+    flex: 1, minWidth: 0, maxWidth: LARGURA_MAXIMA,
     padding: `${espaco.xl}px ${espaco.xl}px ${espaco.gigante}px`,
   },
 
@@ -50,7 +61,7 @@ export const est = {
   },
 
   avisoAmostra: {
-    maxWidth: 1400, margin: `0 auto ${espaco.lg}px`, padding: `${espaco.md}px ${espaco.lg}px`,
+    maxWidth: LARGURA_MAXIMA, margin: `0 auto ${espaco.lg}px`, padding: `${espaco.md}px ${espaco.lg}px`,
     ...tipo('corpo'), background: claro.atencaoFundo,
     borderWidth: 1, borderStyle: 'solid', borderColor: claro.atencao,
     borderRadius: raio.md, color: claro.texto,
@@ -75,7 +86,7 @@ export const est = {
 
   /* --- a resposta --- */
   resposta: {
-    maxWidth: 1400, margin: `0 auto ${espaco.lg}px`, padding: espaco.xl,
+    maxWidth: LARGURA_MAXIMA, margin: `0 auto ${espaco.lg}px`, padding: espaco.xl,
     background: claro.papel, borderRadius: raio.lg, boxShadow: elevacao.media,
     borderLeft: `4px solid ${claro.vermelho}`,
     display: 'flex', gap: espaco.xxl, flexWrap: 'wrap',
@@ -91,7 +102,7 @@ export const est = {
 
   /* --- numeros de apoio --- */
   contexto: {
-    maxWidth: 1400, margin: `0 auto ${espaco.xl}px`, padding: `${espaco.md}px ${espaco.xl}px`,
+    maxWidth: LARGURA_MAXIMA, margin: `0 auto ${espaco.xl}px`, padding: `${espaco.md}px ${espaco.xl}px`,
     display: 'flex', gap: espaco.xxl, flexWrap: 'wrap',
     borderTop: `1px solid ${claro.borda}`, borderBottom: `1px solid ${claro.borda}`,
   },
@@ -111,7 +122,7 @@ export const est = {
 
   /* --- tabela de operacoes --- */
   blocoTabela: {
-    maxWidth: 1400, margin: `${espaco.xl}px auto`, background: claro.papel,
+    maxWidth: LARGURA_MAXIMA, margin: `${espaco.xl}px auto`, background: claro.papel,
     borderRadius: raio.lg, boxShadow: elevacao.baixa, border: `1px solid ${claro.borda}`,
     overflow: 'hidden',
   },
@@ -136,6 +147,11 @@ export const est = {
     fontFamily: fonteAnalise.numero, color: claro.texto, borderBottom: `1px solid ${claro.borda}`,
   },
   linhaGargalo: { background: 'rgba(194, 65, 12, 0.05)' },
+  // A observacao do cronoanalista, embaixo do nome da operacao.
+  anotacaoOperacao: {
+    ...tipo('legenda'), color: claro.textoMedio, marginTop: 2, whiteSpace: 'pre-wrap',
+    maxWidth: 360,
+  },
   selo: {
     marginLeft: espaco.sm, padding: '2px 7px', background: claro.critico, color: '#fff',
     borderRadius: raio.sm, ...tipo('micro'), fontSize: 10,
@@ -393,7 +409,7 @@ export const est = {
     borderRadius: raio.sm, ...tipo('legenda'),
   },
   semDados: {
-    maxWidth: 1400, margin: `${espaco.xxl}px auto`, padding: espaco.xxl,
+    maxWidth: LARGURA_MAXIMA, margin: `${espaco.xxl}px auto`, padding: espaco.xxl,
     textAlign: 'center', ...tipo('corpo'), color: claro.textoFraco,
     background: claro.papel, border: `1px dashed ${claro.borda}`, borderRadius: raio.lg,
   },
