@@ -72,6 +72,15 @@ export function resumoDoPeriodo(conferencias, maquinas = []) {
     produtivoMs,
     paradaMs,
     ritmoMedio: produtivoMs > 0 ? (pecasTot * 3600000) / produtivoMs : null,
+    /**
+     * O ritmo do RELOGIO: pecas por hora de presenca, paradas dentro.
+     *
+     * E' o numero que enche o caminhao, e o unico que se compara com a
+     * demanda: o ritmo de maquina rodando ignora o tempo parado e daria
+     * veredito de atendimento otimista pelo tamanho da propria parada.
+     * Sem parada marcada os dois sao iguais.
+     */
+    ritmoRelogio: totalMs > 0 ? (pecasTot * 3600000) / totalMs : null,
     // O pareto e' a soma BRUTA por motivo, sem o teto do periodo: ele
     // responde "qual motivo pesa mais", e ratear o teto entre motivos
     // inventaria proporcao. Os dois numeros so' divergem com parada maior

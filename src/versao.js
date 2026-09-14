@@ -13,6 +13,44 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.73.0',
+    data: '2026-09-14',
+    titulo: 'O relatório responde: isso atende?',
+    itens: [
+      'NOVO QUADRO "O PROGRAMA DA SEMANA", no topo do relatório Ritmo por máquina, logo abaixo dos números do período. Põe lado a lado o que a demanda EXIGE de cada máquina e o que o grupo ENTREGA — e fecha com o número que decide: quantas máquinas o programa pede ao ritmo medido, contra quantas o grupo tem.',
+      'O VEREDITO USA O RITMO DE RELÓGIO, com as paradas dentro. É o que sai do posto por hora de presença. Comparar a demanda com o ritmo de máquina rodando daria um "atende" otimista exatamente do tamanho da parada — a peça que não saiu porque a máquina parou também não entrou no caminhão. O ritmo rodando aparece ao lado, como referência.',
+      'E SEPARA O PROBLEMA DE CAPACIDADE DO DE PARADA. Quando o grupo não atende mas atenderia sem as paradas, o quadro diz isso com todas as letras: "antes de falar em máquina nova, o que falta é tempo parado". Quando nem sem parada o programa caberia, também diz — aí falta capacidade de verdade.',
+      'A SEMANA É ESCOLHIDA PELA DATA DAS MEDIÇÕES (semana ISO, no relógio da fábrica), e dá para trocar no próprio quadro. Medição de uma semana nunca é comparada com o programa de outra sem que a tela avise: se não houver programa para aquela semana, ela diz qual falta em vez de usar a semana errada.',
+      'SEM PROGRAMA, SEM JORNADA OU COM VÁRIOS GRUPOS EM TELA, o quadro não some — vira uma faixa discreta dizendo o que falta, com o atalho para configurar. E ele só compara quando há UM grupo em vista: misturar furadeira com embalagem daria um "exigido por máquina" que não é de ninguém.',
+      'TUDO ISSO SAI NA FOLHA IMPRESSA, com os mesmos números e o mesmo veredito — o documento circula na reunião, e é lá que a pergunta é feita.',
+    ],
+  },
+  {
+    versao: '2.72.0',
+    data: '2026-09-14',
+    titulo: 'Demanda semanal: o relatório passa a saber o que é preciso fazer',
+    itens: [
+      'NOVA TELA "DEMANDA SEMANAL", na lateral do relatório Ritmo por máquina. É onde entra o programa do PCP: quantas peças o GRUPO de máquinas (0002 FURADEIRA, por exemplo) tem de entregar em cada semana. Sem isso o relatório só sabia dizer quanto o posto entrega — nunca se aquilo atende.',
+      'COLE A PLANILHA INTEIRA, não digite. A tela entende a colagem do Excel com as colunas SEMANA e TOTAL SEMANA, ignora os totalizadores do rodapé (TOTAL ACUMULADO, MÉDIA SEMANAL) e ainda confere o total contra a soma dos lotes — se a coluna vier trocada, ela avisa com os dois números antes de gravar. Trinta e seis semanas entram de uma vez.',
+      'GRAVAR MESCLA: semana que não veio na colagem fica como estava. Dá para colar só o mês corrente toda segunda-feira sem perder o histórico do ano — e é o histórico que permite comparar uma medição de março com o programa de março.',
+      'A DEMANDA É DO GRUPO, não da peça. Takt é tempo disponível dividido pela demanda, e numa furadeira que roda doze peças nenhuma delas tem o turno inteiro só para si: calculado peça a peça, cada peça pareceria folgada e o posto estouraria assim mesmo.',
+      'HORAS DISPONÍVEIS POR MÁQUINA, POR SEMANA, no cadastro do grupo. Com 3 furadeiras a 44 h a tela mostra 132 horas-máquina e calcula o ritmo exigido de cada uma. Enquanto ninguém informar as horas, NÃO há takt e a tela diz isso — jornada é decisão de turno, e assumir 44 h daria veredito sobre um turno que talvez não exista.',
+      'A VARIAÇÃO DO PROGRAMA FICA À VISTA: média, desvio e quanto a maior semana é maior que a menor. Nas 36 semanas de 2026 as furadeiras foram de 64.750 a 134.586 peças — 2,08x. É por isso que a quantidade é por semana e não um campo fixo: um número cravado na média erra 66% na semana fraca, e erra calado.',
+    ],
+  },
+  {
+    versao: '2.71.0',
+    data: '2026-09-14',
+    titulo: 'Tempo por peça no quadro Ritmo por peça',
+    itens: [
+      'COLUNA "POR PEÇA" NO QUADRO RITMO POR PEÇA, na tela e na folha impressa: quantos segundos leva UMA peça no posto, do começo ao fim — manuseio mais todos os acionamentos do motor. É o número que entra na carga máquina e no cálculo de lote, e que até agora só saía dividindo 3.600 pelas peças/hora na calculadora.',
+      'O NÚMERO JÁ ERA CALCULADO, só não aparecia: é o tempo com a máquina rodando dividido pelas peças, ponderado como o ritmo (soma de peças sobre soma de tempo, não média de médias). Nenhuma conta mudou — peças/hora, peças/min e por acionamento saem iguais aos da versão anterior.',
+      'POR PEÇA E POR ACION. SÃO O MESMO TEMPO EM DUAS RÉGUAS: o tempo cheio da peça, e ele dividido pelos acionamentos do motor (manuseio incluído nos dois). A segunda é a que compara peças de furação diferente na mesma máquina. Quando TODA peça do quadro é de um acionamento só, os dois números seriam idênticos e a coluna "Por acion." não aparece — na tela e no papel.',
+      'PEÇA DE MINUTOS SAI EM MINUTOS: embalagem e montagem agora leem "5min00s" no lugar de "300.0s". Até um minuto, continua em segundos com uma casa.',
+      'NÃO É TAKT TIME, e a diferença importa na hora de planejar: o Takt vem da DEMANDA (tempo disponível ÷ quantidade) e vive no estudo de tempos, em Ajustes do estudo. Esta coluna é o tempo MEDIDO da peça no posto. Um diz o ritmo que o cliente exige; o outro, o ritmo que a máquina entrega.',
+    ],
+  },
+  {
     versao: '2.70.0',
     data: '2026-09-11',
     titulo: 'Observação na conferência rápida',

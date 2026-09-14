@@ -10,7 +10,7 @@ import { GraficoTendenciaPeriodo } from '../graficos.jsx';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
 import { VERSAO } from '../../../versao.js';
 import { imp } from './estilos.js';
-import { porMinuto } from './formato.js';
+import { porMinuto, porPeca } from './formato.js';
 
 /**
  * FOLHA DO RITMO POR MAQUINA — A4 retrato, modelo basico.
@@ -24,7 +24,10 @@ import { porMinuto } from './formato.js';
  * de amostra carimbado. Os numeros sao pecas/hora e pecas/minuto; maquina
  * medida ha' pouco tempo leva uma NOTA em texto corrido, nao um selo.
  */
-export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, analise, entreMaquinas, porCiclo }) {
+export default function ImpressaoConferencias({
+  linhas, resumo, resumoPecas, grupoDe, filtro, analise, entreMaquinas, porCiclo,
+  demanda, grupoNome,
+}) {
   // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
   const gruposCobertos = [...new Set(resumo.map((g) => grupoDe?.(g.maquina)).filter(Boolean))].sort();
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -49,6 +52,9 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
   // So' com UMA maquina, pelo mesmo motivo da tela: misturando postos, a
   // hora fraca seria a hora da maquina mais lenta, nao uma hora fraca.
   const curvaDoDia = resumo.length === 1 ? ritmoPorHoraDoDia(linhas) : [];
+  /* Quadro "Ritmo por peça": a regua por acionamento so' diz algo quando
+     alguma peca pede mais de um — a mesma regra da tela. */
+  const temPorAcion = resumoPecas.some((g) => g.ciclosPorPeca > 1);
 
   return (
     <div className="somente-impressao" style={imp.folha}>
@@ -84,6 +90,62 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
           </div>
         ))}
       </section>
+
+      {/* O PROGRAMA DA SEMANA no papel, antes de tudo: o documento circula
+          na reuniao, e a primeira pergunta e' se atende. So' sai quando ha'
+          veredito — quadro de "falta configurar" e' conversa de tela, nao
+          de folha impressa. */}
+      {demanda?.estado === 'pronto' && demanda.veredito && (
+        <section style={imp.comparativo}>
+          <h2 style={imp.tituloSecao}>
+            O programa da semana {demanda.semana.chave}{grupoNome ? ` — ${grupoNome}` : ''}
+          </h2>
+          <div style={imp.comparativoGrade}>
+            <div style={imp.comparativoCaixa}>
+              <span style={imp.comparativoRotulo}>Exigido por máquina</span>
+              <span style={imp.comparativoValor}>
+                {Math.round(demanda.veredito.pecasPorHoraMaquina)} pç/h
+              </span>
+              <span style={imp.comparativoSub}>
+                takt {(demanda.veredito.taktMs / 1000).toFixed(1)}s por peça
+              </span>
+            </div>
+            <div style={imp.comparativoCaixa}>
+              <span style={imp.comparativoRotulo}>Entregue no relógio</span>
+              <span style={imp.comparativoValor}>
+                {Math.round(demanda.veredito.ritmoRelogio)} pç/h
+              </span>
+              <span style={imp.comparativoSub}>
+                {demanda.veredito.ritmoRodando
+                  ? `${Math.round(demanda.veredito.ritmoRodando)} pç/h com a máquina rodando`
+                  : 'sem parada marcada no período'}
+              </span>
+            </div>
+            <div style={demanda.veredito.atende ? imp.comparativoCaixa : imp.comparativoCaixaDestaque}>
+              <span style={imp.comparativoRotulo}>Máquinas necessárias</span>
+              <span style={imp.comparativoValor}>
+                {demanda.veredito.maquinasNecessarias.toFixed(1).replace('.', ',')}
+              </span>
+              <span style={imp.comparativoSub}>
+                o grupo tem {demanda.veredito.maquinas}
+                {demanda.veredito.maquinasSeNaoParasse
+                  && demanda.veredito.maquinasSeNaoParasse < demanda.veredito.maquinasNecessarias
+                  ? ` · sem as paradas, ${demanda.veredito.maquinasSeNaoParasse.toFixed(1).replace('.', ',')}`
+                  : ''}
+              </span>
+            </div>
+          </div>
+          <p style={imp.comparativoNota}>
+            {demanda.demanda.toLocaleString('pt-BR')} peças programadas, divididas entre
+            {' '}{demanda.veredito.maquinas} máquina(s) com
+            {' '}{Math.round(demanda.veredito.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina
+            na semana. O veredito usa o ritmo de RELÓGIO (paradas dentro): é o que sai do posto por
+            hora de presença. {demanda.veredito.atende
+              ? `O grupo ATENDE o programa, com ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de folga.`
+              : `O grupo NÃO ATENDE: falta ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de ritmo em cada máquina.`}
+          </p>
+        </section>
+      )}
 
       {comparativo && (
         <section style={imp.comparativo}>
@@ -338,6 +400,9 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
           )}
 
           <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Ritmo por peça</h2>
+          {/* A MESMA regra da tela (TabelaRitmoPorPeca): com toda peca de um
+              acionamento so', "Por acion." repetiria "Por peça" numero por
+              numero. O que esta' na tela e' o que sai no papel. */}
           <table style={imp.tabela}>
             <thead>
               <tr>
@@ -350,7 +415,8 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
                 <th style={imp.thNum}>Tempo rodando</th>
                 <th style={imp.thNum}>Peças/hora</th>
                 <th style={imp.thNum}>Peças/min</th>
-                <th style={imp.thNum}>Por acion.</th>
+                <th style={imp.thNum}>Por peça</th>
+                {temPorAcion && <th style={imp.thNum}>Por acion.</th>}
               </tr>
             </thead>
             <tbody>
@@ -365,15 +431,24 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
                   <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
                   <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
                   <td style={imp.tdNum}>{porMinuto(g.ritmoMedio)}</td>
-                  <td style={imp.tdNum}>{(g.cicloMotorMs / 1000).toFixed(1)}s</td>
+                  <td style={imp.tdNum}>{porPeca(g.cicloMedioMs)}</td>
+                  {temPorAcion && (
+                    <td style={imp.tdNum}>{g.ciclosMistos ? '—' : porPeca(g.cicloMotorMs)}</td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
           <p style={imp.nota}>
             ACION.: quantas vezes o motor é acionado para fazer uma peça. Peça de mais
-            acionamentos rende menos peças/hora sem a máquina estar mais lenta — POR ACION. é o
-            número comparável entre peças de furação diferente.
+            acionamentos rende menos peças/hora sem a máquina estar mais lenta. POR PEÇA é o
+            tempo cheio de uma peça — manuseio e furação juntos — medido COM A MÁQUINA
+            RODANDO: quem for multiplicar por uma quantidade planejada precisa somar o tempo
+            parado do posto, senão a carga sai menor que a realidade.
+            {' '}
+            {temPorAcion
+              ? 'POR ACION. é esse mesmo tempo dividido pelos acionamentos: é ele que compara peças de furação diferente.'
+              : 'Toda peça aqui é de um acionamento só — o tempo por acionamento seria o mesmo da coluna POR PEÇA, e a tabela não repete o número.'}
           </p>
 
           {/* A REGUA DO CICLO no papel: pecas de mesmo acionamento deveriam
@@ -474,6 +549,8 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
             ['Parado', 'tempo em que a máquina não produziu dentro do período: troca/setup, falta de material, manutenção.'],
             ['Peças/hora', 'quantas peças saem em uma hora com a máquina rodando.'],
             ['Peças/min', 'o mesmo ritmo, em peças por minuto.'],
+            ['Por peça', 'tempo cheio de UMA peça no posto — manuseio e furação juntos — '
+              + 'medido com a máquina rodando. Para planejar carga, some o tempo parado do posto.'],
             ['Ritmo médio', 'total de peças dividido pelo tempo total com a máquina rodando.'],
             ['Máquina rodando', 'quanto do período observado a máquina passou produzindo. '
               + 'É a DISPONIBILIDADE do período — 100% menos o tempo parado.'],

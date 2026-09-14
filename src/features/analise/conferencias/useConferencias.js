@@ -37,18 +37,31 @@ export function useConferencias() {
    * sem cadastro, as maquinas simplesmente aparecem sem grupo.
    */
   const [mapaGrupos, setMapaGrupos] = useState(() => new Map());
+  // O ID do grupo, alem do rotulo: e' por ele que a tela de demanda abre ja'
+  // no grupo da maquina que se esta' olhando, em vez de pedir que o usuario
+  // procure na lista o grupo que ele acabou de filtrar.
+  const [mapaGrupoIds, setMapaGrupoIds] = useState(() => new Map());
+  // O cadastro inteiro (grupos com a jornada, maquinas com o grupo): e' o
+  // que o quadro do programa da semana precisa para saber quantas maquinas
+  // ATIVAS o grupo tem e quantas horas cada uma cumpre.
+  const [cadastro, setCadastro] = useState(null);
   useEffect(() => {
     listarCadastroMaquinas()
-      .then(({ maquinas }) => {
+      .then((c) => {
         const mapa = new Map();
-        for (const m of maquinas) {
+        const ids = new Map();
+        for (const m of c.maquinas) {
           if (m.grupo_codigo) mapa.set(nomeChave(m.nome), `${m.grupo_codigo} · ${m.grupo_nome}`);
+          if (m.grupo_id) ids.set(nomeChave(m.nome), m.grupo_id);
         }
         setMapaGrupos(mapa);
+        setMapaGrupoIds(ids);
+        setCadastro(c);
       })
       .catch(() => {});
   }, []);
   const grupoDe = (maquina) => mapaGrupos.get(nomeChave(maquina)) || null;
+  const grupoIdDe = (maquina) => mapaGrupoIds.get(nomeChave(maquina)) || null;
 
   async function carregar(arquivadas = verArquivadas) {
     setEstado('carregando');
@@ -118,7 +131,7 @@ export function useConferencias() {
     executar(c.id, () => excluirConferencia(c.id), aoConcluir);
 
   return {
-    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe,
+    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe, cadastro,
     limparErro: () => setErro(null),
     alternarArquivadas: () => setVerArquivadas((v) => !v),
     carregar,

@@ -86,12 +86,58 @@ No PC, o botão **Conferências** no topo da Análise abre o relatório
 pedido de quem usa — o anterior falava em CV%, ciclo do motor e critérios,
 e carimbava "amostra insuficiente" em quase tudo): ritmo por máquina e por
 peça em **peças/hora e peças/minuto**, ritmo médio **ponderado pelo tempo**
-(Σ peças / Σ tempo rodando, não média de taxas), tempo rodando, tempo
+(Σ peças / Σ tempo rodando, não média de taxas), o **tempo por peça** em
+segundos ao lado do tempo por acionamento do motor (um é o que a peça custa
+no posto, o outro compara peças de furação diferente), tempo rodando, tempo
 parado com o setup destacado, melhor e pior registro com a peça — mais a
 tabela completa e impressão em **documento A4 próprio** (não a tela no
 papel). O **filtro por máquina** da lateral vale para o relatório inteiro,
 **folha impressa incluída**: com uma máquina escolhida o botão vira
 "Imprimir esta máquina" e o A4 sai só com ela, com o nome no título.
+
+### Demanda semanal — o que o posto precisa entregar
+
+Na lateral do relatório, **Demanda semanal** guarda o programa do PCP por
+**grupo de máquina** (0002 FURADEIRA), uma linha por semana. Entra por
+**colagem da planilha**: a tela lê as colunas `SEMANA` e `TOTAL SEMANA`,
+ignora os totalizadores do rodapé e confere o total contra a soma dos lotes,
+avisando com os dois números quando não bate. Gravar **mescla** — semana que
+não veio na colagem fica como estava, então dá para colar só o mês corrente
+sem perder o histórico.
+
+É **por grupo** e não por peça de propósito: Takt é tempo disponível ÷
+demanda, e numa furadeira que roda doze peças nenhuma delas tem o turno
+inteiro só para si — peça a peça, cada uma pareceria folgada e o posto
+estouraria assim mesmo. E é **por semana** porque o programa varia demais
+para um campo fixo: nas 36 semanas de 2026 as furadeiras foram de 64.750 a
+134.586 peças (média 107.086, CV 17,5%).
+
+As **horas disponíveis por máquina por semana** ficam no cadastro do grupo
+(`grupos_maquina.horas_semana`, alterável em **Máquinas** ou na própria tela
+de demanda — o PATCH de grupo exige papel de administrador). Com 3 máquinas
+ativas a 44 h são 132 horas-máquina, e o ritmo exigido de cada uma é a
+demanda dividida por elas. **Sem as horas não há takt**: nenhuma jornada é
+presumida, e a tela diz o que falta.
+
+### O programa da semana × o que o grupo entrega
+
+Com demanda e jornada cadastradas, o relatório abre com o quadro **O
+programa da semana**: o **exigido por máquina** (demanda ÷ horas-máquina),
+o **entregue no relógio** e, em destaque, **quantas máquinas** o programa
+pede ao ritmo medido contra quantas o grupo tem.
+
+O veredito usa o **ritmo de relógio** (`resumoDoPeriodo.ritmoRelogio`, com
+as paradas dentro), nunca o de máquina rodando: comparar a demanda com o
+ritmo rodando devolveria um "atende" otimista do tamanho da parada. O ritmo
+rodando entra ao lado, como referência — e é a distância entre os dois que
+separa **problema de capacidade** de **problema de parada**. Quando o grupo
+não atende mas atenderia sem as paradas, o quadro diz isso explicitamente.
+
+A semana sai da **data das medições** (semana ISO 8601, no fuso da fábrica),
+com seletor para trocar. Medição de uma semana nunca é comparada com o
+programa de outra: sem programa para aquela semana, o quadro diz qual falta.
+Só compara com **um grupo em vista** (filtro por máquina, ou todas as
+máquinas do mesmo grupo). O quadro e o veredito saem também na folha A4.
 
 O botão **Paradas** de cada linha abre o cadastro no PC: quem confere no
 corredor raramente para para digitar o setup, e reconstituir depois — com o

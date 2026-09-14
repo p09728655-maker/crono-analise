@@ -83,6 +83,20 @@ export const IconeMaquinas = () => (
   </Icone>
 );
 
+/**
+ * Calendario com barras — a DEMANDA da semana.
+ *
+ * Calendario sozinho seria "agenda"; as barras dentro dizem que o que se
+ * guarda ali e' quantidade, semana a semana.
+ */
+export const IconeDemanda = () => (
+  <Icone>
+    <rect x="3.5" y="5" width="17" height="15" rx="2" />
+    <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
+    <path d="M8 16.5v-2M12 16.5v-4M16 16.5v-3" />
+  </Icone>
+);
+
 /** Chave — a chave da IA. */
 export const IconeChave = () => (
   <Icone>

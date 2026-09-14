@@ -35,6 +35,20 @@ describe('resumoDoPeriodo — os numeros do topo', () => {
     expect(r.ritmoMedio).toBe(1080);
   });
 
+  it('o ritmo de RELOGIO conta o periodo inteiro — e e ele que se compara com a demanda', () => {
+    const r = resumoDoPeriodo(conferencias, [{ maquina: 'A' }]);
+    // 720 pecas em 60 min de presenca = 720 pc/h. Comparar a demanda com os
+    // 1080 de maquina rodando daria veredito otimista pelo tamanho da parada.
+    expect(r.ritmoRelogio).toBe(720);
+    expect(r.ritmoRelogio).toBeLessThan(r.ritmoMedio);
+  });
+
+  it('sem parada marcada, relogio e maquina rodando sao o mesmo numero', () => {
+    const r = resumoDoPeriodo([{ duracao_ms: 60 * MIN, pecas: 600, paradas: [] }]);
+    expect(r.ritmoRelogio).toBe(600);
+    expect(r.ritmoMedio).toBe(600);
+  });
+
   it('o pareto lista os motivos do maior para o menor, com o setup a parte', () => {
     const { pareto } = resumoDoPeriodo(conferencias);
     // Soma bruta por motivo (15 + 10 = 25 min), sem o teto do periodo que

@@ -73,6 +73,9 @@ await movel.close();
   let lista = [
     { id: 'c1', maquina: 'Furadeira14', peca: 'Sleep lateral',
       iniciado_em: inicio, finalizado_em: hoje,
+      // DOIS acionamentos: e' esta peca que faz o quadro "Ritmo por peça"
+      // mostrar a coluna por acionamento (e chegar as 11 colunas).
+      ciclos_por_peca: 2,
       duracao_ms: 180000, pecas: 20, salvo_em: hoje, arquivada: false, paradas: [] },
     { id: 'c2', maquina: 'Furadeira 03', peca: 'Lateral Mesa', hora_inicial: '07:00', hora_final: '07:30',
       duracao_ms: 1800000, pecas: 420, salvo_em: hoje, arquivada: false, paradas: [],
@@ -204,6 +207,19 @@ await movel.close();
     'o ritmo consolidado da peca aparece (300pc/20min = 900 pc/h)');
   checar(/15\.0/.test(textoRef),
     'a peca tambem sai em pecas por minuto (900/60 = 15.0)');
+  // 300 pc em 20 min de maquina rodando = 4,0 s por peca — a mesma conta que
+  // 3.600 / 900 pc/h. As duas colunas saem da mesma medicao e nao podem
+  // discordar na mesma linha.
+  checar(/4\.0s/.test(textoRef),
+    'o tempo por peca sai ao lado do ritmo (300pc em 20min = 4.0s)');
+  // Sleep lateral e' de 2 acionamentos: 9,0 s a peca, 4,5 s o acionamento.
+  checar(/9\.0s/.test(textoRef) && /4\.5s/.test(textoRef),
+    'peca de 2 acionamentos mostra o tempo cheio e o tempo por acionamento');
+  // Com 11 colunas e o respiro padrao a tabela passava da largura do painel
+  // em 1440, e `est.painel` tem overflowX auto: a ultima coluna — a que o
+  // proprio texto chama de comparavel — saia da vista.
+  checar(await refPecas.evaluate((s) => s.scrollWidth <= s.clientWidth + 1),
+    'o quadro cabe no painel: nenhuma coluna escondida atras de rolagem');
 
   /* ------------------- analise do periodo, gerada pelo algoritmo */
   const analise = p2.locator('[aria-label="Análise do período"]');
