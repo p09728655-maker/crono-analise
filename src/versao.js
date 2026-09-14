@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.75.0',
+    data: '2026-09-14',
+    titulo: 'A semana da planilha é a da coluna SEMANA',
+    itens: [
+      'A PLANILHA DO PCP TEM DUAS COLUNAS PARECIDAS: SEMANA (S02, S04, S05... o calendário, que pula semana sem programa) e Nº PLANILHA (001-26, 002-26... um contador sequencial). Só a primeira é semana. A importação lia a segunda: o programa da S39 entrava como semana 36, e o desvio crescia a cada semana pulada no ano.',
+      'AGORA A SEMANA SAI DA COLUNA SEMANA, pelo cabeçalho da colagem, e o formato "S02" é entendido — o ano vem do "-26" da própria linha. A coluna Nº PLANILHA é ignorada COM AVISO na prévia, nunca em silêncio: era exatamente o silêncio que escondia o deslocamento.',
+      'QUEM JÁ COLOU O PROGRAMA PRECISA REFAZER: apague o programa do grupo (botão na tela de Demanda semanal) e cole a planilha de novo, agora com a coluna SEMANA junto. Gravar por cima não resolve — as semanas erradas continuariam lá, com quantidade de outra semana.',
+      'O QUADRO NÃO AFIRMA MAIS "programa não cadastrado" ENQUANTO CARREGA. Ele dizia isso no intervalo entre abrir a tela e a demanda chegar do servidor: uma frase falsa piscando, e falsa justamente sobre o que o quadro existe para responder.',
+    ],
+  },
+  {
     versao: '2.74.0',
     data: '2026-09-14',
     titulo: 'Cadastrar máquina deixou de ser rolar a tela inteira',

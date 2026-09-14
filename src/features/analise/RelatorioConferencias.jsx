@@ -74,7 +74,14 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [verDemanda, setVerDemanda] = useState(false);
   const [semanaEscolhida, setSemanaEscolhida] = useState(null);
-  const [demandas, setDemandas] = useState([]);
+  /**
+   * `null` enquanto a demanda do grupo nao respondeu — nao `[]`.
+   *
+   * Com lista vazia o quadro afirmava "Programa de produção não cadastrado"
+   * no intervalo entre abrir a tela e a resposta chegar: uma frase falsa
+   * piscando, e falsa justamente sobre o que a tela existe para dizer.
+   */
+  const [demandas, setDemandas] = useState(null);
   const [confirmando, setConfirmando] = useState(null);
   const [confirmandoLote, setConfirmandoLote] = useState(null);
   const [editandoParadas, setEditandoParadas] = useState(null);
@@ -119,10 +126,13 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   // aparece, como acontece quando nao ha' programa nenhum.
   useEffect(() => {
     setSemanaEscolhida(null);
-    if (!grupoDoQuadro) { setDemandas([]); return; }
+    setDemandas(null);
+    if (!grupoDoQuadro) return;
     let vivo = true;
     listarDemanda(grupoDoQuadro)
       .then((lista) => { if (vivo) setDemandas(lista); })
+      // Falha de carga vira lista vazia: o quadro diz que nao ha' programa
+      // e oferece o caminho, que e' melhor do que sumir sem explicacao.
       .catch(() => { if (vivo) setDemandas([]); });
     return () => { vivo = false; };
   }, [grupoDoQuadro]);
@@ -131,7 +141,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const maquinasDoGrupo = (cadastro?.maquinas || [])
     .filter((m) => m.grupo_id === grupoDoQuadro && m.ativa).length;
 
-  const leituraDemanda = useMemo(() => (grupoDoQuadro && painel
+  const leituraDemanda = useMemo(() => (grupoDoQuadro && painel && demandas !== null
     ? leituraDaDemanda({
         demandas,
         horas: grupoDoCadastro?.horas_semana,

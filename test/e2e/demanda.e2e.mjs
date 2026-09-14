@@ -192,6 +192,10 @@ await p2.route('**/api/conferencias**', (rota) => rota.fulfill({
 await p2.goto(`${BASE}/analise/conferencias`);
 const quadro = p2.locator('[aria-label="Programa da semana"]');
 await quadro.waitFor({ timeout: 10000 });
+/* Espera o quadro SAIR do estado de carga. Sem isto o teste lia o quadro
+   no intervalo entre abrir a tela e a demanda chegar — e passava ou falhava
+   pela velocidade da maquina, nao pelo que o codigo faz. */
+await quadro.getByText(/O programa da semana/).waitFor({ timeout: 10000 });
 const q = await quadro.innerText();
 
 checar(/semana 037-26/.test(q),

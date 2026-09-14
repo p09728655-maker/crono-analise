@@ -112,6 +112,15 @@ estouraria assim mesmo. E é **por semana** porque o programa varia demais
 para um campo fixo: nas 36 semanas de 2026 as furadeiras foram de 64.750 a
 134.586 peças (média 107.086, CV 17,5%).
 
+> **A semana é a da coluna SEMANA, não a do Nº PLANILHA.** A planilha do PCP
+> traz as duas: `SEMANA` (S02, S04, S05… o calendário, que pula semana sem
+> programa) e `Nº PLANILHA` (001-26, 002-26… um contador sequencial). As duas
+> parecem semana; só a primeira é. Ler a segunda punha o programa da S39 como
+> semana 36 — e o desvio crescia a cada semana pulada (aconteceu em set/2026).
+> `colunaDaSemana()` resolve pelo cabeçalho, o formato `S02` é entendido (o ano
+> vem do `-26` da própria linha) e a coluna de planilha é ignorada **com aviso
+> na prévia** — o silêncio era o que escondia o deslocamento.
+
 A rota da demanda mora **dentro de `api/maquinas`** (`?demanda=1`), e não
 num `api/demanda.js` próprio: o plano Hobby aceita **12 funções serverless
 por deploy** e o projeto está exatamente nas 12 — a 13ª derruba o deploy

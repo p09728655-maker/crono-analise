@@ -19,8 +19,14 @@
  * 66% na semana fraca. O numero tem de vir com a semana a que pertence.
  */
 
-/** Codigo de semana do PCP: "001-26" = semana 1 de 2026. */
-const RE_SEMANA = /^(\d{1,3})\s*[-/]\s*(\d{2}|\d{4})$/;
+/** Codigo de semana COM ano: "001-26" = semana 1 de 2026; "1/2026" idem. */
+const RE_SEMANA_COM_ANO = /^(\d{1,3})\s*[-/]\s*(\d{2}|\d{4})$/;
+/**
+ * Codigo de semana SEM ano, como a planilha do PCP escreve: "S02", "S 2",
+ * "SEM 02", "SEMANA 2". O ano vem de outra celula da linha ou do parametro
+ * — inventar um ano aqui e' o tipo de chute que vira comparacao errada.
+ */
+const RE_SEMANA_SO_NUMERO = /^(?:s|sem|semana)\s*[-.]?\s*(\d{1,2})$/i;
 
 /**
  * Linhas de rodape da planilha: totalizadores, nao semanas. Entram aqui
@@ -52,15 +58,23 @@ export function numeroPtBr(valor) {
  * "001-26" -> { ano: 2026, numero: 1 }. Ano de dois digitos vira 20xx: a
  * planilha do PCP nunca escreve o seculo, e semana "001-26" e' de 2026.
  */
-export function lerCodigoSemana(valor) {
-  const m = RE_SEMANA.exec(String(valor ?? '').trim());
-  if (!m) return null;
-  const numero = Number(m[1]);
-  const ano = m[2].length === 2 ? 2000 + Number(m[2]) : Number(m[2]);
-  // 53 semanas e' o maximo de um ano ISO; 0 nao existe.
-  if (!(numero >= 1 && numero <= 53)) return null;
-  if (!(ano >= 2000 && ano <= 2099)) return null;
-  return { ano, numero };
+export function lerCodigoSemana(valor, { ano: anoPadrao = null } = {}) {
+  const bruto = String(valor ?? '').trim();
+  const valido = (ano, numero) => (
+    // 53 semanas e' o maximo de um ano ISO; 0 nao existe.
+    numero >= 1 && numero <= 53 && ano >= 2000 && ano <= 2099 ? { ano, numero } : null
+  );
+
+  const comAno = RE_SEMANA_COM_ANO.exec(bruto);
+  if (comAno) {
+    const ano = comAno[2].length === 2 ? 2000 + Number(comAno[2]) : Number(comAno[2]);
+    return valido(ano, Number(comAno[1]));
+  }
+
+  // "S02" sozinho nao diz o ano: sem alguem informar, nao vira semana.
+  const soNumero = RE_SEMANA_SO_NUMERO.exec(bruto);
+  if (soNumero && anoPadrao) return valido(Number(anoPadrao), Number(soNumero[1]));
+  return null;
 }
 
 /** { ano: 2026, numero: 1 } -> "001-26", como o PCP escreve. */
@@ -82,12 +96,63 @@ const celulas = (linha) => linha.split(/\t|;|\s{2,}/).map((c) => c.trim());
  * "TOTAL ACUMULADO" nao conta — e' rodape, nao coluna.
  */
 function colunaDoTotal(linhas) {
+  const cols = cabecalho(linhas);
+  if (!cols) return null;
+  const i = cols.findIndex((c, k) => k > 0 && /total/i.test(c) && !/acumulad/i.test(c));
+  return i > 0 ? i : null;
+}
+
+/** A linha de cabecalho: a que nomeia uma coluna SEMANA. */
+function cabecalho(linhas) {
   for (const linha of linhas) {
     const cols = celulas(linha);
-    if (cols.length < 2) continue;
-    if (!/^semana$/i.test(cols[0])) continue;
-    const i = cols.findIndex((c, k) => k > 0 && /total/i.test(c) && !/acumulad/i.test(c));
-    if (i > 0) return i;
+    if (cols.length >= 2 && cols.some((c) => /^semanas?$/i.test(c))) return cols;
+  }
+  return null;
+}
+
+/**
+ * QUAL COLUNA E' A SEMANA — e esta e' a pergunta que ja' custou caro.
+ *
+ * A planilha do PCP tem DUAS colunas parecidas: SEMANA (S02, S04, S05...,
+ * a semana do calendario, que pula semana sem programa) e Nº PLANILHA
+ * (001-26, 002-26..., um contador sequencial de planilhas). As duas
+ * "parecem" semana; so' a primeira e'.
+ *
+ * Lendo a coluna errada, o programa da S39 entrava como semana 36 e o
+ * relatorio comparava medicao de uma semana com o programa de outra — com
+ * o desvio crescendo a cada semana pulada no ano. Aconteceu de verdade
+ * (set/2026), e so' foi descoberto porque o usuario mandou a planilha
+ * inteira depois.
+ *
+ * Por isso a coluna vem do CABECALHO, e a coluna de planilha e' ignorada
+ * com aviso na tela — nao em silencio.
+ */
+function colunaDaSemana(linhas) {
+  const cols = cabecalho(linhas);
+  if (!cols) return null;
+  const i = cols.findIndex((c) => /^semanas?$/i.test(c));
+  return i >= 0 ? i : null;
+}
+
+/** A coluna que numera PLANILHAS, se existir. So' serve para avisar. */
+function colunaDaPlanilha(linhas) {
+  const cols = cabecalho(linhas);
+  if (!cols) return null;
+  const i = cols.findIndex((c) => /planilha/i.test(c));
+  return i >= 0 ? i : null;
+}
+
+/**
+ * O ano escondido na linha: a coluna Nº PLANILHA traz "001-26", e o "-26"
+ * e' o ano do programa. Serve para a semana "S02", que vem sem ano nenhum.
+ */
+function anoNaLinha(cols) {
+  for (const c of cols) {
+    const m = RE_SEMANA_COM_ANO.exec(String(c).trim());
+    if (!m) continue;
+    const ano = m[2].length === 2 ? 2000 + Number(m[2]) : Number(m[2]);
+    if (ano >= 2000 && ano <= 2099) return ano;
   }
   return null;
 }
@@ -104,32 +169,47 @@ function colunaDoTotal(linhas) {
  *
  * @returns {{ semanas: Array<{ano, numero, chave, pecas}>, avisos: string[] }}
  */
-export function interpretarColagem(texto) {
+export function interpretarColagem(texto, { ano = new Date().getFullYear() } = {}) {
   const linhas = String(texto ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const coluna = colunaDoTotal(linhas);
+  const iSemana = colunaDaSemana(linhas) ?? 0;
+  const iPlanilha = colunaDaPlanilha(linhas);
   const avisos = [];
   const porChave = new Map();
 
+  /**
+   * A coluna de planilha e' a armadilha desta planilha: ela tambem "parece"
+   * semana. Avisar e' obrigatorio — ignorar em silencio foi o que deixou o
+   * programa entrar deslocado tres semanas sem ninguem perceber.
+   */
+  if (iPlanilha !== null && iPlanilha !== iSemana) {
+    avisos.push(
+      'A coluna Nº PLANILHA foi ignorada: ela numera as planilhas, não as semanas. '
+      + 'A semana lida é a da coluna SEMANA.',
+    );
+  }
+
   for (const linha of linhas) {
     const cols = celulas(linha);
-    const semana = lerCodigoSemana(cols[0]);
+    const celulaSemana = cols[iSemana] ?? '';
+    // "S02" nao traz ano; o "-26" da coluna de planilha traz. Sem nenhum
+    // dos dois, vale o ano informado (a tela manda o corrente).
+    const semana = lerCodigoSemana(celulaSemana, { ano: anoNaLinha(cols) ?? ano });
     if (!semana) {
       // Cabecalho, rodape e linha de texto passam sem reclamacao. O que
       // parece semana e nao e' ("01/26", "semana 5") vira aviso: e' onde
       // mora o erro de digitacao que apagaria uma semana do programa.
-      const c0 = cols[0] || '';
-      if (c0 && !RE_RODAPE.test(c0) && !/^semana$/i.test(c0) && /\d/.test(c0) && cols.length > 1) {
+      const c0 = celulaSemana;
+      if (c0 && !RE_RODAPE.test(c0) && !/^semanas?$/i.test(c0) && /\d/.test(c0) && cols.length > 1) {
         avisos.push(`Linha ignorada, não parece uma semana: "${linha.slice(0, 60)}"`);
       }
       continue;
     }
 
-    const numeros = cols.slice(1).map(numeroPtBr);
-    // Com cabecalho, a coluna do total manda. Sem ele, a linha so' vale
-    // quando traz um numero unico — somar lotes por conta propria seria
-    // inventar a regra da planilha de outra pessoa.
-    const doCabecalho = coluna !== null ? numeros[coluna - 1] : null;
-    const validos = numeros.filter((n) => n !== null);
+    // Numeros por posicao ABSOLUTA: a semana pode nao estar na coluna 0, e
+    // entre ela e o total pode haver coluna de texto (a de planilha).
+    const doCabecalho = coluna !== null ? numeroPtBr(cols[coluna]) : null;
+    const validos = cols.map(numeroPtBr).filter((n) => n !== null);
     const pecas = doCabecalho ?? (validos.length === 1 ? validos[0] : null);
 
     const chave = chaveSemana(semana);
@@ -146,7 +226,9 @@ export function interpretarColagem(texto) {
      * planilha pode ter lote fora da conta — mas avisa com os dois numeros.
      */
     if (coluna !== null && validos.length > 1) {
-      const lotes = numeros.slice(0, coluna - 1).filter((n) => n !== null);
+      // Tudo o que e' numero ANTES da coluna do total e' lote. A semana e a
+      // planilha nao entram: "S02" e "001-26" nao viram numero.
+      const lotes = cols.slice(0, coluna).map(numeroPtBr).filter((n) => n !== null);
       const soma = lotes.reduce((a, b) => a + b, 0);
       if (lotes.length > 1 && Math.abs(soma - pecas) > 1) {
         avisos.push(

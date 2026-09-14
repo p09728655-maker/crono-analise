@@ -25,6 +25,53 @@ MÉDIA SEMANAL	107.086
 MAIOR SEMANA	134.586	018-26
 MENOR SEMANA	64.750	011-26`;
 
+/**
+ * A planilha COMPLETA do PCP, com as duas colunas que ja' se confundiram:
+ * SEMANA (S02, S04... o calendario, que pula semana sem programa) e
+ * Nº PLANILHA (001-26... um contador sequencial). Ler a segunda punha o
+ * programa da S39 como semana 36 — tres semanas de deslocamento.
+ */
+const COLAGEM_COMPLETA = `SEMANA	Nº PLANILHA	LOTE 1	LOTE 2	LOTE 3	LOTE 4	LOTE 5	TOTAL SEMANA
+S02	001-26	25.000	27.750	34.900	28.650	11.950	128.250
+S04	002-26	27.250	19.850	13.473	12.000	33.000	105.573
+S22	020-26	20.000	27.500	19.700	18.300	34.000	119.500
+S24	021-26	16.100	27.450	28.600	14.500	22.400	109.050
+S39	036-26	15.514	26.200	11.500	16.450	14.200	83.864`;
+
+describe('as duas colunas de semana da planilha do PCP', () => {
+  const { semanas, avisos } = interpretarColagem(COLAGEM_COMPLETA);
+
+  it('le a coluna SEMANA, nao a Nº PLANILHA', () => {
+    expect(semanas.map((s) => s.chave)).toEqual(
+      ['002-26', '004-26', '022-26', '024-26', '039-26'],
+    );
+  });
+
+  it('e avisa que ignorou a coluna de planilha — nunca em silencio', () => {
+    expect(avisos.some((a) => /Nº PLANILHA foi ignorada/.test(a))).toBe(true);
+  });
+
+  it('o ano vem do "-26" da propria linha, porque "S02" nao traz ano', () => {
+    expect(semanas.every((s) => s.ano === 2026)).toBe(true);
+  });
+
+  it('as quantidades continuam saindo da coluna TOTAL SEMANA', () => {
+    expect(semanas[0].pecas).toBe(128250);
+    expect(semanas[4].pecas).toBe(83864);
+  });
+
+  it('a semana pulada fica pulada: S23 nao existe no programa', () => {
+    expect(semanas.some((s) => s.numero === 23)).toBe(false);
+    expect(semanas.some((s) => s.numero === 22)).toBe(true);
+    expect(semanas.some((s) => s.numero === 24)).toBe(true);
+  });
+
+  it('a soma dos lotes confere com o total, com a coluna de planilha no meio', () => {
+    // 20.000 + 27.500 + 19.700 + 18.300 + 34.000 = 119.500 (S22)
+    expect(avisos.some((a) => /não bate com a soma dos lotes/.test(a))).toBe(false);
+  });
+});
+
 describe('numeros da planilha', () => {
   it('ponto e separador de milhar, nao decimal', () => {
     expect(numeroPtBr('128.250')).toBe(128250);
@@ -50,6 +97,15 @@ describe('codigo da semana', () => {
     expect(lerCodigoSemana('001-26')).toEqual({ ano: 2026, numero: 1 });
     expect(lerCodigoSemana('36-26')).toEqual({ ano: 2026, numero: 36 });
     expect(lerCodigoSemana('01/2027')).toEqual({ ano: 2027, numero: 1 });
+  });
+
+  it('le "S02" quando alguem informa o ano — e recusa sem ele', () => {
+    expect(lerCodigoSemana('S02', { ano: 2026 })).toEqual({ ano: 2026, numero: 2 });
+    expect(lerCodigoSemana('SEM 39', { ano: 2026 })).toEqual({ ano: 2026, numero: 39 });
+    expect(lerCodigoSemana('semana 4', { ano: 2026 })).toEqual({ ano: 2026, numero: 4 });
+    // Sem ano nao ha' semana: inventar o ano vira comparacao com o programa
+    // de outro ano, calada.
+    expect(lerCodigoSemana('S02')).toBe(null);
   });
 
   it('recusa semana que nao existe', () => {
