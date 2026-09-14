@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, raio, rotulo, tipo } from '../../theme/escala.js';
@@ -63,6 +63,11 @@ export default function Maquinas({ aoFechar }) {
   const [editando, setEditando] = useState(null);           // {id, nome, grupoId}
   const [editandoGrupo, setEditandoGrupo] = useState(null); // {id, codigo, nome}
   const [excluindo, setExcluindo] = useState(null);         // id da maquina a confirmar
+  const [excluindoGrupo, setExcluindoGrupo] = useState(false);
+  // Nome da maquina recem-cadastrada: e' por ele que a linha nova e'
+  // trazida para a parte visivel da lista.
+  const [recemCriada, setRecemCriada] = useState(null);
+  const listaRef = useRef(null);
   const [novoNome, setNovoNome] = useState('');
   const [novoGrupoId, setNovoGrupoId] = useState('');       // so' vale em "Todas"
   const [novoGrupo, setNovoGrupo] = useState(null);         // {codigo, nome} | null
@@ -96,11 +101,66 @@ export default function Maquinas({ aoFechar }) {
 
   async function criar(ev) {
     ev.preventDefault();
-    if (!novoNome.trim()) return;
-    if (await aplicar(() => criarMaquina({ nome: novoNome.trim(), grupoId: grupoDoCadastro }))) {
+    const nome = novoNome.trim();
+    if (!nome) return;
+    if (await aplicar(() => criarMaquina({ nome, grupoId: grupoDoCadastro }))) {
       setNovoNome('');
+      /**
+       * A BUSCA SAI DO CAMINHO depois de cadastrar.
+       *
+       * Com o filtro ligado, a maquina recem-criada podia nao casar com ele
+       * e simplesmente nao aparecer: o campo limpava (sinal de que deu
+       * certo) e a linha nao existia em lugar nenhum da tela. Quem cadastra
+       * conclui que falhou, cadastra de novo e leva "Ja existe esta maquina
+       * no cadastro".
+       */
+      setBusca('');
+      setRecemCriada(nome);
     }
   }
+
+  /**
+   * Leva a linha recem-criada para a parte visivel da lista.
+   *
+   * A lista rola dentro da caixa: num grupo com trinta maquinas, a nova
+   * nascia abaixo do fim visivel e o usuario tinha de rolar para conferir
+   * se entrou — metade do problema que este redesenho veio resolver.
+   */
+  useEffect(() => {
+    if (!recemCriada) return;
+    const alvo = listaRef.current?.querySelector(`[data-maquina="${CSS.escape(recemCriada)}"]`);
+    alvo?.scrollIntoView({ block: 'nearest' });
+    setRecemCriada(null);
+  }, [recemCriada, maquinas]);
+
+  /**
+   * Trocar de grupo ou mexer na busca DESARMA a confirmacao de exclusao.
+   *
+   * Sem isto ela ficava presa: armar "Excluir" numa maquina, passear por
+   * outro grupo e voltar mostrava o botao vermelho pronto, sem ninguem ter
+   * pedido de novo.
+   */
+  useEffect(() => { setExcluindo(null); setExcluindoGrupo(false); }, [escolhido, busca]);
+
+  /**
+   * ESC desarma a confirmacao; sem nada armado, fecha a janela.
+   *
+   * A confirmacao deixa um botao vermelho pronto na tela: precisa existir
+   * um jeito de sair dela que nao seja mirar o "Cancelar" com o mouse.
+   */
+  useEffect(() => {
+    const aoTeclar = (ev) => {
+      if (ev.key !== 'Escape') return;
+      if (excluindo || excluindoGrupo) {
+        setExcluindo(null);
+        setExcluindoGrupo(false);
+        return;
+      }
+      if (!ocupado) aoFechar();
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [excluindo, excluindoGrupo, ocupado, aoFechar]);
 
   // Sugestao do proximo codigo livre: maior codigo numerico + 1, com zeros.
   const proximoCodigo = () => {
@@ -130,6 +190,15 @@ export default function Maquinas({ aoFechar }) {
   });
 
   const grupoAtual = grupos.find((g) => g.id === escolhido) || null;
+  /**
+   * Grupo escolhido que sumiu do cadastro (excluido em outro PC) volta para
+   * "Todas". Sem isto a tela escrevia "em Sem grupo" e mandava o id morto
+   * para a API, que respondia 404 — rotulo e efeito discordando.
+   */
+  useEffect(() => {
+    if (escolhido === TODAS || escolhido === SEM_GRUPO) return;
+    if (maquinas != null && !grupos.some((g) => g.id === escolhido)) setEscolhido(TODAS);
+  }, [escolhido, grupos, maquinas]);
 
   return (
     <div style={est.modal} role="dialog" aria-label="Cadastro de máquinas">
@@ -137,7 +206,9 @@ export default function Maquinas({ aoFechar }) {
           aberto fica de fora — ele ja' esta' marcado, e escurecer por cima
           confundiria "aqui" com "por cima". */}
       <style>{`
-        .item-grupo:not([aria-current]):hover { background: ${t.papel}; color: ${t.texto}; }
+        /* Cinza, nao branco: branco e' a cor do grupo ABERTO, e o hover
+           com a mesma cor punha dois itens com cara de escolhido. */
+        .item-grupo:not([aria-current]):hover { background: #EDF0F3; color: ${t.texto}; }
       `}</style>
       <div style={est.caixa}>
         <header style={est.topo}>
@@ -164,7 +235,7 @@ export default function Maquinas({ aoFechar }) {
             <p style={est.vazioTexto}>
               Enquanto o cadastro estiver vazio, o celular segue com o campo de texto
               livre. Traga de uma vez as máquinas que as conferências já usaram — uma
-              grafia por máquina — ou cadastre ao lado.
+              grafia por máquina — ou cadastre abaixo.
             </p>
             <div style={est.vazioAcoes}>
               <button
@@ -221,10 +292,61 @@ export default function Maquinas({ aoFechar }) {
                     </div>
                   </form>
                 ) : (
-                  <ItemGrupo
-                    key={g.id} codigo={g.codigo} rotulo={g.nome} contador={contar(g.id)}
-                    ativo={escolhido === g.id} aoEscolher={() => setEscolhido(g.id)}
-                  />
+                  <Fragment key={g.id}>
+                    <ItemGrupo
+                      codigo={g.codigo} rotulo={g.nome} contador={contar(g.id)}
+                      ativo={escolhido === g.id} aoEscolher={() => setEscolhido(g.id)}
+                    />
+                    {/* As ações ficam ENCOSTADAS no grupo que elas alteram.
+                        Soltas no fim da coluna, liam-se como ação do último
+                        item da lista — que é outro grupo. */}
+                    {escolhido === g.id && (
+                      <div style={est.acoesGrupo}>
+                        <button
+                          type="button" style={est.botaoTexto}
+                          aria-label={`Editar grupo ${g.nome}`}
+                          onClick={() => setEditandoGrupo({ id: g.id, codigo: g.codigo, nome: g.nome })}
+                        >
+                          Editar grupo
+                        </button>
+                        {excluindoGrupo ? (
+                          <>
+                            <button
+                              type="button" style={est.botaoPerigo} disabled={ocupado}
+                              aria-label={`Confirmar exclusão do grupo ${g.nome}`}
+                              onClick={async () => {
+                                if (await aplicar(() => removerGrupoMaquina(g.id))) {
+                                  setExcluindoGrupo(false);
+                                  setEscolhido(TODAS);
+                                }
+                              }}
+                            >
+                              Excluir grupo
+                            </button>
+                            <button type="button" style={est.botaoTexto} onClick={() => setExcluindoGrupo(false)}>
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          /* Excluir grupo solta TODAS as máquinas dele de uma
+                             vez: pergunta antes, como a exclusão de máquina. */
+                          <button
+                            type="button" style={est.botaoExcluir} disabled={ocupado}
+                            aria-label={`Excluir grupo ${g.nome}`}
+                            title="As máquinas do grupo não são apagadas: ficam sem grupo"
+                            onClick={() => setExcluindoGrupo(true)}
+                          >
+                            Excluir grupo
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {excluindoGrupo && escolhido === g.id && (
+                      <p style={est.avisoGrupo}>
+                        As {contar(g.id)} máquinas de {g.nome} não são apagadas — ficam sem grupo.
+                      </p>
+                    )}
+                  </Fragment>
                 )
               ))}
 
@@ -232,29 +354,6 @@ export default function Maquinas({ aoFechar }) {
                 rotulo="Sem grupo" contador={contar(SEM_GRUPO)}
                 ativo={escolhido === SEM_GRUPO} aoEscolher={() => setEscolhido(SEM_GRUPO)}
               />
-
-              {/* As ações do grupo ficam com o grupo ABERTO, não em cada
-                  linha: seis grupos × dois botões viravam doze links
-                  disputando com os nomes. */}
-              {grupoAtual && !editandoGrupo && (
-                <div style={est.acoesGrupo}>
-                  <button
-                    type="button" style={est.botaoTexto}
-                    onClick={() => setEditandoGrupo({ id: grupoAtual.id, codigo: grupoAtual.codigo, nome: grupoAtual.nome })}
-                  >
-                    Editar grupo
-                  </button>
-                  <button
-                    type="button" style={est.botaoTexto} disabled={ocupado}
-                    title="As máquinas do grupo não são apagadas: ficam sem grupo"
-                    onClick={async () => {
-                      if (await aplicar(() => removerGrupoMaquina(grupoAtual.id))) setEscolhido(TODAS);
-                    }}
-                  >
-                    Excluir grupo
-                  </button>
-                </div>
-              )}
 
               {novoGrupo ? (
                 <form
@@ -326,14 +425,14 @@ export default function Maquinas({ aoFechar }) {
                 </button>
               </form>
 
-              {lista.length > 8 && (
+              {(lista.length > 8 || busca !== '') && (
                 <input
                   type="search" value={busca} onChange={(ev) => setBusca(ev.target.value)}
                   placeholder="Buscar máquina pelo nome" style={est.input} aria-label="Buscar máquina"
                 />
               )}
 
-              <div style={est.listaMaquinas}>
+              <div style={est.listaMaquinas} ref={listaRef}>
                 {visiveis.length === 0 && lista.length > 0 && (
                   <p style={est.dica}>
                     {alvo
@@ -388,7 +487,10 @@ export default function Maquinas({ aoFechar }) {
                           {m.grupo_codigo ? `${m.grupo_codigo} · ${m.grupo_nome}` : 'Sem grupo'}
                         </div>
                       )}
-                      <div style={{ ...est.linha, ...(m.ativa ? {} : est.linhaInativa) }}>
+                      <div
+                        style={{ ...est.linha, ...(m.ativa ? {} : est.linhaInativa) }}
+                        data-maquina={m.nome}
+                      >
                         <span style={est.linhaRotulo}>{m.nome}</span>
                         {!m.ativa && <span style={est.seloInativo}>Desativada</span>}
                         <div style={est.linhaBotoes}>
@@ -640,6 +742,10 @@ const est = {
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
     color: t.textoFraco, ...tipo('micro'), letterSpacing: 1, flexShrink: 0,
     fontFamily: "'Roboto Mono', 'Consolas', monospace",
+  },
+  avisoGrupo: {
+    ...tipo('legenda'), color: t.textoMedio, margin: 0,
+    padding: `0 ${espaco.sm}px ${espaco.sm}px`, lineHeight: 1.5,
   },
   acoesGrupo: {
     display: 'flex', gap: espaco.md, flexWrap: 'wrap',

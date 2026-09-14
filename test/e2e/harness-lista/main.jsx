@@ -106,8 +106,28 @@ window.fetch = async (url, opts = {}) => {
   const alvo = String(url);
 
   if (alvo.includes('/maquinas')) {
-    // POST de maquina: registra o que subiu (e' o que o teste confere) e
-    // entra na lista, para a tela mostrar o resultado como o servidor faria.
+    /**
+     * O mock precisa MEXER na lista, nao so' devolve-la.
+     *
+     * Enquanto ele respondia o cadastro inteiro em qualquer metodo, o teste
+     * do "Cancelar" da exclusao passava mesmo com o botao ligado no
+     * removerMaquina(): a linha continuava na tela nos dois caminhos. Um
+     * teste que passa dos dois jeitos nao protege nada.
+     */
+    if (metodo === 'DELETE') {
+      window.__deletes.push(alvo);
+      const id = new URL(alvo, location.origin).searchParams.get('id');
+      const i = maquinasCad.findIndex((m) => m.id === id);
+      if (i >= 0) maquinasCad.splice(i, 1);
+    }
+    if (metodo === 'PATCH') {
+      const corpo = JSON.parse(opts.body || '{}');
+      window.__patches.push({ url: alvo, corpo });
+      const id = new URL(alvo, location.origin).searchParams.get('id');
+      const m = maquinasCad.find((x) => x.id === id);
+      if (m) Object.assign(m, corpo.nome ? { nome: corpo.nome } : {},
+        typeof corpo.ativa === 'boolean' ? { ativa: corpo.ativa } : {});
+    }
     if (metodo === 'POST') {
       const corpo = JSON.parse(opts.body || '{}');
       window.__posts.push({ url: alvo, corpo });
