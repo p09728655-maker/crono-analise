@@ -489,6 +489,54 @@ CREATE INDEX IF NOT EXISTS maquinas_empresa_idx ON maquinas (empresa_id, nome);
 ALTER TABLE maquinas ENABLE ROW LEVEL SECURITY;
 -- Politicas de `maquinas`: idem, na secao de RLS.
 
+-- -------------------------------------------------------- demanda_semanal
+-- O PROGRAMA DE PRODUCAO, semana a semana, por grupo de maquina.
+--
+-- O relatorio de ritmo sabia dizer quanto o posto ENTREGA e nunca se isso
+-- BASTA — a segunda pergunta e' a que a reuniao de producao faz, e a
+-- resposta exige a demanda, que mora na planilha do PCP.
+--
+-- POR GRUPO, nao por maquina nem por peca:
+--   * por PECA seria errado. Takt e' tempo disponivel dividido pela
+--     demanda; numa maquina que roda doze pecas, nenhuma delas tem o turno
+--     inteiro so' para si. Calculado peca a peca, cada uma parece folgada e
+--     o posto estoura mesmo assim.
+--   * por MAQUINA nao e' o que o PCP programa: o grupo (0002 FURADEIRA) e'
+--     que recebe o volume e distribui entre as maquinas dele.
+--
+-- POR SEMANA, e nao um numero fixo: nas 36 semanas de 2026 o programa das
+-- furadeiras foi de 64.750 a 134.586 pecas (media 107.086, CV 17,5%). Um
+-- valor unico cravado na media erra 66% na semana fraca — e um indicador
+-- errado que ninguem percebe e' pior que indicador nenhum.
+CREATE TABLE IF NOT EXISTS demanda_semanal (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id    uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  -- Grupo apagado leva junto o programa dele: quantidade sem grupo nao se
+  -- compara com capacidade nenhuma.
+  grupo_id      uuid NOT NULL REFERENCES grupos_maquina(id) ON DELETE CASCADE,
+  -- A semana como o PCP escreve: 001-26 = ano 2026, numero 1. Guardada em
+  -- duas colunas para ordenar no tempo sem depender do texto.
+  ano           smallint NOT NULL CHECK (ano BETWEEN 2000 AND 2099),
+  numero        smallint NOT NULL CHECK (numero BETWEEN 1 AND 53),
+  pecas         integer NOT NULL CHECK (pecas > 0),
+  criado_em     timestamptz NOT NULL DEFAULT now(),
+  atualizado_em timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS demanda_semanal_unq
+  ON demanda_semanal (empresa_id, grupo_id, ano, numero);
+CREATE INDEX IF NOT EXISTS demanda_semanal_grupo_idx
+  ON demanda_semanal (empresa_id, grupo_id, ano DESC, numero DESC);
+
+ALTER TABLE demanda_semanal ENABLE ROW LEVEL SECURITY;
+-- Politicas de `demanda_semanal`: idem, na secao de RLS.
+
+-- HORAS DISPONIVEIS por maquina, por semana, no grupo. Sem ela nao ha'
+-- takt: o ritmo exigido e' a demanda dividida pelo tempo disponivel, e
+-- "tempo disponivel" e' decisao de turno, nao dado de medicao. Fica NULA
+-- ate' alguem informar — e o relatorio diz que falta, em vez de assumir 44.
+ALTER TABLE grupos_maquina ADD COLUMN IF NOT EXISTS horas_semana numeric(5,2)
+  CHECK (horas_semana IS NULL OR (horas_semana > 0 AND horas_semana <= 168));
+
 -- ------------------------------------------------- passo 3 da migracao
 -- Derruba o formato antigo, DEPOIS de a conversao acima ter rodado e de as
 -- paradas terem virado linha. E' a ultima etapa da refatoracao do periodo:
@@ -556,6 +604,10 @@ CREATE TRIGGER usuarios_touch BEFORE UPDATE ON usuarios
 
 DROP TRIGGER IF EXISTS motivos_parada_touch ON motivos_parada;
 CREATE TRIGGER motivos_parada_touch BEFORE UPDATE ON motivos_parada
+  FOR EACH ROW EXECUTE FUNCTION toca_atualizado_em();
+
+DROP TRIGGER IF EXISTS demanda_semanal_touch ON demanda_semanal;
+CREATE TRIGGER demanda_semanal_touch BEFORE UPDATE ON demanda_semanal
   FOR EACH ROW EXECUTE FUNCTION toca_atualizado_em();
 
 -- ------------------------------------------------------------------- RLS
@@ -777,6 +829,17 @@ CREATE POLICY maquinas_admin ON maquinas FOR ALL TO authenticated
   USING (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin')
   WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'admin');
 
+-- demanda_semanal: todo mundo le (e' o que da' o veredito no relatorio) e
+-- quem faz analise mantem — o programa e' trabalho de PCP, nao segredo de
+-- administrador. Mesma regra de pode_escrever() das outras telas de analise.
+DROP POLICY IF EXISTS demanda_le ON demanda_semanal;
+CREATE POLICY demanda_le ON demanda_semanal FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS demanda_escreve ON demanda_semanal;
+CREATE POLICY demanda_escreve ON demanda_semanal FOR ALL TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.pode_escrever())
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.pode_escrever());
+
 -- motivos_parada: todo mundo le (a coleta precisa da lista), so' admin mexe
 -- — e' a lista que da' nome a toda parada ja' registrada.
 DROP POLICY IF EXISTS motivos_le ON motivos_parada;
@@ -801,6 +864,7 @@ CREATE POLICY configuracoes_admin ON configuracoes FOR ALL TO authenticated
 -- anonimo neste sistema.
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON empresas, usuarios, estudos, operacoes,
-  observacoes, paradas, conferencias, configuracoes, motivos_parada TO authenticated;
+  observacoes, paradas, conferencias, configuracoes, motivos_parada,
+  demanda_semanal TO authenticated;
 REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas,
-  conferencias, configuracoes, motivos_parada FROM anon;
+  conferencias, configuracoes, motivos_parada, demanda_semanal FROM anon;

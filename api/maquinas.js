@@ -21,7 +21,7 @@
  */
 import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
-import { texto, uuid } from './_lib/validar.js';
+import { decimal, texto, uuid } from './_lib/validar.js';
 
 // Nome canonico: apara e recolhe espaco repetido. Caixa e acento ficam —
 // e' o nome EXIBIDO; a unicidade compara sem caixa (indice lower/btrim).
@@ -38,7 +38,7 @@ function codigoDe(valor) {
 }
 
 const listarGrupos = (db, empresaId) => db`
-  SELECT id, codigo, nome FROM grupos_maquina
+  SELECT id, codigo, nome, horas_semana FROM grupos_maquina
    WHERE empresa_id = ${empresaId}
    ORDER BY codigo`;
 
@@ -155,8 +155,8 @@ export default handler(async (req, res) => {
         if (!atual) throw naoEncontrado('Grupo de maquina nao encontrado');
 
         const tem = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
-        if (!tem('codigo') && !tem('nome')) {
-          throw erroValidacao('Nada a atualizar: informe "codigo" ou "nome"');
+        if (!tem('codigo') && !tem('nome') && !tem('horasSemana')) {
+          throw erroValidacao('Nada a atualizar: informe "codigo", "nome" ou "horasSemana"');
         }
         if (tem('codigo')) {
           const codigo = codigoDe(corpo.codigo);
@@ -175,7 +175,22 @@ export default handler(async (req, res) => {
           if (outro) throw new ErroHttp(409, `Ja existe um grupo com este nome: "${outro.nome}"`);
           await db`UPDATE grupos_maquina SET nome = ${nome} WHERE id = ${grupoId}`;
         }
-        const [grupo] = await db`SELECT id, codigo, nome FROM grupos_maquina WHERE id = ${grupoId}`;
+        /**
+         * HORAS DISPONIVEIS por maquina por semana — o denominador do takt.
+         *
+         * Nulo APAGA a configuracao, de proposito: e' como o PCP diz "nao
+         * sei" depois de ter dito 44. Sem isso, o unico jeito de desfazer um
+         * numero errado seria digitar outro numero errado, e o relatorio
+         * seguiria dando veredito sobre um turno que nao existe.
+         */
+        if (tem('horasSemana')) {
+          const horas = corpo.horasSemana === null || corpo.horasSemana === ''
+            ? null
+            : decimal(corpo.horasSemana, 'horasSemana', { min: 0.5, max: 168 });
+          await db`UPDATE grupos_maquina SET horas_semana = ${horas} WHERE id = ${grupoId}`;
+        }
+        const [grupo] = await db`
+          SELECT id, codigo, nome, horas_semana FROM grupos_maquina WHERE id = ${grupoId}`;
         return json(res, 200, { grupo });
       }
 
