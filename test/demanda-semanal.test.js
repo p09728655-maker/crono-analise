@@ -8,7 +8,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  chaveSemana, comoDia, comoPeriodo, horasDeSetup, interpretarColagem, intervaloIso, lerCodigoSemana,
+  chaveSemana, comoDia, comoHoras, comoPeriodo, contaDasHoras, horasDeSetup, interpretarColagem, intervaloIso,
+  lerCodigoSemana,
   lerDataPtBr, maquinasNecessarias, numeroPtBr, leituraDaDemanda, ordenarSemanas,
   periodoDaSemana, periodosDoPrograma, resumoDaDemanda, ritmoExigido, semanaIso,
   semanaQueContem, vereditoDaSemana,
@@ -832,8 +833,55 @@ describe('o setup que a medicao nao pega', () => {
     expect(horasDeSetup({})).toBe(null);
   });
 
-  it('zero setup e informacao, diferente de nao informado', () => {
+  it('zero setup e informacao, diferente de nao informado — e vale sem os outros campos', () => {
     expect(horasDeSetup({ setupsDia: 0, dias: 5, minutos: 20 })).toBe(0);
+    // "Este grupo nao faz setup": zero trocas nao precisa de duracao nem de dias.
+    expect(horasDeSetup({ setupsDia: 0 })).toBe(0);
+    expect(horasDeSetup({ setupsDia: 5, dias: 5, minutos: 0 })).toBe(0);
+  });
+
+  it('a conta exibida FECHA em toda combinacao: jornada − setup = produtivas, setup = por maquina × maquinas', () => {
+    /**
+     * Arredondar os tres a partir do exato nao fecha (40 − 1,25 = 38,75
+     * vira "40 − 1,3 = 38,8"). A propriedade e' verificada numa varredura
+     * de valores reais, nao em cinco formatacoes soltas.
+     */
+    const ler = (txt) => Number(txt.replace('.', '').replace(',', '.'));
+    let casos = 0;
+    for (const maquinas of [1, 2, 3, 6, 8]) {
+      for (const horas of [40, 44, 43.5]) {
+        for (const setupsDia of [1, 2, 5, 7]) {
+          for (const dias of [1, 5, 6]) {
+            for (const minutos of [3, 7, 15, 19, 20, 33, 45]) {
+              const setupHoras = horasDeSetup({ setupsDia, dias, minutos });
+              const c = contaDasHoras({ horas, setupHoras, maquinas });
+              const j = ler(c.texto.jornada); const s = ler(c.texto.setup); const p = ler(c.texto.produtivas);
+              expect(Math.round((j - s) * 10) / 10).toBe(p);
+              expect(Math.round(ler(c.texto.porMaquina) * maquinas * 10) / 10).toBe(s);
+              casos += 1;
+            }
+          }
+        }
+      }
+    }
+    expect(casos).toBeGreaterThan(1000);
+    // O caso que quebrava: 1 maquina, 40 h, 1/dia × 5 dias × 15 min.
+    const c = contaDasHoras({ horas: 40, setupHoras: horasDeSetup({ setupsDia: 1, dias: 5, minutos: 15 }), maquinas: 1 });
+    expect(`${c.texto.jornada} − ${c.texto.setup} = ${c.texto.produtivas}`).toBe('40 − 1,3 = 38,7');
+  });
+
+  it('sem setup a conta e so a jornada; sem jornada nao ha conta', () => {
+    const c = contaDasHoras({ horas: 44, maquinas: 6 });
+    expect(c.setup).toBe(null);
+    expect(c.texto.produtivas).toBe('264');
+    expect(contaDasHoras({ horas: 0, maquinas: 6 })).toBe(null);
+  });
+
+  it('horas ausentes saem vazias, nunca "0"', () => {
+    expect(comoHoras(null)).toBe('');
+    expect(comoHoras(undefined)).toBe('');
+    expect(comoHoras(NaN)).toBe('');
+    expect(comoHoras(0)).toBe('0');
   });
 
   it('o setup sai das horas disponiveis, e o exigido sobe', () => {
@@ -861,15 +909,14 @@ describe('o setup que a medicao nao pega', () => {
     expect(maquinasNecessarias({ pecas: 134586, horas: 44, ritmoMedido: 611 })).toBeCloseTo(5.01, 2);
   });
 
-  it('o veredito diz se o setup entrou na conta', () => {
+  it('com o setup, a semana de pico deixa de caber nas seis furadeiras', () => {
     const sem = vereditoDaSemana({ pecas: 134586, horas: 44, maquinas: 6, ritmoRelogio: 611 });
     const com = vereditoDaSemana({
       pecas: 134586, horas: 44, maquinas: 6, ritmoRelogio: 611, setupHoras: 25 * 20 / 60,
     });
-    expect(sem.setupInformado).toBe(false);
     expect(sem.atende).toBe(true);
-    expect(com.setupInformado).toBe(true);
     expect(com.atende).toBe(false);
+    expect(com.horasSetup).toBeCloseTo(50, 0);
   });
 });
 
@@ -893,8 +940,34 @@ describe('setup na leitura do quadro', () => {
     const l = leituraDaDemanda({ ...base, setup: { setupsDia: null, dias: 5, minutos: null } });
     expect(l.estado).toBe('pronto');
     expect(l.setup).toBe(null);
-    expect(l.veredito.setupInformado).toBe(false);
     expect(l.veredito.horasDisponiveis).toBe(264);
+  });
+
+  it('setup ZERO com dias e minutos vazios nao vira "0 por dia × 0 dias × 0 min"', () => {
+    const l = leituraDaDemanda({ ...base, setup: { setupsDia: 0, dias: null, minutos: null } });
+    expect(l.estado).toBe('pronto');
+    expect(l.setup.zerado).toBe(true);
+    expect(l.setup.dias).toBe(null);
+    expect(l.setup.minutos).toBe(null);
+    expect(l.conta.texto.produtivas).toBe('264');
+  });
+
+  it('a conta que a tela escreve vem da leitura, ja derivada', () => {
+    const l = leituraDaDemanda({ ...base, setup: { setupsDia: 5, dias: 5, minutos: 20 } });
+    expect(l.conta.texto).toEqual(expect.objectContaining({ jornada: '264', setup: '49,8', produtivas: '214,2', porMaquina: '8,3' }));
+  });
+
+  it('as paradas marcadas sao classificadas no dominio, nao por diferenca de taxa', () => {
+    const observado = { pecas: 2666, totalMs: 4 * 3600000, paradaMs: 30 * 60000, setupMs: 30 * 60000 };
+    // So' setup marcado + setup planejado: e' 'so-setup', mesmo com relogio == rodando.
+    const so = leituraDaDemanda({ ...base, observado, setup: { setupsDia: 5, dias: 5, minutos: 20 } });
+    expect(so.paradas).toBe('so-setup');
+    // Sem setup planejado, o setup marcado e' parada como qualquer outra.
+    expect(leituraDaDemanda({ ...base, observado }).paradas).toBe('outras');
+    // Um minuto de OUTRA parada ja' e' 'outras' — sem tolerancia de taxa.
+    const comOutra = { ...observado, paradaMs: 31 * 60000 };
+    expect(leituraDaDemanda({ ...base, observado: comOutra, setup: { setupsDia: 5, dias: 5, minutos: 20 } }).paradas).toBe('outras');
+    expect(leituraDaDemanda({ ...base, observado: { ...observado, paradaMs: 0, setupMs: 0 } }).paradas).toBe('nenhuma');
   });
 
   it('setup medido nas paradas sai do relogio para nao contar duas vezes', () => {
@@ -915,10 +988,13 @@ describe('setup na leitura do quadro', () => {
     expect(comPlanejado.setup.medidoMs).toBe(30 * 60000);
   });
 
-  it('setup que come a jornada inteira cai em sem-horas, nao em veredito', () => {
-    const l = leituraDaDemanda({ ...base, setup: { setupsDia: 20, dias: 7, minutos: 60 } });
-    expect(l.estado).toBe('sem-horas');
+  it('setup que come a jornada inteira tem estado proprio — as horas ESTAO informadas', () => {
+    // 200 min no lugar de 20: 5 x 5 x 200 / 60 = 83 h numa jornada de 44.
+    // Cair em 'sem-horas' mandaria "informar as horas" — correcao que nao corrige.
+    const l = leituraDaDemanda({ ...base, setup: { setupsDia: 5, dias: 5, minutos: 200 } });
+    expect(l.estado).toBe('setup-excede');
     expect(l.veredito).toBe(null);
+    expect(l.demanda).toBe(121900);
   });
 });
 
