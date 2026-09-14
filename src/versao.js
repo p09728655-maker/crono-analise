@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.79.0',
+    data: '2026-09-14',
+    titulo: 'Dá para imprimir o GRUPO de máquinas',
+    itens: [
+      'O RELATÓRIO SÓ IMPRIMIA UMA MÁQUINA OU A FÁBRICA INTEIRA. Com furadeira e CNC medidas no mesmo período, "Imprimir todas" junta postos que não se comparam — 674 pç/h de média entre uma furadeira de 818 e uma CNC de 181 não é o ritmo de ninguém — e imprimir posto a posto obriga a juntar folhas na mão. Faltava a unidade com que se decide capacidade: o grupo.',
+      'AGORA O NOME DO GRUPO NA LATERAL (0002 · FURADEIRA) É UM FILTRO: clique nele e o relatório inteiro passa a ser o do grupo — números do topo, cartões, comparativo entre as máquinas dele, gráficos, tabela — e o botão vira "Imprimir este grupo". A folha A4 sai com o nome do grupo no título e só com as máquinas dele.',
+      'O ITEM TRAZ O TOTAL DE MEDIÇÕES DO GRUPO, como qualquer outro da lateral, e se marca como escolhido. Com um grupo só medido no período ele não aparece: ali "Todas" já é o grupo, e um filtro que não filtra nada só ensina a desconfiar do filtro.',
+      'O PROGRAMA DA SEMANA VOLTOU A APARECER COM O GRUPO INTEIRO EM TELA. Ele sumia sempre que havia mais de uma máquina do mesmo grupo — justamente o caso em que a pergunta "isso atende?" se responde: a conta exigia, por engano, que houvesse uma máquina só. Com duas furadeiras na tela o quadro ficava em branco; agora ele compara o grupo com o programa, como sempre foi a intenção.',
+    ],
+  },
+  {
     versao: '2.78.0',
     data: '2026-09-14',
     titulo: 'O setup entra na conta — e uma semana pode ser digitada',

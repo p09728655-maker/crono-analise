@@ -146,25 +146,30 @@ export default function MenuLateral({
       )}
 
       {/* 5. Secoes do estudo aberto — o que antes eram abas horizontais.
-             Um item com `cabecalho: true` nao e' clicavel: e' o nome de um
-             GRUPO, e os itens abaixo dele pertencem a ele. E' assim que o
-             relatorio lista as maquinas debaixo do grupo do cadastro
-             (0002 · FURADEIRA), a mesma leitura que o celular ja' oferece
-             no <optgroup> da escolha da maquina. */}
+             Um item com `cabecalho: true` e' o nome de um GRUPO, e os itens
+             abaixo dele pertencem a ele. E' assim que o relatorio lista as
+             maquinas debaixo do grupo do cadastro (0002 · FURADEIRA), a
+             mesma leitura que o celular ja' oferece no <optgroup> da
+             escolha da maquina.
+
+             O nome do grupo TAMBEM CLICA, e escolhe o grupo inteiro: era a
+             unica maneira de imprimir "as furadeiras" sem imprimir uma
+             maquina de cada vez e juntar as folhas na mao. Continua lendo
+             como cabecalho (caixa alta, cinza) — o que muda e' que ele
+             responde ao clique e se marca como ativo, igual aos demais. */}
       {secoes?.length > 0 && (
         <div style={est.bloco} role="group" aria-label={secoesRotulo}>
           <div style={est.grupoRotulo}>{secoesRotulo}</div>
-          {secoes.map((s) => (s.cabecalho ? (
-            <div key={s.id} style={est.subgrupoRotulo}>{s.rotulo}</div>
-          ) : (
+          {secoes.map((s) => (
             <button
               key={s.id}
               type="button"
               className="menu-lateral-item"
               onClick={() => aoTrocarSecao(s.id)}
               aria-current={s.id === secaoAtiva ? 'page' : undefined}
+              title={s.cabecalho ? `Ver só as máquinas de ${s.rotulo}` : undefined}
               style={{
-                ...est.item,
+                ...(s.cabecalho ? est.itemGrupo : est.item),
                 ...(s.recuado ? est.itemRecuado : {}),
                 ...(s.id === secaoAtiva ? est.itemAtivo : {}),
               }}
@@ -182,7 +187,7 @@ export default function MenuLateral({
               )}
               {s.contador != null && <span style={est.contagem}>{s.contador}</span>}
             </button>
-          )))}
+          ))}
         </div>
       )}
 
@@ -439,11 +444,21 @@ const est = {
   // criado so' para este rotulo, e levava a tela do relatorio a dez tamanhos
   // distintos (teto da escala e' cinco). A hierarquia sai do espacamento e
   // da cor, nao de um tamanho novo.
-  subgrupoRotulo: {
-    ...rotulo(t.textoFraco),
+  //
+  // E' BOTAO, nao rotulo: escolhe o grupo inteiro. Por isso repete o
+  // sangramento do item (a barra vermelha do ativo nasce colada na lateral)
+  // e o lugar da contagem a' direita. O que o mantem legivel como CABECALHO
+  // e' a tipografia de rotulo e o respiro acima, nao a falta de clique.
+  itemGrupo: {
+    width: `calc(100% + ${espaco.lg * 2}px)`, marginLeft: -espaco.lg,
     // Na regua da lateral, como o rotulo do bloco: o que separa os dois e' o
     // respiro acima, nao um recuo — quem recua e' o que esta' DENTRO dele.
-    padding: `${espaco.md}px 0 ${espaco.xs}px`,
+    padding: `${espaco.md}px ${espaco.lg}px ${espaco.xs}px`,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: espaco.sm,
+    background: 'transparent', border: 'none', borderRadius: 0,
+    ...rotulo(t.textoFraco), textAlign: 'left',
+    cursor: 'pointer', fontFamily: 'inherit',
+    transition: `background ${transicao.rapida}, color ${transicao.rapida}`,
   },
   // Shorthand inteiro, nao paddingLeft: misturar com o `padding` do
   // item base deixa o estilo imprevisivel no rerender (ver checar-estilos).

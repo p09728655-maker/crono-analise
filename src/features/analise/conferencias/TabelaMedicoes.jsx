@@ -17,7 +17,7 @@ import { porMinuto } from './formato.js';
  * existe com a maquina escolhida na lateral (ver loteDaMaquina).
  */
 export default function TabelaMedicoes({
-  linhas, filtro, verArquivadas, lote, ocupado,
+  linhas, escopo, verArquivadas, lote, ocupado,
   aoArquivarLote, aoRenomear, aoEditarParadas, aoAlternarArquivo, aoExcluir,
 }) {
   return (
@@ -26,7 +26,7 @@ export default function TabelaMedicoes({
         <div style={est.painelTopoTexto}>
           <h2 style={est.painelTitulo}>
             {verArquivadas ? 'Medições arquivadas' : 'Todas as medições'}
-            {filtro ? ` · ${filtro}` : ''}
+            {escopo ? ` · ${escopo.rotulo}` : ''}
           </h2>
           {/* De QUAL tempo saem os numeros. O celular mostra o peças/min
               do PERIODO (com as paradas dentro) e este relatorio mostra o

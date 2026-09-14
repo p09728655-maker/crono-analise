@@ -15,12 +15,12 @@ import { porMinuto } from './formato.js';
  * parada): sem parada, o que saiu ja' E' o potencial, e o quadro viraria
  * enfeite. Quem decide isso e' quem chama.
  */
-export default function ComparativoParadas({ comparativo, resumo, filtro }) {
+export default function ComparativoParadas({ comparativo, resumo, escopo }) {
   return (
     <section style={est.comparativo} aria-label="Comparativo com e sem parada">
       <div style={est.comparativoTopo}>
         <h2 style={est.comparativoTitulo}>
-          O que a parada custou{filtro ? ` — ${filtro}` : ''}
+          O que a parada custou{escopo ? ` — ${escopo.rotulo}` : ''}
         </h2>
         {/* O MESMO criterio do cartao da maquina. Sem esta nota, uma
             medicao de 6 min afirmava "deixou de sair 21 peças" ao lado de

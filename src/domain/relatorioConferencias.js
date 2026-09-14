@@ -19,6 +19,47 @@ export const TODAS = '__todas';
 /** O nome que a medicao sem maquina recebe — o mesmo de resumirConferencias. */
 export const SEM_MAQUINA = 'Sem máquina';
 
+/** O grupo das maquinas que o cadastro nao agrupou. Rotulo e chave: a
+    lateral mostra esta palavra e o filtro procura por ela. */
+export const SEM_GRUPO = 'Sem grupo';
+
+/**
+ * Prefixo do id de cada item da lateral. OS DOIS sao prefixados de
+ * proposito: o cadastro nao proibe ':' no nome da maquina, entao prefixar
+ * so' o grupo deixaria uma maquina chamada "grupo:0002 · FURADEIRA" ser
+ * lida como filtro de grupo — e a tela abriria vazia sem dizer por que.
+ * Com os dois prefixos o id diz o que ele e', e nao ha' o que adivinhar.
+ */
+export const PREFIXO_GRUPO = 'grupo:';
+export const PREFIXO_MAQUINA = 'maquina:';
+
+/**
+ * O QUE A LATERAL ESCOLHEU, lido do id do item: nada (todas as maquinas),
+ * uma MAQUINA ou um GRUPO inteiro.
+ *
+ * O grupo entrou em set/26 a pedido do PPCP: com furadeira e CNC no mesmo
+ * relatorio, "Imprimir todas" traz postos que nao se comparam, e imprimir
+ * maquina por maquina obriga a juntar folhas na mao. O grupo e' a unidade
+ * com que se decide capacidade — e' dele que sai o programa da semana.
+ *
+ * Devolve `null` para "todas": e' o mesmo `null` do filtro, e assim quem
+ * le' nao precisa tratar dois vazios diferentes.
+ */
+export function escopoDaLateral(id) {
+  const texto = String(id ?? '').trim();
+  if (!texto || texto === TODAS) return null;
+  if (texto.startsWith(PREFIXO_GRUPO)) {
+    const grupo = texto.slice(PREFIXO_GRUPO.length).trim();
+    return grupo ? { tipo: 'grupo', rotulo: grupo } : null;
+  }
+  // Sem prefixo o id e' o proprio nome da maquina: e' o que a lateral
+  // mandava ate' set/26, e o que um estado guardado antes disso devolve.
+  const maquina = texto.startsWith(PREFIXO_MAQUINA)
+    ? texto.slice(PREFIXO_MAQUINA.length).trim()
+    : texto;
+  return maquina ? { tipo: 'maquina', rotulo: maquina } : null;
+}
+
 const nomeDaMaquina = (c) => String(c.maquina || '').trim() || SEM_MAQUINA;
 
 /**
@@ -38,6 +79,18 @@ export function filtrarResumo(resumo, maquina) {
   if (!maquina) return resumo;
   const chave = nomeChave(maquina);
   return resumo.filter((g) => nomeChave(g.maquina) === chave);
+}
+
+/**
+ * O corte por GRUPO — vale para medicoes e para resumos, porque os dois
+ * carregam o nome da maquina e o grupo sai do CADASTRO, nao do dado
+ * medido. Maquina que o cadastro nao agrupou cai em SEM_GRUPO, o mesmo
+ * balde que a lateral mostra: filtrar por um grupo que a lateral oferece
+ * nunca devolve tela vazia.
+ */
+export function filtrarPorGrupo(lista, grupo, grupoDe = () => null) {
+  if (!grupo) return lista;
+  return lista.filter((item) => (grupoDe(nomeDaMaquina(item)) || SEM_GRUPO) === grupo);
 }
 
 /**
@@ -138,7 +191,13 @@ export function barrasPorMedicao(conferencias, maquina) {
  * Maquina sem grupo no cadastro nao some: cai em "Sem grupo", no fim — o
  * cadastro organiza, nao trava, como no celular. Grupos em ordem de codigo
  * (0002 antes de 0004). Com um grupo so' o cabecalho nao organiza nada:
- * repetiria o obvio acima de uma lista que ja' e' toda dele.
+ * repetiria o obvio acima de uma lista que ja' e' toda dele — e nao faria
+ * falta como filtro: sem outro grupo em tela, "Todas" JA' E' o grupo.
+ *
+ * O item de grupo (`cabecalho: true`) NAO e' so' um rotulo: ele filtra o
+ * grupo inteiro, e leva o total de medicoes dele como qualquer outro item
+ * da lateral. Sem isso, imprimir "as furadeiras" obrigava a imprimir uma
+ * maquina de cada vez e juntar as folhas na mao.
  *
  * O bloco aparece MESMO com uma maquina so' (mudanca de 31/08): ele sumia
  * com uma unica maquina medida, e o usuario nao achava onde filtrar para
@@ -148,22 +207,35 @@ export function itensDaLateral({ resumo = [], total = 0, grupoDe = () => null } 
   if (!resumo.length) return [];
   const porGrupo = new Map();
   for (const g of resumo) {
-    const grupo = grupoDe(g.maquina) || 'Sem grupo';
+    const grupo = grupoDe(g.maquina) || SEM_GRUPO;
     if (!porGrupo.has(grupo)) porGrupo.set(grupo, []);
     porGrupo.get(grupo).push(g);
   }
   const grupos = [...porGrupo.keys()].sort((a, b) => {
-    if (a === 'Sem grupo') return 1;
-    if (b === 'Sem grupo') return -1;
+    if (a === SEM_GRUPO) return 1;
+    if (b === SEM_GRUPO) return -1;
     return a.localeCompare(b, 'pt-BR');
   });
 
   const itens = [{ id: TODAS, rotulo: 'Todas', contador: total }];
   const nomearGrupos = grupos.length > 1;
   for (const grupo of grupos) {
-    if (nomearGrupos) itens.push({ id: `grupo:${grupo}`, rotulo: grupo, cabecalho: true });
-    for (const g of porGrupo.get(grupo)) {
-      itens.push({ id: g.maquina, rotulo: g.maquina, contador: g.n, recuado: nomearGrupos });
+    const doGrupo = porGrupo.get(grupo);
+    if (nomearGrupos) {
+      itens.push({
+        id: `${PREFIXO_GRUPO}${grupo}`,
+        rotulo: grupo,
+        cabecalho: true,
+        contador: doGrupo.reduce((acc, g) => acc + (Number(g.n) || 0), 0),
+      });
+    }
+    for (const g of doGrupo) {
+      itens.push({
+        id: `${PREFIXO_MAQUINA}${g.maquina}`,
+        rotulo: g.maquina,
+        contador: g.n,
+        recuado: nomearGrupos,
+      });
     }
   }
   return itens;

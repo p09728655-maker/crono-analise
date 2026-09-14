@@ -18,15 +18,17 @@ import { porMinuto, porPeca } from './formato.js';
  *
  * Nao e' a tela no papel — a tela tem filtro, botao e cor de interface; o
  * papel tem contexto e responsavel. Recebe os dados JA' FILTRADOS pela
- * lateral: com uma maquina escolhida, sai a folha daquela maquina, com o
- * nome dela no titulo e na identificacao.
+ * lateral, e o `escopo` diz o que a lateral escolheu: com uma maquina, sai
+ * a folha daquela maquina; com um GRUPO, a folha das maquinas dele — nos
+ * dois casos com o nome no titulo e na identificacao, porque folha que
+ * circula na reuniao sem dizer de quem e' vira discussao sobre o dado.
  *
  * Sem jargao (decisao de 31/08): nada de CV%, ciclo do motor ou criterio
  * de amostra carimbado. Os numeros sao pecas/hora e pecas/minuto; maquina
  * medida ha' pouco tempo leva uma NOTA em texto corrido, nao um selo.
  */
 export default function ImpressaoConferencias({
-  linhas, resumo, resumoPecas, grupoDe, filtro, analise, entreMaquinas, porCiclo,
+  linhas, resumo, resumoPecas, grupoDe, escopo, analise, entreMaquinas, porCiclo,
   demanda, grupoNome,
 }) {
   // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
@@ -62,14 +64,20 @@ export default function ImpressaoConferencias({
       <header style={imp.cabecalho}>
         <div>
           <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={imp.logo} />
-          <h1 style={imp.titulo}>Ritmo por Máquina{filtro ? ` — ${filtro}` : ''}</h1>
+          <h1 style={imp.titulo}>Ritmo por Máquina{escopo ? ` — ${escopo.rotulo}` : ''}</h1>
         </div>
         <div style={imp.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
       </header>
 
       <section style={imp.identificacao}>
         {[
-          filtro ? ['Máquina', filtro] : ['Máquinas', String(resumo.length)],
+          /* Com o GRUPO escolhido, a folha diz o grupo E quantas maquinas
+             dele entraram: "0002 · FURADEIRA" sozinho nao permite conferir
+             se a maquina que faltou foi filtrada ou simplesmente nao foi
+             medida no periodo. */
+          escopo?.tipo === 'maquina'
+            ? ['Máquina', escopo.rotulo]
+            : ['Máquinas', String(resumo.length)],
           ['Grupos de máquina', gruposCobertos.length ? gruposCobertos.join(' · ') : '—'],
           ['Período coberto', periodo],
           ['Medições', String(linhas.length)],

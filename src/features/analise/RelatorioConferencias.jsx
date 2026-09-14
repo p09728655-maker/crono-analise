@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { VERSAO } from '../../versao.js';
-import { TODAS, loteDaMaquina } from '../../domain/relatorioConferencias.js';
+import { TODAS, escopoDaLateral, loteDaMaquina } from '../../domain/relatorioConferencias.js';
 import { leituraDaDemanda, lerCodigoSemana } from '../../domain/demandaSemanal.js';
 import { listarDemanda } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
@@ -71,7 +71,15 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
     limparErro, carregar,
   } = dados;
 
-  const [filtro, setFiltro] = useState(null);
+  /**
+   * O QUE A LATERAL ESCOLHEU — o id do item, nao so' o nome da maquina.
+   *
+   * Uma maquina, um GRUPO inteiro (0002 · FURADEIRA) ou nada (todas). O
+   * grupo entrou a pedido do PPCP: com furadeira e CNC no mesmo relatorio,
+   * "imprimir todas" mistura postos que nao se comparam, e imprimir maquina
+   * por maquina obriga a juntar folhas na mao.
+   */
+  const [selecao, setSelecao] = useState(null);
   const [verVersoes, setVerVersoes] = useState(false);
   const [verDemanda, setVerDemanda] = useState(false);
   const [semanaEscolhida, setSemanaEscolhida] = useState(null);
@@ -107,10 +115,23 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   // Trocar de face (ativas x arquivadas) derruba o filtro: a maquina
   // escolhida pode nao existir do outro lado, e a tela ficaria vazia sem
   // dizer por que.
-  const trocarFace = () => { setFiltro(null); dados.alternarArquivadas(); };
+  const trocarFace = () => { setSelecao(null); dados.alternarArquivadas(); };
   const fecharJanela = (fechar) => () => { limparErro(); fechar(null); };
 
-  const leitura = useLeitura({ linhas, filtro, mapaGrupos, grupoDe });
+  /**
+   * O ESCOPO da tela — `{ tipo, rotulo }` ou `null` para todas.
+   *
+   * `filtro` (a maquina) continua sendo o que manda nas leituras que so'
+   * fazem sentido com UM posto: o grafico por medicao, o lote de arquivar,
+   * o titulo da folha. O grupo corta os mesmos dados, mas NAO vira maquina
+   * escolhida — arquivar um grupo inteiro num clique nunca foi pedido, e o
+   * grafico por medicao voltaria a misturar postos.
+   */
+  const escopo = useMemo(() => escopoDaLateral(selecao), [selecao]);
+  const filtro = escopo?.tipo === 'maquina' ? escopo.rotulo : null;
+  const grupoEscolhido = escopo?.tipo === 'grupo' ? escopo.rotulo : null;
+
+  const leitura = useLeitura({ linhas, filtro, grupo: grupoEscolhido, mapaGrupos, grupoDe });
   const {
     visiveis, resumoVisivel, resumoPecasVisivel, analise, barrasDoFiltro, painel,
     curvaDoDia, comparativo, entreMaquinas, porCiclo, secoes,
@@ -127,8 +148,15 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
    */
   const grupoDoQuadro = useMemo(() => {
     if (filtro) return grupoIdDe(filtro) || null;
-    const ids = new Set(resumoVisivel.map((g) => grupoIdDe(g.maquina)).filter(Boolean));
-    return ids.size === 1 && ids.size === resumoVisivel.length ? [...ids][0] : null;
+    /* TODAS as maquinas em tela precisam ter grupo, e ser o MESMO. A conta
+       anterior comparava `ids.size` (grupos distintos) com a quantidade de
+       maquinas: com duas furadeiras do mesmo grupo dava 1 contra 2, e o
+       quadro do programa sumia justamente no caso em que ele mais serve —
+       o grupo inteiro em tela. Agora o que se exige e' o que a frase acima
+       diz: um grupo so', e ninguem sem grupo. */
+    const ids = resumoVisivel.map((g) => grupoIdDe(g.maquina));
+    const distintos = new Set(ids);
+    return distintos.size === 1 && ids.every(Boolean) ? [...distintos][0] : null;
   }, [filtro, resumoVisivel, mapaGrupos]);
 
   // A demanda do grupo chega por fora das medicoes: e' cadastro, nao
@@ -196,8 +224,14 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
           acaoPrimaria={estado === 'pronto' && linhas.length > 0 && !verArquivadas
             ? {
                 // O rotulo diz O QUE vai sair no papel: com uma maquina
-                // escolhida na lateral, imprime so' ela.
-                rotulo: secoes.length ? (filtro ? 'Imprimir esta máquina' : 'Imprimir todas') : 'Imprimir',
+                // escolhida na lateral imprime so' ela; com um grupo, as
+                // maquinas dele. Sem dizer, "Imprimir" com a lateral
+                // filtrada parecia que sairia tudo.
+                rotulo: secoes.length
+                  ? (escopo
+                    ? (escopo.tipo === 'grupo' ? 'Imprimir este grupo' : 'Imprimir esta máquina')
+                    : 'Imprimir todas')
+                  : 'Imprimir',
                 aoClicar: () => window.print(),
               }
             : undefined}
@@ -206,8 +240,8 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
              lista: e' navegacao, nao um controle do conteudo. */
           secoes={secoes}
           secoesRotulo="Máquinas"
-          secaoAtiva={filtro ?? TODAS}
-          aoTrocarSecao={(id) => setFiltro(id === TODAS ? null : id)}
+          secaoAtiva={selecao ?? TODAS}
+          aoTrocarSecao={(id) => setSelecao(id === TODAS ? null : id)}
           /* O "arquivar esta maquina" NAO vem para ca'. A lateral e'
              navegacao (mais imprimir, que nao muda dado); arquivar mora no
              cabecalho da tabela, encostado nas linhas que vao sair — o
@@ -312,7 +346,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               )}
 
               {!verArquivadas && comparativo && (
-                <ComparativoParadas comparativo={comparativo} resumo={resumoVisivel} filtro={filtro} />
+                <ComparativoParadas comparativo={comparativo} resumo={resumoVisivel} escopo={escopo} />
               )}
 
               <CartoesMaquina resumo={resumoVisivel} grupoDe={grupoDe} />
@@ -350,7 +384,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
 
               <TabelaMedicoes
                 linhas={visiveis}
-                filtro={filtro}
+                escopo={escopo}
                 verArquivadas={verArquivadas}
                 lote={lote}
                 ocupado={ocupado}
@@ -422,7 +456,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
                nao tem mais o que mostrar, e a tela ficaria vazia sem dizer
                por que. */
             aoConfirmar={() => dados.alternarArquivoDaMaquina(
-              confirmandoLote, () => { setConfirmandoLote(null); setFiltro(null); },
+              confirmandoLote, () => { setConfirmandoLote(null); setSelecao(null); },
             )}
           />
         )}
@@ -444,7 +478,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
           resumo={resumoVisivel}
           resumoPecas={resumoPecasVisivel}
           grupoDe={grupoDe}
-          filtro={filtro}
+          escopo={escopo}
           analise={analiseNoPapel ? analise : null}
           entreMaquinas={entreMaquinas}
           porCiclo={porCiclo}

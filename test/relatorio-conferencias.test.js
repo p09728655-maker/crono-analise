@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  TODAS, barrasPorMedicao, filtrarPorMaquina, filtrarResumo, formatarDataHora, itensDaLateral,
-  loteDaMaquina, resumoDoPeriodo,
+  TODAS, barrasPorMedicao, escopoDaLateral, filtrarPorGrupo, filtrarPorMaquina, filtrarResumo,
+  formatarDataHora, itensDaLateral, loteDaMaquina, resumoDoPeriodo,
 } from '../src/domain/relatorioConferencias.js';
 
 const MIN = 60000;
@@ -160,6 +160,79 @@ describe('filtrarPorMaquina — o corte da lateral', () => {
   });
 });
 
+describe('escopoDaLateral — maquina, grupo ou todas', () => {
+  it('sem item escolhido (ou em Todas) nao ha escopo: e a mesma ausencia do filtro', () => {
+    expect(escopoDaLateral(null)).toBe(null);
+    expect(escopoDaLateral('')).toBe(null);
+    expect(escopoDaLateral(TODAS)).toBe(null);
+  });
+
+  it('o id de um GRUPO vem prefixado e devolve o nome do grupo', () => {
+    expect(escopoDaLateral('grupo:0002 · FURADEIRA'))
+      .toEqual({ tipo: 'grupo', rotulo: '0002 · FURADEIRA' });
+  });
+
+  it('o id de uma MAQUINA vem prefixado e devolve o nome dela', () => {
+    expect(escopoDaLateral('maquina:Furadeira 03'))
+      .toEqual({ tipo: 'maquina', rotulo: 'Furadeira 03' });
+  });
+
+  it('maquina com cara de grupo no nome nao vira filtro de grupo — o prefixo decide', () => {
+    // O cadastro nao proibe ':' no nome. Sem o prefixo da maquina, esta
+    // aqui abriria a tela vazia filtrando um grupo que nao existe.
+    expect(escopoDaLateral('maquina:grupo:0002 · FURADEIRA'))
+      .toEqual({ tipo: 'maquina', rotulo: 'grupo:0002 · FURADEIRA' });
+  });
+
+  it('id sem prefixo continua sendo o nome da maquina — e o que a lateral mandava antes', () => {
+    expect(escopoDaLateral('Furadeira 03')).toEqual({ tipo: 'maquina', rotulo: 'Furadeira 03' });
+  });
+
+  it('prefixo sem nome de grupo nao filtra nada — seria a tela vazia sem motivo', () => {
+    expect(escopoDaLateral('grupo:')).toBe(null);
+    expect(escopoDaLateral('grupo:   ')).toBe(null);
+  });
+});
+
+describe('filtrarPorGrupo — o corte do grupo inteiro', () => {
+  const grupos = {
+    'FURADEIRA 16': '0002 · FURADEIRA',
+    'FURADEIRA 12': '0002 · FURADEIRA',
+    'CNC SCM': '0006 · CNC',
+  };
+  const grupoDe = (m) => grupos[m] || null;
+  const linhas = [
+    { id: 1, maquina: 'FURADEIRA 16' },
+    { id: 2, maquina: 'FURADEIRA 12' },
+    { id: 3, maquina: 'CNC SCM' },
+    { id: 4, maquina: 'Embaladora' },
+    { id: 5, maquina: '' },
+  ];
+
+  it('sem grupo escolhido devolve tudo, o mesmo array', () => {
+    expect(filtrarPorGrupo(linhas, null, grupoDe)).toBe(linhas);
+  });
+
+  it('leva TODAS as maquinas do grupo, e so elas', () => {
+    expect(filtrarPorGrupo(linhas, '0002 · FURADEIRA', grupoDe).map((c) => c.id)).toEqual([1, 2]);
+    expect(filtrarPorGrupo(linhas, '0006 · CNC', grupoDe).map((c) => c.id)).toEqual([3]);
+  });
+
+  it('o que o cadastro nao agrupou cai em "Sem grupo" — o mesmo balde da lateral', () => {
+    expect(filtrarPorGrupo(linhas, 'Sem grupo', grupoDe).map((c) => c.id)).toEqual([4, 5]);
+  });
+
+  it('o resumo segue o mesmo corte — a folha e a tela saem do mesmo recorte', () => {
+    const resumo = [{ maquina: 'FURADEIRA 16', n: 11 }, { maquina: 'CNC SCM', n: 1 }];
+    expect(filtrarPorGrupo(resumo, '0002 · FURADEIRA', grupoDe))
+      .toEqual([{ maquina: 'FURADEIRA 16', n: 11 }]);
+  });
+
+  it('sem cadastro nenhum, tudo e "Sem grupo" — nenhuma medicao some', () => {
+    expect(filtrarPorGrupo(linhas, 'Sem grupo').map((c) => c.id)).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
 describe('itensDaLateral — as maquinas debaixo do grupo do cadastro', () => {
   const grupos = { 'Furadeira 03': '0002 · FURADEIRA', 'Fresadora 01': '0004 · FRESADORA' };
   const grupoDe = (m) => grupos[m] || null;
@@ -173,24 +246,32 @@ describe('itensDaLateral — as maquinas debaixo do grupo do cadastro', () => {
     const itens = itensDaLateral({ resumo, total: 4, grupoDe });
     expect(itens.map((i) => i.id)).toEqual([
       TODAS,
-      'grupo:0002 · FURADEIRA', 'Furadeira 03',
-      'grupo:0004 · FRESADORA', 'Fresadora 01',
-      'grupo:Sem grupo', 'Embaladora',
+      'grupo:0002 · FURADEIRA', 'maquina:Furadeira 03',
+      'grupo:0004 · FRESADORA', 'maquina:Fresadora 01',
+      'grupo:Sem grupo', 'maquina:Embaladora',
     ]);
     expect(itens[0]).toEqual({ id: TODAS, rotulo: 'Todas', contador: 4 });
     expect(itens[1].cabecalho).toBe(true);
-    expect(itens[2]).toEqual({ id: 'Furadeira 03', rotulo: 'Furadeira 03', contador: 2, recuado: true });
+    // O grupo e' clicavel e conta as medicoes dele: e por esse item que se
+    // imprime "as furadeiras" de uma vez.
+    expect(itens[1]).toEqual({
+      id: 'grupo:0002 · FURADEIRA', rotulo: '0002 · FURADEIRA', cabecalho: true, contador: 2,
+    });
+    expect(itens[2]).toEqual({
+      id: 'maquina:Furadeira 03', rotulo: 'Furadeira 03', contador: 2, recuado: true,
+    });
   });
 
   it('com um grupo so nao ha cabecalho nem recuo — repetiria o obvio', () => {
     const itens = itensDaLateral({ resumo: [resumo[2]], total: 2, grupoDe });
-    expect(itens.map((i) => i.id)).toEqual([TODAS, 'Furadeira 03']);
+    expect(itens.map((i) => i.id)).toEqual([TODAS, 'maquina:Furadeira 03']);
     expect(itens[1].recuado).toBe(false);
   });
 
   it('sem cadastro as maquinas aparecem mesmo assim, sem grupo', () => {
     const itens = itensDaLateral({ resumo, total: 4 });
-    expect(itens.map((i) => i.id)).toEqual([TODAS, 'Fresadora 01', 'Embaladora', 'Furadeira 03']);
+    expect(itens.map((i) => i.id))
+      .toEqual([TODAS, 'maquina:Fresadora 01', 'maquina:Embaladora', 'maquina:Furadeira 03']);
   });
 
   it('sem medicao a lateral fica sem itens', () => {
