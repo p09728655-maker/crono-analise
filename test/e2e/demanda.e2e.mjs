@@ -137,6 +137,103 @@ checar(await janela.locator('textarea').inputValue() === '',
 checar(erros.length === 0, `sem erro de pagina (${erros.join(' | ') || 'nenhum'})`);
 if (process.env.FOTO) await janela.screenshot({ path: process.env.FOTO });
 
+/* ==================================================================
+   O VEREDITO no relatorio: o programa da semana x o que o grupo entrega.
+
+   Cenario montado para cair no caso que mais importa — o grupo NAO
+   atende, mas atenderia sem as paradas. E' a diferenca entre comprar
+   maquina e organizar o setup, e o quadro tem de dizer qual dos dois.
+   ================================================================== */
+const ctx2 = await navegador.newContext({ viewport: { width: 1440, height: 1200 } });
+const p2 = await ctx2.newPage();
+await semearSessao(p2);
+const erros2 = [];
+p2.on('pageerror', (e) => erros2.push(e.message));
+
+await p2.route('**/api/maquinas**', (rota) => rota.fulfill({
+  json: {
+    grupos: [{ id: 'g2', codigo: '0002', nome: 'FURADEIRA', horas_semana: 44 }],
+    maquinas: [
+      { id: 'm1', nome: 'Furadeira 03', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+      { id: 'm2', nome: 'Furadeira 16', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+      { id: 'm3', nome: 'Furadeira 21', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+    ],
+  },
+}));
+
+/* Uma hora de relogio, 700 pecas, 12 min parados: 700 pc/h no relogio e
+   875 pc/h com a maquina rodando. 09/09/2026 e' quarta da semana 37. */
+await p2.route('**/api/conferencias**', (rota) => rota.fulfill({
+  json: {
+    conferencias: [{
+      id: 'c1', maquina: 'Furadeira 03', peca: 'Princesa Fundo',
+      iniciado_em: '2026-09-09T07:00:00-03:00', finalizado_em: '2026-09-09T08:00:00-03:00',
+      salvo_em: '2026-09-09T08:00:00-03:00',
+      duracao_ms: 3600000, pecas: 700, ciclos_por_peca: 1, arquivada: false,
+      paradas: [{ motivo: 'setup', duracao_ms: 720000 }],
+    }],
+    outras: 0,
+  },
+}));
+
+/* Programa de duas semanas: a 37 (a das medicoes) e a 36. */
+await p2.route('**/api/demanda**', (rota) => rota.fulfill({
+  json: {
+    demandas: [
+      { id: 'd1', grupo_id: 'g2', ano: 2026, numero: 36, pecas: 83864 },
+      { id: 'd2', grupo_id: 'g2', ano: 2026, numero: 37, pecas: 100637 },
+    ],
+  },
+}));
+
+await p2.goto(`${BASE}/analise/conferencias`);
+const quadro = p2.locator('[aria-label="Programa da semana"]');
+await quadro.waitFor({ timeout: 10000 });
+const q = await quadro.innerText();
+
+checar(/semana 037-26/.test(q),
+  'escolhe sozinho a semana da medicao (09/09/2026 e a semana 37), nao a ultima cadastrada');
+checar(/100\.637 peças programadas/.test(q), 'mostra a demanda da semana');
+checar(/132 horas-máquina/.test(q), '3 maquinas x 44 h = 132 horas-maquina');
+// 100.637 / 132 = 762 pc/h por maquina
+checar(/762/.test(q), 'o exigido por maquina sai da demanda dividida pelas horas-maquina');
+// 700 pecas em 1 h de relogio
+checar(/700/.test(q), 'o entregue e o ritmo de RELOGIO, com a parada dentro');
+// 700 pecas em 48 min rodando = 875 pc/h
+checar(/875 pç\/h com a máquina rodando/.test(q),
+  'o ritmo de maquina rodando aparece como referencia, nao como veredito');
+checar(/não atende o programa/.test(q), 'o veredito e o que o relogio entrega: 700 < 762');
+checar(/Falta 8% de ritmo/.test(q), 'diz quanto falta em cada maquina');
+// 100.637 / (44 x 700) = 3,27 maquinas; sem parada, 100.637 / (44 x 875) = 2,61
+checar(/3,3/.test(q), 'quantas maquinas o programa pede ao ritmo medido');
+checar(/2,6/.test(q), 'e quantas pediria sem as paradas');
+checar(/Antes de falar em máquina nova/.test(q),
+  'com a folga cabendo nas maquinas que existem, manda tratar a parada — nao comprar maquina');
+if (process.env.FOTO2) await quadro.screenshot({ path: process.env.FOTO2 });
+
+/* ---- trocar a semana a mao: o veredito acompanha ---- */
+await quadro.locator('select').selectOption('036-26');
+await p2.waitForTimeout(300);
+const q36 = await quadro.innerText();
+checar(/83\.864 peças programadas/.test(q36), 'trocar a semana troca a demanda comparada');
+// 83.864 / 132 = 635 pc/h exigidos — 700 medidos passam
+checar(/atende o programa/.test(q36) && !/não atende/.test(q36),
+  'na semana fraca o mesmo posto ATENDE — e e por isso que o takt nao pode ser fixo');
+
+/* ---- o papel diz o mesmo que a tela ---- */
+const papel = await p2.evaluate(() => {
+  const folha = document.querySelector('.somente-impressao');
+  return { texto: folha?.innerText || '', estoura: folha ? folha.scrollWidth > document.documentElement.clientWidth + 1 : false };
+});
+checar(/O programa da semana 036-26/.test(papel.texto),
+  'a folha impressa traz o programa da semana ESCOLHIDA na tela');
+checar(/635 pç\/h/.test(papel.texto) && /700 pç\/h/.test(papel.texto),
+  'com os mesmos numeros da tela: exigido e entregue');
+checar(/ATENDE o programa/.test(papel.texto), 'e o mesmo veredito');
+checar(!papel.estoura, 'o quadro do programa nao empurra a folha para fora do A4');
+
+checar(erros2.length === 0, `sem erro de pagina no veredito (${erros2.join(' | ') || 'nenhum'})`);
+
 await navegador.close();
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTudo certo');
 process.exit(falhas ? 1 : 0);

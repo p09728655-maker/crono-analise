@@ -256,3 +256,159 @@ export function maquinasNecessarias({ pecas, horas, ritmoMedido } = {}) {
   if (p <= 0 || h <= 0 || r <= 0) return null;
   return p / (h * r);
 }
+
+/**
+ * A SEMANA de uma medicao — ISO 8601, no relogio da fabrica.
+ *
+ * O programa e' numerado por semana (001-26) e a medicao e' datada. Para
+ * casar os dois e' preciso dizer a que semana a data pertence, e a conta
+ * usa o dia CIVIL da fabrica: a medicao de segunda as 07h em Sao Paulo nao
+ * pode cair na semana anterior porque o navegador do PC esta' em UTC.
+ *
+ * ISO: a semana comeca na SEGUNDA e a semana 1 e' a que contem a primeira
+ * quinta-feira do ano. E' a convencao do Brasil e a que o Excel usa em
+ * NUMSEMANA(data; 21) — se a numeracao do PCP for outra, a tela deixa
+ * escolher a semana a mao, e por isso este numero nunca decide sozinho.
+ */
+const FUSO_FABRICA = 'America/Sao_Paulo';
+
+const civilDaFabrica = (() => {
+  let fmt = null;
+  try {
+    fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: FUSO_FABRICA, year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+  } catch { fmt = null; }
+  return (data) => {
+    // Ambiente sem base de fusos: cai no relogio local — pior que o certo,
+    // melhor que quebrar o relatorio.
+    if (!fmt) return [data.getFullYear(), data.getMonth() + 1, data.getDate()];
+    const [a, m, d] = fmt.format(data).split('-').map(Number);
+    return [a, m, d];
+  };
+})();
+
+export function semanaIso(data) {
+  const quando = data instanceof Date ? data : new Date(data);
+  if (Number.isNaN(quando.getTime())) return null;
+  const [a, m, d] = civilDaFabrica(quando);
+  // A quinta-feira da mesma semana define o ano ISO: e' o que faz 31/12 e
+  // 01/01 caírem na mesma semana quando e' o caso.
+  const utc = new Date(Date.UTC(a, m - 1, d));
+  const diaDaSemana = utc.getUTCDay() || 7;            // segunda = 1, domingo = 7
+  utc.setUTCDate(utc.getUTCDate() + 4 - diaDaSemana);
+  const ano = utc.getUTCFullYear();
+  const primeiroDia = Date.UTC(ano, 0, 1);
+  const numero = Math.ceil((((utc.getTime() - primeiroDia) / 86400000) + 1) / 7);
+  return { ano, numero };
+}
+
+/** Segunda e domingo de uma semana ISO — para a tela mostrar o periodo. */
+export function intervaloIso({ ano, numero } = {}) {
+  if (!(ano >= 2000 && numero >= 1 && numero <= 53)) return null;
+  const jan4 = new Date(Date.UTC(ano, 0, 4));
+  const dia = jan4.getUTCDay() || 7;
+  const inicio = new Date(jan4);
+  inicio.setUTCDate(jan4.getUTCDate() - dia + 1 + ((numero - 1) * 7));
+  const fim = new Date(inicio);
+  fim.setUTCDate(inicio.getUTCDate() + 6);
+  return { inicio, fim };
+}
+
+/**
+ * O VEREDITO da semana: o que a demanda exige contra o que o posto entrega.
+ *
+ * Duas reguas, de proposito:
+ *
+ *  - `ritmoRelogio` (pecas por HORA DE PRESENCA, paradas dentro) e' o que
+ *    decide. E' ele que enche o caminhao. Comparar o takt com o ritmo de
+ *    maquina rodando dá um veredito otimista pelo tamanho da parada: com
+ *    85% de disponibilidade, 44 h de relogio valem 37 h de producao.
+ *  - `ritmoRodando` entra so' como o "se nao parasse" — a distancia entre
+ *    os dois e' exatamente o que ha' a ganhar tratando parada, e e' o
+ *    numero que decide entre comprar maquina e organizar o setup.
+ *
+ * Devolve null quando falta qualquer peca da conta. Nao ha' aproximacao:
+ * veredito sobre dado que nao existe e' chute com cara de indicador.
+ */
+export function vereditoDaSemana({
+  pecas, horas, maquinas = 1, ritmoRelogio, ritmoRodando,
+} = {}) {
+  const exigido = ritmoExigido({ pecas, horas, maquinas });
+  const real = Number(ritmoRelogio) || 0;
+  if (!exigido || real <= 0) return null;
+
+  const potencial = Number(ritmoRodando) || 0;
+  const precisa = maquinasNecessarias({ pecas, horas, ritmoMedido: real });
+  return {
+    ...exigido,
+    ritmoRelogio: real,
+    ritmoRodando: potencial > 0 ? potencial : null,
+    atende: real >= exigido.pecasPorHoraMaquina,
+    // Quanto sobra (+) ou falta (-) no ritmo de cada maquina, em %.
+    folgaPct: ((real / exigido.pecasPorHoraMaquina) - 1) * 100,
+    maquinasNecessarias: precisa,
+    maquinasSeNaoParasse: potencial > 0
+      ? maquinasNecessarias({ pecas, horas, ritmoMedido: potencial })
+      : null,
+    // Quantas maquinas o grupo TEM. Fica no resultado para a tela nao
+    // precisar recalcular a comparacao que ela vai escrever em palavras.
+    maquinas: Math.max(1, Math.floor(Number(maquinas) || 1)),
+  };
+}
+
+/**
+ * A LEITURA da demanda para o relatorio: qual semana comparar, com o que,
+ * e o que falta quando nao da' para comparar.
+ *
+ * Existe para a tela nao precisar decidir nada: ela recebe um estado e os
+ * numeros prontos. Os estados sao os quatro caminhos honestos —
+ *   sem-demanda  o grupo nao tem programa cadastrado;
+ *   sem-semana   ha' programa, mas nao o da semana das medicoes;
+ *   sem-horas    ha' programa e falta a jornada do grupo;
+ *   pronto       da' para comparar.
+ *
+ * A semana ESCOLHIDA manda; sem escolha, vale a semana da medicao mais
+ * recente. Nunca "a ultima cadastrada": comparar medicao de marco com o
+ * programa de setembro daria um veredito que ninguem consegue explicar.
+ */
+export function leituraDaDemanda({
+  demandas = [], horas = null, maquinas = 0, ritmoRelogio = null, ritmoRodando = null,
+  datas = [], semanaEscolhida = null,
+} = {}) {
+  const semanas = ordenarSemanas(
+    (demandas || []).map((d) => ({ ...d, chave: chaveSemana(d) })),
+  );
+  if (!semanas.length) return { estado: 'sem-demanda', semanas: [] };
+
+  const medidas = ordenarSemanas(
+    (datas || []).map((d) => semanaIso(d)).filter(Boolean),
+  );
+  const daMedicao = medidas.length ? medidas[medidas.length - 1] : null;
+  const alvo = semanaEscolhida || daMedicao || semanas[semanas.length - 1];
+  const registro = semanas.find((s) => s.ano === alvo.ano && s.numero === alvo.numero) || null;
+
+  const base = {
+    semanas,
+    semana: { ...alvo, chave: chaveSemana(alvo) },
+    intervalo: intervaloIso(alvo),
+    // Quantas semanas DIFERENTES as medicoes cobrem: com mais de uma, o
+    // ritmo medido e' de um periodo que atravessa semanas, e a tela precisa
+    // dizer isso em vez de deixar entender que mediu so' aquela.
+    semanasMedidas: new Set(medidas.map(chaveSemana)).size,
+    escolhaAutomatica: !semanaEscolhida && Boolean(daMedicao),
+  };
+
+  if (!registro) return { ...base, estado: 'sem-semana', demanda: null, veredito: null };
+  if (!(Number(horas) > 0) || !(Number(maquinas) > 0)) {
+    return { ...base, estado: 'sem-horas', demanda: registro.pecas, veredito: null };
+  }
+  return {
+    ...base,
+    estado: 'pronto',
+    demanda: registro.pecas,
+    veredito: vereditoDaSemana({
+      pecas: registro.pecas, horas, maquinas, ritmoRelogio, ritmoRodando,
+    }),
+  };
+}

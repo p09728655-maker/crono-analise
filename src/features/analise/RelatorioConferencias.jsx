@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { VERSAO } from '../../versao.js';
 import { TODAS, loteDaMaquina } from '../../domain/relatorioConferencias.js';
+import { leituraDaDemanda, lerCodigoSemana } from '../../domain/demandaSemanal.js';
+import { listarDemanda } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
@@ -19,6 +21,7 @@ import AnalisePeriodo from './conferencias/AnalisePeriodo.jsx';
 import TabelaMedicoes from './conferencias/TabelaMedicoes.jsx';
 import RenomearPeca from './conferencias/RenomearPeca.jsx';
 import DemandaSemanal from './DemandaSemanal.jsx';
+import PainelDemanda from './conferencias/PainelDemanda.jsx';
 import EditorParadas from './conferencias/EditorParadas.jsx';
 import { ConfirmarExclusao, ConfirmarLote } from './conferencias/Confirmacoes.jsx';
 import ImpressaoConferencias from './conferencias/ImpressaoConferencias.jsx';
@@ -63,13 +66,15 @@ const lerAnaliseNoPapel = () => {
 export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const dados = useConferencias();
   const {
-    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe,
+    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe, cadastro,
     limparErro, carregar,
   } = dados;
 
   const [filtro, setFiltro] = useState(null);
   const [verVersoes, setVerVersoes] = useState(false);
   const [verDemanda, setVerDemanda] = useState(false);
+  const [semanaEscolhida, setSemanaEscolhida] = useState(null);
+  const [demandas, setDemandas] = useState([]);
   const [confirmando, setConfirmando] = useState(null);
   const [confirmandoLote, setConfirmandoLote] = useState(null);
   const [editandoParadas, setEditandoParadas] = useState(null);
@@ -95,6 +100,49 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   } = leitura;
 
   const lote = loteDaMaquina({ filtro, visiveis, verArquivadas });
+
+  /**
+   * O PROGRAMA DA SEMANA so' se compara com UM grupo de maquina.
+   *
+   * Com a maquina filtrada, e' o grupo dela. Sem filtro, so' vale quando
+   * todas as maquinas em tela sao do mesmo grupo — misturar furadeira com
+   * embalagem daria um "exigido por maquina" que nao e' de ninguem.
+   */
+  const grupoDoQuadro = useMemo(() => {
+    if (filtro) return grupoIdDe(filtro) || null;
+    const ids = new Set(resumoVisivel.map((g) => grupoIdDe(g.maquina)).filter(Boolean));
+    return ids.size === 1 && ids.size === resumoVisivel.length ? [...ids][0] : null;
+  }, [filtro, resumoVisivel, mapaGrupos]);
+
+  // A demanda do grupo chega por fora das medicoes: e' cadastro, nao
+  // medicao. Falha de carga nao derruba o relatorio — o quadro apenas nao
+  // aparece, como acontece quando nao ha' programa nenhum.
+  useEffect(() => {
+    setSemanaEscolhida(null);
+    if (!grupoDoQuadro) { setDemandas([]); return; }
+    let vivo = true;
+    listarDemanda(grupoDoQuadro)
+      .then((lista) => { if (vivo) setDemandas(lista); })
+      .catch(() => { if (vivo) setDemandas([]); });
+    return () => { vivo = false; };
+  }, [grupoDoQuadro]);
+
+  const grupoDoCadastro = cadastro?.grupos?.find((g) => g.id === grupoDoQuadro) || null;
+  const maquinasDoGrupo = (cadastro?.maquinas || [])
+    .filter((m) => m.grupo_id === grupoDoQuadro && m.ativa).length;
+
+  const leituraDemanda = useMemo(() => (grupoDoQuadro && painel
+    ? leituraDaDemanda({
+        demandas,
+        horas: grupoDoCadastro?.horas_semana,
+        maquinas: maquinasDoGrupo,
+        ritmoRelogio: painel.ritmoRelogio,
+        ritmoRodando: painel.ritmoMedio,
+        // A data em que a medicao ACONTECEU, nao a em que subiu.
+        datas: visiveis.map((c) => c.iniciado_em || c.salvo_em).filter(Boolean),
+        semanaEscolhida,
+      })
+    : null), [grupoDoQuadro, demandas, grupoDoCadastro, maquinasDoGrupo, painel, visiveis, semanaEscolhida]);
   const janelaAberta = Boolean(editandoParadas || confirmando || confirmandoLote || renomeando);
 
   return (
@@ -218,6 +266,20 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
             <>
               {!verArquivadas && painel && <KpisDoPeriodo painel={painel} />}
 
+              {/* O PROGRAMA DA SEMANA vem logo depois dos numeros do topo e
+                  antes de tudo o mais: e' o unico quadro que responde "isso
+                  atende?", e quem abre o relatorio para a reuniao procura
+                  essa resposta antes de procurar o ritmo. Nao aparece nas
+                  arquivadas — ritmo nao sai de arquivada. */}
+              {!verArquivadas && leituraDemanda && (
+                <PainelDemanda
+                  leitura={leituraDemanda}
+                  grupoNome={grupoDoCadastro ? `${grupoDoCadastro.codigo} · ${grupoDoCadastro.nome}` : null}
+                  aoConfigurar={() => setVerDemanda(true)}
+                  aoTrocarSemana={(chave) => setSemanaEscolhida(lerCodigoSemana(chave))}
+                />
+              )}
+
               {!verArquivadas && comparativo && (
                 <ComparativoParadas comparativo={comparativo} resumo={resumoVisivel} filtro={filtro} />
               )}
@@ -280,7 +342,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
             aoFechar={() => setVerDemanda(false)}
             /* Com uma maquina filtrada, abre no grupo DELA: quem filtrou a
                Furadeira 03 nao quer procurar "0002 FURADEIRA" numa lista. */
-            grupoInicial={filtro ? grupoIdDe(filtro) : null}
+            grupoInicial={grupoDoQuadro}
           />
         )}
 
@@ -349,6 +411,10 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
           analise={analiseNoPapel ? analise : null}
           entreMaquinas={entreMaquinas}
           porCiclo={porCiclo}
+          /* O que esta' na tela e' o que sai no papel — o veredito da
+             semana inclusive. */
+          demanda={leituraDemanda}
+          grupoNome={grupoDoCadastro ? `${grupoDoCadastro.codigo} · ${grupoDoCadastro.nome}` : null}
         />
       )}
     </div>

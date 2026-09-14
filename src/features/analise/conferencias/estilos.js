@@ -70,6 +70,35 @@ export const est = {
   comparativoSubDestaque: { ...tipo('legenda'), ...numeros, color: t.texto },
   comparativoNota: { ...tipo('legenda'), color: t.textoMedio, margin: 0 },
 
+  /* ---- programa da semana (demanda x entregue) ---- */
+  // O titulo e o seletor de semana dividem a linha: a semana e' PARTE do
+  // titulo do quadro, nao um filtro solto no meio do relatorio.
+  demandaTopoLinha: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: espaco.lg, flexWrap: 'wrap',
+  },
+  demandaSeletor: { display: 'flex', alignItems: 'center', gap: espaco.sm },
+  demandaSelect: {
+    minHeight: 32, padding: `0 ${espaco.sm}px`, background: t.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.texto, ...tipo('corpo'), ...numeros, fontFamily: 'inherit',
+  },
+  /**
+   * O quadro quando ainda NAO da' para comparar.
+   *
+   * Some seria pior: quem nunca cadastrou demanda nao descobriria que o
+   * relatorio sabe responder "isso atende?". Fica discreto — uma faixa, nao
+   * um painel — e leva direto para o que falta.
+   */
+  chamadaDemanda: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: espaco.lg, flexWrap: 'wrap',
+    padding: `${espaco.md}px ${espaco.xl}px`, marginBottom: espaco.xl,
+    background: t.papel, borderRadius: raio.lg,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+  },
+  chamadaTexto: { ...tipo('legenda'), color: t.textoMedio, flex: '1 1 420px', lineHeight: 1.55 },
+
   /* ---- faixa de numeros do topo ---- */
   kpis: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(172px, 1fr))',

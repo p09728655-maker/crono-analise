@@ -24,7 +24,10 @@ import { porMinuto, porPeca } from './formato.js';
  * de amostra carimbado. Os numeros sao pecas/hora e pecas/minuto; maquina
  * medida ha' pouco tempo leva uma NOTA em texto corrido, nao um selo.
  */
-export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, grupoDe, filtro, analise, entreMaquinas, porCiclo }) {
+export default function ImpressaoConferencias({
+  linhas, resumo, resumoPecas, grupoDe, filtro, analise, entreMaquinas, porCiclo,
+  demanda, grupoNome,
+}) {
   // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
   const gruposCobertos = [...new Set(resumo.map((g) => grupoDe?.(g.maquina)).filter(Boolean))].sort();
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -87,6 +90,62 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
           </div>
         ))}
       </section>
+
+      {/* O PROGRAMA DA SEMANA no papel, antes de tudo: o documento circula
+          na reuniao, e a primeira pergunta e' se atende. So' sai quando ha'
+          veredito — quadro de "falta configurar" e' conversa de tela, nao
+          de folha impressa. */}
+      {demanda?.estado === 'pronto' && demanda.veredito && (
+        <section style={imp.comparativo}>
+          <h2 style={imp.tituloSecao}>
+            O programa da semana {demanda.semana.chave}{grupoNome ? ` — ${grupoNome}` : ''}
+          </h2>
+          <div style={imp.comparativoGrade}>
+            <div style={imp.comparativoCaixa}>
+              <span style={imp.comparativoRotulo}>Exigido por máquina</span>
+              <span style={imp.comparativoValor}>
+                {Math.round(demanda.veredito.pecasPorHoraMaquina)} pç/h
+              </span>
+              <span style={imp.comparativoSub}>
+                takt {(demanda.veredito.taktMs / 1000).toFixed(1)}s por peça
+              </span>
+            </div>
+            <div style={imp.comparativoCaixa}>
+              <span style={imp.comparativoRotulo}>Entregue no relógio</span>
+              <span style={imp.comparativoValor}>
+                {Math.round(demanda.veredito.ritmoRelogio)} pç/h
+              </span>
+              <span style={imp.comparativoSub}>
+                {demanda.veredito.ritmoRodando
+                  ? `${Math.round(demanda.veredito.ritmoRodando)} pç/h com a máquina rodando`
+                  : 'sem parada marcada no período'}
+              </span>
+            </div>
+            <div style={demanda.veredito.atende ? imp.comparativoCaixa : imp.comparativoCaixaDestaque}>
+              <span style={imp.comparativoRotulo}>Máquinas necessárias</span>
+              <span style={imp.comparativoValor}>
+                {demanda.veredito.maquinasNecessarias.toFixed(1).replace('.', ',')}
+              </span>
+              <span style={imp.comparativoSub}>
+                o grupo tem {demanda.veredito.maquinas}
+                {demanda.veredito.maquinasSeNaoParasse
+                  && demanda.veredito.maquinasSeNaoParasse < demanda.veredito.maquinasNecessarias
+                  ? ` · sem as paradas, ${demanda.veredito.maquinasSeNaoParasse.toFixed(1).replace('.', ',')}`
+                  : ''}
+              </span>
+            </div>
+          </div>
+          <p style={imp.comparativoNota}>
+            {demanda.demanda.toLocaleString('pt-BR')} peças programadas, divididas entre
+            {' '}{demanda.veredito.maquinas} máquina(s) com
+            {' '}{Math.round(demanda.veredito.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina
+            na semana. O veredito usa o ritmo de RELÓGIO (paradas dentro): é o que sai do posto por
+            hora de presença. {demanda.veredito.atende
+              ? `O grupo ATENDE o programa, com ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de folga.`
+              : `O grupo NÃO ATENDE: falta ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de ritmo em cada máquina.`}
+          </p>
+        </section>
+      )}
 
       {comparativo && (
         <section style={imp.comparativo}>

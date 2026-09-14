@@ -8,8 +8,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  chaveSemana, interpretarColagem, lerCodigoSemana, maquinasNecessarias, numeroPtBr,
-  ordenarSemanas, resumoDaDemanda, ritmoExigido,
+  chaveSemana, interpretarColagem, intervaloIso, lerCodigoSemana, maquinasNecessarias, numeroPtBr,
+  leituraDaDemanda, ordenarSemanas, resumoDaDemanda, ritmoExigido, semanaIso, vereditoDaSemana,
 } from '../src/domain/demandaSemanal.js';
 
 const COLAGEM_REAL = `SEMANA	LOTE 1	LOTE 2	LOTE 3	LOTE 4	LOTE 5	TOTAL SEMANA	MÉDIA / LOTE
@@ -197,5 +197,153 @@ describe('o que a demanda exige', () => {
   it('sem ritmo medido nao da para dizer quantas maquinas', () => {
     expect(maquinasNecessarias({ pecas: 107086, horas: 44, ritmoMedido: 0 })).toBe(null);
     expect(maquinasNecessarias()).toBe(null);
+  });
+});
+
+describe('a semana de uma medicao', () => {
+  it('semana ISO comeca na segunda', () => {
+    // 14/09/2026 e uma segunda-feira: abre a semana 38.
+    expect(semanaIso(new Date('2026-09-14T10:00:00-03:00'))).toEqual({ ano: 2026, numero: 38 });
+    // Domingo 13/09 ainda fecha a semana 37.
+    expect(semanaIso(new Date('2026-09-13T10:00:00-03:00'))).toEqual({ ano: 2026, numero: 37 });
+  });
+
+  it('usa o dia da FABRICA, nao o do navegador', () => {
+    /**
+     * Domingo 13/09 as 23h em Sao Paulo e' segunda 02h em UTC. Pelo relogio
+     * do navegador a medicao pularia para a semana seguinte e seria
+     * comparada com o programa errado.
+     */
+    expect(semanaIso(new Date('2026-09-13T23:00:00-03:00'))).toEqual({ ano: 2026, numero: 37 });
+  });
+
+  it('a virada do ano cai na semana da quinta-feira', () => {
+    // 01/01/2026 e quinta: semana 1 de 2026, e 31/12/2025 (quarta) tambem.
+    expect(semanaIso(new Date('2026-01-01T09:00:00-03:00'))).toEqual({ ano: 2026, numero: 1 });
+    expect(semanaIso(new Date('2025-12-31T09:00:00-03:00'))).toEqual({ ano: 2026, numero: 1 });
+  });
+
+  it('data invalida nao vira semana', () => {
+    expect(semanaIso(new Date('nada'))).toBe(null);
+    expect(semanaIso('2026-13-45')).toBe(null);
+  });
+
+  it('o intervalo da semana vai de segunda a domingo', () => {
+    const { inicio, fim } = intervaloIso({ ano: 2026, numero: 38 });
+    expect(inicio.toISOString().slice(0, 10)).toBe('2026-09-14');
+    expect(fim.toISOString().slice(0, 10)).toBe('2026-09-20');
+  });
+
+  it('a semana 1 de 2026 comeca em 29/12/2025', () => {
+    expect(intervaloIso({ ano: 2026, numero: 1 }).inicio.toISOString().slice(0, 10))
+      .toBe('2025-12-29');
+  });
+
+  it('semana que nao existe nao tem intervalo', () => {
+    expect(intervaloIso({ ano: 2026, numero: 54 })).toBe(null);
+    expect(intervaloIso()).toBe(null);
+  });
+});
+
+describe('veredito da semana', () => {
+  /* Programa de 107.086 pecas, 3 furadeiras a 44 h = 811 pc/h por maquina. */
+  const base = { pecas: 107086, horas: 44, maquinas: 3 };
+
+  it('o que decide e o ritmo de RELOGIO, com as paradas dentro', () => {
+    // 700 pc/h no relogio (850 rodando) nao alcanca os 811 exigidos.
+    const v = vereditoDaSemana({ ...base, ritmoRelogio: 700, ritmoRodando: 850 });
+    expect(v.atende).toBe(false);
+    expect(v.folgaPct).toBeCloseTo(-13.7, 1);
+    // 107.086 / (44 x 700) = 3,48 furadeiras
+    expect(v.maquinasNecessarias).toBeCloseTo(3.48, 2);
+    // Sem as paradas seriam 2,86: a diferenca e o que ha a ganhar no setup
+    expect(v.maquinasSeNaoParasse).toBeCloseTo(2.86, 2);
+  });
+
+  it('atende quando o ritmo de relogio passa do exigido', () => {
+    const v = vereditoDaSemana({ ...base, ritmoRelogio: 900, ritmoRodando: 900 });
+    expect(v.atende).toBe(true);
+    expect(v.folgaPct).toBeGreaterThan(10);
+    expect(v.maquinasNecessarias).toBeLessThan(3);
+  });
+
+  it('sem ritmo medido ou sem horas nao ha veredito', () => {
+    expect(vereditoDaSemana({ ...base, ritmoRelogio: 0 })).toBe(null);
+    expect(vereditoDaSemana({ pecas: 107086, maquinas: 3, ritmoRelogio: 800 })).toBe(null);
+    expect(vereditoDaSemana()).toBe(null);
+  });
+
+  it('sem o ritmo rodando o veredito sai mesmo assim, sem o "se nao parasse"', () => {
+    const v = vereditoDaSemana({ ...base, ritmoRelogio: 700 });
+    expect(v.atende).toBe(false);
+    expect(v.ritmoRodando).toBe(null);
+    expect(v.maquinasSeNaoParasse).toBe(null);
+  });
+});
+
+describe('leitura da demanda para o relatorio', () => {
+  const demandas = [
+    { ano: 2026, numero: 36, pecas: 83864 },
+    { ano: 2026, numero: 37, pecas: 100637 },
+  ];
+  const medicao = new Date('2026-09-09T08:00:00-03:00');   // quarta da semana 37
+
+  it('sem programa cadastrado nao ha o que comparar', () => {
+    expect(leituraDaDemanda({ demandas: [] }).estado).toBe('sem-demanda');
+  });
+
+  it('escolhe a semana da medicao mais recente, nao a ultima cadastrada', () => {
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [new Date('2026-08-31T08:00:00-03:00'), medicao],
+    });
+    expect(l.semana.chave).toBe('037-26');
+    expect(l.demanda).toBe(100637);
+    expect(l.escolhaAutomatica).toBe(true);
+    // As duas medicoes caem em semanas diferentes (36 e 37)
+    expect(l.semanasMedidas).toBe(2);
+  });
+
+  it('a escolha do usuario manda sobre a data da medicao', () => {
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700, datas: [medicao],
+      semanaEscolhida: { ano: 2026, numero: 36 },
+    });
+    expect(l.semana.chave).toBe('036-26');
+    expect(l.demanda).toBe(83864);
+    expect(l.escolhaAutomatica).toBe(false);
+  });
+
+  it('medicao de semana sem programa nao vira veredito com o programa de outra', () => {
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [new Date('2026-09-16T08:00:00-03:00')],   // semana 38, nao cadastrada
+    });
+    expect(l.estado).toBe('sem-semana');
+    expect(l.semana.chave).toBe('038-26');
+    expect(l.veredito).toBe(null);
+  });
+
+  it('sem horas do grupo mostra a demanda e nao da veredito', () => {
+    const l = leituraDaDemanda({ demandas, maquinas: 3, ritmoRelogio: 700, datas: [medicao] });
+    expect(l.estado).toBe('sem-horas');
+    expect(l.demanda).toBe(100637);
+    expect(l.veredito).toBe(null);
+  });
+
+  it('com tudo no lugar, o veredito sai sobre o ritmo de relogio', () => {
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700, ritmoRodando: 850, datas: [medicao],
+    });
+    expect(l.estado).toBe('pronto');
+    // 100.637 / (3 x 44) = 762 pc/h por maquina; 700 medidos nao alcancam
+    expect(l.veredito.pecasPorHoraMaquina).toBeCloseTo(762.4, 1);
+    expect(l.veredito.atende).toBe(false);
+    expect(l.veredito.maquinasNecessarias).toBeCloseTo(3.27, 2);
+  });
+
+  it('o intervalo da semana acompanha, para a tela mostrar de quando e', () => {
+    const l = leituraDaDemanda({ demandas, horas: 44, maquinas: 3, ritmoRelogio: 700, datas: [medicao] });
+    expect(l.intervalo.inicio.toISOString().slice(0, 10)).toBe('2026-09-07');
   });
 });

@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.73.0',
+    data: '2026-09-14',
+    titulo: 'O relatório responde: isso atende?',
+    itens: [
+      'NOVO QUADRO "O PROGRAMA DA SEMANA", no topo do relatório Ritmo por máquina, logo abaixo dos números do período. Põe lado a lado o que a demanda EXIGE de cada máquina e o que o grupo ENTREGA — e fecha com o número que decide: quantas máquinas o programa pede ao ritmo medido, contra quantas o grupo tem.',
+      'O VEREDITO USA O RITMO DE RELÓGIO, com as paradas dentro. É o que sai do posto por hora de presença. Comparar a demanda com o ritmo de máquina rodando daria um "atende" otimista exatamente do tamanho da parada — a peça que não saiu porque a máquina parou também não entrou no caminhão. O ritmo rodando aparece ao lado, como referência.',
+      'E SEPARA O PROBLEMA DE CAPACIDADE DO DE PARADA. Quando o grupo não atende mas atenderia sem as paradas, o quadro diz isso com todas as letras: "antes de falar em máquina nova, o que falta é tempo parado". Quando nem sem parada o programa caberia, também diz — aí falta capacidade de verdade.',
+      'A SEMANA É ESCOLHIDA PELA DATA DAS MEDIÇÕES (semana ISO, no relógio da fábrica), e dá para trocar no próprio quadro. Medição de uma semana nunca é comparada com o programa de outra sem que a tela avise: se não houver programa para aquela semana, ela diz qual falta em vez de usar a semana errada.',
+      'SEM PROGRAMA, SEM JORNADA OU COM VÁRIOS GRUPOS EM TELA, o quadro não some — vira uma faixa discreta dizendo o que falta, com o atalho para configurar. E ele só compara quando há UM grupo em vista: misturar furadeira com embalagem daria um "exigido por máquina" que não é de ninguém.',
+      'TUDO ISSO SAI NA FOLHA IMPRESSA, com os mesmos números e o mesmo veredito — o documento circula na reunião, e é lá que a pergunta é feita.',
+    ],
+  },
+  {
     versao: '2.72.0',
     data: '2026-09-14',
     titulo: 'Demanda semanal: o relatório passa a saber o que é preciso fazer',
