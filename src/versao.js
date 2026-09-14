@@ -13,6 +13,20 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.74.0',
+    data: '2026-09-14',
+    titulo: 'Cadastrar máquina deixou de ser rolar a tela inteira',
+    itens: [
+      'A TELA DE MÁQUINAS VIROU DUAS COLUNAS: os grupos ficam à esquerda, com o código da fábrica e quantas máquinas cada um tem; à direita, só as máquinas do grupo que você escolheu. Antes era uma lista só, com todos os grupos e todas as máquinas abertos ao mesmo tempo.',
+      'O CAMPO DE CADASTRAR SUBIU PARA O TOPO. Ele ficava no fim da lista: com trinta máquinas, cadastrar mais uma era rolar a tela inteira para achar o campo, e rolar de novo para conferir se entrou.',
+      'E O GRUPO VEM DA COLUNA DA ESQUERDA, não de uma lista suspensa. Com FURADEIRA aberto, a tela diz "em 0002 · FURADEIRA" ao lado do campo e é ali que a máquina nasce — cadastrar oito furadeiras são oito digitações e nenhuma ida ao seletor. A lista suspensa só aparece em "Todas", onde não há grupo de onde tirar.',
+      'BUSCA POR NOME quando o cadastro passa de oito máquinas, ignorando maiúscula e acento. "fresadora" acha FRESADORA 01.',
+      'EXCLUIR AGORA PERGUNTA ANTES — máquina e grupo. A lista ficou mais compacta e os botões, mais perto: um clique errado apagaria cadastro sem aviso. Ao excluir um grupo a tela ainda lembra que as máquinas dele não são apagadas, só ficam sem grupo. ESC desarma a pergunta; Editar e Desativar continuam em um clique.',
+      'CADASTRAR COM A BUSCA LIGADA NÃO ESCONDE MAIS A MÁQUINA NOVA: a busca se limpa sozinha e a linha recém-criada é trazida para a parte visível da lista. Antes, com um filtro no campo, a máquina entrava no banco e não aparecia em lugar nenhum — quem cadastrou concluía que falhou e cadastrava de novo.',
+      'AS AÇÕES DO GRUPO (editar, excluir) saíram de cada linha e ficam com o grupo aberto: seis grupos vezes dois botões eram doze links disputando atenção com os nomes. Nada sumiu — excluir grupo continua sem apagar máquina, que só fica sem grupo.',
+    ],
+  },
+  {
     versao: '2.73.0',
     data: '2026-09-14',
     titulo: 'O relatório responde: isso atende?',

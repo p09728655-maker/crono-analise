@@ -1,6 +1,18 @@
 /**
  * DEMANDA SEMANAL — o programa de producao por grupo de maquina.
  *
+ * POR QUE AQUI DENTRO, E NAO NUM api/demanda.js PROPRIO: o plano Hobby da
+ * Vercel aceita 12 funcoes serverless por deploy, e o projeto ja' estava
+ * exatamente nas 12. O arquivo proprio virava a 13a e derrubava o DEPLOY
+ * INTEIRO — nao so' o endpoint novo, o app todo parava de publicar (foi o
+ * que aconteceu no deploy do PR #73). Mesma razao pela qual a recuperacao
+ * de senha mora dentro de api/sessao.js.
+ *
+ * Este arquivo esta' em `_lib` de proposito: pasta com underscore nao vira
+ * funcao na Vercel. Quem expoe a rota e' api/maquinas.js, com ?demanda=1 —
+ * e o assunto casa: a demanda e' de um GRUPO de maquina, e a jornada do
+ * grupo (horas_semana) ja' mora naquele cadastro.
+ *
  * Guarda o que a planilha do PCP ja' diz: quantas pecas o grupo (0002
  * FURADEIRA, por exemplo) tem de entregar em cada semana. E' o numerador do
  * ritmo exigido; o denominador (horas disponiveis) mora no proprio grupo,
@@ -23,9 +35,9 @@
  *    de PCP, nao configuracao de administrador. A mesma regra de
  *    pode_escrever() que a RLS aplica no banco.
  */
-import { autenticar, exigirPapel } from './_lib/auth.js';
-import { erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
-import { inteiro, lista, uuid } from './_lib/validar.js';
+import { exigirPapel } from './auth.js';
+import { erroValidacao, json, lerCorpo, naoEncontrado } from './http.js';
+import { inteiro, lista, uuid } from './validar.js';
 
 /** Duas planilhas de ano cheio numa colagem so' — teto do que faz sentido. */
 const MAX_SEMANAS = 120;
@@ -51,9 +63,7 @@ async function grupoDaEmpresa(db, empresaId, valor, campo = 'grupo') {
   return id;
 }
 
-export default handler(async (req, res) => {
-  permitir(req, ['GET', 'POST', 'DELETE']);
-  const auth = await autenticar(req);
+export async function demandaSemanal(req, res, auth) {
   const { empresaId } = auth;
 
   if (req.method === 'GET') {
@@ -135,4 +145,4 @@ export default handler(async (req, res) => {
     if (!apagada) throw naoEncontrado('Semana nao encontrada neste grupo');
     return json(res, 200, { demandas: await listar(db, empresaId, grupoId) });
   });
-});
+}

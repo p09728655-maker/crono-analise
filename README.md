@@ -112,6 +112,13 @@ estouraria assim mesmo. E é **por semana** porque o programa varia demais
 para um campo fixo: nas 36 semanas de 2026 as furadeiras foram de 64.750 a
 134.586 peças (média 107.086, CV 17,5%).
 
+A rota da demanda mora **dentro de `api/maquinas`** (`?demanda=1`), e não
+num `api/demanda.js` próprio: o plano Hobby aceita **12 funções serverless
+por deploy** e o projeto está exatamente nas 12 — a 13ª derruba o deploy
+inteiro (ver *Deploy*). O assunto casa, porque a demanda é de um grupo e a
+jornada do grupo já mora nesse cadastro. `test/limite-funcoes.test.js` falha
+antes de o deploy falhar.
+
 As **horas disponíveis por máquina por semana** ficam no cadastro do grupo
 (`grupos_maquina.horas_semana`, alterável em **Máquinas** ou na própria tela
 de demanda — o PATCH de grupo exige papel de administrador). Com 3 máquinas
@@ -512,6 +519,25 @@ A conferência do **cronômetro ao vivo** também ganhou período: o fim é o
 próprio `salvo_em` e o início sai dele menos a duração cronometrada. Antes
 essa medição ficava sem período nenhum.
 
+### Máquinas: grupo à esquerda, cadastro no topo
+
+O cadastro (**Ferramentas → Máquinas**) é de duas colunas: os **grupos** à
+esquerda (com o código do ERP e quantas máquinas cada um tem) e, à direita,
+as máquinas **do grupo escolhido** — cadastro no topo, busca abaixo dele e a
+lista rolando dentro da própria caixa.
+
+A escolha da esquerda é o contexto de tudo: filtra a lista e é o grupo que a
+próxima máquina recebe, então cadastrar oito furadeiras são oito digitações e
+nenhuma ida ao seletor. O `<select>` de grupo só aparece em **Todas**, onde
+não há contexto de onde tirar. **Sem grupo** e **Todas** são filtros, não
+grupos: `grupoParaCadastrar()` traduz os dois para `null`/seletor antes de
+chamar a API — mandar o id falso deles daria erro de validação no lugar de
+cadastrar a máquina sem grupo.
+
+A busca aparece com mais de oito máquinas e ignora caixa e acento (a mesma
+`nomeChave` que agrupa medição). **Excluir** pede confirmação na própria
+linha: a lista ficou densa, e o clique errado ali apaga cadastro.
+
 ### Analistas: o campo que era texto livre
 
 Os estudos gravavam o analista como **texto digitado**, e o banco de produção
@@ -746,6 +772,16 @@ Verificado, não presumido: `SET ROLE anon; SELECT * FROM estudos` retorna
 ---
 
 ## Deploy (Vercel)
+
+> **12 funções serverless por deploy** é o teto do plano Hobby, e o projeto
+> vive exatamente nele. Passar do teto não quebra só o endpoint novo:
+> **derruba o deploy inteiro** — o app para de publicar e a produção fica na
+> versão anterior, sem nada na tela dizendo por quê. Já aconteceu duas vezes
+> (recuperação de senha, resolvida dentro de `api/sessao.js`; demanda semanal,
+> resolvida em `api/_lib/demanda.js` + `api/maquinas.js?demanda=1`). Pasta e
+> arquivo com underscore não viram função — é onde mora código compartilhado.
+> `test/limite-funcoes.test.js` conta os arquivos e falha antes do deploy;
+> nem `vite build` nem os outros testes olham a pasta `api/`.
 
 Em **Settings → Environment Variables**:
 

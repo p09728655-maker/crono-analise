@@ -72,10 +72,30 @@ let proximoMotivo = 1;
 const gruposMaq = [
   { id: 'g1', codigo: '0001', nome: 'SECCIONADORA' },
   { id: 'g2', codigo: '0002', nome: 'FURADEIRA' },
+  { id: 'g4', codigo: '0004', nome: 'FRESADORA' },
 ];
+/**
+ * Cadastro do TAMANHO do real (print do usuario de 14/09: oito furadeiras,
+ * quatro fresadoras, mais os grupos vazios). Com duas maquinas a tela
+ * parecia bem resolvida; o problema so' aparece com a lista cheia — e e'
+ * com ela que a busca e o filtro por grupo precisam ser provados.
+ */
+const furadeira = (id, nome, ativa = true) =>
+  ({ id, nome, ativa, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' });
+const fresadora = (id, nome) =>
+  ({ id, nome, ativa: true, grupo_id: 'g4', grupo_codigo: '0004', grupo_nome: 'FRESADORA' });
 const maquinasCad = [
-  { id: 'm1', nome: 'Furadeira 12', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
-  { id: 'm2', nome: 'Furadeira 16', ativa: false, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+  furadeira('m1', 'Furadeira 12'),
+  furadeira('m2', 'Furadeira 16', false),
+  furadeira('m3', 'FURADEIRA 04'),
+  furadeira('m4', 'FURADEIRA 07 UN II MANUAL'),
+  furadeira('m5', 'FURADEIRA 11'),
+  furadeira('m6', 'FURADEIRA 14'),
+  furadeira('m7', 'FURADEIRA 15 UN II'),
+  fresadora('m8', 'FRESADORA 01'),
+  fresadora('m9', 'FRESADORA 03'),
+  // Sem grupo: e' o filtro que mais erra, porque "Sem grupo" nao e' grupo.
+  { id: 'm10', nome: 'ESQUADREJADEIRA', ativa: true, grupo_id: null },
 ];
 const codigoDe = (v) => String(v || '').trim().toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -86,6 +106,39 @@ window.fetch = async (url, opts = {}) => {
   const alvo = String(url);
 
   if (alvo.includes('/maquinas')) {
+    /**
+     * O mock precisa MEXER na lista, nao so' devolve-la.
+     *
+     * Enquanto ele respondia o cadastro inteiro em qualquer metodo, o teste
+     * do "Cancelar" da exclusao passava mesmo com o botao ligado no
+     * removerMaquina(): a linha continuava na tela nos dois caminhos. Um
+     * teste que passa dos dois jeitos nao protege nada.
+     */
+    if (metodo === 'DELETE') {
+      window.__deletes.push(alvo);
+      const id = new URL(alvo, location.origin).searchParams.get('id');
+      const i = maquinasCad.findIndex((m) => m.id === id);
+      if (i >= 0) maquinasCad.splice(i, 1);
+    }
+    if (metodo === 'PATCH') {
+      const corpo = JSON.parse(opts.body || '{}');
+      window.__patches.push({ url: alvo, corpo });
+      const id = new URL(alvo, location.origin).searchParams.get('id');
+      const m = maquinasCad.find((x) => x.id === id);
+      if (m) Object.assign(m, corpo.nome ? { nome: corpo.nome } : {},
+        typeof corpo.ativa === 'boolean' ? { ativa: corpo.ativa } : {});
+    }
+    if (metodo === 'POST') {
+      const corpo = JSON.parse(opts.body || '{}');
+      window.__posts.push({ url: alvo, corpo });
+      if (corpo.nome) {
+        const g = gruposMaq.find((x) => x.id === corpo.grupoId) || null;
+        maquinasCad.push({
+          id: `m${maquinasCad.length + 1}`, nome: corpo.nome, ativa: true,
+          grupo_id: g?.id || null, grupo_codigo: g?.codigo, grupo_nome: g?.nome,
+        });
+      }
+    }
     return new Response(JSON.stringify({ maquinas: maquinasCad, grupos: gruposMaq }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     });

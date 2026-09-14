@@ -22,6 +22,7 @@
 import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
 import { decimal, texto, uuid } from './_lib/validar.js';
+import { demandaSemanal } from './_lib/demanda.js';
 
 // Nome canonico: apara e recolhe espaco repetido. Caixa e acento ficam —
 // e' o nome EXIBIDO; a unicidade compara sem caixa (indice lower/btrim).
@@ -78,6 +79,21 @@ async function grupoValido(db, empresaId, grupoId) {
 export default handler(async (req, res) => {
   permitir(req, ['GET', 'POST', 'PATCH', 'DELETE']);
   const auth = await autenticar(req);
+
+  /**
+   * A DEMANDA SEMANAL entra por aqui (?demanda=1), antes de tudo.
+   *
+   * O plano Hobby da Vercel aceita 12 funcoes serverless por deploy e o
+   * projeto ja' estava exatamente nas 12: um api/demanda.js proprio virava
+   * a 13a e derrubava o deploy INTEIRO — foi o que aconteceu no PR #73. O
+   * assunto casa com esta funcao (a demanda e' de um GRUPO, e a jornada do
+   * grupo ja' mora neste cadastro), e a regra de papel dela e' OUTRA: o
+   * programa de producao e' trabalho de PCP (admin ou analista), enquanto o
+   * cadastro de maquina e' so' do administrador. Por isso o desvio vem
+   * ANTES do exigirPapel la' embaixo. Ver api/_lib/demanda.js.
+   */
+  if (req.query?.demanda === '1') return demandaSemanal(req, res, auth);
+
   const { empresaId } = auth;
   const id = req.query?.id;
   const grupoParam = req.query?.grupo;

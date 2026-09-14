@@ -48,6 +48,116 @@ checar(/Desativada/.test(texto), 'maquina desativada aparece marcada, nao some')
 checar(await dialogo.getByRole('button', { name: 'Imprimir' }).count() === 1,
   'a tela tem o botao Imprimir');
 
+/* ============================================================
+   A COLUNA DE GRUPOS: filtra a lista e da contexto ao cadastro.
+
+   Com o cadastro cheio (o do print do usuario), a tela antiga era um
+   scroll unico com o campo de cadastrar no FIM. O que se prova aqui e'
+   que escolher o grupo passou a fazer as duas coisas que importam:
+   encurtar a lista e dizer onde a proxima maquina vai nascer.
+   ============================================================ */
+const grupoFuradeira = dialogo.getByRole('button', { name: /FURADEIRA/ }).first();
+await grupoFuradeira.click();
+await p.waitForTimeout(150);
+const soFuradeiras = await dialogo.innerText();
+checar(/FURADEIRA 11/.test(soFuradeiras) && !/FRESADORA 01/.test(soFuradeiras),
+  'escolher o grupo mostra so as maquinas dele');
+checar(/em\s+0002 · FURADEIRA/.test(soFuradeiras),
+  'com o grupo aberto, o cadastro diz onde a maquina vai nascer — sem lista suspensa');
+checar(await dialogo.locator('select').count() === 0,
+  'e o seletor de grupo nem aparece: ele so existe em "Todas"');
+
+await dialogo.getByLabel('Nome da nova máquina').fill('FURADEIRA 21');
+await dialogo.getByRole('button', { name: '+ Cadastrar' }).click();
+await p.waitForTimeout(250);
+const enviado = await p.evaluate(() => window.__posts.filter((x) => /maquinas/.test(x.url)).pop());
+checar(enviado?.corpo?.nome === 'FURADEIRA 21' && enviado?.corpo?.grupoId === 'g2',
+  'a maquina sobe ja no grupo aberto (grupoId g2), sem ninguem escolher nada');
+checar(/FURADEIRA 21/.test(await dialogo.innerText()), 'e aparece na lista do grupo');
+
+/* "Sem grupo" NAO e' grupo: mandar o id falso dele para a API daria erro
+   de validacao no lugar de cadastrar a maquina sem grupo. */
+await dialogo.getByRole('button', { name: /Sem grupo/ }).click();
+await p.waitForTimeout(150);
+checar(/ESQUADREJADEIRA/.test(await dialogo.innerText()) && !/FURADEIRA 11/.test(await dialogo.innerText()),
+  '"Sem grupo" lista as maquinas que nao tem grupo nenhum');
+await dialogo.getByLabel('Nome da nova máquina').fill('LIXADEIRA');
+await dialogo.getByRole('button', { name: '+ Cadastrar' }).click();
+await p.waitForTimeout(250);
+const semGrupo = await p.evaluate(() => window.__posts.filter((x) => /maquinas/.test(x.url)).pop());
+checar(semGrupo?.corpo?.nome === 'LIXADEIRA' && semGrupo?.corpo?.grupoId === null,
+  'cadastrar em "Sem grupo" manda grupoId nulo — nao o id do filtro');
+
+/* ---- a busca, que so aparece quando a lista justifica ---- */
+await dialogo.getByRole('button', { name: /^Todas/ }).click();
+await p.waitForTimeout(150);
+const busca = dialogo.getByLabel('Buscar máquina');
+checar(await busca.count() === 1, 'com o cadastro cheio, a busca aparece');
+await busca.fill('fresadora');
+await p.waitForTimeout(150);
+const buscado = await dialogo.innerText();
+checar(/FRESADORA 01/.test(buscado) && !/FURADEIRA 11/.test(buscado),
+  'a busca acha pelo nome, ignorando caixa');
+await busca.fill('');
+await p.waitForTimeout(150);
+
+/* ---- excluir pede confirmacao: a lista ficou densa ----
+   Os DOIS caminhos sao exercitados de verdade: o mock apaga no DELETE,
+   entao "cancelar nao apaga" so' passa se o cancelar realmente nao chamar
+   a API. Com o mock devolvendo sempre a lista inteira, essa asserção
+   passava ate' com o Cancelar ligado no removerMaquina. */
+const deletesAntes = await p.evaluate(() => window.__deletes.length);
+await dialogo.getByRole('button', { name: 'Excluir FURADEIRA 11' }).click();
+await p.waitForTimeout(150);
+checar(/Excluir do cadastro\?/.test(await dialogo.innerText()),
+  'excluir pergunta antes — clique errado numa lista densa apagaria cadastro');
+await dialogo.getByRole('button', { name: 'Cancelar' }).first().click();
+await p.waitForTimeout(200);
+checar(await p.evaluate(() => window.__deletes.length) === deletesAntes,
+  'cancelar nao chama a API — nenhum DELETE sai');
+checar(/FURADEIRA 11/.test(await dialogo.innerText()), 'e a maquina continua no cadastro');
+
+/* ESC tambem desarma, sem precisar mirar o Cancelar. */
+await dialogo.getByRole('button', { name: 'Excluir FURADEIRA 11' }).click();
+await p.waitForTimeout(150);
+await p.keyboard.press('Escape');
+await p.waitForTimeout(150);
+checar(!/Excluir do cadastro\?/.test(await dialogo.innerText()) && await dialogo.count() === 1,
+  'ESC desarma a confirmacao sem fechar a janela');
+
+/* E confirmar apaga DE VERDADE: e o ramo destrutivo da interacao nova. */
+await dialogo.getByRole('button', { name: 'Excluir FURADEIRA 14' }).click();
+await p.waitForTimeout(150);
+await dialogo.getByRole('button', { name: 'Excluir', exact: true }).last().click();
+await p.waitForTimeout(300);
+const depois = await dialogo.innerText();
+checar(!/FURADEIRA 14/.test(depois), 'confirmar apaga a maquina do cadastro');
+checar(await p.evaluate(() => window.__deletes.some((u) => /id=m6/.test(u))),
+  'e o DELETE sai com o id da maquina certa');
+
+/* ---- cadastrar com a busca ligada nao pode esconder a maquina nova ---- */
+await busca.fill('fresadora');
+await p.waitForTimeout(150);
+await dialogo.getByLabel('Nome da nova máquina').fill('PRENSA 1');
+await dialogo.getByRole('button', { name: '+ Cadastrar' }).click();
+await p.waitForTimeout(300);
+checar(/PRENSA 1/.test(await dialogo.innerText()),
+  'a maquina recem-cadastrada aparece mesmo com a busca ligada — a busca sai do caminho');
+checar(await busca.inputValue() === '', 'e o campo de busca fica limpo');
+
+/* ---- excluir GRUPO tambem pergunta, e diz o que acontece com as maquinas ---- */
+await dialogo.getByRole('button', { name: /^0004/ }).click();
+await p.waitForTimeout(150);
+await dialogo.getByRole('button', { name: 'Excluir grupo FRESADORA' }).click();
+await p.waitForTimeout(150);
+const avisoGrupo = await dialogo.innerText();
+checar(/não são apagadas/.test(avisoGrupo),
+  'excluir grupo avisa que as maquinas ficam sem grupo, em vez de sumir');
+await dialogo.getByRole('button', { name: 'Cancelar' }).first().click();
+await p.waitForTimeout(150);
+
+if (process.env.FOTO) await dialogo.screenshot({ path: process.env.FOTO });
+
 /* ------------------------------------------- o documento de impressao */
 const impresso = await p.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
 checar(/Cadastro de Máquinas/.test(impresso), 'o papel e um documento proprio, com titulo');
