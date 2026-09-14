@@ -22,7 +22,10 @@ export default function TabelaRitmoPorPeca({ resumoPecas }) {
           Quantas peças saem por hora e por minuto, peça a peça, com a máquina rodando.
           A coluna <strong>Acion.</strong> diz quantas vezes o motor é acionado para
           fazer uma peça: peça de mais acionamentos rende menos peças/hora sem a
-          máquina estar mais lenta.
+          máquina estar mais lenta. <strong>Por peça</strong> é o tempo de uma peça
+          inteira — manuseio mais todos os acionamentos, o número que entra na carga
+          da máquina; <strong>Por acion.</strong> é o tempo de um acionamento só, o
+          comparável entre peças de furação diferente.
         </p>
       </div>
       <table style={est.tabela}>
@@ -41,6 +44,9 @@ export default function TabelaRitmoPorPeca({ resumoPecas }) {
             <th style={est.thNum}>Tempo rodando</th>
             <th style={est.thNum}>Peças/hora</th>
             <th style={est.thNum}>Peças/min</th>
+            <th style={est.thNum} title="Tempo de uma peça inteira: manuseio mais todos os acionamentos do motor">
+              Por peça
+            </th>
             <th style={est.thNum} title="Tempo de um acionamento do motor — comparável entre peças de furação diferente">
               Por acion.
             </th>
@@ -72,6 +78,7 @@ export default function TabelaRitmoPorPeca({ resumoPecas }) {
               <td style={est.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
               <td style={est.tdNumForte}>{Math.round(g.ritmoMedio)}</td>
               <td style={est.tdNum}>{porMinuto(g.ritmoMedio)}</td>
+              <td style={est.tdNum}>{(g.cicloMedioMs / 1000).toFixed(1)}s</td>
               <td style={est.tdNum}>{(g.cicloMotorMs / 1000).toFixed(1)}s</td>
             </tr>
           ))}

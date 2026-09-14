@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.71.0',
+    data: '2026-09-14',
+    titulo: 'Tempo por peça no quadro Ritmo por peça',
+    itens: [
+      'COLUNA "POR PEÇA" NO QUADRO RITMO POR PEÇA, na tela e na folha impressa: quantos segundos leva UMA peça no posto, do começo ao fim — manuseio mais todos os acionamentos do motor. É o número que entra na carga máquina e no cálculo de lote, e que até agora só saía dividindo 3.600 pelas peças/hora na calculadora.',
+      'O NÚMERO JÁ ERA CALCULADO, só não aparecia: é o tempo com a máquina rodando dividido pelas peças, ponderado como o ritmo (soma de peças sobre soma de tempo, não média de médias). Nenhuma conta mudou — peças/hora, peças/min e por acionamento saem iguais aos da versão anterior.',
+      'POR PEÇA E POR ACION. RESPONDEM PERGUNTAS DIFERENTES. "Por peça" é o que a peça custa naquele posto. "Por acion." é o tempo de um acionamento do motor, que é o que compara peças de furação diferente na mesma máquina. Numa peça de 2 acionamentos, o "por peça" é o dobro do "por acion.".',
+      'NÃO É TAKT TIME, e a diferença importa na hora de planejar: o Takt vem da DEMANDA (tempo disponível ÷ quantidade) e vive no estudo de tempos, em Ajustes do estudo. Esta coluna é o tempo MEDIDO da peça no posto. Um diz o ritmo que o cliente exige; o outro, o ritmo que a máquina entrega.',
+    ],
+  },
+  {
     versao: '2.70.0',
     data: '2026-09-11',
     titulo: 'Observação na conferência rápida',

@@ -86,7 +86,9 @@ No PC, o botão **Conferências** no topo da Análise abre o relatório
 pedido de quem usa — o anterior falava em CV%, ciclo do motor e critérios,
 e carimbava "amostra insuficiente" em quase tudo): ritmo por máquina e por
 peça em **peças/hora e peças/minuto**, ritmo médio **ponderado pelo tempo**
-(Σ peças / Σ tempo rodando, não média de taxas), tempo rodando, tempo
+(Σ peças / Σ tempo rodando, não média de taxas), o **tempo por peça** em
+segundos ao lado do tempo por acionamento do motor (um é o que a peça custa
+no posto, o outro compara peças de furação diferente), tempo rodando, tempo
 parado com o setup destacado, melhor e pior registro com a peça — mais a
 tabela completa e impressão em **documento A4 próprio** (não a tela no
 papel). O **filtro por máquina** da lateral vale para o relatório inteiro,

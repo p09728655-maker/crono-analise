@@ -350,6 +350,7 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
                 <th style={imp.thNum}>Tempo rodando</th>
                 <th style={imp.thNum}>Peças/hora</th>
                 <th style={imp.thNum}>Peças/min</th>
+                <th style={imp.thNum}>Por peça</th>
                 <th style={imp.thNum}>Por acion.</th>
               </tr>
             </thead>
@@ -365,6 +366,7 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
                   <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
                   <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
                   <td style={imp.tdNum}>{porMinuto(g.ritmoMedio)}</td>
+                  <td style={imp.tdNum}>{(g.cicloMedioMs / 1000).toFixed(1)}s</td>
                   <td style={imp.tdNum}>{(g.cicloMotorMs / 1000).toFixed(1)}s</td>
                 </tr>
               ))}
@@ -372,8 +374,10 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
           </table>
           <p style={imp.nota}>
             ACION.: quantas vezes o motor é acionado para fazer uma peça. Peça de mais
-            acionamentos rende menos peças/hora sem a máquina estar mais lenta — POR ACION. é o
-            número comparável entre peças de furação diferente.
+            acionamentos rende menos peças/hora sem a máquina estar mais lenta. POR PEÇA é o
+            tempo de uma peça inteira — manuseio mais todos os acionamentos, o número que entra
+            na carga da máquina; POR ACION. é o tempo de um acionamento só, o comparável entre
+            peças de furação diferente.
           </p>
 
           {/* A REGUA DO CICLO no papel: pecas de mesmo acionamento deveriam
