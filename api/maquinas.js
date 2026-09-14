@@ -21,7 +21,7 @@
  */
 import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
-import { decimal, texto, uuid } from './_lib/validar.js';
+import { decimal, inteiro, texto, uuid } from './_lib/validar.js';
 import { demandaSemanal } from './_lib/demanda.js';
 
 // Nome canonico: apara e recolhe espaco repetido. Caixa e acento ficam —
@@ -39,7 +39,7 @@ function codigoDe(valor) {
 }
 
 const listarGrupos = (db, empresaId) => db`
-  SELECT id, codigo, nome, horas_semana FROM grupos_maquina
+  SELECT id, codigo, nome, horas_semana, setups_dia, setup_min, dias_semana FROM grupos_maquina
    WHERE empresa_id = ${empresaId}
    ORDER BY codigo`;
 
@@ -171,8 +171,9 @@ export default handler(async (req, res) => {
         if (!atual) throw naoEncontrado('Grupo de maquina nao encontrado');
 
         const tem = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
-        if (!tem('codigo') && !tem('nome') && !tem('horasSemana')) {
-          throw erroValidacao('Nada a atualizar: informe "codigo", "nome" ou "horasSemana"');
+        const campos = ['codigo', 'nome', 'horasSemana', 'setupsDia', 'setupMin', 'diasSemana'];
+        if (!campos.some(tem)) {
+          throw erroValidacao(`Nada a atualizar: informe ${campos.map((c) => `"${c}"`).join(', ')}`);
         }
         if (tem('codigo')) {
           const codigo = codigoDe(corpo.codigo);
@@ -205,8 +206,34 @@ export default handler(async (req, res) => {
             : decimal(corpo.horasSemana, 'horasSemana', { min: 0.5, max: 168 });
           await db`UPDATE grupos_maquina SET horas_semana = ${horas} WHERE id = ${grupoId}`;
         }
+        /**
+         * SETUP PLANEJADO: trocas por dia, minutos por troca e dias de
+         * producao na semana, por maquina. Mesma regra das horas — nulo
+         * apaga. Zero e' valido e diferente de nulo: "este grupo nao faz
+         * setup" e' informacao; "nao sei" nao e'.
+         */
+        const apagar = (v) => v === null || v === '';
+        if (tem('setupsDia')) {
+          const n = apagar(corpo.setupsDia)
+            ? null
+            : inteiro(corpo.setupsDia, 'setupsDia', { min: 0, max: 100 });
+          await db`UPDATE grupos_maquina SET setups_dia = ${n} WHERE id = ${grupoId}`;
+        }
+        if (tem('setupMin')) {
+          const min = apagar(corpo.setupMin)
+            ? null
+            : decimal(corpo.setupMin, 'setupMin', { min: 0, max: 600 });
+          await db`UPDATE grupos_maquina SET setup_min = ${min} WHERE id = ${grupoId}`;
+        }
+        if (tem('diasSemana')) {
+          const dias = apagar(corpo.diasSemana)
+            ? null
+            : inteiro(corpo.diasSemana, 'diasSemana', { min: 1, max: 7 });
+          await db`UPDATE grupos_maquina SET dias_semana = ${dias} WHERE id = ${grupoId}`;
+        }
         const [grupo] = await db`
-          SELECT id, codigo, nome, horas_semana FROM grupos_maquina WHERE id = ${grupoId}`;
+          SELECT id, codigo, nome, horas_semana, setups_dia, setup_min, dias_semana
+            FROM grupos_maquina WHERE id = ${grupoId}`;
         return json(res, 200, { grupo });
       }
 

@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.78.0',
+    data: '2026-09-14',
+    titulo: 'O setup entra na conta — e uma semana pode ser digitada',
+    itens: [
+      'O SETUP NÃO ESTAVA EM LUGAR NENHUM DA CONTA. A troca de peça (gabarito, batente, brocas) acontece entre uma medição e a seguinte, e o cronômetro só roda na corrida: nas furadeiras, 49 min parados em 4h22 de medição e menos de 1 min marcado como troca/setup — num posto que troca de peça cinco vezes por dia. Nem o ritmo entregue nem as horas disponíveis viam esse tempo, e o veredito saía otimista exatamente por ele: a semana de pico (134.586 peças) "sobrava" a 510 pç/h por máquina; com o setup, pede 629 — e não cabe em 611.',
+      'AGORA O SETUP É PLANEJADO, NO GRUPO: setups por dia × dias de produção na semana × minutos por setup, por máquina. Entra na tela de Demanda semanal, no bloco Tempo disponível, que mostra a conta inteira a cada tecla — jornada, o que o setup come e as horas produtivas que sobram — antes de salvar. O ritmo exigido, o takt e as máquinas necessárias passam a ser calculados sobre as horas produtivas.',
+      'ENTRA UMA VEZ SÓ. Se uma medição também marcar parada de troca/setup, o relatório tira esse tempo do ritmo de relógio antes de comparar — o setup planejado já saiu das horas, e contar nos dois lados seria descontar duas vezes. O quadro diz quando fez isso.',
+      'SEM SETUP INFORMADO O QUADRO AVISA, na tela e no papel: "horas de jornada cheia, veredito otimista pela troca de peça". Não presumo nenhum setup, nem dias de produção — pelo mesmo motivo que não presumo 44 h.',
+      'UMA SEMANA PODE SER INCLUÍDA A MÃO: semana (S38), início e peças, para a semana reprogramada ou quando a planilha não está aberta. Mesma rota da colagem, mesma mescla; a tela mostra o período antes de gravar e avisa se a semana já existe (substitui). O início é obrigatório aqui — digitando uma semana, não há desculpa para casar por número.',
+    ],
+  },
+  {
     versao: '2.77.0',
     data: '2026-09-14',
     titulo: 'A semana da fábrica casa por DATA, não por número',

@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  chaveSemana, comoDia, comoPeriodo, interpretarColagem, intervaloIso, lerCodigoSemana,
+  chaveSemana, comoDia, comoPeriodo, horasDeSetup, interpretarColagem, intervaloIso, lerCodigoSemana,
   lerDataPtBr, maquinasNecessarias, numeroPtBr, leituraDaDemanda, ordenarSemanas,
   periodoDaSemana, periodosDoPrograma, resumoDaDemanda, ritmoExigido, semanaIso,
   semanaQueContem, vereditoDaSemana,
@@ -810,6 +810,115 @@ describe('a data completa diz de que ANO e o programa', () => {
     ].join('\n'), { ano: 2026 });
     expect(r.semanas[0].chave).toBe('001-27');
     expect(r.semanas[0].inicio).toBe('2027-01-04');
+  });
+});
+
+describe('o setup que a medicao nao pega', () => {
+  /**
+   * Nas furadeiras (set/2026): 49 min parados em 4h22 de medicao e menos
+   * de 1 min marcado como troca/setup — num posto que troca de peca cinco
+   * vezes por dia. A troca acontece ENTRE medicoes, e o cronometro so'
+   * roda na corrida. Sem o setup planejado, o veredito saia otimista pelo
+   * setup da semana inteira.
+   */
+  it('5 por dia x 5 dias x 20 min sao 8,3 h por maquina na semana', () => {
+    expect(horasDeSetup({ setupsDia: 5, dias: 5, minutos: 20 })).toBeCloseTo(8.333, 3);
+  });
+
+  it('faltando qualquer um dos tres, nao ha setup planejado — e nao se presume', () => {
+    expect(horasDeSetup({ setupsDia: 5, minutos: 20 })).toBe(null);
+    expect(horasDeSetup({ setupsDia: 5, dias: '', minutos: 20 })).toBe(null);
+    expect(horasDeSetup({ setupsDia: null, dias: 5, minutos: 20 })).toBe(null);
+    expect(horasDeSetup({})).toBe(null);
+  });
+
+  it('zero setup e informacao, diferente de nao informado', () => {
+    expect(horasDeSetup({ setupsDia: 0, dias: 5, minutos: 20 })).toBe(0);
+  });
+
+  it('o setup sai das horas disponiveis, e o exigido sobe', () => {
+    // 6 furadeiras x 44 h = 264 h; menos 6 x 8,33 = 50 h de setup: 214 h.
+    const semSetup = ritmoExigido({ pecas: 134586, horas: 44, maquinas: 6 });
+    const comSetup = ritmoExigido({ pecas: 134586, horas: 44, maquinas: 6, setupHoras: 25 * 20 / 60 });
+    expect(semSetup.horasDisponiveis).toBe(264);
+    expect(comSetup.horasDisponiveis).toBeCloseTo(214, 0);
+    expect(comSetup.horasJornada).toBe(264);
+    expect(comSetup.horasSetup).toBeCloseTo(50, 0);
+    // 134.586 / 214 = 629 pc/h: a semana de pico que "sobrava" a 510 deixa de caber em 611.
+    expect(semSetup.pecasPorHoraMaquina).toBeCloseTo(509.8, 0);
+    expect(comSetup.pecasPorHoraMaquina).toBeCloseTo(629, 0);
+  });
+
+  it('setup maior que a jornada nao e folga negativa: nao ha ritmo', () => {
+    expect(ritmoExigido({ pecas: 1000, horas: 44, maquinas: 2, setupHoras: 44 })).toBe(null);
+    expect(ritmoExigido({ pecas: 1000, horas: 44, maquinas: 2, setupHoras: 50 })).toBe(null);
+  });
+
+  it('maquinas necessarias tambem contam so as horas produtivas', () => {
+    // 134.586 / (35,67 h x 611 pc/h) = 6,2 maquinas — mais que as 6 que existem.
+    expect(maquinasNecessarias({ pecas: 134586, horas: 44, ritmoMedido: 611, setupHoras: 25 * 20 / 60 }))
+      .toBeCloseTo(6.18, 2);
+    expect(maquinasNecessarias({ pecas: 134586, horas: 44, ritmoMedido: 611 })).toBeCloseTo(5.01, 2);
+  });
+
+  it('o veredito diz se o setup entrou na conta', () => {
+    const sem = vereditoDaSemana({ pecas: 134586, horas: 44, maquinas: 6, ritmoRelogio: 611 });
+    const com = vereditoDaSemana({
+      pecas: 134586, horas: 44, maquinas: 6, ritmoRelogio: 611, setupHoras: 25 * 20 / 60,
+    });
+    expect(sem.setupInformado).toBe(false);
+    expect(sem.atende).toBe(true);
+    expect(com.setupInformado).toBe(true);
+    expect(com.atende).toBe(false);
+  });
+});
+
+describe('setup na leitura do quadro', () => {
+  const { semanas } = interpretarColagem(FURACAO, { ano: 2026 });
+  const base = {
+    demandas: semanas, horas: 44, maquinas: 6, ritmoRelogio: 611, ritmoRodando: 750,
+    datas: [new Date('2026-09-10T08:00:00-03:00')],   // 038-26, 121.900 pecas
+  };
+
+  it('com setup planejado, o exigido e sobre as horas produtivas', () => {
+    const l = leituraDaDemanda({ ...base, setup: { setupsDia: 5, dias: 5, minutos: 20 } });
+    expect(l.estado).toBe('pronto');
+    // 121.900 / 214 h = 570 pc/h
+    expect(l.veredito.pecasPorHoraMaquina).toBeCloseTo(569.6, 0);
+    expect(l.setup).toEqual(expect.objectContaining({ setupsDia: 5, dias: 5, minutos: 20 }));
+    expect(l.setup.horasPorMaquina).toBeCloseTo(8.333, 3);
+  });
+
+  it('sem setup informado, a leitura diz que falta — e nao presume nenhum', () => {
+    const l = leituraDaDemanda({ ...base, setup: { setupsDia: null, dias: 5, minutos: null } });
+    expect(l.estado).toBe('pronto');
+    expect(l.setup).toBe(null);
+    expect(l.veredito.setupInformado).toBe(false);
+    expect(l.veredito.horasDisponiveis).toBe(264);
+  });
+
+  it('setup medido nas paradas sai do relogio para nao contar duas vezes', () => {
+    /**
+     * Se o analista marcou 30 min de troca/setup dentro das medicoes, esse
+     * tempo ja' baixou o ritmo de relogio. Com o setup planejado tambem
+     * saindo das horas, seria descontado duas vezes. O relogio da
+     * comparacao volta a ser pecas / (tempo − setup medido).
+     */
+    const observado = { pecas: 2666, totalMs: 4 * 3600000, setupMs: 30 * 60000 };
+    const semPlanejado = leituraDaDemanda({ ...base, ritmoRelogio: 666.5, observado });
+    const comPlanejado = leituraDaDemanda({
+      ...base, ritmoRelogio: 666.5, observado, setup: { setupsDia: 5, dias: 5, minutos: 20 },
+    });
+    expect(semPlanejado.veredito.ritmoRelogio).toBeCloseTo(666.5, 1);
+    // 2.666 pecas em 3,5 h sem o setup = 761,7 pc/h
+    expect(comPlanejado.veredito.ritmoRelogio).toBeCloseTo(761.7, 1);
+    expect(comPlanejado.setup.medidoMs).toBe(30 * 60000);
+  });
+
+  it('setup que come a jornada inteira cai em sem-horas, nao em veredito', () => {
+    const l = leituraDaDemanda({ ...base, setup: { setupsDia: 20, dias: 7, minutos: 60 } });
+    expect(l.estado).toBe('sem-horas');
+    expect(l.veredito).toBe(null);
   });
 });
 

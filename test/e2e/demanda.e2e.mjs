@@ -46,6 +46,13 @@ p.on('pageerror', (e) => erros.push(e.message));
 // Grupo 0002 FURADEIRA com tres maquinas ativas e uma inativa: a inativa
 // NAO pode contar no tempo disponivel.
 let horasSemana = null;
+// O que o PATCH de grupo recebeu por ultimo, e o grupo como o servidor o
+// devolveria depois: e' assim que a tela repinta a conta do tempo.
+let ultimoPatch = null;
+let grupoFuradeira = {
+  id: 'g2', codigo: '0002', nome: 'FURADEIRA',
+  horas_semana: null, dias_semana: null, setups_dia: null, setup_min: null,
+};
 /* A demanda entra pela MESMA rota do cadastro (?demanda=1): o plano Hobby
    da Vercel aceita 12 funcoes por deploy e o projeto ja' esta' nas 12. O
    mock precisa separar os dois assuntos pela query, como o servidor faz. */
@@ -59,19 +66,35 @@ await p.route('**/api/maquinas**', async (rota) => {
       const corpo = JSON.parse(req.postData() || '{}');
       enviados.push(corpo);
       urlDaGravacao = req.url();
-      gravadas = corpo.semanas.map((s, i) => ({ id: `d${i}`, grupo_id: 'g2', ...s }));
+      // MESCLA, como o servidor (ON CONFLICT por ano+numero): a semana
+      // digitada depois da colagem nao pode apagar as coladas — e o mock
+      // que substituisse a lista provaria o oposto do que a API faz.
+      const porChave = new Map(gravadas.map((g) => [`${g.ano}-${g.numero}`, g]));
+      corpo.semanas.forEach((s, i) => {
+        const chave = `${s.ano}-${s.numero}`;
+        porChave.set(chave, { id: porChave.get(chave)?.id || `d${gravadas.length + i}`, grupo_id: 'g2', ...s });
+      });
+      gravadas = [...porChave.values()].sort((a, b) => (a.ano - b.ano) || (a.numero - b.numero));
     }
     if (req.method() === 'DELETE') gravadas = [];
     return rota.fulfill({ json: { demandas: gravadas } });
   }
   if (req.method() === 'PATCH') {
-    horasSemana = JSON.parse(req.postData() || '{}').horasSemana;
-    return rota.fulfill({ json: { grupo: { id: 'g2', codigo: '0002', nome: 'FURADEIRA', horas_semana: horasSemana } } });
+    ultimoPatch = JSON.parse(req.postData() || '{}');
+    horasSemana = ultimoPatch.horasSemana;
+    grupoFuradeira = {
+      ...grupoFuradeira,
+      horas_semana: ultimoPatch.horasSemana ?? grupoFuradeira.horas_semana,
+      dias_semana: ultimoPatch.diasSemana ?? grupoFuradeira.dias_semana,
+      setups_dia: ultimoPatch.setupsDia ?? grupoFuradeira.setups_dia,
+      setup_min: ultimoPatch.setupMin ?? grupoFuradeira.setup_min,
+    };
+    return rota.fulfill({ json: { grupo: grupoFuradeira } });
   }
   return rota.fulfill({
     json: {
       grupos: [
-        { id: 'g2', codigo: '0002', nome: 'FURADEIRA', horas_semana: horasSemana },
+        grupoFuradeira,
         { id: 'g1', codigo: '0001', nome: 'SECCIONADORA', horas_semana: null },
       ],
       maquinas: [
@@ -102,11 +125,31 @@ checar(/Sem as horas não há takt/.test(await texto()),
 
 /* -------------------------------------------- horas: o tempo disponivel */
 await janela.getByPlaceholder('ex.: 44').fill('44');
-await janela.getByRole('button', { name: 'Salvar horas' }).click();
+await p.waitForTimeout(150);
+checar(/Setup não informado/.test(await texto()),
+  'com a jornada e sem o setup, a tela diz que o veredito sairia otimista');
+// A conta aparece ANTES de salvar, com o que foi digitado.
+checar(/132/.test(await texto()) && /3 máq\. × 44 h/.test(await texto()),
+  'a conta da jornada aparece na tela a cada tecla: 3 maq x 44 h = 132');
+
+/* O setup: 5 trocas por dia, 5 dias, 20 min — 8,3 h por maquina. E' o
+   tempo que a medicao nao pega, e a tela precisa mostrar o que ele come. */
+await janela.getByPlaceholder('ex.: 5').first().fill('5');    // dias de producao
+await janela.getByPlaceholder('ex.: 5').nth(1).fill('5');     // setups por dia
+await janela.getByPlaceholder('ex.: 20').fill('20');
+await p.waitForTimeout(150);
+const conta = await texto();
+checar(/8,3 h por máq/.test(conta), '5/dia x 5 dias x 20 min = 8,3 h de setup por maquina');
+// 3 x 44 = 132; 3 x 8,33 = 25; produtivas = 107
+checar(/− 25/.test(conta) && /107/.test(conta),
+  'a conta mostra jornada 132, setup -25 e 107 horas produtivas');
+checar(!/Setup não informado/.test(conta), 'informado o setup, a ressalva some');
+
+await janela.getByRole('button', { name: 'Salvar tempo disponível' }).click();
 await p.waitForTimeout(300);
 checar(horasSemana === 44, 'as horas do grupo sobem para o cadastro de maquinas');
-checar(/132 horas-máquina/.test(await texto()),
-  '3 maquinas x 44 h = 132 horas-maquina na semana');
+checar(ultimoPatch && ultimoPatch.setupsDia === 5 && ultimoPatch.setupMin === 20 && ultimoPatch.diasSemana === 5,
+  'setups por dia, minutos e dias sobem no MESMO PATCH — e uma decisao, nao quatro');
 
 /* ------------------------------------------- colagem da planilha do PCP */
 await janela.locator('textarea').fill(COLAGEM_SEM_DATA);
@@ -141,16 +184,32 @@ checar(JSON.stringify(enviados[0].semanas[0])
   === JSON.stringify({ ano: 2026, numero: 1, pecas: 128250, inicio: '2026-01-05' }),
   'a semana sobe como ano, numero, pecas e a data de inicio — nao como texto');
 
+/* ------------------------------------------- uma semana digitada a mao */
+await janela.getByLabel('Semana', { exact: true }).fill('S40');
+await janela.getByLabel('Início', { exact: true }).fill('22/09/2026');
+await janela.getByLabel('Peças', { exact: true }).fill('90.500');
+await p.waitForTimeout(150);
+checar(/040-26 · 22\/09 a 28\/09\/2026 · 90\.500 peças/.test(await texto()),
+  'a semana digitada mostra chave, periodo e pecas antes de gravar');
+await janela.getByRole('button', { name: 'Incluir semana' }).click();
+await p.waitForTimeout(300);
+checar(enviados.length === 2 && JSON.stringify(enviados[1].semanas)
+  === JSON.stringify([{ ano: 2026, numero: 40, pecas: 90500, inicio: '2026-09-22' }]),
+  'a semana manual sobe pela mesma rota, com data — sem data nao ha botao');
+checar(/040-26/.test(await texto()) && /22\/09 a 28\/09/.test(await texto()),
+  'e aparece na tabela gravada com o periodo');
+
 /* ------------------------------------- o quadro gravado, com o exigido */
 const gravado = await texto();
 checar(/018-26/.test(gravado) && /134\.586/.test(gravado),
   'o programa gravado aparece na tela');
 checar(/07\/05 a 13\/05/.test(gravado),
   'cada semana gravada mostra o PERIODO que cobre — o unico jeito de conferir contra a planilha');
-// 134.586 / (44 h x 3 maquinas) = 1.020 pc/h por maquina; takt 3,5 s
-checar(/1\.020 pç\/h/.test(gravado),
-  'o ritmo exigido por maquina sai da demanda dividida pelas horas-maquina');
-checar(/3\.5s/.test(gravado), 'e o takt por maquina, em segundos por peca');
+// 134.586 / (35,67 h produtivas x 3 maquinas) = 1.258 pc/h por maquina; takt 2,9 s.
+// Sem o setup seriam 1.020 — a diferenca e' exatamente o que a troca de peca come.
+checar(/1\.258 pç\/h/.test(gravado),
+  'o ritmo exigido por maquina sai da demanda dividida pelas horas PRODUTIVAS');
+checar(/2\.9s/.test(gravado), 'e o takt por maquina, em segundos por peca');
 // 134.586 / 64.750 = 2,08x
 checar(/2\.08x|2,08x/.test(gravado),
   'a tela mostra a variacao entre a menor e a maior semana — e o que impede um takt fixo');
