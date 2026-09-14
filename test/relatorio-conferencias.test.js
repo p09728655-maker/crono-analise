@@ -169,23 +169,31 @@ describe('escopoDaLateral — maquina, grupo ou todas', () => {
 
   it('o id de um GRUPO vem prefixado e devolve o nome do grupo', () => {
     expect(escopoDaLateral('grupo:0002 · FURADEIRA'))
-      .toEqual({ tipo: 'grupo', rotulo: '0002 · FURADEIRA' });
+      .toEqual({ tipo: 'grupo', chave: '0002 · FURADEIRA', rotulo: '0002 · FURADEIRA', semGrupo: false });
+  });
+
+  it('"Sem grupo" filtra pelo balde, mas no papel nao se chama grupo', () => {
+    // No titulo de uma folha A4, "— Sem grupo" se le' como se houvesse um
+    // grupo com esse nome, ao lado do campo "Grupos de máquina: —".
+    expect(escopoDaLateral('grupo:Sem grupo'))
+      .toEqual({ tipo: 'grupo', chave: 'Sem grupo', rotulo: 'Sem grupo no cadastro', semGrupo: true });
   });
 
   it('o id de uma MAQUINA vem prefixado e devolve o nome dela', () => {
     expect(escopoDaLateral('maquina:Furadeira 03'))
-      .toEqual({ tipo: 'maquina', rotulo: 'Furadeira 03' });
+      .toEqual({ tipo: 'maquina', chave: 'Furadeira 03', rotulo: 'Furadeira 03' });
   });
 
   it('maquina com cara de grupo no nome nao vira filtro de grupo — o prefixo decide', () => {
     // O cadastro nao proibe ':' no nome. Sem o prefixo da maquina, esta
     // aqui abriria a tela vazia filtrando um grupo que nao existe.
     expect(escopoDaLateral('maquina:grupo:0002 · FURADEIRA'))
-      .toEqual({ tipo: 'maquina', rotulo: 'grupo:0002 · FURADEIRA' });
+      .toEqual({ tipo: 'maquina', chave: 'grupo:0002 · FURADEIRA', rotulo: 'grupo:0002 · FURADEIRA' });
   });
 
-  it('id sem prefixo continua sendo o nome da maquina — e o que a lateral mandava antes', () => {
-    expect(escopoDaLateral('Furadeira 03')).toEqual({ tipo: 'maquina', rotulo: 'Furadeira 03' });
+  it('id sem prefixo vale como nome de maquina — a rede para um id de outro caminho', () => {
+    expect(escopoDaLateral('Furadeira 03'))
+      .toEqual({ tipo: 'maquina', chave: 'Furadeira 03', rotulo: 'Furadeira 03' });
   });
 
   it('prefixo sem nome de grupo nao filtra nada — seria a tela vazia sem motivo', () => {
@@ -255,8 +263,16 @@ describe('itensDaLateral — as maquinas debaixo do grupo do cadastro', () => {
     // O grupo e' clicavel e conta as medicoes dele: e por esse item que se
     // imprime "as furadeiras" de uma vez.
     expect(itens[1]).toEqual({
-      id: 'grupo:0002 · FURADEIRA', rotulo: '0002 · FURADEIRA', cabecalho: true, contador: 2,
+      id: 'grupo:0002 · FURADEIRA',
+      rotulo: '0002 · FURADEIRA',
+      cabecalho: true,
+      dica: 'Ver só as máquinas de 0002 · FURADEIRA',
+      contador: 2,
     });
+    // "Ver só as máquinas de Sem grupo" e' portugues quebrado: a dica do
+    // balde e' escrita a parte.
+    expect(itens.find((i) => i.id === 'grupo:Sem grupo').dica)
+      .toBe('Ver só as máquinas sem grupo no cadastro');
     expect(itens[2]).toEqual({
       id: 'maquina:Furadeira 03', rotulo: 'Furadeira 03', contador: 2, recuado: true,
     });

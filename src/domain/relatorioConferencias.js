@@ -42,6 +42,12 @@ export const PREFIXO_MAQUINA = 'maquina:';
  * maquina por maquina obriga a juntar folhas na mao. O grupo e' a unidade
  * com que se decide capacidade — e' dele que sai o programa da semana.
  *
+ * Sao DOIS campos porque nem sempre coincidem: `chave` e' o que filtra
+ * (o valor que o cadastro conhece) e `rotulo` e' o que se escreve na tela
+ * e no papel. "Sem grupo" e' o caso: filtra pelo balde de mesmo nome, mas
+ * no titulo de uma folha A4 "— Sem grupo" se le' como se houvesse um grupo
+ * chamado assim, ao lado de um campo que diz "Grupos de máquina: —".
+ *
  * Devolve `null` para "todas": e' o mesmo `null` do filtro, e assim quem
  * le' nao precisa tratar dois vazios diferentes.
  */
@@ -50,14 +56,23 @@ export function escopoDaLateral(id) {
   if (!texto || texto === TODAS) return null;
   if (texto.startsWith(PREFIXO_GRUPO)) {
     const grupo = texto.slice(PREFIXO_GRUPO.length).trim();
-    return grupo ? { tipo: 'grupo', rotulo: grupo } : null;
+    if (!grupo) return null;
+    return {
+      tipo: 'grupo',
+      chave: grupo,
+      rotulo: grupo === SEM_GRUPO ? 'Sem grupo no cadastro' : grupo,
+      semGrupo: grupo === SEM_GRUPO,
+    };
   }
-  // Sem prefixo o id e' o proprio nome da maquina: e' o que a lateral
-  // mandava ate' set/26, e o que um estado guardado antes disso devolve.
+  /* Id sem prefixo vale como nome de maquina. Nada manda um hoje — a
+     lateral sempre prefixa, e a selecao nao e' guardada em lugar nenhum
+     (useState puro). Fica como rede: se um dia chegar um id de outro
+     caminho, filtrar a maquina nomeada e' erro mais barato do que abrir
+     em "todas" sem avisar. */
   const maquina = texto.startsWith(PREFIXO_MAQUINA)
     ? texto.slice(PREFIXO_MAQUINA.length).trim()
     : texto;
-  return maquina ? { tipo: 'maquina', rotulo: maquina } : null;
+  return maquina ? { tipo: 'maquina', chave: maquina, rotulo: maquina } : null;
 }
 
 const nomeDaMaquina = (c) => String(c.maquina || '').trim() || SEM_MAQUINA;
@@ -226,6 +241,12 @@ export function itensDaLateral({ resumo = [], total = 0, grupoDe = () => null } 
         id: `${PREFIXO_GRUPO}${grupo}`,
         rotulo: grupo,
         cabecalho: true,
+        // A dica sai daqui, nao da lateral: "Ver só as máquinas de Sem
+        // grupo" e' portugues quebrado, e o menu nao tem por que saber o
+        // que e' um grupo do cadastro.
+        dica: grupo === SEM_GRUPO
+          ? 'Ver só as máquinas sem grupo no cadastro'
+          : `Ver só as máquinas de ${grupo}`,
         contador: doGrupo.reduce((acc, g) => acc + (Number(g.n) || 0), 0),
       });
     }

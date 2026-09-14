@@ -17,9 +17,31 @@ import { porMinuto } from './formato.js';
  * existe com a maquina escolhida na lateral (ver loteDaMaquina).
  */
 export default function TabelaMedicoes({
-  linhas, escopo, verArquivadas, lote, ocupado,
+  linhas, escopo, filtro, verArquivadas, lote, ocupado,
   aoArquivarLote, aoRenomear, aoEditarParadas, aoAlternarArquivo, aoExcluir,
 }) {
+  /**
+   * A frase do LOTE. Com um GRUPO escolhido ela nao pode ser "escolha uma
+   * máquina em MÁQUINAS": o usuário acabou de escolher nessa mesma lateral,
+   * e o título logo acima ja' diz o nome do que ele escolheu — as duas
+   * frases ficam a 40px uma da outra. O lote e' por MAQUINA de propósito:
+   * arquivar um grupo inteiro num clique nunca foi pedido.
+   */
+  let dicaLote;
+  if (lote) {
+    dicaLote = verArquivadas
+      ? `${lote.ids.length} medição(ões) desta máquina — dá para restaurar todas de uma vez.`
+      : `${lote.ids.length} medição(ões) desta máquina — dá para arquivar todas de uma vez.`;
+  } else if (filtro) {
+    dicaLote = 'Nenhuma medição desta máquina nesta lista.';
+  } else if (escopo) {
+    dicaLote = 'O lote é por máquina: escolha uma em MÁQUINAS, ao lado, para arquivar '
+      + '(ou restaurar) todas as medições dela de uma vez.';
+  } else {
+    dicaLote = 'Escolha uma máquina em MÁQUINAS, ao lado, para arquivar (ou restaurar) '
+      + 'todas as medições dela de uma vez.';
+  }
+
   return (
     <section style={est.painel} aria-label={verArquivadas ? 'Medições arquivadas' : 'Todas as medições'}>
       <div style={est.painelTopo}>
@@ -38,11 +60,7 @@ export default function TabelaMedicoes({
             inteiro; o de máquina rodando fica na linha das paradas.
           </p>
           <p style={est.painelDica}>
-            {lote
-              ? (verArquivadas
-                ? `${lote.ids.length} medição(ões) desta máquina — dá para restaurar todas de uma vez.`
-                : `${lote.ids.length} medição(ões) desta máquina — dá para arquivar todas de uma vez.`)
-              : 'Escolha uma máquina em MÁQUINAS, ao lado, para arquivar (ou restaurar) todas as medições dela de uma vez.'}
+            {dicaLote}
           </p>
         </div>
         {lote && (

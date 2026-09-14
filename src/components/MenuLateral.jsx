@@ -167,7 +167,7 @@ export default function MenuLateral({
               className="menu-lateral-item"
               onClick={() => aoTrocarSecao(s.id)}
               aria-current={s.id === secaoAtiva ? 'page' : undefined}
-              title={s.cabecalho ? `Ver só as máquinas de ${s.rotulo}` : undefined}
+              title={s.dica}
               style={{
                 ...(s.cabecalho ? est.itemGrupo : est.item),
                 ...(s.recuado ? est.itemRecuado : {}),

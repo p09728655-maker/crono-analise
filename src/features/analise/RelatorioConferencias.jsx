@@ -128,8 +128,10 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
    * grafico por medicao voltaria a misturar postos.
    */
   const escopo = useMemo(() => escopoDaLateral(selecao), [selecao]);
-  const filtro = escopo?.tipo === 'maquina' ? escopo.rotulo : null;
-  const grupoEscolhido = escopo?.tipo === 'grupo' ? escopo.rotulo : null;
+  // A CHAVE e' o que filtra (o valor que o cadastro conhece); o `rotulo`
+  // do escopo so' vira texto de titulo. Os dois so' diferem em "Sem grupo".
+  const filtro = escopo?.tipo === 'maquina' ? escopo.chave : null;
+  const grupoEscolhido = escopo?.tipo === 'grupo' ? escopo.chave : null;
 
   const leitura = useLeitura({ linhas, filtro, grupo: grupoEscolhido, mapaGrupos, grupoDe });
   const {
@@ -229,7 +231,12 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
                 // filtrada parecia que sairia tudo.
                 rotulo: secoes.length
                   ? (escopo
-                    ? (escopo.tipo === 'grupo' ? 'Imprimir este grupo' : 'Imprimir esta máquina')
+                    ? (escopo.tipo === 'grupo'
+                      // "Sem grupo" e' balde do cadastro, nao unidade de
+                      // capacidade: chamar de grupo no botao seria dar
+                      // nome de posto a uma pendencia de cadastro.
+                      ? (escopo.semGrupo ? 'Imprimir as sem grupo' : 'Imprimir este grupo')
+                      : 'Imprimir esta máquina')
                     : 'Imprimir todas')
                   : 'Imprimir',
                 aoClicar: () => window.print(),
@@ -385,6 +392,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               <TabelaMedicoes
                 linhas={visiveis}
                 escopo={escopo}
+                filtro={filtro}
                 verArquivadas={verArquivadas}
                 lote={lote}
                 ocupado={ocupado}

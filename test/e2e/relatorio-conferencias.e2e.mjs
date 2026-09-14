@@ -642,6 +642,8 @@ await movel.close();
         medir('g1', 'FURADEIRA 16', 'SLEEP TAMPO', 750),
         medir('g2', 'FURADEIRA 12', 'SLEEP TAMPO', 818),
         medir('g3', 'CNC SCM', 'LT 171 SLEEP', 181),
+        // Fora do cadastro de maquinas: cai no balde "Sem grupo".
+        medir('g4', 'EMBALADORA', 'CAIXA SLEEP', 300),
       ],
     },
   }));
@@ -672,6 +674,15 @@ await movel.close();
   checar(!/CNC SCM/.test(folhaGrupo),
     'a maquina de outro grupo NAO entra: imprimir o grupo nao imprime a fabrica');
 
+  // O titulo da tabela ja' diz o que foi escolhido: mandar "escolha uma
+  // maquina em MAQUINAS" duas linhas abaixo e' pedir o que acabou de ser
+  // feito, na mesma lateral.
+  const tabela = await p4.locator('[aria-label="Todas as medições"]').first().innerText();
+  checar(/Todas as medições · 0002 · FURADEIRA/.test(tabela),
+    'a tabela diz de qual GRUPO sao as linhas');
+  checar(/O lote é por máquina/.test(tabela) && !/^Escolha uma máquina em MÁQUINAS/m.test(tabela),
+    'com o grupo escolhido, a dica do lote explica que o lote e por maquina');
+
   // O PROGRAMA DA SEMANA e' cadastro de GRUPO: com o grupo inteiro em tela
   // o quadro tem de aparecer. Ele sumia — a conta exigia uma maquina so'
   // por engano, e era justamente aqui que ele mais serve.
@@ -684,6 +695,19 @@ await movel.close();
     'voltar a Todas devolve "Imprimir todas"');
   checar(/CNC SCM/.test(await p4.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '')),
     'sem escopo, a folha volta a cobrir a fabrica inteira');
+
+  /* ------------------------ "Sem grupo" nao e' um grupo, e o texto diz isso */
+  const semGrupo = p4.getByRole('button', { name: /^SEM GRUPO/i });
+  checar(await semGrupo.count() === 1, 'maquina fora do cadastro aparece no balde "Sem grupo"');
+  await semGrupo.click();
+  await p4.waitForTimeout(400);
+  checar(/Imprimir as sem grupo/.test(await lateral.innerText()),
+    'o balde nao vira grupo no botao: "Imprimir as sem grupo"');
+  const folhaSemGrupo = await p4.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
+  checar(/Ritmo por Máquina — Sem grupo no cadastro/.test(folhaSemGrupo),
+    'no papel, "Sem grupo" e dito como pendencia de cadastro — nao como nome de grupo');
+  checar(/EMBALADORA/.test(folhaSemGrupo) && !/FURADEIRA 16/.test(folhaSemGrupo),
+    'a folha do balde leva so as maquinas sem grupo');
 
   checar(errosG.length === 0, `sem erro de pagina no filtro por grupo (${errosG.join('; ') || 'nenhum'})`);
   await ctx4.close();
