@@ -18,6 +18,7 @@ import ParetoParadas from './conferencias/ParetoParadas.jsx';
 import AnalisePeriodo from './conferencias/AnalisePeriodo.jsx';
 import TabelaMedicoes from './conferencias/TabelaMedicoes.jsx';
 import RenomearPeca from './conferencias/RenomearPeca.jsx';
+import DemandaSemanal from './DemandaSemanal.jsx';
 import EditorParadas from './conferencias/EditorParadas.jsx';
 import { ConfirmarExclusao, ConfirmarLote } from './conferencias/Confirmacoes.jsx';
 import ImpressaoConferencias from './conferencias/ImpressaoConferencias.jsx';
@@ -62,12 +63,13 @@ const lerAnaliseNoPapel = () => {
 export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const dados = useConferencias();
   const {
-    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe,
+    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe,
     limparErro, carregar,
   } = dados;
 
   const [filtro, setFiltro] = useState(null);
   const [verVersoes, setVerVersoes] = useState(false);
+  const [verDemanda, setVerDemanda] = useState(false);
   const [confirmando, setConfirmando] = useState(null);
   const [confirmandoLote, setConfirmandoLote] = useState(null);
   const [editandoParadas, setEditandoParadas] = useState(null);
@@ -138,6 +140,10 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               }]
             : []}
           acoesRotulo="Este relatório"
+          /* O programa de producao abre pela lateral do RELATORIO, e nao
+             pela lista de estudos: e' aqui que ele vira veredito, e quem
+             pergunta "isso atende?" ja' esta' olhando este numero. */
+          aoVerDemanda={() => setVerDemanda(true)}
         />
 
         <main style={est.conteudoLateral}>
@@ -267,6 +273,15 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
 
         {verVersoes && (
           <HistoricoVersoes modo="analise" aoFechar={() => setVerVersoes(false)} />
+        )}
+
+        {verDemanda && (
+          <DemandaSemanal
+            aoFechar={() => setVerDemanda(false)}
+            /* Com uma maquina filtrada, abre no grupo DELA: quem filtrou a
+               Furadeira 03 nao quer procurar "0002 FURADEIRA" numa lista. */
+            grupoInicial={filtro ? grupoIdDe(filtro) : null}
+          />
         )}
 
         {renomeando && (

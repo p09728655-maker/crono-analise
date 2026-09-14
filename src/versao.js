@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.72.0',
+    data: '2026-09-14',
+    titulo: 'Demanda semanal: o relatório passa a saber o que é preciso fazer',
+    itens: [
+      'NOVA TELA "DEMANDA SEMANAL", na lateral do relatório Ritmo por máquina. É onde entra o programa do PCP: quantas peças o GRUPO de máquinas (0002 FURADEIRA, por exemplo) tem de entregar em cada semana. Sem isso o relatório só sabia dizer quanto o posto entrega — nunca se aquilo atende.',
+      'COLE A PLANILHA INTEIRA, não digite. A tela entende a colagem do Excel com as colunas SEMANA e TOTAL SEMANA, ignora os totalizadores do rodapé (TOTAL ACUMULADO, MÉDIA SEMANAL) e ainda confere o total contra a soma dos lotes — se a coluna vier trocada, ela avisa com os dois números antes de gravar. Trinta e seis semanas entram de uma vez.',
+      'GRAVAR MESCLA: semana que não veio na colagem fica como estava. Dá para colar só o mês corrente toda segunda-feira sem perder o histórico do ano — e é o histórico que permite comparar uma medição de março com o programa de março.',
+      'A DEMANDA É DO GRUPO, não da peça. Takt é tempo disponível dividido pela demanda, e numa furadeira que roda doze peças nenhuma delas tem o turno inteiro só para si: calculado peça a peça, cada peça pareceria folgada e o posto estouraria assim mesmo.',
+      'HORAS DISPONÍVEIS POR MÁQUINA, POR SEMANA, no cadastro do grupo. Com 3 furadeiras a 44 h a tela mostra 132 horas-máquina e calcula o ritmo exigido de cada uma. Enquanto ninguém informar as horas, NÃO há takt e a tela diz isso — jornada é decisão de turno, e assumir 44 h daria veredito sobre um turno que talvez não exista.',
+      'A VARIAÇÃO DO PROGRAMA FICA À VISTA: média, desvio e quanto a maior semana é maior que a menor. Nas 36 semanas de 2026 as furadeiras foram de 64.750 a 134.586 peças — 2,08x. É por isso que a quantidade é por semana e não um campo fixo: um número cravado na média erra 66% na semana fraca, e erra calado.',
+    ],
+  },
+  {
     versao: '2.71.0',
     data: '2026-09-14',
     titulo: 'Tempo por peça no quadro Ritmo por peça',

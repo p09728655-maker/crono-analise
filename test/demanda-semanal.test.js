@@ -8,7 +8,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  chaveSemana, interpretarColagem, lerCodigoSemana, numeroPtBr, ordenarSemanas, resumoDaDemanda,
+  chaveSemana, interpretarColagem, lerCodigoSemana, maquinasNecessarias, numeroPtBr,
+  ordenarSemanas, resumoDaDemanda, ritmoExigido,
 } from '../src/domain/demandaSemanal.js';
 
 const COLAGEM_REAL = `SEMANA	LOTE 1	LOTE 2	LOTE 3	LOTE 4	LOTE 5	TOTAL SEMANA	MÉDIA / LOTE
@@ -156,5 +157,45 @@ describe('leitura do programa', () => {
   it('sem semana nenhuma nao ha leitura', () => {
     expect(resumoDaDemanda([])).toBe(null);
     expect(resumoDaDemanda(null)).toBe(null);
+  });
+});
+
+describe('o que a demanda exige', () => {
+  it('tres furadeiras a 44 h somam 132 horas-maquina na semana', () => {
+    const r = ritmoExigido({ pecas: 107086, horas: 44, maquinas: 3 });
+    expect(r.horasDisponiveis).toBe(132);
+    // 107.086 / 132 = 811,3 pecas por hora-maquina
+    expect(r.pecasPorHoraMaquina).toBeCloseTo(811.26, 1);
+    // O grupo inteiro, por hora de relogio: 107.086 / 44 = 2.434 pc/h
+    expect(r.pecasPorHoraGrupo).toBeCloseTo(2433.77, 1);
+    // Takt por maquina: 3.600.000 / 811,26 = 4.437 ms
+    expect(r.taktMs).toBeCloseTo(4437.6, 0);
+  });
+
+  it('uma maquina so: o ritmo do grupo e o da maquina', () => {
+    const r = ritmoExigido({ pecas: 44000, horas: 44, maquinas: 1 });
+    expect(r.pecasPorHoraMaquina).toBe(1000);
+    expect(r.pecasPorHoraGrupo).toBe(1000);
+    expect(r.taktMs).toBe(3600);
+  });
+
+  it('sem horas nao ha takt — e nao ha jornada presumida', () => {
+    expect(ritmoExigido({ pecas: 107086, horas: 0, maquinas: 3 })).toBe(null);
+    expect(ritmoExigido({ pecas: 107086, maquinas: 3 })).toBe(null);
+    expect(ritmoExigido({ pecas: 0, horas: 44, maquinas: 3 })).toBe(null);
+    expect(ritmoExigido({ pecas: 107086, horas: 44, maquinas: 0 })).toBe(null);
+    expect(ritmoExigido()).toBe(null);
+  });
+
+  it('quantas maquinas o ritmo medido exige', () => {
+    // 107.086 pecas / (44 h x 800 pc/h) = 3,04 furadeiras
+    expect(maquinasNecessarias({ pecas: 107086, horas: 44, ritmoMedido: 800 })).toBeCloseTo(3.04, 2);
+    // Na semana de pico o mesmo posto precisa de quase quatro
+    expect(maquinasNecessarias({ pecas: 134586, horas: 44, ritmoMedido: 800 })).toBeCloseTo(3.82, 2);
+  });
+
+  it('sem ritmo medido nao da para dizer quantas maquinas', () => {
+    expect(maquinasNecessarias({ pecas: 107086, horas: 44, ritmoMedido: 0 })).toBe(null);
+    expect(maquinasNecessarias()).toBe(null);
   });
 });

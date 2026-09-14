@@ -95,6 +95,30 @@ papel). O **filtro por máquina** da lateral vale para o relatório inteiro,
 **folha impressa incluída**: com uma máquina escolhida o botão vira
 "Imprimir esta máquina" e o A4 sai só com ela, com o nome no título.
 
+### Demanda semanal — o que o posto precisa entregar
+
+Na lateral do relatório, **Demanda semanal** guarda o programa do PCP por
+**grupo de máquina** (0002 FURADEIRA), uma linha por semana. Entra por
+**colagem da planilha**: a tela lê as colunas `SEMANA` e `TOTAL SEMANA`,
+ignora os totalizadores do rodapé e confere o total contra a soma dos lotes,
+avisando com os dois números quando não bate. Gravar **mescla** — semana que
+não veio na colagem fica como estava, então dá para colar só o mês corrente
+sem perder o histórico.
+
+É **por grupo** e não por peça de propósito: Takt é tempo disponível ÷
+demanda, e numa furadeira que roda doze peças nenhuma delas tem o turno
+inteiro só para si — peça a peça, cada uma pareceria folgada e o posto
+estouraria assim mesmo. E é **por semana** porque o programa varia demais
+para um campo fixo: nas 36 semanas de 2026 as furadeiras foram de 64.750 a
+134.586 peças (média 107.086, CV 17,5%).
+
+As **horas disponíveis por máquina por semana** ficam no cadastro do grupo
+(`grupos_maquina.horas_semana`, alterável em **Máquinas** ou na própria tela
+de demanda — o PATCH de grupo exige papel de administrador). Com 3 máquinas
+ativas a 44 h são 132 horas-máquina, e o ritmo exigido de cada uma é a
+demanda dividida por elas. **Sem as horas não há takt**: nenhuma jornada é
+presumida, e a tela diz o que falta.
+
 O botão **Paradas** de cada linha abre o cadastro no PC: quem confere no
 corredor raramente para para digitar o setup, e reconstituir depois — com o
 apontamento na mão — é trabalho de escritório. A lista é gravada inteira

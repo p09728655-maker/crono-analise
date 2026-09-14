@@ -201,3 +201,58 @@ export function resumoDaDemanda(semanas) {
     ultima: ordenadas[ordenadas.length - 1],
   };
 }
+
+/**
+ * O QUE A DEMANDA EXIGE do grupo, na semana.
+ *
+ * Takt e' tempo disponivel dividido pela demanda. Num grupo de maquinas em
+ * PARALELO (tres furadeiras fazendo o mesmo servico) o tempo disponivel e'
+ * a soma das maquinas: 3 furadeiras x 44 h = 132 horas-maquina. Por isso o
+ * numero que interessa ao chao e' o ritmo POR MAQUINA — e' ele que se
+ * compara com as pecas/hora que o relatorio mede em cada posto.
+ *
+ * Devolve null quando falta dado. Nao ha' padrao de 44 h aqui de proposito:
+ * jornada e' decisao de turno, e assumir uma produz veredito sobre um turno
+ * que talvez nao exista.
+ *
+ * @param pecas    demanda da semana (pecas)
+ * @param horas    horas disponiveis por maquina na semana
+ * @param maquinas maquinas ativas no grupo (minimo 1)
+ */
+export function ritmoExigido({ pecas, horas, maquinas = 1 } = {}) {
+  const p = Number(pecas) || 0;
+  const h = Number(horas) || 0;
+  const m = Math.max(0, Math.floor(Number(maquinas) || 0));
+  if (p <= 0 || h <= 0 || m <= 0) return null;
+
+  const horasDisponiveis = h * m;               // horas-maquina na semana
+  const pecasPorHoraGrupo = p / horasDisponiveis * m; // o grupo inteiro, por hora de relogio
+  const pecasPorHoraMaquina = p / horasDisponiveis;   // o que cada maquina precisa fazer
+  return {
+    horasDisponiveis,
+    pecasPorHoraGrupo,
+    pecasPorHoraMaquina,
+    // Takt POR MAQUINA, em ms: o tempo que cada maquina tem para cada peca.
+    taktMs: 3600000 / pecasPorHoraMaquina,
+  };
+}
+
+/**
+ * Quantas maquinas o ritmo medido exige para dar conta da demanda.
+ *
+ * E' a leitura que fecha a conta no chao: "cada furadeira faz 800 pc/h, o
+ * programa pede 107.086 na semana, a jornada e' 44 h — entao sao 3,0
+ * furadeiras". Usa o ritmo REAL medido (o de relogio, com as paradas
+ * dentro), nao o potencial: maquina parada nao produz.
+ *
+ * @param pecas       demanda da semana
+ * @param horas       horas disponiveis por maquina na semana
+ * @param ritmoMedido pecas/hora que UMA maquina entrega
+ */
+export function maquinasNecessarias({ pecas, horas, ritmoMedido } = {}) {
+  const p = Number(pecas) || 0;
+  const h = Number(horas) || 0;
+  const r = Number(ritmoMedido) || 0;
+  if (p <= 0 || h <= 0 || r <= 0) return null;
+  return p / (h * r);
+}

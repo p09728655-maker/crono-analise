@@ -208,6 +208,25 @@ export const atualizarGrupoMaquina = (id, dados) =>
 export const removerGrupoMaquina = (id) =>
   requisitar(`/maquinas?grupo=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 
+/* -------------------------------------------------- demanda semanal */
+/* O programa de producao do grupo, semana a semana: o numerador do ritmo
+   que a demanda exige. Gravar MESCLA — semana que nao veio na colagem
+   fica como estava. */
+export const listarDemanda = (grupoId) =>
+  requisitar(grupoId ? `/demanda?grupo=${encodeURIComponent(grupoId)}` : '/demanda')
+    .then((r) => r.demandas || []);
+export const gravarDemanda = (grupoId, semanas) =>
+  requisitar(`/demanda?grupo=${encodeURIComponent(grupoId)}`, { metodo: 'POST', corpo: { semanas } })
+    .then((r) => r.demandas || []);
+export const removerSemanaDemanda = (grupoId, { ano, numero }) =>
+  requisitar(
+    `/demanda?grupo=${encodeURIComponent(grupoId)}&ano=${ano}&numero=${numero}`,
+    { metodo: 'DELETE' },
+  ).then((r) => r.demandas || []);
+export const limparDemanda = (grupoId) =>
+  requisitar(`/demanda?grupo=${encodeURIComponent(grupoId)}&tudo=1`, { metodo: 'DELETE' })
+    .then((r) => r.demandas || []);
+
 /* ------------------------------------------ analistas e identificacao */
 export const listarUsuarios = () => requisitar('/usuarios').then((r) => r.usuarios || []);
 export const criarUsuario = (dados) =>
