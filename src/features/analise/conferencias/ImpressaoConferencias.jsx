@@ -10,7 +10,7 @@ import { GraficoTendenciaPeriodo } from '../graficos.jsx';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
 import { VERSAO } from '../../../versao.js';
 import { imp } from './estilos.js';
-import { porMinuto } from './formato.js';
+import { porMinuto, porPeca } from './formato.js';
 
 /**
  * FOLHA DO RITMO POR MAQUINA — A4 retrato, modelo basico.
@@ -49,6 +49,9 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
   // So' com UMA maquina, pelo mesmo motivo da tela: misturando postos, a
   // hora fraca seria a hora da maquina mais lenta, nao uma hora fraca.
   const curvaDoDia = resumo.length === 1 ? ritmoPorHoraDoDia(linhas) : [];
+  /* Quadro "Ritmo por peça": a regua por acionamento so' diz algo quando
+     alguma peca pede mais de um — a mesma regra da tela. */
+  const temPorAcion = resumoPecas.some((g) => g.ciclosPorPeca > 1);
 
   return (
     <div className="somente-impressao" style={imp.folha}>
@@ -338,6 +341,9 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
           )}
 
           <h2 style={{ ...imp.tituloSecao, marginTop: 14 }}>Ritmo por peça</h2>
+          {/* A MESMA regra da tela (TabelaRitmoPorPeca): com toda peca de um
+              acionamento so', "Por acion." repetiria "Por peça" numero por
+              numero. O que esta' na tela e' o que sai no papel. */}
           <table style={imp.tabela}>
             <thead>
               <tr>
@@ -351,7 +357,7 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
                 <th style={imp.thNum}>Peças/hora</th>
                 <th style={imp.thNum}>Peças/min</th>
                 <th style={imp.thNum}>Por peça</th>
-                <th style={imp.thNum}>Por acion.</th>
+                {temPorAcion && <th style={imp.thNum}>Por acion.</th>}
               </tr>
             </thead>
             <tbody>
@@ -366,8 +372,10 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
                   <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
                   <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
                   <td style={imp.tdNum}>{porMinuto(g.ritmoMedio)}</td>
-                  <td style={imp.tdNum}>{(g.cicloMedioMs / 1000).toFixed(1)}s</td>
-                  <td style={imp.tdNum}>{(g.cicloMotorMs / 1000).toFixed(1)}s</td>
+                  <td style={imp.tdNum}>{porPeca(g.cicloMedioMs)}</td>
+                  {temPorAcion && (
+                    <td style={imp.tdNum}>{g.ciclosMistos ? '—' : porPeca(g.cicloMotorMs)}</td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -375,9 +383,13 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
           <p style={imp.nota}>
             ACION.: quantas vezes o motor é acionado para fazer uma peça. Peça de mais
             acionamentos rende menos peças/hora sem a máquina estar mais lenta. POR PEÇA é o
-            tempo de uma peça inteira — manuseio mais todos os acionamentos, o número que entra
-            na carga da máquina; POR ACION. é o tempo de um acionamento só, o comparável entre
-            peças de furação diferente.
+            tempo cheio de uma peça — manuseio e furação juntos — medido COM A MÁQUINA
+            RODANDO: quem for multiplicar por uma quantidade planejada precisa somar o tempo
+            parado do posto, senão a carga sai menor que a realidade.
+            {' '}
+            {temPorAcion
+              ? 'POR ACION. é esse mesmo tempo dividido pelos acionamentos: é ele que compara peças de furação diferente.'
+              : 'Toda peça aqui é de um acionamento só — o tempo por acionamento seria o mesmo da coluna POR PEÇA, e a tabela não repete o número.'}
           </p>
 
           {/* A REGUA DO CICLO no papel: pecas de mesmo acionamento deveriam
@@ -478,6 +490,8 @@ export default function ImpressaoConferencias({ linhas, resumo, resumoPecas, gru
             ['Parado', 'tempo em que a máquina não produziu dentro do período: troca/setup, falta de material, manutenção.'],
             ['Peças/hora', 'quantas peças saem em uma hora com a máquina rodando.'],
             ['Peças/min', 'o mesmo ritmo, em peças por minuto.'],
+            ['Por peça', 'tempo cheio de UMA peça no posto — manuseio e furação juntos — '
+              + 'medido com a máquina rodando. Para planejar carga, some o tempo parado do posto.'],
             ['Ritmo médio', 'total de peças dividido pelo tempo total com a máquina rodando.'],
             ['Máquina rodando', 'quanto do período observado a máquina passou produzindo. '
               + 'É a DISPONIBILIDADE do período — 100% menos o tempo parado.'],

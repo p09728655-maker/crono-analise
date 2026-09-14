@@ -359,6 +359,41 @@ export const est = {
     padding: espaco.lg, textAlign: 'right', ...tipo('corpoF'), ...numeros,
     color: t.texto, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
   },
+
+  /* ---- quadro "Ritmo por peça": a tabela mais larga do relatorio ---- */
+  /**
+   * Ela carrega duas colunas que as outras nao tem (tempo por peca e por
+   * acionamento) e passa de 11 colunas. Com o respiro padrao de 16px o
+   * conteudo mede 1197px contra 1127px de painel em 1440 — e `painel` tem
+   * overflowX auto, entao a ULTIMA coluna, justamente a que o texto chama
+   * de "o comparavel", sai da vista atras de uma rolagem dentro do cartao.
+   * Mesmos estilos, 12px de respiro horizontal: 1109px, cabe.
+   *
+   * A altura da linha nao muda — o respiro que sai e' so' o lateral.
+   */
+  thEstreito: {
+    textAlign: 'left', padding: espaco.md,
+    ...rotulo(t.textoFraco), background: '#F8F9FB',
+    borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  thNumEstreito: {
+    textAlign: 'right', padding: espaco.md,
+    ...rotulo(t.textoFraco), background: '#F8F9FB',
+    borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  tdCurtoEstreito: {
+    padding: `${espaco.lg}px ${espaco.md}px`, ...tipo('corpo'), color: t.textoMedio,
+    borderBottom: `1px solid ${t.borda}`,
+    maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  tdNumEstreito: {
+    padding: `${espaco.lg}px ${espaco.md}px`, textAlign: 'right', ...tipo('corpo'), ...numeros,
+    color: t.textoMedio, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  tdNumForteEstreito: {
+    padding: `${espaco.lg}px ${espaco.md}px`, textAlign: 'right', ...tipo('corpoF'), ...numeros,
+    color: t.texto, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
 };
 
 /* Impressao: mesmos valores da Folha de Analise do estudo — o papel dos dois
@@ -402,7 +437,13 @@ export const imp = {
   tabela: { width: '100%', borderCollapse: 'collapse', fontSize: 9.5, breakInside: 'avoid' },
   th: { textAlign: 'left', padding: '4px 5px', fontWeight: 700, borderBottom: '1.5px solid #000', whiteSpace: 'nowrap' },
   thNum: { textAlign: 'right', padding: '4px 5px', fontWeight: 700, borderBottom: '1.5px solid #000', whiteSpace: 'nowrap' },
-  td: { padding: '3px 5px', borderBottom: '1px solid #DDD', verticalAlign: 'top' },
+  // overflowWrap pelo mesmo motivo do tdObservacao logo abaixo: nome de peca
+  // sem separador ("LATERAL_SUPERIOR_MESA_SLEEP_1800X400") nao quebra sozinho
+  // e empurra as colunas da direita para fora da largura util do A4.
+  td: {
+    padding: '3px 5px', borderBottom: '1px solid #DDD', verticalAlign: 'top',
+    overflowWrap: 'anywhere',
+  },
   // overflowWrap OBRIGATORIO: o campo aceita 2000 caracteres e um codigo de
   // OP colado sem espaco empurrava a tabela para fora da largura util do A4,
   // levando as colunas da direita para fora do papel.
