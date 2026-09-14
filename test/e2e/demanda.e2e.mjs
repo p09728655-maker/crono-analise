@@ -38,8 +38,24 @@ p.on('pageerror', (e) => erros.push(e.message));
 // Grupo 0002 FURADEIRA com tres maquinas ativas e uma inativa: a inativa
 // NAO pode contar no tempo disponivel.
 let horasSemana = null;
+/* A demanda entra pela MESMA rota do cadastro (?demanda=1): o plano Hobby
+   da Vercel aceita 12 funcoes por deploy e o projeto ja' esta' nas 12. O
+   mock precisa separar os dois assuntos pela query, como o servidor faz. */
+let gravadas = [];
+let urlDaGravacao = '';
+const enviados = [];
 await p.route('**/api/maquinas**', async (rota) => {
   const req = rota.request();
+  if (/demanda=1/.test(req.url())) {
+    if (req.method() === 'POST') {
+      const corpo = JSON.parse(req.postData() || '{}');
+      enviados.push(corpo);
+      urlDaGravacao = req.url();
+      gravadas = corpo.semanas.map((s, i) => ({ id: `d${i}`, grupo_id: 'g2', ...s }));
+    }
+    if (req.method() === 'DELETE') gravadas = [];
+    return rota.fulfill({ json: { demandas: gravadas } });
+  }
   if (req.method() === 'PATCH') {
     horasSemana = JSON.parse(req.postData() || '{}').horasSemana;
     return rota.fulfill({ json: { grupo: { id: 'g2', codigo: '0002', nome: 'FURADEIRA', horas_semana: horasSemana } } });
@@ -61,20 +77,6 @@ await p.route('**/api/maquinas**', async (rota) => {
 });
 
 await p.route('**/api/conferencias**', (rota) => rota.fulfill({ json: { conferencias: [], outras: 0 } }));
-
-/* A demanda: o servidor guarda o que a tela mandou e devolve a lista. */
-let gravadas = [];
-const enviados = [];
-await p.route('**/api/demanda**', async (rota) => {
-  const req = rota.request();
-  if (req.method() === 'POST') {
-    const corpo = JSON.parse(req.postData() || '{}');
-    enviados.push(corpo);
-    gravadas = corpo.semanas.map((s, i) => ({ id: `d${i}`, grupo_id: 'g2', ...s }));
-  }
-  if (req.method() === 'DELETE') gravadas = [];
-  return rota.fulfill({ json: { demandas: gravadas } });
-});
 
 await p.goto(`${BASE}/analise/conferencias`);
 
@@ -116,6 +118,8 @@ await p.waitForTimeout(400);
 
 checar(enviados.length === 1 && enviados[0].semanas.length === 3,
   'sobe uma gravacao so, com as tres semanas');
+checar(/\/api\/maquinas\?demanda=1/.test(urlDaGravacao),
+  'a gravacao vai pela rota dentro de /api/maquinas — o projeto nao pode ganhar uma 13a funcao');
 checar(JSON.stringify(enviados[0].semanas[0]) === JSON.stringify({ ano: 2026, numero: 1, pecas: 128250 }),
   'a semana sobe como ano, numero e pecas — nao como texto');
 
@@ -150,7 +154,16 @@ await semearSessao(p2);
 const erros2 = [];
 p2.on('pageerror', (e) => erros2.push(e.message));
 
-await p2.route('**/api/maquinas**', (rota) => rota.fulfill({
+await p2.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
+  ? rota.fulfill({
+    json: {
+      demandas: [
+        { id: 'd1', grupo_id: 'g2', ano: 2026, numero: 36, pecas: 83864 },
+        { id: 'd2', grupo_id: 'g2', ano: 2026, numero: 37, pecas: 100637 },
+      ],
+    },
+  })
+  : rota.fulfill({
   json: {
     grupos: [{ id: 'g2', codigo: '0002', nome: 'FURADEIRA', horas_semana: 44 }],
     maquinas: [
@@ -159,7 +172,7 @@ await p2.route('**/api/maquinas**', (rota) => rota.fulfill({
       { id: 'm3', nome: 'Furadeira 21', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
     ],
   },
-}));
+})));
 
 /* Uma hora de relogio, 700 pecas, 12 min parados: 700 pc/h no relogio e
    875 pc/h com a maquina rodando. 09/09/2026 e' quarta da semana 37. */
@@ -173,16 +186,6 @@ await p2.route('**/api/conferencias**', (rota) => rota.fulfill({
       paradas: [{ motivo: 'setup', duracao_ms: 720000 }],
     }],
     outras: 0,
-  },
-}));
-
-/* Programa de duas semanas: a 37 (a das medicoes) e a 36. */
-await p2.route('**/api/demanda**', (rota) => rota.fulfill({
-  json: {
-    demandas: [
-      { id: 'd1', grupo_id: 'g2', ano: 2026, numero: 36, pecas: 83864 },
-      { id: 'd2', grupo_id: 'g2', ano: 2026, numero: 37, pecas: 100637 },
-    ],
   },
 }));
 

@@ -212,19 +212,23 @@ export const removerGrupoMaquina = (id) =>
 /* O programa de producao do grupo, semana a semana: o numerador do ritmo
    que a demanda exige. Gravar MESCLA — semana que nao veio na colagem
    fica como estava. */
+/* A rota vive dentro de /maquinas (?demanda=1), e nao num /demanda proprio:
+   o plano Hobby da Vercel aceita 12 funcoes por deploy e o projeto ja' esta'
+   nas 12 — a 13a derruba o deploy inteiro. Ver api/_lib/demanda.js. */
+const ROTA_DEMANDA = '/maquinas?demanda=1';
 export const listarDemanda = (grupoId) =>
-  requisitar(grupoId ? `/demanda?grupo=${encodeURIComponent(grupoId)}` : '/demanda')
+  requisitar(grupoId ? `${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}` : ROTA_DEMANDA)
     .then((r) => r.demandas || []);
 export const gravarDemanda = (grupoId, semanas) =>
-  requisitar(`/demanda?grupo=${encodeURIComponent(grupoId)}`, { metodo: 'POST', corpo: { semanas } })
+  requisitar(`${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}`, { metodo: 'POST', corpo: { semanas } })
     .then((r) => r.demandas || []);
 export const removerSemanaDemanda = (grupoId, { ano, numero }) =>
   requisitar(
-    `/demanda?grupo=${encodeURIComponent(grupoId)}&ano=${ano}&numero=${numero}`,
+    `${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}&ano=${ano}&numero=${numero}`,
     { metodo: 'DELETE' },
   ).then((r) => r.demandas || []);
 export const limparDemanda = (grupoId) =>
-  requisitar(`/demanda?grupo=${encodeURIComponent(grupoId)}&tudo=1`, { metodo: 'DELETE' })
+  requisitar(`${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}&tudo=1`, { metodo: 'DELETE' })
     .then((r) => r.demandas || []);
 
 /* ------------------------------------------ analistas e identificacao */
