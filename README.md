@@ -99,11 +99,11 @@ papel). O **filtro por máquina** da lateral vale para o relatório inteiro,
 
 Na lateral do relatório, **Demanda semanal** guarda o programa do PCP por
 **grupo de máquina** (0002 FURADEIRA), uma linha por semana. Entra por
-**colagem da planilha**: a tela lê as colunas `SEMANA` e `TOTAL SEMANA`,
-ignora os totalizadores do rodapé e confere o total contra a soma dos lotes,
-avisando com os dois números quando não bate. Gravar **mescla** — semana que
-não veio na colagem fica como estava, então dá para colar só o mês corrente
-sem perder o histórico.
+**colagem da planilha**: a tela lê as colunas `SEMANA`, `INÍCIO` e
+`TOTAL SEMANA`, ignora os totalizadores do rodapé e confere o total contra a
+soma dos lotes, avisando com os dois números quando não bate. Gravar
+**mescla** — semana que não veio na colagem fica como estava, então dá para
+colar só o mês corrente sem perder o histórico.
 
 É **por grupo** e não por peça de propósito: Takt é tempo disponível ÷
 demanda, e numa furadeira que roda doze peças nenhuma delas tem o turno
@@ -120,6 +120,38 @@ para um campo fixo: nas 36 semanas de 2026 as furadeiras foram de 64.750 a
 > `colunaDaSemana()` resolve pelo cabeçalho, o formato `S02` é entendido (o ano
 > vem do `-26` da própria linha) e a coluna de planilha é ignorada **com aviso
 > na prévia** — o silêncio era o que escondia o deslocamento.
+
+> **E a semana da fábrica não é a do calendário — por isso o casamento é por
+> DATA.** A linha `034-26` é rotulada `S37` e rodou de **31/08 a 04/09**; a
+> semana ISO 37 só começa em 07/09. A `035-26` começou numa **terça** (08/09)
+> porque 07/09 foi feriado. O rótulo `S` corre uma semana à frente do ISO e o
+> feriado desloca o início: casar medição e programa por NÚMERO erra nos dois
+> eixos. Com a coluna `INÍCIO` colada, `demanda_semanal.inicio` guarda o
+> primeiro dia e `semanaQueContem()` escolhe a linha cujo **período** contém a
+> medição. Cada semana vale **sete dias fixos** a partir do início. Esticar
+> até a semana seguinte cobriria o feriado no meio, mas atribuiria à semana
+> anterior os dias de uma semana que faltou na colagem — e um veredito com a
+> demanda errada, calado, é pior que um dia descoberto que aparece na tela
+> como "sem programa para o período desta medição", com o seletor de semana
+> ao lado.
+>
+> A decisão é **de cada linha**: semana sem data casa pelo número (só contra
+> linhas que também não têm data), semana com data casa pelo período. As duas
+> convivem no mesmo grupo, que é o que acontece quando se cola só o mês
+> corrente por cima — `casadoPorData` diz como o veredito da vez foi casado, e
+> a ressalva sai na tela e no papel.
+>
+> A coluna `INÍCIO` precisa apontar para o **início da produção** da semana
+> (na planilha do PCP, a data de **CORTE MDF**, coluna `A4` da aba da semana),
+> **não** para a `PREV EMB` (coluna `I4`): a previsão de embalagem cai uma
+> semana à frente e o veredito sairia comparando a medição com o programa
+> anterior. Confira pelo período que a tela mostra — `034-26 · 31/08 a 04/09`
+> tem de bater com o DASHBOARD da planilha.
+>
+> `anoNaLinha()` não deixa a célula de data virar o ANO do programa: `24/08`
+> (sem o ano) tem a cara de "semana 24 de 2008", e o programa inteiro ia para
+> um ano onde nenhuma medição procuraria. Valor ambíguo só vale se der no ano
+> de referência; `033-26` passa porque 26 não é mês nenhum.
 
 A rota da demanda mora **dentro de `api/maquinas`** (`?demanda=1`), e não
 num `api/demanda.js` próprio: o plano Hobby aceita **12 funções serverless

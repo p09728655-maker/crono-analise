@@ -3,6 +3,7 @@ import {
   comparativoDeParadas, conferenciaRapida, faixaHoraria, formatarDuracao, ritmoPorHoraDoDia,
   somarParadas,
 } from '../../../domain/cronoanalise.js';
+import { comoPeriodo } from '../../../domain/demandaSemanal.js';
 import { constanciaTexto, lerGrupo } from '../../../domain/comparativoMaquinas.js';
 import { lerClasse } from '../../../domain/ritmoPorCiclo.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
@@ -97,8 +98,19 @@ export default function ImpressaoConferencias({
           de folha impressa. */}
       {demanda?.estado === 'pronto' && demanda.veredito && (
         <section style={imp.comparativo}>
+          {/* O PERIODO no papel, nao so' o codigo. E' a folha que vai para a
+              reuniao, e o codigo da semana sozinho nao permite conferir nada:
+              a semana da fabrica desloca por feriado e o rotulo da planilha
+              corre a frente do calendario. Com as datas, o PCP confere. */}
           <h2 style={imp.tituloSecao}>
-            O programa da semana {demanda.semana.chave}{grupoNome ? ` — ${grupoNome}` : ''}
+            O programa da semana {demanda.semana.chave}
+            {/* SO' O PERIODO DA PLANILHA. Sem a coluna INICIO, o intervalo que
+                a leitura devolve e' o da semana ISO do calendario — e a 036-26
+                da fabrica rodou de 24/08 a 28/08, uma semana inteira longe da
+                semana 36 do calendario. Afirmar essa data no titulo da folha
+                que vai para a reuniao e' pior que nao dizer data nenhuma. */}
+            {demanda.periodo ? ` · ${comoPeriodo(demanda.periodo, { ano: true })}` : ''}
+            {grupoNome ? ` — ${grupoNome}` : ''}
           </h2>
           <div style={imp.comparativoGrade}>
             <div style={imp.comparativoCaixa}>
@@ -143,6 +155,13 @@ export default function ImpressaoConferencias({
             hora de presença. {demanda.veredito.atende
               ? `O grupo ATENDE o programa, com ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de folga.`
               : `O grupo NÃO ATENDE: falta ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de ritmo em cada máquina.`}
+            {/* A RESSALVA vai junto para o papel. E' a folha que circula na
+                reuniao, e um veredito casado por numero da semana tem margem
+                de erro que a tela mostra e o papel calava. */}
+            {!demanda.casadoPorData && (
+              <> Semana cadastrada <strong>sem data de início</strong>: casada pelo número,
+                que erra quando a semana da fábrica desloca por feriado.</>
+            )}
           </p>
         </section>
       )}

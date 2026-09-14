@@ -43,6 +43,34 @@ import { inteiro, lista, uuid } from './validar.js';
 const MAX_SEMANAS = 120;
 
 /**
+ * O INICIO da semana, como a coluna INICIO da planilha traz.
+ *
+ * Guardado como DIA, sem hora e sem fuso: e' o que casa a medicao com a
+ * linha do programa. A semana da fabrica nao e' a do calendario — a 034-26
+ * rodou de 31/08 a 04/09 e a planilha a chama de "S37", que no ISO seria
+ * 07/09. Casar por numero erra em toda semana com feriado; casar por data
+ * nao erra.
+ *
+ * Opcional de proposito: programa colado antes desta coluna existir
+ * continua valendo, e o relatorio cai no casamento por numero. Recusar a
+ * gravacao inteira por falta dela apagaria o que ja' funciona.
+ */
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
+
+function diaDaSemana(valor, campo) {
+  if (valor == null || valor === '') return null;
+  const bruto = String(valor).slice(0, 10);
+  if (!DIA.test(bruto)) throw erroValidacao(`Campo "${campo}" precisa ser uma data AAAA-MM-DD`);
+  const d = new Date(`${bruto}T00:00:00Z`);
+  // "2026-02-31" passa no formato e nao existe no calendario: o construtor
+  // desliza para 03/03 calado, e a semana inteira mudaria de lugar.
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== bruto) {
+    throw erroValidacao(`Campo "${campo}" nao e uma data valida`);
+  }
+  return bruto;
+}
+
+/**
  * `atualizado_em` vai junto de proposito: e' com ele que a tela carimba
  * QUANDO o programa foi colado. Programa velho dando veredito com cara de
  * atual e' o risco que sobra depois que a conta esta' certa — e ninguem
@@ -50,12 +78,14 @@ const MAX_SEMANAS = 120;
  */
 const listar = (db, empresaId, grupoId) => (grupoId
   ? db`
-    SELECT id, grupo_id, ano, numero, pecas, atualizado_em
+    SELECT id, grupo_id, ano, numero, pecas,
+           to_char(inicio, 'YYYY-MM-DD') AS inicio, atualizado_em
       FROM demanda_semanal
      WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
      ORDER BY ano, numero`
   : db`
-    SELECT id, grupo_id, ano, numero, pecas, atualizado_em
+    SELECT id, grupo_id, ano, numero, pecas,
+           to_char(inicio, 'YYYY-MM-DD') AS inicio, atualizado_em
       FROM demanda_semanal
      WHERE empresa_id = ${empresaId}
      ORDER BY grupo_id, ano, numero`);
@@ -108,6 +138,7 @@ export async function demandaSemanal(req, res, auth) {
         // Teto de 10 milhoes de pecas na semana: acima disso e' quase certo
         // que alguem colou a coluna do acumulado do ano no lugar da semana.
         pecas: obrigatorio(s?.pecas, `semanas[${i}].pecas`, { min: 1, max: 10000000 }),
+        inicio: diaDaSemana(s?.inicio, `semanas[${i}].inicio`),
       }));
 
       // Colagem com a mesma semana duas vezes: fica a ultima, como a tela
@@ -116,10 +147,13 @@ export async function demandaSemanal(req, res, auth) {
 
       for (const s of porSemana.values()) {
         await db`
-          INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas)
-          VALUES (${empresaId}, ${grupoId}, ${s.ano}, ${s.numero}, ${s.pecas})
+          INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas, inicio)
+          VALUES (${empresaId}, ${grupoId}, ${s.ano}, ${s.numero}, ${s.pecas}, ${s.inicio})
           ON CONFLICT (empresa_id, grupo_id, ano, numero)
-          DO UPDATE SET pecas = EXCLUDED.pecas`;
+          DO UPDATE SET pecas = EXCLUDED.pecas,
+                        -- Colagem SEM a coluna INICIO nao apaga a data que
+                        -- ja' estava gravada: ela so' nao veio desta vez.
+                        inicio = COALESCE(EXCLUDED.inicio, demanda_semanal.inicio)`;
       }
       return json(res, 201, { demandas: await listar(db, empresaId, grupoId) });
     }

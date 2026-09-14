@@ -519,9 +519,21 @@ CREATE TABLE IF NOT EXISTS demanda_semanal (
   ano           smallint NOT NULL CHECK (ano BETWEEN 2000 AND 2099),
   numero        smallint NOT NULL CHECK (numero BETWEEN 1 AND 53),
   pecas         integer NOT NULL CHECK (pecas > 0),
+  -- O PRIMEIRO DIA da semana na fabrica, da coluna INICIO da planilha.
+  --
+  -- A semana da fabrica nao e' a do calendario: a 034-26 rodou de 31/08 a
+  -- 04/09 e a planilha a rotula "S37" (a semana ISO 37 comeca em 07/09);
+  -- a 035-26 comecou numa terca porque 07/09 foi feriado. Casar medicao e
+  -- programa pelo NUMERO erra em toda semana deslocada, e o erro cresce
+  -- com as semanas puladas no ano. Com a data, nao erra.
+  --
+  -- NULA e' permitida: programa gravado antes desta coluna existir
+  -- continua valendo, e o relatorio cai no casamento por numero.
+  inicio        date,
   criado_em     timestamptz NOT NULL DEFAULT now(),
   atualizado_em timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE demanda_semanal ADD COLUMN IF NOT EXISTS inicio date;
 CREATE UNIQUE INDEX IF NOT EXISTS demanda_semanal_unq
   ON demanda_semanal (empresa_id, grupo_id, ano, numero);
 CREATE INDEX IF NOT EXISTS demanda_semanal_grupo_idx
