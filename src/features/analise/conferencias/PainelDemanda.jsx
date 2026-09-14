@@ -1,3 +1,4 @@
+import { comoDia, comoPeriodo, periodosDoPrograma } from '../../../domain/demandaSemanal.js';
 import { est } from './estilos.js';
 import { porMinuto } from './formato.js';
 
@@ -23,16 +24,48 @@ import { porMinuto } from './formato.js';
  * caminho. Sumir com o quadro esconde a funcao de quem nunca a configurou.
  */
 export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTrocarSemana }) {
-  const { estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas, programa } = leitura;
+  const {
+    estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas, programa, medicao,
+    casadoPorData,
+  } = leitura;
 
-  /* ---- os tres caminhos em que ainda nao ha' o que comparar ---- */
+  /* O periodo de cada semana cadastrada, para o seletor dizer de que dias
+     fala cada opcao. Trinta e seis linhas: conta barata, feita a cada
+     desenho em vez de guardada em estado que pode envelhecer. */
+  const periodoDe = new Map(
+    periodosDoPrograma(semanas || []).map((x) => [x.semana.chave, comoPeriodo(x)]),
+  );
+
+  /* ---- os caminhos em que ainda nao ha' o que comparar ---- */
   if (estado !== 'pronto') {
     return (
       <section style={est.chamadaDemanda} aria-label="Programa da semana">
         <div style={est.chamadaTexto}>
-          <strong>{titulo(estado, semana)}</strong>{' '}
-          {explicacao(estado, semana, demanda, grupoNome, programa)}
+          <strong>{titulo(estado)}</strong>{' '}
+          {explicacao(estado, semana, demanda, grupoNome, programa, medicao)}
         </div>
+        {/* O SELETOR TAMBEM AQUI. A janela de cada semana e' de sete dias
+            fixos, e um dia util perdido num feriado longo fica sem programa
+            de proposito — atribuir a demanda da semana anterior seria errar
+            calado. Mas o preco so' e' justo se houver saida na mesma tela:
+            sem o seletor, "escolha outra semana" era um conselho sem onde. */}
+        {estado === 'sem-semana' && semanas?.length > 0 && (
+          <label style={est.demandaSeletor}>
+            <span style={est.comparativoRotulo}>Comparar com</span>
+            <select
+              style={est.demandaSelect}
+              value=""
+              onChange={(ev) => ev.target.value && aoTrocarSemana(ev.target.value)}
+            >
+              <option value="">escolha a semana</option>
+              {[...semanas].reverse().map((s) => (
+                <option key={s.chave} value={s.chave}>
+                  {s.chave}{periodoDe.get(s.chave) ? ` · ${periodoDe.get(s.chave)}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {/* Com vários grupos em tela não há o que configurar: o que falta é
             escolher a máquina, e o botão levaria para o lugar errado. */}
         {estado !== 'varios-grupos' && (
@@ -64,8 +97,14 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
                 value={semana.chave}
                 onChange={(ev) => aoTrocarSemana(ev.target.value)}
               >
+                {/* O PERIODO dentro da opcao. E' aqui que o usuario troca a
+                    comparacao, e o codigo da semana sozinho nao diz de que
+                    dias a linha fala — que e' o problema que esta tela inteira
+                    existe para resolver. */}
                 {[...semanas].reverse().map((s) => (
-                  <option key={s.chave} value={s.chave}>{s.chave}</option>
+                  <option key={s.chave} value={s.chave}>
+                    {s.chave}{periodoDe.get(s.chave) ? ` · ${periodoDe.get(s.chave)}` : ''}
+                  </option>
                 ))}
               </select>
             </label>
@@ -73,9 +112,12 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
         </div>
         <p style={est.comparativoDica}>
           {demanda.toLocaleString('pt-BR')} peças programadas
+          {/* O PERIODO, sempre. A semana da fabrica nao e' a do calendario
+              (a 034-26 e' rotulada S37 e roda de 31/08 a 04/09), entao o
+              codigo sozinho nao permite conferir nada — a data permite. */}
           {intervalo && (
-            <> para a semana de {intervalo.inicio.toLocaleDateString('pt-BR')} a{' '}
-              {intervalo.fim.toLocaleDateString('pt-BR')}</>
+            <> para {casadoPorData ? 'o período de' : 'a semana de'}{' '}
+              {comoPeriodo(intervalo, { ano: true })}</>
           )}
           , divididas entre <strong>{v.maquinas} máquina(s)</strong> do grupo com{' '}
           {Math.round(v.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina na semana.
@@ -175,17 +217,30 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
           : {programa.n} semanas, de {comoOPcpEscreve(programa.primeira)} a{' '}
           {comoOPcpEscreve(programa.ultima)}. O veredito vale para a demanda desse
           programa — se o PCP reprogramou depois, cole a planilha de novo.
+          {/* CASADO POR NUMERO e' o caso pior, e ele precisa aparecer: a
+              semana da fabrica desloca por feriado e o rotulo da planilha
+              corre a frente do calendario, entao o numero acerta por
+              sorte. Com a coluna INICIO colada, casa por data e nao erra. */}
+          {!casadoPorData && (
+            <> <strong>Esta semana está cadastrada sem data de início</strong>: o período
+              acima é o do calendário, não o da planilha, e sem data a medição casa pelo
+              NÚMERO da semana — que erra quando a semana da fábrica desloca por feriado.
+              Cole a planilha com a coluna INÍCIO.</>
+          )}
         </p>
       )}
     </section>
   );
 }
 
-const titulo = (estado, semana) => ({
+const titulo = (estado) => ({
   'varios-grupos': 'Escolha uma máquina para ver o programa da semana.',
   'sem-demanda': 'Programa de produção não cadastrado.',
-  'sem-semana': `Sem programa para a semana ${semana?.chave ?? ''}.`,
+  // Sem numero: com casamento por data, a semana que falta pode estar
+  // cadastrada com OUTRO numero — e mandar procurar por ele engana.
+  'sem-semana': 'Sem programa para o período desta medição.',
   'sem-horas': 'Falta a jornada do grupo.',
+  'sem-ritmo': 'Sem ritmo medido no período.',
 }[estado] || '');
 
 /** "de S02 a S39" — a semana como o PCP escreve, não como o app guarda. */
@@ -197,7 +252,7 @@ function cobertura(programa) {
   return ate;
 }
 
-function explicacao(estado, semana, demanda, grupoNome, programa) {
+function explicacao(estado, semana, demanda, grupoNome, programa, medicao) {
   if (estado === 'varios-grupos') {
     /**
      * O quadro SUMIA calado quando a tela misturava grupos, e quem nunca
@@ -211,7 +266,22 @@ function explicacao(estado, semana, demanda, grupoNome, programa) {
     return `Sem a demanda${grupoNome ? ` de ${grupoNome}` : ''}, o relatório diz quanto o posto entrega, mas não se isso atende. O programa entra colando a planilha do PCP.`;
   }
   if (estado === 'sem-semana') {
-    return `As medições em tela são desta semana, e ela não está no programa cadastrado.${cobertura(programa)} Cole a semana que falta — ou escolha outra na tela de demanda.`;
+    /**
+     * Com programa POR DATA a falta e' de um DIA, nao de um numero: dizer
+     * "a semana 36 nao esta' cadastrada" manda o PCP procurar uma linha
+     * que pode existir com outro numero. A data ele acha na planilha.
+     */
+    const quando = programa?.temData && medicao ? ` de ${comoDia(medicao, { ano: true })}` : '';
+    return `A medição mais recente${quando} não cai em nenhuma semana do programa cadastrado.${cobertura(programa)} Escolha a semana a comparar aqui mesmo, ou cole a semana que falta em Demanda semanal.`;
+  }
+  if (estado === 'sem-ritmo') {
+    const quanto = demanda?.toLocaleString('pt-BR') ?? '';
+    // Sem medicao NENHUMA e' diferente de medicao que nao rende ritmo — e
+    // dizer "as medicoes em tela" quando nao ha' nenhuma e' afirmar o que
+    // a tela mostra que nao existe.
+    return medicao
+      ? `Há ${quanto} peças programadas e a jornada do grupo está informada, mas as medições em tela não dão ritmo nenhum para comparar. Sem ritmo medido não há veredito — e inventar um a partir do programa seria comparar a demanda com ela mesma.`
+      : `Há ${quanto} peças programadas nesta semana, mas não há medição em tela para comparar. O veredito aparece quando houver conferência no período — sem medição, o número acima é só o programa.`;
   }
   return `Há ${demanda?.toLocaleString('pt-BR') ?? ''} peças programadas para ${semana?.chave ?? 'a semana'}, mas o grupo não tem horas por semana informadas. Sem elas não há ritmo exigido: jornada é decisão de turno, e não presumo nenhuma.`;
 }

@@ -8,8 +8,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  chaveSemana, interpretarColagem, intervaloIso, lerCodigoSemana, maquinasNecessarias, numeroPtBr,
-  leituraDaDemanda, ordenarSemanas, resumoDaDemanda, ritmoExigido, semanaIso, vereditoDaSemana,
+  chaveSemana, comoDia, comoPeriodo, interpretarColagem, intervaloIso, lerCodigoSemana,
+  lerDataPtBr, maquinasNecessarias, numeroPtBr, leituraDaDemanda, ordenarSemanas,
+  periodoDaSemana, periodosDoPrograma, resumoDaDemanda, ritmoExigido, semanaIso,
+  semanaQueContem, vereditoDaSemana,
 } from '../src/domain/demandaSemanal.js';
 
 const COLAGEM_REAL = `SEMANA	LOTE 1	LOTE 2	LOTE 3	LOTE 4	LOTE 5	TOTAL SEMANA	MÉDIA / LOTE
@@ -37,6 +39,13 @@ S04	002-26	27.250	19.850	13.473	12.000	33.000	105.573
 S22	020-26	20.000	27.500	19.700	18.300	34.000	119.500
 S24	021-26	16.100	27.450	28.600	14.500	22.400	109.050
 S39	036-26	15.514	26.200	11.500	16.450	14.200	83.864`;
+
+/**
+ * Os avisos MENOS o da coluna INICIO. Ele sai em toda colagem que nao
+ * traz data, que e' quase toda colagem antiga destes testes — e o que
+ * cada um deles afirma e' outra coisa. O aviso tem teste proprio abaixo.
+ */
+const semOAvisoDaData = (avisos) => avisos.filter((a) => !/INÍCIO/.test(a));
 
 describe('as duas colunas de semana da planilha do PCP', () => {
   const { semanas, avisos } = interpretarColagem(COLAGEM_COMPLETA);
@@ -69,6 +78,39 @@ describe('as duas colunas de semana da planilha do PCP', () => {
   it('a soma dos lotes confere com o total, com a coluna de planilha no meio', () => {
     // 20.000 + 27.500 + 19.700 + 18.300 + 34.000 = 119.500 (S22)
     expect(avisos.some((a) => /não bate com a soma dos lotes/.test(a))).toBe(false);
+  });
+});
+
+describe('colagem SEM cabecalho com as duas colunas', () => {
+  /**
+   * O caso que quebrou duas vezes: as linhas coladas direto do Excel, com
+   * Nº PLANILHA na FRENTE e sem a linha de titulos. Sem cabecalho a regra
+   * da coluna nao alcanca, e a primeira coluna venceria — a do contador.
+   */
+  const { semanas, avisos } = interpretarColagem([
+    '001-26\tS02\t25.000\t27.750\t34.900\t28.650\t11.950\t128.250\t25.650',
+    '020-26\tS22\t20.000\t27.500\t19.700\t18.300\t34.000\t119.500\t23.900',
+    '036-26\tS39\t15.514\t26.200\t11.500\t16.450\t14.200\t83.864\t16.773',
+  ].join('\n'));
+
+  it('vale a coluna no formato S02, nao a primeira', () => {
+    expect(semanas.map((x) => x.chave)).toEqual(['002-26', '022-26', '039-26']);
+  });
+
+  it('e o aviso diz qual coluna venceu e por que', () => {
+    expect(avisos.some((a) => /formato S02/.test(a))).toBe(true);
+  });
+
+  it('o total continua saindo da coluna que fecha a soma dos lotes', () => {
+    expect(semanas.map((x) => x.pecas)).toEqual([128250, 119500, 83864]);
+  });
+
+  it('sem coluna S nenhuma, "001-26" continua valendo como semana', () => {
+    // Compatibilidade: quem exporta so' a coluna de semana no formato do
+    // app nao pode deixar de funcionar.
+    const r = interpretarColagem('001-26\t128.250\n002-26\t105.573');
+    expect(r.semanas.map((x) => x.chave)).toEqual(['001-26', '002-26']);
+    expect(semOAvisoDaData(r.avisos)).toEqual([]);
   });
 });
 
@@ -142,7 +184,7 @@ describe('colagem da planilha do PCP', () => {
 
   it('TOTAL ACUMULADO e MEDIA SEMANAL nao viram semana nem aviso', () => {
     expect(semanas.some((s) => s.pecas === 3855110)).toBe(false);
-    expect(avisos).toEqual([]);
+    expect(semOAvisoDaData(avisos)).toEqual([]);
   });
 
   it('a soma dos lotes confere com o total de cada semana', () => {
@@ -163,14 +205,14 @@ describe('colagem torta', () => {
   it('sem cabecalho, duas colunas bastam', () => {
     const { semanas, avisos } = interpretarColagem('005-26\t122.500\n006-26\t114.228');
     expect(semanas.map((s) => s.pecas)).toEqual([122500, 114228]);
-    expect(avisos).toEqual([]);
+    expect(semOAvisoDaData(avisos)).toEqual([]);
   });
 
   it('sem cabecalho, o total e a coluna que FECHA A SOMA das anteriores', () => {
     // 25.000 + 27.750 = 52.750 — so' a terceira coluna fecha.
     const { semanas, avisos } = interpretarColagem('005-26\t25.000\t27.750\t52.750');
     expect(semanas[0].pecas).toBe(52750);
-    expect(avisos).toEqual([]);
+    expect(semOAvisoDaData(avisos)).toEqual([]);
   });
 
   it('a planilha inteira colada SEM cabecalho e lida, com a media por lote no fim', () => {
@@ -184,7 +226,7 @@ describe('colagem torta', () => {
       'S39\t15.514\t26.200\t11.500\t16.450\t14.200\t83.864\t16.773',
     ].join('\n'), { ano: 2026 });
     expect(semanas.map((x) => `${x.chave}=${x.pecas}`)).toEqual(['002-26=128250', '039-26=83864']);
-    expect(avisos).toEqual([]);
+    expect(semOAvisoDaData(avisos)).toEqual([]);
   });
 
   it('quando nenhuma coluna fecha a soma, pede o cabecalho — uma vez, nao por linha', () => {
@@ -426,5 +468,429 @@ describe('leitura da demanda para o relatorio', () => {
   it('o intervalo da semana acompanha, para a tela mostrar de quando e', () => {
     const l = leituraDaDemanda({ demandas, horas: 44, maquinas: 3, ritmoRelogio: 700, datas: [medicao] });
     expect(l.intervalo.inicio.toISOString().slice(0, 10)).toBe('2026-09-07');
+  });
+});
+
+/**
+ * A SEMANA DA FABRICA NAO E' A DO CALENDARIO — e esta e' a fixture que
+ * prova por que o casamento passou a ser por data.
+ *
+ * Linhas reais da aba FURAÇÃO (planilha do PCP, 2026), com a coluna
+ * INICIO. Repare no que o numero da semana faz aqui:
+ *
+ *   Nº PLANILHA  SEMANA  INICIO   periodo real (DASHBOARD)  semana ISO
+ *   033-26       S36     24/08    24/08 a 28/08             35
+ *   034-26       S37     31/08    31/08 a 04/09             36
+ *   035-26       S38     08/09    08/09 a 14/09             37
+ *   036-26       S39     15/09    15/09 a 21/09             38
+ *
+ * O rotulo S corre UMA SEMANA a frente do ISO, e a 035-26 comeca na TERCA
+ * porque 07/09 foi feriado. Casar medicao com programa por numero erra nos
+ * dois eixos ao mesmo tempo; casar por data acerta nos dois.
+ */
+const FURACAO = [
+  'Nº PLANILHA\tSEMANA\tINÍCIO\tLOTE 1\tLOTE 2\tTOTAL SEMANA\tMÉDIA / LOTE',
+  '033-26\tS36\t24/08/2026\t60.000\t68.900\t128.900\t25.780',
+  '034-26\tS37\t31/08/2026\t40.000\t53.200\t93.200\t18.640',
+  '035-26\tS38\t08/09/2026\t60.000\t61.900\t121.900\t24.380',
+  '036-26\tS39\t15/09/2026\t40.000\t43.864\t83.864\t16.773',
+].join('\n');
+
+describe('a coluna INICIO', () => {
+  const { semanas, avisos } = interpretarColagem(FURACAO, { ano: 2026 });
+
+  it('cada semana vem com a data em que comeca', () => {
+    expect(semanas.map((s) => `${s.chave}=${s.inicio}`)).toEqual([
+      '036-26=2026-08-24', '037-26=2026-08-31', '038-26=2026-09-08', '039-26=2026-09-15',
+    ]);
+  });
+
+  it('com a data no lugar, nao ha aviso de coluna faltando', () => {
+    expect(avisos.filter((a) => /coluna INÍCIO/.test(a))).toEqual([]);
+  });
+
+  it('colagem SEM a coluna avisa — o casamento vai cair no numero da semana', () => {
+    const r = interpretarColagem('SEMANA\tTOTAL SEMANA\nS37\t93.200', { ano: 2026 });
+    expect(r.semanas[0].inicio).toBe(null);
+    expect(r.avisos.some((a) => /coluna precisa se chamar INÍCIO/.test(a))).toBe(true);
+  });
+
+  it('o rodape continua mudo quando a coluna Nº PLANILHA vem na frente', () => {
+    /**
+     * Com a planilha na primeira coluna, "TOTAL ACUMULADO" fica fora da
+     * coluna SEMANA — que recebe o proprio 3.855.110. A linha nao vira
+     * semana (certo) e tambem nao pode virar aviso: planilha certa que
+     * reclama na previa ensina a ignorar a previa.
+     */
+    const r = interpretarColagem([
+      FURACAO,
+      'TOTAL ACUMULADO\t3.855.110',
+      'MÉDIA SEMANAL\t107.086',
+    ].join('\n'), { ano: 2026 });
+    expect(r.semanas.length).toBe(4);
+    expect(r.avisos.filter((a) => /Linha ignorada/.test(a))).toEqual([]);
+  });
+
+  it('data invertida ou impossivel nao vira semana com data torta', () => {
+    expect(lerDataPtBr('31/02/2026')).toBe(null);
+    expect(lerDataPtBr('8/1/26').toISOString().slice(0, 10)).toBe('2026-01-08');
+  });
+});
+
+describe('ate onde vai cada semana do programa', () => {
+  const { semanas } = interpretarColagem(FURACAO, { ano: 2026 });
+  const periodos = periodosDoPrograma(semanas);
+  const como = (p) => `${p.inicio.toISOString().slice(0, 10)}..${p.fim.toISOString().slice(0, 10)}`;
+
+  it('cada semana vale SETE dias a partir do inicio, e nem um a mais', () => {
+    expect(como(periodos[1])).toBe('2026-08-31..2026-09-06');
+    expect(como(periodos[2])).toBe('2026-09-08..2026-09-14');
+    expect(como(periodos[3])).toBe('2026-09-15..2026-09-21');
+  });
+
+  it('SEMANA QUE FALTOU NA COLAGEM nao e engolida pela anterior', () => {
+    /**
+     * O teste que tranca o pior erro possivel aqui. Colando a S36 e a S38
+     * sem a S37 no meio, esticar a janela ate' a vespera da seguinte poria
+     * a medicao de 02/09 com a demanda de 24/08 — 128.900 no lugar de
+     * 93.200. Sairia "faltam 28% de ritmo, precisa de 4,2 maquinas" onde a
+     * verdade e' "praticamente atende": decisao de comprar maquina nascida
+     * de uma linha que nao foi colada, e sem aviso nenhum na tela.
+     */
+    const r = interpretarColagem([
+      'SEMANA\tINÍCIO\tTOTAL SEMANA',
+      'S36\t24/08/2026\t128.900',
+      'S38\t08/09/2026\t121.900',
+    ].join('\n'), { ano: 2026 });
+    expect(semanaQueContem(r.semanas, new Date('2026-09-02T10:00:00-03:00'))).toBe(null);
+  });
+
+  it('o dia util perdido num feriado longo fica DESCOBERTO, e isso e o certo', () => {
+    // 07/09 (feriado) esta' fora da janela da semana que comecou em 31/08.
+    // Faltar em voz alta — o quadro diz "sem programa para o periodo desta
+    // medicao" e o seletor resolve na mao — e melhor que errar calado.
+    expect(semanaQueContem(semanas, new Date('2026-09-07T10:00:00-03:00'))).toBe(null);
+  });
+
+  it('buraco grande no programa nao vira uma semana de meses', () => {
+    const r = interpretarColagem([
+      'SEMANA\tINÍCIO\tTOTAL SEMANA',
+      'S02\t08/01/2026\t128.250',
+      'S39\t15/09/2026\t83.864',
+    ].join('\n'), { ano: 2026 });
+    const [primeira] = periodosDoPrograma(r.semanas);
+    expect(como(primeira)).toBe('2026-01-08..2026-01-14');
+    expect(semanaQueContem(r.semanas, new Date('2026-03-10T12:00:00-03:00'))).toBe(null);
+  });
+
+  it('as janelas saem em ordem de DATA, nao de rotulo', () => {
+    // A ultima planilha do ano pode chamar-se "S01": ordenar pelo numero a
+    // poria no comeco do ano, e a premissa desta tela e' que o rotulo nao
+    // e' confiavel.
+    const r = interpretarColagem([
+      'SEMANA\tINÍCIO\tTOTAL SEMANA',
+      'S39\t15/09/2026\t83.864',
+      'S02\t08/01/2026\t128.250',
+    ].join('\n'), { ano: 2026 });
+    expect(periodosDoPrograma(r.semanas).map((x) => x.semana.chave))
+      .toEqual(['002-26', '039-26']);
+  });
+});
+
+describe('qual semana cobre a medicao', () => {
+  const { semanas } = interpretarColagem(FURACAO, { ano: 2026 });
+  const em = (iso) => semanaQueContem(semanas, new Date(`${iso}T10:00:00-03:00`))?.chave ?? null;
+
+  it('sexta 04/09 pertence ao programa que comecou em 31/08', () => {
+    expect(em('2026-09-04')).toBe('037-26');
+  });
+
+
+  it('terca 08/09 pertence a semana seguinte', () => {
+    expect(em('2026-09-08')).toBe('038-26');
+  });
+
+  it('a medicao de segunda a noite nao escorrega para a semana seguinte', () => {
+    // 14/09 as 21h em Sao Paulo e' 15/09 as 00h UTC: comparado cru, o
+    // ultimo dia da 038-26 cairia na 039-26.
+    expect(em('2026-09-14')).toBe('038-26');
+    expect(semanaQueContem(semanas, new Date('2026-09-14T21:30:00-03:00')).chave).toBe('038-26');
+  });
+
+  it('antes do programa comecar, nao ha semana nenhuma', () => {
+    expect(em('2026-08-23')).toBe(null);
+  });
+});
+
+describe('leitura da demanda casada por data', () => {
+  const { semanas } = interpretarColagem(FURACAO, { ano: 2026 });
+  const demandas = semanas.map((s) => ({ ...s, atualizado_em: '2026-09-14T12:00:00Z' }));
+
+  it('a medicao de 10/09 pega o programa de 08/09, nao o da semana ISO 37', () => {
+    /**
+     * O erro que este casamento acabou: 10/09 e' semana ISO 37, e a linha
+     * rotulada "S37" e' a de 31/08 — o programa da semana ANTERIOR. Por
+     * numero, o relatorio comparava 93.200 com o ritmo de outra semana.
+     */
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [new Date('2026-09-10T08:00:00-03:00')],
+    });
+    expect(l.estado).toBe('pronto');
+    expect(l.demanda).toBe(121900);
+    expect(l.semana.chave).toBe('038-26');
+    expect(l.periodo.inicio.toISOString().slice(0, 10)).toBe('2026-09-08');
+    expect(l.casadoPorData).toBe(true);
+  });
+
+  it('a semana escolhida a mao continua mandando', () => {
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [new Date('2026-09-10T08:00:00-03:00')],
+      semanaEscolhida: { ano: 2026, numero: 36 },
+    });
+    expect(l.demanda).toBe(128900);
+    expect(l.semana.chave).toBe('036-26');
+    // A semana escolhida TEM data: cobrar a coluna INÍCIO dela, com o
+    // periodo dela na linha de cima, ensina a ignorar a ressalva que importa.
+    expect(l.casadoPorData).toBe(true);
+    expect(l.periodo.inicio.toISOString().slice(0, 10)).toBe('2026-08-24');
+  });
+
+  it('medicao fora de todo periodo do programa nao inventa semana', () => {
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [new Date('2026-10-20T08:00:00-03:00')],
+    });
+    expect(l.estado).toBe('sem-semana');
+    expect(l.veredito).toBe(null);
+    expect(l.medicao.toISOString().slice(0, 10)).toBe('2026-10-20');
+  });
+
+  it('programa SEM data cai no casamento por numero, e diz que caiu', () => {
+    const antigas = demandas.map(({ inicio, ...resto }) => resto);
+    const l = leituraDaDemanda({
+      demandas: antigas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [new Date('2026-09-10T08:00:00-03:00')],   // semana ISO 37
+    });
+    expect(l.casadoPorData).toBe(false);
+    expect(l.programa.temData).toBe(false);
+    expect(l.semana.chave).toBe('037-26');
+    expect(l.demanda).toBe(93200);
+  });
+});
+
+describe('programa MISTURADO: linhas com data e linhas sem', () => {
+  /**
+   * O caminho normal de atualizacao. A gravacao MESCLA, entao quem ja'
+   * tinha o programa cadastrado e cola setembro com a coluna INICIO fica
+   * com as duas coisas no mesmo grupo. Se a decisao fosse do programa
+   * inteiro, as semanas antigas — visiveis na tela de Demanda — parariam
+   * de casar, e o quadro diria "sem programa" com a semana na tela.
+   */
+  const demandas = [
+    { ano: 2026, numero: 11, pecas: 100000 },                          // antiga, sem data
+    { ano: 2026, numero: 38, pecas: 121900, inicio: '2026-09-08' },    // nova, com data
+  ];
+
+  it('a semana antiga continua casando pelo numero', () => {
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [new Date('2026-03-11T08:00:00-03:00')],   // semana ISO 11
+    });
+    expect(l.estado).toBe('pronto');
+    expect(l.demanda).toBe(100000);
+    expect(l.casadoPorData).toBe(false);
+  });
+
+  it('a semana nova casa pela data, no mesmo programa', () => {
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [new Date('2026-09-10T08:00:00-03:00')],
+    });
+    expect(l.demanda).toBe(121900);
+    expect(l.casadoPorData).toBe(true);
+  });
+
+  it('linha COM data nao casa pelo numero como consolo', () => {
+    // 15/09 e' semana ISO 38, e a linha 38 tem data que diz 08/09..14/09.
+    // Deixar o numero valer aqui devolveria a resposta que a data negou.
+    const l = leituraDaDemanda({
+      demandas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [new Date('2026-09-15T08:00:00-03:00')],
+    });
+    expect(l.estado).toBe('sem-semana');
+  });
+
+  it('a tela sabe quantas linhas ainda estao sem data', () => {
+    const l = leituraDaDemanda({ demandas, horas: 44, maquinas: 3, datas: [] });
+    expect(l.programa.semData).toBe(1);
+    expect(l.programa.temData).toBe(true);
+  });
+});
+
+describe('a data nao pode virar o ANO do programa', () => {
+  it('INICIO em dd/mm nao grava o programa em 2008', () => {
+    /**
+     * "24/08" tem a cara exata de "semana 24 de 2008" para quem le' codigo
+     * de semana. Lido como ano, o programa inteiro ia para 2008 — e
+     * nenhuma medicao de 2026 acharia nada, para sempre, sem erro nenhum
+     * na tela.
+     */
+    const r = interpretarColagem([
+      'SEMANA\tINÍCIO\tLOTE 1\tLOTE 2\tTOTAL SEMANA',
+      'S36\t24/08\t60.000\t68.900\t128.900',
+      'S37\t31/08\t40.000\t53.200\t93.200',
+    ].join('\n'), { ano: 2026 });
+    expect(r.semanas.map((x) => x.chave)).toEqual(['036-26', '037-26']);
+  });
+
+  it('e avisa que a data veio e nao deu para ler, com o formato certo', () => {
+    const r = interpretarColagem([
+      'SEMANA\tINÍCIO\tTOTAL SEMANA',
+      'S36\t24/08\t128.900',
+    ].join('\n'), { ano: 2026 });
+    expect(r.semanas[0].inicio).toBe(null);
+    expect(r.avisos.some((a) => /dd\/mm\/aaaa/.test(a))).toBe(true);
+    // E NAO o aviso de coluna ausente: a coluna veio. Mandar buscar o que
+    // ja' foi trazido e' pior que nao avisar.
+    expect(r.avisos.some((a) => /veio sem a coluna INÍCIO/.test(a))).toBe(false);
+  });
+
+  it('o Nº PLANILHA continua dando o ano quando a semana vem sem ele', () => {
+    const r = interpretarColagem([
+      'Nº PLANILHA\tSEMANA\tINÍCIO\tTOTAL SEMANA',
+      '033-26\tS36\t24/08/2026\t128.900',
+    ].join('\n'), { ano: 2030 });
+    expect(r.semanas[0].chave).toBe('036-26');
+  });
+});
+
+describe('outra coluna de data NAO e o inicio da semana', () => {
+  /**
+   * A planilha do PCP tem varias colunas de data — CORTE MDF, CORTE MDP,
+   * PREV EMB — e a de embalagem cai UMA SEMANA a frente da producao.
+   * Pescar "a primeira data da linha" com o cabecalho na mao poria a
+   * medicao de 31/08 (que e' a 037-26, 93.200) contra a demanda da
+   * 036-26 (128.900): 977 pc/h exigidos no lugar de 706, "precisa de 4,2
+   * maquinas" onde a verdade e' "praticamente atende".
+   */
+  const COM_ENTREGA = [
+    'SEMANA\tENTREGA\tTOTAL SEMANA',
+    'S36\t28/08/2026\t128.900',
+    'S37\t04/09/2026\t93.200',
+  ].join('\n');
+
+  it('com cabecalho, data fora de uma coluna INÍCIO nao vira inicio de semana', () => {
+    const r = interpretarColagem(COM_ENTREGA, { ano: 2026 });
+    expect(r.semanas.map((x) => x.inicio)).toEqual([null, null]);
+  });
+
+  it('e a previa diz que a coluna precisa se chamar INÍCIO', () => {
+    const r = interpretarColagem(COM_ENTREGA, { ano: 2026 });
+    expect(r.avisos.some((a) => /coluna precisa se chamar INÍCIO/.test(a))).toBe(true);
+  });
+
+  it('sem cabecalho, a data da linha continua valendo — nao ha outra de onde escolher', () => {
+    const r = interpretarColagem('S36\t24/08/2026\t128.900', { ano: 2026 });
+    expect(r.semanas[0].inicio).toBe('2026-08-24');
+  });
+});
+
+describe('a data completa diz de que ANO e o programa', () => {
+  it('planilha de 2027 colada em 2026 nao grava por cima de 2026', () => {
+    /**
+     * A chave no banco e' empresa+grupo+ano+numero. Lida como 2026, a
+     * semana 1 de 2027 sobrescrevia a semana 1 de 2026 no ON CONFLICT — a
+     * demanda real sumia na gravacao, sem aviso nenhum.
+     */
+    const r = interpretarColagem([
+      'SEMANA\tINÍCIO\tTOTAL SEMANA',
+      'S01\t04/01/2027\t128.250',
+    ].join('\n'), { ano: 2026 });
+    expect(r.semanas[0].chave).toBe('001-27');
+    expect(r.semanas[0].inicio).toBe('2027-01-04');
+  });
+});
+
+describe('quantas semanas as medicoes cobrem', () => {
+  const { semanas } = interpretarColagem(FURACAO, { ano: 2026 });
+
+  it('conta a semana da FABRICA, nao a do calendario', () => {
+    /**
+     * 31/08 e 04/09 sao a MESMA semana de fabrica (037-26) e semanas ISO
+     * diferentes. Contando ISO, a tela escrevia "o periodo e 31/08 a
+     * 06/09" e logo abaixo "as medicoes cobrem 2 semanas" — contradicao
+     * na mesma frase, desqualificando um numero que esta certo.
+     */
+    const l = leituraDaDemanda({
+      demandas: semanas, horas: 44, maquinas: 3, ritmoRelogio: 700,
+      datas: [
+        new Date('2026-08-31T08:00:00-03:00'),
+        new Date('2026-09-04T08:00:00-03:00'),
+      ],
+    });
+    expect(l.semanasMedidas).toBe(1);
+  });
+});
+
+describe('quando ainda nao da para dar veredito', () => {
+  const { semanas } = interpretarColagem(FURACAO, { ano: 2026 });
+
+  it('sem medicao nenhuma, mostra a ultima semana do programa e nao inventa veredito', () => {
+    const l = leituraDaDemanda({ demandas: semanas, horas: 44, maquinas: 3, datas: [] });
+    expect(l.semana.chave).toBe('039-26');
+    expect(l.estado).toBe('sem-ritmo');
+    expect(l.veredito).toBe(null);
+  });
+
+  it('sem medicao, NEM COM ritmo na mao sai veredito', () => {
+    // Ritmo sem data nao se sabe de que semana e'. Comparar a ultima semana
+    // cadastrada com ele e' o "medicao de marco contra o programa de
+    // setembro" que este arquivo inteiro recusa.
+    const l = leituraDaDemanda({
+      demandas: semanas, horas: 44, maquinas: 3, ritmoRelogio: 700, datas: [],
+    });
+    expect(l.estado).toBe('sem-ritmo');
+    expect(l.veredito).toBe(null);
+    expect(l.medicao).toBe(null);
+  });
+
+  it('a ultima do programa e a de DATA mais recente, nao a de rotulo maior', () => {
+    // A ultima planilha do ano pode chamar-se "S01".
+    const r = interpretarColagem([
+      'SEMANA\tINÍCIO\tTOTAL SEMANA',
+      'S39\t15/09/2026\t83.864',
+      'S52\t21/12/2026\t60.000',
+    ].join('\n'), { ano: 2026 });
+    const l = leituraDaDemanda({ demandas: r.semanas, horas: 44, maquinas: 3, datas: [] });
+    expect(l.semana.chave).toBe('052-26');
+  });
+
+  it('com medicao sem ritmo aproveitavel, tambem nao ha veredito', () => {
+    // 'pronto' com veredito nulo era um estado que a tela nao sabia
+    // desenhar — e quebrava no primeiro acesso a v.atende.
+    const l = leituraDaDemanda({
+      demandas: semanas, horas: 44, maquinas: 3, ritmoRelogio: 0,
+      datas: [new Date('2026-09-10T08:00:00-03:00')],
+    });
+    expect(l.estado).toBe('sem-ritmo');
+    expect(l.demanda).toBe(121900);
+    expect(l.veredito).toBe(null);
+  });
+});
+
+describe('a data na tela', () => {
+  it('o dia nao volta 24 h ao ser formatado no fuso da fabrica', () => {
+    // As datas do programa sao 00h UTC. Formatadas no relogio local de Sao
+    // Paulo (UTC-3), 08/09 viraria 07/09 — e o periodo na tela deixaria de
+    // bater com a planilha que o PCP tem aberta ao lado.
+    expect(comoDia(new Date('2026-09-08T00:00:00Z'))).toBe('08/09');
+    expect(comoDia(new Date('2026-09-08T00:00:00Z'), { ano: true })).toBe('08/09/2026');
+  });
+
+  it('o periodo sai como o PCP le', () => {
+    const { semanas } = interpretarColagem(FURACAO, { ano: 2026 });
+    expect(comoPeriodo(periodoDaSemana(semanas, semanas[2]))).toBe('08/09 a 14/09');
   });
 });

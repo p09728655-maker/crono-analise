@@ -13,6 +13,22 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.77.0',
+    data: '2026-09-14',
+    titulo: 'A semana da fábrica casa por DATA, não por número',
+    itens: [
+      'A SEMANA DA FÁBRICA NÃO É A DO CALENDÁRIO, e era por isso que o veredito podia sair da semana errada. A planilha 034-26 roda de 31/08 a 04/09 e é rotulada "S37" — a semana 37 do calendário só começa em 07/09. E a 035-26 começou numa terça, porque 07/09 foi feriado. Casar medição e programa pelo NÚMERO da semana erra nos dois casos, e o erro cresce a cada semana deslocada no ano.',
+      'AGORA CASA PELA DATA: cole a planilha com a coluna INÍCIO (a data em que cada semana começa) e a medição cai na linha cujo PERÍODO a contém. Feriado, semana pulada e semana de oito dias deixam de errar — a data não tem ambiguidade.',
+      'CADA SEMANA MOSTRA O PERÍODO QUE COBRE, na tela de Demanda semanal e no quadro do relatório: "031-26 · 31/08 a 04/09". É a única conferência possível contra o Excel — número de semana ninguém confere de cabeça; data, sim. Confira na primeira colagem se o período bate com a planilha que você tem aberta.',
+      'CADA SEMANA VALE SETE DIAS a partir do início, e nem um a mais. Esticar até a semana seguinte cobriria o dia de feriado, mas atribuiria à semana anterior todos os dias de uma semana que faltou na colagem — colando a S36 e a S38 sem a S37, a medição de 02/09 sairia com a demanda de 24/08 e o quadro pediria 4,2 máquinas onde a verdade é "praticamente atende". Com a janela fixa, o dia descoberto aparece como "sem programa para o período desta medição" e o seletor de semana resolve na mão. Errar calado é pior que faltar em voz alta.',
+      'O PROGRAMA QUE VOCÊ JÁ COLOU CONTINUA VALENDO. A decisão é de cada linha, não do programa inteiro: semana sem data casa pelo número, semana com data casa pelo período — as duas convivem no mesmo grupo, que é o que acontece quando se cola só o mês corrente por cima. A prévia diz quantas linhas ficaram sem data, e o quadro (na tela e no papel) avisa quando o veredito da semana foi casado pelo número.',
+      'DATA EM dd/mm (SEM O ANO) NÃO GRAVA MAIS O PROGRAMA EM 2008. "24/08" tem a cara exata de "semana 24 de 2008" para quem lê código de semana, e o programa inteiro ia para um ano onde nenhuma medição procuraria — calado. Agora o formato ambíguo só vale se der no ano da colagem, e INÍCIO que não dá para ler vira aviso com o formato certo (dd/mm/aaaa) em vez de sumir.',
+      'E A DATA COMPLETA PASSOU A DIZER DE QUE ANO É O PROGRAMA. Colar em dezembro a planilha do ano seguinte gravava a semana 1 por cima da semana 1 do ano corrente — a demanda real sumia na gravação, sem aviso. Com 04/01/2027 na coluna INÍCIO, a semana entra em 2027.',
+      'A COLUNA DA DATA PRECISA SE CHAMAR INÍCIO. Antes, com cabeçalho na colagem, qualquer coluna de data servia — e a planilha do PCP tem várias (CORTE MDF, CORTE MDP, PREV EMB). A de embalagem cai uma semana à frente da produção: adivinhar punha a semana inteira no lugar errado, calado. Agora, sem uma coluna com esse nome, a prévia diz que nenhuma data foi usada.',
+      'O RODAPÉ DA PLANILHA (TOTAL ACUMULADO, MÉDIA SEMANAL) parou de virar "linha ignorada" na prévia quando a colagem traz a coluna Nº PLANILHA na frente. Planilha certa reclamando na prévia ensina a ignorar a prévia.',
+    ],
+  },
+  {
     versao: '2.76.0',
     data: '2026-09-14',
     titulo: 'Colar a planilha ficou mais fácil, e o quadro atualiza sozinho',

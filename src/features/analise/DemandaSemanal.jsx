@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
-  chaveSemana, interpretarColagem, resumoDaDemanda, ritmoExigido,
+  chaveSemana, comoDia, comoPeriodo, emUtc, interpretarColagem, periodosDoPrograma,
+  resumoDaDemanda, ritmoExigido,
 } from '../../domain/demandaSemanal.js';
 import {
   atualizarGrupoMaquina, gravarDemanda, limparDemanda, listarCadastroMaquinas, listarDemanda,
@@ -80,6 +81,20 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
 
   const lido = useMemo(() => interpretarColagem(colagem), [colagem]);
   const resumo = useMemo(() => resumoDaDemanda(semanas || []), [semanas]);
+
+  /**
+   * O PERIODO de cada semana gravada, para a tabela dizer de que dias o
+   * programa fala.
+   *
+   * E' a unica conferencia possivel contra a coluna INICIO vir da celula
+   * errada na planilha: o PCP tem a planilha aberta ao lado e ve' na hora
+   * se a 034-26 aqui diz 31/08 a 04/09 ou outra coisa. Numero de semana
+   * ninguem confere de cabeca; data, sim.
+   */
+  const periodos = useMemo(
+    () => new Map(periodosDoPrograma(semanas || []).map((x) => [chaveSemana(x.semana), x])),
+    [semanas],
+  );
   const horasNum = Number(String(horas).replace(',', '.')) || 0;
 
   async function aplicar(fn) {
@@ -94,7 +109,9 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
   const gravarColagem = () => aplicar(async () => {
     const lista = await gravarDemanda(
       grupoId,
-      lido.semanas.map((s) => ({ ano: s.ano, numero: s.numero, pecas: s.pecas })),
+      lido.semanas.map((s) => ({
+        ano: s.ano, numero: s.numero, pecas: s.pecas, inicio: s.inicio,
+      })),
     );
     setSemanas(lista.map((d) => ({ ...d, chave: chaveSemana(d) })));
     setColagem('');
@@ -214,7 +231,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
               <textarea
                 style={est.areaColagem} value={colagem} disabled={ocupado}
                 onChange={(ev) => setColagem(ev.target.value)}
-                placeholder={'SEMANA\tLOTE 1\t...\tTOTAL SEMANA\n001-26\t25.000\t...\t128.250'}
+                placeholder={'SEMANA\tINÍCIO\tLOTE 1\t...\tTOTAL SEMANA\nS02\t08/01/2026\t25.000\t...\t128.250'}
                 rows={6}
               />
 
@@ -229,7 +246,11 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                     <div style={est.previaLinhas}>
                       {lido.semanas.slice(0, 4).map((s) => (
                         <span key={s.chave} style={est.previaItem}>
-                          {s.chave}: <strong>{s.pecas.toLocaleString('pt-BR')}</strong>
+                          {/* A DATA na previa, ANTES de gravar: e' onde o PCP percebe
+                              se a coluna INICIO da planilha aponta para a celula
+                              certa. Depois de gravado, o erro ja' esta' no veredito. */}
+                          {s.chave}{s.inicio ? ' ' + comoDia(emUtc(s.inicio)) : ''}:{' '}
+                          <strong>{s.pecas.toLocaleString('pt-BR')}</strong>
                         </span>
                       ))}
                       {lido.semanas.length > 4 && (
@@ -289,6 +310,9 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                     <thead>
                       <tr>
                         <th style={est.th}>Semana</th>
+                        <th style={est.th} title="Os dias que essa semana do programa cobre na fábrica">
+                          Período
+                        </th>
                         <th style={est.thNum}>Peças</th>
                         <th style={est.thNum} title="Peças por hora que cada máquina do grupo precisa fazer">
                           Exigido por máquina
@@ -305,6 +329,9 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                         return (
                           <tr key={s.chave}>
                             <td style={est.td}>{s.chave}</td>
+                            <td style={est.tdPeriodo}>
+                              {comoPeriodo(periodos.get(s.chave)) || 'sem data'}
+                            </td>
                             <td style={est.tdNum}>{s.pecas.toLocaleString('pt-BR')}</td>
                             <td style={est.tdNum}>
                               {r ? `${Math.round(r.pecasPorHoraMaquina).toLocaleString('pt-BR')} pç/h` : '—'}
@@ -443,6 +470,10 @@ const est = {
   },
   tdNum: {
     padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'right', ...tipo('corpo'), ...numeros,
+    color: t.textoMedio, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  tdPeriodo: {
+    padding: `${espaco.sm}px ${espaco.md}px`, ...tipo('legenda'), ...numeros,
     color: t.textoMedio, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
   },
   tdAcoes: {
