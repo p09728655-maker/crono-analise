@@ -167,7 +167,8 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
           minutos: grupoDoCadastro?.setup_min,
         },
         observado: {
-          pecas: painel.pecasTot, totalMs: painel.totalMs, setupMs: painel.pareto?.setupMs,
+          pecas: painel.pecasTot, totalMs: painel.totalMs, paradaMs: painel.paradaMs,
+          setupMs: painel.pareto?.setupMs,
         },
         // A data em que a medicao ACONTECEU, nao a em que subiu.
         datas: visiveis.map((c) => c.iniciado_em || c.salvo_em).filter(Boolean),

@@ -175,22 +175,29 @@ export default handler(async (req, res) => {
         if (!campos.some(tem)) {
           throw erroValidacao(`Nada a atualizar: informe ${campos.map((c) => `"${c}"`).join(', ')}`);
         }
+        /**
+         * TUDO VALIDADO ANTES DO PRIMEIRO UPDATE — codigo e nome inclusive.
+         * No modo de servico nao ha' transacao; validar entre gravacoes
+         * deixaria metade da decisao no banco quando um campo viesse errado
+         * (nome gravado, setup recusado). As consultas de unicidade sao
+         * leituras: podem vir antes.
+         */
+        let codigo;
         if (tem('codigo')) {
-          const codigo = codigoDe(corpo.codigo);
+          codigo = codigoDe(corpo.codigo);
           const [outro] = await db`
             SELECT codigo FROM grupos_maquina
              WHERE empresa_id = ${empresaId} AND codigo = ${codigo} AND id <> ${grupoId}`;
           if (outro) throw new ErroHttp(409, `Ja existe um grupo com o codigo ${codigo}`);
-          await db`UPDATE grupos_maquina SET codigo = ${codigo} WHERE id = ${grupoId}`;
         }
+        let nome;
         if (tem('nome')) {
-          const nome = nomeLimpo(texto(corpo.nome, 'nome', { obrigatorio: true, max: 60 }));
+          nome = nomeLimpo(texto(corpo.nome, 'nome', { obrigatorio: true, max: 60 }));
           if (!nome) throw erroValidacao('Informe o nome do grupo');
           const [outro] = await db`
             SELECT nome FROM grupos_maquina
              WHERE empresa_id = ${empresaId} AND lower(btrim(nome)) = lower(${nome}) AND id <> ${grupoId}`;
           if (outro) throw new ErroHttp(409, `Ja existe um grupo com este nome: "${outro.nome}"`);
-          await db`UPDATE grupos_maquina SET nome = ${nome} WHERE id = ${grupoId}`;
         }
         /**
          * HORAS DISPONIVEIS por maquina por semana — o denominador do takt.
@@ -200,36 +207,47 @@ export default handler(async (req, res) => {
          * numero errado seria digitar outro numero errado, e o relatorio
          * seguiria dando veredito sobre um turno que nao existe.
          */
-        if (tem('horasSemana')) {
-          const horas = corpo.horasSemana === null || corpo.horasSemana === ''
-            ? null
-            : decimal(corpo.horasSemana, 'horasSemana', { min: 0.5, max: 168 });
-          await db`UPDATE grupos_maquina SET horas_semana = ${horas} WHERE id = ${grupoId}`;
-        }
         /**
          * SETUP PLANEJADO: trocas por dia, minutos por troca e dias de
          * producao na semana, por maquina. Mesma regra das horas — nulo
          * apaga. Zero e' valido e diferente de nulo: "este grupo nao faz
          * setup" e' informacao; "nao sei" nao e'.
+         *
+         * Os quatro numeros sobem juntos porque sao uma decisao so'; a
+         * validacao de todos vem antes de qualquer UPDATE (ver acima).
          */
         const apagar = (v) => v === null || v === '';
-        if (tem('setupsDia')) {
-          const n = apagar(corpo.setupsDia)
-            ? null
-            : inteiro(corpo.setupsDia, 'setupsDia', { min: 0, max: 100 });
-          await db`UPDATE grupos_maquina SET setups_dia = ${n} WHERE id = ${grupoId}`;
+        const tempo = {
+          horas_semana: tem('horasSemana')
+            ? (apagar(corpo.horasSemana) ? null : decimal(corpo.horasSemana, 'horasSemana', { min: 0.5, max: 168 }))
+            : undefined,
+          setups_dia: tem('setupsDia')
+            ? (apagar(corpo.setupsDia) ? null : inteiro(corpo.setupsDia, 'setupsDia', { min: 0, max: 100 }))
+            : undefined,
+          setup_min: tem('setupMin')
+            ? (apagar(corpo.setupMin) ? null : decimal(corpo.setupMin, 'setupMin', { min: 0, max: 600 }))
+            : undefined,
+          dias_semana: tem('diasSemana')
+            ? (apagar(corpo.diasSemana) ? null : inteiro(corpo.diasSemana, 'diasSemana', { min: 1, max: 7 }))
+            : undefined,
+        };
+        if (codigo !== undefined) {
+          await db`UPDATE grupos_maquina SET codigo = ${codigo} WHERE id = ${grupoId}`;
         }
-        if (tem('setupMin')) {
-          const min = apagar(corpo.setupMin)
-            ? null
-            : decimal(corpo.setupMin, 'setupMin', { min: 0, max: 600 });
-          await db`UPDATE grupos_maquina SET setup_min = ${min} WHERE id = ${grupoId}`;
+        if (nome !== undefined) {
+          await db`UPDATE grupos_maquina SET nome = ${nome} WHERE id = ${grupoId}`;
         }
-        if (tem('diasSemana')) {
-          const dias = apagar(corpo.diasSemana)
-            ? null
-            : inteiro(corpo.diasSemana, 'diasSemana', { min: 1, max: 7 });
-          await db`UPDATE grupos_maquina SET dias_semana = ${dias} WHERE id = ${grupoId}`;
+        if (tempo.horas_semana !== undefined) {
+          await db`UPDATE grupos_maquina SET horas_semana = ${tempo.horas_semana} WHERE id = ${grupoId}`;
+        }
+        if (tempo.setups_dia !== undefined) {
+          await db`UPDATE grupos_maquina SET setups_dia = ${tempo.setups_dia} WHERE id = ${grupoId}`;
+        }
+        if (tempo.setup_min !== undefined) {
+          await db`UPDATE grupos_maquina SET setup_min = ${tempo.setup_min} WHERE id = ${grupoId}`;
+        }
+        if (tempo.dias_semana !== undefined) {
+          await db`UPDATE grupos_maquina SET dias_semana = ${tempo.dias_semana} WHERE id = ${grupoId}`;
         }
         const [grupo] = await db`
           SELECT id, codigo, nome, horas_semana, setups_dia, setup_min, dias_semana

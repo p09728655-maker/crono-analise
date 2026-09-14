@@ -82,12 +82,15 @@ await p.route('**/api/maquinas**', async (rota) => {
   if (req.method() === 'PATCH') {
     ultimoPatch = JSON.parse(req.postData() || '{}');
     horasSemana = ultimoPatch.horasSemana;
+    // Campo PRESENTE no corpo vale, inclusive null — e' assim que se apaga.
+    // Com `??` o mock manteria o valor antigo onde a API grava NULL.
+    const campo = (chave, atual) => (chave in ultimoPatch ? ultimoPatch[chave] : atual);
     grupoFuradeira = {
       ...grupoFuradeira,
-      horas_semana: ultimoPatch.horasSemana ?? grupoFuradeira.horas_semana,
-      dias_semana: ultimoPatch.diasSemana ?? grupoFuradeira.dias_semana,
-      setups_dia: ultimoPatch.setupsDia ?? grupoFuradeira.setups_dia,
-      setup_min: ultimoPatch.setupMin ?? grupoFuradeira.setup_min,
+      horas_semana: campo('horasSemana', grupoFuradeira.horas_semana),
+      dias_semana: campo('diasSemana', grupoFuradeira.dias_semana),
+      setups_dia: campo('setupsDia', grupoFuradeira.setups_dia),
+      setup_min: campo('setupMin', grupoFuradeira.setup_min),
     };
     return rota.fulfill({ json: { grupo: grupoFuradeira } });
   }
@@ -139,10 +142,10 @@ await janela.getByPlaceholder('ex.: 5').nth(1).fill('5');     // setups por dia
 await janela.getByPlaceholder('ex.: 20').fill('20');
 await p.waitForTimeout(150);
 const conta = await texto();
-checar(/8,3 h por máq/.test(conta), '5/dia x 5 dias x 20 min = 8,3 h de setup por maquina');
-// 3 x 44 = 132; 3 x 8,33 = 25; produtivas = 107
-checar(/− 25/.test(conta) && /107/.test(conta),
-  'a conta mostra jornada 132, setup -25 e 107 horas produtivas');
+checar(/8,3\u00a0h\/máq/.test(conta), '5/dia x 5 dias x 20 min = 8,3 h de setup por maquina');
+// 3 x 44 = 132; setup por maquina 8,3 x 3 = 24,9; produtivas 132 − 24,9 = 107,1 (derivados)
+checar(/− 24,9/.test(conta) && /107,1/.test(conta),
+  'a conta mostra jornada 132, setup −24,9 e 107,1 produtivas — derivados, e fecham');
 checar(!/Setup não informado/.test(conta), 'informado o setup, a ressalva some');
 
 await janela.getByRole('button', { name: 'Salvar tempo disponível' }).click();
@@ -350,7 +353,8 @@ await p3.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().u
   })
   : rota.fulfill({
     json: {
-      grupos: [{ id: 'g2', codigo: '0002', nome: 'FURADEIRA', horas_semana: 44 }],
+      // Setup PLANEJADO cadastrado: 5/dia x 5 dias x 20 min = 8,3 h por maquina.
+      grupos: [{ id: 'g2', codigo: '0002', nome: 'FURADEIRA', horas_semana: 44, dias_semana: 5, setups_dia: 5, setup_min: 20 }],
       maquinas: [
         { id: 'm1', nome: 'Furadeira 03', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
         { id: 'm2', nome: 'Furadeira 16', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
@@ -359,6 +363,10 @@ await p3.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().u
     },
   })));
 
+/* 1 h, 700 pecas, 12 min de TROCA/SETUP marcados — e nenhuma outra parada.
+   Com o setup planejado, esses 12 min saem do relogio (700 pc em 48 min =
+   875 pc/h) e a tela nao pode dizer "sem parada marcada" nem mostrar
+   875 como contraste de 875. */
 await p3.route('**/api/conferencias**', (rota) => rota.fulfill({
   json: {
     conferencias: [{
@@ -366,7 +374,7 @@ await p3.route('**/api/conferencias**', (rota) => rota.fulfill({
       iniciado_em: '2026-09-09T07:00:00-03:00', finalizado_em: '2026-09-09T08:00:00-03:00',
       salvo_em: '2026-09-09T08:00:00-03:00',
       duracao_ms: 3600000, pecas: 700, ciclos_por_peca: 1, arquivada: false,
-      paradas: [],
+      paradas: [{ motivo: 'setup', duracao_ms: 720000 }],
     }],
     outras: 0,
   },
@@ -384,6 +392,18 @@ checar(/período de 08\/09 a 14\/09\/2026/.test(q3),
   'o quadro mostra o PERIODO da planilha — e' + "' o que da para conferir contra o Excel");
 checar(!/cadastrada sem data de início/.test(q3),
   'com data no programa, nao ha ressalva de casamento por numero');
+// 3 x 44 = 132 h; setup 8,3 x 3 = 24,9 h; produtivas 107,1 h — os TRES exibidos, a conta fecha.
+checar(/107,1 horas-máquina produtivas/.test(q3) && /132 h de jornada − 24,9 h de setup/.test(q3),
+  'a conta das horas na tela fecha: 132 − 24,9 = 107,1');
+checar(/a única parada marcada foi troca\/setup, já contada no setup planejado/.test(q3),
+  'so setup marcado: a tela nao diz "sem parada marcada" nem contrasta 875 com 875');
+checar(/As medições marcaram 12 min de troca\/setup/.test(q3),
+  'e a nota diz quanto setup medido saiu do relogio');
+const papel3 = await p3.evaluate(() => document.querySelector('.somente-impressao')?.innerText || '');
+checar(/exceto 12 min de troca\/setup marcados nas medições/.test(papel3),
+  'o papel leva a mesma nota do relogio recalculado');
+checar(/só troca\/setup marcado, já no planejado/.test(papel3) && !/875 pç\/h com a máquina rodando/.test(papel3),
+  'e o cartao do papel nao apresenta 875 como contraste de 875');
 const opcoes = await quadro3.locator('select option').allInnerTexts();
 checar(opcoes.some((o) => /038-26 · 08\/09 a 14\/09/.test(o)),
   'o seletor de semana diz de que dias fala cada opcao');
