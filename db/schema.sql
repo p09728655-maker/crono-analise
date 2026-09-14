@@ -549,6 +549,25 @@ ALTER TABLE demanda_semanal ENABLE ROW LEVEL SECURITY;
 ALTER TABLE grupos_maquina ADD COLUMN IF NOT EXISTS horas_semana numeric(5,2)
   CHECK (horas_semana IS NULL OR (horas_semana > 0 AND horas_semana <= 168));
 
+-- SETUP PLANEJADO por maquina, por semana: quantas trocas de peca e quanto
+-- dura cada uma. E' o tempo que a medicao NAO pega — a troca (gabarito,
+-- batente, brocas) acontece ENTRE uma medicao e a seguinte — e que por
+-- isso nao estava em lado nenhum da conta: nem no ritmo entregue, nem
+-- nas horas disponiveis. Nas furadeiras (set/2026) sao 5 trocas por dia
+-- de 20 min: 8,3 h por maquina por semana que a jornada de 44 h nao tem.
+-- Entra como regra do PCP (carga-maquina trata preparacao assim), nao
+-- como medicao. Nulos ate' alguem informar; o relatorio avisa que falta.
+--
+-- Por DIA, porque e' assim que o chao conta ("cinco trocas por dia"); a
+-- jornada esta' por semana, entao os dias de producao na semana fecham a
+-- conta: setups/dia x dias x minutos = horas de setup por maquina/semana.
+ALTER TABLE grupos_maquina ADD COLUMN IF NOT EXISTS setups_dia smallint
+  CHECK (setups_dia IS NULL OR (setups_dia >= 0 AND setups_dia <= 100));
+ALTER TABLE grupos_maquina ADD COLUMN IF NOT EXISTS setup_min numeric(5,1)
+  CHECK (setup_min IS NULL OR (setup_min >= 0 AND setup_min <= 600));
+ALTER TABLE grupos_maquina ADD COLUMN IF NOT EXISTS dias_semana smallint
+  CHECK (dias_semana IS NULL OR (dias_semana BETWEEN 1 AND 7));
+
 -- ------------------------------------------------- passo 3 da migracao
 -- Derruba o formato antigo, DEPOIS de a conversao acima ter rodado e de as
 -- paradas terem virado linha. E' a ultima etapa da refatoracao do periodo:

@@ -543,22 +543,64 @@ export function resumoDaDemanda(semanas) {
  * @param horas    horas disponiveis por maquina na semana
  * @param maquinas maquinas ativas no grupo (minimo 1)
  */
-export function ritmoExigido({ pecas, horas, maquinas = 1 } = {}) {
+export function ritmoExigido({ pecas, horas, maquinas = 1, setupHoras = 0 } = {}) {
   const p = Number(pecas) || 0;
   const h = Number(horas) || 0;
   const m = Math.max(0, Math.floor(Number(maquinas) || 0));
-  if (p <= 0 || h <= 0 || m <= 0) return null;
+  const setup = Math.max(0, Number(setupHoras) || 0);
+  // O que sobra da jornada depois do setup e' o que produz. Setup maior
+  // que a jornada nao e' folga negativa: e' cadastro errado, e nao ha' ritmo.
+  const produtivas = h - setup;
+  if (p <= 0 || h <= 0 || m <= 0 || produtivas <= 0) return null;
 
-  const horasDisponiveis = h * m;               // horas-maquina na semana
+  const horasDisponiveis = produtivas * m;      // horas-maquina PRODUTIVAS na semana
   const pecasPorHoraGrupo = p / horasDisponiveis * m; // o grupo inteiro, por hora de relogio
   const pecasPorHoraMaquina = p / horasDisponiveis;   // o que cada maquina precisa fazer
   return {
     horasDisponiveis,
+    // A jornada cheia e o setup, separados, para a tela escrever a conta
+    // ("264 h de jornada − 50 h de setup = 214 h produtivas") em vez de
+    // um numero que ninguem consegue conferir.
+    horasJornada: h * m,
+    horasSetup: setup * m,
     pecasPorHoraGrupo,
     pecasPorHoraMaquina,
     // Takt POR MAQUINA, em ms: o tempo que cada maquina tem para cada peca.
     taktMs: 3600000 / pecasPorHoraMaquina,
   };
+}
+
+/**
+ * HORAS DE SETUP por maquina por semana, do cadastro do grupo.
+ *
+ * O setup e' o que a medicao NAO pega: a troca de peca (gabarito, batente,
+ * posicao das brocas) acontece ENTRE uma medicao e a seguinte, e o
+ * cronometro so' roda durante a corrida. No relatorio de setembro/2026 as
+ * furadeiras tinham 49 min parados em 4h22 de medicao — e menos de 1 min
+ * marcado como troca/setup, num posto que troca de peca cinco vezes por
+ * dia. O setup nao estava em lado nenhum da conta: nem no ritmo entregue
+ * (ritmo de corrida), nem nas horas disponiveis (jornada cheia). O
+ * veredito saia otimista exatamente pelo tamanho do setup semanal.
+ *
+ * Por isso ele entra como PLANEJADO, no cadastro do grupo — setups por
+ * DIA x dias de producao na semana x minutos por setup, por maquina — e
+ * nao como medicao: e' como carga-maquina trata preparacao, e nao
+ * depende da amostra do dia pegar duas ou tres trocas. Por dia porque e'
+ * assim que o chao conta ("cinco trocas por dia"); os dias fecham a
+ * conta com a jornada, que esta' por semana. Nao presumo cinco dias pelo
+ * mesmo motivo que nao presumo 44 h: e' decisao de turno.
+ *
+ * Devolve null quando falta qualquer um dos tres: sem eles nao ha' setup
+ * planejado, e a tela avisa que o veredito esta' sem ele.
+ */
+export function horasDeSetup({ setupsDia, dias, minutos } = {}) {
+  const vazio = (v) => v == null || v === '';
+  if (vazio(setupsDia) || vazio(dias) || vazio(minutos)) return null;
+  const n = Number(setupsDia);
+  const d = Number(dias);
+  const min = Number(minutos);
+  if (![n, d, min].every(Number.isFinite) || n < 0 || d <= 0 || min < 0) return null;
+  return (n * d * min) / 60;
 }
 
 /**
@@ -572,10 +614,11 @@ export function ritmoExigido({ pecas, horas, maquinas = 1 } = {}) {
  * @param pecas       demanda da semana
  * @param horas       horas disponiveis por maquina na semana
  * @param ritmoMedido pecas/hora que UMA maquina entrega
+ * @param setupHoras  horas de setup por maquina na semana, que nao produzem
  */
-export function maquinasNecessarias({ pecas, horas, ritmoMedido } = {}) {
+export function maquinasNecessarias({ pecas, horas, ritmoMedido, setupHoras = 0 } = {}) {
   const p = Number(pecas) || 0;
-  const h = Number(horas) || 0;
+  const h = (Number(horas) || 0) - Math.max(0, Number(setupHoras) || 0);
   const r = Number(ritmoMedido) || 0;
   if (p <= 0 || h <= 0 || r <= 0) return null;
   return p / (h * r);
@@ -773,14 +816,15 @@ export function intervaloIso({ ano, numero } = {}) {
  * veredito sobre dado que nao existe e' chute com cara de indicador.
  */
 export function vereditoDaSemana({
-  pecas, horas, maquinas = 1, ritmoRelogio, ritmoRodando,
+  pecas, horas, maquinas = 1, ritmoRelogio, ritmoRodando, setupHoras = null,
 } = {}) {
-  const exigido = ritmoExigido({ pecas, horas, maquinas });
+  const setup = setupHoras == null ? 0 : Math.max(0, Number(setupHoras) || 0);
+  const exigido = ritmoExigido({ pecas, horas, maquinas, setupHoras: setup });
   const real = Number(ritmoRelogio) || 0;
   if (!exigido || real <= 0) return null;
 
   const potencial = Number(ritmoRodando) || 0;
-  const precisa = maquinasNecessarias({ pecas, horas, ritmoMedido: real });
+  const precisa = maquinasNecessarias({ pecas, horas, ritmoMedido: real, setupHoras: setup });
   return {
     ...exigido,
     ritmoRelogio: real,
@@ -790,8 +834,11 @@ export function vereditoDaSemana({
     folgaPct: ((real / exigido.pecasPorHoraMaquina) - 1) * 100,
     maquinasNecessarias: precisa,
     maquinasSeNaoParasse: potencial > 0
-      ? maquinasNecessarias({ pecas, horas, ritmoMedido: potencial })
+      ? maquinasNecessarias({ pecas, horas, ritmoMedido: potencial, setupHoras: setup })
       : null,
+    // Se o setup planejado entrou na conta. Sem ele o veredito e' otimista
+    // pelo tamanho do setup semanal — e a tela precisa dizer isso.
+    setupInformado: setupHoras != null,
     // Quantas maquinas o grupo TEM. Fica no resultado para a tela nao
     // precisar recalcular a comparacao que ela vai escrever em palavras.
     maquinas: Math.max(1, Math.floor(Number(maquinas) || 1)),
@@ -818,6 +865,11 @@ export function vereditoDaSemana({
 export function leituraDaDemanda({
   demandas = [], horas = null, maquinas = 0, ritmoRelogio = null, ritmoRodando = null,
   datas = [], semanaEscolhida = null,
+  // Setup PLANEJADO do grupo: { setupsDia, dias, minutos } por maquina.
+  setup = null,
+  // O periodo OBSERVADO: { pecas, totalMs, setupMs } — o que as medicoes
+  // somaram, para tirar do relogio o setup que elas por acaso pegaram.
+  observado = null,
 } = {}) {
   const semanas = ordenarSemanas(
     (demandas || []).map((d) => ({ ...d, chave: chaveSemana(d) })),
@@ -916,6 +968,25 @@ export function leituraDaDemanda({
     semData: semanas.filter((s) => !s.inicio).length,
   };
 
+  /**
+   * O SETUP entra UMA vez so'. Planejado, ele sai das horas disponiveis.
+   * Se as medicoes tambem pegaram troca/setup como parada, esse tempo ja'
+   * esta' dentro do ritmo de relogio — e ficaria contado duas vezes: uma
+   * nas horas, outra no ritmo. Por isso, com setup planejado informado, o
+   * relogio da comparacao e' recalculado SEM as paradas de setup medidas:
+   * pecas sobre (tempo observado − setup medido). Sem setup planejado,
+   * o relogio fica como veio, com tudo dentro.
+   */
+  const setupHoras = horasDeSetup(setup || {});
+  const setupMedidoMs = Math.max(0, Number(observado?.setupMs) || 0);
+  const totalMs = Number(observado?.totalMs) || 0;
+  const pecasObservadas = Number(observado?.pecas) || 0;
+  const relogioSemSetup = setupHoras != null && setupMedidoMs > 0
+    && totalMs > setupMedidoMs && pecasObservadas > 0
+    ? (pecasObservadas * 3600000) / (totalMs - setupMedidoMs)
+    : null;
+  const relogio = relogioSemSetup ?? ritmoRelogio;
+
   const periodo = registro ? periodoDaSemana(semanas, registro) : null;
   const base = {
     semanas,
@@ -943,10 +1014,26 @@ export function leituraDaDemanda({
     medicao: ultimaMedicao ? diaCivil(ultimaMedicao) : null,
     escolhaAutomatica: !semanaEscolhida && Boolean(daMedicao),
     casadoPorData,
+    // O setup como a tela escreve a conta: "25 × 20 min = 8,3 h por
+    // máquina". Nulo quando nao informado — e a tela diz que falta.
+    setup: setupHoras == null ? null : {
+      setupsDia: Number(setup.setupsDia),
+      dias: Number(setup.dias),
+      minutos: Number(setup.minutos),
+      horasPorMaquina: setupHoras,
+      // Quanto de troca/setup as medicoes pegaram e foi tirado do relogio
+      // para nao contar duas vezes. Zero na pratica de hoje (< 1 min).
+      medidoMs: relogioSemSetup != null ? setupMedidoMs : 0,
+    },
   };
 
   if (!registro) return { ...base, estado: 'sem-semana', demanda: null, veredito: null };
   if (!(Number(horas) > 0) || !(Number(maquinas) > 0)) {
+    return { ...base, estado: 'sem-horas', demanda: registro.pecas, veredito: null };
+  }
+  // Setup que come a jornada inteira e' cadastro errado, nao folga
+  // negativa: cai no mesmo estado de "falta a jornada", e a tela diz qual.
+  if (setupHoras != null && setupHoras >= Number(horas)) {
     return { ...base, estado: 'sem-horas', demanda: registro.pecas, veredito: null };
   }
   /**
@@ -962,7 +1049,7 @@ export function leituraDaDemanda({
    * com o programa de setembro" que este arquivo inteiro recusa.
    */
   const veredito = semMedicao ? null : vereditoDaSemana({
-    pecas: registro.pecas, horas, maquinas, ritmoRelogio, ritmoRodando,
+    pecas: registro.pecas, horas, maquinas, ritmoRelogio: relogio, ritmoRodando, setupHoras,
   });
   if (!veredito) return { ...base, estado: 'sem-ritmo', demanda: registro.pecas, veredito: null };
   return {

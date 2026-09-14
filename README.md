@@ -161,11 +161,29 @@ jornada do grupo já mora nesse cadastro. `test/limite-funcoes.test.js` falha
 antes de o deploy falhar.
 
 As **horas disponíveis por máquina por semana** ficam no cadastro do grupo
-(`grupos_maquina.horas_semana`, alterável em **Máquinas** ou na própria tela
-de demanda — o PATCH de grupo exige papel de administrador). Com 3 máquinas
-ativas a 44 h são 132 horas-máquina, e o ritmo exigido de cada uma é a
-demanda dividida por elas. **Sem as horas não há takt**: nenhuma jornada é
-presumida, e a tela diz o que falta.
+(`grupos_maquina.horas_semana`, alterável na tela de demanda — o PATCH de
+grupo exige papel de administrador). Com 3 máquinas ativas a 44 h são 132
+horas-máquina, e o ritmo exigido de cada uma é a demanda dividida por elas.
+**Sem as horas não há takt**: nenhuma jornada é presumida, e a tela diz o que
+falta.
+
+> **O setup é planejado, não medido — e entra uma vez só.** A troca de peça
+> (gabarito, batente, brocas) acontece *entre* uma medição e a seguinte, e o
+> cronômetro só roda na corrida: nas furadeiras (set/2026) foram 49 min
+> parados em 4h22 de medição e menos de 1 min marcado como troca/setup, num
+> posto que troca cinco vezes por dia. Nem o ritmo entregue nem as horas viam
+> esse tempo. Por isso o grupo guarda `setups_dia`, `setup_min` e
+> `dias_semana`; `horasDeSetup()` dá as horas por máquina, `ritmoExigido()` e
+> `maquinasNecessarias()` recebem `setupHoras` e trabalham sobre as horas
+> **produtivas** (jornada − setup). Se uma medição também marcou parada de
+> troca/setup, `leituraDaDemanda()` recalcula o relógio sem ela — o planejado
+> já saiu das horas, e descontar nos dois lados contaria duas vezes. Sem setup
+> informado o quadro avisa (tela e papel) que o veredito é otimista; nada é
+> presumido, nem dias de produção.
+
+Uma semana também entra **digitada** (semana, início, peças) pelo mesmo
+`gravarDemanda()`, com o início obrigatório — quem digita uma semana não tem
+desculpa para casar por número.
 
 ### O programa da semana × o que o grupo entrega
 

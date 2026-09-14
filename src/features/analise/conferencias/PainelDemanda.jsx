@@ -26,7 +26,7 @@ import { porMinuto } from './formato.js';
 export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTrocarSemana }) {
   const {
     estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas, programa, medicao,
-    casadoPorData,
+    casadoPorData, setup,
   } = leitura;
 
   /* O periodo de cada semana cadastrada, para o seletor dizer de que dias
@@ -120,7 +120,20 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
               {comoPeriodo(intervalo, { ano: true })}</>
           )}
           , divididas entre <strong>{v.maquinas} máquina(s)</strong> do grupo com{' '}
-          {Math.round(v.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina na semana.
+          {/* A CONTA DO TEMPO por extenso: jornada, setup, produtivas. Um
+              numero so' ("214 horas-máquina") ninguem confere; "264 − 50"
+              qualquer um confere de cabeca — e e' o setup que decide a
+              semana de pico. */}
+          {setup
+            ? (
+              <>
+                <strong>{Math.round(v.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina
+                produtivas</strong> na semana ({Math.round(v.horasJornada).toLocaleString('pt-BR')} h
+                de jornada − {Math.round(v.horasSetup).toLocaleString('pt-BR')} h de setup:{' '}
+                {setup.setupsDia} por dia × {setup.dias} dias × {setup.minutos} min por máquina).
+              </>
+            )
+            : <>{Math.round(v.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina na semana.</>}
           {semanasMedidas > 1 && (
             <> As medições em tela cobrem <strong>{semanasMedidas} semanas</strong> — o ritmo
               é o médio do período observado, não só o desta semana.</>
@@ -221,6 +234,20 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
               semana da fabrica desloca por feriado e o rotulo da planilha
               corre a frente do calendario, entao o numero acerta por
               sorte. Com a coluna INICIO colada, casa por data e nao erra. */}
+          {/* SETUP NAO INFORMADO e' a ressalva que mais pesa: a troca de peca
+              acontece entre medicoes e o cronometro nao pega; sem o planejado,
+              o veredito e' otimista pelo setup da semana inteira. */}
+          {!setup && (
+            <> <strong>Setup não informado</strong>: as horas acima são jornada cheia. A troca de
+              peça acontece entre uma medição e outra e o cronômetro não pega — cada hora de
+              setup da semana torna este veredito otimista. Informe setups por dia e minutos
+              por setup na tela de demanda.</>
+          )}
+          {setup?.medidoMs > 0 && (
+            <> As medições marcaram {Math.round(setup.medidoMs / 60000)} min de troca/setup;
+              esse tempo saiu do ritmo de relógio para não contar duas vezes com o setup
+              planejado.</>
+          )}
           {!casadoPorData && (
             <> <strong>Esta semana está cadastrada sem data de início</strong>: o período
               acima é o do calendário, não o da planilha, e sem data a medição casa pelo

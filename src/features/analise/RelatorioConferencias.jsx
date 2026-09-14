@@ -158,6 +158,17 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
         maquinas: maquinasDoGrupo,
         ritmoRelogio: painel.ritmoRelogio,
         ritmoRodando: painel.ritmoMedio,
+        // O setup PLANEJADO do grupo (trocas/dia, dias, minutos) e o que as
+        // medicoes somaram: com os dois, o dominio tira do relogio o setup
+        // que a medicao por acaso pegou, para nao contar duas vezes.
+        setup: {
+          setupsDia: grupoDoCadastro?.setups_dia,
+          dias: grupoDoCadastro?.dias_semana,
+          minutos: grupoDoCadastro?.setup_min,
+        },
+        observado: {
+          pecas: painel.pecasTot, totalMs: painel.totalMs, setupMs: painel.pareto?.setupMs,
+        },
         // A data em que a medicao ACONTECEU, nao a em que subiu.
         datas: visiveis.map((c) => c.iniciado_em || c.salvo_em).filter(Boolean),
         semanaEscolhida,

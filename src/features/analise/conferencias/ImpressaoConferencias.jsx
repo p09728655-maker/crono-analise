@@ -151,13 +151,20 @@ export default function ImpressaoConferencias({
             {demanda.demanda.toLocaleString('pt-BR')} peças programadas, divididas entre
             {' '}{demanda.veredito.maquinas} máquina(s) com
             {' '}{Math.round(demanda.veredito.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina
-            na semana. O veredito usa o ritmo de RELÓGIO (paradas dentro): é o que sai do posto por
+            {demanda.setup
+              ? ` produtivas (${Math.round(demanda.veredito.horasJornada).toLocaleString('pt-BR')} h de jornada − ${Math.round(demanda.veredito.horasSetup).toLocaleString('pt-BR')} h de setup: ${demanda.setup.setupsDia}/dia × ${demanda.setup.dias} dias × ${demanda.setup.minutos} min por máquina)`
+              : ''}
+            {' '}na semana. O veredito usa o ritmo de RELÓGIO (paradas dentro): é o que sai do posto por
             hora de presença. {demanda.veredito.atende
               ? `O grupo ATENDE o programa, com ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de folga.`
               : `O grupo NÃO ATENDE: falta ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de ritmo em cada máquina.`}
             {/* A RESSALVA vai junto para o papel. E' a folha que circula na
                 reuniao, e um veredito casado por numero da semana tem margem
                 de erro que a tela mostra e o papel calava. */}
+            {!demanda.setup && (
+              <> <strong>Setup não informado</strong>: horas de jornada cheia — a troca de peça
+                entre medições não está na conta, e o veredito é otimista por ela.</>
+            )}
             {!demanda.casadoPorData && (
               <> Semana cadastrada <strong>sem data de início</strong>: casada pelo número,
                 que erra quando a semana da fábrica desloca por feriado.</>
