@@ -640,15 +640,23 @@ RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
 $$;
 
 -- Coletar = registrar medicao e montar estudo. Inclui o tablet.
+--
+-- SET search_path = '' nas duas: elas decidem QUEM ESCREVE nas politicas de
+-- RLS, e com search_path mutavel o `public.papel_atual()` de dentro delas
+-- poderia resolver para outro objeto — a funcao que autoriza a escrita
+-- passaria a responder o que quem controla a sessao quisesse. Tudo aqui ja'
+-- e' qualificado com `public.`, entao fixar nao muda comportamento. As
+-- demais funcoes do arquivo ja' nasciam assim; estas duas ficaram de fora
+-- ate' o linter do Supabase apontar (set/2026).
 CREATE OR REPLACE FUNCTION public.pode_coletar()
-RETURNS boolean LANGUAGE sql STABLE AS $$
+RETURNS boolean LANGUAGE sql STABLE SET search_path = '' AS $$
   SELECT public.papel_atual() IN ('admin', 'analista', 'coletor')
 $$;
 
 -- Escrever de ANALISE (arquivar conferencia, marcar parada no PC, descartar
 -- ciclo): trabalho de gente, nao de aparelho.
 CREATE OR REPLACE FUNCTION public.pode_escrever()
-RETURNS boolean LANGUAGE sql STABLE AS $$
+RETURNS boolean LANGUAGE sql STABLE SET search_path = '' AS $$
   SELECT public.papel_atual() IN ('admin', 'analista')
 $$;
 
