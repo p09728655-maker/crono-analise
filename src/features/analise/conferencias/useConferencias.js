@@ -45,6 +45,11 @@ export function useConferencias() {
   // que o quadro do programa da semana precisa para saber quantas maquinas
   // ATIVAS o grupo tem e quantas horas cada uma cumpre.
   const [cadastro, setCadastro] = useState(null);
+  // Contador de recarga: a tela de Demanda semanal muda a jornada do grupo
+  // por fora deste hook, e sem isto o relatorio seguiria com o cadastro de
+  // quando a pagina abriu.
+  const [recarga, setRecarga] = useState(0);
+  const recarregarCadastro = () => setRecarga((n) => n + 1);
   useEffect(() => {
     listarCadastroMaquinas()
       .then((c) => {
@@ -59,7 +64,7 @@ export function useConferencias() {
         setCadastro(c);
       })
       .catch(() => {});
-  }, []);
+  }, [recarga]);
   const grupoDe = (maquina) => mapaGrupos.get(nomeChave(maquina)) || null;
   const grupoIdDe = (maquina) => mapaGrupoIds.get(nomeChave(maquina)) || null;
 
@@ -131,7 +136,8 @@ export function useConferencias() {
     executar(c.id, () => excluirConferencia(c.id), aoConcluir);
 
   return {
-    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe, cadastro,
+    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe,
+    cadastro, recarregarCadastro,
     limparErro: () => setErro(null),
     alternarArquivadas: () => setVerArquivadas((v) => !v),
     carregar,

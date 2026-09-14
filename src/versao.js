@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.76.0',
+    data: '2026-09-14',
+    titulo: 'Colar a planilha ficou mais fácil, e o quadro atualiza sozinho',
+    itens: [
+      'COLAR SEM O CABEÇALHO AGORA FUNCIONA. Quem copia as linhas no Excel raramente leva a linha de títulos junto, e a tela respondia com um aviso por linha dizendo "sem quantidade legível" — 36 avisos que não diziam o que fazer. Agora ela acha o total sozinha: é a coluna cujo valor FECHA A SOMA das anteriores. Numa linha com cinco lotes, o total e a média por lote, só o total fecha a conta — não é chute por posição, é conferência.',
+      'QUANDO NENHUMA COLUNA FECHA A SOMA, a tela pede o cabeçalho UMA vez, em vez de repetir o aviso em cada linha. O problema é da colagem, não de cada semana.',
+      'O QUADRO DO RELATÓRIO ATUALIZA AO FECHAR A JANELA DA DEMANDA. Quem colava a planilha e fechava continuava lendo "Programa de produção não cadastrado" até apertar F5 — a tela afirmava o contrário do que ela mesma acabara de gravar.',
+      'O QUADRO DIZ DE QUANDO É O PROGRAMA: "colado em 14/09, 36 semanas, de S02 a S39". A conta pode estar certa e o veredito errado do mesmo jeito se a demanda for de três meses atrás, e número sem idade não levanta suspeita em ninguém.',
+      'E DIZ POR QUE SUMIU, QUANDO SOME. Com máquinas de grupos diferentes na tela (furadeira e CNC, por exemplo) o quadro simplesmente não aparecia: o programa é de UM grupo, e "exigido por máquina" misturando postos não é de ninguém. Agora ele aparece explicando que basta escolher uma máquina na lateral.',
+    ],
+  },
+  {
     versao: '2.75.0',
     data: '2026-09-14',
     titulo: 'A semana da planilha é a da coluna SEMANA',
