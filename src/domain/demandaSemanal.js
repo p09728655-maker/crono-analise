@@ -135,6 +135,24 @@ function colunaDaSemana(linhas) {
   return i >= 0 ? i : null;
 }
 
+/**
+ * SEM CABECALHO, qual celula da linha e' a semana?
+ *
+ * A que vem no formato "S02". Ela e' inequivoca: so' a coluna SEMANA
+ * escreve assim. "001-26" e' ambiguo — e' o formato da coluna Nº PLANILHA
+ * E o formato que o proprio app usa para semana, entao sozinho ele nao
+ * decide nada.
+ *
+ * Existe porque a regra do cabecalho nao alcanca quem cola so' as linhas
+ * de dados: sem ela, a primeira coluna vencia, e a primeira coluna e' a do
+ * contador de planilhas. O deslocamento de tres semanas voltou assim, uma
+ * hora depois de ter sido corrigido (set/2026).
+ */
+function semanaNaLinha(cols) {
+  const comS = cols.findIndex((c) => RE_SEMANA_SO_NUMERO.test(String(c ?? '').trim()));
+  return comS >= 0 ? comS : 0;
+}
+
 /** A coluna que numera PLANILHAS, se existir. So' serve para avisar. */
 function colunaDaPlanilha(linhas) {
   const cols = cabecalho(linhas);
@@ -201,8 +219,11 @@ function anoNaLinha(cols) {
 export function interpretarColagem(texto, { ano = new Date().getFullYear() } = {}) {
   const linhas = String(texto ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const coluna = colunaDoTotal(linhas);
-  const iSemana = colunaDaSemana(linhas) ?? 0;
+  // Com cabecalho a coluna e' fixa; sem ele, cada linha diz onde esta' a
+  // semana — e quem manda e' o formato "S02".
+  const iSemanaFixa = colunaDaSemana(linhas);
   const iPlanilha = colunaDaPlanilha(linhas);
+  let ignoradaPorFormato = false;
   const avisos = [];
   const porChave = new Map();
   // Quantas linhas tinham semana legivel e nenhuma quantidade identificavel.
@@ -213,7 +234,7 @@ export function interpretarColagem(texto, { ano = new Date().getFullYear() } = {
    * semana. Avisar e' obrigatorio — ignorar em silencio foi o que deixou o
    * programa entrar deslocado tres semanas sem ninguem perceber.
    */
-  if (iPlanilha !== null && iPlanilha !== iSemana) {
+  if (iPlanilha !== null && iPlanilha !== iSemanaFixa) {
     avisos.push(
       'A coluna Nº PLANILHA foi ignorada: ela numera as planilhas, não as semanas. '
       + 'A semana lida é a da coluna SEMANA.',
@@ -222,6 +243,10 @@ export function interpretarColagem(texto, { ano = new Date().getFullYear() } = {
 
   for (const linha of linhas) {
     const cols = celulas(linha);
+    const iSemana = iSemanaFixa ?? semanaNaLinha(cols);
+    // Linha com "S02" em outra coluna e um "001-26" na frente: a primeira
+    // coluna NAO e' a semana, e quem le' precisa saber disso.
+    if (iSemanaFixa === null && iSemana > 0) ignoradaPorFormato = true;
     const celulaSemana = cols[iSemana] ?? '';
     // "S02" nao traz ano; o "-26" da coluna de planilha traz. Sem nenhum
     // dos dois, vale o ano informado (a tela manda o corrente).
@@ -280,6 +305,13 @@ export function interpretarColagem(texto, { ano = new Date().getFullYear() } = {
       avisos.push(`Semana ${chave} aparece duas vezes com quantidades diferentes — ficou a última.`);
     }
     porChave.set(chave, { ...semana, chave, pecas });
+  }
+
+  if (ignoradaPorFormato) {
+    avisos.push(
+      'A colagem veio sem cabeçalho e com mais de uma coluna parecida com semana. '
+      + 'Valeu a que está no formato S02 — a outra numera planilhas, não semanas.',
+    );
   }
 
   if (semAmparo > 0) {

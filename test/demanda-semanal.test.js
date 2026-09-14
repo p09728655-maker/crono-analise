@@ -72,6 +72,39 @@ describe('as duas colunas de semana da planilha do PCP', () => {
   });
 });
 
+describe('colagem SEM cabecalho com as duas colunas', () => {
+  /**
+   * O caso que quebrou duas vezes: as linhas coladas direto do Excel, com
+   * Nº PLANILHA na FRENTE e sem a linha de titulos. Sem cabecalho a regra
+   * da coluna nao alcanca, e a primeira coluna venceria — a do contador.
+   */
+  const { semanas, avisos } = interpretarColagem([
+    '001-26\tS02\t25.000\t27.750\t34.900\t28.650\t11.950\t128.250\t25.650',
+    '020-26\tS22\t20.000\t27.500\t19.700\t18.300\t34.000\t119.500\t23.900',
+    '036-26\tS39\t15.514\t26.200\t11.500\t16.450\t14.200\t83.864\t16.773',
+  ].join('\n'));
+
+  it('vale a coluna no formato S02, nao a primeira', () => {
+    expect(semanas.map((x) => x.chave)).toEqual(['002-26', '022-26', '039-26']);
+  });
+
+  it('e o aviso diz qual coluna venceu e por que', () => {
+    expect(avisos.some((a) => /formato S02/.test(a))).toBe(true);
+  });
+
+  it('o total continua saindo da coluna que fecha a soma dos lotes', () => {
+    expect(semanas.map((x) => x.pecas)).toEqual([128250, 119500, 83864]);
+  });
+
+  it('sem coluna S nenhuma, "001-26" continua valendo como semana', () => {
+    // Compatibilidade: quem exporta so' a coluna de semana no formato do
+    // app nao pode deixar de funcionar.
+    const r = interpretarColagem('001-26\t128.250\n002-26\t105.573');
+    expect(r.semanas.map((x) => x.chave)).toEqual(['001-26', '002-26']);
+    expect(r.avisos).toEqual([]);
+  });
+});
+
 describe('numeros da planilha', () => {
   it('ponto e separador de milhar, nao decimal', () => {
     expect(numeroPtBr('128.250')).toBe(128250);
