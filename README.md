@@ -512,6 +512,25 @@ A conferência do **cronômetro ao vivo** também ganhou período: o fim é o
 próprio `salvo_em` e o início sai dele menos a duração cronometrada. Antes
 essa medição ficava sem período nenhum.
 
+### Máquinas: grupo à esquerda, cadastro no topo
+
+O cadastro (**Ferramentas → Máquinas**) é de duas colunas: os **grupos** à
+esquerda (com o código do ERP e quantas máquinas cada um tem) e, à direita,
+as máquinas **do grupo escolhido** — cadastro no topo, busca abaixo dele e a
+lista rolando dentro da própria caixa.
+
+A escolha da esquerda é o contexto de tudo: filtra a lista e é o grupo que a
+próxima máquina recebe, então cadastrar oito furadeiras são oito digitações e
+nenhuma ida ao seletor. O `<select>` de grupo só aparece em **Todas**, onde
+não há contexto de onde tirar. **Sem grupo** e **Todas** são filtros, não
+grupos: `grupoParaCadastrar()` traduz os dois para `null`/seletor antes de
+chamar a API — mandar o id falso deles daria erro de validação no lugar de
+cadastrar a máquina sem grupo.
+
+A busca aparece com mais de oito máquinas e ignora caixa e acento (a mesma
+`nomeChave` que agrupa medição). **Excluir** pede confirmação na própria
+linha: a lista ficou densa, e o clique errado ali apaga cadastro.
+
 ### Analistas: o campo que era texto livre
 
 Os estudos gravavam o analista como **texto digitado**, e o banco de produção

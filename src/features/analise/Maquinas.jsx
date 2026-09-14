@@ -8,7 +8,26 @@ import {
   atualizarGrupoMaquina, atualizarMaquina, criarGrupoMaquina, criarMaquina,
   listarCadastroMaquinas, removerGrupoMaquina, removerMaquina, semearMaquinasDasConferencias,
 } from '../../lib/api.js';
+import { nomeChave } from '../../domain/cronoanalise.js';
 import { adotarMaquinas } from '../../lib/maquinas.js';
+
+/** Itens da coluna da esquerda que nao sao grupo do cadastro. */
+const TODAS = '__todas';
+const SEM_GRUPO = '__sem_grupo';
+/** O escolhido carrega contexto de grupo? ("Todas" nao carrega.) */
+const temContexto = (id) => id !== TODAS;
+/**
+ * O grupo que a nova maquina recebe.
+ *
+ * "Sem grupo" e "Todas" NAO sao grupos do cadastro — sao filtros. Mandar o
+ * id falso deles para a API daria erro de validacao no lugar de cadastrar
+ * a maquina sem grupo, que e' o que a pessoa pediu.
+ */
+function grupoParaCadastrar(escolhido, doSeletor) {
+  if (escolhido === TODAS) return doSeletor || null;
+  if (escolhido === SEM_GRUPO) return null;
+  return escolhido;
+}
 
 /**
  * CADASTRO DE MAQUINAS E GRUPOS — trabalho de PC.
@@ -32,11 +51,21 @@ export default function Maquinas({ aoFechar }) {
   const [erro, setErro] = useState(null);
   const [ocupado, setOcupado] = useState(false);
 
-  const [editando, setEditando] = useState(null);        // {id, nome, grupoId}
+  /**
+   * O GRUPO ESCOLHIDO na coluna da esquerda manda em tudo: filtra a lista
+   * e ja' entra como grupo da proxima maquina cadastrada. E' o que tira a
+   * lista suspensa do caminho — cadastrar oito furadeiras deixa de ser oito
+   * idas ao seletor.
+   */
+  const [escolhido, setEscolhido] = useState(TODAS);
+  const [busca, setBusca] = useState('');
+
+  const [editando, setEditando] = useState(null);           // {id, nome, grupoId}
   const [editandoGrupo, setEditandoGrupo] = useState(null); // {id, codigo, nome}
+  const [excluindo, setExcluindo] = useState(null);         // id da maquina a confirmar
   const [novoNome, setNovoNome] = useState('');
-  const [novoGrupoId, setNovoGrupoId] = useState('');
-  const [novoGrupo, setNovoGrupo] = useState(null);      // {codigo, nome} | null
+  const [novoGrupoId, setNovoGrupoId] = useState('');       // so' vale em "Todas"
+  const [novoGrupo, setNovoGrupo] = useState(null);         // {codigo, nome} | null
 
   // Falha de carga deixa null: "nenhuma cadastrada" e "nao deu para saber"
   // sao afirmacoes diferentes (mesma decisao do cadastro de motivos).
@@ -63,12 +92,14 @@ export default function Maquinas({ aoFechar }) {
 
   const recarregar = () => aplicar(() => Promise.resolve());
 
+  const grupoDoCadastro = grupoParaCadastrar(escolhido, novoGrupoId);
+
   async function criar(ev) {
     ev.preventDefault();
     if (!novoNome.trim()) return;
-    // O grupo escolhido FICA: cadastrar as furadeiras em sequencia nao
-    // deve exigir escolher "Furadeira" a cada uma.
-    if (await aplicar(() => criarMaquina({ nome: novoNome.trim(), grupoId: novoGrupoId || null }))) setNovoNome('');
+    if (await aplicar(() => criarMaquina({ nome: novoNome.trim(), grupoId: grupoDoCadastro }))) {
+      setNovoNome('');
+    }
   }
 
   // Sugestao do proximo codigo livre: maior codigo numerico + 1, com zeros.
@@ -81,230 +112,336 @@ export default function Maquinas({ aoFechar }) {
   const naoCarregou = maquinas == null && erro;
   const vazio = maquinas?.length === 0;
 
+  const lista = maquinas || [];
+  const contar = (id) => (id === TODAS
+    ? lista.length
+    : lista.filter((m) => (id === SEM_GRUPO ? !m.grupo_id : m.grupo_id === id)).length);
+
+  /**
+   * A busca ignora caixa, acento e espaco repetido — a mesma chave que
+   * agrupa medicao por nome. Quem procura "furadeira 4" tem de achar
+   * "FURADEIRA 04"? Nao: o numero e' outro. Mas "furadeira" acha todas.
+   */
+  const alvo = nomeChave(busca);
+  const visiveis = lista.filter((m) => {
+    const doGrupo = escolhido === TODAS
+      || (escolhido === SEM_GRUPO ? !m.grupo_id : m.grupo_id === escolhido);
+    return doGrupo && (!alvo || nomeChave(m.nome).includes(alvo));
+  });
+
+  const grupoAtual = grupos.find((g) => g.id === escolhido) || null;
+
   return (
     <div style={est.modal} role="dialog" aria-label="Cadastro de máquinas">
+      {/* Estado de mouse por classe: estilo inline nao faz :hover. O grupo
+          aberto fica de fora — ele ja' esta' marcado, e escurecer por cima
+          confundiria "aqui" com "por cima". */}
+      <style>{`
+        .item-grupo:not([aria-current]):hover { background: ${t.papel}; color: ${t.texto}; }
+      `}</style>
       <div style={est.caixa}>
-        <h2 style={est.titulo}>Máquinas</h2>
-        <p style={est.texto}>
-          A lista que o celular oferece no Ritmo da furadeira. Com ela preenchida,
-          o nome sai igual em toda medição. Os <strong>grupos</strong> levam o
-          código da fábrica (0001 SECCIONADORA, 0002 FURADEIRA...) e organizam a
-          escolha — e, adiante, a leitura por grupo nos relatórios.
-        </p>
+        <header style={est.topo}>
+          <div>
+            <h2 style={est.titulo}>Máquinas</h2>
+            <p style={est.texto}>
+              A lista que o celular oferece na medição. Com ela preenchida, o nome sai
+              igual em toda medição — e os <strong>grupos</strong> (código da fábrica:
+              0002 FURADEIRA) organizam a escolha e a leitura dos relatórios.
+            </p>
+          </div>
+          {maquinas?.length > 0 && (
+            <button type="button" style={est.botaoSecundario} onClick={() => window.print()}>
+              Imprimir
+            </button>
+          )}
+        </header>
 
         {maquinas == null && !erro && <p style={est.texto}>Carregando cadastro...</p>}
-
-        {maquinas != null && (
-          <section style={est.bloco} aria-label="Grupos de máquina">
-            <span style={est.blocoRotulo}>GRUPOS</span>
-            {grupos.length === 0 && !novoGrupo && (
-              <p style={est.dica}>Nenhum grupo ainda — as máquinas podem existir sem grupo.</p>
-            )}
-            {grupos.map((g) => (
-              editandoGrupo?.id === g.id ? (
-                <form
-                  key={g.id} style={est.formGrupo}
-                  onSubmit={async (ev) => {
-                    ev.preventDefault();
-                    if (await aplicar(() => atualizarGrupoMaquina(g.id, {
-                      codigo: editandoGrupo.codigo.trim(), nome: editandoGrupo.nome.trim(),
-                    }))) setEditandoGrupo(null);
-                  }}
-                >
-                  <input
-                    type="text" value={editandoGrupo.codigo} maxLength={10} style={{ ...est.input, width: 90 }}
-                    onChange={(ev) => setEditandoGrupo({ ...editandoGrupo, codigo: ev.target.value })}
-                    aria-label={`Código do grupo ${g.nome}`} inputMode="numeric"
-                  />
-                  <input
-                    type="text" value={editandoGrupo.nome} maxLength={60} style={{ ...est.input, flex: 1 }}
-                    onChange={(ev) => setEditandoGrupo({ ...editandoGrupo, nome: ev.target.value })}
-                    aria-label={`Nome do grupo ${g.nome}`} autoFocus
-                  />
-                  <button type="button" style={est.botaoTexto} onClick={() => setEditandoGrupo(null)}>Cancelar</button>
-                  <button type="submit" style={est.botaoPrimario} disabled={ocupado || !editandoGrupo.nome.trim()}>
-                    Salvar
-                  </button>
-                </form>
-              ) : (
-                <div key={g.id} style={est.linhaGrupo}>
-                  <span style={est.codigoGrupo}>{g.codigo}</span>
-                  <span style={{ ...est.linhaRotulo, flex: 1 }}>{g.nome}</span>
-                  <button
-                    type="button" style={est.botaoTexto}
-                    onClick={() => setEditandoGrupo({ id: g.id, codigo: g.codigo, nome: g.nome })}
-                    aria-label={`Editar grupo ${g.nome}`}
-                  >
-                    Editar
-                  </button>
-                  <button
-                    type="button" style={est.botaoTexto} disabled={ocupado}
-                    onClick={() => aplicar(() => removerGrupoMaquina(g.id))}
-                    aria-label={`Excluir grupo ${g.nome}`}
-                    title="As máquinas do grupo não são apagadas: ficam sem grupo"
-                  >
-                    Excluir
-                  </button>
-                </div>
-              )
-            ))}
-
-            {novoGrupo ? (
-              <form
-                style={est.formGrupo}
-                onSubmit={async (ev) => {
-                  ev.preventDefault();
-                  if (await aplicar(() => criarGrupoMaquina({
-                    codigo: novoGrupo.codigo.trim(), nome: novoGrupo.nome.trim(),
-                  }))) setNovoGrupo(null);
-                }}
-              >
-                <input
-                  type="text" value={novoGrupo.codigo} maxLength={10} style={{ ...est.input, width: 90 }}
-                  onChange={(ev) => setNovoGrupo({ ...novoGrupo, codigo: ev.target.value })}
-                  aria-label="Código do novo grupo" inputMode="numeric"
-                />
-                <input
-                  type="text" value={novoGrupo.nome} maxLength={60} style={{ ...est.input, flex: 1 }}
-                  onChange={(ev) => setNovoGrupo({ ...novoGrupo, nome: ev.target.value })}
-                  placeholder="Ex: FURADEIRA" aria-label="Nome do novo grupo" autoFocus
-                />
-                <button type="button" style={est.botaoTexto} onClick={() => setNovoGrupo(null)}>Cancelar</button>
-                <button type="submit" style={est.botaoPrimario} disabled={ocupado || !novoGrupo.nome.trim()}>
-                  Criar
-                </button>
-              </form>
-            ) : (
-              <button
-                type="button" style={{ ...est.botaoTexto, alignSelf: 'flex-start' }}
-                onClick={() => setNovoGrupo({ codigo: proximoCodigo(), nome: '' })}
-              >
-                + Novo grupo
-              </button>
-            )}
-          </section>
-        )}
 
         {vazio && !naoCarregou && (
           <div style={est.vazio}>
             <div style={est.vazioTitulo}>Nenhuma máquina cadastrada</div>
             <p style={est.vazioTexto}>
-              Enquanto o cadastro estiver vazio, o celular segue com o campo de
-              texto livre. Traga de uma vez as máquinas que as conferências já
-              usaram — uma grafia por máquina — ou cadastre abaixo.
+              Enquanto o cadastro estiver vazio, o celular segue com o campo de texto
+              livre. Traga de uma vez as máquinas que as conferências já usaram — uma
+              grafia por máquina — ou cadastre ao lado.
             </p>
             <div style={est.vazioAcoes}>
-              <button type="button" style={est.botaoPrimario} onClick={() => aplicar(semearMaquinasDasConferencias)} disabled={ocupado}>
+              <button
+                type="button" style={est.botaoPrimario} disabled={ocupado}
+                onClick={() => aplicar(semearMaquinasDasConferencias)}
+              >
                 {ocupado ? 'Trazendo...' : 'Trazer das conferências'}
               </button>
             </div>
           </div>
         )}
 
-        {maquinas?.length > 0 && (
-          <div style={est.lista}>
-            {maquinas.map((m, i) => (
-              editando?.id === m.id ? (
+        {maquinas != null && (
+          <div style={est.colunas}>
+            {/* ---------------------------------------- grupos, à esquerda */}
+            <nav style={est.lateral} aria-label="Grupos de máquina">
+              <span style={est.blocoRotulo}>Grupos</span>
+
+              {[{ id: TODAS, rotulo: 'Todas' }].map((it) => (
+                <ItemGrupo
+                  key={it.id} rotulo={it.rotulo} contador={contar(it.id)}
+                  ativo={escolhido === it.id} aoEscolher={() => setEscolhido(it.id)}
+                />
+              ))}
+
+              {grupos.map((g) => (
+                editandoGrupo?.id === g.id ? (
+                  <form
+                    key={g.id} style={est.formGrupo}
+                    onSubmit={async (ev) => {
+                      ev.preventDefault();
+                      if (await aplicar(() => atualizarGrupoMaquina(g.id, {
+                        codigo: editandoGrupo.codigo.trim(), nome: editandoGrupo.nome.trim(),
+                      }))) setEditandoGrupo(null);
+                    }}
+                  >
+                    <input
+                      type="text" value={editandoGrupo.codigo} maxLength={10} style={est.inputCodigo}
+                      onChange={(ev) => setEditandoGrupo({ ...editandoGrupo, codigo: ev.target.value })}
+                      aria-label={`Código do grupo ${g.nome}`} inputMode="numeric"
+                    />
+                    <input
+                      type="text" value={editandoGrupo.nome} maxLength={60} style={est.input}
+                      onChange={(ev) => setEditandoGrupo({ ...editandoGrupo, nome: ev.target.value })}
+                      aria-label={`Nome do grupo ${g.nome}`} autoFocus
+                    />
+                    <div style={est.formGrupoAcoes}>
+                      <button type="button" style={est.botaoTexto} onClick={() => setEditandoGrupo(null)}>
+                        Cancelar
+                      </button>
+                      <button type="submit" style={est.botaoPrimario} disabled={ocupado || !editandoGrupo.nome.trim()}>
+                        Salvar
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <ItemGrupo
+                    key={g.id} codigo={g.codigo} rotulo={g.nome} contador={contar(g.id)}
+                    ativo={escolhido === g.id} aoEscolher={() => setEscolhido(g.id)}
+                  />
+                )
+              ))}
+
+              <ItemGrupo
+                rotulo="Sem grupo" contador={contar(SEM_GRUPO)}
+                ativo={escolhido === SEM_GRUPO} aoEscolher={() => setEscolhido(SEM_GRUPO)}
+              />
+
+              {/* As ações do grupo ficam com o grupo ABERTO, não em cada
+                  linha: seis grupos × dois botões viravam doze links
+                  disputando com os nomes. */}
+              {grupoAtual && !editandoGrupo && (
+                <div style={est.acoesGrupo}>
+                  <button
+                    type="button" style={est.botaoTexto}
+                    onClick={() => setEditandoGrupo({ id: grupoAtual.id, codigo: grupoAtual.codigo, nome: grupoAtual.nome })}
+                  >
+                    Editar grupo
+                  </button>
+                  <button
+                    type="button" style={est.botaoTexto} disabled={ocupado}
+                    title="As máquinas do grupo não são apagadas: ficam sem grupo"
+                    onClick={async () => {
+                      if (await aplicar(() => removerGrupoMaquina(grupoAtual.id))) setEscolhido(TODAS);
+                    }}
+                  >
+                    Excluir grupo
+                  </button>
+                </div>
+              )}
+
+              {novoGrupo ? (
                 <form
-                  key={m.id}
-                  style={est.form}
+                  style={est.formGrupo}
                   onSubmit={async (ev) => {
                     ev.preventDefault();
-                    if (await aplicar(() => atualizarMaquina(m.id, {
-                      nome: editando.nome.trim(), grupoId: editando.grupoId || null,
-                    }))) setEditando(null);
+                    if (await aplicar(() => criarGrupoMaquina({
+                      codigo: novoGrupo.codigo.trim(), nome: novoGrupo.nome.trim(),
+                    }))) setNovoGrupo(null);
                   }}
                 >
                   <input
-                    type="text" value={editando.nome} maxLength={120} autoFocus
-                    onChange={(ev) => setEditando({ ...editando, nome: ev.target.value })}
-                    style={est.input} aria-label={`Novo nome de ${m.nome}`}
+                    type="text" value={novoGrupo.codigo} maxLength={10} style={est.inputCodigo}
+                    onChange={(ev) => setNovoGrupo({ ...novoGrupo, codigo: ev.target.value })}
+                    aria-label="Código do novo grupo" inputMode="numeric"
                   />
-                  <select
-                    value={editando.grupoId}
-                    onChange={(ev) => setEditando({ ...editando, grupoId: ev.target.value })}
-                    style={est.input} aria-label={`Grupo de ${m.nome}`}
-                  >
-                    <option value="">Sem grupo</option>
-                    {grupos.map((g) => <option key={g.id} value={g.id}>{rotuloGrupo(g)}</option>)}
-                  </select>
-                  <span style={est.dica}>
-                    Renomear vale para as próximas medições; as antigas continuam com o
-                    nome gravado.
-                  </span>
-                  <div style={est.formAcoes}>
-                    <button type="button" style={est.botaoTexto} onClick={() => setEditando(null)}>Cancelar</button>
-                    <button type="submit" style={est.botaoPrimario} disabled={ocupado || !editando.nome.trim()}>
-                      {ocupado ? 'Salvando...' : 'Salvar'}
+                  <input
+                    type="text" value={novoGrupo.nome} maxLength={60} style={est.input}
+                    onChange={(ev) => setNovoGrupo({ ...novoGrupo, nome: ev.target.value })}
+                    placeholder="Ex: FURADEIRA" aria-label="Nome do novo grupo" autoFocus
+                  />
+                  <div style={est.formGrupoAcoes}>
+                    <button type="button" style={est.botaoTexto} onClick={() => setNovoGrupo(null)}>Cancelar</button>
+                    <button type="submit" style={est.botaoPrimario} disabled={ocupado || !novoGrupo.nome.trim()}>
+                      Criar
                     </button>
                   </div>
                 </form>
               ) : (
-                <div key={m.id}>
-                  {/* Cabecalho quando o grupo muda: a API entrega ordenado
-                      por codigo de grupo, entao o titulo sai uma vez por bloco. */}
-                  {(m.grupo_id || null) !== (maquinas[i - 1]?.grupo_id || null) && (
-                    <div style={est.grupoTitulo}>
-                      {m.grupo_codigo ? `${m.grupo_codigo} · ${m.grupo_nome}` : 'Sem grupo'}
-                    </div>
-                  )}
-                  <div style={{ ...est.linha, ...(m.ativa ? {} : est.linhaInativa) }}>
-                    <div style={est.linhaCorpo}>
-                      <span style={est.linhaRotulo}>{m.nome}</span>
-                      {!m.ativa && <span style={est.seloInativo}>Desativada</span>}
-                    </div>
-                    <div style={est.linhaBotoes}>
-                      <button
-                        type="button" style={est.botaoTexto}
-                        onClick={() => setEditando({ id: m.id, nome: m.nome, grupoId: m.grupo_id || '' })}
-                        aria-label={`Editar ${m.nome}`}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button" style={est.botaoTexto} disabled={ocupado}
-                        onClick={() => aplicar(() => atualizarMaquina(m.id, { ativa: !m.ativa }))}
-                        aria-label={`${m.ativa ? 'Desativar' : 'Reativar'} ${m.nome}`}
-                      >
-                        {m.ativa ? 'Desativar' : 'Reativar'}
-                      </button>
-                      <button
-                        type="button" style={est.botaoTexto} disabled={ocupado}
-                        onClick={() => aplicar(() => removerMaquina(m.id))}
-                        aria-label={`Excluir ${m.nome}`}
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            ))}
-          </div>
-        )}
+                <button
+                  type="button" style={est.botaoNovoGrupo}
+                  onClick={() => setNovoGrupo({ codigo: proximoCodigo(), nome: '' })}
+                >
+                  + Novo grupo
+                </button>
+              )}
+            </nav>
 
-        {!naoCarregou && maquinas != null && (
-          <form style={est.novaLinha} onSubmit={criar}>
-            <input
-              type="text" value={novoNome} maxLength={120}
-              onChange={(ev) => setNovoNome(ev.target.value)}
-              placeholder="Ex: Furadeira 21"
-              style={{ ...est.input, flex: 1.4 }}
-              aria-label="Nome da nova máquina"
-            />
-            <select
-              value={novoGrupoId}
-              onChange={(ev) => setNovoGrupoId(ev.target.value)}
-              style={{ ...est.input, flex: 1 }}
-              aria-label="Grupo da nova máquina"
-            >
-              <option value="">Sem grupo</option>
-              {grupos.map((g) => <option key={g.id} value={g.id}>{rotuloGrupo(g)}</option>)}
-            </select>
-            <button type="submit" style={est.botaoSecundario} disabled={ocupado || !novoNome.trim()}>
-              + Cadastrar
-            </button>
-          </form>
+            {/* -------------------------------- máquinas do grupo, à direita */}
+            <section style={est.painel} aria-label="Máquinas do grupo">
+              {/* O CADASTRO FICA NO TOPO, não no fim da lista: cadastrar era
+                  rolar quarenta linhas até achar o campo. E o grupo vem da
+                  coluna da esquerda — o seletor só aparece em "Todas". */}
+              <form style={est.novaLinha} onSubmit={criar}>
+                <input
+                  type="text" value={novoNome} maxLength={120}
+                  onChange={(ev) => setNovoNome(ev.target.value)}
+                  placeholder="Ex: FURADEIRA 21"
+                  style={{ ...est.input, flex: 1 }}
+                  aria-label="Nome da nova máquina"
+                />
+                {temContexto(escolhido) ? (
+                  <span style={est.destinoCadastro}>
+                    em <strong>{grupoAtual ? rotuloGrupo(grupoAtual) : 'Sem grupo'}</strong>
+                  </span>
+                ) : (
+                  <select
+                    value={novoGrupoId}
+                    onChange={(ev) => setNovoGrupoId(ev.target.value)}
+                    style={{ ...est.input, width: 190 }}
+                    aria-label="Grupo da nova máquina"
+                  >
+                    <option value="">Sem grupo</option>
+                    {grupos.map((g) => <option key={g.id} value={g.id}>{rotuloGrupo(g)}</option>)}
+                  </select>
+                )}
+                <button type="submit" style={est.botaoPrimario} disabled={ocupado || !novoNome.trim()}>
+                  + Cadastrar
+                </button>
+              </form>
+
+              {lista.length > 8 && (
+                <input
+                  type="search" value={busca} onChange={(ev) => setBusca(ev.target.value)}
+                  placeholder="Buscar máquina pelo nome" style={est.input} aria-label="Buscar máquina"
+                />
+              )}
+
+              <div style={est.listaMaquinas}>
+                {visiveis.length === 0 && lista.length > 0 && (
+                  <p style={est.dica}>
+                    {alvo
+                      ? `Nenhuma máquina com "${busca.trim()}" ${escolhido === TODAS ? 'no cadastro' : 'neste grupo'}.`
+                      : 'Nenhuma máquina neste grupo ainda — cadastre acima.'}
+                  </p>
+                )}
+
+                {visiveis.map((m, i) => (
+                  editando?.id === m.id ? (
+                    <form
+                      key={m.id}
+                      style={est.form}
+                      onSubmit={async (ev) => {
+                        ev.preventDefault();
+                        if (await aplicar(() => atualizarMaquina(m.id, {
+                          nome: editando.nome.trim(), grupoId: editando.grupoId || null,
+                        }))) setEditando(null);
+                      }}
+                    >
+                      <input
+                        type="text" value={editando.nome} maxLength={120} autoFocus
+                        onChange={(ev) => setEditando({ ...editando, nome: ev.target.value })}
+                        style={est.input} aria-label={`Novo nome de ${m.nome}`}
+                      />
+                      <select
+                        value={editando.grupoId}
+                        onChange={(ev) => setEditando({ ...editando, grupoId: ev.target.value })}
+                        style={est.input} aria-label={`Grupo de ${m.nome}`}
+                      >
+                        <option value="">Sem grupo</option>
+                        {grupos.map((g) => <option key={g.id} value={g.id}>{rotuloGrupo(g)}</option>)}
+                      </select>
+                      <span style={est.dica}>
+                        Renomear vale para as próximas medições; as antigas continuam com o
+                        nome gravado.
+                      </span>
+                      <div style={est.formAcoes}>
+                        <button type="button" style={est.botaoTexto} onClick={() => setEditando(null)}>Cancelar</button>
+                        <button type="submit" style={est.botaoPrimario} disabled={ocupado || !editando.nome.trim()}>
+                          {ocupado ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div key={m.id}>
+                      {/* Em "Todas", o grupo volta como cabeçalho: sem ele a
+                          lista corrida não diz de quem é cada máquina. */}
+                      {escolhido === TODAS
+                        && (m.grupo_id || null) !== (visiveis[i - 1]?.grupo_id || null) && (
+                        <div style={est.grupoTitulo}>
+                          {m.grupo_codigo ? `${m.grupo_codigo} · ${m.grupo_nome}` : 'Sem grupo'}
+                        </div>
+                      )}
+                      <div style={{ ...est.linha, ...(m.ativa ? {} : est.linhaInativa) }}>
+                        <span style={est.linhaRotulo}>{m.nome}</span>
+                        {!m.ativa && <span style={est.seloInativo}>Desativada</span>}
+                        <div style={est.linhaBotoes}>
+                          {excluindo === m.id ? (
+                            <>
+                              <span style={est.dica}>Excluir do cadastro?</span>
+                              <button
+                                type="button" style={est.botaoPerigo} disabled={ocupado}
+                                onClick={async () => {
+                                  if (await aplicar(() => removerMaquina(m.id))) setExcluindo(null);
+                                }}
+                              >
+                                Excluir
+                              </button>
+                              <button type="button" style={est.botaoTexto} onClick={() => setExcluindo(null)}>
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button" style={est.botaoTexto}
+                                onClick={() => setEditando({ id: m.id, nome: m.nome, grupoId: m.grupo_id || '' })}
+                                aria-label={`Editar ${m.nome}`}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button" style={est.botaoTexto} disabled={ocupado}
+                                onClick={() => aplicar(() => atualizarMaquina(m.id, { ativa: !m.ativa }))}
+                                aria-label={`${m.ativa ? 'Desativar' : 'Reativar'} ${m.nome}`}
+                              >
+                                {m.ativa ? 'Desativar' : 'Reativar'}
+                              </button>
+                              {/* Excluir pede confirmação: a lista ficou mais
+                                  densa, e o clique errado aqui apaga cadastro. */}
+                              <button
+                                type="button" style={est.botaoExcluir} disabled={ocupado}
+                                onClick={() => setExcluindo(m.id)}
+                                aria-label={`Excluir ${m.nome}`}
+                              >
+                                Excluir
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                ))}
+              </div>
+            </section>
+          </div>
         )}
 
         {erro && <div style={est.erro} role="alert">{erro}</div>}
@@ -316,11 +453,6 @@ export default function Maquinas({ aoFechar }) {
         )}
 
         <div style={est.acoes}>
-          {maquinas?.length > 0 && (
-            <button type="button" style={est.botaoPrimario} onClick={() => window.print()}>
-              Imprimir
-            </button>
-          )}
           <button type="button" style={{ ...est.botaoSecundario, flex: 1 }} onClick={aoFechar}>
             Fechar
           </button>
@@ -329,6 +461,23 @@ export default function Maquinas({ aoFechar }) {
 
       {maquinas?.length > 0 && <ImpressaoCadastro grupos={grupos} maquinas={maquinas} />}
     </div>
+  );
+}
+
+/** Um grupo na coluna da esquerda: código, nome e quantas máquinas tem. */
+function ItemGrupo({ codigo, rotulo: nome, contador, ativo, aoEscolher }) {
+  return (
+    <button
+      type="button"
+      className="item-grupo"
+      style={{ ...est.itemGrupo, ...(ativo ? est.itemGrupoAtivo : {}) }}
+      aria-current={ativo ? 'true' : undefined}
+      onClick={aoEscolher}
+    >
+      {codigo && <span style={est.codigoGrupo}>{codigo}</span>}
+      <span style={est.itemGrupoNome}>{nome}</span>
+      <span style={est.itemGrupoContador}>{contador}</span>
+    </button>
   );
 }
 
@@ -443,29 +592,122 @@ const est = {
     display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
     padding: espaco.xl, overflowY: 'auto',
   },
+  /**
+   * A caixa nao cresce sem fim: ela para na altura da janela e quem rola e'
+   * a LISTA, la' dentro. Antes, com 30 maquinas, o cadastro e a busca
+   * subiam junto com o scroll e sumiam da tela — cadastrar exigia rolar de
+   * volta ao fim da pagina toda vez.
+   */
   caixa: {
-    width: '100%', maxWidth: 620, background: t.papel,
+    width: '100%', maxWidth: 940, maxHeight: 'calc(100dvh - 48px)',
+    background: t.papel,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.lg,
     padding: espaco.xxl, boxShadow: elevacao.alta,
     display: 'flex', flexDirection: 'column', gap: espaco.lg,
   },
+  topo: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: espaco.lg },
   titulo: { ...tipo('titulo'), margin: 0, color: t.texto },
-  texto: { ...tipo('corpo'), margin: 0, color: t.textoMedio },
+  texto: { ...tipo('corpo'), margin: `${espaco.xs}px 0 0`, color: t.textoMedio, maxWidth: 620 },
 
-  bloco: {
-    display: 'flex', flexDirection: 'column', gap: espaco.sm,
-    padding: espaco.lg, background: t.fundo, borderRadius: raio.md,
-    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+  /* Duas colunas: grupos a esquerda, maquinas do grupo a direita. Em tela
+     estreita elas empilham — a lateral vira uma faixa de grupos em cima. */
+  colunas: {
+    display: 'flex', gap: espaco.lg, alignItems: 'stretch',
+    flexWrap: 'wrap', minHeight: 0, flex: 1,
   },
-  blocoRotulo: rotulo(t.textoFraco),
-  linhaGrupo: { display: 'flex', alignItems: 'center', gap: espaco.md },
-  codigoGrupo: {
-    padding: '1px 8px', borderRadius: raio.sm, background: t.papel,
+  lateral: {
+    flex: '1 1 232px', maxWidth: 280, minWidth: 0,
+    display: 'flex', flexDirection: 'column', gap: 2,
+    padding: espaco.md, background: t.fundo, borderRadius: raio.md,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-    color: t.textoMedio, ...tipo('micro'), letterSpacing: 1,
+    alignSelf: 'flex-start',
+  },
+  blocoRotulo: { ...rotulo(t.textoFraco), padding: `${espaco.xs}px ${espaco.sm}px` },
+
+  itemGrupo: {
+    display: 'flex', alignItems: 'center', gap: espaco.sm, width: '100%',
+    minHeight: 34, padding: `0 ${espaco.sm}px`, textAlign: 'left',
+    background: 'transparent', border: 'none', borderRadius: raio.sm,
+    color: t.textoMedio, ...tipo('corpo'), cursor: 'pointer', fontFamily: 'inherit',
+  },
+  // O grupo aberto e' o contexto de tudo o que aparece a' direita — e de
+  // onde a proxima maquina vai nascer. Precisa ficar claro qual e'.
+  itemGrupoAtivo: { background: t.papel, color: t.texto, fontWeight: 600, boxShadow: elevacao.baixa },
+  itemGrupoNome: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  itemGrupoContador: { ...tipo('legenda'), color: t.textoFraco, flexShrink: 0 },
+  codigoGrupo: {
+    padding: '1px 6px', borderRadius: raio.sm, background: t.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    color: t.textoFraco, ...tipo('micro'), letterSpacing: 1, flexShrink: 0,
     fontFamily: "'Roboto Mono', 'Consolas', monospace",
   },
-  formGrupo: { display: 'flex', gap: espaco.sm, alignItems: 'center' },
+  acoesGrupo: {
+    display: 'flex', gap: espaco.md, flexWrap: 'wrap',
+    padding: `${espaco.xs}px ${espaco.sm}px ${espaco.sm}px`,
+  },
+  botaoNovoGrupo: {
+    marginTop: espaco.xs, minHeight: 34, padding: `0 ${espaco.sm}px`, textAlign: 'left',
+    background: 'transparent', border: 'none', borderRadius: raio.sm,
+    color: t.textoMedio, ...tipo('legenda'), fontWeight: 600,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  formGrupo: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm,
+    padding: espaco.sm, background: t.papel, borderRadius: raio.sm,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.vermelho,
+  },
+  formGrupoAcoes: { display: 'flex', gap: espaco.md, alignItems: 'center', justifyContent: 'flex-end' },
+  inputCodigo: {
+    width: 90, minHeight: 36, padding: `0 ${espaco.sm}px`, background: t.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.texto, ...tipo('corpo'), outline: 'none',
+    fontFamily: "'Roboto Mono', 'Consolas', monospace",
+  },
+
+  painel: {
+    flex: '3 1 420px', minWidth: 0,
+    display: 'flex', flexDirection: 'column', gap: espaco.md,
+  },
+  /* O cadastro no TOPO e a lista rolando embaixo: e' o que faz cadastrar
+     oito furadeiras seguidas ser oito digitacoes, e nada mais. */
+  novaLinha: { display: 'flex', gap: espaco.sm, alignItems: 'center', flexWrap: 'wrap' },
+  destinoCadastro: { ...tipo('legenda'), color: t.textoMedio, whiteSpace: 'nowrap' },
+  listaMaquinas: {
+    display: 'flex', flexDirection: 'column', gap: espaco.xs,
+    overflowY: 'auto', minHeight: 0, maxHeight: '52dvh',
+    paddingRight: espaco.xs,
+  },
+  grupoTitulo: { ...rotulo(t.textoFraco), margin: `${espaco.md}px 0 ${espaco.xs}px` },
+  linha: {
+    display: 'flex', alignItems: 'center', gap: espaco.sm,
+    minHeight: 40, padding: `0 ${espaco.md}px`, background: t.fundo, borderRadius: raio.sm,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+  },
+  // Desativada continua legivel: ela ainda nomeia conferencia antiga.
+  linhaInativa: { opacity: 0.62 },
+  linhaRotulo: {
+    flex: 1, minWidth: 0, ...tipo('corpo'), color: t.texto,
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  seloInativo: {
+    padding: '1px 6px', borderRadius: raio.pill, background: t.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    color: t.textoFraco, ...tipo('micro'), flexShrink: 0,
+  },
+  linhaBotoes: { display: 'flex', gap: espaco.md, flexShrink: 0, alignItems: 'center' },
+
+  form: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm,
+    padding: espaco.lg, background: t.fundo, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.vermelho,
+  },
+  formAcoes: { display: 'flex', gap: espaco.md, justifyContent: 'flex-end', alignItems: 'center' },
+  dica: { ...tipo('legenda'), color: t.textoFraco, fontStyle: 'italic', margin: 0 },
+  input: {
+    width: '100%', minHeight: 40, padding: `0 ${espaco.md}px`, background: t.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.texto, ...tipo('corpo'), fontFamily: 'inherit', outline: 'none',
+  },
 
   vazio: {
     display: 'flex', flexDirection: 'column', gap: espaco.sm,
@@ -475,38 +717,6 @@ const est = {
   vazioTitulo: { ...tipo('corpoF'), color: t.texto },
   vazioTexto: { ...tipo('legenda'), color: t.textoMedio, margin: 0 },
   vazioAcoes: { display: 'flex', gap: espaco.md, flexWrap: 'wrap', marginTop: espaco.sm },
-
-  lista: { display: 'flex', flexDirection: 'column', gap: espaco.sm },
-  grupoTitulo: { ...rotulo(t.textoFraco), margin: `${espaco.sm}px 0 ${espaco.xs}px` },
-  linha: {
-    display: 'flex', alignItems: 'center', gap: espaco.md,
-    padding: `${espaco.sm}px ${espaco.md}px`, background: t.fundo, borderRadius: raio.md,
-    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-  },
-  // Desativada continua legivel: ela ainda nomeia conferencia antiga.
-  linhaInativa: { opacity: 0.62 },
-  linhaCorpo: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: espaco.sm, flexWrap: 'wrap' },
-  linhaRotulo: { ...tipo('corpoF'), color: t.texto },
-  seloInativo: {
-    padding: '1px 6px', borderRadius: raio.pill, background: t.papel,
-    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
-    color: t.textoFraco, ...tipo('micro'),
-  },
-  linhaBotoes: { display: 'flex', gap: espaco.md, flexShrink: 0, alignItems: 'center' },
-
-  form: {
-    display: 'flex', flexDirection: 'column', gap: espaco.sm,
-    padding: espaco.lg, background: t.fundo, borderRadius: raio.md,
-    borderWidth: 1, borderStyle: 'solid', borderColor: t.vermelho,
-  },
-  novaLinha: { display: 'flex', gap: espaco.md, alignItems: 'center' },
-  dica: { ...tipo('legenda'), color: t.textoFraco, fontStyle: 'italic', margin: 0 },
-  input: {
-    width: '100%', minHeight: 40, padding: `0 ${espaco.md}px`, background: t.papel,
-    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
-    color: t.texto, ...tipo('corpo'), fontFamily: 'inherit', outline: 'none',
-  },
-  formAcoes: { display: 'flex', gap: espaco.md, justifyContent: 'flex-end', alignItems: 'center' },
 
   botaoPrimario: {
     minHeight: 40, padding: `0 ${espaco.lg}px`,
@@ -522,6 +732,17 @@ const est = {
     minHeight: 32, padding: 0, background: 'transparent', border: 'none',
     color: t.textoMedio, ...tipo('legenda'), fontWeight: 600,
     cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline',
+  },
+  // Excluir nao tem o mesmo peso de Editar: ele apaga cadastro, e so' pede
+  // confirmacao depois do clique. Fica em cinza fraco, sem sublinhado.
+  botaoExcluir: {
+    minHeight: 32, padding: 0, background: 'transparent', border: 'none',
+    color: t.textoFraco, ...tipo('legenda'), cursor: 'pointer', fontFamily: 'inherit',
+  },
+  botaoPerigo: {
+    minHeight: 32, padding: `0 ${espaco.md}px`, background: t.critico,
+    border: 'none', borderRadius: raio.sm, color: '#fff',
+    ...tipo('legenda'), fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
   },
 
   erro: {
