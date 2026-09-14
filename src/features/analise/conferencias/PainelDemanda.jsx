@@ -23,7 +23,7 @@ import { porMinuto } from './formato.js';
  * caminho. Sumir com o quadro esconde a funcao de quem nunca a configurou.
  */
 export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTrocarSemana }) {
-  const { estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas } = leitura;
+  const { estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas, programa } = leitura;
 
   /* ---- os tres caminhos em que ainda nao ha' o que comparar ---- */
   if (estado !== 'pronto') {
@@ -31,11 +31,15 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
       <section style={est.chamadaDemanda} aria-label="Programa da semana">
         <div style={est.chamadaTexto}>
           <strong>{titulo(estado, semana)}</strong>{' '}
-          {explicacao(estado, semana, demanda, grupoNome)}
+          {explicacao(estado, semana, demanda, grupoNome, programa)}
         </div>
-        <button type="button" style={est.botaoSecundario} onClick={aoConfigurar}>
-          {estado === 'sem-horas' ? 'Informar as horas' : 'Configurar demanda'}
-        </button>
+        {/* Com vários grupos em tela não há o que configurar: o que falta é
+            escolher a máquina, e o botão levaria para o lugar errado. */}
+        {estado !== 'varios-grupos' && (
+          <button type="button" style={est.botaoSecundario} onClick={aoConfigurar}>
+            {estado === 'sem-horas' ? 'Informar as horas' : 'Configurar demanda'}
+          </button>
+        )}
       </section>
     );
   }
@@ -158,22 +162,56 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
           </>
         )}
       </p>
+
+      {/* DE QUANDO É O PROGRAMA. A conta pode estar certa e o veredito
+          errado do mesmo jeito, se a demanda for de três meses atrás — e
+          número sem idade não levanta suspeita em ninguém. */}
+      {programa?.n > 0 && (
+        <p style={est.comparativoNota}>
+          Programa colado
+          {programa.atualizadoEm
+            ? ` em ${programa.atualizadoEm.toLocaleDateString('pt-BR')}`
+            : ''}
+          : {programa.n} semanas, de {comoOPcpEscreve(programa.primeira)} a{' '}
+          {comoOPcpEscreve(programa.ultima)}. O veredito vale para a demanda desse
+          programa — se o PCP reprogramou depois, cole a planilha de novo.
+        </p>
+      )}
     </section>
   );
 }
 
 const titulo = (estado, semana) => ({
+  'varios-grupos': 'Escolha uma máquina para ver o programa da semana.',
   'sem-demanda': 'Programa de produção não cadastrado.',
   'sem-semana': `Sem programa para a semana ${semana?.chave ?? ''}.`,
   'sem-horas': 'Falta a jornada do grupo.',
 }[estado] || '');
 
-function explicacao(estado, semana, demanda, grupoNome) {
+/** "de S02 a S39" — a semana como o PCP escreve, não como o app guarda. */
+const comoOPcpEscreve = (s) => (s ? `S${String(s.numero).padStart(2, '0')}` : '');
+
+function cobertura(programa) {
+  if (!programa?.n) return '';
+  const ate = ` Cadastradas: ${programa.n} semanas, de ${comoOPcpEscreve(programa.primeira)} a ${comoOPcpEscreve(programa.ultima)}.`;
+  return ate;
+}
+
+function explicacao(estado, semana, demanda, grupoNome, programa) {
+  if (estado === 'varios-grupos') {
+    /**
+     * O quadro SUMIA calado quando a tela misturava grupos, e quem nunca
+     * viu ele funcionando nao tinha como saber que precisava filtrar. A
+     * comparacao exige um grupo: a demanda e' dele, e "exigido por
+     * máquina" misturando furadeira com embalagem nao é de ninguém.
+     */
+    return 'O programa é de um grupo de máquina, e a tela está mostrando mais de um. Escolha uma máquina em MÁQUINAS, na lateral, e o quadro aparece com o exigido, o entregue e quantas máquinas o programa pede.';
+  }
   if (estado === 'sem-demanda') {
     return `Sem a demanda${grupoNome ? ` de ${grupoNome}` : ''}, o relatório diz quanto o posto entrega, mas não se isso atende. O programa entra colando a planilha do PCP.`;
   }
   if (estado === 'sem-semana') {
-    return 'As medições em tela são desta semana, e ela não está no programa cadastrado. Cole a semana que falta — ou escolha outra na tela de demanda.';
+    return `As medições em tela são desta semana, e ela não está no programa cadastrado.${cobertura(programa)} Cole a semana que falta — ou escolha outra na tela de demanda.`;
   }
   return `Há ${demanda?.toLocaleString('pt-BR') ?? ''} peças programadas para ${semana?.chave ?? 'a semana'}, mas o grupo não tem horas por semana informadas. Sem elas não há ritmo exigido: jornada é decisão de turno, e não presumo nenhuma.`;
 }

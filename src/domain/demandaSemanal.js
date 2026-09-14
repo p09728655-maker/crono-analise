@@ -144,6 +144,35 @@ function colunaDaPlanilha(linhas) {
 }
 
 /**
+ * SEM CABECALHO, qual coluna e' o total?
+ *
+ * A que vale a SOMA das anteriores. Numa linha "S02 | 25.000 | 27.750 |
+ * 34.900 | 28.650 | 11.950 | 128.250 | 25.650", so' a sexta fecha a conta
+ * dos cinco lotes — a media por lote (25.650) nao fecha nada. E' inferencia
+ * VERIFICADA, nao chute por posicao: ou a soma bate, ou nao ha' resposta.
+ *
+ * Existe porque exigir o cabecalho na colagem e' exigir que a pessoa
+ * arraste o mouse ate' a linha certa; quem copia as linhas de dados no
+ * Excel raramente leva o cabecalho junto — e a recusa saia como 36 avisos
+ * de "sem quantidade legível", que nao dizem o que fazer.
+ *
+ * Devolve null quando nenhuma coluna fecha, ou quando mais de uma fecha
+ * (ambiguidade real: ai' o cabecalho decide, e a tela pede por ele).
+ */
+function colunaQueFechaASoma(cols) {
+  const numeros = cols.map(numeroPtBr);
+  const candidatas = [];
+  for (let i = 2; i < numeros.length; i++) {
+    if (numeros[i] === null) continue;
+    const antes = numeros.slice(0, i).filter((n) => n !== null);
+    if (antes.length < 2) continue;
+    const soma = antes.reduce((a, b) => a + b, 0);
+    if (Math.abs(soma - numeros[i]) <= 1) candidatas.push(i);
+  }
+  return candidatas.length === 1 ? candidatas[0] : null;
+}
+
+/**
  * O ano escondido na linha: a coluna Nº PLANILHA traz "001-26", e o "-26"
  * e' o ano do programa. Serve para a semana "S02", que vem sem ano nenhum.
  */
@@ -176,6 +205,8 @@ export function interpretarColagem(texto, { ano = new Date().getFullYear() } = {
   const iPlanilha = colunaDaPlanilha(linhas);
   const avisos = [];
   const porChave = new Map();
+  // Quantas linhas tinham semana legivel e nenhuma quantidade identificavel.
+  let semAmparo = 0;
 
   /**
    * A coluna de planilha e' a armadilha desta planilha: ela tambem "parece"
@@ -210,11 +241,17 @@ export function interpretarColagem(texto, { ano = new Date().getFullYear() } = {
     // entre ela e o total pode haver coluna de texto (a de planilha).
     const doCabecalho = coluna !== null ? numeroPtBr(cols[coluna]) : null;
     const validos = cols.map(numeroPtBr).filter((n) => n !== null);
-    const pecas = doCabecalho ?? (validos.length === 1 ? validos[0] : null);
+    // Sem cabecalho: um numero so' e' o total; varios, vale a coluna que
+    // fecha a soma dos anteriores.
+    const daSoma = coluna === null ? colunaQueFechaASoma(cols) : null;
+    const pecas = doCabecalho
+      ?? (validos.length === 1 ? validos[0] : (daSoma !== null ? numeroPtBr(cols[daSoma]) : null));
 
     const chave = chaveSemana(semana);
     if (pecas === null || pecas <= 0) {
-      avisos.push(`Semana ${chave} sem quantidade legível — não foi importada.`);
+      // UM aviso para a colagem inteira, nao um por linha: o problema e' da
+      // colagem (falta o cabecalho), nao de cada semana.
+      semAmparo += 1;
       continue;
     }
 
@@ -225,10 +262,11 @@ export function interpretarColagem(texto, { ano = new Date().getFullYear() } = {
      * lugar de "TOTAL SEMANA", a diferenca salta. Nao bloqueia — a
      * planilha pode ter lote fora da conta — mas avisa com os dois numeros.
      */
-    if (coluna !== null && validos.length > 1) {
+    const colunaDoTotalNaLinha = coluna ?? daSoma;
+    if (colunaDoTotalNaLinha !== null && validos.length > 1) {
       // Tudo o que e' numero ANTES da coluna do total e' lote. A semana e a
       // planilha nao entram: "S02" e "001-26" nao viram numero.
-      const lotes = cols.slice(0, coluna).map(numeroPtBr).filter((n) => n !== null);
+      const lotes = cols.slice(0, colunaDoTotalNaLinha).map(numeroPtBr).filter((n) => n !== null);
       const soma = lotes.reduce((a, b) => a + b, 0);
       if (lotes.length > 1 && Math.abs(soma - pecas) > 1) {
         avisos.push(
@@ -242,6 +280,14 @@ export function interpretarColagem(texto, { ano = new Date().getFullYear() } = {
       avisos.push(`Semana ${chave} aparece duas vezes com quantidades diferentes — ficou a última.`);
     }
     porChave.set(chave, { ...semana, chave, pecas });
+  }
+
+  if (semAmparo > 0) {
+    avisos.push(
+      `${semAmparo} linha(s) com semana legível não trouxeram quantidade identificável. `
+      + 'Cole junto o cabeçalho da planilha (a linha com SEMANA e TOTAL SEMANA) — '
+      + 'com ele não há dúvida sobre qual coluna é o total.',
+    );
   }
 
   const semanas = ordenarSemanas([...porChave.values()]);
@@ -470,8 +516,28 @@ export function leituraDaDemanda({
   const alvo = semanaEscolhida || daMedicao || semanas[semanas.length - 1];
   const registro = semanas.find((s) => s.ano === alvo.ano && s.numero === alvo.numero) || null;
 
+  /**
+   * O CARIMBO DO PROGRAMA: de quando ele e' e ate' onde vai.
+   *
+   * A conta pode estar certa e o veredito errado do mesmo jeito, se o
+   * programa for de tres meses atras. A tela nao tinha como dizer isso —
+   * numero sem idade nao levanta suspeita em ninguem.
+   */
+  const gravacoes = semanas
+    .map((s) => new Date(s.atualizado_em))
+    .filter((d) => !Number.isNaN(d.getTime()));
+  const programa = {
+    n: semanas.length,
+    primeira: semanas[0],
+    ultima: semanas[semanas.length - 1],
+    atualizadoEm: gravacoes.length
+      ? new Date(Math.max(...gravacoes.map((d) => d.getTime())))
+      : null,
+  };
+
   const base = {
     semanas,
+    programa,
     semana: { ...alvo, chave: chaveSemana(alvo) },
     intervalo: intervaloIso(alvo),
     // Quantas semanas DIFERENTES as medicoes cobrem: com mais de uma, o

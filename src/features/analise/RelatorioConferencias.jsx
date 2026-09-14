@@ -66,7 +66,8 @@ const lerAnaliseNoPapel = () => {
 export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const dados = useConferencias();
   const {
-    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe, cadastro,
+    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe,
+    cadastro, recarregarCadastro,
     limparErro, carregar,
   } = dados;
 
@@ -82,6 +83,15 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
    * piscando, e falsa justamente sobre o que a tela existe para dizer.
    */
   const [demandas, setDemandas] = useState(null);
+  /**
+   * Bump ao FECHAR a tela de demanda.
+   *
+   * O quadro buscava o programa uma vez, na abertura da pagina. Quem colava
+   * a planilha e fechava a janela continuava lendo "Programa de produção
+   * não cadastrado" — o dado ja' estava no banco, e so' um F5 mostrava. A
+   * tela afirmava o contrario do que ela propria acabara de gravar.
+   */
+  const [recargaDemanda, setRecargaDemanda] = useState(0);
   const [confirmando, setConfirmando] = useState(null);
   const [confirmandoLote, setConfirmandoLote] = useState(null);
   const [editandoParadas, setEditandoParadas] = useState(null);
@@ -135,7 +145,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
       // e oferece o caminho, que e' melhor do que sumir sem explicacao.
       .catch(() => { if (vivo) setDemandas([]); });
     return () => { vivo = false; };
-  }, [grupoDoQuadro]);
+  }, [grupoDoQuadro, recargaDemanda]);
 
   const grupoDoCadastro = cadastro?.grupos?.find((g) => g.id === grupoDoQuadro) || null;
   const maquinasDoGrupo = (cadastro?.maquinas || [])
@@ -349,7 +359,13 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
 
         {verDemanda && (
           <DemandaSemanal
-            aoFechar={() => setVerDemanda(false)}
+            aoFechar={() => {
+              setVerDemanda(false);
+              // O que a janela gravou (programa e jornada) tem de aparecer
+              // no quadro sem F5.
+              setRecargaDemanda((n) => n + 1);
+              recarregarCadastro();
+            }}
             /* Com uma maquina filtrada, abre no grupo DELA: quem filtrou a
                Furadeira 03 nao quer procurar "0002 FURADEIRA" numa lista. */
             grupoInicial={grupoDoQuadro}

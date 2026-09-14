@@ -166,10 +166,35 @@ describe('colagem torta', () => {
     expect(avisos).toEqual([]);
   });
 
-  it('sem cabecalho e com varios numeros, nao adivinha qual e o total', () => {
+  it('sem cabecalho, o total e a coluna que FECHA A SOMA das anteriores', () => {
+    // 25.000 + 27.750 = 52.750 — so' a terceira coluna fecha.
     const { semanas, avisos } = interpretarColagem('005-26\t25.000\t27.750\t52.750');
+    expect(semanas[0].pecas).toBe(52750);
+    expect(avisos).toEqual([]);
+  });
+
+  it('a planilha inteira colada SEM cabecalho e lida, com a media por lote no fim', () => {
+    /**
+     * O caso real: quem copia as linhas no Excel raramente leva o cabecalho
+     * junto. Aqui ha' cinco lotes, o TOTAL e a MEDIA/LOTE — so' o total
+     * fecha a soma dos cinco; a media nao fecha nada.
+     */
+    const { semanas, avisos } = interpretarColagem([
+      'S02\t25.000\t27.750\t34.900\t28.650\t11.950\t128.250\t25.650',
+      'S39\t15.514\t26.200\t11.500\t16.450\t14.200\t83.864\t16.773',
+    ].join('\n'), { ano: 2026 });
+    expect(semanas.map((x) => `${x.chave}=${x.pecas}`)).toEqual(['002-26=128250', '039-26=83864']);
+    expect(avisos).toEqual([]);
+  });
+
+  it('quando nenhuma coluna fecha a soma, pede o cabecalho — uma vez, nao por linha', () => {
+    const { semanas, avisos } = interpretarColagem([
+      'S02\t25.000\t27.750\t34.900',
+      'S04\t27.250\t19.850\t13.473',
+    ].join('\n'), { ano: 2026 });
     expect(semanas).toEqual([]);
-    expect(avisos[0]).toMatch(/sem quantidade legível/);
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toMatch(/2 linha\(s\).*Cole junto o cabeçalho/s);
   });
 
   it('linha que parece semana e nao e vira aviso, e o resto e importado', () => {

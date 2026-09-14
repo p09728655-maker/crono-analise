@@ -42,14 +42,20 @@ import { inteiro, lista, uuid } from './validar.js';
 /** Duas planilhas de ano cheio numa colagem so' — teto do que faz sentido. */
 const MAX_SEMANAS = 120;
 
+/**
+ * `atualizado_em` vai junto de proposito: e' com ele que a tela carimba
+ * QUANDO o programa foi colado. Programa velho dando veredito com cara de
+ * atual e' o risco que sobra depois que a conta esta' certa — e ninguem
+ * desconfia de um numero que nao diz a idade.
+ */
 const listar = (db, empresaId, grupoId) => (grupoId
   ? db`
-    SELECT id, grupo_id, ano, numero, pecas
+    SELECT id, grupo_id, ano, numero, pecas, atualizado_em
       FROM demanda_semanal
      WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
      ORDER BY ano, numero`
   : db`
-    SELECT id, grupo_id, ano, numero, pecas
+    SELECT id, grupo_id, ano, numero, pecas, atualizado_em
       FROM demanda_semanal
      WHERE empresa_id = ${empresaId}
      ORDER BY grupo_id, ano, numero`);
