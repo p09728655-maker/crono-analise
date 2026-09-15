@@ -62,6 +62,16 @@ export function analisarCaminho(caminho) {
   // Conferencia rapida: cronometro avulso, sem estudo — nao carrega nada.
   if (/^\/coleta\/rapida\/?$/i.test(p)) return { modo: 'coleta', tela: 'rapida', estudoId: null, operacaoId: null };
 
+  /**
+   * O PAINEL DE PAREDE nao passa pela regra de aparelho.
+   *
+   * `ehDesktop()` exige largura E MOUSE, e o monitor do chao de fabrica
+   * costuma ser TV ou mini-PC sem ponteiro nenhum: pela regra geral ele
+   * cairia na coleta, que e' exatamente a tela que nao se quer na parede.
+   * O painel e' escolhido pela URL, e so' por ela.
+   */
+  if (/^\/painel\/?$/i.test(p)) return { modo: 'painel', tela: 'painel', estudoId: null, operacaoId: null };
+
   if (/^\/coleta\/?$/i.test(p)) return { modo: 'coleta', tela: 'lista', estudoId: null, operacaoId: null };
   if (/^\/analise\/conferencias\/?$/i.test(p)) return { modo: 'analise', tela: 'conferencias', estudoId: null, operacaoId: null };
 
@@ -121,6 +131,7 @@ export const caminhos = {
   lista: (modo) => (modo === 'analise' ? '/analise/estudos' : `/${modo}`),
   rapida: () => '/coleta/rapida',
   conferencias: () => '/analise/conferencias',
+  painel: () => '/painel',
   estudo: (modo, estudoId) => `/${modo}/estudo/${estudoId}`,
   coletar: (estudoId, operacaoId) => `/coleta/estudo/${estudoId}/operacao/${operacaoId}`,
 };

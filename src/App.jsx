@@ -5,6 +5,7 @@ import ColetaFuradeira from './features/coleta/ColetaFuradeira.jsx';
 import ConferenciaRapida from './features/coleta/ConferenciaRapida.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import RelatorioConferencias from './features/analise/RelatorioConferencias.jsx';
+import PainelFabrica from './features/painel/PainelFabrica.jsx';
 import Inicio from './features/analise/Inicio.jsx';
 import BarraSincronizacao from './components/BarraSincronizacao.jsx';
 import { SistemaEncerrado } from './components/SairDoSistema.jsx';
@@ -109,7 +110,10 @@ export default function App() {
   const emColeta = tela === 'coleta';
   // A conferencia rapida tambem e' tela cheia de cronometro: sem barra de
   // sincronizacao (ela nao fala com o servidor) e sem distracao.
-  const telaCheia = emColeta || tela === 'rapida';
+  // O painel de parede tambem e' tela cheia: ninguem chega perto para ler
+  // barra de sincronizacao, e ela so' roubaria altura do que se le' a
+  // metros.
+  const telaCheia = emColeta || tela === 'rapida' || tela === 'painel';
 
   // Recarregar no meio da coleta perderia o ciclo em andamento.
   useEffect(() => {
@@ -220,6 +224,11 @@ export default function App() {
       {tela === 'rapida' && (
         <ConferenciaRapida aoSair={() => navegar(caminhos.lista('coleta'))} />
       )}
+
+      {/* GESTAO A VISTA: monitor de parede, sem interacao nenhuma. Nao
+          recebe `aoVoltar` de proposito — nao ha' de onde voltar, e um
+          botao nesta tela so' existiria para ser apertado por engano. */}
+      {tela === 'painel' && <PainelFabrica />}
 
       {tela === 'conferencias' && (
         <RelatorioConferencias

@@ -63,6 +63,27 @@ describe('conferencia rapida na URL', () => {
       expect(analisarCaminho(`/analise/estudo/${id}`).tela).toBe('estudo');
     });
 
+    /**
+     * O PAINEL DE PAREDE tem modo proprio, e nao 'analise'.
+     *
+     * `ehDesktop()` exige largura E MOUSE. O monitor do chao de fabrica e'
+     * TV ou mini-PC sem ponteiro: com modo 'analise' o App o mandaria para
+     * a coleta — justamente a tela que nao se quer na parede.
+     */
+    it('/painel tem modo proprio, para nao cair na regra de aparelho', () => {
+      expect(analisarCaminho('/painel').tela).toBe('painel');
+      expect(analisarCaminho('/painel').modo).toBe('painel');
+      expect(analisarCaminho('/painel/').tela).toBe('painel');
+      expect(analisarCaminho('/Painel').tela).toBe('painel');
+      expect(analisarCaminho('/painel?tv=1').tela).toBe('painel');
+      expect(caminhos.painel()).toBe('/painel');
+    });
+
+    it('o painel nao engole nem e engolido pelas outras rotas', () => {
+      expect(analisarCaminho('/painel/qualquer').padrao).toBe(true);
+      expect(analisarCaminho('/analise').tela).toBe('inicio');
+    });
+
     it('a COLETA nao tem inicio: /coleta e a lista, e caminhos respeita isso', () => {
       expect(analisarCaminho('/coleta').tela).toBe('lista');
       expect(caminhos.lista('coleta')).toBe('/coleta');
