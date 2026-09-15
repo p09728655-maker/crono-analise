@@ -349,7 +349,12 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
                   leitura={leituraDemanda}
                   grupoNome={grupoDoCadastro ? `${grupoDoCadastro.codigo} · ${grupoDoCadastro.nome}` : null}
                   aoConfigurar={() => setVerDemanda(true)}
-                  aoTrocarSemana={(chave) => setSemanaEscolhida(lerCodigoSemana(chave))}
+                  /* Vazio LIMPA a escolha e devolve o quadro ao automatico
+                     (a semana que contem a medicao). Explicito de
+                     proposito: lerCodigoSemana('') ja' devolve null, mas
+                     depender disso amarraria a volta ao automatico a um
+                     detalhe do parser. */
+                  aoTrocarSemana={(chave) => setSemanaEscolhida(chave ? lerCodigoSemana(chave) : null)}
                 />
               )}
 

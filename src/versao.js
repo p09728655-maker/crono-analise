@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.83.0',
+    data: '2026-09-15',
+    titulo: 'Dá para voltar a semana automática depois de escolher na mão',
+    itens: [
+      'ESCOLHER UMA SEMANA NO SELETOR ERA SÓ DE IDA. Uma vez escolhida, a escolha valia até você trocar de grupo ou recarregar a tela — quem conferiu a semana passada ficava preso nela, e o relatório seguia comparando a medição de hoje com o programa de outra semana. Nada na tela dizia que aquela escolha era manual.',
+      'AGORA O SELETOR TEM UMA OPÇÃO EM BRANCO no topo, "Automática · pela data da medição". Escolhê-la apaga a escolha manual e devolve o quadro à semana que contém a medição mais recente — a mesma que ele usa sozinho quando você abre o relatório.',
+      'E O SELETOR PASSOU A DIZER DE ONDE VEIO A SEMANA. Enquanto ninguém escolheu nada, ele mostra "Automática"; escolhida na mão, mostra a semana. Antes ele mostrava a semana nos dois casos, e não havia como saber se o número em tela era o que o relatório escolheu ou o que alguém deixou escolhido.',
+      'A opção leva escrito o que ela faz. Uma linha vazia num seletor de PCP não diz se apaga a comparação ou se a devolve ao normal — e as duas coisas mudam o veredito.',
+    ],
+  },
+  {
     versao: '2.82.0',
     data: '2026-09-15',
     titulo: 'A tela de Demanda semanal cabe quase toda na tela',
