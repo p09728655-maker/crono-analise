@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  TODAS, barrasPorMedicao, escopoDaLateral, filtrarPorGrupo, filtrarPorMaquina, filtrarResumo,
-  formatarDataHora, itensDaLateral, loteDaMaquina, resumoDoPeriodo,
+  TODAS, barrasPorMedicao, escopoDaLateral, filtrarPorGrupo, filtrarPorMaquina, filtrarPorPeriodo,
+  filtrarResumo, formatarDataHora, itensDaLateral, loteDaMaquina, resumoDoPeriodo,
 } from '../src/domain/relatorioConferencias.js';
 
 const MIN = 60000;
@@ -307,5 +307,65 @@ describe('loteDaMaquina — arquivar o que esta na tela', () => {
     expect(loteDaMaquina({ filtro: 'Furadeira 03', visiveis, verArquivadas: false }))
       .toEqual({ maquina: 'Furadeira 03', ids: ['a', 'b'], arquivada: true });
     expect(loteDaMaquina({ filtro: 'Furadeira 03', visiveis, verArquivadas: true }).arquivada).toBe(false);
+  });
+});
+
+/**
+ * A JANELA DE TEMPO do relatorio.
+ *
+ * Sem ela o relatorio somava todas as medicoes nao arquivadas para
+ * sempre, e o "ritmo medio" do topo virava a media de meses — numero que
+ * nao e' o ritmo de nada, sustentando decisao de capacidade.
+ */
+describe('filtrarPorPeriodo', () => {
+  const AGORA = Date.parse('2026-09-15T12:00:00Z');
+  const em = (iso) => ({ iniciado_em: iso, maquina: 'FURADEIRA 16' });
+
+  it('mantem o que caiu dentro da janela e corta o resto', () => {
+    const linhas = [
+      em('2026-09-15T07:00:00Z'),   // hoje
+      em('2026-09-10T07:00:00Z'),   // 5 dias
+      em('2026-08-20T07:00:00Z'),   // 26 dias
+      em('2026-06-01T07:00:00Z'),   // 106 dias
+    ];
+    expect(filtrarPorPeriodo(linhas, 7, AGORA)).toHaveLength(2);
+    expect(filtrarPorPeriodo(linhas, 30, AGORA)).toHaveLength(3);
+    expect(filtrarPorPeriodo(linhas, 90, AGORA)).toHaveLength(3);
+  });
+
+  it('dias nulo ou zero devolve tudo — e a opcao "Tudo" do seletor', () => {
+    const linhas = [em('2026-06-01T07:00:00Z'), em('2020-01-01T07:00:00Z')];
+    expect(filtrarPorPeriodo(linhas, 0, AGORA)).toHaveLength(2);
+    expect(filtrarPorPeriodo(linhas, null, AGORA)).toHaveLength(2);
+  });
+
+  /**
+   * A janela conta de AGORA, nao da ultima medicao: "ultimos 7 dias" que
+   * se estica ate' achar medicao mente sobre o proprio rotulo.
+   */
+  it('janela sem medicao nenhuma devolve vazio, em vez de esticar', () => {
+    expect(filtrarPorPeriodo([em('2026-08-01T07:00:00Z')], 7, AGORA)).toHaveLength(0);
+  });
+
+  /**
+   * SALVO nao e' quando aconteceu: medicao feita offline sobe dias
+   * depois, e cortar por ela poria a medicao de terca fora da janela que
+   * a contem.
+   */
+  it('corta por quando MEDIU, nao por quando salvou', () => {
+    const offline = { iniciado_em: '2026-09-14T07:00:00Z', salvo_em: '2026-09-15T07:00:00Z' };
+    const antiga = { iniciado_em: '2026-07-01T07:00:00Z', salvo_em: '2026-09-15T07:00:00Z' };
+    expect(filtrarPorPeriodo([offline, antiga], 7, AGORA)).toEqual([offline]);
+  });
+
+  it('sem instante legivel, a medicao fica DENTRO — nao some por falta de carimbo', () => {
+    const semData = { maquina: 'FURADEIRA 16', pecas: 10 };
+    expect(filtrarPorPeriodo([semData], 7, AGORA)).toEqual([semData]);
+  });
+
+  it('aceita camelCase do aparelho, como o resto do dominio', () => {
+    const doAparelho = { iniciadoEm: '2026-09-14T07:00:00Z' };
+    expect(filtrarPorPeriodo([doAparelho], 7, AGORA)).toEqual([doAparelho]);
+    expect(filtrarPorPeriodo([{ iniciadoEm: '2026-01-01T07:00:00Z' }], 7, AGORA)).toHaveLength(0);
   });
 });

@@ -89,6 +89,54 @@ export function filtrarPorMaquina(conferencias, maquina) {
   return conferencias.filter((c) => nomeChave(nomeDaMaquina(c)) === chave);
 }
 
+/**
+ * QUANDO A MEDICAO ACONTECEU, em ms.
+ *
+ * `iniciado_em` primeiro, `salvo_em` depois, nos dois formatos (o servidor
+ * manda snake_case, o aparelho camelCase) — a mesma ordem de
+ * analiseConferencias. Salvo NAO e' quando aconteceu: medicao feita
+ * offline no posto sobe dias depois, e cortar por ela poria a medicao de
+ * terca fora de uma janela que a contem.
+ */
+export function quandoMediu(c) {
+  for (const candidato of [c?.iniciado_em, c?.iniciadoEm, c?.salvo_em, c?.salvoEm]) {
+    if (candidato == null) continue;
+    const ts = new Date(candidato).getTime();
+    if (Number.isFinite(ts)) return ts;
+  }
+  return NaN;
+}
+
+/**
+ * A JANELA DE TEMPO do relatorio — o corte que faltava.
+ *
+ * Sem ele o relatorio somava TODAS as medicoes nao arquivadas, para
+ * sempre: o "ritmo medio" do topo virava a media de meses, misturando
+ * pecas, operadores e o antes e o depois de qualquer melhoria. Numero que
+ * nao e' o ritmo de nada, sustentando decisao de capacidade.
+ *
+ * A janela conta a partir de AGORA, nao da ultima medicao. "Ultimos 7
+ * dias" que se estica ate' achar medicao mente sobre o proprio rotulo — e
+ * "nao se mediu nada na semana passada" e' informacao, nao problema a
+ * esconder. Quem chama mostra o vazio e oferece alargar.
+ *
+ * `dias` nulo ou zero devolve tudo: e' a opcao "Tudo" do seletor, que
+ * continua existindo para quem quer a serie inteira.
+ *
+ * Medicao SEM instante legivel fica DENTRO de qualquer janela: ela nao
+ * tem como provar que esta' fora, e sumir com dado por falta de carimbo
+ * seria pior que mostra-lo.
+ */
+export function filtrarPorPeriodo(conferencias, dias, agora = Date.now()) {
+  const n = Number(dias) || 0;
+  if (n <= 0) return conferencias;
+  const corte = agora - (n * 86400000);
+  return conferencias.filter((c) => {
+    const ts = quandoMediu(c);
+    return !Number.isFinite(ts) || ts >= corte;
+  });
+}
+
 /** O mesmo corte, sobre os resumos (por maquina ou por peca x maquina). */
 export function filtrarResumo(resumo, maquina) {
   if (!maquina) return resumo;

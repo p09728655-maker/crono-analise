@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { VERSAO } from '../../versao.js';
-import { TODAS, escopoDaLateral, loteDaMaquina } from '../../domain/relatorioConferencias.js';
+import {
+  TODAS, escopoDaLateral, filtrarPorPeriodo, loteDaMaquina, quandoMediu,
+} from '../../domain/relatorioConferencias.js';
 import { leituraDaDemanda, lerCodigoSemana } from '../../domain/demandaSemanal.js';
 import { listarDemanda } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
@@ -12,6 +14,7 @@ import { useConferencias } from './conferencias/useConferencias.js';
 import { useLeitura } from './conferencias/useLeitura.js';
 import { est } from './conferencias/estilos.js';
 import KpisDoPeriodo from './conferencias/KpisDoPeriodo.jsx';
+import SeletorPeriodo from './conferencias/SeletorPeriodo.jsx';
 import ComparativoParadas from './conferencias/ComparativoParadas.jsx';
 import CartoesMaquina from './conferencias/CartoesMaquina.jsx';
 import TabelaRitmoPorPeca from './conferencias/TabelaRitmoPorPeca.jsx';
@@ -77,6 +80,33 @@ const lerAnaliseNoPapel = () => {
  * Por isso o padrao e' `!== '0'` e nao `=== '1'`: quem nunca mexeu
  * continua imprimindo com o programa, como sempre saiu.
  */
+/**
+ * A JANELA DE TEMPO do relatorio.
+ *
+ * Padrao de 30 DIAS, e nao "tudo": o relatorio somava todas as medicoes
+ * nao arquivadas para sempre, e o ritmo do topo virava a media de meses —
+ * misturando pecas, operadores e o antes e o depois de cada melhoria. Com
+ * a janela, o numero volta a falar de um periodo que existe.
+ *
+ * Trinta dias nao muda nada para quem esta' medindo agora e protege quem
+ * abrir a tela daqui a um ano. O periodo fica CARIMBADO ao lado dos
+ * numeros, e "Tudo" continua a um clique.
+ */
+const CHAVE_PERIODO = 'ritmo.periodo-dias';
+const PERIODO_PADRAO = 30;
+const lerPeriodo = () => {
+  try {
+    // Chave AUSENTE tem de cair no padrao, e `Number(null)` e' 0 — que e'
+    // um valor valido aqui ("Tudo"). Sem esta guarda, quem nunca escolheu
+    // periodo nenhum abria justamente na media de tudo o que ja' foi
+    // medido, que e' o que a janela existe para evitar.
+    const guardado = localStorage.getItem(CHAVE_PERIODO);
+    if (guardado == null || guardado === '') return PERIODO_PADRAO;
+    const n = Number(guardado);
+    return Number.isFinite(n) && n >= 0 ? n : PERIODO_PADRAO;
+  } catch { return PERIODO_PADRAO; }
+};
+
 const CHAVE_PROGRAMA_PAPEL = 'ritmo.programa-na-impressao';
 const lerProgramaNoPapel = () => {
   try { return localStorage.getItem(CHAVE_PROGRAMA_PAPEL) !== '0'; } catch { return true; }
@@ -125,6 +155,12 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const [renomeando, setRenomeando] = useState(null);
   const [analiseNoPapel, setAnaliseNoPapel] = useState(lerAnaliseNoPapel);
   const [programaNoPapel, setProgramaNoPapel] = useState(lerProgramaNoPapel);
+  const [periodoDias, setPeriodoDias] = useState(lerPeriodo);
+
+  const trocarPeriodo = (dias) => {
+    setPeriodoDias(dias);
+    try { localStorage.setItem(CHAVE_PERIODO, String(dias)); } catch { /* sem armazenamento */ }
+  };
 
   const alternarAnaliseNoPapel = () => setAnaliseNoPapel((v) => {
     const novo = !v;
@@ -159,7 +195,25 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const filtro = escopo?.tipo === 'maquina' ? escopo.chave : null;
   const grupoEscolhido = escopo?.tipo === 'grupo' ? escopo.chave : null;
 
-  const leitura = useLeitura({ linhas, filtro, grupo: grupoEscolhido, mapaGrupos, grupoDe });
+  /**
+   * O CORTE POR PERIODO ENTRA AQUI, antes de tudo o que se calcula.
+   *
+   * `useLeitura` deriva os numeros do topo, os cartoes, os graficos, a
+   * lateral e a folha A4 desta mesma lista. Cortar aqui e' o que faz tela
+   * e papel falarem do mesmo periodo sem nenhum deles precisar saber que
+   * existe um filtro.
+   */
+  const linhasDoPeriodo = useMemo(
+    // A face das ARQUIVADAS nao leva janela: quem abriu as arquivadas foi
+    // buscar justamente o que saiu de circulacao, e cortar por data ali
+    // esconderia o que a pessoa foi procurar.
+    () => (verArquivadas ? linhas : filtrarPorPeriodo(linhas, periodoDias)),
+    [linhas, periodoDias, verArquivadas],
+  );
+
+  const leitura = useLeitura({
+    linhas: linhasDoPeriodo, filtro, grupo: grupoEscolhido, mapaGrupos, grupoDe,
+  });
   const {
     visiveis, resumoVisivel, resumoPecasVisivel, analise, barrasDoFiltro, painel,
     curvaDoDia, comparativo, entreMaquinas, porCiclo, secoes,
@@ -250,7 +304,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
             titulo: 'Ritmo por máquina',
             subtitulo: 'Peças/hora e peças/minuto de cada posto',
           }}
-          acaoPrimaria={estado === 'pronto' && linhas.length > 0 && !verArquivadas
+          acaoPrimaria={estado === 'pronto' && linhasDoPeriodo.length > 0 && !verArquivadas
             ? {
                 // O rotulo diz O QUE vai sair no papel: com uma maquina
                 // escolhida na lateral imprime so' ela; com um grupo, as
@@ -361,7 +415,37 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               levanta), o ritmo por peca, os graficos, as paradas, a analise
               — e a tabela de tudo no fim. Na face das ARQUIVADAS so' os
               cartoes e a tabela ficam: ritmo nao sai de arquivadas. */}
-          {estado === 'pronto' && linhas.length > 0 && (
+          {/* O SELETOR FICA FORA do corpo de proposito: com a janela
+              vazia o corpo nao desenha, e um filtro que some junto com o
+              que ele filtrou deixa a pessoa sem como alargar. */}
+          {estado === 'pronto' && linhas.length > 0 && !verArquivadas && (
+            <SeletorPeriodo
+              dias={periodoDias}
+              aoTrocar={trocarPeriodo}
+              linhas={linhasDoPeriodo}
+              quandoMediu={quandoMediu}
+            />
+          )}
+
+          {/* JANELA VAZIA NAO E' RELATORIO VAZIO. "Nao se mediu nada nos
+              ultimos 7 dias" e' informacao de PCP — some com ela e a tela
+              volta a mentir por omissao. Por isso diz quantas ficaram de
+              fora e de quando e' a mais recente, com a saida ao lado. */}
+          {estado === 'pronto' && linhas.length > 0 && !verArquivadas
+            && linhasDoPeriodo.length === 0 && (
+            <EstadoVazio
+              modo="analise"
+              titulo={`Nenhuma medição nos últimos ${periodoDias} dias`}
+              texto={`Há ${linhas.length} medição(ões) fora desta janela — nenhuma foi apagada. A janela existe para o ritmo do topo falar de um período que existe, em vez da média de tudo o que já foi medido.`}
+              acao={(
+                <button type="button" style={est.botaoSecundario} onClick={() => trocarPeriodo(0)}>
+                  Ver tudo
+                </button>
+              )}
+            />
+          )}
+
+          {estado === 'pronto' && linhasDoPeriodo.length > 0 && (
             <>
               {!verArquivadas && painel && <KpisDoPeriodo painel={painel} />}
 
@@ -514,7 +598,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
         )}
       </div>
 
-      {estado === 'pronto' && linhas.length > 0 && (
+      {estado === 'pronto' && linhasDoPeriodo.length > 0 && (
         <ImpressaoConferencias
           linhas={visiveis}
           resumo={resumoVisivel}

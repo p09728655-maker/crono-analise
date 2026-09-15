@@ -106,6 +106,15 @@ export const est = {
   /* Seletor de semana e a opcao de sair no papel dividem o lado direito
      do titulo: sao as duas decisoes sobre ESTE quadro. */
   demandaAcoes: { display: 'flex', alignItems: 'center', gap: espaco.lg, flexWrap: 'wrap' },
+
+  /* ---- a janela de tempo do relatorio ---- */
+  /* Fica ACIMA dos numeros do topo: o periodo e' o primeiro qualificador
+     de todos eles, e lido depois nao qualifica nada. */
+  periodoLinha: {
+    display: 'flex', alignItems: 'center', gap: espaco.md, flexWrap: 'wrap',
+    marginBottom: espaco.lg,
+  },
+  periodoCarimbo: { ...tipo('legenda'), ...numeros, color: t.textoMedio },
   demandaSelect: {
     minHeight: 32, padding: `0 ${espaco.sm}px`, background: t.papel,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,

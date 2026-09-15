@@ -741,6 +741,91 @@ await movel.close();
   await ctx4.close();
 }
 
+/* ============================ a JANELA DE TEMPO do relatorio ============ */
+/**
+ * O relatorio somava TODAS as medicoes nao arquivadas, para sempre. Com
+ * vinte medicoes a tela ja' incomodava; o problema serio era outro: o
+ * ritmo do topo era a media ponderada de tudo o que ja' foi medido, e em
+ * seis meses isso mistura pecas, operadores e o antes e o depois de cada
+ * melhoria — sustentando o veredito contra a demanda da semana.
+ */
+{
+  const ctx5 = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const p5 = await ctx5.newPage();
+  await semearSessao(p5);
+  const erros5 = [];
+  p5.on('pageerror', (e) => erros5.push(e.message));
+
+  const atras = (dias) => new Date(Date.now() - (dias * 86400000)).toISOString();
+  const medicao = (id, dias, pecas) => ({
+    id, maquina: 'FURADEIRA 16', peca: 'Princesa Fundo',
+    iniciado_em: atras(dias), finalizado_em: atras(dias), salvo_em: atras(dias),
+    duracao_ms: 3600000, pecas, ciclos_por_peca: 1, arquivada: false, paradas: [],
+  });
+
+  await p5.route('**/api/conferencias**', (rota) => rota.fulfill({
+    json: {
+      // Uma de ontem, uma de 20 dias, uma de 60: cada janela pega um
+      // conjunto diferente, e a de 7 dias pega so' a primeira.
+      conferencias: [medicao('r1', 1, 700), medicao('r2', 20, 500), medicao('r3', 60, 300)],
+      outras: 0,
+    },
+  }));
+  await p5.route('**/api/maquinas**', (rota) => rota.fulfill({ json: { grupos: [], maquinas: [] } }));
+
+  await p5.goto(`${BASE}/analise/conferencias`);
+  const topo = p5.locator('[aria-label="Resumo do período"]');
+  await topo.waitFor({ timeout: 10000 });
+
+  /* ---- o padrao de 30 dias, carimbado ao lado dos numeros ---- */
+  const seletor = p5.locator('select').first();
+  checar(await seletor.inputValue() === '30',
+    'o relatorio abre em ultimos 30 dias — nao na media de tudo o que ja foi medido');
+  checar(/2 medição\(ões\)/.test(await p5.locator('main').innerText()),
+    'a janela de 30 dias deixa de fora a medicao de 60 dias');
+  // 700 + 500 = 1200 pecas em 2 h = 600 pc/h. Com a de 60 dias entrariam
+  // 1500 em 3 h = 500 pc/h — numero diferente, sobre periodo diferente.
+  checar(/600 pç\/h/.test(await topo.innerText()),
+    'e o ritmo do topo e o do periodo: 1200 pecas em 2 h = 600 pc/h');
+
+  /* ---- Tudo traz a serie inteira, e o numero muda junto ---- */
+  await seletor.selectOption('0');
+  await p5.waitForTimeout(400);
+  checar(/3 medição\(ões\)/.test(await p5.locator('main').innerText()),
+    '"Tudo" traz a serie inteira de volta');
+  checar(/500 pç\/h/.test(await topo.innerText()),
+    'e o ritmo muda com ela: 1500 pecas em 3 h = 500 pc/h — outro periodo, outro numero');
+  checar(await p5.evaluate(() => localStorage.getItem('ritmo.periodo-dias')) === '0',
+    'a janela escolhida fica gravada no navegador');
+
+  /* ---- a folha impressa segue a janela ---- */
+  await seletor.selectOption('7');
+  await p5.waitForTimeout(400);
+  const folha5 = await p5.evaluate(() => document.querySelector('.somente-impressao')?.innerText || '');
+  checar(/700/.test(folha5) && !/500/.test(folha5),
+    'a folha A4 sai com a janela da tela — o que esta na tela e o que sai no papel');
+
+  /* ---- janela vazia diz o que houve, e oferece a saida ---- */
+  await p5.route('**/api/conferencias**', (rota) => rota.fulfill({
+    json: { conferencias: [medicao('r3', 60, 300)], outras: 0 },
+  }));
+  await p5.reload();
+  await p5.getByText(/Nenhuma medição nos últimos 7 dias/).waitFor({ timeout: 10000 });
+  checar(true, 'janela sem medicao diz que a janela esta vazia — nao que o relatorio esta vazio');
+  const vazio5 = await p5.locator('main').innerText();
+  checar(/1 medição\(ões\) fora desta janela/.test(vazio5),
+    'e diz quantas ficaram de fora — nenhuma foi apagada');
+  checar(await p5.locator('select').count() >= 1,
+    'o seletor continua em tela: filtro que some junto com o que filtrou deixa sem saida');
+  await p5.getByRole('button', { name: 'Ver tudo' }).click();
+  await p5.waitForTimeout(400);
+  checar(await topo.count() === 1,
+    '"Ver tudo" devolve o relatorio — a medicao de 60 dias estava la o tempo todo');
+
+  checar(erros5.length === 0, `sem erro de pagina na janela de tempo (${erros5.join('; ') || 'nenhum'})`);
+  await ctx5.close();
+}
+
 checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})`);
 
 await navegador.close();
