@@ -91,9 +91,16 @@ segundos ao lado do tempo por acionamento do motor (um é o que a peça custa
 no posto, o outro compara peças de furação diferente), tempo rodando, tempo
 parado com o setup destacado, melhor e pior registro com a peça — mais a
 tabela completa e impressão em **documento A4 próprio** (não a tela no
-papel). O **filtro por máquina** da lateral vale para o relatório inteiro,
-**folha impressa incluída**: com uma máquina escolhida o botão vira
-"Imprimir esta máquina" e o A4 sai só com ela, com o nome no título.
+papel). O **filtro** da lateral vale para o relatório inteiro, **folha
+impressa incluída**: com uma máquina escolhida o botão vira "Imprimir esta
+máquina" e o A4 sai só com ela, com o nome no título.
+
+O **nome do grupo** na lateral (0002 · FURADEIRA) também é um filtro:
+escolhe o grupo inteiro e o botão vira **"Imprimir este grupo"** — uma folha
+com todas as máquinas dele, sem a CNC no meio e sem juntar folha de máquina
+em máquina na mão. O grupo é a unidade com que se decide capacidade, e é
+dele que sai o programa da semana. Com um grupo só medido no período o item
+não aparece: ali **Todas** já é o grupo.
 
 ### Demanda semanal — o que o posto precisa entregar
 

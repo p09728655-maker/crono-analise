@@ -21,18 +21,33 @@ import { analisarConferencias } from '../../../domain/analiseConferencias.js';
 import { compararMaquinas } from '../../../domain/comparativoMaquinas.js';
 import { classesDeCiclo } from '../../../domain/ritmoPorCiclo.js';
 import {
-  barrasPorMedicao, filtrarPorMaquina, filtrarResumo, itensDaLateral, resumoDoPeriodo,
+  barrasPorMedicao, filtrarPorGrupo, filtrarPorMaquina, filtrarResumo, itensDaLateral,
+  resumoDoPeriodo,
 } from '../../../domain/relatorioConferencias.js';
 
-export function useLeitura({ linhas, filtro, mapaGrupos, grupoDe }) {
+/**
+ * `filtro` e' a MAQUINA escolhida na lateral; `grupo`, o GRUPO inteiro.
+ * Nunca os dois ao mesmo tempo — a lateral escolhe um item so' —, e por
+ * isso os dois cortes podem ser aplicados em sequencia sem se atrapalhar.
+ */
+export function useLeitura({ linhas, filtro, grupo, mapaGrupos, grupoDe }) {
   const resumo = useMemo(() => resumirConferencias(linhas), [linhas]);
   // Ritmo POR PECA: mesmo calculo, agrupado por peca x maquina — e' o
   // numero que dimensiona carga e lote. Ver resumirConferencias.
   const resumoPecas = useMemo(() => resumirConferencias(linhas, { porPeca: true }), [linhas]);
 
-  const visiveis = useMemo(() => filtrarPorMaquina(linhas, filtro), [linhas, filtro]);
-  const resumoVisivel = useMemo(() => filtrarResumo(resumo, filtro), [resumo, filtro]);
-  const resumoPecasVisivel = useMemo(() => filtrarResumo(resumoPecas, filtro), [resumoPecas, filtro]);
+  const visiveis = useMemo(
+    () => filtrarPorGrupo(filtrarPorMaquina(linhas, filtro), grupo, grupoDe),
+    [linhas, filtro, grupo, mapaGrupos],
+  );
+  const resumoVisivel = useMemo(
+    () => filtrarPorGrupo(filtrarResumo(resumo, filtro), grupo, grupoDe),
+    [resumo, filtro, grupo, mapaGrupos],
+  );
+  const resumoPecasVisivel = useMemo(
+    () => filtrarPorGrupo(filtrarResumo(resumoPecas, filtro), grupo, grupoDe),
+    [resumoPecas, filtro, grupo, mapaGrupos],
+  );
 
   const analise = useMemo(
     () => analisarConferencias({

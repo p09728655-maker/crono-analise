@@ -601,6 +601,118 @@ await movel.close();
   await ctx3.close();
 }
 
+/* ------------------------------------- imprimir o GRUPO de maquinas */
+/**
+ * O caso do PPCP: furadeira e CNC medidas no mesmo periodo. "Imprimir
+ * todas" junta postos que nao se comparam, e imprimir maquina por maquina
+ * obriga a juntar folhas na mao. O nome do grupo na lateral escolhe o
+ * grupo inteiro — e o que esta' na tela e' o que sai no papel.
+ */
+{
+  const ctx4 = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const p4 = await ctx4.newPage();
+  await semearSessao(p4);
+  const errosG = [];
+  p4.on('pageerror', (e) => errosG.push(e.message));
+
+  const agora = new Date().toISOString();
+  // 60 min sem parada: as pecas medidas SAO o ritmo, e a conta se confere
+  // de cabeca — 750, 818 e 181 pc/h, como no relatorio que originou o pedido.
+  const medir = (id, maquina, peca, pecas) => ({
+    id, maquina, peca, pecas, ciclos_por_peca: 1, arquivada: false, paradas: [],
+    duracao_ms: 3600000, salvo_em: agora,
+  });
+
+  await p4.route('**/api/maquinas**', (rota) => rota.fulfill({
+    json: {
+      maquinas: [
+        { id: 'm1', nome: 'FURADEIRA 16', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+        { id: 'm2', nome: 'FURADEIRA 12', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+        { id: 'm3', nome: 'CNC SCM', ativa: true, grupo_id: 'g6', grupo_codigo: '0006', grupo_nome: 'CNC' },
+      ],
+      grupos: [
+        { id: 'g2', codigo: '0002', nome: 'FURADEIRA' },
+        { id: 'g6', codigo: '0006', nome: 'CNC' },
+      ],
+    },
+  }));
+  await p4.route('**/api/conferencias**', (rota) => rota.fulfill({
+    json: {
+      conferencias: [
+        medir('g1', 'FURADEIRA 16', 'SLEEP TAMPO', 750),
+        medir('g2', 'FURADEIRA 12', 'SLEEP TAMPO', 818),
+        medir('g3', 'CNC SCM', 'LT 171 SLEEP', 181),
+        // Fora do cadastro de maquinas: cai no balde "Sem grupo".
+        medir('g4', 'EMBALADORA', 'CAIXA SLEEP', 300),
+      ],
+    },
+  }));
+
+  await p4.goto(`${BASE}/analise/conferencias`);
+  await p4.getByRole('button', { name: /^Todas/ }).waitFor({ timeout: 10000 });
+
+  const lateral = p4.locator('nav');
+  const grupo = p4.getByRole('button', { name: /^0002 · FURADEIRA/ });
+  checar(await grupo.count() === 1, 'o nome do grupo na lateral E um botao — da para escolher o grupo');
+
+  await grupo.click();
+  await p4.waitForTimeout(400);
+  const kpis = await p4.locator('[aria-label="Resumo do período"]').first().innerText();
+  // 1568 pecas em 2 h rodando = 784 pc/h. So' as duas furadeiras: com a CNC
+  // dentro seriam 1749 pecas em 3 h = 583 pc/h.
+  checar(/784 pç\/h/.test(kpis), 'os numeros do topo passam a ser os do GRUPO (1568 pc em 2 h)');
+  checar(/2 máquina/.test(kpis), 'o grupo leva as duas furadeiras, e so elas');
+
+  checar(/Imprimir este grupo/.test(await lateral.innerText()),
+    'com o grupo escolhido, o botao diz o que vai sair: "Imprimir este grupo"');
+
+  const folhaGrupo = await p4.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
+  checar(/Ritmo por Máquina — 0002 · FURADEIRA/.test(folhaGrupo),
+    'a folha impressa sai com o nome do GRUPO no titulo');
+  checar(/FURADEIRA 16/.test(folhaGrupo) && /FURADEIRA 12/.test(folhaGrupo),
+    'as duas maquinas do grupo saem na mesma folha — nao ha mais folha por maquina');
+  checar(!/CNC SCM/.test(folhaGrupo),
+    'a maquina de outro grupo NAO entra: imprimir o grupo nao imprime a fabrica');
+
+  // O titulo da tabela ja' diz o que foi escolhido: mandar "escolha uma
+  // maquina em MAQUINAS" duas linhas abaixo e' pedir o que acabou de ser
+  // feito, na mesma lateral.
+  const tabela = await p4.locator('[aria-label="Todas as medições"]').first().innerText();
+  checar(/Todas as medições · 0002 · FURADEIRA/.test(tabela),
+    'a tabela diz de qual GRUPO sao as linhas');
+  checar(/O lote é por máquina/.test(tabela) && !/^Escolha uma máquina em MÁQUINAS/m.test(tabela),
+    'com o grupo escolhido, a dica do lote explica que o lote e por maquina');
+
+  // O PROGRAMA DA SEMANA e' cadastro de GRUPO: com o grupo inteiro em tela
+  // o quadro tem de aparecer. Ele sumia — a conta exigia uma maquina so'
+  // por engano, e era justamente aqui que ele mais serve.
+  checar(await p4.locator('[aria-label="Programa da semana"]').count() === 1,
+    'com o grupo em tela, o quadro do programa da semana aparece');
+
+  await p4.getByRole('button', { name: /^Todas/ }).click();
+  await p4.waitForTimeout(400);
+  checar(/Imprimir todas/.test(await lateral.innerText()),
+    'voltar a Todas devolve "Imprimir todas"');
+  checar(/CNC SCM/.test(await p4.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '')),
+    'sem escopo, a folha volta a cobrir a fabrica inteira');
+
+  /* ------------------------ "Sem grupo" nao e' um grupo, e o texto diz isso */
+  const semGrupo = p4.getByRole('button', { name: /^SEM GRUPO/i });
+  checar(await semGrupo.count() === 1, 'maquina fora do cadastro aparece no balde "Sem grupo"');
+  await semGrupo.click();
+  await p4.waitForTimeout(400);
+  checar(/Imprimir as sem grupo/.test(await lateral.innerText()),
+    'o balde nao vira grupo no botao: "Imprimir as sem grupo"');
+  const folhaSemGrupo = await p4.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
+  checar(/Ritmo por Máquina — Sem grupo no cadastro/.test(folhaSemGrupo),
+    'no papel, "Sem grupo" e dito como pendencia de cadastro — nao como nome de grupo');
+  checar(/EMBALADORA/.test(folhaSemGrupo) && !/FURADEIRA 16/.test(folhaSemGrupo),
+    'a folha do balde leva so as maquinas sem grupo');
+
+  checar(errosG.length === 0, `sem erro de pagina no filtro por grupo (${errosG.join('; ') || 'nenhum'})`);
+  await ctx4.close();
+}
+
 checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})`);
 
 await navegador.close();

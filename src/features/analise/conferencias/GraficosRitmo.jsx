@@ -80,7 +80,12 @@ export default function GraficosRitmo({ resumo, filtro, barrasDoFiltro, curvaDoD
               ...h,
               nota: h.n > 1 ? `${h.n} medições` : '1 medição',
             }))}
-            titulo={`Ritmo por hora do dia${filtro ? ` — ${filtro}` : ''}`}
+            /* O nome sai do RESUMO, nao do filtro: a curva so' existe com
+               UMA maquina em tela (ver useLeitura), e ela chega ai' tambem
+               quando o grupo escolhido tem uma maquina medida so' — ou
+               quando so' uma foi medida no periodo. Pelo filtro, esses dois
+               casos perdiam o nome de quem e' a curva. */
+            titulo={`Ritmo por hora do dia${resumo.length === 1 ? ` — ${resumo[0].maquina}` : ''}`}
             subtitulo="Peças por hora com a máquina rodando, em cada hora do relógio — as medições da mesma hora somam, mesmo de datas diferentes"
             rotuloOk="Hora medida"
             rotuloFraco="Menos de 5 min medidos nessa hora"
