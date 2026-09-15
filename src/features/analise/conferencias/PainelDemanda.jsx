@@ -127,30 +127,39 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
             <> para {casadoPorData ? 'o período de' : 'a semana de'}{' '}
               {comoPeriodo(intervalo, { ano: true })}</>
           )}
-          , divididas entre <strong>{v.maquinas} máquina(s)</strong> do grupo com{' '}
-          {/* A CONTA DO TEMPO por extenso: jornada, setup, produtivas. Um
-              numero so' ("214 horas-máquina") ninguem confere; "264 − 50"
-              qualquer um confere de cabeca — e e' o setup que decide a
-              semana de pico. */}
-          {setup && conta
-            ? (setup.zerado
-              ? (
-                <>
-                  <strong>{conta.texto.jornada} horas-máquina</strong> na semana — o grupo está
-                  cadastrado <strong>sem troca de peça</strong> (setup zero).
-                </>
-              )
-              : (
-                <>
-                  <strong>{conta.texto.produtivas} horas-máquina produtivas</strong> na semana
-                  ({conta.texto.jornada} h de jornada − {conta.texto.setup} h de setup:{' '}
-                  {setup.setupsDia} por dia × {setup.dias} dias × {setup.minutos} min por máquina).
-                </>
-              ))
-            : <>{conta?.texto.jornada ?? Math.round(v.horasDisponiveis)} horas-máquina na semana.</>}
-          {semanasMedidas > 1 && (
-            <> As medições em tela cobrem <strong>{semanasMedidas} semanas</strong> — o ritmo
-              é o médio do período observado, não só o desta semana.</>
+          , divididas entre <strong>{v.maquinas} máquina(s)</strong> do grupo.
+        </p>
+      </div>
+
+      {/* O VEREDITO ANTES DOS NUMEROS. "Isso atende?" e' a pergunta que
+          trouxe a pessoa ao relatorio; ela estava respondida em legenda
+          cinza DEPOIS dos tres cartoes, e o leitor tinha de atravessar
+          474, 612 e 4,6 para chegar nela. Agora os numeros sao a
+          evidencia do que a faixa ja' afirmou — que e' a ordem em que a
+          reuniao acontece. */}
+      <div style={{ ...est.veredito, ...(atende ? est.vereditoAtende : est.vereditoFalha) }}>
+        <p style={est.vereditoManchete}>
+          {atende
+            ? '✓ O grupo atende o programa desta semana.'
+            : '⚠ O grupo não atende o programa desta semana.'}
+        </p>
+        <p style={est.vereditoTexto}>
+          {atende
+            ? `Sobram ${Math.abs(v.folgaPct).toFixed(0)}% de ritmo sobre o exigido.`
+            : `Falta ${Math.abs(v.folgaPct).toFixed(0)}% de ritmo em cada máquina.`}
+          {!atende && v.maquinasSeNaoParasse && v.maquinasSeNaoParasse <= v.maquinas && (
+            <>
+              {' '}<strong>Antes de falar em máquina nova:</strong> ao ritmo com a máquina
+              rodando o programa caberia nas {v.maquinas} que existem. O que falta é tempo
+              parado, não capacidade — trate a parada primeiro.
+            </>
+          )}
+          {!atende && v.maquinasSeNaoParasse && v.maquinasSeNaoParasse > v.maquinas && (
+            <>
+              {' '}Mesmo sem nenhuma parada o programa pediria{' '}
+              {v.maquinasSeNaoParasse.toFixed(1).replace('.', ',')} máquinas: aqui falta
+              capacidade de verdade, não só disponibilidade.
+            </>
           )}
         </p>
       </div>
@@ -186,6 +195,17 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
                 ? 'a única parada marcada foi troca/setup, já contada no setup planejado'
                 : 'sem parada marcada no período: é também o ritmo com a máquina rodando')}
           </div>
+          {/* POR QUE ESTE NUMERO NAO E' O DO QUADRO DE BAIXO. Com setup
+              medido descontado, este relogio fica um ou dois pc/h acima do
+              "Saiu no período" — dois numeros quase iguais, com o mesmo
+              pc/min, que parecem erro de conta a quem le'. A razao estava
+              so' no paragrafo de procedencia, tres blocos abaixo: longe
+              demais de quem esta' comparando os dois. */}
+          {setup?.medidoMs > 0 && (
+            <div style={est.comparativoSub}>
+              já sem o setup medido ({setupMedidoTexto}), que o planejado acima cobre
+            </div>
+          )}
         </div>
 
         {/* O destaque so' e' CRITICO quando nao atende: pintar de vermelho
@@ -209,28 +229,31 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
         </div>
       </div>
 
+      {/* COMO A CONTA E' FEITA, depois dos numeros. A conta do tempo por
+          extenso — jornada, setup, produtivas — e' o que permite conferir
+          "264 − 50 = 214" de cabeca, e e' o setup que decide a semana de
+          pico. Mas e' METODO: antes da grade, eram quatro linhas de prosa
+          entre o titulo e o primeiro numero. */}
       <p style={est.comparativoNota}>
-        <strong>
-          {atende
-            ? '✓ O grupo atende o programa desta semana.'
-            : '⚠ O grupo não atende o programa desta semana.'}
-        </strong>{' '}
-        {atende
-          ? `Sobram ${Math.abs(v.folgaPct).toFixed(0)}% de ritmo sobre o exigido.`
-          : `Falta ${Math.abs(v.folgaPct).toFixed(0)}% de ritmo em cada máquina.`}
-        {!atende && v.maquinasSeNaoParasse && v.maquinasSeNaoParasse <= v.maquinas && (
-          <>
-            {' '}<strong>Antes de falar em máquina nova:</strong> ao ritmo com a máquina
-            rodando o programa caberia nas {v.maquinas} que existem. O que falta é tempo
-            parado, não capacidade — trate a parada primeiro.
-          </>
-        )}
-        {!atende && v.maquinasSeNaoParasse && v.maquinasSeNaoParasse > v.maquinas && (
-          <>
-            {' '}Mesmo sem nenhuma parada o programa pediria{' '}
-            {v.maquinasSeNaoParasse.toFixed(1).replace('.', ',')} máquinas: aqui falta
-            capacidade de verdade, não só disponibilidade.
-          </>
+        {setup && conta
+          ? (setup.zerado
+            ? (
+              <>
+                O grupo tem <strong>{conta.texto.jornada} horas-máquina</strong> na semana — está
+                cadastrado <strong>sem troca de peça</strong> (setup zero).
+              </>
+            )
+            : (
+              <>
+                O grupo tem <strong>{conta.texto.produtivas} horas-máquina produtivas</strong> na
+                semana ({conta.texto.jornada} h de jornada − {conta.texto.setup} h de setup:{' '}
+                {setup.setupsDia} por dia × {setup.dias} dias × {setup.minutos} min por máquina).
+              </>
+            ))
+          : <>O grupo tem {conta?.texto.jornada ?? Math.round(v.horasDisponiveis)} horas-máquina na semana.</>}
+        {semanasMedidas > 1 && (
+          <> As medições em tela cobrem <strong>{semanasMedidas} semanas</strong> — o ritmo
+            é o médio do período observado, não só o desta semana.</>
         )}
       </p>
 

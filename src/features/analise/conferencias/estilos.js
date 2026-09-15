@@ -70,6 +70,31 @@ export const est = {
   comparativoSubDestaque: { ...tipo('legenda'), ...numeros, color: t.texto },
   comparativoNota: { ...tipo('legenda'), color: t.textoMedio, margin: 0 },
 
+  /* ---- o veredito como MANCHETE ---- */
+  /**
+   * "Isso atende?" e' a pergunta que traz a pessoa ao relatorio, e a
+   * resposta estava em legenda cinza embaixo dos tres cartoes — o texto
+   * mais fraco da tela. Agora ela vem ANTES dos numeros, que passam a ser
+   * a evidencia do que a faixa ja' afirmou.
+   *
+   * Borda grossa so' na esquerda, e nao caixa inteira colorida: o quadro
+   * ja' tem um cartao de destaque (maquinas necessarias) e dois blocos
+   * gritando disputariam a mesma atencao.
+   *
+   * Longhand nos quatro lados de proposito — as variantes so' trocam cor,
+   * e shorthand aqui com longhand na variante e' o conflito que
+   * test/checar-estilos.mjs existe para pegar.
+   */
+  veredito: {
+    display: 'flex', flexDirection: 'column', gap: espaco.xs,
+    padding: `${espaco.md}px ${espaco.lg}px`, borderRadius: raio.md,
+    borderLeftWidth: 4, borderLeftStyle: 'solid',
+  },
+  vereditoAtende: { background: t.okFundo, borderLeftColor: t.ok },
+  vereditoFalha: { background: t.criticoFundo, borderLeftColor: t.critico },
+  vereditoManchete: { ...tipo('corpoF'), color: t.texto, margin: 0 },
+  vereditoTexto: { ...tipo('legenda'), color: t.texto, margin: 0, lineHeight: 1.55 },
+
   /* ---- programa da semana (demanda x entregue) ---- */
   // O titulo e o seletor de semana dividem a linha: a semana e' PARTE do
   // titulo do quadro, nao um filtro solto no meio do relatorio.
