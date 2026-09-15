@@ -25,6 +25,18 @@ export const HISTORICO = [
     ],
   },
   {
+    versao: '2.78.1',
+    data: '2026-09-14',
+    titulo: 'Acertos da revisão do setup',
+    itens: [
+      'A CONTA DAS HORAS FECHA NA TELA E NO PAPEL. Jornada, setup e produtivas arredondados um a um davam "132 − 38 = 95" (a verdade era 132 − 37,5 = 94,5) — e arredondar os três com uma casa a mais falhava do mesmo jeito em 5% das combinações. Agora os números são derivados um do outro: o setup do grupo é o setup por máquina exibido vezes as máquinas, e as produtivas são a jornada exibida menos o setup exibido. A subtração que você confere de cabeça bate sempre; o que a tela mostra pode ficar até um décimo de hora longe do exato que o ritmo exigido usou.',
+      'SETUP MAIOR QUE A JORNADA TEM AVISO PRÓPRIO. Um zero a mais nos minutos (200 no lugar de 20) fazia o quadro dizer "falta a jornada do grupo" e oferecer "informar as horas" — com as horas informadas. Agora diz que o setup cadastrado come a jornada inteira e manda conferir o setup.',
+      'QUANDO A ÚNICA PARADA MARCADA FOI TROCA/SETUP, o quadro não diz mais "sem parada marcada" ao lado da nota que conta o setup marcado: diz que ela já está no setup planejado. O papel leva a mesma nota, que antes só existia na tela.',
+      'ZERO SETUP VALE SOZINHO: "este grupo não troca de peça" é zero em setups por dia ou em minutos, sem precisar preencher o resto — antes o quadro seguia dizendo "setup não informado".',
+      'SALVAR O TEMPO DISPONÍVEL É TUDO OU NADA: os quatro números são validados antes de qualquer gravação. Um valor fora da faixa no último campo deixava os três primeiros gravados e o quarto não.',
+    ],
+  },
+  {
     versao: '2.78.0',
     data: '2026-09-14',
     titulo: 'O setup entra na conta — e uma semana pode ser digitada',

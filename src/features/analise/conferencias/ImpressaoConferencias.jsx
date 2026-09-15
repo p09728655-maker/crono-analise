@@ -136,9 +136,9 @@ export default function ImpressaoConferencias({
                 {Math.round(demanda.veredito.ritmoRelogio)} pç/h
               </span>
               <span style={imp.comparativoSub}>
-                {demanda.veredito.ritmoRodando
+                {demanda.paradas === 'outras' && demanda.veredito.ritmoRodando
                   ? `${Math.round(demanda.veredito.ritmoRodando)} pç/h com a máquina rodando`
-                  : 'sem parada marcada no período'}
+                  : (demanda.paradas === 'so-setup' ? 'só troca/setup marcado, já no planejado' : 'sem parada marcada no período')}
               </span>
             </div>
             <div style={demanda.veredito.atende ? imp.comparativoCaixa : imp.comparativoCaixaDestaque}>
@@ -158,11 +158,16 @@ export default function ImpressaoConferencias({
           <p style={imp.comparativoNota}>
             {demanda.demanda.toLocaleString('pt-BR')} peças programadas, divididas entre
             {' '}{demanda.veredito.maquinas} máquina(s) com
-            {' '}{Math.round(demanda.veredito.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina
-            {demanda.setup
-              ? ` produtivas (${Math.round(demanda.veredito.horasJornada).toLocaleString('pt-BR')} h de jornada − ${Math.round(demanda.veredito.horasSetup).toLocaleString('pt-BR')} h de setup: ${demanda.setup.setupsDia}/dia × ${demanda.setup.dias} dias × ${demanda.setup.minutos} min por máquina)`
+            {' '}{demanda.conta ? demanda.conta.texto.produtivas : Math.round(demanda.veredito.horasDisponiveis)} horas-máquina
+            {demanda.setup && demanda.conta && !demanda.setup.zerado
+              ? ` produtivas (${demanda.conta.texto.jornada} h de jornada − ${demanda.conta.texto.setup} h de setup: ${demanda.setup.setupsDia}/dia × ${demanda.setup.dias} dias × ${demanda.setup.minutos} min por máquina)`
               : ''}
-            {' '}na semana. O veredito usa o ritmo de RELÓGIO (paradas dentro): é o que sai do posto por
+            {demanda.setup?.zerado ? ' (grupo cadastrado sem troca de peça: setup zero)' : ''}
+            {' '}na semana. O veredito usa o ritmo de RELÓGIO (paradas dentro
+            {demanda.setup?.medidoMs > 0
+              ? `, exceto ${demanda.setup.medidoMs >= 60000 ? `${Math.round(demanda.setup.medidoMs / 60000)} min` : 'menos de 1 min'} de troca/setup marcados nas medições — já contados no setup planejado, saíram do relógio para não contar duas vezes`
+              : ''}
+            ): é o que sai do posto por
             hora de presença. {demanda.veredito.atende
               ? `O grupo ATENDE o programa, com ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de folga.`
               : `O grupo NÃO ATENDE: falta ${Math.abs(demanda.veredito.folgaPct).toFixed(0)}% de ritmo em cada máquina.`}

@@ -26,7 +26,7 @@ import { porMinuto } from './formato.js';
 export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTrocarSemana }) {
   const {
     estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas, programa, medicao,
-    casadoPorData, setup,
+    casadoPorData, setup, conta, paradas,
   } = leitura;
 
   /* O periodo de cada semana cadastrada, para o seletor dizer de que dias
@@ -70,7 +70,7 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
             escolher a máquina, e o botão levaria para o lugar errado. */}
         {estado !== 'varios-grupos' && (
           <button type="button" style={est.botaoSecundario} onClick={aoConfigurar}>
-            {estado === 'sem-horas' ? 'Informar as horas' : 'Configurar demanda'}
+            {estado === 'sem-horas' ? 'Informar as horas' : (estado === 'setup-excede' ? 'Corrigir o setup' : 'Configurar demanda')}
           </button>
         )}
       </section>
@@ -80,6 +80,14 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
   const v = veredito;
   const atende = v.atende;
   const precisa = v.maquinasNecessarias;
+  // O que as paradas marcadas dizem vem pronto do dominio ('nenhuma',
+  // 'so-setup', 'outras'): decidir aqui por diferenca de taxa errava com
+  // parada pequena e contradizia a nota do setup logo abaixo.
+  const paradaAlemDoSetup = paradas === 'outras';
+  const soSetupMarcado = paradas === 'so-setup';
+  const setupMedidoTexto = setup?.medidoMs >= 60000
+    ? `${Math.round(setup.medidoMs / 60000)} min`
+    : 'menos de 1 min';
 
   return (
     <section style={est.comparativo} aria-label="Programa da semana">
@@ -124,16 +132,22 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
               numero so' ("214 horas-máquina") ninguem confere; "264 − 50"
               qualquer um confere de cabeca — e e' o setup que decide a
               semana de pico. */}
-          {setup
-            ? (
-              <>
-                <strong>{Math.round(v.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina
-                produtivas</strong> na semana ({Math.round(v.horasJornada).toLocaleString('pt-BR')} h
-                de jornada − {Math.round(v.horasSetup).toLocaleString('pt-BR')} h de setup:{' '}
-                {setup.setupsDia} por dia × {setup.dias} dias × {setup.minutos} min por máquina).
-              </>
-            )
-            : <>{Math.round(v.horasDisponiveis).toLocaleString('pt-BR')} horas-máquina na semana.</>}
+          {setup && conta
+            ? (setup.zerado
+              ? (
+                <>
+                  <strong>{conta.texto.jornada} horas-máquina</strong> na semana — o grupo está
+                  cadastrado <strong>sem troca de peça</strong> (setup zero).
+                </>
+              )
+              : (
+                <>
+                  <strong>{conta.texto.produtivas} horas-máquina produtivas</strong> na semana
+                  ({conta.texto.jornada} h de jornada − {conta.texto.setup} h de setup:{' '}
+                  {setup.setupsDia} por dia × {setup.dias} dias × {setup.minutos} min por máquina).
+                </>
+              ))
+            : <>{conta?.texto.jornada ?? Math.round(v.horasDisponiveis)} horas-máquina na semana.</>}
           {semanasMedidas > 1 && (
             <> As medições em tela cobrem <strong>{semanasMedidas} semanas</strong> — o ritmo
               é o médio do período observado, não só o desta semana.</>
@@ -166,9 +180,11 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
             {porMinuto(v.ritmoRelogio)} pç/min · medido no período observado
           </div>
           <div style={est.comparativoSub}>
-            {v.ritmoRodando && v.ritmoRodando > v.ritmoRelogio
+            {paradaAlemDoSetup
               ? `${Math.round(v.ritmoRodando)} pç/h com a máquina rodando — a diferença é tempo parado`
-              : 'sem parada marcada no período: é também o ritmo com a máquina rodando'}
+              : (soSetupMarcado
+                ? 'a única parada marcada foi troca/setup, já contada no setup planejado'
+                : 'sem parada marcada no período: é também o ritmo com a máquina rodando')}
           </div>
         </div>
 
@@ -188,7 +204,7 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
           <div style={atende ? est.comparativoSub : est.comparativoSubDestaque}>
             {v.maquinasSeNaoParasse && v.maquinasSeNaoParasse < precisa
               ? `sem as paradas seriam ${v.maquinasSeNaoParasse.toFixed(1).replace('.', ',')}`
-              : 'sem parada marcada para descontar'}
+              : (soSetupMarcado ? 'o setup marcado já está no planejado' : 'sem parada marcada para descontar')}
           </div>
         </div>
       </div>
@@ -244,7 +260,7 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
               por setup na tela de demanda.</>
           )}
           {setup?.medidoMs > 0 && (
-            <> As medições marcaram {Math.round(setup.medidoMs / 60000)} min de troca/setup;
+            <> As medições marcaram {setupMedidoTexto} de troca/setup;
               esse tempo saiu do ritmo de relógio para não contar duas vezes com o setup
               planejado.</>
           )}
@@ -267,6 +283,7 @@ const titulo = (estado) => ({
   // cadastrada com OUTRO numero — e mandar procurar por ele engana.
   'sem-semana': 'Sem programa para o período desta medição.',
   'sem-horas': 'Falta a jornada do grupo.',
+  'setup-excede': 'O setup cadastrado come a jornada inteira.',
   'sem-ritmo': 'Sem ritmo medido no período.',
 }[estado] || '');
 
@@ -300,6 +317,12 @@ function explicacao(estado, semana, demanda, grupoNome, programa, medicao) {
      */
     const quando = programa?.temData && medicao ? ` de ${comoDia(medicao, { ano: true })}` : '';
     return `A medição mais recente${quando} não cai em nenhuma semana do programa cadastrado.${cobertura(programa)} Escolha a semana a comparar aqui mesmo, ou cole a semana que falta em Demanda semanal.`;
+  }
+  if (estado === 'setup-excede') {
+    // As horas ESTAO informadas: mandar informa-las apontaria uma correcao
+    // que nao corrige. O erro e' no setup (200 min no lugar de 20, por
+    // exemplo), e e' isso que a tela tem de dizer.
+    return 'Setups por dia × dias × minutos por setup dá mais horas do que a jornada da máquina — não sobra tempo para produzir, o que é cadastro errado (um zero a mais nos minutos, por exemplo). Confira os números do setup na tela de demanda.';
   }
   if (estado === 'sem-ritmo') {
     const quanto = demanda?.toLocaleString('pt-BR') ?? '';

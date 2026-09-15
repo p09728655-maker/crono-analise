@@ -595,6 +595,9 @@ export function ritmoExigido({ pecas, horas, maquinas = 1, setupHoras = 0 } = {}
  */
 export function horasDeSetup({ setupsDia, dias, minutos } = {}) {
   const vazio = (v) => v == null || v === '';
+  // "Este grupo nao faz setup" e' zero em setups OU em minutos — e vale
+  // sem os outros dois: quem nao troca de peca nao tem duracao de troca.
+  if ((!vazio(setupsDia) && Number(setupsDia) === 0) || (!vazio(minutos) && Number(minutos) === 0)) return 0;
   if (vazio(setupsDia) || vazio(dias) || vazio(minutos)) return null;
   const n = Number(setupsDia);
   const d = Number(dias);
@@ -782,6 +785,56 @@ export const comoDia = (d, { ano = false } = {}) => (d instanceof Date && !Numbe
   })
   : '');
 
+/**
+ * HORAS como a tela escreve — e de um jeito que a conta FECHA.
+ *
+ * Arredondar jornada, setup e produtivas cada um para inteiro da
+ * "132 − 38 = 95": 132,0 − 37,5 = 94,5, e ninguem confere de cabeca uma
+ * subtracao que nao bate. Inteiro quando e' inteiro (a um decimo); uma
+ * casa quando nao e' — nos tres numeros, sempre pela mesma regra.
+ */
+const umDecimo = (h) => Math.round(Number(h) * 10) / 10;
+export const comoHoras = (h) => {
+  // Dado ausente e' vazio, nunca "0 h": zero e' uma afirmacao.
+  if (h == null || h === '' || !Number.isFinite(Number(h))) return '';
+  const n = umDecimo(h);
+  return Number.isInteger(n) ? n.toLocaleString('pt-BR') : n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+};
+
+/**
+ * A CONTA DAS HORAS, com os numeros DERIVADOS um do outro — e' a unica
+ * regra que fecha sempre.
+ *
+ * Arredondar jornada, setup e produtivas cada um a partir do valor exato
+ * nao fecha: 40 − 1,25 = 38,75 vira "40 − 1,3 = 38,8" (e 5% das
+ * combinacoes reais de setup falham assim). Aqui o setup do grupo e' o
+ * setup POR MAQUINA ja' arredondado vezes as maquinas, e as produtivas
+ * sao a jornada exibida menos o setup exibido. O que a tela mostra pode
+ * ficar ate' um decimo longe do exato que o ritmo exigido usou — e a
+ * subtracao que a pessoa confere de cabeca bate, sempre.
+ *
+ * Devolve numeros (ja' a um decimo) e textos. `setup` e `porMaquina` sao
+ * null sem setup informado; ai' produtivas = jornada.
+ */
+export function contaDasHoras({ horas, setupHoras = null, maquinas = 1 } = {}) {
+  const m = Math.max(0, Math.floor(Number(maquinas) || 0));
+  const h = Number(horas) || 0;
+  if (h <= 0 || m <= 0) return null;
+  const jornada = umDecimo(h * m);
+  const porMaquina = setupHoras == null ? null : umDecimo(Math.max(0, Number(setupHoras) || 0));
+  const setup = porMaquina == null ? null : umDecimo(porMaquina * m);
+  const produtivas = umDecimo(jornada - (setup ?? 0));
+  return {
+    jornada, setup, porMaquina, produtivas,
+    texto: {
+      jornada: comoHoras(jornada),
+      setup: setup == null ? '' : comoHoras(setup),
+      porMaquina: porMaquina == null ? '' : comoHoras(porMaquina),
+      produtivas: comoHoras(produtivas),
+    },
+  };
+}
+
 /** "31/08 a 04/09" — o periodo de uma semana, como a planilha o escreve. */
 export const comoPeriodo = (periodo, { ano = false } = {}) => (periodo?.inicio && periodo?.fim
   ? `${comoDia(periodo.inicio)} a ${comoDia(periodo.fim, { ano })}`
@@ -836,9 +889,6 @@ export function vereditoDaSemana({
     maquinasSeNaoParasse: potencial > 0
       ? maquinasNecessarias({ pecas, horas, ritmoMedido: potencial, setupHoras: setup })
       : null,
-    // Se o setup planejado entrou na conta. Sem ele o veredito e' otimista
-    // pelo tamanho do setup semanal — e a tela precisa dizer isso.
-    setupInformado: setupHoras != null,
     // Quantas maquinas o grupo TEM. Fica no resultado para a tela nao
     // precisar recalcular a comparacao que ela vai escrever em palavras.
     maquinas: Math.max(1, Math.floor(Number(maquinas) || 1)),
@@ -850,10 +900,11 @@ export function vereditoDaSemana({
  * e o que falta quando nao da' para comparar.
  *
  * Existe para a tela nao precisar decidir nada: ela recebe um estado e os
- * numeros prontos. Os estados sao os cinco caminhos honestos —
+ * numeros prontos. Os estados sao os seis caminhos honestos —
  *   sem-demanda  o grupo nao tem programa cadastrado;
  *   sem-semana   ha' programa, mas nao o da semana das medicoes;
  *   sem-horas    ha' programa e falta a jornada do grupo;
+ *   setup-excede o setup cadastrado come a jornada inteira (cadastro errado);
  *   sem-ritmo    ha' tudo e nao ha' medicao aproveitavel no periodo;
  *   pronto       da' para comparar.
  *
@@ -862,13 +913,31 @@ export function vereditoDaSemana({
  * comparar medicao de marco com o programa de setembro daria um veredito
  * que ninguem consegue explicar.
  */
+const numeroOuNulo = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+
+function classificarParadas({
+  paradaMs, setupMs, setupPlanejado, ritmoRelogio, ritmoRodando, temObservado,
+}) {
+  if (temObservado) {
+    const outrasMs = Math.max(0, paradaMs - (setupPlanejado ? setupMs : 0));
+    if (outrasMs > 0) return 'outras';
+    return setupPlanejado && setupMs > 0 ? 'so-setup' : 'nenhuma';
+  }
+  // Sem o detalhe das paradas (chamador antigo), vale a inferencia pela
+  // diferenca entre rodando e relogio — e' o que havia antes.
+  const rodando = Number(ritmoRodando) || 0;
+  const relogio = Number(ritmoRelogio) || 0;
+  return rodando > 0 && relogio > 0 && rodando > relogio + 0.5 ? 'outras' : 'nenhuma';
+}
+
 export function leituraDaDemanda({
   demandas = [], horas = null, maquinas = 0, ritmoRelogio = null, ritmoRodando = null,
   datas = [], semanaEscolhida = null,
   // Setup PLANEJADO do grupo: { setupsDia, dias, minutos } por maquina.
   setup = null,
-  // O periodo OBSERVADO: { pecas, totalMs, setupMs } — o que as medicoes
-  // somaram, para tirar do relogio o setup que elas por acaso pegaram.
+  // O periodo OBSERVADO: { pecas, totalMs, paradaMs, setupMs } — o que as
+  // medicoes somaram, para tirar do relogio o setup que elas por acaso
+  // pegaram e para dizer se houve parada ALEM dele.
   observado = null,
 } = {}) {
   const semanas = ordenarSemanas(
@@ -1017,24 +1086,49 @@ export function leituraDaDemanda({
     // O setup como a tela escreve a conta: "25 × 20 min = 8,3 h por
     // máquina". Nulo quando nao informado — e a tela diz que falta.
     setup: setupHoras == null ? null : {
-      setupsDia: Number(setup.setupsDia),
-      dias: Number(setup.dias),
-      minutos: Number(setup.minutos),
+      // Os campos como foram cadastrados — null continua null. "Zero
+      // setup" vale com dias e minutos vazios, e a tela nao pode imprimir
+      // "0 por dia × 0 dias × 0 min" para um cadastro que so' disse 0.
+      setupsDia: numeroOuNulo(setup.setupsDia),
+      dias: numeroOuNulo(setup.dias),
+      minutos: numeroOuNulo(setup.minutos),
       horasPorMaquina: setupHoras,
+      zerado: setupHoras === 0,
       // Quanto de troca/setup as medicoes pegaram e foi tirado do relogio
       // para nao contar duas vezes. Zero na pratica de hoje (< 1 min).
       medidoMs: relogioSemSetup != null ? setupMedidoMs : 0,
     },
+    // A conta das horas como a tela escreve, com os numeros derivados um
+    // do outro para a subtracao fechar. Null enquanto falta jornada.
+    conta: contaDasHoras({ horas, setupHoras, maquinas }),
+    /**
+     * O QUE AS PARADAS MARCADAS DIZEM, decidido aqui e nao por diferenca
+     * de taxa na tela: 'nenhuma' (nada marcado), 'so-setup' (a unica
+     * parada foi troca/setup e ela ja' esta' no setup planejado) ou
+     * 'outras' (houve parada alem do setup — ou o setup nao e' planejado
+     * e entao conta como parada). Com o setup planejado tirando o setup
+     * medido do relogio, relogio e rodando ficam iguais quando so' houve
+     * setup — e "sem parada marcada" ai' contradiria a nota do setup.
+     */
+    paradas: classificarParadas({
+      paradaMs: Number(observado?.paradaMs) || 0,
+      setupMs: setupMedidoMs,
+      setupPlanejado: setupHoras != null,
+      ritmoRelogio: relogio,
+      ritmoRodando,
+      temObservado: observado != null && Number.isFinite(Number(observado?.paradaMs)),
+    }),
   };
 
   if (!registro) return { ...base, estado: 'sem-semana', demanda: null, veredito: null };
   if (!(Number(horas) > 0) || !(Number(maquinas) > 0)) {
     return { ...base, estado: 'sem-horas', demanda: registro.pecas, veredito: null };
   }
-  // Setup que come a jornada inteira e' cadastro errado, nao folga
-  // negativa: cai no mesmo estado de "falta a jornada", e a tela diz qual.
+  // Setup que come a jornada inteira e' cadastro errado (200 min no lugar
+  // de 20), nao folga negativa. Estado PROPRIO: mandar "informar as horas"
+  // aqui apontaria uma correcao que nao corrige — as horas estao la'.
   if (setupHoras != null && setupHoras >= Number(horas)) {
-    return { ...base, estado: 'sem-horas', demanda: registro.pecas, veredito: null };
+    return { ...base, estado: 'setup-excede', demanda: registro.pecas, veredito: null };
   }
   /**
    * SEM RITMO MEDIDO nao ha' veredito — e 'pronto' com veredito nulo era

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../theme/escala.js';
 import {
-  chaveSemana, comoDia, comoPeriodo, dataIso, emUtc, horasDeSetup, interpretarColagem,
+  chaveSemana, comoDia, comoPeriodo, contaDasHoras, dataIso, emUtc, horasDeSetup, interpretarColagem,
   lerCodigoSemana, lerDataPtBr, numeroPtBr, periodosDoPrograma, resumoDaDemanda, ritmoExigido,
 } from '../../domain/demandaSemanal.js';
 import {
@@ -116,13 +116,10 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
   const setupHoras = horasDeSetup({
     setupsDia: numero(setupsDia), dias: numero(diasSemana), minutos: numero(setupMin),
   });
-  const tempo = {
-    jornada: horasNum * maquinasDoGrupo,
-    setup: setupHoras != null ? setupHoras * maquinasDoGrupo : null,
-    produtivas: horasNum > 0
-      ? Math.max(0, horasNum - (setupHoras ?? 0)) * maquinasDoGrupo
-      : 0,
-  };
+  // Numeros DERIVADOS um do outro (dominio): setup do grupo = por maquina
+  // exibido x maquinas; produtivas = jornada exibida − setup exibido. E' a
+  // unica regra em que "264 − 50 = 214" fecha em toda combinacao.
+  const conta = contaDasHoras({ horas: horasNum, setupHoras, maquinas: maquinasDoGrupo });
   const setupComeTudo = setupHoras != null && horasNum > 0 && setupHoras >= horasNum;
   const houveMudancaNoTempo = [
     [horas, grupo?.horas_semana], [diasSemana, grupo?.dias_semana],
@@ -323,7 +320,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                   <div style={est.contaCaixa}>
                     <span style={est.contaRotulo}>Jornada</span>
                     <span style={est.contaValor}>
-                      {Math.round(tempo.jornada).toLocaleString('pt-BR')}<span style={est.contaUnidade}>h</span>
+                      {conta.texto.jornada}<span style={est.contaUnidade}>h</span>
                     </span>
                     <span style={est.contaFormula}>
                       {maquinasDoGrupo} máq. × {horasNum.toLocaleString('pt-BR')} h
@@ -332,19 +329,21 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                   <div style={est.contaCaixa}>
                     <span style={est.contaRotulo}>Setup</span>
                     <span style={setupHoras == null ? est.contaValorVazio : est.contaValor}>
-                      {setupHoras == null ? '?' : `− ${Math.round(tempo.setup).toLocaleString('pt-BR')}`}
+                      {setupHoras == null ? '?' : `− ${conta.texto.setup}`}
                       {setupHoras != null && <span style={est.contaUnidade}>h</span>}
                     </span>
                     <span style={est.contaFormula}>
                       {setupHoras == null
                         ? 'setups/dia × dias × minutos'
-                        : `${numero(setupsDia)}/dia × ${numero(diasSemana)} dias × ${numero(setupMin)} min = ${setupHoras.toFixed(1).replace('.', ',')} h/máq.`}
+                        : (setupHoras === 0
+                          ? 'sem troca de peça cadastrada'
+                          : `${numero(setupsDia)}/dia × ${numero(diasSemana)} dias × ${numero(setupMin)} min = ${conta.texto.porMaquina} h/máq.`)}
                     </span>
                   </div>
                   <div style={setupComeTudo ? est.contaCaixaAlerta : est.contaCaixaResultado}>
                     <span style={est.contaRotulo}>Produtivas</span>
                     <span style={est.contaValor}>
-                      {Math.round(tempo.produtivas).toLocaleString('pt-BR')}<span style={est.contaUnidade}>h</span>
+                      {conta.texto.produtivas}<span style={est.contaUnidade}>h</span>
                     </span>
                     <span style={est.contaFormula}>
                       {setupComeTudo
