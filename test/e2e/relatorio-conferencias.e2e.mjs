@@ -251,6 +251,34 @@ await movel.close();
   checar(!/Análise do período/.test(await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '')),
     'desmarcada, o papel volta a sair so com os numeros');
 
+  /* ------------------ recolher a analise: decisao de TELA, nao de papel */
+  /**
+   * O quadro tem seis secoes e e' a maior rolagem do relatorio. Quem nao
+   * usa a leitura em texto rolava tudo isso para chegar na tabela de
+   * medicoes. Recolher e' independente de sair no papel — e e' justamente
+   * essa independencia que precisa estar provada: quem recolhe na tela com
+   * a caixa marcada continua levando a analise para a reuniao.
+   */
+  await analise.getByRole('button', { name: 'Recolher análise' }).click();
+  const recolhida = await analise.innerText();
+  checar(!/Leitura geral/i.test(recolhida),
+    'recolhida, o miolo some da tela e sobra o cabecalho');
+  checar(await analise.getByRole('button', { name: 'Analisar com IA' }).count() === 0,
+    'o botao de IA some junto — recolher esconde o miolo inteiro');
+  checar(await p2.evaluate(() => localStorage.getItem('ritmo.analise-oculta')) === '1',
+    'a escolha de recolher fica gravada no navegador');
+
+  await analise.getByRole('checkbox', { name: 'Sair na impressão' }).check();
+  checar(/Leitura geral/i.test(await p2.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '')),
+    'recolhida na TELA, a analise continua saindo no PAPEL se a caixa estiver marcada');
+  await analise.getByRole('checkbox', { name: 'Sair na impressão' }).uncheck();
+
+  await analise.getByRole('button', { name: 'Mostrar análise' }).click();
+  checar(/Leitura geral/i.test(await analise.innerText()),
+    'mostrar traz a analise de volta, inteira');
+  checar(await p2.evaluate(() => localStorage.getItem('ritmo.analise-oculta')) === '0',
+    'e a escolha de mostrar tambem fica gravada');
+
   /* ------------- filtro na lateral abre o grafico por conferencia */
   const grafico = p2.locator('figure').first();
   checar(/Ritmo por máquina/.test(await grafico.textContent()),

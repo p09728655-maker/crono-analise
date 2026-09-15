@@ -3,6 +3,17 @@ import { analisarConferenciasComIa } from '../../../lib/api.js';
 import { est } from './estilos.js';
 
 /**
+ * Recolher a analise fica GRAVADO no navegador, como a opcao de sair no
+ * papel: quem trabalha com o relatorio aberto o dia todo e nao usa a
+ * leitura em texto nao quer fechar seis secoes toda vez que abre a tela.
+ * Sem armazenamento (aba privada), vale so' enquanto a tela vive.
+ */
+const CHAVE_ANALISE_OCULTA = 'ritmo.analise-oculta';
+const lerAnaliseOculta = () => {
+  try { return localStorage.getItem(CHAVE_ANALISE_OCULTA) === '1'; } catch { return false; }
+};
+
+/**
  * ANALISE DO PERIODO — o algoritmo primeiro, a IA como opcao.
  *
  * Ate' 31/08 a leitura dos numeros so' existia via IA: cada clique gastava
@@ -18,6 +29,13 @@ export default function AnalisePeriodo({ secoes, resumo, noPapel, aoAlternarPape
   const [rodando, setRodando] = useState(false);
   const [resposta, setResposta] = useState(null);
   const [erro, setErro] = useState(null);
+  const [oculta, setOculta] = useState(lerAnaliseOculta);
+
+  const alternarOculta = () => setOculta((v) => {
+    const novo = !v;
+    try { localStorage.setItem(CHAVE_ANALISE_OCULTA, novo ? '1' : '0'); } catch { /* sem armazenamento */ }
+    return novo;
+  });
 
   async function analisar() {
     setRodando(true);
@@ -55,55 +73,79 @@ export default function AnalisePeriodo({ secoes, resumo, noPapel, aoAlternarPape
         <div style={{ minWidth: 0 }}>
           <h2 style={est.iaTitulo}>Análise do período</h2>
           <p style={est.iaTexto}>
-            Gerada na hora pelos números deste relatório — sem IA, sem custo, funciona sem internet.
+            {oculta
+              // RECOLHER E' DE TELA, nao de papel. A caixa ao lado segue
+              // mandando na folha, e quem recolhe aqui com ela marcada
+              // continua levando a analise para a reuniao — dizer isso
+              // evita o susto de imprimir e achar que sumiu.
+              ? 'Recolhida nesta tela. A folha impressa segue o que estiver marcado ao lado.'
+              : 'Gerada na hora pelos números deste relatório — sem IA, sem custo, funciona sem internet.'}
           </p>
         </div>
-        {/* A opcao mora ONDE a analise mora: quem le e quer levar para a
-            reuniao marca aqui, e a folha A4 passa a sair com a analise.
-            A escolha fica gravada no navegador. */}
-        <label style={est.rotuloPapel}>
-          <input
-            type="checkbox"
-            checked={noPapel}
-            onChange={aoAlternarPapel}
-            style={est.caixaPapel}
-          />
-          Sair na impressão
-        </label>
+        <div style={est.analiseAcoes}>
+          {/* A opcao mora ONDE a analise mora: quem le e quer levar para a
+              reuniao marca aqui, e a folha A4 passa a sair com a analise.
+              A escolha fica gravada no navegador. */}
+          <label style={est.rotuloPapel}>
+            <input
+              type="checkbox"
+              checked={noPapel}
+              onChange={aoAlternarPapel}
+              style={est.caixaPapel}
+            />
+            Sair na impressão
+          </label>
+          <button
+            type="button"
+            style={est.botaoRecolher}
+            onClick={alternarOculta}
+            aria-expanded={!oculta}
+          >
+            {oculta ? 'Mostrar análise' : 'Recolher análise'}
+          </button>
+        </div>
       </div>
 
-      {secoes.map((s) => (
-        <div key={s.titulo} style={est.analiseSecao}>
-          <h3 style={est.analiseTitulo}>{s.titulo}</h3>
-          {s.linhas.map((l) => (
-            <p key={l} style={est.analiseLinha}>{l}</p>
+      {/* RECOLHIDO some com o miolo INTEIRO, o botao de IA junto: o quadro
+          ficou com seis secoes e e' a maior rolagem do relatorio. Quem nao
+          usa a leitura em texto rolava tudo isso para chegar na tabela de
+          medicoes. O cabecalho fica — e' por ele que se traz de volta. */}
+      {!oculta && (
+        <>
+          {secoes.map((s) => (
+            <div key={s.titulo} style={est.analiseSecao}>
+              <h3 style={est.analiseTitulo}>{s.titulo}</h3>
+              {s.linhas.map((l) => (
+                <p key={l} style={est.analiseLinha}>{l}</p>
+              ))}
+            </div>
           ))}
-        </div>
-      ))}
 
-      {/* A IA vira opcao, atras de um botao discreto: quem quiser uma
-          segunda leitura em texto corrido paga o token; ninguem mais
-          precisa da chave para ter analise. */}
-      <div style={est.iaOpcional}>
-        <span style={est.iaTexto}>
-          Quer uma segunda leitura, em texto corrido? Opcional — usa a chave da IA.
-        </span>
-        <button type="button" style={est.botaoSecundario} onClick={analisar} disabled={rodando}>
-          {rodando ? 'Analisando...' : 'Analisar com IA'}
-        </button>
-      </div>
-
-      {erro && <div style={est.iaErro}>{erro}</div>}
-
-      {resposta && (
-        <div style={est.iaResposta}>
-          <div style={est.iaRespostaTexto}>{resposta.analise}</div>
-          <div style={est.iaMeta}>
-            Gerada por {resposta.modelo}
-            {resposta.uso?.saida ? ` · ${resposta.uso.saida} tokens` : ''} — confira antes de
-            decidir: a IA lê os números, não o posto.
+          {/* A IA vira opcao, atras de um botao discreto: quem quiser uma
+              segunda leitura em texto corrido paga o token; ninguem mais
+              precisa da chave para ter analise. */}
+          <div style={est.iaOpcional}>
+            <span style={est.iaTexto}>
+              Quer uma segunda leitura, em texto corrido? Opcional — usa a chave da IA.
+            </span>
+            <button type="button" style={est.botaoSecundario} onClick={analisar} disabled={rodando}>
+              {rodando ? 'Analisando...' : 'Analisar com IA'}
+            </button>
           </div>
-        </div>
+
+          {erro && <div style={est.iaErro}>{erro}</div>}
+
+          {resposta && (
+            <div style={est.iaResposta}>
+              <div style={est.iaRespostaTexto}>{resposta.analise}</div>
+              <div style={est.iaMeta}>
+                Gerada por {resposta.modelo}
+                {resposta.uso?.saida ? ` · ${resposta.uso.saida} tokens` : ''} — confira antes de
+                decidir: a IA lê os números, não o posto.
+              </div>
+            </div>
+          )}
+        </>
       )}
     </section>
   );
