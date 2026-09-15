@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.82.0',
+    data: '2026-09-15',
+    titulo: 'A tela de Demanda semanal cabe quase toda na tela',
+    itens: [
+      'A JANELA TINHA 1625 PIXELS DE ALTURA CONTRA 1000 DE TELA — 625 de rolagem só para chegar no programa gravado. O maior quadro dela era "Tempo disponível", com 463 pixels (28% de tudo): jornada, dias, setups por dia, minutos e a conta das três caixas. É o quadro que se cadastra UMA VEZ por grupo e fica meses igual.',
+      'AGORA ELE RECOLHE SOZINHO depois de salvo, para uma linha: "107,1 horas-máquina produtivas na semana — 3 máq. × 44 h − 24,9 h de setup". A conta continua conferível sem abrir nada; "Editar" traz os campos de volta. Fica aberto enquanto a jornada não tiver sido cadastrada (aí preencher é o próprio assunto) e enquanto houver alteração por salvar — recolher nunca leva junto o que você digitou.',
+      'A RESSALVA DO SETUP NÃO RECOLHE. Se o setup não foi informado, o aviso de que o veredito sai otimista continua à vista mesmo com o quadro fechado: é a informação que menos pode ficar atrás de um clique.',
+      '"INCLUIR UMA SEMANA" TAMBÉM NASCE RECOLHIDO. A demanda entra por colagem da planilha do PCP — digitar é o caminho da semana reprogramada ou de quando a planilha não está à mão, e mesmo assim ocupava 190 pixels acima da caixa de colagem, empurrando o caminho principal para fora da tela. Um clique em "Digitar uma semana à mão" abre, e o que você já tinha digitado continua lá se recolher e abrir de novo.',
+      'RESULTADO: de 1625 para 1164 pixels, e a rolagem de 625 para 164 — 74% a menos. Os dois maiores quadros passaram a ser os que você veio usar: a colagem da planilha e o programa gravado.',
+    ],
+  },
+  {
     versao: '2.81.0',
     data: '2026-09-15',
     titulo: 'As barras de parada alinham, e a análise pode ser recolhida',

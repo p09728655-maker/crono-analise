@@ -6,6 +6,7 @@
  * embaixo de cada um. E' o que permite conferir de cabeca ("6 × 44 = 264,
  * tirei 50, sobram 214") em vez de confiar num numero que apareceu.
  */
+import { useEffect, useState } from 'react';
 import { est } from './estilos.js';
 
 export default function TempoDisponivel({ tempo, grupo, maquinasDoGrupo, ocupado, aoSalvar }) {
@@ -14,9 +15,76 @@ export default function TempoDisponivel({ tempo, grupo, maquinasDoGrupo, ocupado
     horasNum, setupHoras, conta, setupComeTudo, valores, houveMudanca,
   } = tempo;
 
+  /**
+   * O QUADRO MAIOR DA JANELA, e o que menos se mexe.
+   *
+   * Jornada e setup se cadastram uma vez por grupo e ficam meses iguais,
+   * mas o quadro ocupava 463px dos 1625 da janela — 28% da rolagem para
+   * quem veio colar a planilha da semana. Configurado e sem alteracao
+   * pendente, ele recolhe para uma linha com a conta.
+   *
+   * Recolher nunca esconde trabalho: fica aberto enquanto NAO ha' jornada
+   * cadastrada (ai' preencher e' o proprio assunto do quadro) e enquanto
+   * houver mudanca por salvar. Trocar de grupo fecha de novo, porque a
+   * pergunta volta a ser a do grupo novo.
+   */
+  const configurado = grupo?.horas_semana != null;
+  const [abertoNaMao, setAbertoNaMao] = useState(false);
+  useEffect(() => { setAbertoNaMao(false); }, [grupo?.id]);
+  const aberto = abertoNaMao || !configurado || houveMudanca;
+
+  if (!aberto) {
+    return (
+      <div style={est.bloco}>
+        <div style={est.blocoTopo}>
+          <div style={est.blocoTitulo}>Tempo disponível</div>
+          <button type="button" style={est.botaoTexto} onClick={() => setAbertoNaMao(true)}>
+            Editar
+          </button>
+        </div>
+        {/* A CONTA EM UMA LINHA. Sem ela, recolher viraria esconder o
+            numero de que o exigido de toda semana depende. */}
+        <p style={est.blocoResumo}>
+          {conta
+            ? (
+              <>
+                <strong>{conta.texto.produtivas} horas-máquina produtivas</strong> na semana —{' '}
+                {maquinasDoGrupo} máq. × {horasNum.toLocaleString('pt-BR')} h
+                {setupHoras != null && setupHoras > 0 && <> − {conta.texto.setup} h de setup</>}.
+              </>
+            )
+            : <>Jornada cadastrada, mas sem máquina ativa no grupo para multiplicar.</>}
+        </p>
+        {/* A RESSALVA DO SETUP NAO RECOLHE JUNTO: sem ele o veredito sai
+            otimista pelo tempo de troca da semana inteira, e essa e' a
+            informacao que menos pode ficar atras de um clique. */}
+        {setupHoras == null && (
+          <p style={est.blocoAviso}>
+            Setup não informado — as horas acima são jornada cheia, e o veredito sai
+            otimista pelo tempo de troca da semana.
+          </p>
+        )}
+        {setupComeTudo && (
+          <p style={est.blocoAviso}>
+            O setup cadastrado come a jornada inteira — confira os números.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={est.bloco}>
-      <div style={est.blocoTitulo}>Tempo disponível</div>
+      <div style={est.blocoTopo}>
+        <div style={est.blocoTitulo}>Tempo disponível</div>
+        {/* So' recolhe o que ja' esta' salvo: com mudanca pendente o botao
+            sairia do caminho levando junto o que foi digitado. */}
+        {configurado && !houveMudanca && (
+          <button type="button" style={est.botaoTexto} onClick={() => setAbertoNaMao(false)}>
+            Recolher
+          </button>
+        )}
+      </div>
       <p style={est.blocoTexto}>
         O ritmo exigido é a demanda dividida pelo tempo que o grupo tem para produzir:
         a <strong>jornada</strong> de cada máquina menos o <strong>setup</strong> — a troca
