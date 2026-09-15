@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.87.0',
+    data: '2026-09-15',
+    titulo: 'A TV pode mostrar um grupo só',
+    itens: [
+      'O MONITOR PERTO DAS FURADEIRAS NÃO TEM POR QUE MOSTRAR A CNC. Até aqui o painel mostrava a fábrica inteira, sempre.',
+      'AGORA O ENDEREÇO ESCOLHE: /painel?grupo=0002 abre a TV só com as máquinas daquele grupo, e o título passa a dizer "0002 · FURADEIRA" em vez de "Ritmo por máquina". Sem o parâmetro, continua mostrando tudo.',
+      'É PELA URL PORQUE A TV NÃO TEM MOUSE. A única escolha possível num monitor de parede é a que já está no endereço, fixada uma vez quando se monta o monitor. Pelo CÓDIGO do grupo (0002) e não pelo nome: é o que a fábrica usa, é curto, não tem acento e sobrevive a renomear o grupo no cadastro.',
+      'CÓDIGO ERRADO NÃO DÁ TELA EM BRANCO. Monitor apagado por um dígito trocado é o pior jeito de falhar — ninguém chega perto para investigar, e a fábrica conclui que o painel morreu. A tela diz qual código foi pedido, lista os que existem, e segue mostrando a fábrica inteira.',
+      'E O ATALHO JÁ LEVA O GRUPO: com um grupo filtrado no relatório, "Painel de parede" abre a TV daquele grupo. O filtro por máquina do relatório continua valendo só lá — a TV é de grupo, não de máquina.',
+    ],
+  },
+  {
     versao: '2.86.1',
     data: '2026-09-15',
     titulo: 'O painel de parede agora tem porta de entrada',

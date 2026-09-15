@@ -127,6 +127,69 @@ checar(/maior parada: /.test(tela),
 checar(await p.locator('button').count() === 0,
   'painel de parede nao tem botao nenhum — ninguem chega perto para apertar');
 
+/* ================= a TV de um GRUPO so': ?grupo=0002 ==================== */
+/**
+ * O monitor perto das furadeiras nao tem por que mostrar a CNC. Mas a TV
+ * nao tem mouse nem teclado: a unica escolha possivel e' a que ja' esta'
+ * no endereco, fixado uma vez quando se monta o monitor.
+ */
+{
+  const pg = await ctx.newPage();
+  await semearSessao(pg);
+  const errosG = [];
+  pg.on('pageerror', (e) => errosG.push(e.message));
+  await pg.route('**/api/conferencias**', (rota) => rota.fulfill({
+    json: {
+      conferencias: [
+        medicao('g1', 'FURADEIRA 16', 0, 900),
+        medicao('g2', 'CNC SCM', 0, 181),
+      ],
+      outras: 0,
+    },
+  }));
+  await pg.route('**/api/maquinas**', (rota) => rota.fulfill({
+    json: {
+      grupos: [
+        { id: 'g2', codigo: '0002', nome: 'FURADEIRA' },
+        { id: 'g6', codigo: '0006', nome: 'CNC' },
+      ],
+      maquinas: [
+        { id: 'm1', nome: 'FURADEIRA 16', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+        { id: 'm4', nome: 'FURADEIRA 21', ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' },
+        { id: 'm6', nome: 'CNC SCM', ativa: true, grupo_id: 'g6', grupo_codigo: '0006', grupo_nome: 'CNC' },
+      ],
+    },
+  }));
+
+  await pg.goto(`${BASE}/painel?grupo=0002`);
+  await pg.getByText('0002 · FURADEIRA').first().waitFor({ timeout: 10000 });
+  const soGrupo = await pg.locator('body').innerText();
+  checar(/FURADEIRA 16/.test(soGrupo) && !/CNC SCM/.test(soGrupo),
+    '?grupo=0002 mostra so as furadeiras — a CNC fica fora desta TV');
+  // O TITULO nomeia o grupo: num monitor filtrado o titulo generico faria
+  // a fabrica inteira parecer resumida a quatro furadeiras.
+  checar(/^0002 · FURADEIRA/m.test(soGrupo),
+    'e o titulo da TV nomeia o grupo, em vez de dizer "Ritmo por máquina"');
+  // A maquina sem medicao do GRUPO continua aparecendo: o filtro corta
+  // por grupo, nao esconde pendencia.
+  checar(/FURADEIRA 21/.test(soGrupo),
+    'a maquina do grupo que ninguem mediu continua aparecendo');
+
+  /* ---- codigo errado NAO pode dar tela em branco ---- */
+  await pg.goto(`${BASE}/painel?grupo=9999`);
+  await pg.getByText(/não existe no cadastro/).waitFor({ timeout: 10000 });
+  const errado = await pg.locator('body').innerText();
+  checar(/Grupo 9999 não existe no cadastro/.test(errado),
+    'codigo errado na URL diz o que ha de errado — monitor em branco ninguem investiga');
+  checar(/0002, 0006/.test(errado),
+    'e diz quais codigos existem, para corrigir a URL sem sair da frente da TV');
+  checar(/FURADEIRA 16/.test(errado) && /CNC SCM/.test(errado),
+    'e segue mostrando a fabrica inteira em vez de nao mostrar nada');
+
+  checar(errosG.length === 0, `sem erro de pagina no filtro por grupo (${errosG.join(' | ') || 'nenhum'})`);
+  await pg.close();
+}
+
 /* ======== o painel tem de ser ACHAVEL: ele nasceu so por URL digitada ==== */
 /**
  * A primeira versao criou a tela e nenhuma porta para ela — existia e era

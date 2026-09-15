@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { DIAS_ATE_ENVELHECER, SEM_GRUPO_PAINEL, painelDeMaquinas } from '../../domain/painelFabrica.js';
+import {
+  DIAS_ATE_ENVELHECER, SEM_GRUPO_PAINEL, painelDeMaquinas, resolverGrupoDoPainel,
+} from '../../domain/painelFabrica.js';
 import { filtrarPorPeriodo } from '../../domain/relatorioConferencias.js';
 import { nomeChave } from '../../domain/cronoanalise.js';
 import { listarCadastroMaquinas, listarConferenciasServidor } from '../../lib/api.js';
@@ -81,6 +83,22 @@ export default function PainelFabrica() {
 
   /* O GRUPO de cada maquina vem do cadastro, ligado pelo nome com a mesma
      chave normalizada do resto do app: a medicao grava texto livre. */
+  /**
+   * QUAL GRUPO ESTA TV MOSTRA — `?grupo=0002`, lido do endereco.
+   *
+   * O monitor perto das furadeiras nao tem por que mostrar a CNC, e a TV
+   * nao tem mouse: a unica escolha possivel e' a que ja' esta' na URL,
+   * fixada uma vez quando se monta o monitor. Lido de `location.search`
+   * porque a rota do app corta a query antes de casar o caminho.
+   */
+  const codigoPedido = useMemo(() => {
+    try { return new URLSearchParams(window.location.search).get('grupo') || ''; } catch { return ''; }
+  }, []);
+  const escolha = useMemo(
+    () => resolverGrupoDoPainel(cadastro, codigoPedido),
+    [cadastro, codigoPedido],
+  );
+
   const grupoDe = useMemo(() => {
     const mapa = new Map();
     for (const m of cadastro?.maquinas || []) {
@@ -91,16 +109,27 @@ export default function PainelFabrica() {
     return (nome) => mapa.get(nomeChave(nome)) || null;
   }, [cadastro]);
 
-  const painel = useMemo(() => painelDeMaquinas(
-    filtrarPorPeriodo(linhas || [], JANELA_DIAS),
-    { maquinas: cadastro?.maquinas || [], grupoDe },
-  ), [linhas, cadastro, grupoDe]);
+  /* O CORTE POR GRUPO acontece antes da conta, nas medicoes E no cadastro:
+     assim os contadores de "sem numero atual" tambem sao do grupo, e nao
+     da fabrica inteira. */
+  const painel = useMemo(() => {
+    const doGrupo = (nome) => !escolha.nomes || escolha.nomes.has(nomeChave(nome));
+    const medicoes = filtrarPorPeriodo(linhas || [], JANELA_DIAS)
+      .filter((c) => doGrupo(c.maquina ?? ''));
+    const postos = (cadastro?.maquinas || []).filter((m) => doGrupo(m.nome));
+    return painelDeMaquinas(medicoes, { maquinas: postos, grupoDe });
+  }, [linhas, cadastro, grupoDe, escolha]);
 
   return (
     <div style={est.tela}>
       <header style={est.topo}>
         <div>
-          <h1 style={est.titulo}>Ritmo por máquina</h1>
+          {/* O GRUPO NO TITULO: quem passa precisa saber de que postos e'
+              a tela, e num monitor filtrado o titulo generico faria a
+              fabrica inteira parecer resumida a quatro furadeiras. */}
+          <h1 style={est.titulo}>
+            {escolha.encontrado && escolha.rotulo ? escolha.rotulo : 'Ritmo por máquina'}
+          </h1>
           {/* O PERIODO no topo, sempre. Painel de parede se le' como
               "agora"; sem esta linha, sete dias viram hoje na cabeca de
               quem passa. */}
@@ -117,6 +146,20 @@ export default function PainelFabrica() {
               : 'carregando...')}
         </span>
       </header>
+
+      {/* CODIGO ERRADO NA URL NAO PODE DAR TELA VAZIA. Monitor em branco
+          por um digito trocado e' o pior jeito de falhar: ninguem chega
+          perto para investigar, e a fabrica conclui que o painel morreu.
+          Ele diz o que pediu, o que existe, e segue mostrando a fabrica. */}
+      {cadastro && !escolha.encontrado && (
+        <p style={est.vazio}>
+          Grupo <strong>{escolha.codigo}</strong> não existe no cadastro.
+          {escolha.disponiveis.length > 0
+            ? ` Os códigos cadastrados são: ${escolha.disponiveis.join(', ')}.`
+            : ' Nenhum grupo cadastrado ainda.'}
+          {' '}Mostrando a fábrica inteira.
+        </p>
+      )}
 
       {linhas == null && !erro && <p style={est.vazio}>Carregando medições...</p>}
 

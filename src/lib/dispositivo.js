@@ -131,7 +131,9 @@ export const caminhos = {
   lista: (modo) => (modo === 'analise' ? '/analise/estudos' : `/${modo}`),
   rapida: () => '/coleta/rapida',
   conferencias: () => '/analise/conferencias',
-  painel: () => '/painel',
+  // O painel aceita o CODIGO do grupo: e' o endereco que se deixa fixo no
+  // navegador do monitor perto daquele conjunto de maquinas.
+  painel: (grupo) => (grupo ? `/painel?grupo=${encodeURIComponent(grupo)}` : '/painel'),
   estudo: (modo, estudoId) => `/${modo}/estudo/${estudoId}`,
   coletar: (estudoId, operacaoId) => `/coleta/estudo/${estudoId}/operacao/${operacaoId}`,
 };
