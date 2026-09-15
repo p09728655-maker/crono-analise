@@ -84,6 +84,15 @@ export const est = {
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
   },
   blocoTitulo: { ...rotulo(t.textoFraco) },
+  /* Titulo do quadro e o botao que o abre dividem a linha: o botao e' o
+     estado do quadro, nao uma acao solta no meio da janela. */
+  blocoTopo: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: espaco.md, flexWrap: 'wrap',
+  },
+  /* O QUE O QUADRO RECOLHIDO CONTINUA DIZENDO. Recolher nao pode virar
+     esconder: a conta fica aqui em uma linha, conferivel sem abrir. */
+  blocoResumo: { ...tipo('legenda'), ...numeros, color: t.texto, margin: 0, lineHeight: 1.5 },
   blocoTexto: { ...tipo('legenda'), color: t.textoMedio, margin: 0, lineHeight: 1.55 },
   blocoAviso: { ...tipo('legenda'), color: t.textoFraco, margin: 0, fontStyle: 'italic' },
 

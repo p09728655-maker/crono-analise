@@ -49,9 +49,44 @@ export default function SemanaManual({ semanas, ocupado, aoIncluir }) {
     if (ok) setManual(VAZIO);
   }
 
+  /**
+   * CAMINHO DE EXCECAO, recolhido por padrao.
+   *
+   * A demanda entra por COLAGEM — e' o que o proprio quadro de baixo diz e
+   * o que o dominio documenta. Digitar uma semana serve para a
+   * reprogramada ou para quando a planilha nao esta' a' mao, e assim
+   * mesmo ocupava 190px acima da caixa de colagem, empurrando o caminho
+   * principal para fora da tela.
+   *
+   * O rascunho SOBREVIVE ao recolher: o estado mora aqui e o componente
+   * nao desmonta — so' o formulario deixa de ser desenhado.
+   */
+  const [aberto, setAberto] = useState(false);
+
+  if (!aberto) {
+    return (
+      <div style={est.bloco}>
+        <div style={est.blocoTopo}>
+          <div style={est.blocoTitulo}>Incluir uma semana</div>
+          <button type="button" style={est.botaoTexto} onClick={() => setAberto(true)}>
+            {preenchido ? 'Voltar ao que eu digitava' : 'Digitar uma semana à mão'}
+          </button>
+        </div>
+        <p style={est.blocoResumo}>
+          Para uma semana reprogramada ou quando a planilha não está à mão.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div style={est.bloco}>
-      <div style={est.blocoTitulo}>Incluir uma semana</div>
+      <div style={est.blocoTopo}>
+        <div style={est.blocoTitulo}>Incluir uma semana</div>
+        <button type="button" style={est.botaoTexto} onClick={() => setAberto(false)}>
+          Recolher
+        </button>
+      </div>
       <p style={est.blocoTexto}>
         Para uma semana reprogramada ou quando a planilha não está à mão. Semana como
         o PCP escreve (<strong>S38</strong>), início é o primeiro dia de produção dela

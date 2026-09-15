@@ -154,6 +154,27 @@ checar(horasSemana === 44, 'as horas do grupo sobem para o cadastro de maquinas'
 checar(ultimoPatch && ultimoPatch.setupsDia === 5 && ultimoPatch.setupMin === 20 && ultimoPatch.diasSemana === 5,
   'setups por dia, minutos e dias sobem no MESMO PATCH — e uma decisao, nao quatro');
 
+/**
+ * SALVO, O MAIOR QUADRO DA JANELA RECOLHE.
+ *
+ * Jornada e setup se cadastram uma vez por grupo e ficam meses iguais,
+ * mas o quadro ocupava 463px dos 1625 da janela — 28% da rolagem para
+ * quem veio colar a planilha da semana. Recolher nao pode virar esconder:
+ * a conta continua legivel em uma linha.
+ */
+await p.waitForTimeout(200);
+checar(await janela.getByPlaceholder('ex.: 44').count() === 0,
+  'salvo o tempo disponivel, o quadro recolhe sozinho');
+const recolhido = await texto();
+checar(/107,1 horas-máquina produtivas/.test(recolhido) && /3 máq\. × 44 h/.test(recolhido),
+  'recolhido, ele ainda diz a conta inteira: 107,1 produtivas de 3 maq x 44 h');
+checar(!/Setup não informado/.test(recolhido),
+  'com o setup informado, a ressalva segue fora — recolhido ou nao');
+await janela.getByRole('button', { name: 'Editar' }).click();
+checar(await janela.getByPlaceholder('ex.: 44').count() === 1,
+  '"Editar" abre o quadro de volta, com os campos');
+await janela.getByRole('button', { name: 'Recolher' }).click();
+
 /* ------------------------------------------- colagem da planilha do PCP */
 await janela.locator('textarea').fill(COLAGEM_SEM_DATA);
 await p.waitForTimeout(200);
@@ -188,6 +209,25 @@ checar(JSON.stringify(enviados[0].semanas[0])
   'a semana sobe como ano, numero, pecas e a data de inicio — nao como texto');
 
 /* ------------------------------------------- uma semana digitada a mao */
+/**
+ * O quadro nasce RECOLHIDO: a demanda entra por colagem, e digitar uma
+ * semana e' o caminho da reprogramada. Aberto, ele ocupava 190px acima da
+ * caixa de colagem — empurrando o caminho principal para fora da tela.
+ */
+checar(await janela.getByLabel('Semana', { exact: true }).count() === 0,
+  'o quadro de digitar semana comeca recolhido — colar e o caminho principal');
+await janela.getByRole('button', { name: 'Digitar uma semana à mão' }).click();
+
+// O RASCUNHO SOBREVIVE AO RECOLHER: o estado mora no quadro e ele nao
+// desmonta. Recolher que apagasse o que foi digitado seria perder
+// trabalho por causa de um clique de arrumacao.
+await janela.getByLabel('Semana', { exact: true }).fill('S39');
+await janela.getByRole('button', { name: 'Recolher' }).click();
+checar(await janela.getByLabel('Semana', { exact: true }).count() === 0, 'recolhe de novo');
+await janela.getByRole('button', { name: 'Voltar ao que eu digitava' }).click();
+checar(await janela.getByLabel('Semana', { exact: true }).inputValue() === 'S39',
+  'e o que estava digitado continua la depois de recolher e abrir');
+
 await janela.getByLabel('Semana', { exact: true }).fill('S40');
 await janela.getByLabel('Início', { exact: true }).fill('22/09/2026');
 await janela.getByLabel('Peças', { exact: true }).fill('90.500');
