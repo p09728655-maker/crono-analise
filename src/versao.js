@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.84.0',
+    data: '2026-09-15',
+    titulo: 'Dá para imprimir a medição sem o programa da semana',
+    itens: [
+      'PARA TIRAR UMA FOLHA SEM O PROGRAMA, A ÚNICA SAÍDA ERA APAGAR A PROGRAMAÇÃO DO GRUPO — e recolar a planilha depois. Destruir cadastro para resolver impressão. Medindo a máquina, a folha é da MEDIÇÃO: o veredito de atendimento sai de uma amostra que ainda está assentando, e "o grupo não atende" impresso ao lado de meia medição é uma afirmação que ninguém quis fazer.',
+      'AGORA O QUADRO DO PROGRAMA TEM "SAIR NA IMPRESSÃO", igual ao da Análise do período. Desmarque e a folha sai só com os números da medição; o programa continua inteiro no cadastro e na tela. A escolha fica gravada no navegador.',
+      'MARCADA POR PADRÃO, ao contrário da análise: é como a folha sempre saiu, e quem nunca mexer não vê diferença nenhuma.',
+      'DESMARCADA, O QUADRO AVISA na tela que está fora do papel. Uma folha que chega à reunião sem o veredito, sem ninguém perceber, é o estrago que esse aviso evita.',
+    ],
+  },
+  {
     versao: '2.83.0',
     data: '2026-09-15',
     titulo: 'Dá para voltar a semana automática depois de escolher na mão',

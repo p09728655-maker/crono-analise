@@ -103,6 +103,9 @@ export const est = {
     gap: espaco.lg, flexWrap: 'wrap',
   },
   demandaSeletor: { display: 'flex', alignItems: 'center', gap: espaco.sm },
+  /* Seletor de semana e a opcao de sair no papel dividem o lado direito
+     do titulo: sao as duas decisoes sobre ESTE quadro. */
+  demandaAcoes: { display: 'flex', alignItems: 'center', gap: espaco.lg, flexWrap: 'wrap' },
   demandaSelect: {
     minHeight: 32, padding: `0 ${espaco.sm}px`, background: t.papel,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,

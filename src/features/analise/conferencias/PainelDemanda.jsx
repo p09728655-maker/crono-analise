@@ -23,7 +23,9 @@ import { porMinuto } from './formato.js';
  * Quando falta dado, o quadro NAO some: ele diz o que falta e oferece o
  * caminho. Sumir com o quadro esconde a funcao de quem nunca a configurou.
  */
-export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTrocarSemana }) {
+export default function PainelDemanda({
+  leitura, grupoNome, aoConfigurar, aoTrocarSemana, noPapel, aoAlternarPapel,
+}) {
   const {
     estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas, programa, medicao,
     casadoPorData, setup, conta, paradas, escolhaAutomatica,
@@ -97,6 +99,7 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
             O programa da semana {semana.chave}
             {grupoNome ? ` — ${grupoNome}` : ''}
           </h2>
+          <div style={est.demandaAcoes}>
           {semanas.length > 1 && (
             <label style={est.demandaSeletor}>
               <span style={est.comparativoRotulo}>Semana</span>
@@ -135,7 +138,40 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
               </select>
             </label>
           )}
+          {/**
+           * TIRAR O PROGRAMA DA FOLHA, sem apagar o programa.
+           *
+           * Medindo a maquina, a folha e' da MEDICAO: o veredito de
+           * atendimento sai de uma amostra que ainda esta' assentando, e
+           * "o grupo nao atende" impresso ao lado de meia medicao e' uma
+           * afirmacao que ninguem quis fazer. Ate' aqui a unica saida era
+           * APAGAR a programacao do grupo para imprimir — destruir
+           * cadastro para resolver impressao, e recolar a planilha depois.
+           *
+           * Marcada por padrao: e' como a folha sempre saiu.
+           */}
+          <label style={est.rotuloPapel}>
+            <input
+              type="checkbox"
+              checked={noPapel}
+              onChange={aoAlternarPapel}
+              style={est.caixaPapel}
+            />
+            Sair na impressão
+          </label>
+          </div>
         </div>
+        {/* AVISO SO' QUANDO ESTA' FORA. A analise faz o contrario (nasce
+            fora do papel), entao ali a caixa desmarcada e' o normal e nao
+            precisa dizer nada. Aqui desmarcar TIRA do papel o que ele
+            sempre levou — e uma folha que chega a' reuniao sem o veredito,
+            sem ninguem perceber, e' o estrago que este aviso evita. */}
+        {!noPapel && (
+          <p style={est.comparativoNota}>
+            <strong>Este quadro não sai na folha impressa.</strong> O papel fica só com os
+            números da medição — marque a caixa acima para o programa voltar a sair.
+          </p>
+        )}
         <p style={est.comparativoDica}>
           {demanda.toLocaleString('pt-BR')} peças programadas
           {/* O PERIODO, sempre. A semana da fabrica nao e' a do calendario

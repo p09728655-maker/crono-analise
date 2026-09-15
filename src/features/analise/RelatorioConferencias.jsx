@@ -63,6 +63,25 @@ const lerAnaliseNoPapel = () => {
   try { return localStorage.getItem(CHAVE_ANALISE_PAPEL) === '1'; } catch { return false; }
 };
 
+/**
+ * O PROGRAMA DA SEMANA no papel — ligado por padrao, ao contrario da
+ * analise.
+ *
+ * Medindo a maquina, a folha e' da MEDICAO: o veredito de atendimento sai
+ * de uma amostra que ainda esta' assentando, e "o grupo nao atende"
+ * impresso ao lado de meia medicao e' uma afirmacao que ninguem quis
+ * fazer. Ate' aqui a unica saida era APAGAR a programacao do grupo para
+ * imprimir e recolar a planilha depois — destruir cadastro para resolver
+ * impressao.
+ *
+ * Por isso o padrao e' `!== '0'` e nao `=== '1'`: quem nunca mexeu
+ * continua imprimindo com o programa, como sempre saiu.
+ */
+const CHAVE_PROGRAMA_PAPEL = 'ritmo.programa-na-impressao';
+const lerProgramaNoPapel = () => {
+  try { return localStorage.getItem(CHAVE_PROGRAMA_PAPEL) !== '0'; } catch { return true; }
+};
+
 export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const dados = useConferencias();
   const {
@@ -105,10 +124,17 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const [editandoParadas, setEditandoParadas] = useState(null);
   const [renomeando, setRenomeando] = useState(null);
   const [analiseNoPapel, setAnaliseNoPapel] = useState(lerAnaliseNoPapel);
+  const [programaNoPapel, setProgramaNoPapel] = useState(lerProgramaNoPapel);
 
   const alternarAnaliseNoPapel = () => setAnaliseNoPapel((v) => {
     const novo = !v;
     try { localStorage.setItem(CHAVE_ANALISE_PAPEL, novo ? '1' : '0'); } catch { /* sem armazenamento */ }
+    return novo;
+  });
+
+  const alternarProgramaNoPapel = () => setProgramaNoPapel((v) => {
+    const novo = !v;
+    try { localStorage.setItem(CHAVE_PROGRAMA_PAPEL, novo ? '1' : '0'); } catch { /* sem armazenamento */ }
     return novo;
   });
 
@@ -355,6 +381,8 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
                      depender disso amarraria a volta ao automatico a um
                      detalhe do parser. */
                   aoTrocarSemana={(chave) => setSemanaEscolhida(chave ? lerCodigoSemana(chave) : null)}
+                  noPapel={programaNoPapel}
+                  aoAlternarPapel={alternarProgramaNoPapel}
                 />
               )}
 
@@ -498,7 +526,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
           porCiclo={porCiclo}
           /* O que esta' na tela e' o que sai no papel — o veredito da
              semana inclusive. */
-          demanda={leituraDemanda}
+          demanda={programaNoPapel ? leituraDemanda : null}
           grupoNome={grupoDoCadastro ? `${grupoDoCadastro.codigo} · ${grupoDoCadastro.nome}` : null}
         />
       )}

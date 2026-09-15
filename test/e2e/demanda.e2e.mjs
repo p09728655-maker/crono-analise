@@ -475,6 +475,40 @@ checar(/121\.900 peças programadas/.test(devolvido),
 checar(await quadro3.locator('select').inputValue() === '',
   'e o seletor volta a mostrar automatica: a escolha manual deixou de existir');
 
+/**
+ * TIRAR O PROGRAMA DA FOLHA SEM APAGAR O PROGRAMA.
+ *
+ * Medindo a maquina, a folha e' da MEDICAO: o veredito sai de uma amostra
+ * que ainda esta' assentando, e "o grupo nao atende" impresso ao lado de
+ * meia medicao e' uma afirmacao que ninguem quis fazer. Ate' aqui a unica
+ * saida era APAGAR a programacao do grupo para imprimir e recolar a
+ * planilha depois — destruir cadastro para resolver impressao.
+ */
+const papelCom = await p3.evaluate(() => document.querySelector('.somente-impressao')?.innerText || '');
+checar(/O programa da semana/.test(papelCom),
+  'por padrao o programa sai na folha, como sempre saiu');
+
+await quadro3.getByRole('checkbox', { name: 'Sair na impressão' }).uncheck();
+await p3.waitForTimeout(300);
+const papelSem = await p3.evaluate(() => document.querySelector('.somente-impressao')?.innerText || '');
+checar(!/O programa da semana/.test(papelSem),
+  'desmarcada, a folha sai sem o quadro do programa');
+checar(/pç\/h/.test(papelSem),
+  'e a folha continua trazendo os numeros da medicao — so o programa saiu');
+// O PROGRAMA CONTINUA NO BANCO: e' o ponto inteiro desta opcao.
+const telaSem = await quadro3.innerText();
+checar(/121\.900 peças programadas/.test(telaSem),
+  'na TELA o programa continua inteiro — tirar do papel nao apaga a programacao');
+checar(/não sai na folha impressa/.test(telaSem),
+  'e o quadro avisa que esta fora do papel — folha sem veredito nao pode surpreender');
+checar(await p3.evaluate(() => localStorage.getItem('ritmo.programa-na-impressao')) === '0',
+  'a escolha fica gravada no navegador');
+
+await quadro3.getByRole('checkbox', { name: 'Sair na impressão' }).check();
+await p3.waitForTimeout(300);
+checar(/O programa da semana/.test(await p3.evaluate(() => document.querySelector('.somente-impressao')?.innerText || '')),
+  'marcada de novo, o programa volta para a folha');
+
 /* ---- o dia descoberto tem saida na mesma tela ---- */
 // 07/09 e' feriado e fica fora da janela de sete dias da semana que
 // comecou em 31/08 — de proposito. O preco so' e' justo se der para
