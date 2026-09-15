@@ -13,6 +13,20 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.86.0',
+    data: '2026-09-15',
+    titulo: 'Gestão à vista: o painel de monitor do chão de fábrica',
+    itens: [
+      'NOVA TELA EM /painel, para o monitor da fábrica. Sem menu, sem filtro, sem botão nenhum: ninguém chega perto dela. Carrega sozinha, atualiza sozinha a cada 2 minutos e é escura como a coleta, pelo mesmo motivo — luz irregular de fábrica, e número claro sobre fundo escuro salta de longe.',
+      'UM CARTÃO POR MÁQUINA, agrupado pelo grupo do cadastro. O número grande é o ritmo de RELÓGIO (com as paradas dentro), com o rodando ao lado como potencial — a mesma regra do relatório. Máquinas de grupos diferentes nunca aparecem na mesma lista: uma CNC a 181 pç/h não é "pior" que uma furadeira a 750, são serviços diferentes.',
+      'CADA CARTÃO DIZ A IDADE DA PRÓPRIA MEDIÇÃO. O RitmoPatrimar mede por amostragem — o analista passa, mede vinte minutos e vai embora — e painel de parede sugere "agora" por natureza. Mostrar 750 pç/h de uma medição de quarta, numa terça, é mentir sem escrever nada falso. Medição com mais de 2 dias aparece marcada em âmbar e dizendo a idade.',
+      'A MÁQUINA QUE NINGUÉM MEDIU APARECE, e vem PRIMEIRO no grupo. Ela não entrava em resumo nenhum porque não tem número — e é justamente a que a fábrica esquece. "Ninguém mediu esta máquina" é pendência mais urgente que um ritmo baixo: no ritmo baixo ao menos se sabe que é baixo.',
+      'DENTRO DO GRUPO, O MENOR RITMO PRIMEIRO — é onde a capacidade se perde. Máquina desativada no cadastro não entra: não é pendência de medição.',
+      'A JANELA É DE 7 DIAS, fixa, e está escrita no topo. Gestão à vista fala do presente; esticar para trinta traria média de mês para uma tela que se lê como "agora". Quem quer a série inteira tem o relatório.',
+      'A ROTA NÃO PASSA PELA REGRA DE APARELHO. O app manda quem "não é desktop" para a coleta, e desktop exige largura E MOUSE — o monitor de parede costuma ser TV ou mini-PC sem ponteiro nenhum, e cairia justamente na tela que não se quer na parede.',
+    ],
+  },
+  {
     versao: '2.85.0',
     data: '2026-09-15',
     titulo: 'O relatório passou a ter período — e o ritmo do topo voltou a falar de um',
