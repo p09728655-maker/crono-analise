@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.86.1',
+    data: '2026-09-15',
+    titulo: 'O painel de parede agora tem porta de entrada',
+    itens: [
+      'O PAINEL SÓ ABRIA DIGITANDO A URL. Ele foi entregue sem link nenhum no app: a tela existia e era invisível para quem não soubesse o endereço de cor. Falha da entrega anterior.',
+      'AGORA ELE ESTÁ EM FERRAMENTAS, no menu lateral do relatório, ao lado de Demanda semanal — que é onde se procura esse tipo de coisa.',
+      'O ITEM ABRE EM ABA NOVA, de propósito. O painel não tem botão nenhum (é de parede, ninguém chega perto dele), então aberto na mesma aba prenderia quem clicou, sem volta. Em aba separada, o PC continua no relatório e a aba nova é a que vai para o monitor.',
+      'O endereço continua sendo /painel — é ele que se deixa fixo no navegador da TV.',
+    ],
+  },
+  {
     versao: '2.86.0',
     data: '2026-09-15',
     titulo: 'Gestão à vista: o painel de monitor do chão de fábrica',

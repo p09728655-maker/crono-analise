@@ -4,6 +4,7 @@ import {
   TODAS, escopoDaLateral, filtrarPorPeriodo, loteDaMaquina, quandoMediu,
 } from '../../domain/relatorioConferencias.js';
 import { leituraDaDemanda, lerCodigoSemana } from '../../domain/demandaSemanal.js';
+import { caminhos } from '../../lib/dispositivo.js';
 import { listarDemanda } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
@@ -345,6 +346,15 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
              pela lista de estudos: e' aqui que ele vira veredito, e quem
              pergunta "isso atende?" ja' esta' olhando este numero. */
           aoVerDemanda={() => setVerDemanda(true)}
+          /**
+           * O PAINEL DE PAREDE abre em ABA NOVA.
+           *
+           * Ele nao tem botao nenhum — e' de monitor, ninguem chega perto
+           * — entao nesta mesma aba prenderia quem clicou, sem volta. Em
+           * aba separada o PC continua no relatorio, e a aba nova e' a que
+           * vai para a TV.
+           */
+          aoVerPainel={() => window.open(caminhos.painel(), '_blank', 'noopener')}
         />
 
         <main style={est.conteudoLateral}>

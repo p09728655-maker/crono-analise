@@ -127,6 +127,39 @@ checar(/maior parada: /.test(tela),
 checar(await p.locator('button').count() === 0,
   'painel de parede nao tem botao nenhum — ninguem chega perto para apertar');
 
+/* ======== o painel tem de ser ACHAVEL: ele nasceu so por URL digitada ==== */
+/**
+ * A primeira versao criou a tela e nenhuma porta para ela — existia e era
+ * invisivel. O item vive em FERRAMENTAS, ao lado de Demanda semanal, que
+ * e' onde se procura esse tipo de coisa.
+ */
+{
+  const ctx2 = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const p2 = await ctx2.newPage();
+  await semearSessao(p2);
+  await p2.route('**/api/conferencias**', (rota) => rota.fulfill({
+    json: { conferencias: [medicao('x1', 'FURADEIRA 16', 0, 700)], outras: 0 },
+  }));
+  await p2.route('**/api/maquinas**', (rota) => rota.fulfill({ json: { grupos: [], maquinas: [] } }));
+
+  await p2.goto(`${BASE}/analise/conferencias`);
+  const item = p2.getByRole('button', { name: 'Painel de parede' });
+  await item.waitFor({ timeout: 10000 });
+  checar(true, 'o relatorio oferece "Painel de parede" em Ferramentas — nao so por URL digitada');
+
+  /**
+   * ABA NOVA de proposito: o painel nao tem botao nenhum, entao aberto
+   * nesta mesma aba prenderia quem clicou, sem volta.
+   */
+  const [aba] = await Promise.all([ctx2.waitForEvent('page'), item.click()]);
+  await aba.waitForLoadState('domcontentloaded');
+  checar(new URL(aba.url()).pathname === '/painel',
+    'e abre o painel em ABA NOVA — a tela de parede nao tem volta');
+  checar(await p2.evaluate(() => location.pathname) === '/analise/conferencias',
+    'o relatorio fica onde estava: quem clicou nao perde o que estava vendo');
+  await ctx2.close();
+}
+
 checar(erros.length === 0, `sem erro de pagina (${erros.join(' | ') || 'nenhum'})`);
 
 await navegador.close();
