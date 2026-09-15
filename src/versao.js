@@ -13,6 +13,20 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.80.0',
+    data: '2026-09-15',
+    titulo: 'O relatório abre pela resposta, não pelo número mais otimista',
+    itens: [
+      'O RELATÓRIO ABRIA PELO NÚMERO MAIS OTIMISTA. "Ritmo médio 750 pç/h" era o maior número da tela — e era o ritmo com a máquina RODANDO, que ignora o tempo parado. Quem decide se o programa é atendido é o ritmo de RELÓGIO (612 pç/h na mesma medição), que ficava menor e mais abaixo. Quem passava o olho num slide levava o 750.',
+      'AGORA O TOPO COMEÇA PELO RITMO DE RELÓGIO, com as paradas dentro, e o ritmo rodando vem logo depois dizendo que é potencial. Os dois só aparecem separados quando há parada marcada: sem parada eles são o mesmo número, e dois cartões iguais com nomes diferentes ensinariam a desconfiar dos dois.',
+      '"ISSO ATENDE?" É A PERGUNTA QUE TRAZ ALGUÉM AO RELATÓRIO, e a resposta estava em letra cinza miúda DEPOIS dos três cartões — era preciso atravessar exigido, entregue e máquinas necessárias para chegar nela. Agora ela é uma faixa antes dos números, verde quando atende e laranja quando não. Os números passaram a ser a evidência do que a faixa já afirmou.',
+      'DOIS NÚMEROS QUASE IGUAIS PARECIAM ERRO DE CONTA. "Entregue no relógio 612 pç/h" e "Saiu no período 611 pç/h" apareciam na mesma tela, os dois com 10,2 pç/min. Não é erro: o primeiro já desconta o setup que as medições pegaram, para não contar duas vezes com o setup planejado. A razão estava só no parágrafo de procedência, três quadros abaixo — agora está no próprio cartão.',
+      'A CONTA DAS HORAS DESCEU PARA DEPOIS DOS NÚMEROS. Eram quatro linhas de texto entre o título do quadro e o primeiro número. A conta continua por extenso ("264 h de jornada − 50 h de setup"), agora onde ela serve: para conferir o número que acabou de ser lido.',
+      'NO RESTO, NADA MUDA NO TRABALHO DE QUEM USA. Por dentro, cinco arquivos grandes foram divididos (demanda semanal, cadastro de máquinas, os gráficos e as duas bibliotecas de cálculo): mesmas contas, mesmos textos, mesma folha impressa. Os 577 testes de cálculo e as 618 checagens de tela passaram sem precisar de uma alteração sequer.',
+      'CORREÇÃO em Demanda semanal: pedir "Apagar o programa deste grupo" e trocar de grupo no seletor deixava o botão vermelho de confirmação armado no grupo novo, sem ninguém ter pedido. Agora trocar de grupo desarma.',
+    ],
+  },
+  {
     versao: '2.79.0',
     data: '2026-09-14',
     titulo: 'Dá para imprimir o GRUPO de máquinas',
