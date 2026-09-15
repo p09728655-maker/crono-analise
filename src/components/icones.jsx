@@ -98,6 +98,11 @@ export const IconeDemanda = () => (
 );
 
 /** Chave — a chave da IA. */
+/** Monitor de parede — o painel de gestao a vista. */
+export const IconePainel = () => (
+  <Icone><rect x="2.5" y="4" width="19" height="13" rx="2" /><path d="M8.5 21h7M12 17v4" /></Icone>
+);
+
 export const IconeChave = () => (
   <Icone>
     <circle cx="8" cy="12" r="3.5" />

@@ -3,7 +3,7 @@ import { elevacao, espaco, raio, rotulo, tipo, transicao } from '../theme/escala
 import { LOGO_PATRIMAR } from '../theme/logo.js';
 import {
   IconeAnalistas, IconeArquivados, IconeChave, IconeDemanda, IconeEstudos, IconeImportar,
-  IconeInicio, IconeMaquinas, IconeParadas, IconeRitmo,
+  IconeInicio, IconeMaquinas, IconePainel, IconeParadas, IconeRitmo,
 } from './icones.jsx';
 
 /**
@@ -46,11 +46,11 @@ export default function MenuLateral({
   // diz onde voce esta' obriga a olhar o conteudo para descobrir.
   aoVerInicio, inicioAtivo, aoVerEstudos, estudosAtivo,
   aoNovoEstudo, aoImportar, aoVerConferencias, aoVerArquivados, arquivados = 0,
-  aoVerChaveIa, aoVerMotivos, aoVerMaquinas, aoVerDemanda, aoVerAnalistas, usuario, aoTrocarModo,
+  aoVerChaveIa, aoVerMotivos, aoVerMaquinas, aoVerDemanda, aoVerPainel, aoVerAnalistas, usuario, aoTrocarModo,
 }) {
   const total = grupos.reduce((acc, g) => acc + g.estudos.length, 0);
   const temFerramentas = aoBuscar || aoImportar || aoVerChaveIa || aoVerMotivos || aoVerMaquinas
-    || aoVerDemanda || aoVerAnalistas;
+    || aoVerDemanda || aoVerPainel || aoVerAnalistas;
 
   return (
     <nav style={est.lateral} aria-label="Navegação">
@@ -359,6 +359,23 @@ export default function MenuLateral({
               <span style={est.itemComIcone}>
                 <IconeDemanda />
                 <span style={est.itemTexto}>Demanda semanal</span>
+              </span>
+            </button>
+          )}
+          {/**
+           * O PAINEL DE PAREDE, que ate' aqui so' existia por URL digitada.
+           *
+           * Abre em ABA NOVA de proposito: a tela nao tem botao nenhum —
+           * e' de parede, ninguem chega perto dela — entao aberta nesta
+           * mesma aba ela prenderia quem clicou, sem volta. Em aba
+           * separada, o PC continua no relatorio e a aba nova e' a que vai
+           * para o monitor.
+           */}
+          {aoVerPainel && (
+            <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerPainel}>
+              <span style={est.itemComIcone}>
+                <IconePainel />
+                <span style={est.itemTexto}>Painel de parede</span>
               </span>
             </button>
           )}
