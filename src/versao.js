@@ -13,6 +13,20 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.85.0',
+    data: '2026-09-15',
+    titulo: 'O relatório passou a ter período — e o ritmo do topo voltou a falar de um',
+    itens: [
+      'O RELATÓRIO SOMAVA TODAS AS MEDIÇÕES NÃO ARQUIVADAS, PARA SEMPRE. Com vinte medições a tela já incomodava, mas o problema sério era outro: o "Ritmo no relógio" do topo era a média ponderada de tudo o que já foi medido. Em seis meses isso mistura peças diferentes, operadores diferentes e o antes e o depois de cada melhoria — um número que não é o ritmo de nada, e que ainda assim sustenta o veredito contra a demanda da semana.',
+      'AGORA O RELATÓRIO TEM UMA JANELA DE TEMPO: últimos 7, 30, 90 dias ou Tudo, com o período escrito ao lado do seletor ("11 medição(ões) de 08/09 a 15/09"). Número de produção sem período declarado é a mesma classe de problema do ritmo sem base — quem lê não tem como saber do que ele fala.',
+      'A JANELA VALE PARA O RELATÓRIO INTEIRO: números do topo, cartões por máquina, gráficos, tabela, o veredito contra o programa e a folha A4. O que está na tela continua sendo o que sai no papel.',
+      'PADRÃO DE 30 DIAS. Não muda nada para quem está medindo agora e protege quem abrir a tela daqui a um ano. "Tudo" continua a um clique, e a escolha fica gravada no navegador.',
+      'JANELA SEM MEDIÇÃO NÃO É RELATÓRIO VAZIO. Se não houve medição no período, a tela diz isso, diz quantas ficaram de fora — nenhuma foi apagada — e oferece "Ver tudo" ali mesmo. O seletor continua visível: filtro que some junto com o que filtrou deixa sem saída.',
+      'A janela conta a partir de HOJE, não da última medição: "últimos 7 dias" que se estica até achar medição mente sobre o próprio rótulo. E corta por QUANDO SE MEDIU, não por quando salvou — medição feita offline no posto sobe dias depois, e cortar pelo salvamento poria a medição de terça fora de uma janela que a contém.',
+      'AS ARQUIVADAS NÃO LEVAM JANELA: quem abre as arquivadas foi buscar justamente o que saiu de circulação.',
+    ],
+  },
+  {
     versao: '2.84.0',
     data: '2026-09-15',
     titulo: 'Dá para imprimir a medição sem o programa da semana',
