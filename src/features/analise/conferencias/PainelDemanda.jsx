@@ -26,7 +26,7 @@ import { porMinuto } from './formato.js';
 export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTrocarSemana }) {
   const {
     estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas, programa, medicao,
-    casadoPorData, setup, conta, paradas,
+    casadoPorData, setup, conta, paradas, escolhaAutomatica,
   } = leitura;
 
   /* O periodo de cada semana cadastrada, para o seletor dizer de que dias
@@ -102,9 +102,27 @@ export default function PainelDemanda({ leitura, grupoNome, aoConfigurar, aoTroc
               <span style={est.comparativoRotulo}>Semana</span>
               <select
                 style={est.demandaSelect}
-                value={semana.chave}
+                /* EM BRANCO quando ninguem escolheu: o seletor passa a
+                   MOSTRAR de onde veio a semana, alem de deixar troca-la. */
+                value={escolhaAutomatica ? '' : semana.chave}
                 onChange={(ev) => aoTrocarSemana(ev.target.value)}
               >
+                {/**
+                 * A VOLTA PARA O AUTOMATICO, que nao existia.
+                 *
+                 * Escolher uma semana na mao gravava a escolha ate' trocar
+                 * de grupo: quem conferiu a semana passada ficava presa
+                 * nela, e o relatorio seguia comparando a medicao de hoje
+                 * com o programa de outra semana — sem nada na tela
+                 * dizendo que a escolha era manual. O dominio ja' separava
+                 * os dois casos (`escolhaAutomatica`); faltava a tela
+                 * oferecer o caminho de volta.
+                 *
+                 * A opcao leva o que ela FAZ escrito. Uma linha vazia num
+                 * seletor de PCP nao diz se apaga a comparacao ou se a
+                 * devolve ao normal.
+                 */}
+                <option value="">Automática · pela data da medição</option>
                 {/* O PERIODO dentro da opcao. E' aqui que o usuario troca a
                     comparacao, e o codigo da semana sozinho nao diz de que
                     dias a linha fala — que e' o problema que esta tela inteira

@@ -448,6 +448,33 @@ const opcoes = await quadro3.locator('select option').allInnerTexts();
 checar(opcoes.some((o) => /038-26 · 08\/09 a 14\/09/.test(o)),
   'o seletor de semana diz de que dias fala cada opcao');
 
+/**
+ * A VOLTA PARA O AUTOMATICO — a ida e a volta, na mesma tela.
+ *
+ * Escolher uma semana na mao gravava a escolha ate' trocar de grupo: quem
+ * conferiu a semana passada ficava presa nela, e o relatorio seguia
+ * comparando a medicao de hoje com o programa de outra semana, sem nada
+ * dizendo que a escolha era manual. O dominio ja' separava os dois casos
+ * (`escolhaAutomatica`); faltava a tela oferecer o caminho de volta.
+ */
+checar(opcoes.some((o) => /Automática · pela data da medição/.test(o)),
+  'o seletor traz a opcao em branco: a volta para a escolha automatica');
+checar(await quadro3.locator('select').inputValue() === '',
+  'sem escolha manual o seletor mostra a automatica — diz de ONDE veio a semana');
+
+await quadro3.locator('select').selectOption('037-26');
+await p3.waitForTimeout(300);
+checar(/93\.200 peças programadas/.test(await quadro3.innerText()),
+  'escolhida na mao, o quadro passa a comparar com a semana escolhida');
+
+await quadro3.locator('select').selectOption('');
+await p3.waitForTimeout(300);
+const devolvido = await quadro3.innerText();
+checar(/121\.900 peças programadas/.test(devolvido),
+  'em branco devolve o quadro a semana da MEDICAO — 09/09 volta para a 038-26');
+checar(await quadro3.locator('select').inputValue() === '',
+  'e o seletor volta a mostrar automatica: a escolha manual deixou de existir');
+
 /* ---- o dia descoberto tem saida na mesma tela ---- */
 // 07/09 e' feriado e fica fora da janela de sete dias da semana que
 // comecou em 31/08 — de proposito. O preco so' e' justo se der para
