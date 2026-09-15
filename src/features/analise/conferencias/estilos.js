@@ -147,10 +147,33 @@ export const est = {
     background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, padding: espaco.xl,
   },
-  paretoLinha: {
-    display: 'grid', gridTemplateColumns: 'minmax(120px, auto) 1fr auto',
-    gap: espaco.md, alignItems: 'center', ...tipo('corpo'), ...numeros,
+  /**
+   * UM grid para a lista inteira, nao um por linha.
+   *
+   * As tres colunas (motivo, barra, tempo) eram declaradas no estilo da
+   * LINHA — e grid so' alinha colunas dentro do mesmo container. Cada
+   * linha dimensionava a propria coluna de motivo pelo texto dela, entao
+   * as barras comecavam num x diferente a cada linha: "Outro" abria a
+   * barra 8px antes de "Necessidade pessoal". Num pareto isso e' pior que
+   * feio — a barra e' a leitura, e comeco desalinhado muda o comprimento
+   * aparente de cada uma.
+   *
+   * Por isso as linhas nao sao mais elementos: os tres campos entram
+   * direto neste grid (Fragment no JSX), e as colunas valem para todos.
+   */
+  paretoGrade: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(96px, max-content) minmax(0, 1fr) max-content',
+    gap: espaco.md, alignItems: 'center', marginTop: espaco.md,
+    ...tipo('corpo'), ...numeros,
   },
+  /* Motivo e' cadastrado pela fabrica e pode vir longo. Teto com
+     reticencias para nao espremer a barra ate' sumir; o texto inteiro
+     continua no title, para quem precisar ler. */
+  paretoRotulo: {
+    maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  paretoValor: { whiteSpace: 'nowrap', textAlign: 'right' },
   paretoTrilha: { height: 10, background: '#EDF0F3', borderRadius: raio.pill, overflow: 'hidden' },
   paretoBarra: { display: 'block', height: '100%', borderRadius: raio.pill, background: '#D97706' },
 
@@ -249,6 +272,16 @@ export const est = {
     cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
   },
   caixaPapel: { width: 16, height: 16, margin: 0, accentColor: t.vermelho, cursor: 'pointer' },
+  /* As DUAS decisoes sobre este quadro — sair no papel e ficar a' vista —
+     dividem a mesma linha e a mesma escala. Uma delas em corpo de botao
+     grande pesaria mais que a analise que ela comanda. */
+  analiseAcoes: { display: 'flex', alignItems: 'center', gap: espaco.lg, flexWrap: 'wrap' },
+  botaoRecolher: {
+    minHeight: 32, padding: `0 ${espaco.md}px`, background: 'transparent',
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.textoMedio, ...tipo('legenda'), fontWeight: 600,
+    cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+  },
   analiseSecao: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
   analiseTitulo: { ...rotulo(t.textoFraco), margin: 0 },
   analiseLinha: { ...tipo('corpo'), color: t.textoMedio, margin: 0, lineHeight: 1.55 },

@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.81.0',
+    data: '2026-09-15',
+    titulo: 'As barras de parada alinham, e a análise pode ser recolhida',
+    itens: [
+      'AS BARRAS DO QUADRO DE PARADAS COMEÇAVAM CADA UMA NUM PONTO. "Outro" abria a barra alguns pixels antes de "Necessidade pessoal", porque cada linha media a própria coluna pelo tamanho do texto do motivo. Num Pareto isso é pior que feio: a barra É a leitura, e começo desalinhado muda o comprimento aparente de cada uma. Agora as três colunas valem para a lista inteira e todas as barras partem do mesmo ponto.',
+      'MOTIVO LONGO NÃO ESPREME MAIS A BARRA. Como o catálogo de motivos é cadastrado pela fábrica, um nome comprido empurrava a barra para a direita; agora o rótulo tem um teto, com reticências, e o texto inteiro aparece ao passar o mouse.',
+      'A ANÁLISE DO PERÍODO PODE SER RECOLHIDA. São seis seções e é a maior rolagem do relatório — quem não usa a leitura em texto rolava tudo isso para chegar na tabela de medições. O botão "Recolher análise" some com o miolo e deixa só o cabeçalho; "Mostrar análise" traz de volta, e a escolha fica gravada no navegador.',
+      'RECOLHER É DA TELA, NÃO DO PAPEL. A caixa "Sair na impressão" continua mandando sozinha na folha A4: recolher na tela com ela marcada segue levando a análise para a reunião. O quadro diz isso quando está recolhido, para ninguém imprimir achando que sumiu.',
+    ],
+  },
+  {
     versao: '2.80.0',
     data: '2026-09-15',
     titulo: 'O relatório abre pela resposta, não pelo número mais otimista',
