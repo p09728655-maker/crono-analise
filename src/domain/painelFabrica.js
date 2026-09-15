@@ -49,6 +49,50 @@ export const DIAS_ATE_ENVELHECER = 2;
 const horas = (ms) => ms / 3600000;
 
 /**
+ * QUAL GRUPO A TV MOSTRA — resolvido pelo CODIGO, vindo da URL.
+ *
+ * Um monitor perto das furadeiras nao tem por que mostrar a CNC. Mas a TV
+ * nao tem mouse nem teclado: a unica escolha possivel e' a que ja' esta'
+ * no endereco, fixado uma vez quando se monta o monitor. Por isso o filtro
+ * e' `?grupo=0002` e nao um seletor.
+ *
+ * Pelo CODIGO (0002) e nao pelo nome: e' o que a fabrica usa, e' curto,
+ * nao tem acento e sobrevive a renomear o grupo no cadastro.
+ *
+ * CODIGO QUE NAO EXISTE NAO PODE DAR TELA VAZIA. Um monitor em branco por
+ * causa de um dígito errado na URL e' o pior jeito de falhar: ninguem
+ * chega perto para investigar, e a fabrica conclui que o painel morreu.
+ * Por isso a resolucao devolve o que ha' de errado E os codigos que
+ * existem, para a tela dizer os dois.
+ */
+export function resolverGrupoDoPainel(cadastro, codigo) {
+  const pedido = String(codigo ?? '').trim();
+  const grupos = cadastro?.grupos || [];
+  const disponiveis = grupos.map((g) => g.codigo).filter(Boolean);
+
+  if (!pedido) return { filtrado: false, encontrado: true, rotulo: null, nomes: null, disponiveis };
+
+  const grupo = grupos.find((g) => String(g.codigo).trim() === pedido);
+  if (!grupo) return { filtrado: true, encontrado: false, codigo: pedido, rotulo: null, nomes: null, disponiveis };
+
+  /* Os NOMES das maquinas do grupo: a medicao grava texto livre e se liga
+     ao cadastro pelo nome, entao e' por nome que o corte acontece. */
+  const nomes = new Set(
+    (cadastro?.maquinas || [])
+      .filter((m) => m.grupo_id === grupo.id)
+      .map((m) => nomeChave(m.nome)),
+  );
+  return {
+    filtrado: true,
+    encontrado: true,
+    codigo: grupo.codigo,
+    rotulo: `${grupo.codigo} · ${grupo.nome}`,
+    nomes,
+    disponiveis,
+  };
+}
+
+/**
  * O painel: uma faixa por grupo, um cartao por maquina.
  *
  * @param conferencias medicoes ja' cortadas pela janela de tempo

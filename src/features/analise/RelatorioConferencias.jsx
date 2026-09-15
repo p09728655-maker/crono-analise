@@ -354,7 +354,12 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
            * aba separada o PC continua no relatorio, e a aba nova e' a que
            * vai para a TV.
            */
-          aoVerPainel={() => window.open(caminhos.painel(), '_blank', 'noopener')}
+          /* LEVA O GRUPO ESCOLHIDO. Filtrado em 0002 · FURADEIRA, o
+             painel abre so' com as furadeiras — que e' o monitor que se
+             pendura perto delas. Sem filtro, abre a fabrica. */
+          aoVerPainel={() => window.open(
+            caminhos.painel(grupoDoCadastro?.codigo), '_blank', 'noopener',
+          )}
         />
 
         <main style={est.conteudoLateral}>

@@ -7,7 +7,9 @@
  * por qualquer teste que so' olhe se a conta fecha.
  */
 import { describe, expect, it } from 'vitest';
-import { DIAS_ATE_ENVELHECER, SEM_GRUPO_PAINEL, painelDeMaquinas } from '../src/domain/painelFabrica.js';
+import {
+  DIAS_ATE_ENVELHECER, SEM_GRUPO_PAINEL, painelDeMaquinas, resolverGrupoDoPainel,
+} from '../src/domain/painelFabrica.js';
 
 const AGORA = Date.parse('2026-09-15T12:00:00Z');
 const atras = (dias) => new Date(AGORA - (dias * 86400000)).toISOString();
@@ -131,5 +133,61 @@ describe('painelDeMaquinas', () => {
 
   it('sem medicao e sem cadastro, o painel devolve vazio em vez de quebrar', () => {
     expect(painelDeMaquinas([], { agora: AGORA })).toEqual({ grupos: [], total: 0, semNumero: 0 });
+  });
+});
+
+/**
+ * QUAL GRUPO A TV MOSTRA.
+ *
+ * O monitor perto das furadeiras nao tem por que mostrar a CNC, mas a TV
+ * nao tem mouse: a unica escolha possivel e' a que ja' esta' no endereco,
+ * fixado quando se monta o monitor.
+ */
+describe('resolverGrupoDoPainel', () => {
+  const cadastro = {
+    grupos: [
+      { id: 'g2', codigo: '0002', nome: 'FURADEIRA' },
+      { id: 'g6', codigo: '0006', nome: 'CNC' },
+    ],
+    maquinas: [
+      { nome: 'FURADEIRA 16', ativa: true, grupo_id: 'g2' },
+      { nome: 'FURADEIRA 12', ativa: true, grupo_id: 'g2' },
+      { nome: 'CNC SCM', ativa: true, grupo_id: 'g6' },
+    ],
+  };
+
+  it('sem codigo na URL, o painel nao filtra — a TV mostra a fabrica', () => {
+    const r = resolverGrupoDoPainel(cadastro, '');
+    expect(r.filtrado).toBe(false);
+    expect(r.nomes).toBeNull();
+  });
+
+  it('pelo CODIGO, devolve o rotulo e as maquinas do grupo', () => {
+    const r = resolverGrupoDoPainel(cadastro, '0002');
+    expect(r.filtrado).toBe(true);
+    expect(r.encontrado).toBe(true);
+    expect(r.rotulo).toBe('0002 · FURADEIRA');
+    expect([...r.nomes].sort()).toEqual(['furadeira 12', 'furadeira 16']);
+  });
+
+  /**
+   * Monitor em branco por um digito errado na URL e' o pior jeito de
+   * falhar: ninguem chega perto para investigar, e a fabrica conclui que o
+   * painel morreu.
+   */
+  it('codigo inexistente NAO some com a tela: diz o que pediu e o que existe', () => {
+    const r = resolverGrupoDoPainel(cadastro, '0009');
+    expect(r.encontrado).toBe(false);
+    expect(r.codigo).toBe('0009');
+    expect(r.disponiveis).toEqual(['0002', '0006']);
+  });
+
+  it('espaco sobrando na URL nao quebra o casamento', () => {
+    expect(resolverGrupoDoPainel(cadastro, ' 0002 ').rotulo).toBe('0002 · FURADEIRA');
+  });
+
+  it('sem cadastro carregado, devolve sem quebrar', () => {
+    expect(resolverGrupoDoPainel(null, '0002').encontrado).toBe(false);
+    expect(resolverGrupoDoPainel(null, '').filtrado).toBe(false);
   });
 });
