@@ -321,3 +321,60 @@ export function loteDaMaquina({ filtro, visiveis = [], verArquivadas = false } =
   if (!filtro || !visiveis.length) return null;
   return { maquina: filtro, ids: visiveis.map((c) => c.id), arquivada: !verArquivadas };
 }
+
+/**
+ * O RITMO NOMINAL DO FABRICANTE, por maquina, lido do cadastro.
+ *
+ * "Ritmo estavel" diz que a maquina nao subiu nem caiu; nao diz em que
+ * patamar. O catalogo e' a unica referencia externa que o relatorio tem
+ * para isso — e mora no cadastro (maquinas.nominal_ciclos_min), ligado a'
+ * medicao pelo NOME, com a mesma chave normalizada do grupo. Devolve um
+ * Map chave -> { ciclosMin, fonte }; maquina sem nominal fica fora, e quem
+ * consulta trata o vazio como "nao informado", nunca como zero.
+ */
+/** O nominal como se escreve na fabrica: "12,5", nunca "12.5" — em folha
+ *  que circula, o ponto se le' como milhar. Inteiro sai sem casa. */
+export const formatarNominal = (ciclosMin) => String(Number(ciclosMin)).replace('.', ',');
+
+export function mapaNominalDoCadastro(maquinas = []) {
+  const mapa = new Map();
+  for (const m of maquinas || []) {
+    const ciclosMin = Number(m?.nominal_ciclos_min ?? m?.nominalCiclosMin);
+    if (!m?.nome || !(ciclosMin > 0)) continue;
+    mapa.set(nomeChave(m.nome), {
+      ciclosMin,
+      fonte: String(m.nominal_fonte ?? m.nominalFonte ?? '').trim() || null,
+    });
+  }
+  return mapa;
+}
+
+/**
+ * QUANTO DO NOMINAL a maquina fez, com ela RODANDO — em %.
+ *
+ * Compara ACIONAMENTOS por minuto (nao pecas): e' assim que o catalogo
+ * fala, e e' a unidade em que uma peca de 2 ciclos nao parece "metade do
+ * ritmo" de uma de 1. Peca de 1 ciclo: acionamentos e pecas sao o mesmo
+ * numero. O tempo e' o PRODUTIVO, de proposito: a parada ja' tem o seu
+ * numero ("Maquina rodando %"); misturar os dois aqui esconderia qual dos
+ * dois problemas e' o da maquina.
+ *
+ * O que sobra dentro deste percentual e' o MANUSEIO — carregar, posicionar,
+ * retirar — que o catalogo nao inclui. Por isso ele raramente chega a 100%,
+ * e por isso nao e' meta: e' a distancia ate' o teto. A meta operacional
+ * continua sendo a melhor medicao da propria maquina (aproveitamentoPct em
+ * comparativoMaquinas).
+ *
+ * Null quando nao ha' nominal, tempo rodando ou acionamentos — a tela
+ * mostra vazio, nao 0%.
+ */
+export function aproveitamentoDoNominal(g, nominalCiclosMin) {
+  const nominal = Number(nominalCiclosMin);
+  if (!(nominal > 0) || !g || !(g.totalProdutivoMs > 0)) return null;
+  // resumirConferencias sempre traz totalAcionamentos (ciclo 1 quando a
+  // medicao nao gravou); o fallback e' para resumo montado a mao.
+  const acionamentos = Number(g.totalAcionamentos ?? g.totalPecas) || 0;
+  if (!(acionamentos > 0)) return null;
+  const ciclosPorMin = (acionamentos * 60000) / g.totalProdutivoMs;
+  return (ciclosPorMin / nominal) * 100;
+}

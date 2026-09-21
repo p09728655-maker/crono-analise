@@ -6,8 +6,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  TODAS, barrasPorMedicao, escopoDaLateral, filtrarPorGrupo, filtrarPorMaquina, filtrarPorPeriodo,
-  filtrarResumo, formatarDataHora, itensDaLateral, loteDaMaquina, resumoDoPeriodo,
+  TODAS, aproveitamentoDoNominal, barrasPorMedicao, escopoDaLateral, filtrarPorGrupo, filtrarPorMaquina,
+  filtrarPorPeriodo, filtrarResumo, formatarDataHora, formatarNominal, itensDaLateral, loteDaMaquina,
+  mapaNominalDoCadastro, resumoDoPeriodo,
 } from '../src/domain/relatorioConferencias.js';
 
 const MIN = 60000;
@@ -367,5 +368,46 @@ describe('filtrarPorPeriodo', () => {
     const doAparelho = { iniciadoEm: '2026-09-14T07:00:00Z' };
     expect(filtrarPorPeriodo([doAparelho], 7, AGORA)).toEqual([doAparelho]);
     expect(filtrarPorPeriodo([{ iniciadoEm: '2026-01-01T07:00:00Z' }], 7, AGORA)).toHaveLength(0);
+  });
+});
+
+describe('nominal do fabricante — em que patamar o ritmo estavel esta', () => {
+  it('le o cadastro pela chave do nome; sem nominal a maquina fica fora', () => {
+    const mapa = mapaNominalDoCadastro([
+      { nome: 'FURADEIRA 16', nominal_ciclos_min: '15.00', nominal_fonte: 'Catálogo 2019' },
+      { nome: 'FURADEIRA 12', nominal_ciclos_min: null, nominal_fonte: null },
+      { nome: 'CNC SCM', nominal_ciclos_min: 0 },
+    ]);
+    expect(mapa.get('furadeira 16')).toEqual({ ciclosMin: 15, fonte: 'Catálogo 2019' });
+    expect(mapa.has('furadeira 12')).toBe(false);
+    expect(mapa.has('cnc scm')).toBe(false);
+  });
+
+  it('escreve o nominal com virgula, sem casa quando inteiro', () => {
+    expect(formatarNominal('15.00')).toBe('15');
+    expect(formatarNominal(12.5)).toBe('12,5');
+  });
+
+  it('compara ACIONAMENTOS por minuto rodando com o nominal', () => {
+    // 600 pecas de 2 ciclos em 1 h rodando = 1200 acionamentos/h = 20/min.
+    // Nominal 25/min -> 80%. Em pecas seria 10/min -> 40%, e a maquina
+    // pareceria a metade do que fez.
+    const g = { totalPecas: 600, totalAcionamentos: 1200, totalProdutivoMs: 3600000 };
+    expect(aproveitamentoDoNominal(g, 25)).toBeCloseTo(80, 5);
+  });
+
+  it('resumo montado a mao, sem totalAcionamentos, cai nas pecas (1 ciclo)', () => {
+    const g = { totalPecas: 733, totalProdutivoMs: 3600000 };
+    // 733 pc/h = 12.2 pc/min contra 15 nominal -> 81%.
+    expect(aproveitamentoDoNominal(g, 15)).toBeCloseTo((733 / 60 / 15) * 100, 5);
+  });
+
+  it('e nulo — nunca 0% — sem nominal, sem tempo rodando ou sem pecas', () => {
+    const g = { totalPecas: 100, totalAcionamentos: 100, totalProdutivoMs: 600000 };
+    expect(aproveitamentoDoNominal(g, null)).toBeNull();
+    expect(aproveitamentoDoNominal(g, 0)).toBeNull();
+    expect(aproveitamentoDoNominal({ ...g, totalProdutivoMs: 0 }, 15)).toBeNull();
+    expect(aproveitamentoDoNominal({ ...g, totalPecas: 0, totalAcionamentos: 0 }, 15)).toBeNull();
+    expect(aproveitamentoDoNominal(null, 15)).toBeNull();
   });
 });

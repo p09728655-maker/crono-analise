@@ -6,7 +6,7 @@ import {
 import { comoPeriodo } from '../../../domain/demandaSemanal.js';
 import { constanciaTexto, lerGrupo } from '../../../domain/comparativoMaquinas.js';
 import { lerClasse } from '../../../domain/ritmoPorCiclo.js';
-import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
+import { aproveitamentoDoNominal, formatarDataHora, formatarNominal } from '../../../domain/relatorioConferencias.js';
 import { GraficoTendenciaPeriodo } from '../graficos.jsx';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
 import { VERSAO } from '../../../versao.js';
@@ -28,13 +28,19 @@ import { porMinuto, porPeca } from './formato.js';
  * medida ha' pouco tempo leva uma NOTA em texto corrido, nao um selo.
  */
 export default function ImpressaoConferencias({
-  linhas, resumo, resumoPecas, grupoDe, escopo, analise, entreMaquinas, porCiclo,
-  demanda, grupoNome,
+  linhas, resumo, resumoPecas, grupoDe, nominalDe = () => null, escopo, analise, entreMaquinas,
+  porCiclo, demanda, grupoNome,
 }) {
   // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
   const gruposCobertos = [...new Set(resumo.map((g) => grupoDe?.(g.maquina)).filter(Boolean))].sort();
   const hoje = new Date().toLocaleDateString('pt-BR');
   const emMedicao = resumo.filter((g) => !g.confiavel);
+  /* A coluna "Do nominal" so' existe se alguma maquina da folha tem o
+     ritmo de catalogo no cadastro: coluna inteira de travessao e' ruido. */
+  const comNominal = resumo
+    .map((g) => ({ maquina: g.maquina, nominal: nominalDe?.(g.maquina) }))
+    .filter((x) => x.nominal);
+  const temNominal = comNominal.length > 0;
 
   const datas = linhas.map((c) => new Date(c.salvo_em)).filter((d) => !Number.isNaN(d.getTime()));
   const periodo = datas.length
@@ -234,24 +240,44 @@ export default function ImpressaoConferencias({
             <th style={imp.thNum}>Rodando %</th>
             <th style={imp.thNum}>Peças/hora</th>
             <th style={imp.thNum}>Peças/min</th>
+            {/* "(ciclos)" no cabecalho: a coluna vizinha e' em pecas, e
+                quem dividir pc/min pelo nominal numa peca de 2 ciclos
+                acharia outro numero. */}
+            {temNominal && <th style={imp.thNum}>Do nominal (ciclos)</th>}
           </tr>
         </thead>
         <tbody>
-          {resumo.map((g) => (
-            <tr key={g.maquina}>
-              <td style={imp.td}>{g.maquina}</td>
-              <td style={imp.td}>{grupoDe?.(g.maquina) || '—'}</td>
-              <td style={imp.tdNum}>{g.n}</td>
-              <td style={imp.tdNum}>{g.totalPecas}</td>
-              <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
-              <td style={imp.tdNum}>{g.totalParadaMs > 0 ? formatarDuracao(g.totalParadaMs) : '—'}</td>
-              <td style={imp.tdNum}>{Math.round(g.disponibilidadePct)}%</td>
-              <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
-              <td style={imp.tdNum}>{porMinuto(g.ritmoMedio)}</td>
-            </tr>
-          ))}
+          {resumo.map((g) => {
+            const pct = temNominal ? aproveitamentoDoNominal(g, nominalDe?.(g.maquina)?.ciclosMin) : null;
+            return (
+              <tr key={g.maquina}>
+                <td style={imp.td}>{g.maquina}</td>
+                <td style={imp.td}>{grupoDe?.(g.maquina) || '—'}</td>
+                <td style={imp.tdNum}>{g.n}</td>
+                <td style={imp.tdNum}>{g.totalPecas}</td>
+                <td style={imp.tdNum}>{formatarDuracao(g.totalProdutivoMs)}</td>
+                <td style={imp.tdNum}>{g.totalParadaMs > 0 ? formatarDuracao(g.totalParadaMs) : '—'}</td>
+                <td style={imp.tdNum}>{Math.round(g.disponibilidadePct)}%</td>
+                <td style={{ ...imp.tdNum, fontWeight: 700 }}>{Math.round(g.ritmoMedio)}</td>
+                <td style={imp.tdNum}>{porMinuto(g.ritmoMedio)}</td>
+                {temNominal && <td style={imp.tdNum}>{pct == null ? '—' : `${Math.round(pct)}%`}</td>}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+
+      {/* De onde saiu o nominal: numero sem origem nao se contesta nem se
+          confia. Uma linha por maquina, com a fonte quando foi anotada. */}
+      {temNominal && (
+        <p style={{ ...imp.nota, margin: '6px 0 0' }}>
+          Do nominal: acionamentos por minuto com a máquina rodando, contra o ritmo de
+          catálogo do cadastro — {comNominal.map((x) => (
+            `${x.maquina} ${formatarNominal(x.nominal.ciclosMin)} ciclos/min${x.nominal.fonte ? ` (${x.nominal.fonte})` : ''}`
+          )).join(' · ')}. O medido inclui o manuseio da peça; o catálogo não. É a distância
+          até o teto, não meta.
+        </p>
+      )}
 
       {/* Nota em texto corrido, nao carimbo: o numero ja' saiu na tabela. */}
       {emMedicao.length > 0 && (
@@ -596,6 +622,8 @@ export default function ImpressaoConferencias({
             ['Deixou de sair', 'peças que teriam saído no MESMO período se a máquina não tivesse '
               + 'parado, ao ritmo que ela própria fez rodando. Não é meta nem capacidade de catálogo.'],
             ['Grupo', 'grupo do cadastro de máquinas, com o código da fábrica (ex: 0002 · FURADEIRA).'],
+            ['Do nominal', 'quanto do ritmo de catálogo do fabricante (ciclos por minuto, do cadastro) a máquina '
+              + 'fez com ela rodando. Inclui o manuseio da peça, que o catálogo não tem: é distância até o teto, não meta.'],
             ['Ainda em medição', 'máquina medida poucas vezes ou por pouco tempo — o número pode mudar com mais medições.'],
             ['Obs.', 'observação escrita pelo analista no aparelho, na hora da medição: o que o contador não registra.'],
           ].map(([sigla, texto]) => (

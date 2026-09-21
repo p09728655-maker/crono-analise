@@ -127,6 +127,12 @@ export const est = {
     color: t.textoFraco, ...tipo('micro'), flexShrink: 0,
   },
   linhaBotoes: { display: 'flex', gap: espaco.md, flexShrink: 0, alignItems: 'center' },
+  // O nominal do fabricante na linha, discreto: e' referencia, nao alerta.
+  seloNominal: {
+    padding: '1px 6px', borderRadius: raio.pill, background: t.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    color: t.textoMedio, ...tipo('micro'), flexShrink: 0, whiteSpace: 'nowrap',
+  },
 
   form: {
     display: 'flex', flexDirection: 'column', gap: espaco.sm,
@@ -134,6 +140,7 @@ export const est = {
     borderWidth: 1, borderStyle: 'solid', borderColor: t.vermelho,
   },
   formAcoes: { display: 'flex', gap: espaco.md, justifyContent: 'flex-end', alignItems: 'center' },
+  formLinha: { display: 'flex', gap: espaco.sm, alignItems: 'center', flexWrap: 'wrap' },
   dica: { ...tipo('legenda'), color: t.textoFraco, fontStyle: 'italic', margin: 0 },
   input: {
     width: '100%', minHeight: 40, padding: `0 ${espaco.md}px`, background: t.papel,

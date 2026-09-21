@@ -12,10 +12,17 @@ import { createPortal } from 'react-dom';
 import { claro } from '../../../theme/tokensAnalise.js';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
 import { VERSAO } from '../../../versao.js';
+import { formatarNominal } from '../../../domain/relatorioConferencias.js';
 
 export default function ImpressaoCadastro({ grupos, maquinas }) {
   const hoje = new Date().toLocaleDateString('pt-BR');
   const ativas = maquinas.filter((m) => m.ativa).length;
+  // A coluna do nominal so' entra se alguma maquina tem: folha de
+  // travessoes nao informa nada.
+  const temNominal = maquinas.some((m) => m.nominal_ciclos_min != null);
+  const nominalDe = (m) => (m.nominal_ciclos_min == null
+    ? '—'
+    : `${formatarNominal(m.nominal_ciclos_min)} ciclos/min${m.nominal_fonte ? ` (${m.nominal_fonte})` : ''}`);
 
   return createPortal(
     <div className="somente-impressao" style={impc.folha}>
@@ -50,6 +57,7 @@ export default function ImpressaoCadastro({ grupos, maquinas }) {
             <th style={impc.th}>Grupo</th>
             <th style={impc.th}>Máquina</th>
             <th style={impc.th}>Situação</th>
+            {temNominal && <th style={impc.th}>Nominal do fabricante</th>}
           </tr>
         </thead>
         <tbody>
@@ -59,6 +67,7 @@ export default function ImpressaoCadastro({ grupos, maquinas }) {
               <td style={impc.td}>{m.grupo_nome || 'Sem grupo'}</td>
               <td style={{ ...impc.td, fontWeight: 600 }}>{m.nome}</td>
               <td style={impc.td}>{m.ativa ? 'Ativa' : 'Desativada'}</td>
+              {temNominal && <td style={impc.td}>{nominalDe(m)}</td>}
             </tr>
           ))}
           {/* Grupo ainda sem maquina tambem e' informacao: ele existe no
@@ -69,6 +78,7 @@ export default function ImpressaoCadastro({ grupos, maquinas }) {
               <td style={impc.td}>{g.nome}</td>
               <td style={{ ...impc.td, color: '#777', fontStyle: 'italic' }}>sem máquinas cadastradas</td>
               <td style={impc.td}>—</td>
+              {temNominal && <td style={impc.td}>—</td>}
             </tr>
           ))}
         </tbody>
@@ -78,6 +88,8 @@ export default function ImpressaoCadastro({ grupos, maquinas }) {
         Desativada: fora da escolha do celular, mas segue nomeando as conferências já
         registradas. Máquina usada só por texto livre (fora do cadastro) não aparece
         nesta folha — traga-a pelo botão "Trazer das conferências".
+        {temNominal && ' Nominal do fabricante: ritmo de catálogo em ciclos (acionamentos) por minuto, '
+          + 'sem manuseio — referência de teto, não meta.'}
       </p>
     </div>,
     document.body,

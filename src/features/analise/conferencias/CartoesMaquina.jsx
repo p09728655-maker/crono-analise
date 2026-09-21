@@ -1,4 +1,5 @@
 import { formatarDuracao } from '../../../domain/cronoanalise.js';
+import { aproveitamentoDoNominal, formatarNominal } from '../../../domain/relatorioConferencias.js';
 import { est } from './estilos.js';
 import { porMinuto } from './formato.js';
 
@@ -11,7 +12,7 @@ import { porMinuto } from './formato.js';
  * autoavaliando) — ele virou uma nota discreta em cinza ("ainda em
  * medicao"), nunca um carimbo na frente do numero.
  */
-export default function CartoesMaquina({ resumo, grupoDe }) {
+export default function CartoesMaquina({ resumo, grupoDe, nominalDe = () => null }) {
   return (
     <section style={est.resumoGrade} aria-label="Resumo por máquina">
       {resumo.map((g) => (
@@ -48,6 +49,23 @@ export default function CartoesMaquina({ resumo, grupoDe }) {
                 {' · '}Pior: {Math.round(g.pior.ritmo)} pç/h{g.pior.peca ? ` (${g.pior.peca})` : ''}
               </span>
             )}
+            {/* O NOMINAL do fabricante, quando o cadastro tem: e' o unico
+                numero que diz em que PATAMAR o ritmo esta' — "estavel" so'
+                diz que nao mudou. Em ciclos/min porque e' assim que o
+                catalogo fala; inclui o manuseio, que o catalogo nao tem —
+                por isso e' distancia ate' o teto, nao meta. */}
+            {(() => {
+              const nominal = nominalDe(g.maquina);
+              const pct = nominal ? aproveitamentoDoNominal(g, nominal.ciclosMin) : null;
+              if (pct == null) return null;
+              return (
+                <span>
+                  Nominal do fabricante: {formatarNominal(nominal.ciclosMin)} ciclos/min
+                  {' · '}rodando a <strong>{Math.round(pct)}%</strong> do nominal
+                  {nominal.fonte ? ` (${nominal.fonte})` : ''}
+                </span>
+              );
+            })()}
           </div>
           {/* Nota em cinza, nunca carimbo: o numero ja' e' o resultado — a
               nota so' lembra que ele ainda assenta. */}
