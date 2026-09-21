@@ -45,7 +45,7 @@ const listarGrupos = (db, empresaId) => db`
 
 // Grupo (pelo codigo) antes do nome: e' a ordem da escolha no celular.
 const listarMaquinas = (db, empresaId) => db`
-  SELECT m.id, m.nome, m.ativa, m.grupo_id,
+  SELECT m.id, m.nome, m.ativa, m.grupo_id, m.nominal_ciclos_min, m.nominal_fonte,
          g.codigo AS grupo_codigo, g.nome AS grupo_nome
     FROM maquinas m
     LEFT JOIN grupos_maquina g ON g.id = m.grupo_id
@@ -261,30 +261,72 @@ export default handler(async (req, res) => {
       if (!atual) throw naoEncontrado('Maquina nao encontrada');
 
       const tem = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
-      if (!tem('nome') && !tem('ativa') && !tem('grupoId')) {
-        throw erroValidacao('Nada a atualizar: informe "nome", "grupoId" ou "ativa"');
+      const campos = ['nome', 'grupoId', 'ativa', 'nominalCiclosMin', 'nominalFonte'];
+      if (!campos.some(tem)) {
+        throw erroValidacao(`Nada a atualizar: informe ${campos.map((c) => `"${c}"`).join(', ')}`);
       }
 
+      /**
+       * TUDO VALIDADO ANTES DO PRIMEIRO UPDATE — a mesma regra do PATCH de
+       * grupo. Sem transacao no modo de servico, validar entre gravacoes
+       * deixaria o nome novo no banco com o nominal recusado.
+       */
+      let nome;
       if (tem('nome')) {
-        const nome = nomeLimpo(texto(corpo.nome, 'nome', { obrigatorio: true, max: 120 }));
+        nome = nomeLimpo(texto(corpo.nome, 'nome', { obrigatorio: true, max: 120 }));
         if (!nome) throw erroValidacao('Informe o nome da maquina');
         const [outra] = await db`
           SELECT nome FROM maquinas
            WHERE empresa_id = ${empresaId} AND lower(btrim(nome)) = lower(${nome}) AND id <> ${maquinaId}`;
         if (outra) throw new ErroHttp(409, `Ja existe esta maquina no cadastro: "${outra.nome}"`);
+      }
+      // null/vazio LIMPA: e' o caminho de tirar de um grupo errado.
+      const grupoId = tem('grupoId') ? await grupoValido(db, empresaId, corpo.grupoId) : undefined;
+
+      /**
+       * RITMO NOMINAL DO FABRICANTE, em ciclos por minuto, e a FONTE dele.
+       *
+       * Nulo APAGA (como a jornada do grupo): "nao sei" e' diferente de
+       * qualquer numero. A fonte so' existe junto do numero — apagar o
+       * nominal apaga a fonte, e fonte sem nominal nao grava: e' anotacao
+       * de um numero, nao campo solto.
+       */
+      const apagar = (v) => v === null || v === '';
+      const nominal = tem('nominalCiclosMin')
+        ? (apagar(corpo.nominalCiclosMin)
+          ? null
+          : decimal(corpo.nominalCiclosMin, 'nominalCiclosMin', { min: 0.01, max: 10000 }))
+        : undefined;
+      let fonte = tem('nominalFonte')
+        ? (apagar(corpo.nominalFonte) ? null : nomeLimpo(texto(corpo.nominalFonte, 'nominalFonte', { max: 120 })) || null)
+        : undefined;
+      if (nominal === null) fonte = null;
+      if (fonte != null && nominal === undefined) {
+        const [atualNominal] = await db`SELECT nominal_ciclos_min FROM maquinas WHERE id = ${maquinaId}`;
+        if (atualNominal?.nominal_ciclos_min == null) {
+          throw erroValidacao('Informe o ritmo nominal (ciclos/min) junto com a fonte');
+        }
+      }
+
+      if (nome !== undefined) {
         await db`UPDATE maquinas SET nome = ${nome} WHERE id = ${maquinaId}`;
       }
-      if (tem('grupoId')) {
-        // null/vazio LIMPA: e' o caminho de tirar de um grupo errado.
-        const grupoId = await grupoValido(db, empresaId, corpo.grupoId);
+      if (grupoId !== undefined) {
         await db`UPDATE maquinas SET grupo_id = ${grupoId} WHERE id = ${maquinaId}`;
       }
       if (tem('ativa')) {
         await db`UPDATE maquinas SET ativa = ${Boolean(corpo.ativa)} WHERE id = ${maquinaId}`;
       }
+      if (nominal !== undefined) {
+        await db`UPDATE maquinas SET nominal_ciclos_min = ${nominal} WHERE id = ${maquinaId}`;
+      }
+      if (fonte !== undefined) {
+        await db`UPDATE maquinas SET nominal_fonte = ${fonte} WHERE id = ${maquinaId}`;
+      }
 
       const [maquina] = await db`
-        SELECT m.id, m.nome, m.ativa, m.grupo_id, g.codigo AS grupo_codigo, g.nome AS grupo_nome
+        SELECT m.id, m.nome, m.ativa, m.grupo_id, m.nominal_ciclos_min, m.nominal_fonte,
+               g.codigo AS grupo_codigo, g.nome AS grupo_nome
           FROM maquinas m LEFT JOIN grupos_maquina g ON g.id = m.grupo_id
          WHERE m.id = ${maquinaId}`;
       return json(res, 200, { maquina });

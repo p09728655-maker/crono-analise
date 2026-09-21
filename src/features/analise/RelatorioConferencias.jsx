@@ -116,7 +116,7 @@ const lerProgramaNoPapel = () => {
 export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const dados = useConferencias();
   const {
-    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe,
+    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe, nominalDe,
     cadastro, recarregarCadastro,
     limparErro, carregar,
   } = dados;
@@ -489,7 +489,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
                 <ComparativoParadas comparativo={comparativo} resumo={resumoVisivel} escopo={escopo} />
               )}
 
-              <CartoesMaquina resumo={resumoVisivel} grupoDe={grupoDe} />
+              <CartoesMaquina resumo={resumoVisivel} grupoDe={grupoDe} nominalDe={nominalDe} />
 
               {!verArquivadas && <ComparativoMaquinas comparativo={entreMaquinas} />}
 
@@ -619,6 +619,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
           resumo={resumoVisivel}
           resumoPecas={resumoPecasVisivel}
           grupoDe={grupoDe}
+          nominalDe={nominalDe}
           escopo={escopo}
           analise={analiseNoPapel ? analise : null}
           entreMaquinas={entreMaquinas}

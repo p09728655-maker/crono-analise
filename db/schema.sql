@@ -458,6 +458,24 @@ ALTER TABLE grupos_maquina ENABLE ROW LEVEL SECURITY;
 -- Excluir um grupo NAO apaga maquina: ela so' fica sem grupo.
 ALTER TABLE maquinas ADD COLUMN IF NOT EXISTS grupo_id uuid REFERENCES grupos_maquina(id) ON DELETE SET NULL;
 
+-- RITMO NOMINAL DO FABRICANTE, por maquina: o teto de catalogo, em CICLOS
+-- (acionamentos do cabecote) POR MINUTO. E' a referencia que faltava ao
+-- relatorio: "ritmo estavel" diz que a maquina nao subiu nem caiu, mas nao
+-- diz em que patamar — estavel a 60% do que ela foi comprada para fazer e'
+-- outro problema. Em ciclos, nao em pecas, porque e' assim que o catalogo
+-- fala (a maquina nao sabe o que e' uma peca), e e' a unidade em que pecas
+-- de furacao diferente se comparam (ciclos_por_peca em conferencias).
+-- Peca de 1 ciclo: ciclos/min e pecas/min sao o mesmo numero.
+--
+-- NAO e' meta: o catalogo e' medido sem manuseio, com a peca ideal. A meta
+-- operacional continua sendo a melhor medicao da propria maquina. Nulo ate'
+-- alguem informar; a fonte (catalogo, manual, ano) fica anotada ao lado,
+-- porque numero sem origem ninguem confia nem contesta.
+ALTER TABLE maquinas ADD COLUMN IF NOT EXISTS nominal_ciclos_min numeric(7,2)
+  CHECK (nominal_ciclos_min IS NULL OR (nominal_ciclos_min > 0 AND nominal_ciclos_min <= 10000));
+ALTER TABLE maquinas ADD COLUMN IF NOT EXISTS nominal_fonte text
+  CHECK (nominal_fonte IS NULL OR length(nominal_fonte) <= 120);
+
 -- Migra o formato intermediario (coluna de texto `grupo`, que nunca chegou
 -- a ser publicada): vira linha em grupos_maquina com codigo sequencial
 -- (0001, 0002...) e a maquina passa a apontar por grupo_id.

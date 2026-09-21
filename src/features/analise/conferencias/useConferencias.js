@@ -14,6 +14,7 @@
  */
 import { useEffect, useState } from 'react';
 import { nomeChave } from '../../../domain/cronoanalise.js';
+import { mapaNominalDoCadastro } from '../../../domain/relatorioConferencias.js';
 import {
   arquivarConferencia, arquivarConferencias, excluirConferencia, listarCadastroMaquinas,
   listarConferenciasServidor, renomearPecaConferencia, renomearPecaConferencias,
@@ -41,6 +42,9 @@ export function useConferencias() {
   // no grupo da maquina que se esta' olhando, em vez de pedir que o usuario
   // procure na lista o grupo que ele acabou de filtrar.
   const [mapaGrupoIds, setMapaGrupoIds] = useState(() => new Map());
+  // O ritmo NOMINAL do fabricante (ciclos/min), por maquina: a referencia
+  // externa com que o relatorio diz em que patamar o "ritmo estavel" esta'.
+  const [mapaNominal, setMapaNominal] = useState(() => new Map());
   // O cadastro inteiro (grupos com a jornada, maquinas com o grupo): e' o
   // que o quadro do programa da semana precisa para saber quantas maquinas
   // ATIVAS o grupo tem e quantas horas cada uma cumpre.
@@ -61,12 +65,14 @@ export function useConferencias() {
         }
         setMapaGrupos(mapa);
         setMapaGrupoIds(ids);
+        setMapaNominal(mapaNominalDoCadastro(c.maquinas));
         setCadastro(c);
       })
       .catch(() => {});
   }, [recarga]);
   const grupoDe = (maquina) => mapaGrupos.get(nomeChave(maquina)) || null;
   const grupoIdDe = (maquina) => mapaGrupoIds.get(nomeChave(maquina)) || null;
+  const nominalDe = (maquina) => mapaNominal.get(nomeChave(maquina)) || null;
 
   async function carregar(arquivadas = verArquivadas) {
     setEstado('carregando');
@@ -136,7 +142,7 @@ export function useConferencias() {
     executar(c.id, () => excluirConferencia(c.id), aoConcluir);
 
   return {
-    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe,
+    linhas, outras, estado, erro, ocupado, verArquivadas, mapaGrupos, grupoDe, grupoIdDe, nominalDe,
     cadastro, recarregarCadastro,
     limparErro: () => setErro(null),
     alternarArquivadas: () => setVerArquivadas((v) => !v),

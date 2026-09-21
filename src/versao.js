@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.88.0',
+    data: '2026-09-21',
+    titulo: 'O ritmo nominal do fabricante entra no cadastro',
+    itens: [
+      '"RITMO ESTÁVEL" DIZIA QUE A MÁQUINA NÃO SUBIU NEM CAIU — E SÓ ISSO. Não dizia em que patamar: uma furadeira estável a 733 pç/h pode estar fazendo 60% do que foi comprada para fazer, e o relatório não tinha nenhuma referência de fora para acusar isso. A pergunta veio do PPCP: "e se o fabricante diz que ela fura mais peças por minuto?"',
+      'AGORA CADA MÁQUINA PODE TER O RITMO NOMINAL DO FABRICANTE no cadastro (Máquinas → Editar): o número do catálogo, em CICLOS por minuto, com a fonte anotada ao lado (catálogo, manual, ano) — número sem origem ninguém confia nem contesta. Fica vazio até alguém informar; vazio apaga.',
+      'EM CICLOS, NÃO EM PEÇAS, de propósito. O catálogo fala em acionamentos do cabeçote — a máquina não sabe o que é uma peça. E é a unidade em que uma peça de 2 ciclos não parece "metade do ritmo" de uma de 1. Peça de 1 ciclo: ciclos/min e peças/min são o mesmo número.',
+      'O RELATÓRIO PASSA A DIZER "DO NOMINAL": nos cartões por máquina e na folha impressa (coluna nova em Ritmo por máquina, só quando alguma máquina tem o nominal), quanto do catálogo a máquina fez COM ELA RODANDO. O tempo parado continua com o número dele (Máquina rodando %): misturar os dois esconderia qual problema é o da máquina.',
+      'NÃO É META. O catálogo é medido sem manuseio, com a peça ideal; o medido inclui carregar, posicionar e retirar. Por isso raramente chega a 100% e por isso o relatório o chama de distância até o teto. A meta operacional continua sendo a melhor medição da própria máquina. Se o nominal e a melhor medição estão perto, o ganho está em reduzir parada; se estão longe, o problema é método, ferramenta ou programa — não a máquina.',
+      'O cadastro impresso também sai com a coluna do nominal quando alguma máquina o tem.',
+    ],
+  },
+  {
     versao: '2.87.0',
     data: '2026-09-15',
     titulo: 'A TV pode mostrar um grupo só',

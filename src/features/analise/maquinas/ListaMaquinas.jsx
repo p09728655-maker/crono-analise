@@ -13,13 +13,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { atualizarMaquina, criarMaquina, removerMaquina } from '../../../lib/api.js';
 import { nomeChave } from '../../../domain/cronoanalise.js';
+import { formatarNominal } from '../../../domain/relatorioConferencias.js';
+import { lerNominalDoFormulario } from './nominal.js';
 import { SEM_GRUPO, TODAS, grupoParaCadastrar, rotuloGrupo, temContexto } from './grupos.js';
 import { est } from './estilos.js';
 
 export default function ListaMaquinas({
   lista, grupos, escolhido, busca, setBusca, ocupado, aplicar, excluindo, setExcluindo,
 }) {
-  const [editando, setEditando] = useState(null);      // {id, nome, grupoId}
+  const [editando, setEditando] = useState(null);      // {id, nome, grupoId, nominal, fonte}
   const [novoNome, setNovoNome] = useState('');
   const [novoGrupoId, setNovoGrupoId] = useState('');  // so' vale em "Todas"
   // Nome da maquina recem-cadastrada: e' por ele que a linha nova e'
@@ -129,8 +131,13 @@ export default function ListaMaquinas({
               style={est.form}
               onSubmit={async (ev) => {
                 ev.preventDefault();
+                // O nominal e' validado AQUI, dentro do aplicar: erro de
+                // digitacao aparece no mesmo lugar que erro do servidor, e
+                // nada e' enviado (ver nominal.js — NaN viraria null, e null
+                // apaga).
                 if (await aplicar(() => atualizarMaquina(m.id, {
                   nome: editando.nome.trim(), grupoId: editando.grupoId || null,
+                  ...lerNominalDoFormulario(editando),
                 }))) setEditando(null);
               }}
             >
@@ -147,6 +154,30 @@ export default function ListaMaquinas({
                 <option value="">Sem grupo</option>
                 {grupos.map((g) => <option key={g.id} value={g.id}>{rotuloGrupo(g)}</option>)}
               </select>
+              {/* O RITMO NOMINAL do fabricante: em ciclos (acionamentos do
+                  cabeçote) por minuto, porque e' assim que o catalogo fala.
+                  E' o que permite ao relatorio dizer em que patamar o ritmo
+                  esta' — "estavel" so' diz que nao mudou. */}
+              <div style={est.formLinha}>
+                <input
+                  type="text" inputMode="decimal" value={editando.nominal}
+                  onChange={(ev) => setEditando({ ...editando, nominal: ev.target.value })}
+                  style={{ ...est.input, width: 150 }} placeholder="Ex: 15"
+                  aria-label={`Ritmo nominal do fabricante de ${m.nome}, em ciclos por minuto`}
+                />
+                <span style={est.destinoCadastro}>ciclos/min (nominal do fabricante)</span>
+                <input
+                  type="text" value={editando.fonte} maxLength={120}
+                  onChange={(ev) => setEditando({ ...editando, fonte: ev.target.value })}
+                  style={{ ...est.input, flex: 1, minWidth: 160 }} placeholder="Fonte: catálogo, manual, ano"
+                  aria-label={`Fonte do ritmo nominal de ${m.nome}`}
+                />
+              </div>
+              <span style={est.dica}>
+                Nominal é o teto de catálogo, medido sem manuseio: o relatório mostra quanto
+                dele a máquina faz rodando. Não é meta. Peça de 1 ciclo: ciclos/min = peças/min.
+                Vazio apaga.
+              </span>
               <span style={est.dica}>
                 Renomear vale para as próximas medições; as antigas continuam com o
                 nome gravado.
@@ -173,6 +204,14 @@ export default function ListaMaquinas({
                 data-maquina={m.nome}
               >
                 <span style={est.linhaRotulo}>{m.nome}</span>
+                {m.nominal_ciclos_min != null && (
+                  <span
+                    style={est.seloNominal}
+                    title={`Ritmo nominal do fabricante${m.nominal_fonte ? ` — ${m.nominal_fonte}` : ''}`}
+                  >
+                    nominal {formatarNominal(m.nominal_ciclos_min)} ciclos/min
+                  </span>
+                )}
                 {!m.ativa && <span style={est.seloInativo}>Desativada</span>}
                 <div style={est.linhaBotoes}>
                   {excluindo === m.id ? (
@@ -194,7 +233,11 @@ export default function ListaMaquinas({
                     <>
                       <button
                         type="button" style={est.botaoTexto}
-                        onClick={() => setEditando({ id: m.id, nome: m.nome, grupoId: m.grupo_id || '' })}
+                        onClick={() => setEditando({
+                          id: m.id, nome: m.nome, grupoId: m.grupo_id || '',
+                          nominal: m.nominal_ciclos_min == null ? '' : formatarNominal(m.nominal_ciclos_min),
+                          fonte: m.nominal_fonte || '',
+                        })}
                         aria-label={`Editar ${m.nome}`}
                       >
                         Editar
