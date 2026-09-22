@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.88.1',
+    data: '2026-09-22',
+    titulo: 'A tela de Máquinas voltou, e o banco passa a subir junto com o app',
+    itens: [
+      'A TELA DE MÁQUINAS ABRIA COM "ERRO INTERNO (POSTGRESERROR:42703)" e não mostrava nada — nem a lista, nem os grupos. A causa não estava no app: a versão 2.88.0 passou a guardar o ritmo nominal de cada máquina, e essas duas colunas nunca foram criadas no banco. O app pedia uma coluna que não existia, e toda a tela caía junto. Ficou assim por dias, e o que apareceu na tela não dizia nem que o problema era de instalação.',
+      'AS COLUNAS FORAM CRIADAS e a tela voltou ao normal, com as máquinas e os grupos como estavam. Nenhum cadastro foi perdido: o ritmo nominal simplesmente ainda está em branco, esperando quem for informar.',
+      'O BANCO AGORA SOBE JUNTO COM O APP. Publicar uma versão nova e atualizar o banco eram dois passos, e o segundo era na mão — quando alguém esquecia, a fábrica descobria pela tela quebrada. Agora os dois acontecem na mesma publicação: se o banco não puder ser atualizado, a versão nova NÃO vai ao ar e o sistema continua na anterior, que funciona. É melhor publicar depois do que publicar quebrado.',
+      'E QUANDO ALGO ASSIM ESCAPAR, A TELA PASSA A EXPLICAR: em vez de "Erro interno" com um código, ela diz qual informação falta no banco e qual é o comando que resolve — do mesmo jeito que já fazia quando uma tabela inteira faltava. O resto do app continua funcionando enquanto isso.',
+      'A falha também passa a ficar registrada no diagnóstico do servidor, não só na tela de quem esbarrou nela. Resposta boa para o usuário não substitui registro: sem ele, uma atualização esquecida só aparece quando alguém reclama. E esse registro passou a nascer junto com o banco — a tabela existia no sistema e não estava descrita no projeto, o mesmo tipo de descompasso que causou esta falha, só que ao contrário.',
+    ],
+  },
+  {
     versao: '2.88.0',
     data: '2026-09-21',
     titulo: 'O ritmo nominal do fabricante entra no cadastro',

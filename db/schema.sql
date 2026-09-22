@@ -623,6 +623,41 @@ CREATE TABLE IF NOT EXISTS configuracoes (
   PRIMARY KEY (empresa_id, chave)
 );
 
+-- ---------------------------------------------------------------- erros_api
+-- A CAIXA-PRETA DO SERVIDOR: toda falha nao tratada de /api cai aqui.
+--
+-- O console da funcao serverless nao e' alcancavel de fora da Vercel, e
+-- "Erro interno" na tela nao diz nada — sem esta tabela o diagnostico vira
+-- adivinhacao. Foi ela que mostrou que a v2.88.0 estava quebrada em
+-- producao ha' dias (15 linhas com sqlstate 42703 apontando
+-- `m.nominal_ciclos_min`), e nao o print de quem esbarrou na tela.
+--
+-- ELA EXISTIA EM PRODUCAO E NAO EXISTIA AQUI — aplicada um dia por migracao
+-- avulsa e nunca escrita neste arquivo. E' a MESMA divergencia que quebrou a
+-- tela de Maquinas, na direcao contraria: banco na frente do repositorio.
+-- Com a migracao rodando no build (scripts/migrar.mjs), este arquivo passou
+-- a ser o unico caminho — sem esta secao, a proxima recriacao do banco
+-- apagaria justamente o diagnostico.
+--
+-- SEM empresa_id de proposito: a falha pode acontecer ANTES de saber quem e'
+-- a empresa (token invalido, banco fora). Nada aqui e' dado de cliente — e'
+-- rota, metodo, SQLSTATE e mensagem, truncados na origem (api/_lib/http.js).
+-- Por isso tambem nao e' lida pelo app: RLS ligada e NENHUMA politica, como
+-- a porta anonima do resto do schema. Quem le, le pelo painel do Supabase.
+CREATE TABLE IF NOT EXISTS erros_api (
+  id          bigserial PRIMARY KEY,
+  ocorrido_em timestamptz NOT NULL DEFAULT now(),
+  rota        text,
+  metodo      text,
+  tipo        text,      -- nome da classe do erro (ex.: PostgresError)
+  sqlstate    text,      -- o codigo do Postgres (42703 = coluna ausente)
+  mensagem    text,
+  versao      text       -- VERCEL_GIT_COMMIT_SHA curto: qual deploy falhou
+);
+-- "O que quebrou agora" e' a unica pergunta que se faz aqui.
+CREATE INDEX IF NOT EXISTS erros_api_recentes_idx ON erros_api (ocorrido_em DESC);
+ALTER TABLE erros_api ENABLE ROW LEVEL SECURITY;
+
 -- ---------------------------------------------------------------- comentarios
 -- client_id ja foi lido como "identificador do aparelho". Nao e: e uma chave
 -- por LINHA, e o UNIQUE em cima dela e o que impede o ciclo de entrar duas
