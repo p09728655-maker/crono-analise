@@ -818,6 +818,37 @@ novo é também a migração** de um banco que já existe — é assim que a tab
 INSERT INTO empresas (nome) VALUES ('Patrimar Móveis') RETURNING id;
 ```
 
+### A migração roda no build (`scripts/migrar.mjs`)
+
+Rodar o `psql` acima **na mão não é mais o processo normal** — é o caminho
+de instalação nova e de emergência. O deploy é automático (merge na `main`
+publica na Vercel) e a migração era manual; quando um PR mexia no banco e
+ninguém rodava o comando, a produção subia com código novo contra banco
+velho e quebrava para o usuário. Foi o que aconteceu na v2.88.0: a tela de
+Máquinas inteira respondeu `PostgresError:42703` por dias porque
+`nominal_ciclos_min` estava na consulta e não no banco.
+
+`npm run build` passou a ser `vite build && node scripts/migrar.mjs`:
+
+| Onde | Migra? | Por quê |
+|---|---|---|
+| Build de **produção** na Vercel | **Sim** | é o único momento em que banco e código precisam casar |
+| Build de **preview** | Não | preview e produção dividem a mesma `DATABASE_URL`: migrar no preview deixaria um PR ainda não revisado mudar o schema de produção, e um `DROP` de branch errada não tem volta. O custo aceito é que o preview de um PR que mexe no banco acusa coluna ausente até a produção publicar — o log do build diz isso |
+| Build **local** | Não | ter `DATABASE_URL` exportada no terminal não é intenção de migrar. Use `MIGRAR=1 npm run build` |
+
+Duas decisões que valem saber:
+
+- **Compila primeiro, migra depois.** Código que nem compila não pode ter
+  mexido no banco de produção.
+- **Falha na migração derruba o build**, de propósito. A produção fica na
+  versão anterior, que funciona, em vez de ir ao ar uma versão sem banco
+  embaixo. Para publicar sem migrar conscientemente: `MIGRAR=0`.
+
+O arquivo inteiro vai numa transação só (protocolo simples, multi-statement),
+então **ou o schema entra inteiro ou não entra nada** — o `psql` na mão não
+dá isso, cada statement fecha sozinho e pode deixar o banco meio migrado. Um
+lock consultivo serializa builds simultâneos.
+
 ### RLS: a porta anônima fica fechada
 
 O schema `public` é exposto pelo PostgREST com a chave anônima, que vive no

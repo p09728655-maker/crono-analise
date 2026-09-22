@@ -25,6 +25,13 @@ function erroDeTabelaAusente(tabela) {
   return err;
 }
 
+/** Como o driver entrega um undefined_column. `mensagem` verbatim do Postgres. */
+function erroDeColunaAusente(mensagem) {
+  const err = new Error(mensagem);
+  err.code = '42703';
+  return err;
+}
+
 describe('handler', () => {
   it('tabela ausente vira 503 nomeando a tabela e o comando', async () => {
     const res = fingirRes();
@@ -34,6 +41,47 @@ describe('handler', () => {
     expect(res.statusCode).toBe(503);
     expect(res.corpo.erro).toContain('motivos_parada');
     expect(res.corpo.erro).toContain('db/schema.sql');
+  });
+
+  /**
+   * O caso da v2.88.0: o deploy subiu com `nominal_ciclos_min` na consulta
+   * e o schema nunca foi aplicado. A tela de Maquinas inteira respondia
+   * "Erro interno (PostgresError:42703)" — nem instalacao, nem coluna, nem
+   * o que fazer. Mesma falha da tabela ausente, mesma resposta.
+   */
+  it('coluna ausente num SELECT vira 503 nomeando a coluna e o comando', async () => {
+    const res = fingirRes();
+    await handler(async () => {
+      throw erroDeColunaAusente('column m.nominal_ciclos_min does not exist');
+    })({ method: 'GET' }, res);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.corpo.erro).toContain('m.nominal_ciclos_min');
+    expect(res.corpo.erro).toContain('db/schema.sql');
+  });
+
+  // No INSERT/UPDATE o Postgres fala outra lingua: coluna entre aspas e a
+  // tabela em `of relation`. O nome sai junto, tabela.coluna.
+  it('coluna ausente num INSERT nomeia tabela e coluna', async () => {
+    const res = fingirRes();
+    await handler(async () => {
+      throw erroDeColunaAusente('column "nominal_fonte" of relation "maquinas" does not exist');
+    })({ method: 'POST' }, res);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.corpo.erro).toContain('maquinas.nominal_fonte');
+  });
+
+  // Mensagem que o regex nao reconhece nao pode virar 500 de volta: o
+  // SQLSTATE ja' basta para saber que e' instalacao, e o 503 e' o recado.
+  it('coluna ausente com mensagem inesperada ainda vira 503', async () => {
+    const res = fingirRes();
+    await handler(async () => {
+      throw erroDeColunaAusente('formato que o Postgres nunca usou');
+    })({ method: 'GET' }, res);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.corpo.erro).toContain('desconhecida');
   });
 
   it('erro de verdade continua sendo 500 sem vazar detalhe', async () => {

@@ -38,6 +38,42 @@ function tabelaQueFalta(err) {
 }
 
 /**
+ * Coluna que o codigo usa e o banco nao tem.
+ *
+ * O MESMO problema de instalacao da tabela ausente, um passo adiante: a
+ * tabela existe, a coluna que a versao nova acrescentou nao. A tela de
+ * Maquinas quebrou inteira assim na v2.88.0 — o deploy subiu com
+ * `nominal_ciclos_min` na consulta e `db/schema.sql` nunca foi aplicado. O
+ * que o analista via era "Erro interno (PostgresError:42703)": nao diz que
+ * o problema e' de instalacao, nem qual coluna, nem o que fazer.
+ *
+ * 42703 e' o SQLSTATE `undefined_column`. O Postgres nao entrega o nome em
+ * campo proprio: ele sai da mensagem, que vem em DUAS formas —
+ *   SELECT: `column m.nominal_ciclos_min does not exist` (com o apelido da
+ *           tabela, sem aspas)
+ *   INSERT/UPDATE: `column "nome" of relation "maquinas" does not exist`
+ */
+function colunaQueFalta(err) {
+  if (err?.code !== '42703') return null;
+  const achado = /column "?([\w.]+)"? (?:of relation "([^"]+)" )?does not exist/.exec(err.message || '');
+  if (!achado) return 'desconhecida';
+  const [, coluna, tabela] = achado;
+  return tabela ? `${tabela}.${coluna}` : coluna;
+}
+
+/**
+ * O que falta no banco, ja' com o artigo certo para a frase da tela.
+ * Tabela e coluna sao a MESMA falha para quem le: deploy sem migracao.
+ */
+function faltaNoBanco(err) {
+  const tabela = tabelaQueFalta(err);
+  if (tabela) return { o: 'a tabela', nome: tabela };
+  const coluna = colunaQueFalta(err);
+  if (coluna) return { o: 'a coluna', nome: coluna };
+  return null;
+}
+
+/**
  * Banco fora de alcance — e o que fazer a respeito.
  *
  * ECONNREFUSED aqui quase sempre significa UMA coisa: DATABASE_URL nao
@@ -105,12 +141,21 @@ export function handler(fn) {
         return;
       }
 
-      const tabela = tabelaQueFalta(err);
-      if (tabela) {
-        console.error(`[ritmopatrimar] tabela ausente no banco: ${tabela}`);
+      const falta = faltaNoBanco(err);
+      if (falta) {
+        console.error(`[ritmopatrimar] ${falta.o} ausente no banco: ${falta.nome}`);
+        /**
+         * Vai para a caixa-preta TAMBEM, nao so' para a tela.
+         *
+         * Foi `erros_api` que mostrou que a v2.88.0 estava quebrada em
+         * producao ha' dias, e nao o print de quem esbarrou nela. Resposta
+         * boa para o usuario nao substitui registro: sem a linha gravada,
+         * uma migracao esquecida so' aparece quando alguem reclama.
+         */
+        await registrarErro(req, err);
         // 503, nao 500: o servico esta' de pe', falta um passo de instalacao.
         json(res, 503, {
-          erro: `O banco ainda nao tem a tabela "${tabela}". Rode `
+          erro: `O banco ainda nao tem ${falta.o} "${falta.nome}". Rode `
             + '`psql "$DATABASE_URL" -f db/schema.sql` no banco desta instalacao — '
             + 'o arquivo e idempotente, entao roda-lo de novo e a migracao. '
             + 'O resto do app continua funcionando.',

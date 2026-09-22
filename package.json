@@ -1,12 +1,12 @@
 {
   "name": "ritmopatrimar",
-  "version": "2.88.0",
+  "version": "2.88.1",
   "private": true,
   "type": "module",
   "description": "RitmoPatrimar — Estudo de Tempos e Cronoanalise (Patrimar Moveis)",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/migrar.mjs",
     "preview": "vite preview",
     "test": "node test/checar-estilos.mjs && vitest run",
     "test:watch": "vitest",
