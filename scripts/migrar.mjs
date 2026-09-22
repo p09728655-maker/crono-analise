@@ -34,13 +34,16 @@
  *    e podia deixar o banco meio migrado.
  *  - O lock consultivo serializa builds simultaneos. Dois deploys ao mesmo
  *    tempo rodando DDL idempotente na mesma tabela nao da' erro previsivel:
- *    da' "tuple concurrently updated". O segundo espera e depois nao acha
- *    nada para fazer.
+ *    da' "tuple concurrently updated". O segundo espera a vez e depois nao
+ *    acha nada para fazer — espera COM TETO, porem: passou do
+ *    statement_timeout fixado em aplicar(), o build falha em vez de ficar
+ *    pendurado. Migracao leva dezenas de milissegundos; dois builds so'
+ *    colidem de verdade se algo ja' estiver errado.
  *
  * Nao e' uma funcao serverless: mora fora de api/, entao nao conta no teto
  * de 12 do plano Hobby (ver test/limite-funcoes.test.js).
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 
@@ -60,10 +63,26 @@ const LOCK = 2088072103;
 export function decidir(env = process.env) {
   const url = env.DATABASE_URL;
 
-  if (env.MIGRAR === '0') {
+  /**
+   * MIGRAR e' a UNICA alavanca manual daqui, e alavanca de seguranca nao
+   * pode falhar aberta: `MIGRAR=false`, `off`, `nao` ou `0 ` com espaco
+   * nao podem cair no caminho padrao e migrar assim mesmo — quem escreveu
+   * isso queria desligar. Valor que nao seja exatamente 0 ou 1 derruba o
+   * build com o nome do erro, em vez de escolher por conta propria.
+   */
+  const migrar = String(env.MIGRAR ?? '').trim();
+  if (migrar !== '' && migrar !== '0' && migrar !== '1') {
+    return {
+      aplicar: false,
+      erro: `MIGRAR="${env.MIGRAR}" nao e' 0 nem 1. Use MIGRAR=1 para aplicar, MIGRAR=0 para `
+        + 'publicar sem migrar, ou nao defina a variavel para o comportamento padrao '
+        + '(migra so no build de producao da Vercel).',
+    };
+  }
+  if (migrar === '0') {
     return { aplicar: false, motivo: 'MIGRAR=0: migracao desligada neste build.' };
   }
-  if (env.MIGRAR === '1') {
+  if (migrar === '1') {
     return url
       ? { aplicar: true, url, motivo: 'MIGRAR=1: aplicando por pedido explicito.' }
       : { aplicar: false, erro: 'MIGRAR=1 sem DATABASE_URL: nao ha banco para migrar.' };
@@ -101,7 +120,11 @@ export function decidir(env = process.env) {
   return { aplicar: true, url, motivo: 'Build de producao: aplicando db/schema.sql.' };
 }
 
-/** TLS: Postgres local (teste) nao tem; host remoto exige. Igual api/_lib/db.js. */
+/**
+ * TLS: Postgres local (teste) nao tem; host remoto exige. Mesma regra de
+ * api/_lib/db.js, com `/var/run` a mais — la' o driver so' ve URL de rede,
+ * aqui um cluster de teste pode vir por socket de dominio unix.
+ */
 const ehLocal = (url) => /localhost|127\.0\.0\.1|\/tmp|\/var\/run/.test(url || '');
 
 /**
@@ -132,7 +155,31 @@ export async function aplicar(url, caminho = SCHEMA) {
   });
   const comecou = Date.now();
   try {
-    await sql.unsafe(`SELECT pg_advisory_xact_lock(${LOCK});\n${schema}`).simple();
+    /**
+     * OS DOIS TIMEOUTS, antes de qualquer DDL.
+     *
+     * `lock_timeout` e' o que protege a FABRICA, nao o build. Sem ele, um
+     * ALTER TABLE que esbarre numa consulta viva do app espera de graca —
+     * e espera segurando ACCESS EXCLUSIVE em tudo que ja' alterou nesta
+     * mesma transacao, com o trafego inteiro enfileirado atras. Dez
+     * segundos e' o limite: passou disso, o build falha e a producao
+     * continua na versao anterior. Deploy barrado custa menos que app
+     * travado no meio do turno.
+     *
+     * `statement_timeout` da' teto a' espera pelo lock consultivo (ela e'
+     * UM statement, entao o timeout a alcanca) sem depender do que o
+     * Supabase configurar por papel. Hoje o papel `postgres` nao define o
+     * seu e herda o do banco; fixar aqui torna o comportamento previsivel.
+     *
+     * SET LOCAL, nao SET: a conexao vem do pooler em modo transaction, e
+     * um SET de sessao sobreviveria ao COMMIT e vazaria para o proximo
+     * inquilino daquela conexao. LOCAL morre no fim desta transacao.
+     */
+    await sql.unsafe(
+      "SET LOCAL lock_timeout = '10s';\n"
+      + "SET LOCAL statement_timeout = '120s';\n"
+      + `SELECT pg_advisory_xact_lock(${LOCK});\n${schema}`,
+    ).simple();
     return Date.now() - comecou;
   } finally {
     await sql.end({ timeout: 5 });
@@ -172,7 +219,23 @@ async function principal() {
   }
 }
 
-// So' roda quando chamado como programa; importado (teste), so' exporta.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  await principal();
+/**
+ * Chamado como programa, ou importado por um teste?
+ *
+ * Pelo realpath dos DOIS lados. `process.argv[1]` guarda o caminho como
+ * foi digitado, com symlink e tudo; `import.meta.url` ja' vem resolvido
+ * pelo Node. Comparar os dois crus faz um checkout sob symlink cair no
+ * ramo "importado": o programa nao roda, nao imprime nada e sai 0 — um
+ * build que passa SEM migrar e sem avisar, exatamente o desfecho que este
+ * arquivo existe para tornar impossivel.
+ */
+function chamadoComoPrograma() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;   // argv[1] que nem existe no disco nao e' este arquivo
+  }
 }
+
+if (chamadoComoPrograma()) await principal();

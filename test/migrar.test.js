@@ -72,6 +72,68 @@ describe('decidir', () => {
     expect(d.aplicar).toBe(false);
     expect(d.erro).toBeUndefined();
   });
+
+  /**
+   * ALAVANCA DE SEGURANCA NAO PODE FALHAR ABERTA.
+   *
+   * Quem escreve MIGRAR=false quer desligar. Se isso cair no caminho
+   * padrao, a unica alavanca que o README oferece para publicar sem
+   * encostar no banco migra assim mesmo — e o operador so' descobre pelo
+   * estrago. Valor desconhecido derruba o build dizendo o que aceitar.
+   */
+  it.each(['false', 'off', 'no', 'nao', 'sim', 'true'])('MIGRAR=%s nao migra em silencio', (valor) => {
+    const d = decidir({ VERCEL: '1', VERCEL_ENV: 'production', DATABASE_URL: URL_QUALQUER, MIGRAR: valor });
+    expect(d.aplicar).toBe(false);
+    expect(d.erro).toMatch(/nao e' 0 nem 1/);
+  });
+
+  // Espaco sobrando e' erro de digitacao, nao outra intencao.
+  it.each(['0 ', ' 0', ' 0 '])('MIGRAR=%s ainda desliga', (valor) => {
+    expect(decidir({ VERCEL: '1', VERCEL_ENV: 'production', DATABASE_URL: URL_QUALQUER, MIGRAR: valor }).aplicar)
+      .toBe(false);
+  });
+
+  // Variavel vazia e' variavel nao definida: mantem o padrao, nao desliga.
+  it('MIGRAR vazio cai no comportamento padrao', () => {
+    expect(decidir({ VERCEL: '1', VERCEL_ENV: 'production', DATABASE_URL: URL_QUALQUER, MIGRAR: '' }).aplicar)
+      .toBe(true);
+  });
+});
+
+/**
+ * A CAIXA-PRETA PRECISA NASCER COM O BANCO.
+ *
+ * `erros_api` existia em producao e NAO existia em db/schema.sql — aplicada
+ * um dia por migracao avulsa e nunca escrita no arquivo. E' a mesma
+ * divergencia que quebrou a tela de Maquinas, na direcao contraria. Agora
+ * que o build migra por este arquivo e so' por ele, banco recriado sem esta
+ * tabela apagaria justamente o diagnostico que revelou a v2.88.0 — e o
+ * `catch {}` de registrarErro engoliria a falha sem uma linha de aviso.
+ */
+describe('o schema cria o que a API escreve', () => {
+  const schema = readFileSync(fileURLToPath(new URL('../db/schema.sql', import.meta.url)), 'utf8');
+  const http = readFileSync(fileURLToPath(new URL('../api/_lib/http.js', import.meta.url)), 'utf8');
+
+  it('db/schema.sql cria erros_api', () => {
+    expect(schema).toMatch(/CREATE TABLE IF NOT EXISTS erros_api/);
+  });
+
+  it('as colunas que a API insere existem no schema', () => {
+    const insercao = /INSERT INTO erros_api \(([^)]+)\)/.exec(http);
+    expect(insercao, 'api/_lib/http.js deveria inserir em erros_api').toBeTruthy();
+
+    const criacao = schema.slice(schema.indexOf('CREATE TABLE IF NOT EXISTS erros_api'));
+    const corpo = criacao.slice(0, criacao.indexOf(');'));
+    for (const coluna of insercao[1].split(',').map((c) => c.trim())) {
+      expect(corpo, `erros_api.${coluna}`).toMatch(new RegExp(`^\\s*${coluna}\\s`, 'm'));
+    }
+  });
+
+  // Tabela de diagnostico do servidor nao e' dado de app: a porta anonima
+  // fica fechada como no resto do schema.
+  it('erros_api nasce com RLS ligada', () => {
+    expect(schema).toMatch(/ALTER TABLE erros_api ENABLE ROW LEVEL SECURITY/);
+  });
 });
 
 /**

@@ -849,6 +849,41 @@ então **ou o schema entra inteiro ou não entra nada** — o `psql` na mão nã
 dá isso, cada statement fecha sozinho e pode deixar o banco meio migrado. Um
 lock consultivo serializa builds simultâneos.
 
+Dois timeouts são fixados antes de qualquer DDL, via `SET LOCAL` (a conexão
+vem do pooler em modo transaction; um `SET` de sessão vazaria para o próximo
+inquilino daquela conexão):
+
+- **`lock_timeout = 10s`** protege a fábrica, não o build. Sem ele, um
+  `ALTER TABLE` que esbarre numa consulta viva do app espera de graça — e
+  espera segurando `ACCESS EXCLUSIVE` em tudo que já alterou na mesma
+  transação, com o tráfego inteiro na fila atrás. Passou de 10s, o build
+  falha. App travado no meio do turno custa mais que deploy barrado.
+- **`statement_timeout = 120s`** dá teto à espera pelo lock consultivo sem
+  depender do que o Supabase configurar por papel.
+
+#### Três coisas que mudaram de natureza — leia antes de mexer no schema
+
+**1. `DROP` de coluna só entra uma versão DEPOIS de o código parar de usá-la.**
+A migração roda no build, e o deploy só é ativado depois dela: existe uma
+janela em que o schema já é novo e o código velho ainda atende. Derrubar uma
+coluna na mesma versão que para de usá-la quebra a produção com exatamente o
+`42703` que essa automação veio evitar, durante toda a janela. O cabeçalho do
+`db/schema.sql` já diz isso; agora é obrigatório.
+
+**2. Rollback: use *Instant Rollback*, não *Redeploy*.** Antes desta mudança,
+reverter um deploy nunca tocava o banco. Agora, um *Redeploy* de commit antigo
+**rebuilda e reaplica o `schema.sql` daquele commit** — inclusive revertendo
+`CHECK`s (o arquivo faz `DROP CONSTRAINT IF EXISTS` seguido de `ADD`). Se um
+dado criado depois violar o `CHECK` antigo, a migração falha e o rollback não
+sai — justamente quando a produção está quebrada. *Instant Rollback* não
+rebuilda. Se precisar mesmo republicar um commit antigo, use `MIGRAR=0`.
+
+**3. `vercel --prod` de qualquer branch migra produção.** A tabela acima diz
+que preview não migra, e isso vale para o fluxo normal (push → preview). Mas
+`vercel --prod` e "Promote to Production" definem `VERCEL_ENV=production` mesmo
+partindo de branch não revisada — e aí a migração roda. Não publique com
+`--prod` de branch que ainda não passou por revisão.
+
 ### RLS: a porta anônima fica fechada
 
 O schema `public` é exposto pelo PostgREST com a chave anônima, que vive no
