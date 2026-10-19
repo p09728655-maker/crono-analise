@@ -203,7 +203,9 @@ export const removerMotivoParada = (id) =>
 // O cadastro vem inteiro: { maquinas, grupos }. Grupos moram no MESMO
 // endpoint (o plano da Vercel limita funcoes e o projeto esta no teto).
 export const listarCadastroMaquinas = () =>
-  requisitar('/maquinas').then((r) => ({ maquinas: r.maquinas || [], grupos: r.grupos || [] }));
+  requisitar('/maquinas').then((r) => ({
+    maquinas: r.maquinas || [], grupos: r.grupos || [], produtos: r.produtos || [],
+  }));
 export const criarMaquina = ({ nome, grupoId }) =>
   requisitar('/maquinas', { metodo: 'POST', corpo: { nome, grupoId } }).then((r) => r.maquina);
 // Carga inicial: os nomes que as conferencias ja usaram, uma grafia por maquina.
@@ -242,6 +244,20 @@ export const removerSemanaDemanda = (grupoId, { ano, numero }) =>
 export const limparDemanda = (grupoId) =>
   requisitar(`${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}&tudo=1`, { metodo: 'DELETE' })
     .then((r) => r.demandas || []);
+
+/* ---------------------------------------------------- cadastro de produtos */
+/* O que vai para cronoanalise, por grupo de maquina. A LISTA chega junto do
+   cadastro de maquinas (listarCadastroMaquinas), que e' o que o tablet
+   guarda; aqui so' as escritas. Mesma rota da demanda pelo mesmo teto de
+   funcoes. Ver api/_lib/produtos.js. */
+const ROTA_PRODUTOS = '/maquinas?produtos=1';
+export const criarProduto = ({ nome, codigo, grupoId }) =>
+  requisitar(ROTA_PRODUTOS, { metodo: 'POST', corpo: { nome, codigo, grupoId } }).then((r) => r.produto);
+export const atualizarProduto = (id, dados) =>
+  requisitar(`${ROTA_PRODUTOS}&id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados })
+    .then((r) => r.produto);
+export const removerProduto = (id) =>
+  requisitar(`${ROTA_PRODUTOS}&id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 
 /* ------------------------------------------ analistas e identificacao */
 export const listarUsuarios = () => requisitar('/usuarios').then((r) => r.usuarios || []);

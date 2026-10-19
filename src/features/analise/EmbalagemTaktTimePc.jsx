@@ -11,6 +11,8 @@ import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import VolumeAVolume from './conferencias/VolumeAVolume.jsx';
+import Produtos from './Produtos.jsx';
+import MotivosParada from './MotivosParada.jsx';
 import { est } from './conferencias/estilos.js';
 
 /** Janela padrao, a mesma do relatorio de ritmo: o que esta' acontecendo agora. */
@@ -34,6 +36,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [aberta, setAberta] = useState(null);
+  // Os dois cadastros que a embalagem pede no tablet: o que se embala e por
+  // que a linha para. Aqui a um clique, sem caçar no menu de outra tela.
+  const [cadastroAberto, setCadastroAberto] = useState(null); // 'produtos' | 'motivos' | null
 
   useEffect(() => {
     let vivo = true;
@@ -120,6 +125,14 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
 
           {leitura && (
             <>
+              <div style={est.barraCadastros}>
+                <button type="button" style={est.botaoLinha} onClick={() => setCadastroAberto('produtos')}>
+                  Produtos da embalagem
+                </button>
+                <button type="button" style={est.botaoLinha} onClick={() => setCadastroAberto('motivos')}>
+                  Motivos de parada
+                </button>
+              </div>
               <div style={est.kpis}>
                 {leitura.taktHoje.length === 0 && (
                   <div style={est.kpi}>
@@ -191,6 +204,10 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
       </div>
 
       {verVersoes && <HistoricoVersoes modo="analise" aoFechar={() => setVerVersoes(false)} />}
+      {cadastroAberto === 'produtos' && (
+        <Produtos grupoInicial={leitura?.taktHoje[0]?.grupo.id || null} aoFechar={() => setCadastroAberto(null)} />
+      )}
+      {cadastroAberto === 'motivos' && <MotivosParada aoFechar={() => setCadastroAberto(null)} />}
     </div>
   );
 }

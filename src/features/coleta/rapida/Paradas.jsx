@@ -66,6 +66,14 @@ export default function Paradas({ motivos, paradas, resumo, duracaoMs, setupCron
                 {motivos.map((m) => (
                   <option key={m.codigo} value={m.codigo}>{m.rotulo}</option>
                 ))}
+                {/* Motivo fora da lista deste posto (a maquina foi trocada
+                    depois de marcar a parada, ou o motivo foi restrito a
+                    outro grupo): continua como opcao, com o nome certo. Sem
+                    isto o select mostraria o primeiro motivo da lista e a
+                    parada parecia de outro motivo sem ter mudado. */}
+                {!motivos.some((m) => m.codigo === p.motivo) && (
+                  <option value={p.motivo}>{rotuloMotivo(p.motivo)}</option>
+                )}
               </select>
               {/* TEXTO, nao `type="number"`: o teclado brasileiro entrega
                   virgula e o campo numerico a DESCARTA em silencio — "1,25"

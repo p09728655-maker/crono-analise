@@ -28,7 +28,7 @@ import { useSelecao } from './maquinas/useSelecao.js';
  * qual confirmacao esta' armada — mora aqui.
  */
 export default function Maquinas({ aoFechar }) {
-  const { maquinas, grupos, erro, ocupado, aplicar, recarregar } = useCadastroMaquinas();
+  const { maquinas, grupos, produtos, erro, ocupado, aplicar, recarregar } = useCadastroMaquinas();
   const selecao = useSelecao({ grupos, maquinas, ocupado, aoFechar });
   const { escolhido, setEscolhido, busca, setBusca } = selecao;
 
@@ -87,7 +87,7 @@ export default function Maquinas({ aoFechar }) {
         {maquinas != null && (
           <div style={est.colunas}>
             <ListaGrupos
-              grupos={grupos} lista={lista} escolhido={escolhido} aoEscolher={setEscolhido}
+              grupos={grupos} lista={lista} produtos={produtos} escolhido={escolhido} aoEscolher={setEscolhido}
               ocupado={ocupado} aplicar={aplicar}
               excluindoGrupo={selecao.excluindoGrupo} setExcluindoGrupo={selecao.setExcluindoGrupo}
             />

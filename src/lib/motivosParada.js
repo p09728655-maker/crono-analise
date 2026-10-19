@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { MOTIVOS_PARADA, definirCatalogoParadas } from '../domain/cronoanalise.js';
 import { listarMotivosParada } from './api.js';
 
@@ -70,9 +70,39 @@ export const motivosAtivos = () => ativos;
 
 const assinar = (fn) => { ouvintes.add(fn); return () => ouvintes.delete(fn); };
 
-/** Hook da lista ATIVA — o que uma tela de coleta oferece. */
+/** Hook da lista ATIVA inteira — o PC, que edita parada de qualquer posto. */
 export function useMotivosParada() {
   return useSyncExternalStore(assinar, motivosAtivos, motivosAtivos);
+}
+
+/**
+ * Os motivos que o tablet oferece NUMA MAQUINA: os que valem para todos
+ * (grupos vazio) e os do grupo dela. A embalagem nao ve' "troca de broca";
+ * a furadeira nao ve' "falta de caixa".
+ *
+ * GRUPO DESCONHECIDO (grupoId nulo) recebe a lista ativa INTEIRA, como era
+ * antes do filtro. Acontece com maquina digitada fora do cadastro, sem
+ * grupo, ou com o estudo importado do roteiro do ERP, cujo recurso
+ * ("FUR16") nao e' o nome do cadastro. Cortar para "so' os de todos" ali
+ * escondia o motivo que a furadeira usa ("troca de broca", restrito a ela)
+ * e a parada entrava como "Outro" — o Pareto perdia a causa (revisao de
+ * 19/10). Sobrar motivo e' incomodo; faltar o certo e' dado errado.
+ *
+ * Se o filtro nao deixar nada — cadastro so' com motivos de outros grupos
+ * —, volta aos motivos de fabrica: o operador diante da maquina parada
+ * nunca fica sem onde tocar.
+ */
+export function motivosDoGrupo(motivos, grupoId) {
+  const todos = motivos || [];
+  const lista = grupoId ? todos.filter((m) => !m.grupos?.length || m.grupos.includes(grupoId)) : todos;
+  return lista.length ? lista : MOTIVOS_PARADA;
+}
+
+/** Hook dos motivos de UMA maquina (pelo grupo dela) — as telas de coleta. */
+export function useMotivosDoGrupo(grupoId) {
+  const ativosAgora = useSyncExternalStore(assinar, motivosAtivos, motivosAtivos);
+  // Memo: lista nova a cada render faria quem depende dela recalcular sem motivo.
+  return useMemo(() => motivosDoGrupo(ativosAgora, grupoId || null), [ativosAgora, grupoId]);
 }
 
 /**
@@ -107,7 +137,14 @@ export async function carregarMotivos() {
  */
 export function codigoPreferido(motivos, preferido) {
   if (motivos.some((m) => m.codigo === preferido)) return preferido;
-  return motivos[0]?.codigo || preferido;
+  /* Atalho de OUTRA parada (falta de material sumiu da lista deste posto)
+     nunca cai no setup: o primeiro da lista costuma ser ele, e parada que
+     o operador nao trocou entraria como troca — o setup sai do relogio do
+     programa e muda o veredito. So' o atalho do proprio setup aceita ele. */
+  const reserva = preferido === 'setup'
+    ? motivos[0]
+    : motivos.find((m) => m.codigo !== 'setup') || motivos[0];
+  return reserva?.codigo || preferido;
 }
 
 /** Adota uma lista recem-salva sem uma segunda ida ao servidor. */

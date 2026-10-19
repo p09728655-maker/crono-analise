@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { nomeChave } from '../domain/cronoanalise.js';
 import { listarCadastroMaquinas } from './api.js';
 
 /**
@@ -19,7 +20,7 @@ import { listarCadastroMaquinas } from './api.js';
  */
 const CHAVE = 'ritmopatrimar.maquinas';
 
-/** O cache guarda o cadastro INTEIRO: { maquinas, grupos }. Cache antigo
+/** O cache guarda o cadastro INTEIRO: { maquinas, grupos, produtos }. Cache antigo
  *  (so' a lista) e formato invalido caem no vazio — texto livre. */
 function lerCache() {
   try {
@@ -106,6 +107,28 @@ export async function carregarMaquinas() {
     }
   })();
   return emVoo;
+}
+
+/**
+ * O GRUPO de uma maquina, pelo NOME — e' o que a conferencia e o estudo
+ * guardam. Mesma comparacao do relatorio (nomeChave): "furadeira 03" acha
+ * "FURADEIRA 03". Nulo quando a maquina nao esta' no cadastro ou nao tem
+ * grupo: ai' o tablet oferece so' o que vale para todos.
+ */
+export function grupoIdDaMaquina(cadastro, nome) {
+  if (!nome) return null;
+  const chave = nomeChave(nome);
+  return (cadastro?.maquinas || []).find((m) => m && nomeChave(m.nome) === chave)?.grupo_id || null;
+}
+
+/**
+ * Os PRODUTOS ativos de um grupo, na ordem do cadastro — o que o tablet
+ * oferece no campo de produto. Sem grupo, nenhum: produto e' sempre de um
+ * posto (o rack da embalagem nao e' a lateral da furadeira).
+ */
+export function produtosDoGrupo(cadastro, grupoId) {
+  if (!grupoId) return [];
+  return (cadastro?.produtos || []).filter((p) => p && p.ativo !== false && p.grupo_id === grupoId);
 }
 
 /** Adota um cadastro recem-salvo sem uma segunda ida ao servidor. */

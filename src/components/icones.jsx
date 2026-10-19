@@ -83,6 +83,14 @@ export const IconeMaquinas = () => (
   </Icone>
 );
 
+/** Caixa fechada — o cadastro de PRODUTOS (o que sai embalado). */
+export const IconeProdutos = () => (
+  <Icone>
+    <path d="M12 3.5l8 4v9l-8 4-8-4v-9z" />
+    <path d="M4 7.5l8 4 8-4M12 11.5v9" />
+  </Icone>
+);
+
 /**
  * Calendario com barras — a DEMANDA da semana.
  *

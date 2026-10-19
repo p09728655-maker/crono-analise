@@ -23,6 +23,7 @@ import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
 import { decimal, inteiro, texto, uuid } from './_lib/validar.js';
 import { demandaSemanal } from './_lib/demanda.js';
+import { listarProdutos, produtos } from './_lib/produtos.js';
 
 // Nome canonico: apara e recolhe espaco repetido. Caixa e acento ficam —
 // e' o nome EXIBIDO; a unicidade compara sem caixa (indice lower/btrim).
@@ -52,9 +53,12 @@ const listarMaquinas = (db, empresaId) => db`
    WHERE m.empresa_id = ${empresaId}
    ORDER BY (g.codigo IS NULL), g.codigo, lower(m.nome)`;
 
+// Os PRODUTOS vem junto: o tablet guarda o cadastro inteiro num cache so'
+// e oferece a lista sem rede — uma ida, um cache, como maquinas e grupos.
 const cadastro = async (db, empresaId) => ({
   maquinas: await listarMaquinas(db, empresaId),
   grupos: await listarGrupos(db, empresaId),
+  produtos: await listarProdutos(db, empresaId),
 });
 
 // "Em uso" olha as conferencias pela mesma comparacao da unicidade.
@@ -93,6 +97,10 @@ export default handler(async (req, res) => {
    * ANTES do exigirPapel la' embaixo. Ver api/_lib/demanda.js.
    */
   if (req.query?.demanda === '1') return demandaSemanal(req, res, auth);
+  // PRODUTOS (?produtos=1), pela mesma razao e com a mesma regra de papel
+  // da demanda: e' trabalho de PCP, nao so' de administrador. Ver
+  // api/_lib/produtos.js.
+  if (req.query?.produtos === '1') return produtos(req, res, auth);
 
   const { empresaId } = auth;
   const id = req.query?.id;
@@ -332,12 +340,22 @@ export default handler(async (req, res) => {
       return json(res, 200, { maquina });
     }
 
-    // DELETE de GRUPO: as maquinas dele so' ficam sem grupo (FK SET NULL).
+    // DELETE de GRUPO: as maquinas dele so' ficam sem grupo (FK SET NULL);
+    // os produtos dele vao junto (FK CASCADE, como o programa da semana).
     if (grupoParam) {
       const grupoId = uuid(grupoParam, 'grupo');
       const [grupo] = await db`
         SELECT id FROM grupos_maquina WHERE id = ${grupoId} AND empresa_id = ${empresaId}`;
       if (!grupo) throw naoEncontrado('Grupo de maquina nao encontrado');
+      /* Os motivos de parada guardam o grupo num array, sem FK: tirar o id
+         ANTES de apagar. Deixado la', o motivo que so' valia para este
+         grupo sumia de todos os tablets, e a tela nao conseguia mais
+         salva-lo (o id morto voltava 404). Sem o id, o motivo que era so'
+         deste grupo passa a valer para todas as maquinas — a tela de
+         grupos avisa antes de excluir. */
+      await db`
+        UPDATE motivos_parada SET grupos = array_remove(grupos, ${grupoId}::uuid)
+         WHERE empresa_id = ${empresaId} AND ${grupoId}::uuid = ANY(grupos)`;
       await db`DELETE FROM grupos_maquina WHERE id = ${grupoId} AND empresa_id = ${empresaId}`;
       return json(res, 200, { acao: 'excluido' });
     }

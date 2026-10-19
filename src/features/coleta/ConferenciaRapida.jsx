@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   conferenciaRapida, duracaoEntreHoras, nomeChave, unidadeDoPosto,
 } from '../../domain/cronoanalise.js';
-import { useMotivosParada } from '../../lib/motivosParada.js';
+import { useMotivosDoGrupo } from '../../lib/motivosParada.js';
 import { useWakeLock, vibrar } from '../../lib/hooks.js';
-import { carregarMaquinas, useMaquinas } from '../../lib/maquinas.js';
+import { carregarMaquinas, produtosDoGrupo, useCadastroMaquinas, useMaquinas } from '../../lib/maquinas.js';
 import { useParadasDoPeriodo } from './rapida/useParadasDoPeriodo.js';
 import { useCronometroAoVivo } from './rapida/useCronometroAoVivo.js';
 import { useHistoricoLocal } from './rapida/useHistoricoLocal.js';
@@ -57,10 +57,6 @@ const PECA = unidadeDoPosto(null);
  * tudo e o que acontece entre um periodo e o proximo.
  */
 export default function ConferenciaRapida({ aoSair }) {
-  // A lista vem do cadastro da fabrica (Ferramentas > Motivos de parada) e
-  // cai nos motivos de fabrica quando ainda nao ha cadastro nem cache.
-  const motivos = useMotivosParada();
-
   // Formulario de horarios (caminho principal).
   const [horaInicial, setHoraInicial] = useState('');
   const [horaFinal, setHoraFinal] = useState('');
@@ -87,12 +83,18 @@ export default function ConferenciaRapida({ aoSair }) {
    * aparece: melhor nada do que um posto errado.
    */
   const cadastroDeMaquinas = useMaquinas();
-  const seloDoPosto = useMemo(() => {
+  const maquinaDoCadastro = useMemo(() => {
     const alvo = nomeChave(maquina);
-    if (!alvo) return null;
-    const m = cadastroDeMaquinas.find((x) => nomeChave(x.nome) === alvo);
-    return m?.grupo_nome ? String(m.grupo_nome).toUpperCase() : null;
+    return alvo ? cadastroDeMaquinas.find((x) => nomeChave(x.nome) === alvo) || null : null;
   }, [cadastroDeMaquinas, maquina]);
+  const seloDoPosto = maquinaDoCadastro?.grupo_nome ? String(maquinaDoCadastro.grupo_nome).toUpperCase() : null;
+  // Motivos e produtos do POSTO escolhido (cadastro do PC, por grupo). A
+  // lista vem de Ferramentas > Motivos de parada e cai nos motivos de
+  // fabrica quando ainda nao ha cadastro nem cache.
+  const grupoDoPosto = maquinaDoCadastro?.grupo_id || null;
+  const motivos = useMotivosDoGrupo(grupoDoPosto);
+  const cadastroCompleto = useCadastroMaquinas();
+  const produtos = useMemo(() => produtosDoGrupo(cadastroCompleto, grupoDoPosto), [cadastroCompleto, grupoDoPosto]);
   /**
    * Esta tela conta PECA, em qualquer posto — a embalagem tem a dela
    * (Embalagem Takt Time), que conta volume do comeco ao fim. Trocar a
@@ -294,7 +296,7 @@ export default function ConferenciaRapida({ aoSair }) {
         <>
           <FormularioHorarios
             maquina={maquina} aoTrocarMaquina={setMaquina}
-            peca={peca} aoTrocarPeca={setPeca}
+            peca={peca} aoTrocarPeca={setPeca} produtos={produtos}
             ciclosPorPeca={ciclosPorPeca} aoTrocarCiclos={setCiclosPorPeca}
             furacaoPassante={furacaoPassante} aoTrocarPassante={setFuracaoPassante}
             horaInicial={horaInicial} aoTrocarHoraInicial={setHoraInicial}
@@ -356,7 +358,7 @@ export default function ConferenciaRapida({ aoSair }) {
           motivos={motivos}
           paradas={paradas}
           maquina={maquina} aoTrocarMaquina={setMaquina}
-          peca={peca} aoTrocarPeca={setPeca}
+          peca={peca} aoTrocarPeca={setPeca} produtos={produtos}
           ciclosPorPeca={ciclosPorPeca} aoTrocarCiclos={setCiclosPorPeca}
           furacaoPassante={furacaoPassante} aoTrocarPassante={setFuracaoPassante}
           {...camposDaObservacao}
