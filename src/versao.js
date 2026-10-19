@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.88.2',
+    data: '2026-10-19',
+    titulo: 'A entrada passa a dizer por que não entrou',
+    itens: [
+      'A ENTRADA DO PC MOSTRAVA "FAILED TO FETCH" e não deixava ninguém entrar. A causa não era a senha nem o app: o banco de dados do sistema tinha sido pausado pelo provedor por falta de uso, e a tela de entrada não recebia resposta nenhuma. O banco foi reativado; nada foi perdido.',
+      'QUANDO O SERVIDOR DE LOGIN NÃO RESPONDER, O "INICIAR SESSÃO" AGORA DIZ ISSO EM PORTUGUÊS e pede para avisar o administrador. Se o próprio computador estiver sem internet, diz que o problema é a rede dele. Antes, as duas situações apareciam como "Failed to fetch", que não diz de quem é o problema nem o que fazer.',
+      'O TABLET PAREADO NÃO PERDE MAIS O PAREAMENTO QUANDO O SERVIDOR CAI. Antes, se o servidor de login respondesse com erro (fora do ar, sobrecarregado ou pausado), o tablet apagava o próprio pareamento e voltava para a tela de parear, pedindo código novo ao administrador. Agora só a credencial recusada — o aparelho revogado na tela de Analistas — desfaz o pareamento; com o servidor fora, o tablet espera e entra sozinho quando ele voltar.',
+      'Senha errada continua com a mesma mensagem de sempre.',
+    ],
+  },
+  {
     versao: '2.88.1',
     data: '2026-09-22',
     titulo: 'A tela de Máquinas voltou, e o banco passa a subir junto com o app',
