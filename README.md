@@ -114,10 +114,12 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   **takt**. Quando o tempo por volume passa do takt, o rótulo ganha "▲ takt". Um toque por volume; o horário de cada toque é gravado
   sozinho, sem digitação.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
-  medições da embalagem. Cada medição tocada abre o **volume a volume**:
-  gráfico do intervalo de cada volume contra a linha do takt, o **tempo por
-  volume no período** contra o takt, as camadas **com a linha rodando** e **sem
-  as lacunas**, as **lacunas** e folha A4.
+  medições da embalagem. Cada medição tocada abre o **volume a volume** na
+  própria página, abaixo da lista (clicar de novo fecha): identificação,
+  cinco cartões (volumes, **tempo por volume no período**, **tempo por volume
+  com a linha rodando**, paradas marcadas, **lacunas**), o gráfico do
+  intervalo de cada volume contra a linha do takt, a leitura em palavras e a
+  folha A4. O PDF sai nomeado "Takt Time - produto - máquina - data hora".
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O PCP cola o programa da embalagem em VOLUMES**: um rack que sai em dois

@@ -4,8 +4,23 @@ import { emSegundos } from '../conferencias/formato.js';
 import { EIXO, Legenda, Texturas, VazioGrafico, passoAgradavel, useLarguraContainer } from './comuns.jsx';
 import { est } from './estilos.js';
 
-/** Barras cortadas no teto que ganham o valor escrito: as maiores, ate' aqui. */
-const MAX_ROTULOS_CORTE = 6;
+/** Barras que ganham o valor escrito em cima (lacunas e cortadas): as maiores, ate' aqui. */
+const MAX_ROTULOS_VALOR = 6;
+
+/**
+ * Margem direita quando ha' linha de referencia: o rotulo da linha ("Takt
+ * 72.0 s", "Rodando 70.4 s") mora FORA da area das barras. Escrito por
+ * cima delas, na ponta direita, o rotulo cobria as ultimas barras e se
+ * misturava com elas.
+ */
+const CALHA_ROTULOS = 100;
+
+/** Distancia minima entre os nomes dos volumes no eixo de baixo, em px. */
+const ESPACO_ROTULO_X = 28;
+const PASSOS_X = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
+
+/** Cor do numero da lacuna no eixo: o laranja da barra escurecido, para ler em fundo branco. */
+const COR_TEXTO_LACUNA = claro.critico;
 
 /**
  * VOLUME A VOLUME — uma barra por intervalo, contra a linha do takt.
@@ -18,12 +33,16 @@ const MAX_ROTULOS_CORTE = 6;
  * A linha pontilhada e' a MEDIA das barras (a linha rodando). Barra por
  * barra nao se compara com o takt: com volume em par (rack de dois volumes
  * saindo colados) metade passa do takt numa linha que atende. O veredito,
- * com as paradas dentro, esta' no texto acima do grafico.
+ * com as paradas dentro, esta' no texto da leitura.
  *
  * LACUNA leva HACHURA, nao so' cor — sai na impressora P&B da fabrica e
  * para quem tem daltonismo, como a barra "ainda em medicao" do Ritmo por
- * maquina. As duas linhas de referencia tem rotulo escrito ao lado: takt
- * (grafite, tracejado) e rodando (a media das barras, pontilhado mais fraco).
+ * maquina. Leva tambem o valor escrito em cima e o numero do volume em
+ * destaque no eixo: e' o volume que se procura na tabela das lacunas.
+ *
+ * As linhas de referencia tem contorno branco por baixo (para nao sumirem
+ * dentro das barras azuis), entrada propria na legenda e o rotulo na calha
+ * da direita, fora das barras.
  *
  * O TETO do eixo e' tres vezes o ritmo normal (ou um pouco acima do takt, o que
  * for maior). Uma lacuna de vinte minutos numa linha de um minuto achataria
@@ -54,33 +73,63 @@ export function GraficoIntervalos({
   const maxY = cortar ? tetoDesejado : Math.max(maior, takt) * 1.12;
   const passoY = passoAgradavel(maxY / 1000) * 1000;
 
+  const linhasDeReferencia = [
+    takt > 0 && takt <= maxY && {
+      chave: 'takt', ms: takt, nome: 'Takt', cor: referencia.linha, traco: referencia.traco, espessura: 2,
+    },
+    mediaMs > 0 && mediaMs <= maxY && {
+      chave: 'media', ms: mediaMs, nome: 'Rodando', cor: claro.texto, traco: '2 3', espessura: 2,
+    },
+  ].filter(Boolean);
+
+  const margem = {
+    esq: EIXO.esq,
+    dir: linhasDeReferencia.length ? CALHA_ROTULOS : EIXO.dir,
+    topo: 22,
+    base: EIXO.base,
+  };
+
   // Ao menos 4px por barra: abaixo disso a barra vira risco e o hover some.
-  const larguraMinima = n * 4 + EIXO.esq + EIXO.dir;
+  const larguraMinima = n * 4 + margem.esq + margem.dir;
   const largura = larguraFixa || Math.max(larguraMinima, larguraContainer || larguraMinima);
-  const alturaPlot = altura - EIXO.topo - EIXO.base;
-  const banda = (largura - EIXO.esq - EIXO.dir) / n;
-  // Vao de 2px entre barras so' quando ha' espaco para ele.
-  const vao = banda >= 6 ? 2 : 0;
+  const alturaPlot = altura - margem.topo - margem.base;
+  const banda = (largura - margem.esq - margem.dir) / n;
+  // Vao entre barras so' quando ha' espaco para ele.
+  const vao = banda >= 10 ? 3 : banda >= 6 ? 2 : 0;
   const larguraBarra = Math.max(1, Math.min(28, banda - vao));
 
-  const yDe = (ms) => EIXO.topo + alturaPlot - (Math.min(ms, maxY) / maxY) * alturaPlot;
-  const base = EIXO.topo + alturaPlot;
+  const yDe = (ms) => margem.topo + alturaPlot - (Math.min(ms, maxY) / maxY) * alturaPlot;
+  const xCentro = (i) => margem.esq + banda * (i + 0.5);
+  const base = margem.topo + alturaPlot;
 
   const grades = [];
-  for (let v = 0; v <= maxY; v += passoY) grades.push(v);
+  for (let v = 0; v <= maxY + 1e-6; v += passoY) grades.push(v);
 
-  // O volume que FECHOU cada intervalo: o primeiro intervalo termina no 2o.
-  const passoX = Math.max(1, Math.round(passoAgradavel(n, 8)));
   const lacunas = new Set((leitura.lacunas || []).map((l) => l.indice));
-  const cortadas = cortar
-    ? intervalos
-      .map((ms, i) => ({ ms, i }))
-      .filter((x) => x.ms > maxY)
-      .sort((a, b) => b.ms - a.ms)
-      .slice(0, MAX_ROTULOS_CORTE)
-      .map((x) => x.i)
-    : [];
-  const rotularCorte = new Set(cortadas);
+  // Valor escrito em cima: das lacunas e das barras cortadas no teto, as
+  // maiores primeiro.
+  const rotularValor = new Set(intervalos
+    .map((ms, i) => ({ ms, i }))
+    .filter((x) => lacunas.has(x.i) || x.ms > maxY)
+    .sort((a, b) => b.ms - a.ms)
+    .slice(0, MAX_ROTULOS_VALOR)
+    .map((x) => x.i));
+
+  // O EIXO DE BAIXO conta VOLUMES: o primeiro intervalo termina no 2o
+  // volume. Rotulo a cada passo redondo que caiba; o volume de cada lacuna
+  // sempre aparece, em destaque, e os vizinhos que colidiriam com ele saem.
+  const passoX = PASSOS_X.find((p) => p * banda >= ESPACO_ROTULO_X) || PASSOS_X[PASSOS_X.length - 1];
+  const xsLacuna = [...lacunas].map(xCentro);
+  const rotulosX = intervalos
+    .map((_, i) => i)
+    .filter((i) => {
+      if (lacunas.has(i)) return true;
+      const volume = i + 2;
+      const redondo = volume % passoX === 0 || (i === 0 && (passoX - (volume % passoX)) * banda >= ESPACO_ROTULO_X);
+      return redondo && xsLacuna.every((x) => Math.abs(x - xCentro(i)) >= ESPACO_ROTULO_X - 6);
+    });
+
+  const comRotuloX = new Set(rotulosX);
 
   const descricao = (ms, i) => {
     const partes = [`${capital(unidade.singular)} ${i + 2}: ${emSegundos(ms)}`];
@@ -88,23 +137,19 @@ export function GraficoIntervalos({
     return partes.join(' — ');
   };
 
-  const linhasDeReferencia = [
-    takt > 0 && takt <= maxY && {
-      chave: 'takt', ms: takt, rotulo: `Takt ${emSegundos(takt)}`,
-      cor: referencia.linha, traco: referencia.traco, espessura: 2,
-    },
-    mediaMs > 0 && mediaMs <= maxY && {
-      chave: 'media', ms: mediaMs, rotulo: `Rodando ${emSegundos(mediaMs)}`,
-      cor: claro.textoMedio, traco: '2 3', espessura: 1.5,
-    },
-  ].filter(Boolean);
+  const posicoesRotulo = posicionarRotulos(linhasDeReferencia.map((r) => ({ chave: r.chave, y: yDe(r.ms) })));
+
+  const tituloEixoY = (v) => (Math.abs(v / 1000 - Math.round(v / 1000)) < 1e-6
+    ? `${Math.round(v / 1000)} s`
+    : emSegundos(v));
 
   return (
     <figure style={est.figura}>
       <figcaption style={est.titulo}>
         Intervalo entre {unidade.plural}
         <span style={est.subtitulo}>
-          Tempo de cada {unidade.singular} até a seguinte, com a linha rodando
+          Tempo de cada {unidade.singular} até {unidade.comArtigo.startsWith('uma') ? 'a seguinte' : 'o seguinte'},
+          {' '}com a linha rodando — as paradas marcadas no cronômetro ficam fora
         </span>
       </figcaption>
 
@@ -112,10 +157,15 @@ export function GraficoIntervalos({
         itens={[
           { rotulo: 'Intervalo', cor: serie.tn },
           {
-            rotulo: 'Lacuna — mais que o dobro do normal',
+            rotulo: `Lacuna — mais que ${leitura.criterios?.fatorLacuna ?? 2}× o normal`,
             cor: serie.tolerancia,
             hachura: `repeating-linear-gradient(45deg, ${serie.tolerancia} 0 3px, rgba(255,255,255,.55) 3px 5px)`,
           },
+          ...linhasDeReferencia.map((r) => ({
+            rotulo: r.chave === 'media' ? 'Rodando — média dos intervalos' : 'Takt da semana',
+            cor: r.cor,
+            linha: r.chave === 'media' ? 'dotted' : 'dashed',
+          })),
         ]}
       />
 
@@ -131,96 +181,123 @@ export function GraficoIntervalos({
             + `${takt ? `, takt de ${emSegundos(takt)}` : ''}`
             + `, ${lacunas.size} lacuna(s)`}
         >
+          {/* Realce da coluna sob o mouse — so' na tela (o papel nao tem
+              os alvos de hover). */}
+          <style>{`.alvo-intervalo-${id}:hover { fill: rgba(20, 23, 26, 0.06); }`}</style>
           <Texturas id={id} />
 
           {grades.map((v) => (
             <g key={v}>
               <line
-                x1={EIXO.esq} x2={largura - EIXO.dir} y1={yDe(v)} y2={yDe(v)}
-                stroke={claro.borda} strokeWidth="1"
+                x1={margem.esq} x2={largura - margem.dir} y1={yDe(v)} y2={yDe(v)}
+                stroke={claro.borda} strokeWidth="1" strokeOpacity={v > 0 ? 0.7 : 0}
               />
-              <text x={EIXO.esq - 8} y={yDe(v) + 4} textAnchor="end" fontSize="11" fill={claro.textoFraco}>
-                {v > 0 ? emSegundos(v) : '0'}
+              <text x={margem.esq - 8} y={yDe(v) + 4} textAnchor="end" fontSize="11" fill={claro.textoMedio}>
+                {v > 0 ? tituloEixoY(v) : '0'}
               </text>
             </g>
           ))}
 
           {intervalos.map((ms, i) => {
-            const x = EIXO.esq + banda * i + (banda - larguraBarra) / 2;
+            const x = margem.esq + banda * i + (banda - larguraBarra) / 2;
             const y = yDe(ms);
             const alturaBarra = Math.max(1, base - y);
             const lacuna = lacunas.has(i);
             const cortada = ms > maxY;
             return (
               <g key={i}>
+                {!larguraFixa && (
+                  /* Alvo de hover maior que a barra: a banda inteira, de
+                     alto a baixo. O <title> e' o tooltip nativo — tambem
+                     lido por leitor de tela. */
+                  <rect
+                    className={`alvo-intervalo-${id}`}
+                    x={margem.esq + banda * i} y={margem.topo} width={banda} height={alturaPlot} fill="transparent"
+                  >
+                    <title>{descricao(ms, i)}</title>
+                  </rect>
+                )}
                 <rect
                   x={x} y={y} width={larguraBarra} height={alturaBarra}
                   fill={lacuna ? serie.tolerancia : serie.tn}
                   rx={larguraBarra >= 6 ? 2 : 0}
+                  pointerEvents="none"
                 />
                 {lacuna && (
-                  <rect x={x} y={y} width={larguraBarra} height={alturaBarra} fill={`url(#${id}-hachura)`} />
+                  <rect
+                    x={x} y={y} width={larguraBarra} height={alturaBarra}
+                    fill={`url(#${id}-hachura)`} pointerEvents="none"
+                  />
                 )}
                 {cortada && (
                   /* O entalhe: a barra nao acaba ali, foi cortada no teto. */
                   <path
                     d={`M${x - 1},${y + 9} l${larguraBarra / 2 + 1},-4 l${larguraBarra / 2 + 1},4`}
-                    fill="none" stroke={claro.papel} strokeWidth="2"
+                    fill="none" stroke={claro.papel} strokeWidth="2" pointerEvents="none"
                   />
                 )}
-                {cortada && rotularCorte.has(i) && (
+                {rotularValor.has(i) && (
                   <text
-                    x={x + larguraBarra / 2} y={y - 4} textAnchor="middle"
-                    fontSize="10" fontWeight="700" fill={claro.texto}
+                    x={x + larguraBarra / 2} y={y - 5} textAnchor="middle"
+                    fontSize="10.5" fontWeight="700" fill={lacuna ? COR_TEXTO_LACUNA : claro.texto}
+                    stroke={claro.papel} strokeWidth="3" paintOrder="stroke" pointerEvents="none"
                   >
                     {emSegundos(ms)}
                   </text>
-                )}
-                {/* Alvo de hover maior que a barra: a banda inteira, de alto
-                    a baixo. O <title> e' o tooltip nativo — tambem lido por
-                    leitor de tela. */}
-                {!larguraFixa && (
-                  <rect x={EIXO.esq + banda * i} y={EIXO.topo} width={banda} height={alturaPlot} fill="transparent">
-                    <title>{descricao(ms, i)}</title>
-                  </rect>
                 )}
               </g>
             );
           })}
 
           {linhasDeReferencia.map((r) => (
-            <g key={r.chave}>
+            <g key={r.chave} pointerEvents="none">
+              {/* Contorno branco por baixo: a linha atravessa as barras azuis
+                  sem sumir dentro delas. */}
               <line
-                x1={EIXO.esq} x2={largura - EIXO.dir} y1={yDe(r.ms)} y2={yDe(r.ms)}
+                x1={margem.esq} x2={largura - margem.dir} y1={yDe(r.ms)} y2={yDe(r.ms)}
+                stroke={claro.papel} strokeWidth={r.espessura + 3} strokeOpacity="0.85"
+              />
+              <line
+                x1={margem.esq} x2={largura - margem.dir} y1={yDe(r.ms)} y2={yDe(r.ms)}
                 stroke={r.cor} strokeWidth={r.espessura} strokeDasharray={r.traco}
               />
               <text
-                x={largura - EIXO.dir - 4} y={posicaoRotulo(r, linhasDeReferencia, yDe)} textAnchor="end"
-                fontSize="11" fontWeight="700" fill={claro.texto}
-                stroke={claro.papel} strokeWidth="3" paintOrder="stroke"
+                x={largura - margem.dir + 8} y={posicoesRotulo[r.chave] + 4} textAnchor="start"
+                fontSize="11" fill={claro.texto}
               >
-                {r.rotulo}
+                <tspan fontWeight="700">{r.nome}</tspan>
+                <tspan dx="4">{emSegundos(r.ms)}</tspan>
               </text>
             </g>
           ))}
 
-          {intervalos.map((_, i) => ((i + 2) % passoX === 0 || i === 0) && (
+          <line x1={margem.esq} x2={largura - margem.dir} y1={base} y2={base} stroke={claro.textoFraco} strokeWidth="1.5" />
+
+          {/* Marca de cada volume no eixo, quando a banda comporta. */}
+          {banda >= 5 && intervalos.map((_, i) => (
+            <line
+              key={`m${i}`}
+              x1={xCentro(i)} x2={xCentro(i)} y1={base} y2={base + (comRotuloX.has(i) ? 5 : 3)}
+              stroke={claro.textoFraco} strokeWidth="1"
+            />
+          ))}
+          {rotulosX.map((i) => (
             <text
               key={`x${i}`}
-              x={EIXO.esq + banda * (i + 0.5)} y={base + 16}
-              textAnchor="middle" fontSize="10" fill={claro.textoFraco}
+              x={xCentro(i)} y={base + 17}
+              textAnchor="middle" fontSize="10.5"
+              fontWeight={lacunas.has(i) ? 700 : 400}
+              fill={lacunas.has(i) ? COR_TEXTO_LACUNA : claro.textoMedio}
             >
               {i + 2}
             </text>
           ))}
           <text
-            x={EIXO.esq + (largura - EIXO.esq - EIXO.dir) / 2} y={altura - 6}
+            x={margem.esq + (largura - margem.esq - margem.dir) / 2} y={altura - 6}
             textAnchor="middle" fontSize="11" fill={claro.textoMedio}
           >
             {capital(unidade.singular)} nº
           </text>
-
-          <line x1={EIXO.esq} x2={largura - EIXO.dir} y1={base} y2={base} stroke={claro.textoFraco} strokeWidth="1.5" />
         </svg>
       </div>
     </figure>
@@ -230,16 +307,22 @@ export function GraficoIntervalos({
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
- * Onde escrever o rotulo de uma linha de referencia. Por padrao, logo acima
- * dela; quando takt e media ficam a menos de uma linha de texto um do
- * outro, o de BAIXO desce para baixo da propria linha — senao os dois se
- * escrevem um por cima do outro, justamente quando estao perto (que e'
+ * Onde escrever o rotulo de cada linha de referencia, na calha da direita.
+ * Por padrao, na altura da propria linha; quando takt e media ficam a menos
+ * de uma linha de texto um do outro, os dois se afastam igualmente — senao
+ * se escrevem um por cima do outro justamente quando estao perto (que e'
  * quando a comparacao mais importa).
  */
-function posicaoRotulo(r, todas, yDe) {
-  const y = yDe(r.ms);
-  const outra = todas.find((x) => x.chave !== r.chave);
-  if (!outra) return y - 5;
-  const yOutra = yDe(outra.ms);
-  return Math.abs(y - yOutra) < 16 && y > yOutra ? y + 14 : y - 5;
+function posicionarRotulos(itens) {
+  const ALTURA_TEXTO = 15;
+  const pos = Object.fromEntries(itens.map((x) => [x.chave, x.y]));
+  if (itens.length === 2) {
+    const [a, b] = [...itens].sort((p, q) => p.y - q.y);
+    const falta = ALTURA_TEXTO - (b.y - a.y);
+    if (falta > 0) {
+      pos[a.chave] = a.y - falta / 2;
+      pos[b.chave] = b.y + falta / 2;
+    }
+  }
+  return pos;
 }

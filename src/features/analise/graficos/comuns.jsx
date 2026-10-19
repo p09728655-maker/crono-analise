@@ -81,7 +81,11 @@ export function Legenda({ itens }) {
     <div style={est.legenda}>
       {itens.map((i) => (
         <span key={i.rotulo} style={est.legendaItem}>
-          <span style={{ ...est.legendaMarca, background: i.cor, backgroundImage: i.hachura }} />
+          {/* `linha`: amostra de linha de referencia (tracejada ou pontilhada),
+              para a legenda dizer o que e' cada linha que atravessa as barras. */}
+          {i.linha
+            ? <span style={{ ...est.legendaLinha, borderTopColor: i.cor, borderTopStyle: i.linha }} />
+            : <span style={{ ...est.legendaMarca, background: i.cor, backgroundImage: i.hachura }} />}
           {i.rotulo}
         </span>
       ))}

@@ -28,7 +28,7 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  *
  * No topo, o TAKT DESTA SEMANA — e' o numero que o chao precisa ter na
  * cabeca. Abaixo, as medicoes da embalagem; as que foram tocadas volume a
- * volume abrem o detalhe (grafico, lacunas, folha A4).
+ * volume abrem o detalhe (grafico, lacunas, folha A4) logo abaixo da lista.
  */
 export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
@@ -162,7 +162,22 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     : ''} A medição nasce no tablet, em Embalagem Takt Time: um toque a cada volume embalado.`}
                 />
               ) : (
-                <TabelaEmbalagem medicoes={leitura.medicoes} aoAbrir={setAberta} />
+                <TabelaEmbalagem
+                  medicoes={leitura.medicoes}
+                  abertaId={aberta?.id ?? null}
+                  // Clicar de novo na medicao aberta fecha o painel.
+                  aoAbrir={(c) => setAberta((atual) => (atual?.id === c.id ? null : c))}
+                />
+              )}
+
+              {/* A medicao selecionada abre AQUI, abaixo da lista. */}
+              {aberta && (
+                <VolumeAVolume
+                  conferencia={aberta}
+                  grupo={grupoAberto}
+                  maquinasDoGrupo={grupoAberto ? leitura.ativasDoGrupo(grupoAberto.id) : 0}
+                  aoFechar={() => setAberta(null)}
+                />
               )}
 
               <p style={est.painelDica}>
@@ -176,15 +191,6 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
       </div>
 
       {verVersoes && <HistoricoVersoes modo="analise" aoFechar={() => setVerVersoes(false)} />}
-
-      {aberta && (
-        <VolumeAVolume
-          conferencia={aberta}
-          grupo={grupoAberto}
-          maquinasDoGrupo={grupoAberto ? leitura.ativasDoGrupo(grupoAberto.id) : 0}
-          aoFechar={() => setAberta(null)}
-        />
-      )}
     </div>
   );
 }
@@ -205,7 +211,7 @@ function semTaktCurto(estado) {
  * abrem o detalhe: as feitas por horarios nao tem intervalo, e o botao
  * desabilitado diria isso pior do que uma frase.
  */
-function TabelaEmbalagem({ medicoes, aoAbrir }) {
+function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
   return (
     <section style={est.painel} aria-label="Medições da embalagem">
       <div style={est.painelTopo}>
@@ -213,7 +219,7 @@ function TabelaEmbalagem({ medicoes, aoAbrir }) {
           <h2 style={est.painelTitulo}>Medições da embalagem</h2>
           <p style={est.painelDica}>
             Volumes/hora do período inteiro, com as paradas dentro — o que de fato saiu.
-            Abra uma medição para ver cada volume contra o takt.
+            Em “Volume a volume”, a medição abre aqui embaixo, com cada volume.
           </p>
         </div>
       </div>
@@ -235,9 +241,10 @@ function TabelaEmbalagem({ medicoes, aoAbrir }) {
           {medicoes.map((c) => {
             const calc = conferenciaRapida({ duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas });
             const par = somarParadas(c.paradas);
+            const selecionada = c.id === abertaId;
             return (
               <Fragment key={c.id}>
-              <tr>
+              <tr style={selecionada ? est.linhaSelecionada : undefined}>
                 <td style={est.tdFraco}>{formatarDataHora(c.salvo_em)}</td>
                 <td style={est.tdCurto}>{c.maquina || '—'}</td>
                 <td style={est.tdCurto}>{c.peca || '—'}</td>
@@ -248,11 +255,16 @@ function TabelaEmbalagem({ medicoes, aoAbrir }) {
                 <td style={est.tdNumForte}>{calc ? Math.round(calc.pecasPorHoraBruto) : '—'}</td>
                 <td style={est.tdAcoes}>
                   {c.com_marcas ? (
-                    <button type="button" style={est.botaoLinha} onClick={() => aoAbrir(c)}>
+                    <button
+                      type="button"
+                      style={selecionada ? est.botaoLinhaAtivo : est.botaoLinha}
+                      aria-pressed={selecionada}
+                      onClick={() => aoAbrir(c)}
+                    >
                       Volume a volume
                     </button>
                   ) : (
-                    <span style={est.tdFraco} title="Medida por horários ou com a contagem corrigida à mão">
+                    <span style={est.textoFraco} title="Medida por horários ou com a contagem corrigida à mão">
                       sem toques
                     </span>
                   )}
@@ -261,7 +273,7 @@ function TabelaEmbalagem({ medicoes, aoAbrir }) {
               {/* A nota do analista, numa linha propria — como no relatorio
                   de ritmo. E' muitas vezes a explicacao da lacuna. */}
               {c.observacao && (
-                <tr>
+                <tr style={selecionada ? est.linhaSelecionada : undefined}>
                   <td style={est.tdObservacao} colSpan={9}>
                     <span style={est.rotuloObservacao}>Obs.</span>
                     {c.observacao}

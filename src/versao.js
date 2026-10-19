@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.90.0',
+    data: '2026-10-19',
+    titulo: 'Embalagem Takt Time: a medição abre na própria tela, números primeiro',
+    itens: [
+      'A MEDIÇÃO ABRE NA PRÓPRIA TELA, LOGO ABAIXO DA LISTA, ao clicar em "Volume a volume" — não mais numa janela por cima. A linha escolhida fica marcada na lista, a página rola até o detalhe e clicar de novo no botão fecha. Imprimir e Fechar ficam no topo do detalhe e acompanham a rolagem.',
+      'A LEITURA SEGUE UMA ORDEM SÓ: quem e quando (produto em destaque, máquina, data, horários) → os números → o gráfico → a explicação. Em destaque, cinco cartões: volumes, tempo por volume no período (com as paradas), tempo por volume com a linha rodando (sem as paradas marcadas), paradas marcadas e lacunas. Os dois tempos por volume agora dizem no próprio nome de que régua são. "Sem as lacunas" e "Takt da semana" continuam, numa faixa de apoio logo abaixo.',
+      'O GRÁFICO FICOU MAIS FÁCIL DE LER: número de cada volume no eixo de baixo, com o volume de cada lacuna em destaque; o valor escrito em cima de cada lacuna; as linhas de referência com nome e valor do lado de fora das barras e na legenda, e com contorno para não sumirem dentro delas; eixo em segundos sem casas decimais sobrando.',
+      'Sem lacuna, o cartão diz "nenhum intervalo passou de 2× o normal" — e não "nenhuma", que dava a entender que não houve perda. Parada marcada e passo lento não viram lacuna.',
+      'A explicação dos números saiu do parágrafo corrido e virou uma lista curta, termo por termo. Ela também corrige um detalhe do texto: o tempo por volume no período é o relógio do primeiro ao último toque dividido pelo número de INTERVALOS (volumes menos um), como a conta sempre fez — o texto dizia "÷ volumes". Nenhuma conta mudou.',
+      'AO SALVAR EM PDF, O ARQUIVO JÁ VEM COM NOME: "Takt Time - produto - máquina - data hora" (ex.: "Takt Time - Rack Sirius 1.6 - EMBALAGEM 01 - 19-10-2026 13h36"). Antes todo PDF saía "RitmoPatrimar — Estudo de Tempos". Barra e dois-pontos no nome do produto ("1/2", "16:9") viram hífen, porque o Windows não aceita esses caracteres. O título da folha impressa diz o mesmo: "Takt Time — produto · máquina".',
+    ],
+  },
+  {
     versao: '2.89.0',
     data: '2026-10-19',
     titulo: 'Embalagem Takt Time: cada volume contra o takt, em segundos',

@@ -17,6 +17,10 @@ export const est = {
   legenda: { display: 'flex', gap: 16, flexWrap: 'wrap', margin: '12px 0', fontSize: 12, color: claro.textoMedio },
   legendaItem: { display: 'inline-flex', alignItems: 'center', gap: 6 },
   legendaMarca: { width: 12, height: 12, borderRadius: 3, display: 'inline-block' },
+  legendaLinha: {
+    width: 22, height: 0, display: 'inline-block',
+    borderTopWidth: 2, borderTopStyle: 'solid', borderTopColor: claro.texto,
+  },
   rolagem: { overflowX: 'auto' },
   rotuloEixo: { fontSize: '11px', fill: claro.textoFraco },
   tituloEixo: { fontSize: '11px', fill: claro.textoFraco },
