@@ -93,8 +93,8 @@ for (let i = 0; i < 12; i++) {
   await t.waitForTimeout(260);
 }
 const painelTempo = await t.locator('[aria-label="Tempo decorrido"]').innerText();
-checar(/ÚLTIMO/i.test(painelTempo) && /MÉDIA/i.test(painelTempo) && /TAKT/i.test(painelTempo)
-  && painelTempo.includes('72.0'), 'cronometro rodando mostra ULTIMO, MEDIA e TAKT 72.0');
+checar(/ÚLTIMO/i.test(painelTempo) && /POR VOLUME/i.test(painelTempo) && /TAKT/i.test(painelTempo)
+  && painelTempo.includes('72.0'), 'cronometro rodando mostra ULTIMO, POR VOLUME e TAKT 72.0');
 if (FOTOS) await t.screenshot({ path: `${FOTOS}/tablet-rodando.png` });
 
 await t.getByRole('button', { name: /Encerrar/ }).click();
@@ -102,7 +102,7 @@ const resumo = t.locator('[aria-label="Resultado da conferência"]');
 await resumo.waitFor({ timeout: 4000 });
 const textoResumo = await resumo.innerText();
 checar(/volumes\/hora/i.test(textoResumo), 'resultado em volumes/hora — nao pecas/hora');
-checar(/MÉDIA/i.test(textoResumo) && /LACUNAS/i.test(textoResumo), 'resultado traz media e lacunas');
+checar(/POR VOLUME/i.test(textoResumo) && /LACUNAS/i.test(textoResumo), 'resultado traz tempo por volume e lacunas');
 checar(await resumo.locator('select').count() === 0, 'resultado mostra a maquina, sem seletor que nao faz nada');
 checar(/PRODUTO/.test(textoResumo), 'o campo e PRODUTO, nao peca');
 checar(/Embalagem Takt Time, no PC/.test(await t.locator('main, body').first().innerText())
@@ -179,8 +179,9 @@ const marcas = [30000];
 for (const s of intervalosS) marcas.push(marcas[marcas.length - 1] + s * 1000);
 const medicao = {
   id: '00000000-0000-0000-0000-00000000c0f1', maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6',
-  iniciado_em: new Date(hoje.getTime() - 15 * 60000).toISOString(), finalizado_em: hoje.toISOString(),
-  duracao_ms: 900000, pecas: marcas.length, ciclos_por_peca: 1, furacao_passante: false,
+  iniciado_em: new Date(hoje.getTime() - 1000000).toISOString(), finalizado_em: hoje.toISOString(),
+  // A ultima marca cai aos 950 s: o periodo tem de conte-la, como o servidor exige.
+  duracao_ms: 1000000, pecas: marcas.length, ciclos_por_peca: 1, furacao_passante: false,
   salvo_em: hoje.toISOString(), arquivada: false, com_marcas: true, paradas: [],
   observacao: 'Faltou caixa às 9h10',
 };
@@ -199,10 +200,13 @@ checar(await p.getByText('Faltou caixa às 9h10').count() > 0, 'a observacao do 
 
 await p.getByRole('button', { name: 'Volume a volume' }).click();
 const janela = p.getByRole('dialog', { name: /Volume a volume/ });
-// 12 x 60 s + 200 s = 920 s / 13 = 70,8 s por volume; takt 72 s.
-await janela.getByText(/saiu um volume a cada 70.8 s em média/).waitFor({ timeout: 8000 });
+// Periodo de 1.000 s com 14 volumes: 71,4 s por volume, paradas dentro;
+// takt 72 s. Rodando: 920 / 13 = 70,8 s. Sem a lacuna: 60 s.
+await janela.getByText(/No período, saiu um volume a cada 71.4 s, paradas dentro/).waitFor({ timeout: 8000 });
 const textoJanela = await janela.innerText();
-checar(/dentro do takt de 72.0 s/.test(textoJanela), 'veredito pela MEDIA: 70.8 s dentro do takt de 72.0 s');
+checar(/dentro do takt de 72.0 s/.test(textoJanela), 'veredito pelo PERIODO: 71.4 s dentro do takt de 72.0 s');
+checar(/COM A LINHA RODANDO[\s\S]*70.8 s/i.test(textoJanela) && /SEM AS LACUNAS[\s\S]*60.0 s/i.test(textoJanela),
+  'as camadas: rodando 70.8 s, sem as lacunas 60.0 s');
 checar(/1 lacuna — intervalo maior que o dobro do normal \(60.0 s\)/.test(textoJanela), 'aponta a lacuna contra o normal de 60.0 s');
 checar(/Faltou caixa às 9h10/.test(textoJanela), 'a observacao aparece junto da lacuna');
 checar(await janela.locator('svg[role="img"]').count() === 1, 'grafico volume a volume desenhado');

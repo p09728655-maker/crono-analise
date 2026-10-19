@@ -77,18 +77,50 @@ function normalELacunas(intervalos, fator) {
 }
 
 /**
+ * O TEMPO POR VOLUME QUE SE COMPARA COM O TAKT — o do PERIODO, paradas dentro.
+ *
+ * E' a mesma regua do veredito da semana (vereditoDaSemana, ritmo de
+ * relogio): o volume que nao saiu porque a linha estava parada tambem nao
+ * entrou no caminhao, marcada a parada ou nao. Comparar o takt com a linha
+ * RODANDO dava um veredito otimista do tamanho da parada — e premiava quem
+ * aperta "Parou": a mesma producao saia "dentro do takt" com a parada
+ * marcada e 122% acima dele sem a marca.
+ *
+ * O SETUP entra uma vez so', como em leituraDaDemanda: com setup PLANEJADO
+ * no cadastro do grupo, ele ja' saiu das horas do takt, entao o setup que a
+ * medicao pegou sai daqui tambem. Sem setup planejado, fica dentro.
+ *
+ * Null sem periodo ou sem volume: a tela mostra vazio, nunca zero.
+ */
+export function periodoPorPeca({
+  duracaoMs, pecas, setupMedidoMs = 0, setupPlanejado = false,
+} = {}) {
+  const dur = Number(duracaoMs) || 0;
+  const n = Math.floor(Number(pecas) || 0);
+  const desconto = setupPlanejado ? Math.min(Math.max(0, Number(setupMedidoMs) || 0), dur) : 0;
+  if (dur <= 0 || n <= 0 || dur - desconto <= 0) return null;
+  return (dur - desconto) / n;
+}
+
+/**
  * A LEITURA de uma medicao volume a volume.
  *
  * Devolve null sem pelo menos dois toques (nao ha' intervalo nenhum). Com
  * menos de `minIntervalos`, devolve so' os intervalos e o motivo: o grafico
  * pode ser desenhado, a leitura nao.
  *
- * O NUMERO QUE SE COMPARA COM O TAKT e' o tempo medio por volume: soma dos
- * intervalos dividida pela quantidade — o mesmo que dizer quantos volumes
- * sairam no tempo em que a linha rodou. Lacuna fica DENTRO dele: parada que
- * ninguem marcou tambem deixou de encher o caminhao. O ritmo SEM as
- * lacunas vem ao lado, como o "se nao parasse", para dizer se o que tira a
- * linha do takt e' o passo dela ou os buracos.
+ * TRES CAMADAS, do que saiu ao "se nao parasse":
+ *
+ *  - PERIODO (periodoPorPecaMs, de fora): duracao / volumes, paradas
+ *    dentro. E' o que se compara com o takt — ver periodoPorPeca.
+ *  - RODANDO (mediaMs): soma dos intervalos / quantidade, sem as paradas
+ *    marcadas no cronometro. A diferenca para o periodo sao elas.
+ *  - NORMAL (normalMs): rodando sem as lacunas. A diferenca para o rodando
+ *    sao as paradas que ninguem marcou; o que sobra acima do takt e' o
+ *    passo da linha.
+ *
+ * Cada camada que cai abaixo do takt diz de onde vem a diferenca — parada
+ * marcada, lacuna ou passo —, e cada uma pede uma acao diferente.
  *
  * Volume a volume contra o takt nao e' leitura: com volumes em par, metade
  * passa do takt e metade fica muito abaixo, numa linha que atende. Por isso
@@ -97,14 +129,15 @@ function normalELacunas(intervalos, fator) {
  * @param marcasMs instante de cada volume, ms no relogio da linha rodando
  * @param taktMs   takt da semana da medicao, por maquina (opcional)
  */
-export function leituraPecaAPeca({ marcasMs, taktMs = null } = {}) {
+export function leituraPecaAPeca({ marcasMs, taktMs = null, periodoPorPecaMs = null } = {}) {
   const intervalos = intervalosEntreMarcas(marcasMs);
   if (!intervalos.length) return null;
 
   const c = CRITERIOS_INTERVALOS;
   const n = intervalos.length;
   const takt = Number(taktMs) > 0 ? Number(taktMs) : null;
-  const base = { n, intervalos, taktMs: takt, criterios: c };
+  const periodo = Number(periodoPorPecaMs) > 0 ? Number(periodoPorPecaMs) : null;
+  const base = { n, intervalos, taktMs: takt, periodoMs: periodo, criterios: c };
 
   if (n < c.minIntervalos) {
     return {
@@ -139,7 +172,8 @@ export function leituraPecaAPeca({ marcasMs, taktMs = null } = {}) {
     lacunas,
     excessoMs,
     pecasNoExcesso: normalMs > 0 ? excessoMs / normalMs : 0,
-    // Positivo: MAIS LENTO que o takt.
+    // Positivo: MAIS LENTO que o takt. O do periodo e' o veredito.
+    periodoVsTaktPct: takt && periodo ? ((periodo / takt) - 1) * 100 : null,
     mediaVsTaktPct: takt ? ((mediaMs / takt) - 1) * 100 : null,
     normalVsTaktPct: takt ? ((normalMs / takt) - 1) * 100 : null,
   };

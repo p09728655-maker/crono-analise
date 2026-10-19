@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  faixaHoraria, formatarDuracao, leituraPecaAPeca, somarParadas, unidadeDoPosto,
+  faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
@@ -65,7 +65,14 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
           pecas: conferencia.pecas,
           duracaoMs: Number(conferencia.duracao_ms),
         });
-    const leitura = leituraPecaAPeca({ marcasMs: carga.marcas, taktMs: takt.taktMs });
+    // O veredito e' do PERIODO, paradas dentro (ver periodoPorPeca).
+    const periodoPorPecaMs = periodoPorPeca({
+      duracaoMs: Number(conferencia.duracao_ms),
+      pecas: conferencia.pecas,
+      setupMedidoMs: somarParadas(conferencia.paradas).setupMs,
+      setupPlanejado: Boolean(takt.setupPlanejado),
+    });
+    const leitura = leituraPecaAPeca({ marcasMs: carga.marcas, taktMs: takt.taktMs, periodoPorPecaMs });
     return { estado: leitura ? 'pronto' : 'sem-marcas', leitura, takt };
   }, [carga, grupo, maquinasDoGrupo, conferencia]);
 }
@@ -101,36 +108,41 @@ export function frasesVolumeAVolume({ leitura, takt, unidade, nomeGrupo }) {
   }
 
   /**
-   * O que se compara com o takt e' a MEDIA por volume (soma dos intervalos
-   * / volumes), lacunas dentro: e' o que de fato saiu com a linha rodando.
-   * Sem as lacunas vem ao lado, para dizer de onde vem a diferenca — do
-   * passo da linha ou dos buracos. Ver leituraPecaAPeca.
+   * O que se compara com o takt e' o PERIODO por volume, paradas dentro —
+   * a regua do veredito da semana. As camadas de baixo dizem de onde vem a
+   * diferenca: rodando (sem as paradas marcadas) e normal (sem as lacunas).
+   * Cada uma que cai abaixo do takt aponta uma acao diferente. Ver
+   * leituraPecaAPeca e periodoPorPeca.
    */
   const linhas = [];
   let tom;
   let manchete;
-  const mediaTxt = emSegundos(leitura.mediaMs);
+  const periodo = leitura.periodoMs ?? leitura.mediaMs;
+  const periodoTxt = emSegundos(periodo);
+  const rodandoTxt = emSegundos(leitura.mediaMs);
   const normalTxt = emSegundos(leitura.normalMs);
   const temLacuna = leitura.lacunas.length > 0;
+  const abertura = `No período, saiu um ${singular} a cada ${periodoTxt}, paradas dentro`;
   if (leitura.taktMs) {
-    const taktTxt = emSegundos(leitura.taktMs);
-    const pct = Math.abs(Math.round(leitura.mediaVsTaktPct));
-    if (leitura.mediaMs <= leitura.taktMs) {
-      manchete = `Com a linha rodando, saiu um ${singular} a cada ${mediaTxt} em média — dentro do takt de ${taktTxt}, com ${pct}% de folga.`;
+    const alvo = leitura.taktMs;
+    const taktTxt = emSegundos(alvo);
+    const pct = Math.abs(Math.round(((periodo / alvo) - 1) * 100));
+    if (periodo <= alvo) {
+      manchete = `${abertura} — dentro do takt de ${taktTxt}, com ${pct}% de folga.`;
       tom = temLacuna ? 'atencao' : 'atende';
-    } else if (temLacuna && leitura.normalMs <= leitura.taktMs) {
-      manchete = `Com a linha rodando, saiu um ${singular} a cada ${mediaTxt} em média — ${pct}% acima do takt de ${taktTxt}.`;
-      linhas.push(`Sem as lacunas seriam ${normalTxt} por ${singular}, dentro do takt: o que tira a linha do takt são as paradas que ninguém marcou, não o passo dela.`);
-      tom = 'falha';
     } else {
-      manchete = `Com a linha rodando, saiu um ${singular} a cada ${mediaTxt} em média — ${pct}% acima do takt de ${taktTxt}.`;
-      linhas.push(temLacuna
-        ? `Mesmo sem as lacunas (${normalTxt} por ${singular}), a linha não acompanha a demanda: o passo dela é mais lento que o takt.`
-        : 'Sem lacuna nenhuma: é o passo da linha que está mais lento que o takt, não parada.');
+      manchete = `${abertura} — ${pct}% acima do takt de ${taktTxt}.`;
       tom = 'falha';
+      if (leitura.mediaMs <= alvo) {
+        linhas.push(`Com a linha rodando seriam ${rodandoTxt} por ${singular}, dentro do takt: o que tira a linha do takt são as paradas marcadas nesta medição.`);
+      } else if (leitura.normalMs <= alvo) {
+        linhas.push(`Com a linha rodando, ${rodandoTxt}; sem as lacunas, ${normalTxt}, dentro do takt: o que tira a linha do takt são as paradas que ninguém marcou.`);
+      } else {
+        linhas.push(`Mesmo sem parada nenhuma (${normalTxt} por ${singular}), a linha não acompanha a demanda: é o passo dela que está mais lento que o takt.`);
+      }
     }
   } else {
-    manchete = `Com a linha rodando, saiu um ${singular} a cada ${mediaTxt} em média.`;
+    manchete = `${abertura}; com a linha rodando, ${rodandoTxt}.`;
     tom = temLacuna ? 'atencao' : 'neutro';
     linhas.push(`Sem takt para comparar: ${semTakt(takt.estado, nomeGrupo)}`);
   }
@@ -150,16 +162,19 @@ export function frasesVolumeAVolume({ leitura, takt, unidade, nomeGrupo }) {
   return { tom, manchete, linhas };
 }
 
-/** Os quatro numeros, na ordem em que se leem. Mesma lista na tela e no papel. */
+/**
+ * Os cinco numeros, na ordem em que se leem: o veredito (periodo x takt) e
+ * as duas camadas do "se nao parasse". Mesma lista na tela e no papel.
+ */
 function numerosDaLeitura(leitura, takt, unidade) {
   if (!leitura.suficiente) {
     return [{ rotulo: 'Intervalos tocados', valor: String(leitura.n), sub: `a leitura começa com ${leitura.criterios.minIntervalos}` }];
   }
   return [
     {
-      rotulo: `Média por ${unidade.singular}`,
-      valor: emSegundos(leitura.mediaMs),
-      sub: `${leitura.n} intervalos, lacunas dentro`,
+      rotulo: `Por ${unidade.singular} no período`,
+      valor: emSegundos(leitura.periodoMs ?? leitura.mediaMs),
+      sub: 'paradas dentro — contra o takt',
     },
     {
       rotulo: 'Takt da semana',
@@ -167,9 +182,14 @@ function numerosDaLeitura(leitura, takt, unidade) {
       sub: leitura.taktMs ? `semana ${takt.semana} · por ${unidade.singular}` : 'sem programa para comparar',
     },
     {
+      rotulo: 'Com a linha rodando',
+      valor: emSegundos(leitura.mediaMs),
+      sub: 'sem as paradas marcadas',
+    },
+    {
       rotulo: 'Sem as lacunas',
       valor: emSegundos(leitura.normalMs),
-      sub: 'o passo quando a linha anda',
+      sub: 'sem parada nenhuma',
     },
     {
       rotulo: 'Lacunas',
@@ -274,7 +294,8 @@ function notaDoCriterio(leitura, unidade) {
   return `Intervalo = tempo de um ${unidade.singular === 'volume' ? 'volume' : 'toque'} até o seguinte, com a linha rodando: `
     + 'as paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) '
     + 'continuam dentro dos intervalos. O primeiro toque não tem intervalo — o cronômetro começa num instante '
-    + 'qualquer. Média = soma dos intervalos ÷ quantidade (o que se compara com o takt). '
+    + 'qualquer. Contra o takt vai o período ÷ volumes, com as paradas dentro — a mesma régua do programa da semana. '
+    + 'Com a linha rodando = soma dos intervalos ÷ quantidade. '
     + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal — a média dos intervalos que não são lacuna. `
     + `Leitura a partir de ${leitura.criterios.minIntervalos} intervalos.`
     + (unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é colado em volumes.' : '');
@@ -359,7 +380,7 @@ function FolhaVolumeAVolume({
         {frases.linhas.map((l) => <p key={l} style={{ margin: '4px 0 0' }}>{l}</p>)}
       </section>
 
-      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(5, 1fr)' }}>
         {numerosDaLeitura(leitura, takt, unidade).map((k) => (
           <div key={k.rotulo} style={imp.campo}>
             <span style={imp.campoRotulo}>{k.rotulo}</span>

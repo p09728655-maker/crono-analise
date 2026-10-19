@@ -334,5 +334,8 @@ export function taktDaMedicao({
     taktMs: leitura.veredito?.taktMs ?? null,
     estado: leitura.estado,
     semana: leitura.semana?.chave ?? null,
+    // Com setup PLANEJADO, ele ja' saiu das horas do takt — e o que a
+    // medicao pegou de setup sai do periodo tambem (ver periodoPorPeca).
+    setupPlanejado: leitura.setup != null,
   };
 }

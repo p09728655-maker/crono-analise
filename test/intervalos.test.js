@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  CRITERIOS_INTERVALOS, intervalosEntreMarcas, leituraPecaAPeca, unidadeDoPosto,
+  CRITERIOS_INTERVALOS, intervalosEntreMarcas, leituraPecaAPeca, periodoPorPeca, unidadeDoPosto,
 } from '../src/domain/cronoanalise.js';
 import { taktDaMedicao } from '../src/domain/demandaSemanal.js';
 
@@ -120,6 +120,56 @@ describe('volume em par e ritmo misto — o que a mediana errava', () => {
     });
     expect(l.lacunas.map((x) => x.ms)).toEqual([1200000, 200000]);
     expect(l.normalMs).toBe(60000);
+  });
+});
+
+/**
+ * O VEREDITO E' DO PERIODO, paradas dentro — a mesma regua do veredito da
+ * semana. Caso da revisao de 19/10: comparar com a linha RODANDO fazia
+ * apertar "Parou" melhorar o veredito.
+ */
+describe('contra o takt vai o periodo, paradas dentro', () => {
+  // 13 volumes a cada 60 s e uma parada de 21 min: ~33 min de periodo.
+  const duracaoMs = (13 * 60 + 1260) * 1000;
+
+  it('periodo por volume = duracao / volumes', () => {
+    expect(periodoPorPeca({ duracaoMs, pecas: 13 })).toBeCloseTo(duracaoMs / 13, 6);
+    expect(periodoPorPeca({ duracaoMs: 0, pecas: 13 })).toBeNull();
+    expect(periodoPorPeca({ duracaoMs, pecas: 0 })).toBeNull();
+  });
+
+  it('marcar a parada NAO melhora o veredito: o periodo e o mesmo', () => {
+    const periodo = periodoPorPeca({ duracaoMs, pecas: 13 });
+    // Sem marcar: a parada fica num intervalo. Marcada: sai do relogio rodando.
+    const semMarcar = leituraPecaAPeca({
+      marcasMs: marcasDe([...Array(12).fill(60), 1260]), taktMs: 72000, periodoPorPecaMs: periodo,
+    });
+    const marcada = leituraPecaAPeca({
+      marcasMs: marcasDe(Array(13).fill(60)), taktMs: 72000, periodoPorPecaMs: periodo,
+    });
+    expect(semMarcar.periodoVsTaktPct).toBeCloseTo(marcada.periodoVsTaktPct, 9);
+    expect(marcada.periodoVsTaktPct).toBeGreaterThan(100); // ~2.040 s / 13 = 157 s contra 72 s
+    // As camadas dizem de onde vem: marcada, rodando ja' fica dentro do takt.
+    expect(marcada.mediaMs).toBe(60000);
+  });
+
+  it('com setup PLANEJADO, o setup medido sai do periodo (nao conta duas vezes)', () => {
+    const base = { duracaoMs: 3600000, pecas: 50, setupMedidoMs: 600000 };
+    expect(periodoPorPeca(base)).toBe(72000);
+    expect(periodoPorPeca({ ...base, setupPlanejado: true })).toBe(60000);
+  });
+
+  it('o takt da medicao diz se ha setup planejado', () => {
+    const demandas = [{ ano: 2026, numero: 43, pecas: 2200, inicio: '2026-10-19' }];
+    const sem = taktDaMedicao({ demandas, horas: 44, maquinas: 1, data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 1 });
+    const com = taktDaMedicao({
+      demandas, horas: 44, maquinas: 1, data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 1,
+      setup: { setupsDia: 2, dias: 5, minutos: 15 },
+    });
+    expect(sem.setupPlanejado).toBe(false);
+    expect(com.setupPlanejado).toBe(true);
+    // (44 - 2 x 5 x 15 / 60) h x 3.600.000 / 2.200 = 41,5 h -> 67.909 ms
+    expect(com.taktMs).toBeCloseTo((41.5 * 3600000) / 2200, 6);
   });
 });
 

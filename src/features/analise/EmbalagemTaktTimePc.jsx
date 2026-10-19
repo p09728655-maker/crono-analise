@@ -146,7 +146,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                   <div style={est.kpiValor}>{leitura.medicoes.length}</div>
                   <div style={est.kpiSub}>
                     {leitura.medicoes.filter((c) => c.com_marcas).length} volume a volume
-                    {leitura.arquivadas > 0 ? ` · ${leitura.arquivadas} arquivada(s) fora da conta` : ''}
+                    {leitura.arquivadas > 0
+                      ? ` · ${leitura.arquivadas} ${leitura.arquivadas === 1 ? 'arquivada' : 'arquivadas'} fora da conta`
+                      : ''}
                   </div>
                 </div>
               </div>
@@ -156,7 +158,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                   modo="analise"
                   titulo="Nenhuma medição da embalagem"
                   texto={`Nos últimos ${DIAS} dias.${leitura.arquivadas > 0
-                    ? ` Há ${leitura.arquivadas} medição(ões) da embalagem arquivada(s) — restaure no relatório Ritmo por máquina, em Arquivadas.`
+                    ? ` ${leitura.arquivadas === 1 ? 'Há 1 medição da embalagem arquivada' : `Há ${leitura.arquivadas} medições da embalagem arquivadas`} — restaure no relatório Ritmo por máquina, em Arquivadas.`
                     : ''} A medição nasce no tablet, em Embalagem Takt Time: um toque a cada volume embalado.`}
                 />
               ) : (

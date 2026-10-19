@@ -10,13 +10,14 @@ import { useCronometroAoVivo } from './rapida/useCronometroAoVivo.js';
 import { useHistoricoLocal } from './rapida/useHistoricoLocal.js';
 import { useRascunho } from './rapida/useRascunho.js';
 import { est } from './rapida/estilos.js';
-
-const PECA = unidadeDoPosto(null);
 import FormularioHorarios from './rapida/FormularioHorarios.jsx';
 import ResultadoHorarios from './rapida/ResultadoHorarios.jsx';
 import CronometroAoVivo from './rapida/CronometroAoVivo.jsx';
 import ResultadoAoVivo from './rapida/ResultadoAoVivo.jsx';
 import Historico from './rapida/Historico.jsx';
+
+/** Esta tela conta PECA em qualquer posto — ver o comentario de `unidade`. */
+const PECA = unidadeDoPosto(null);
 
 /**
  * CONFERENCIA RAPIDA — hora inicial, hora final, pecas. Sem cadastro.

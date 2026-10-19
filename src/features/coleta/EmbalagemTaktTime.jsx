@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  conferenciaRapida, formatarDuracao, formatarSegundos, leituraPecaAPeca, unidadeDoPosto,
+  conferenciaRapida, formatarDuracao, formatarSegundos, leituraPecaAPeca, periodoPorPeca, unidadeDoPosto,
 } from '../../domain/cronoanalise.js';
 import { useMotivosParada } from '../../lib/motivosParada.js';
 import { useWakeLock, vibrar } from '../../lib/hooks.js';
@@ -47,9 +47,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
   const [busca, setBusca] = useState('buscando');
   useEffect(() => {
     let vivo = true;
-    carregarMaquinas().then(
-      (r) => { if (vivo) setBusca(r?.maquinas?.length || r?.grupos?.length ? 'ok' : 'falhou'); },
-    );
+    carregarMaquinas().then((r) => { if (vivo) setBusca(r ? 'ok' : 'falhou'); });
     return () => { vivo = false; };
   }, []);
 
@@ -97,9 +95,23 @@ export default function EmbalagemTaktTime({ aoSair }) {
   // As marcas so' valem com a contagem que elas explicam (ver ConferenciaRapida).
   const marcasConferem = crono.marcasFinais.length > 0
     && Number(crono.pecasFinais) === crono.marcasFinais.length;
+  /* A regua do takt: o PERIODO por volume, paradas dentro (ver
+     periodoPorPeca). Ao vivo, com o relogio correndo; no resultado, com o
+     periodo fechado e as paradas como ficaram. */
+  const descontarSetup = Boolean(takt.setupPlanejado);
+  const porVolumeAoVivo = periodoPorPeca({
+    duracaoMs: crono.decorrido, pecas: crono.pecas,
+    setupMedidoMs: paradas.total.setupMs, setupPlanejado: descontarSetup,
+  });
+  const porVolumeFinal = periodoPorPeca({
+    duracaoMs: crono.duracaoFinal, pecas: crono.pecasFinais,
+    setupMedidoMs: paradas.total.setupMs, setupPlanejado: descontarSetup,
+  });
   const leitura = useMemo(
-    () => (marcasConferem ? leituraPecaAPeca({ marcasMs: crono.marcasFinais, taktMs: takt.taktMs }) : null),
-    [marcasConferem, crono.marcasFinais, takt.taktMs],
+    () => (marcasConferem
+      ? leituraPecaAPeca({ marcasMs: crono.marcasFinais, taktMs: takt.taktMs, periodoPorPecaMs: porVolumeFinal })
+      : null),
+    [marcasConferem, crono.marcasFinais, takt.taktMs, porVolumeFinal],
   );
 
   const salvar = () => historico.salvar({
@@ -202,6 +214,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           unidade={VOLUME}
           modoTakt
           taktMs={takt.taktMs}
+          porVolumeMs={crono.pecas >= 2 ? porVolumeAoVivo : null}
         />
       )}
 
@@ -229,7 +242,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           avisoSalvar={'Salvar envia esta medição para a Embalagem Takt Time, no PC, com o '
             + 'intervalo de cada volume, e guarda uma cópia neste aparelho.'}
           resumo={resultado && (
-            <ResumoTakt resultado={resultado} leitura={leitura} takt={takt} />
+            <ResumoTakt resultado={resultado} leitura={leitura} takt={takt} porVolumeMs={porVolumeFinal} />
           )}
           salvo={historico.salvo}
           aoSalvar={salvar}
@@ -264,9 +277,13 @@ function CartaoTakt({ takt }) {
  * e como saiu (media por volume contra o takt, e as lacunas). A leitura
  * completa, com grafico e a lista das lacunas, fica no PC.
  */
-function ResumoTakt({ resultado, leitura, takt }) {
+function ResumoTakt({
+  resultado, leitura, takt, porVolumeMs,
+}) {
   const suficiente = leitura?.suficiente;
-  const acima = suficiente && takt.taktMs > 0 && leitura.mediaMs > takt.taktMs;
+  // O periodo vale mesmo sem leitura (contagem corrigida, poucos volumes):
+  // e' contagem e duracao, nao toque.
+  const acima = takt.taktMs > 0 && porVolumeMs > takt.taktMs;
   return (
     <>
       <div style={est.destaqueRitmo} aria-label="Volumes por hora no período">
@@ -276,12 +293,11 @@ function ResumoTakt({ resultado, leitura, takt }) {
         </span>
       </div>
       <div style={est.linhaParcial}>
-        {/* A MEDIA por volume (soma dos intervalos / volumes) e' o que se
-            compara com o takt: com volume em par, qualquer medida de
-            posicao mente. Ver leituraPecaAPeca. */}
+        {/* O tempo POR VOLUME do periodo, paradas dentro, e' o que se
+            compara com o takt — a regua do programa da semana. */}
         <Parcial
-          rotulo={acima ? 'Média ▲ takt' : 'Média'}
-          valor={suficiente ? formatarSegundos(leitura.mediaMs) : '—'}
+          rotulo={acima ? 'Por vol ▲ takt' : 'Por volume'}
+          valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
           sufixo="s"
           tom={acima ? 'atencao' : null}
         />
@@ -291,8 +307,8 @@ function ResumoTakt({ resultado, leitura, takt }) {
       </div>
       {leitura && !suficiente && (
         <section style={est.aviso} role="status">
-          Poucos volumes para ler o intervalo: {leitura.motivo}. O ritmo vale; a média
-          por volume e as lacunas, ainda não.
+          Poucos volumes para ler o intervalo: {leitura.motivo}. O tempo por volume vale;
+          as lacunas, ainda não.
         </section>
       )}
       {!(takt.taktMs > 0) && (
@@ -306,7 +322,7 @@ function ResumoTakt({ resultado, leitura, takt }) {
 function semMaquina(busca, cadastro) {
   const temCadastro = (cadastro.maquinas || []).length > 0;
   if (!temCadastro && busca === 'buscando') return 'Buscando o cadastro de máquinas…';
-  if (!temCadastro) {
+  if (!temCadastro && busca === 'falhou') {
     return 'Sem rede e sem o cadastro de máquinas neste aparelho. Conecte à rede uma vez para '
       + 'baixar o cadastro — depois ele fica guardado e a medição funciona sem rede.';
   }

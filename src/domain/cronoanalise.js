@@ -24,7 +24,7 @@ export {
 } from './crono/conferencia.js';
 export { comparativoDeParadas, ritmoPorHoraDoDia } from './crono/maquinas.js';
 export {
-  CRITERIOS_INTERVALOS, intervalosEntreMarcas, leituraPecaAPeca,
+  CRITERIOS_INTERVALOS, intervalosEntreMarcas, leituraPecaAPeca, periodoPorPeca,
 } from './crono/intervalos.js';
 export {
   comparativoCapacidade, dimensionarOperadores, oee, operadoresNecessarios, taktTime,

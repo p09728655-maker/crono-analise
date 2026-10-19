@@ -15,15 +15,15 @@ const MAX_ROTULOS_CORTE = 6;
  * barra solitaria que dispara diz lacuna, e lacuna se trata com outra
  * pergunta ("o que aconteceu ali?").
  *
- * A linha tracejada fina e' a MEDIA por volume — e' ela, e nao barra por
- * barra, que se compara com o takt. Com volume em par (rack de dois volumes
- * saindo colados) metade das barras passa do takt numa linha que atende; a
- * media diz a verdade.
+ * A linha pontilhada e' a MEDIA das barras (a linha rodando). Barra por
+ * barra nao se compara com o takt: com volume em par (rack de dois volumes
+ * saindo colados) metade passa do takt numa linha que atende. O veredito,
+ * com as paradas dentro, esta' no texto acima do grafico.
  *
  * LACUNA leva HACHURA, nao so' cor — sai na impressora P&B da fabrica e
  * para quem tem daltonismo, como a barra "ainda em medicao" do Ritmo por
  * maquina. As duas linhas de referencia tem rotulo escrito ao lado: takt
- * (grafite, tracejado) e media (pontilhado mais fraco).
+ * (grafite, tracejado) e rodando (a media das barras, pontilhado mais fraco).
  *
  * O TETO do eixo e' tres vezes o ritmo normal (ou um pouco acima do takt, o que
  * for maior). Uma lacuna de vinte minutos numa linha de um minuto achataria
@@ -94,7 +94,7 @@ export function GraficoIntervalos({
       cor: referencia.linha, traco: referencia.traco, espessura: 2,
     },
     mediaMs > 0 && mediaMs <= maxY && {
-      chave: 'media', ms: mediaMs, rotulo: `Média ${emSegundos(mediaMs)}`,
+      chave: 'media', ms: mediaMs, rotulo: `Rodando ${emSegundos(mediaMs)}`,
       cor: claro.textoMedio, traco: '2 3', espessura: 1.5,
     },
   ].filter(Boolean);

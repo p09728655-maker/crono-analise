@@ -29,11 +29,9 @@ export function useCronometroAoVivo({ paradas }) {
   const [emParada, setEmParada] = useState(null); // {motivo, inicio}
   const [escolhendoMotivo, setEscolhendoMotivo] = useState(false);
   const [marcasFinais, setMarcasFinais] = useState([]);
-  // O intervalo entre os DOIS ULTIMOS toques e a MEDIA ate' aqui (do
-  // primeiro ao ultimo toque, dividido pelos intervalos) — o que a
-  // Embalagem Takt Time poe ao lado do takt. Null antes do segundo toque.
+  // O intervalo entre os DOIS ULTIMOS toques — o que a Embalagem Takt Time
+  // mostra enquanto o cronometro roda. Null antes do segundo toque.
   const [ultimoIntervaloMs, setUltimoIntervaloMs] = useState(null);
-  const [mediaAteAquiMs, setMediaAteAquiMs] = useState(null);
 
   const rodando = fase === 'rodando';
   const { decorrido, iniciar, parar } = useCronometro();
@@ -49,7 +47,6 @@ export function useCronometroAoVivo({ paradas }) {
     marcasRef.current = [];
     paradaAcumuladaRef.current = 0;
     setUltimoIntervaloMs(null);
-    setMediaAteAquiMs(null);
     // O cronometro ao vivo mede o periodo inteiro; um setup que estivesse
     // correndo no formulario pertencia ao periodo anterior.
     paradas.limpar();
@@ -69,7 +66,6 @@ export function useCronometroAoVivo({ paradas }) {
     ultimoToqueRef.current = agora;
     marcasRef.current.push(Math.round(agora - inicioRef.current - paradaAcumuladaRef.current));
     setUltimoIntervaloMs(ultimoIntervalo(marcasRef.current));
-    setMediaAteAquiMs(mediaAteAqui(marcasRef.current));
     vibrar(45);
     setPulso((p) => p + 1);
     setPecas((n) => n + 1);
@@ -78,7 +74,6 @@ export function useCronometroAoVivo({ paradas }) {
   const desfazer = useCallback(() => {
     marcasRef.current.pop();
     setUltimoIntervaloMs(ultimoIntervalo(marcasRef.current));
-    setMediaAteAquiMs(mediaAteAqui(marcasRef.current));
     setPecas((n) => Math.max(0, n - 1));
     vibrar([25, 40, 25]);
   }, []);
@@ -150,7 +145,7 @@ export function useCronometroAoVivo({ paradas }) {
 
   return {
     fase, rodando, decorrido, pecas, pulso, duracaoFinal, pecasFinais, setPecasFinais, marcasFinais,
-    ultimoIntervaloMs, mediaAteAquiMs,
+    ultimoIntervaloMs,
     emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
     comecar, contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, novaConferencia,
   };
@@ -158,8 +153,4 @@ export function useCronometroAoVivo({ paradas }) {
 
 const ultimoIntervalo = (marcas) => (marcas.length >= 2
   ? marcas[marcas.length - 1] - marcas[marcas.length - 2]
-  : null);
-
-const mediaAteAqui = (marcas) => (marcas.length >= 2
-  ? (marcas[marcas.length - 1] - marcas[0]) / (marcas.length - 1)
   : null);

@@ -110,23 +110,35 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
 - **No tablet**, o atalho *Embalagem Takt Time* abre direto o cronômetro, com a
   máquina do grupo EMBALAGEM já escolhida. Antes de começar aparece o takt da
   semana, em segundos. Durante a medição aparecem o intervalo do **último
-  volume**, a **média até ali** e o **takt**. Quando a média passa do takt, o
-  rótulo ganha "▲ takt". Um toque por volume; o horário de cada toque é gravado
+  volume**, o **tempo por volume** do período até ali (paradas dentro) e o
+  **takt**. Quando o tempo por volume passa do takt, o rótulo ganha "▲ takt". Um toque por volume; o horário de cada toque é gravado
   sozinho, sem digitação.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
   medições da embalagem. Cada medição tocada abre o **volume a volume**:
-  gráfico do intervalo de cada volume contra a linha do takt, **média por
-  volume**, o ritmo **sem as lacunas**, as **lacunas** e folha A4.
+  gráfico do intervalo de cada volume contra a linha do takt, o **tempo por
+  volume no período** contra o takt, as camadas **com a linha rodando** e **sem
+  as lacunas**, as **lacunas** e folha A4.
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O PCP cola o programa da embalagem em VOLUMES**: um rack que sai em dois
   volumes conta dois. Colado em produtos, o takt sai multiplicado pelo número
   de volumes e a linha parece folgada sem estar.
-- **O que se compara com o takt é a média por volume** (soma dos intervalos ÷
-  quantidade), com as lacunas dentro. Não é a mediana, nem volume a volume. O
-  rack de dois volumes sai com os dois colados (25 s, 100 s, 25 s…): a mediana
-  daria 25 s e acusaria lacuna onde não houve parada nenhuma, e metade das
-  barras passaria do takt numa linha que atende.
+- **O que se compara com o takt é o período ÷ volumes, com as paradas
+  dentro**. É a mesma régua do veredito do programa da semana: o volume que não
+  saiu porque a linha parou também não entrou no caminhão, com a parada marcada
+  ou não. Comparar com a linha rodando premiava quem aperta "Parou". Com setup
+  planejado no cadastro, o setup medido sai do período, como no programa.
+- Duas camadas de **diagnóstico** dizem de onde vem a diferença:
+  - **com a linha rodando**: soma dos intervalos ÷ quantidade, sem as paradas
+    marcadas;
+  - **sem as lacunas**: o mesmo, sem nenhuma parada.
+
+  A primeira camada que cai dentro do takt aponta a ação: paradas marcadas,
+  lacunas ou o passo da linha.
+- Nunca se compara volume a volume, nem pela mediana. O rack de dois volumes
+  sai com os dois colados (25 s, 100 s, 25 s…): metade das barras passaria do
+  takt numa linha que atende, e a mediana acusaria lacuna onde não houve
+  parada.
 - **Lacuna** = intervalo maior que o dobro do **ritmo normal**, que é a média
   dos intervalos que não são lacuna. A conta se repete até parar de mudar, para
   que uma parada enorme não esconda as menores. Os intervalos são medidos com a
@@ -1068,7 +1080,8 @@ reenviar o mesmo lote não duplica nada.
 | Takt | tempo disponível ÷ quantidade |
 | Takt da embalagem | (horas da semana − setup planejado) × 3.600 s ÷ volumes da semana, por linha |
 | Intervalo volume a volume | marca(n) − marca(n−1), no relógio da linha rodando; o primeiro toque não tem intervalo |
-| Média por volume (contra o takt) | Σ intervalos ÷ n — lacunas dentro |
+| Por volume no período (contra o takt) | (duração − setup medido, se houver setup planejado) ÷ volumes — paradas dentro |
+| Com a linha rodando | Σ intervalos ÷ n — paradas marcadas fora, lacunas dentro |
 | Ritmo normal | média dos intervalos que não são lacuna (repetida até estabilizar) |
 | Lacuna | intervalo > 2 × ritmo normal; excesso = Σ (lacuna − normal); volumes perdidos ≈ excesso ÷ normal |
 | Tendência (estudo) | regressão linear sobre a ordem dos ciclos; % (critério) = inclinação × (n−1) ÷ média; direção só com \|%\| ≥ 5 e R² ≥ t²₉₅/(t²₉₅+n−2). No quadro, a % exibida é fim ÷ início da reta |

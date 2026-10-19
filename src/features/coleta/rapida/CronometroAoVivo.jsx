@@ -11,18 +11,20 @@ import { est } from './estilos.js';
  */
 export default function CronometroAoVivo({
   crono, parcial, totalParadaMs, motivos, unidade,
-  // Embalagem Takt Time: o ritmo por hora da lugar ao ULTIMO intervalo, a'
-  // MEDIA ate' aqui e ao takt, em segundos — e' a comparacao que o chao faz.
-  modoTakt = false, taktMs = null,
+  // Embalagem Takt Time: o ritmo por hora da lugar ao ULTIMO intervalo, ao
+  // tempo POR VOLUME do periodo ate' aqui (paradas dentro — a regua do
+  // takt, ver periodoPorPeca) e ao takt, em segundos.
+  modoTakt = false, taktMs = null, porVolumeMs = null,
 }) {
   const {
     decorrido, pecas, pulso, emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
-    contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, ultimoIntervaloMs, mediaAteAquiMs,
+    contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, ultimoIntervaloMs,
   } = crono;
-  /* O aviso vai na MEDIA, nao no ultimo: o rack de dois volumes sai com os
-     dois colados (25 s, 100 s...), e o ultimo intervalo passaria do takt a
-     cada dois volumes numa linha que atende. */
-  const acimaDoTakt = modoTakt && taktMs > 0 && mediaAteAquiMs > taktMs;
+  /* O aviso vai no tempo por volume do PERIODO, nao no ultimo intervalo: o
+     rack de dois volumes sai com os dois colados (25 s, 100 s...), e o
+     ultimo passaria do takt a cada dois volumes numa linha que atende. E
+     com as paradas dentro: marcar "Parou" nao pode apagar o aviso. */
+  const acimaDoTakt = modoTakt && taktMs > 0 && porVolumeMs > taktMs;
 
   return (
     <>
@@ -40,11 +42,11 @@ export default function CronometroAoVivo({
                 valor={ultimoIntervaloMs ? formatarSegundos(ultimoIntervaloMs) : '—'}
                 sufixo="s"
               />
-              {/* Acima do takt, a media ganha SETA no rotulo e fundo: a cor
-                  sozinha nao serve a quem olha de longe, de luva, com sol. */}
+              {/* Acima do takt, ganha SETA no rotulo e fundo: a cor sozinha
+                  nao serve a quem olha de longe, de luva, com sol. */}
               <Parcial
-                rotulo={acimaDoTakt ? 'Média ▲ takt' : 'Média'}
-                valor={mediaAteAquiMs ? formatarSegundos(mediaAteAquiMs) : '—'}
+                rotulo={acimaDoTakt ? 'Por vol ▲ takt' : 'Por volume'}
+                valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
                 sufixo="s"
                 tom={acimaDoTakt ? 'atencao' : null}
               />

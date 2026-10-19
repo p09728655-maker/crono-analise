@@ -76,7 +76,10 @@ export function useCadastroMaquinas() {
  * Busca o cadastro no servidor e adota o que vier.
  *
  * Falha de rede nao propaga: sem cadastro a tela usa texto livre, que e'
- * exatamente o comportamento de sempre — nenhum erro a mostrar.
+ * exatamente o comportamento de sempre — nenhum erro a mostrar. Devolve o
+ * cadastro que o SERVIDOR respondeu, ou null quando ele nao respondeu: a
+ * Embalagem Takt Time precisa separar "sem rede" de "sem maquina
+ * cadastrada", que pedem providencias de pessoas diferentes.
  */
 /**
  * Uma busca de cada vez.
@@ -97,7 +100,7 @@ export async function carregarMaquinas() {
       publicar(cadastro);
       return cadastro;
     } catch {
-      return catalogo;
+      return null;
     } finally {
       emVoo = null;
     }
