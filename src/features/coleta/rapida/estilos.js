@@ -243,6 +243,10 @@ export const est = {
   parcialRotulo: { fontSize: 10, letterSpacing: 0.8, color: cores.textoFraco, textTransform: 'uppercase' },
   parcialValor: { fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.1 },
   parcialSufixo: { fontSize: tamanho.legenda, color: cores.textoFraco, marginLeft: 3, fontWeight: 400 },
+  // Acima do takt: FUNDO ambar, texto na cor de sempre. O ambar como cor de
+  // texto da' 2.65:1 nesta superficie (ver comparativoUnidade); quem avisa
+  // de verdade e' o "▲ takt" escrito no rotulo — o fundo so' reforca.
+  parcialAtencao: { background: cores.atencaoFundo, borderRadius: raio.sm, padding: '0 6px' },
 
   botaoGrande: {
     flex: '1 1 auto', minHeight: 180,

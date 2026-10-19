@@ -3,6 +3,8 @@ import ListaEstudos from './features/estudos/ListaEstudos.jsx';
 import DetalheEstudo from './features/estudos/DetalheEstudo.jsx';
 import ColetaFuradeira from './features/coleta/ColetaFuradeira.jsx';
 import ConferenciaRapida from './features/coleta/ConferenciaRapida.jsx';
+import EmbalagemTaktTime from './features/coleta/EmbalagemTaktTime.jsx';
+import EmbalagemTaktTimePc from './features/analise/EmbalagemTaktTimePc.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import RelatorioConferencias from './features/analise/RelatorioConferencias.jsx';
 import PainelFabrica from './features/painel/PainelFabrica.jsx';
@@ -113,7 +115,7 @@ export default function App() {
   // O painel de parede tambem e' tela cheia: ninguem chega perto para ler
   // barra de sincronizacao, e ela so' roubaria altura do que se le' a
   // metros.
-  const telaCheia = emColeta || tela === 'rapida' || tela === 'painel';
+  const telaCheia = emColeta || tela === 'rapida' || tela === 'embalagem' || tela === 'painel';
 
   // Recarregar no meio da coleta perderia o ciclo em andamento.
   useEffect(() => {
@@ -198,6 +200,7 @@ export default function App() {
         <Inicio
           aoAbrirEstudos={irParaLista}
           aoAbrirRelatorio={() => navegar(caminhos.conferencias())}
+          aoAbrirEmbalagem={() => navegar(caminhos.embalagemPc())}
           aoNovoEstudo={() => navegar(`${caminhos.lista('analise')}?novo=1`)}
           aoMedir={medirEstudo}
           aoAnalisar={abrirEstudo}
@@ -215,8 +218,10 @@ export default function App() {
           modo={modo}
           aoTrocarModo={desktop ? trocarModo : undefined}
           aoConferirRapido={() => navegar(caminhos.rapida())}
+          aoEmbalagemTakt={() => navegar(caminhos.embalagem())}
           aoSairDoSistema={desktop ? undefined : () => setEncerrado(true)}
           aoVerConferencias={() => navegar(caminhos.conferencias())}
+          aoVerEmbalagem={() => navegar(caminhos.embalagemPc())}
           aoVerInicio={desktop ? irParaInicio : undefined}
         />
       )}
@@ -225,10 +230,21 @@ export default function App() {
         <ConferenciaRapida aoSair={() => navegar(caminhos.lista('coleta'))} />
       )}
 
+      {tela === 'embalagem' && (
+        <EmbalagemTaktTime aoSair={() => navegar(caminhos.lista('coleta'))} />
+      )}
+
       {/* GESTAO A VISTA: monitor de parede, sem interacao nenhuma. Nao
           recebe `aoVoltar` de proposito — nao ha' de onde voltar, e um
           botao nesta tela so' existiria para ser apertado por engano. */}
       {tela === 'painel' && <PainelFabrica />}
+
+      {tela === 'embalagem-pc' && (
+        <EmbalagemTaktTimePc
+          aoVoltar={() => navegar(caminhos.lista('analise'))}
+          aoVerInicio={irParaInicio}
+        />
+      )}
 
       {tela === 'conferencias' && (
         <RelatorioConferencias

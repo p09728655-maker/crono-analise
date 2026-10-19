@@ -39,7 +39,8 @@ import VazioAnalise from './lista/VazioAnalise.jsx';
  * container calcula uma vez para o modo em que esta'.
  */
 export default function ListaEstudos({
-  aoAbrir, aoEditar, aoMedir, aoImprimir, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoVerConferencias,
+  aoAbrir, aoEditar, aoMedir, aoImprimir, modo = 'coleta', aoTrocarModo, aoConferirRapido, aoEmbalagemTakt,
+  aoVerConferencias, aoVerEmbalagem,
   aoSairDoSistema, aoVerInicio,
 }) {
   const [criando, setCriando] = useState(false);
@@ -118,6 +119,7 @@ export default function ListaEstudos({
       aoNovoEstudo={() => setCriando(true)}
       aoImportar={() => setImportando(true)}
       aoVerConferencias={aoVerConferencias}
+      aoVerEmbalagem={aoVerEmbalagem}
       aoVerArquivados={() => setVerArquivados(true)}
       aoVerChaveIa={() => setVerChaveIa(true)}
       aoVerMotivos={() => setVerMotivos(true)}
@@ -198,6 +200,25 @@ export default function ListaEstudos({
               <div style={est.atalhoTexto}>
                 Peças/hora de qualquer posto: horários, peças e as paradas (setup, falta de peça).
                 Sem cronometrar ciclo.
+              </div>
+            </div>
+            <span style={est.atalhoSeta} aria-hidden="true">→</span>
+          </button>
+        )}
+
+        {/* EMBALAGEM TAKT TIME — funcao propria, separada do Ritmo da
+            maquina: na embalagem a pergunta e' se cada volume sai dentro do
+            takt, nao quantas pecas por hora. Tambem sempre visivel: mede sem
+            rede e manda pela fila. */}
+        {!analise && aoEmbalagemTakt && (
+          <button type="button" style={est.atalhoRapida} onClick={aoEmbalagemTakt}>
+            <Simbolo tipo="cronometro" cor={t.vermelho} tamanho={28} />
+            <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+              <span style={est.atalhoRotulo}>Embalagem</span>
+              <div style={est.atalhoTitulo}>Embalagem Takt Time</div>
+              <div style={est.atalhoTexto}>
+                Toque a cada volume embalado: o intervalo de cada volume, em segundos, contra o
+                takt da semana.
               </div>
             </div>
             <span style={est.atalhoSeta} aria-hidden="true">→</span>

@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
  *   /                                    raiz — decide pelo aparelho
  *   /coleta                              lista (celular)
  *   /coleta/rapida                       conferencia rapida, sem cadastro
+ *   /coleta/embalagem                    embalagem takt time (volume a volume)
  *   /coleta/estudo/<id>                  operacoes do estudo
  *   /coleta/estudo/<id>/operacao/<opId>  cronometro no posto
  *   /analise                             lista (PC)
@@ -61,6 +62,7 @@ export function analisarCaminho(caminho) {
 
   // Conferencia rapida: cronometro avulso, sem estudo — nao carrega nada.
   if (/^\/coleta\/rapida\/?$/i.test(p)) return { modo: 'coleta', tela: 'rapida', estudoId: null, operacaoId: null };
+  if (/^\/coleta\/embalagem\/?$/i.test(p)) return { modo: 'coleta', tela: 'embalagem', estudoId: null, operacaoId: null };
 
   /**
    * O PAINEL DE PAREDE nao passa pela regra de aparelho.
@@ -74,6 +76,7 @@ export function analisarCaminho(caminho) {
 
   if (/^\/coleta\/?$/i.test(p)) return { modo: 'coleta', tela: 'lista', estudoId: null, operacaoId: null };
   if (/^\/analise\/conferencias\/?$/i.test(p)) return { modo: 'analise', tela: 'conferencias', estudoId: null, operacaoId: null };
+  if (/^\/analise\/embalagem\/?$/i.test(p)) return { modo: 'analise', tela: 'embalagem-pc', estudoId: null, operacaoId: null };
 
   /**
    * A CASA DA ANALISE. /analise abre o INICIO, e a lista de estudos ganhou
@@ -130,7 +133,9 @@ export const caminhos = {
   inicio: () => '/analise',
   lista: (modo) => (modo === 'analise' ? '/analise/estudos' : `/${modo}`),
   rapida: () => '/coleta/rapida',
+  embalagem: () => '/coleta/embalagem',
   conferencias: () => '/analise/conferencias',
+  embalagemPc: () => '/analise/embalagem',
   // O painel aceita o CODIGO do grupo: e' o endereco que se deixa fixo no
   // navegador do monitor perto daquele conjunto de maquinas.
   painel: (grupo) => (grupo ? `/painel?grupo=${encodeURIComponent(grupo)}` : '/painel'),

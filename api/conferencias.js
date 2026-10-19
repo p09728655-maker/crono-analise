@@ -87,12 +87,33 @@ export default handler(async (req, res) => {
       });
     }
 
+    /**
+     * ?id=... — AS MARCAS de UMA medicao, para o quadro volume a volume.
+     *
+     * Ficam fora da lista de proposito: uma hora de embalagem sao sessenta
+     * marcas, mas um posto contado peca a peca passa de mil, e a lista traz
+     * ate' MAX_LINHAS medicoes de uma vez para montar o relatorio inteiro.
+     * A lista diz so' se ha' marcas (`com_marcas`); o detalhe vem quando
+     * alguem abre aquela medicao.
+     */
+    if (id) {
+      uuid(id, 'id');
+      return auth.rls(async (db) => {
+        const [linha] = await db`
+          SELECT c.id, c.marcas_ms, c.marcas_relogio_ms, c.marcas_setup_ms FROM conferencias c
+           WHERE c.id = ${id} AND c.empresa_id = ${empresaId}`;
+        if (!linha) throw naoEncontrado('Medição não encontrada');
+        return json(res, 200, { conferencia: linha });
+      });
+    }
+
     return auth.rls(async (db) => {
       // As paradas vem da TABELA, montadas no mesmo formato que o app sempre
       // recebeu ({motivo, duracaoMs, observacao}). A tela nao precisa saber
       // que elas deixaram de morar dentro da conferencia.
       const linhas = await db`
         SELECT c.id, c.maquina, c.peca, c.iniciado_em, c.finalizado_em, c.duracao_ms, c.pecas, c.ciclos_por_peca, c.furacao_passante, c.observacao, c.salvo_em, c.arquivada,
+               (c.marcas_ms IS NOT NULL) AS com_marcas,
                coalesce((
                  SELECT jsonb_agg(jsonb_build_object(
                           'motivo', p.motivo,

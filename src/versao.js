@@ -13,6 +13,31 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.89.0',
+    data: '2026-10-19',
+    titulo: 'Embalagem Takt Time: cada volume contra o takt, em segundos',
+    itens: [
+      'NOVA FUNÇÃO, SEPARADA DO RITMO POR MÁQUINA: EMBALAGEM TAKT TIME. No tablet, o atalho abre direto o cronômetro da embalagem, com a máquina já escolhida. Um toque a cada volume embalado; o horário de cada toque é gravado sozinho, sem digitar hora nem quantidade.',
+      'O TAKT APARECE EM SEGUNDOS NO PRÓPRIO TABLET. Antes de começar, o takt da semana. Durante a medição, o intervalo do último volume, o tempo por volume até ali (paradas dentro) e o takt; quando o tempo por volume passa do takt, o rótulo diz "▲ takt". Sem rede, o tablet usa o programa que já tinha guardado.',
+      'NO PC, CADA MEDIÇÃO ABRE VOLUME A VOLUME: um gráfico com o intervalo de cada volume contra a linha do takt, o TEMPO POR VOLUME NO PERÍODO — que é o que se compara com o takt —, e duas camadas que dizem de onde vem a diferença: com a linha rodando (sem as paradas marcadas) e sem as lacunas. Lacunas são os intervalos maiores que o dobro do ritmo normal. Como as paradas marcadas no cronômetro já ficam de fora, lacuna é parada que ninguém marcou. A observação do analista aparece junto, e a lista das lacunas sai na folha impressa, com espaço para escrever o que aconteceu.',
+      'CONTRA O TAKT VAI O RELÓGIO, COM AS PARADAS DENTRO — a mesma régua do programa da semana —, contado do primeiro ao último toque. O volume que não saiu porque a linha parou também não entrou no caminhão, com a parada marcada ou não; comparar com a linha rodando faria apertar "Parou" melhorar o veredito. E nunca volume a volume: o rack de dois volumes sai com os dois colados (25 s, 100 s, 25 s...), e metade passaria do takt numa linha que atende.',
+      'NO QUADRO DO PROGRAMA DA SEMANA, SETUP CADASTRADO COMO ZERO ("este grupo não faz setup") deixou de tirar do relógio o setup que a medição pegou. Ele não sai das horas, então tem de ficar no relógio — antes, não contava em lugar nenhum.',
+      'O TAKT É POR VOLUME, E O PROGRAMA DA EMBALAGEM PRECISA SER COLADO EM VOLUMES. Um rack que sai em dois volumes conta dois. Colado em produtos, o takt sairia o dobro do real e a linha pareceria folgada sem estar. A conta é a mesma do quadro do programa da semana: horas da semana, menos o setup planejado, divididas pelos volumes.',
+      'Se a contagem for corrigida à mão no fim da medição, o ritmo vale normalmente, mas o intervalo volume a volume não é salvo — a tela avisa na hora. Os toques não explicariam o número digitado, e o intervalo sairia falso.',
+    ],
+  },
+  {
+    versao: '2.88.2',
+    data: '2026-10-19',
+    titulo: 'A entrada passa a dizer por que não entrou',
+    itens: [
+      'A ENTRADA DO PC MOSTRAVA "FAILED TO FETCH" e não deixava ninguém entrar. A causa não era a senha nem o app: o banco de dados do sistema tinha sido pausado pelo provedor por falta de uso, e a tela de entrada não recebia resposta nenhuma. O banco foi reativado; nada foi perdido.',
+      'QUANDO O SERVIDOR DE LOGIN NÃO RESPONDER, O "INICIAR SESSÃO" AGORA DIZ ISSO EM PORTUGUÊS e pede para avisar o administrador. Se o próprio computador estiver sem internet, diz que o problema é a rede dele. Antes, as duas situações apareciam como "Failed to fetch", que não diz de quem é o problema nem o que fazer.',
+      'O TABLET PAREADO NÃO PERDE MAIS O PAREAMENTO QUANDO O SERVIDOR CAI. Antes, se o servidor de login respondesse com erro (fora do ar, sobrecarregado ou pausado), o tablet apagava o próprio pareamento e voltava para a tela de parear, pedindo código novo ao administrador. Agora só a credencial recusada — o aparelho revogado na tela de Analistas — desfaz o pareamento; com o servidor fora, o tablet espera e entra sozinho quando ele voltar.',
+      'Senha errada continua com a mesma mensagem de sempre.',
+    ],
+  },
+  {
     versao: '2.88.1',
     data: '2026-09-22',
     titulo: 'A tela de Máquinas voltou, e o banco passa a subir junto com o app',

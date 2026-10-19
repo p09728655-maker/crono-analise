@@ -800,6 +800,144 @@ rodar('API — integracao com Postgres', () => {
     expect(limpa.corpo.conferencia.paradas).toEqual([]);
   });
 
+  it('marcas do cronometro ao vivo sobem com a conferencia e voltam so no detalhe', async () => {
+    const clientId = crypto.randomUUID();
+    // Cinco volumes a cada minuto, num periodo de 5 min.
+    const marcasMs = [30000, 90000, 150000, 210000, 270000];
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId, maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6',
+          // 240 s de trecho rodando + 20 s de parada marcada entre os toques.
+          duracaoMs: 300000, pecas: 5, marcasMs, marcasRelogioMs: 260000, marcasSetupMs: 15000,
+          salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+
+    const [linha] = await sql`
+      SELECT id, marcas_ms, marcas_relogio_ms, marcas_setup_ms FROM conferencias WHERE client_id = ${clientId}`;
+    expect(linha.marcas_ms).toEqual(marcasMs);
+    expect(linha.marcas_relogio_ms).toBe(260000);
+    expect(linha.marcas_setup_ms).toBe(15000);
+
+    // A lista diz que ha' marcas, mas nao as carrega.
+    const lista = fingirRes();
+    await conferenciasApi(fingirReq({}), lista);
+    const naLista = lista.corpo.conferencias.find((c) => c.id === linha.id);
+    expect(naLista.com_marcas).toBe(true);
+    expect(naLista.marcas_ms).toBeUndefined();
+
+    const detalhe = fingirRes();
+    await conferenciasApi(fingirReq({ query: { id: linha.id } }), detalhe);
+    expect(detalhe.statusCode).toBe(200);
+    expect(detalhe.corpo.conferencia.marcas_ms).toEqual(marcasMs);
+    expect(detalhe.corpo.conferencia.marcas_relogio_ms).toBe(260000);
+    expect(detalhe.corpo.conferencia.marcas_setup_ms).toBe(15000);
+  });
+
+  it('setup no trecho maior que o que o trecho parou vira null — o relogio fica', async () => {
+    const clientId = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          // O trecho parou 20 s (260 - 240): 30 s de setup nele e' impossivel.
+          clientId, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 5,
+          marcasMs: [30000, 90000, 150000, 210000, 270000], marcasRelogioMs: 260000, marcasSetupMs: 30000,
+          salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+    const [linha] = await sql`SELECT marcas_relogio_ms, marcas_setup_ms FROM conferencias WHERE client_id = ${clientId}`;
+    expect(linha.marcas_relogio_ms).toBe(260000);
+    expect(linha.marcas_setup_ms).toBeNull();
+  });
+
+  it('relogio entre toques que nao cabe (menor que o trecho rodando, maior que o periodo) vira null', async () => {
+    const menor = crypto.randomUUID();
+    const maior = crypto.randomUUID();
+    const marcasMs = [30000, 90000, 150000];
+    const res = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          // O trecho rodando ja' tem 120 s: relogio de 100 s e' impossivel.
+          { clientId: menor, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 3, marcasMs, marcasRelogioMs: 100000, salvoEm: new Date().toISOString() },
+          { clientId: maior, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 3, marcasMs, marcasRelogioMs: 400000, salvoEm: new Date().toISOString() },
+        ],
+      },
+    }), res);
+    expect(res.statusCode).toBe(200);
+    const linhas = await sql`
+      SELECT marcas_ms, marcas_relogio_ms FROM conferencias WHERE client_id IN (${menor}, ${maior})`;
+    // As marcas continuam; so' o relogio que nao serve cai.
+    expect(linhas.map((l) => l.marcas_relogio_ms)).toEqual([null, null]);
+    expect(linhas.every((l) => Array.isArray(l.marcas_ms))).toBe(true);
+  });
+
+  it('o banco recusa relogio entre toques sem as marcas', async () => {
+    await expect(sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em, marcas_relogio_ms)
+      VALUES (${crypto.randomUUID()}, ${EMPRESA}, 'X', 60000, 3,
+              now() - interval '1 minute', now(), now(), 50000)`)
+      .rejects.toThrow(/conferencias_marcas_relogio_chk/);
+  });
+
+  it('marcas que nao batem com a contagem entram como nenhuma — e nao travam a fila', async () => {
+    const corrigida = crypto.randomUUID();
+    const foraDeOrdem = crypto.randomUUID();
+    const res = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          // Contagem corrigida a mao no fim: 6 volumes, 5 toques.
+          {
+            clientId: corrigida, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 6,
+            marcasMs: [1000, 2000, 3000, 4000, 5000], salvoEm: new Date().toISOString(),
+          },
+          {
+            clientId: foraDeOrdem, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 2,
+            marcasMs: [5000, 1000], salvoEm: new Date().toISOString(),
+          },
+        ],
+      },
+    }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.corpo.clientIds).toEqual(expect.arrayContaining([corrigida, foraDeOrdem]));
+    const linhas = await sql`
+      SELECT marcas_ms FROM conferencias WHERE client_id IN (${corrigida}, ${foraDeOrdem})`;
+    expect(linhas.map((l) => l.marcas_ms)).toEqual([null, null]);
+  });
+
+  it('o banco recusa marca que nao bate com a contagem, mesmo fora da API', async () => {
+    await expect(sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em, marcas_ms)
+      VALUES (${crypto.randomUUID()}, ${EMPRESA}, 'X', 60000, 3,
+              now() - interval '1 minute', now(), now(), ${[1000, 2000]}::integer[])`)
+      .rejects.toThrow(/conferencias_marcas_chk/);
+  });
+
+  it('marcas de conferencia de OUTRA empresa nao saem', async () => {
+    const alheia = crypto.randomUUID();
+    await sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em, marcas_ms)
+      VALUES (${alheia}, ${OUTRA_EMPRESA}, 'Alheia', 60000, 2,
+              now() - interval '1 minute', now(), now(), ${[1000, 2000]}::integer[])`;
+    const [linha] = await sql`SELECT id FROM conferencias WHERE client_id = ${alheia}`;
+
+    const res = fingirRes();
+    await conferenciasApi(fingirReq({ query: { id: linha.id } }), res);
+    expect(res.statusCode).toBe(404);
+  });
+
   it('nao arquiva nem exclui conferencia de OUTRA empresa', async () => {
     const alheia = crypto.randomUUID();
     await sql`

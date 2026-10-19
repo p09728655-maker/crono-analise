@@ -1,3 +1,5 @@
+import { formatarSegundos } from '../../../domain/cronoanalise.js';
+
 /** Pecas por minuto a partir do ritmo em pecas/hora — pedido de 31/08. */
 export const porMinuto = (pecasPorHora) => (pecasPorHora / 60).toFixed(1);
 
@@ -17,3 +19,13 @@ export function porPeca(ms) {
   const s = Math.round(ms / 1000);
   return `${Math.floor(s / 60)}min${String(s % 60).padStart(2, '0')}s`;
 }
+
+/**
+ * Takt e intervalo EM SEGUNDOS, sempre — "72.0 s", nunca "1min12s".
+ *
+ * E' a unidade em que o takt ja' aparece no estudo (Yamazumi, painel de
+ * operadores, resumo executivo), e a comparacao volume a volume so' se le
+ * de relance se takt e intervalo estiverem na mesma regua. porPeca, acima,
+ * continua servindo a quem le tempo de peca solto.
+ */
+export const emSegundos = (ms) => (Number.isFinite(ms) && ms > 0 ? `${formatarSegundos(ms)} s` : '—');

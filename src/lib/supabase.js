@@ -29,6 +29,25 @@ const MARGEM_S = 60;
 
 export class ErroDeEntrada extends Error {}
 
+/**
+ * Falha ANTES de haver resposta: sem internet, servidor fora do ar ou o
+ * projeto do Supabase pausado. O navegador so' diz "Failed to fetch" — em
+ * ingles e sem dizer de quem e' o problema, como apareceu na entrada do PC
+ * quando o banco ficou pausado.
+ *
+ * Classe propria, e NAO ErroDeEntrada, de proposito: ErroDeEntrada e' o
+ * balde de "o servidor respondeu e recusou". Wi-Fi caindo no chao de fabrica
+ * nao e' recusa, e nao pode desparear o aparelho.
+ */
+export class ErroDeRede extends Error {}
+
+function semResposta() {
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  return new ErroDeRede(offline
+    ? 'Sem internet neste aparelho. Confira a rede e tente de novo.'
+    : 'O servidor de login não respondeu. Se a internet está normal, o sistema pode estar fora do ar — avise o administrador.');
+}
+
 /* ------------------------------------------------------- armazenamento */
 
 const ler = (chave) => {
@@ -53,15 +72,20 @@ export const aparelhoPareado = () => Boolean(ler(GUARDA_APARELHO)?.email);
 async function chamarAuth(caminho, {
   corpo, token, metodo = 'POST', mensagem400 = 'E-mail ou senha não confere',
 } = {}) {
-  const resposta = await fetch(`${URL_SUPABASE}/auth/v1${caminho}`, {
-    method: metodo,
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: CHAVE_PUBLICAVEL,
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: corpo ? JSON.stringify(corpo) : undefined,
-  });
+  let resposta;
+  try {
+    resposta = await fetch(`${URL_SUPABASE}/auth/v1${caminho}`, {
+      method: metodo,
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: CHAVE_PUBLICAVEL,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+  } catch {
+    throw semResposta();
+  }
   let dados = {};
   try { dados = await resposta.json(); } catch { /* logout devolve corpo vazio */ }
   if (!resposta.ok) {
@@ -69,11 +93,15 @@ async function chamarAuth(caminho, {
     // distinguir 'senha errada' de 'o servidor de e-mail nao respondeu' —
     // sao dois problemas com donos diferentes.
     const codigo = dados.error_code || dados.error || '';
-    const erro = (m) => Object.assign(new ErroDeEntrada(m), { status: resposta.status, codigo });
+    const erro = (m, recusada = false) => Object.assign(
+      new ErroDeEntrada(m), { status: resposta.status, codigo, recusada },
+    );
     // Uma mensagem so' para credencial errada, como sempre foi: distinguir
-    // entregaria de graca quais e-mails existem.
+    // entregaria de graca quais e-mails existem. `recusada` e' o que separa
+    // isto de "servidor com problema" (503, 540 de projeto pausado, 429):
+    // so' credencial recusada pode desparear o tablet.
     if (resposta.status === 400 || codigo === 'invalid_credentials' || codigo === 'invalid_grant') {
-      throw erro(mensagem400);
+      throw erro(mensagem400, true);
     }
     throw erro(dados.msg || dados.error_description || 'Não deu para entrar agora. Tente de novo.');
   }
@@ -297,7 +325,10 @@ export async function tokenDeAcesso() {
       await entrarUmaVezSo(aparelho.email, aparelho.senha);
       return ler(GUARDA_SESSAO)?.access ?? null;
     } catch (e) {
-      if (e instanceof ErroDeEntrada) guardar(GUARDA_APARELHO, null);
+      // Revogar o aparelho no PC zera a senha da conta dele: o GoTrue
+      // responde credencial recusada. Servidor fora do ar responde outra
+      // coisa — e ai' o pareamento fica, para entrar sozinho quando voltar.
+      if (e instanceof ErroDeEntrada && e.recusada) guardar(GUARDA_APARELHO, null);
       return null;
     }
   }

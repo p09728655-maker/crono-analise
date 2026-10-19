@@ -381,6 +381,39 @@ ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_periodo_chk;
 ALTER TABLE conferencias ADD CONSTRAINT conferencias_periodo_chk
   CHECK (iniciado_em IS NULL OR finalizado_em IS NULL OR finalizado_em > iniciado_em);
 
+-- MARCAS: o instante de cada toque no "Cronometrar ao vivo", em ms desde o
+-- inicio do periodo, no relogio da LINHA RODANDO (o tempo de parada marcada
+-- durante o cronometro ja' saiu). Uma por peca — na embalagem, uma por
+-- VOLUME. E' o que permite ver o intervalo volume a volume contra o takt,
+-- e a lacuna que ninguem marcou como parada.
+--
+-- NULA e' o caso comum: medicao por horarios, aparelho antigo, ou contagem
+-- corrigida a mao no fim (marca que nao bate com a contagem daria
+-- intervalo falso). O CHECK garante a mesma regra do servidor: se existe,
+-- tem exatamente uma marca por peca.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS marcas_ms integer[];
+ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_marcas_chk;
+ALTER TABLE conferencias ADD CONSTRAINT conferencias_marcas_chk
+  CHECK (marcas_ms IS NULL OR cardinality(marcas_ms) = pecas);
+-- O RELOGIO ENTRE O PRIMEIRO E O ULTIMO TOQUE, paradas dentro, em ms. E' o
+-- que se compara com o takt (tempo por volume = relogio / (N-1)): as marcas
+-- sao do relogio RODANDO e nao sabem quanto parou entre elas, e a duracao
+-- inteira traz a sobra antes do primeiro toque e depois do ultimo. So'
+-- existe junto com as marcas.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS marcas_relogio_ms integer;
+ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_marcas_relogio_chk;
+ALTER TABLE conferencias ADD CONSTRAINT conferencias_marcas_relogio_chk
+  CHECK (marcas_relogio_ms IS NULL OR (marcas_ms IS NOT NULL AND marcas_relogio_ms >= 0));
+-- O SETUP marcado ao vivo que caiu DENTRO desse trecho, em ms. E' o unico
+-- que sai do relogio quando o grupo tem setup planejado: a troca costuma vir
+-- antes do primeiro volume, e descontar o setup da medicao inteira tiraria
+-- do relogio um tempo que ele nunca conteve. So' existe junto com o relogio.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS marcas_setup_ms integer;
+ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_marcas_setup_chk;
+ALTER TABLE conferencias ADD CONSTRAINT conferencias_marcas_setup_chk
+  CHECK (marcas_setup_ms IS NULL OR (marcas_relogio_ms IS NOT NULL
+    AND marcas_setup_ms >= 0 AND marcas_setup_ms <= marcas_relogio_ms));
+
 -- ------------------------------------------------------- motivos_parada
 -- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o
 -- relatorio interpreta.

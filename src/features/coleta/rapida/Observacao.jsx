@@ -24,7 +24,9 @@ import { est } from './estilos.js';
  * Travado, o campo nao mente: mostra o texto que foi salvo e diz que a
  * proxima nota e' da proxima medicao.
  */
-export default function Observacao({ valor, aoTrocar, jaSalva }) {
+export default function Observacao({
+  valor, aoTrocar, jaSalva, destino = 'no relatório Ritmo por máquina',
+}) {
   return (
     <label style={est.campoHora}>
       <span style={est.rotuloCampo}>OBSERVAÇÃO (OPCIONAL)</span>
@@ -46,7 +48,7 @@ export default function Observacao({ valor, aoTrocar, jaSalva }) {
               : 'Medição salva. A observação precisa ser escrita antes de salvar.'}
           </span>
         )
-        : <span style={est.dicaObservacao}>Sai no relatório Ritmo por máquina, junto desta medição.</span>}
+        : <span style={est.dicaObservacao}>Sai {destino}, junto desta medição.</span>}
     </label>
   );
 }

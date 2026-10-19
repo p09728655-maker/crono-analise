@@ -38,7 +38,7 @@ import Analistas from './Analistas.jsx';
  * lista usa (proximasAcoes, situacao).
  */
 export default function Inicio({
-  aoAbrirEstudos, aoAbrirRelatorio, aoNovoEstudo, aoMedir, aoAnalisar, aoTrocarModo,
+  aoAbrirEstudos, aoAbrirRelatorio, aoAbrirEmbalagem, aoNovoEstudo, aoMedir, aoAnalisar, aoTrocarModo,
 }) {
   const [estudos, setEstudos] = useState(null);
   const [erro, setErro] = useState(null);
@@ -90,6 +90,7 @@ export default function Inicio({
         aoVerInicio={() => {}}
         aoVerEstudos={aoAbrirEstudos}
         aoVerConferencias={aoAbrirRelatorio}
+        aoVerEmbalagem={aoAbrirEmbalagem}
         /* SEM acao primaria aqui — de proposito. O botao vermelho da lateral
            e' "a acao desta tela": na lista e' criar estudo, no relatorio e'
            imprimir. No Inicio nao ha' UMA acao — ha' duas, e o unico
@@ -297,6 +298,26 @@ export default function Inicio({
               <span style={est.caminhoNota}>Novas medições vêm do celular</span>
             </div>
           </div>
+
+          {/* EMBALAGEM TAKT TIME — separada do ritmo por maquina a pedido do
+              PPCP: a pergunta da embalagem e' se cada volume sai dentro do
+              takt da semana, e nao qual maquina rende mais. */}
+          {aoAbrirEmbalagem && (
+            <div style={est.caminho}>
+              <span style={est.caminhoRotulo}>Embalagem</span>
+              <span style={est.caminhoTitulo}>Embalagem Takt Time</span>
+              <span style={est.caminhoTexto}>
+                Cada volume embalado contra o takt da semana, em segundos — e onde a linha
+                parou sem ninguém marcar.
+              </span>
+              <div style={est.caminhoAcoes}>
+                <button type="button" style={est.botaoPrimario} onClick={aoAbrirEmbalagem}>
+                  Abrir
+                </button>
+                <span style={est.caminhoNota}>A medição é feita no tablet</span>
+              </div>
+            </div>
+          )}
         </section>
       </main>
 

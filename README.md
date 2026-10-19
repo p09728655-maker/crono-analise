@@ -102,6 +102,67 @@ em máquina na mão. O grupo é a unidade com que se decide capacidade, e é
 dele que sai o programa da semana. Com um grupo só medido no período o item
 não aparece: ali **Todas** já é o grupo.
 
+### Embalagem Takt Time — cada volume contra o takt (`/coleta/embalagem`, `/analise/embalagem`)
+
+Função própria, separada do ritmo por máquina: na embalagem a pergunta não é
+quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
+
+- **No tablet**, o atalho *Embalagem Takt Time* abre direto o cronômetro, com a
+  máquina do grupo EMBALAGEM já escolhida. Antes de começar aparece o takt da
+  semana, em segundos. Durante a medição aparecem o intervalo do **último
+  volume**, o **tempo por volume** do período até ali (paradas dentro) e o
+  **takt**. Quando o tempo por volume passa do takt, o rótulo ganha "▲ takt". Um toque por volume; o horário de cada toque é gravado
+  sozinho, sem digitação.
+- **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
+  medições da embalagem. Cada medição tocada abre o **volume a volume**:
+  gráfico do intervalo de cada volume contra a linha do takt, o **tempo por
+  volume no período** contra o takt, as camadas **com a linha rodando** e **sem
+  as lacunas**, as **lacunas** e folha A4.
+- **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
+  descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
+  **O PCP cola o programa da embalagem em VOLUMES**: um rack que sai em dois
+  volumes conta dois. Colado em produtos, o takt sai multiplicado pelo número
+  de volumes e a linha parece folgada sem estar.
+- **O que se compara com o takt é o tempo por volume no relógio, com as
+  paradas dentro**: o relógio entre o primeiro e o último toque ÷ (volumes − 1).
+  - É a mesma régua do veredito do programa da semana: o volume que não saiu
+    porque a linha parou também não entrou no caminhão, com a parada marcada ou
+    não. Comparar com a linha rodando premiava quem aperta "Parou".
+  - A conta vai **entre toques** porque é ali que há exatamente N − 1 volumes.
+    A duração inteira ÷ N trazia a sobra antes do 1º toque e depois do último,
+    e aprovava no takt de 72 s uma linha de 75 s. O tablet grava esse relógio
+    (`marcas_relogio_ms`), que já traz dentro a parada anotada depois:
+    somá-la às marcas contaria essa parada duas vezes.
+  - Com setup planejado **maior que zero** no cadastro, sai desse relógio o
+    setup marcado ao vivo **dentro do trecho** (`marcas_setup_ms`), e só ele.
+    A troca costuma vir antes do primeiro volume, fora do trecho. Setup
+    anotado depois fica no relógio, um erro para o lado pessimista. Setup
+    zero não tira nada de lado nenhum.
+- Duas camadas de **diagnóstico** dizem de onde vem a diferença:
+  - **com a linha rodando**: soma dos intervalos ÷ quantidade, sem as paradas
+    marcadas;
+  - **sem as lacunas**: o mesmo, sem nenhuma parada.
+
+  A primeira camada que cai dentro do takt aponta a ação: paradas marcadas,
+  lacunas ou o passo da linha.
+- Nunca se compara volume a volume, nem pela mediana. O rack de dois volumes
+  sai com os dois colados (25 s, 100 s, 25 s…): metade das barras passaria do
+  takt numa linha que atende, e a mediana acusaria lacuna onde não houve
+  parada.
+- **Lacuna** = intervalo maior que o dobro do **ritmo normal**, que é a média
+  dos intervalos que não são lacuna. A conta se repete até parar de mudar, para
+  que uma parada enorme não esconda as menores. Os intervalos são medidos com a
+  linha rodando: as paradas marcadas no cronômetro já saem deles. Por isso a
+  lacuna é parada que **ninguém marcou**.
+- Se o analista corrigir a contagem à mão no fim, os toques **não** são salvos
+  (a tela avisa): intervalo de uma contagem que os toques não explicam seria
+  número falso. O banco garante a mesma regra (`conferencias_marcas_chk`: uma
+  marca por volume).
+
+A medição é a mesma conferência de sempre (mesma fila offline, mesma tabela,
+coluna `marcas_ms`). Por isso ela aparece também no relatório de ritmo. A
+separação é de trabalho, não de dado.
+
 ### Demanda semanal — o que o posto precisa entregar
 
 Na lateral do relatório, **Demanda semanal** guarda o programa do PCP por
@@ -1027,6 +1088,12 @@ reenviar o mesmo lote não duplica nada.
 | CV% | desvio padrão amostral ÷ média × 100 |
 | Nievel | n = (1,96 × CV% / 5)² — 95 % de confiança, ±5 % de erro |
 | Takt | tempo disponível ÷ quantidade |
+| Takt da embalagem | (horas da semana − setup planejado) × 3.600 s ÷ volumes da semana, por linha |
+| Intervalo volume a volume | marca(n) − marca(n−1), no relógio da linha rodando; o primeiro toque não tem intervalo |
+| Por volume no período (contra o takt) | (relógio entre o 1º e o último toque − setup marcado ao vivo **dentro desse trecho**, se setup planejado > 0) ÷ (volumes − 1) — paradas dentro |
+| Com a linha rodando | Σ intervalos ÷ n — paradas marcadas fora, lacunas dentro |
+| Ritmo normal | média dos intervalos que não são lacuna (repetida até estabilizar) |
+| Lacuna | intervalo > 2 × ritmo normal; excesso = Σ (lacuna − normal); volumes perdidos ≈ excesso ÷ normal |
 | Tendência (estudo) | regressão linear sobre a ordem dos ciclos; % (critério) = inclinação × (n−1) ÷ média; direção só com \|%\| ≥ 5 e R² ≥ t²₉₅/(t²₉₅+n−2). No quadro, a % exibida é fim ÷ início da reta |
 | Tendência (período) | regressão do ritmo (pç/h) sobre a DATA, em dias; direção só com \|%\| ≥ 8 e R² ≥ t²₉₅/(t²₉₅+df) na regressão do ritmo dividido pela média da própria peça, com df = n − k − 1 (k = peças medidas: cada média estimada custa um grau de liberdade) |
 | Nº operadores | Σ TP ÷ Takt |

@@ -339,6 +339,60 @@ describe('a entrada normal continua como estava', () => {
     expect(await tokenDeAcesso()).toBe('a');
   });
 
+  it('servidor sem resposta vira aviso em portugues, nao "Failed to fetch"', async () => {
+    // Foi o que a entrada do PC mostrou com o projeto do Supabase pausado.
+    globalThis.fetch = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    const { entrarComEmail, ErroDeEntrada } = await carregarModulo();
+
+    const erro = await entrarComEmail('ppcp@patrimarmoveis.com.br', 'certa').catch((e) => e);
+    expect(erro.message).toMatch(/servidor de login não respondeu/);
+    // Nao e' credencial errada: nao pode cair no mesmo balde.
+    expect(erro).not.toBeInstanceOf(ErroDeEntrada);
+  });
+
+  it('aparelho sem internet ouve que o problema e a rede dele', async () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    try {
+      globalThis.fetch = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+      const { entrarComEmail } = await carregarModulo();
+
+      await expect(entrarComEmail('ppcp@patrimarmoveis.com.br', 'certa'))
+        .rejects.toThrow(/Sem internet/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('rede caindo NAO despareia o tablet', async () => {
+    const guardado = prepararNavegador({ pareado: true });
+    globalThis.fetch = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    const { tokenDeAcesso } = await carregarModulo();
+
+    expect(await tokenDeAcesso()).toBeNull();
+    expect(guardado.has(APARELHO)).toBe(true);
+  });
+
+  it.each([429, 500, 502, 503, 504, 540])(
+    'servidor respondendo %i NAO despareia o tablet — 540 e o projeto pausado',
+    async (status) => {
+      const guardado = prepararNavegador({ pareado: true });
+      globalThis.fetch = vi.fn(async () => resposta(status, { msg: 'fora do ar' }));
+      const { tokenDeAcesso } = await carregarModulo();
+
+      expect(await tokenDeAcesso()).toBeNull();
+      expect(guardado.has(APARELHO)).toBe(true);
+    },
+  );
+
+  it('credencial do aparelho recusada (revogado no PC) despareia', async () => {
+    const guardado = prepararNavegador({ pareado: true });
+    globalThis.fetch = vi.fn(async () => resposta(400, { error_code: 'invalid_credentials' }));
+    const { tokenDeAcesso } = await carregarModulo();
+
+    expect(await tokenDeAcesso()).toBeNull();
+    expect(guardado.has(APARELHO)).toBe(false);
+  });
+
   it('entrada certa guarda a sessao', async () => {
     const guardado = prepararNavegador();
     globalThis.fetch = vi.fn(async () => resposta(200, {

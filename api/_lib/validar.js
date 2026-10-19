@@ -82,6 +82,57 @@ export function lista(valor, campo, { max = 500 } = {}) {
 }
 
 /**
+ * As MARCAS do cronometro ao vivo: um instante (ms) por peca, em ordem,
+ * dentro do periodo. Espelha o CHECK conferencias_marcas_chk.
+ *
+ * NAO LANCA, ao contrario do resto deste arquivo. Marca e' dado auxiliar
+ * (o ritmo da medicao sai da contagem e da duracao, nao delas) e chega pela
+ * fila offline: uma recusa aqui travaria a conferencia inteira na fila do
+ * tablet para sempre. Marca que nao serve vira null, e a medicao entra sem
+ * o intervalo volume a volume — que e' exatamente o que ela seria se
+ * tivesse sido feita por horarios.
+ */
+export const MAX_MARCAS = 20000;
+
+export function marcasDaConferencia(valor, { pecas, duracaoMs } = {}) {
+  if (!Array.isArray(valor) || !valor.length || valor.length > MAX_MARCAS) return null;
+  if (valor.length !== pecas) return null;
+  let anterior = 0;
+  for (const m of valor) {
+    if (!Number.isInteger(m) || m < anterior || m > duracaoMs) return null;
+    anterior = m;
+  }
+  return valor;
+}
+
+/**
+ * O relogio entre o primeiro e o ultimo toque (ms, paradas dentro). Mesma
+ * politica das marcas: nao lanca, vira null quando nao serve. Nao pode ser
+ * menor que o trecho das proprias marcas (o relogio rodando ja' e' isso,
+ * sem as paradas) nem maior que o periodo, e nao existe sem marcas.
+ */
+export function relogioDasMarcas(valor, { marcas, duracaoMs } = {}) {
+  if (!Array.isArray(marcas) || marcas.length < 2 || valor == null) return null;
+  const v = Number(valor);
+  if (!Number.isInteger(v) || v < marcas[marcas.length - 1] - marcas[0] || v > duracaoMs) return null;
+  return v;
+}
+
+/**
+ * O setup marcado ao vivo dentro do trecho entre o primeiro e o ultimo
+ * toque. Mesma politica: vira null quando nao serve. Nao pode passar do que
+ * o trecho parou (relogio menos o trecho rodando das marcas), e nao existe
+ * sem o relogio.
+ */
+export function setupDasMarcas(valor, { marcas, relogio } = {}) {
+  if (relogio == null || !Array.isArray(marcas) || valor == null) return null;
+  const v = Number(valor);
+  const parado = relogio - (marcas[marcas.length - 1] - marcas[0]);
+  if (!Number.isInteger(v) || v < 0 || v > parado) return null;
+  return v;
+}
+
+/**
  * Paradas de uma conferencia rapida: [{motivo, duracaoMs, observacao}].
  *
  * Guardadas como jsonb na propria conferencia, entao a validacao aqui e' a
