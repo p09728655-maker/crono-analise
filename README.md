@@ -819,8 +819,11 @@ de aparecer cru no relatório.
 marcados (coluna `motivos_parada.grupos`, `uuid[]`, vazio = todos). O tablet
 mostra os que valem para todos e os do grupo da máquina escolhida: a
 embalagem não vê "troca de broca", a furadeira não vê "falta de caixa".
-Máquina sem grupo vê só os de todos; se o filtro não deixar nada, voltam os
-nove de fábrica. O **setup** vale sempre para todos (a API recusa restringir):
+Máquina fora do cadastro ou sem grupo (ou estudo importado do ERP cujo
+recurso, "FUR16", não é o nome do cadastro) vê a lista inteira, como antes —
+sobrar motivo incomoda, faltar o certo vira "Outro" no Pareto. Se o filtro não
+deixar nada, voltam os nove de fábrica. Excluir um grupo tira o id dele dos
+motivos: o que só valia para aquele grupo passa a valer para todas. O **setup** vale sempre para todos (a API recusa restringir):
 é o único motivo que o cálculo trata como troca.
 
 ### Cadastro de produtos (Ferramentas, no PC)

@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { MOTIVOS_PARADA } from '../src/domain/cronoanalise.js';
-import { motivosDoGrupo } from '../src/lib/motivosParada.js';
+import { codigoPreferido, motivosDoGrupo } from '../src/lib/motivosParada.js';
 import { grupoIdDaMaquina, produtosDoGrupo } from '../src/lib/maquinas.js';
 
 const EMB = 'g-embalagem';
@@ -27,8 +27,17 @@ describe('motivos por grupo', () => {
     expect(codigos(motivosDoGrupo(motivos, FUR))).toEqual(['setup', 'troca_de_broca', 'antigo']);
   });
 
-  it('maquina sem grupo fica so com os que valem para todos', () => {
-    expect(codigos(motivosDoGrupo(motivos, null))).toEqual(['setup', 'antigo']);
+  it('grupo desconhecido (fora do cadastro, recurso do ERP) recebe a lista inteira, como antes', () => {
+    // Cortar para "so' os de todos" escondia "troca de broca" do estudo
+    // importado com recurso "FUR16", e a parada entrava como "Outro".
+    expect(codigos(motivosDoGrupo(motivos, null))).toEqual(codigos(motivos));
+  });
+
+  it('atalho de outra parada nunca cai no setup quando o preferido sumiu do posto', () => {
+    const daEmbalagem = motivosDoGrupo(motivos, EMB); // setup, falta_de_caixa, antigo
+    expect(codigoPreferido(daEmbalagem, 'falta_material')).toBe('falta_de_caixa');
+    expect(codigoPreferido([motivos[0]], 'falta_material')).toBe('setup'); // so' sobrou ele
+    expect(codigoPreferido(daEmbalagem, 'setup')).toBe('setup');
   });
 
   it('sem nenhum motivo que sirva, volta aos de fabrica — nunca lista vazia', () => {

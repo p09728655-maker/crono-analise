@@ -457,8 +457,9 @@ CREATE INDEX IF NOT EXISTS motivos_parada_empresa_idx ON motivos_parada (empresa
 -- resolvendo em qualquer relatorio (parada antiga nao perde o rotulo).
 --
 -- Array, e nao tabela de ligacao: e' uma lista curta, lida inteira pelo
--- tablet e guardada no cache dele, e grupo apagado so' deixa um id que
--- nao casa com maquina nenhuma — o motivo continua valendo para os outros.
+-- tablet e guardada no cache dele. Sem FK, quem apaga o grupo tira o id
+-- daqui (api/maquinas.js, DELETE de grupo): o motivo que so' valia para
+-- ele passa a valer para todas as maquinas, em vez de sumir de todas.
 ALTER TABLE motivos_parada ADD COLUMN IF NOT EXISTS grupos uuid[] NOT NULL DEFAULT '{}';
 
 -- --------------------------------------------------------------- maquinas

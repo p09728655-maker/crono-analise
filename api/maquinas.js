@@ -340,12 +340,22 @@ export default handler(async (req, res) => {
       return json(res, 200, { maquina });
     }
 
-    // DELETE de GRUPO: as maquinas dele so' ficam sem grupo (FK SET NULL).
+    // DELETE de GRUPO: as maquinas dele so' ficam sem grupo (FK SET NULL);
+    // os produtos dele vao junto (FK CASCADE, como o programa da semana).
     if (grupoParam) {
       const grupoId = uuid(grupoParam, 'grupo');
       const [grupo] = await db`
         SELECT id FROM grupos_maquina WHERE id = ${grupoId} AND empresa_id = ${empresaId}`;
       if (!grupo) throw naoEncontrado('Grupo de maquina nao encontrado');
+      /* Os motivos de parada guardam o grupo num array, sem FK: tirar o id
+         ANTES de apagar. Deixado la', o motivo que so' valia para este
+         grupo sumia de todos os tablets, e a tela nao conseguia mais
+         salva-lo (o id morto voltava 404). Sem o id, o motivo que era so'
+         deste grupo passa a valer para todas as maquinas — a tela de
+         grupos avisa antes de excluir. */
+      await db`
+        UPDATE motivos_parada SET grupos = array_remove(grupos, ${grupoId}::uuid)
+         WHERE empresa_id = ${empresaId} AND ${grupoId}::uuid = ANY(grupos)`;
       await db`DELETE FROM grupos_maquina WHERE id = ${grupoId} AND empresa_id = ${empresaId}`;
       return json(res, 200, { acao: 'excluido' });
     }

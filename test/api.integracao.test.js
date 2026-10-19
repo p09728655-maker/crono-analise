@@ -1417,8 +1417,13 @@ rodar('API — integracao com Postgres', () => {
     const geral = await criarMotivo({ rotulo: 'Falta de energia geral' });
     expect(geral.corpo.motivo.grupos).toEqual([]);
 
-    // Grupo de outra empresa (ou inexistente) nao entra.
-    const alheio = await criarMotivo({ rotulo: 'Motivo alheio', grupos: [crypto.randomUUID()] });
+    // Grupo inexistente nao entra — nem grupo de OUTRA empresa.
+    const inexistente = await criarMotivo({ rotulo: 'Motivo inexistente', grupos: [crypto.randomUUID()] });
+    expect(inexistente.statusCode).toBe(404);
+    const [deFora] = await sql`
+      INSERT INTO grupos_maquina (empresa_id, codigo, nome) VALUES (${OUTRA_EMPRESA}, '0077', 'EMBALAGEM DELES')
+      RETURNING id`;
+    const alheio = await criarMotivo({ rotulo: 'Motivo alheio', grupos: [deFora.id] });
     expect(alheio.statusCode).toBe(404);
 
     // Volta a valer para todos com lista vazia.
@@ -1439,6 +1444,13 @@ rodar('API — integracao com Postgres', () => {
     const lista = fingirRes();
     await motivosApi(fingirReq({}), lista);
     expect(lista.corpo.motivos.every((m) => Array.isArray(m.grupos))).toBe(true);
+
+    // Excluir o grupo tira o id dos motivos: o que so' valia para ele passa
+    // a valer para todos — nao some de todos os tablets com um id morto.
+    const soDoGrupo = await criarMotivo({ rotulo: 'Falta de fita', grupos: [grupoId] });
+    await maquinasApi(fingirReq({ metodo: 'DELETE', query: { grupo: grupoId } }), fingirRes());
+    const [depois] = await sql`SELECT grupos FROM motivos_parada WHERE id = ${soDoGrupo.corpo.motivo.id}`;
+    expect(depois.grupos).toEqual([]);
   });
 
   /* ------------------------------------------------- cadastro de produtos */
@@ -1468,6 +1480,21 @@ rodar('API — integracao com Postgres', () => {
 
     const repetido = await pedir({ metodo: 'POST', corpo: { nome: 'rack sirius 1.6', grupoId } });
     expect(repetido.statusCode).toBe(409);
+
+    // OUTRA EMPRESA: o grupo dela nao recebe produto daqui, e o produto
+    // dela nao se le' nem se altera daqui.
+    const [grupoDeles] = await sql`
+      INSERT INTO grupos_maquina (empresa_id, codigo, nome) VALUES (${OUTRA_EMPRESA}, '0078', 'PRODUTOS DELES')
+      RETURNING id`;
+    const [produtoDeles] = await sql`
+      INSERT INTO produtos (empresa_id, grupo_id, nome) VALUES (${OUTRA_EMPRESA}, ${grupoDeles.id}, 'Produto deles')
+      RETURNING id`;
+    expect((await pedir({ metodo: 'POST', corpo: { nome: 'Invasor', grupoId: grupoDeles.id } })).statusCode).toBe(404);
+    expect((await pedir({ metodo: 'PATCH', query: { id: produtoDeles.id }, corpo: { ativo: false } })).statusCode).toBe(404);
+    expect((await pedir({ metodo: 'DELETE', query: { id: produtoDeles.id } })).statusCode).toBe(404);
+    expect((await pedir({ metodo: 'PATCH', query: { id: rack.corpo.produto.id }, corpo: { grupoId: grupoDeles.id } })).statusCode).toBe(404);
+    const daqui = await pedir({});
+    expect(daqui.corpo.produtos.map((p) => p.nome)).not.toContain('Produto deles');
 
     // O ANALISTA mantem o cadastro — pelo token dele, com a RLS avaliando.
     const analista = await criarAnalista({

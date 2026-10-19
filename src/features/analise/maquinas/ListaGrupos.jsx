@@ -15,7 +15,7 @@ import { SEM_GRUPO, TODAS, contarMaquinas, proximoCodigo } from './grupos.js';
 import { est } from './estilos.js';
 
 export default function ListaGrupos({
-  grupos, lista, escolhido, aoEscolher, ocupado, aplicar, excluindoGrupo, setExcluindoGrupo,
+  grupos, lista, produtos = [], escolhido, aoEscolher, ocupado, aplicar, excluindoGrupo, setExcluindoGrupo,
 }) {
   const [editandoGrupo, setEditandoGrupo] = useState(null); // {id, codigo, nome}
   const [novoGrupo, setNovoGrupo] = useState(null);         // {codigo, nome} | null
@@ -113,6 +113,16 @@ export default function ListaGrupos({
             {excluindoGrupo && escolhido === g.id && (
               <p style={est.avisoGrupo}>
                 As {contar(g.id)} máquinas de {g.nome} não são apagadas — ficam sem grupo.
+                {/* O que NAO volta: produto e' do grupo (cascata no banco).
+                    Dito antes do clique — excluir para recriar com outro
+                    codigo apagaria o cadastro de produtos sem aviso. */}
+                {' '}{(() => {
+                  const n = produtos.filter((p) => p.grupo_id === g.id).length;
+                  return n
+                    ? `Os ${n === 1 ? '1 produto cadastrado' : `${n} produtos cadastrados`} neste grupo ${n === 1 ? 'é apagado' : 'são apagados'}.`
+                    : '';
+                })()}
+                {' '}Motivos de parada que valiam só para este grupo passam a valer para todas as máquinas.
               </p>
             )}
           </Fragment>

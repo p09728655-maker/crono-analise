@@ -250,6 +250,9 @@ function Formulario({ motivo, grupos = [], ocupado, aoSalvar, aoCancelar }) {
   const [rotuloTexto, setRotulo] = useState(motivo?.rotulo || '');
   const [acao, setAcao] = useState(motivo?.acao || '');
   const [escolhidos, setEscolhidos] = useState(() => motivo?.grupos || []);
+  // So' os grupos que existem: um id de grupo ja' apagado nao tem
+  // quadradinho, nao conta na dica e nao volta ao servidor (que recusaria).
+  const validos = escolhidos.filter((id) => grupos.some((g) => g.id === id));
   const novo = !motivo;
   const ehSetup = motivo?.codigo === 'setup';
   const alternar = (id) => setEscolhidos((atual) => (
@@ -266,7 +269,7 @@ function Formulario({ motivo, grupos = [], ocupado, aoSalvar, aoCancelar }) {
           acao: acao.trim(),
           // So' manda quando ha' grupos cadastrados: sem eles nao ha' o que
           // escolher, e o setup nunca se restringe.
-          ...(grupos.length && !ehSetup ? { grupos: escolhidos } : {}),
+          ...(grupos.length && !ehSetup ? { grupos: validos } : {}),
         });
       }}
     >
@@ -332,7 +335,7 @@ function Formulario({ motivo, grupos = [], ocupado, aoSalvar, aoCancelar }) {
                 ))}
               </div>
               <span style={est.dica}>
-                {escolhidos.length
+                {validos.length
                   ? 'Só aparece no tablet das máquinas destes grupos.'
                   : 'Nenhum marcado: aparece no tablet de todas as máquinas.'}
               </span>
@@ -356,6 +359,7 @@ function ValePara({ motivo, grupos }) {
   const ids = motivo.grupos || [];
   if (!ids.length) return <span style={est.seloGrupo}>Todas as máquinas</span>;
   const nomes = ids.map((id) => grupos.find((g) => g.id === id)?.nome).filter(Boolean);
+  // Grupos ainda carregando: diz quantos, nao inventa nome.
   return (
     <span style={{ ...est.seloGrupo, ...est.seloGrupoRestrito }}>
       Só {nomes.length ? nomes.join(', ') : `${ids.length} grupo(s)`}

@@ -80,13 +80,21 @@ export function useMotivosParada() {
  * (grupos vazio) e os do grupo dela. A embalagem nao ve' "troca de broca";
  * a furadeira nao ve' "falta de caixa".
  *
- * Maquina sem grupo (grupoId nulo) fica so' com os que valem para todos.
+ * GRUPO DESCONHECIDO (grupoId nulo) recebe a lista ativa INTEIRA, como era
+ * antes do filtro. Acontece com maquina digitada fora do cadastro, sem
+ * grupo, ou com o estudo importado do roteiro do ERP, cujo recurso
+ * ("FUR16") nao e' o nome do cadastro. Cortar para "so' os de todos" ali
+ * escondia o motivo que a furadeira usa ("troca de broca", restrito a ela)
+ * e a parada entrava como "Outro" — o Pareto perdia a causa (revisao de
+ * 19/10). Sobrar motivo e' incomodo; faltar o certo e' dado errado.
+ *
  * Se o filtro nao deixar nada — cadastro so' com motivos de outros grupos
  * —, volta aos motivos de fabrica: o operador diante da maquina parada
  * nunca fica sem onde tocar.
  */
 export function motivosDoGrupo(motivos, grupoId) {
-  const lista = (motivos || []).filter((m) => !m.grupos?.length || (grupoId && m.grupos.includes(grupoId)));
+  const todos = motivos || [];
+  const lista = grupoId ? todos.filter((m) => !m.grupos?.length || m.grupos.includes(grupoId)) : todos;
   return lista.length ? lista : MOTIVOS_PARADA;
 }
 
@@ -129,7 +137,14 @@ export async function carregarMotivos() {
  */
 export function codigoPreferido(motivos, preferido) {
   if (motivos.some((m) => m.codigo === preferido)) return preferido;
-  return motivos[0]?.codigo || preferido;
+  /* Atalho de OUTRA parada (falta de material sumiu da lista deste posto)
+     nunca cai no setup: o primeiro da lista costuma ser ele, e parada que
+     o operador nao trocou entraria como troca — o setup sai do relogio do
+     programa e muda o veredito. So' o atalho do proprio setup aceita ele. */
+  const reserva = preferido === 'setup'
+    ? motivos[0]
+    : motivos.find((m) => m.codigo !== 'setup') || motivos[0];
+  return reserva?.codigo || preferido;
 }
 
 /** Adota uma lista recem-salva sem uma segunda ida ao servidor. */
