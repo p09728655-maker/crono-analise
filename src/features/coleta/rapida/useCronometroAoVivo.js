@@ -91,9 +91,13 @@ export function useCronometroAoVivo({ paradas }) {
     const agora = performance.now();
     if (agora - ultimoToqueRef.current < TOQUE_MINIMO_MS) return;
     ultimoToqueRef.current = agora;
-    marcasRef.current.push(Math.round(agora - inicioRef.current - paradaAcumuladaRef.current));
-    brutasRef.current.push(Math.round(agora - inicioRef.current));
-    setupNoToqueRef.current.push(Math.round(setupAcumuladoRef.current));
+    const toque = momentoDoToque({
+      agora, inicio: inicioRef.current,
+      paradaAcumulada: paradaAcumuladaRef.current, setupAcumulado: setupAcumuladoRef.current,
+    });
+    marcasRef.current.push(toque.marca);
+    brutasRef.current.push(toque.bruta);
+    setupNoToqueRef.current.push(toque.setup);
     setUltimoIntervaloMs(ultimoIntervalo(marcasRef.current));
     setRelogioEntreMarcasMs(entrePrimeiraEUltima(brutasRef.current));
     setSetupEntreMarcasMs(entrePrimeiraEUltima(setupNoToqueRef.current));
@@ -121,7 +125,7 @@ export function useCronometroAoVivo({ paradas }) {
 
   const encerrarParada = useCallback(() => {
     if (!emParada) return;
-    const ms = performance.now() - emParada.inicio;
+    const ms = duracaoDaParada(emParada.inicio, performance.now());
     // Menos de 1s e' toque errado, nao parada. Duas casas no minuto: um
     // setup de 45s precisa entrar como 0,75 — arredondar para 0,8 jogaria
     // 3 segundos dentro do tempo de maquina rodando.
@@ -198,3 +202,24 @@ const ultimoIntervalo = (marcas) => (marcas.length >= 2
 const entrePrimeiraEUltima = (brutas) => (brutas.length >= 2
   ? brutas[brutas.length - 1] - brutas[0]
   : null);
+
+/**
+ * A ARITMETICA DO TOQUE, fora do hook para ser testada com decimal.
+ *
+ * Tudo em ms INTEIRO, e a parada arredondada UMA vez, na origem
+ * (duracaoDaParada). Com a parada acumulada inteira, `bruta - marca` e'
+ * exatamente a parada acumulada — Math.round(x - P) = Math.round(x) - P
+ * quando P e' inteiro. E e' isso que o servidor confere: o setup no trecho
+ * nao pode passar do que o trecho parou (bruta - marca entre o primeiro e o
+ * ultimo toque). Arredondando a soma em vez de cada parada, o setup passava
+ * do parado por 1 ms em 12,6% das medicoes, o servidor descartava o
+ * desconto e tablet e PC mostravam tempos diferentes (revisao de 19/10).
+ */
+export const duracaoDaParada = (inicio, fim) => Math.round(fim - inicio);
+
+export function momentoDoToque({
+  agora, inicio, paradaAcumulada, setupAcumulado,
+}) {
+  const bruta = Math.round(agora - inicio);
+  return { bruta, marca: bruta - paradaAcumulada, setup: setupAcumulado };
+}
