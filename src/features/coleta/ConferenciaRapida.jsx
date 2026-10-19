@@ -191,6 +191,7 @@ export default function ConferenciaRapida({ aoSair }) {
     horaFinal: horarios ? horaFinal : null,
     marcasMs: !horarios && marcasConferem ? crono.marcasFinais : null,
     marcasRelogioMs: !horarios && marcasConferem ? crono.relogioEntreMarcasMs : null,
+    marcasSetupMs: !horarios && marcasConferem ? crono.setupEntreMarcasMs : null,
   });
 
   /**

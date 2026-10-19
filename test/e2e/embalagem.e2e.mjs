@@ -124,11 +124,23 @@ checar(enviado?.marcasRelogioMs === enviado?.marcasMs?.at(-1) - enviado?.marcasM
 await t.getByRole('button', { name: /Nova conferência/ }).click();
 await t.getByRole('button', { name: /INICIAR/ }).click();
 await alvo.waitFor({ timeout: 4000 });
+const marcarSetup = async (ms) => {
+  await t.getByRole('button', { name: 'Parou' }).click();
+  await t.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
+  await t.getByRole('button', { name: 'Setup / Troca' }).click();
+  const v = t.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
+  await v.waitFor({ timeout: 4000 });
+  await t.waitForTimeout(ms);
+  await v.dispatchEvent('pointerdown');
+  await t.waitForTimeout(200);
+};
+// A TROCA ANTES do primeiro volume: fora do trecho entre toques.
+await marcarSetup(1200);
 for (let i = 0; i < 3; i++) { await alvo.dispatchEvent('pointerdown'); await t.waitForTimeout(260); }
-// Parada marcada de ~1,5 s: tem de SAIR do intervalo seguinte.
+// Setup de ~1,5 s ENTRE toques: tem de SAIR do intervalo seguinte.
 await t.getByRole('button', { name: 'Parou' }).click();
 await t.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
-await t.locator('[aria-label="Por que a máquina parou"] button').first().click();
+await t.getByRole('button', { name: 'Setup / Troca' }).click();
 const voltar = t.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
 await voltar.waitFor({ timeout: 4000 });
 await t.waitForTimeout(1500);
@@ -154,6 +166,8 @@ checar(comParada?.marcasMs?.[4] <= comParada?.duracaoMs, 'nenhuma marca passa do
 const paradaNoRelogio = comParada?.marcasRelogioMs - (comParada?.marcasMs?.[4] - comParada?.marcasMs?.[0]);
 checar(paradaNoRelogio >= 1400 && paradaNoRelogio < 2500,
   `o relogio entre toques traz a parada dentro (${paradaNoRelogio} ms a mais que o trecho rodando)`);
+checar(comParada?.marcasSetupMs >= 1400 && comParada?.marcasSetupMs < 2500,
+  `so o setup ENTRE toques conta no trecho (${comParada?.marcasSetupMs} ms; a troca antes do 1o volume fica fora)`);
 
 /* ------------- contagem corrigida a mao: o aviso aparece e as marcas nao sobem */
 await t.getByRole('button', { name: /Nova conferência/ }).click();

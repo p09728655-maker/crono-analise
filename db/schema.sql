@@ -404,6 +404,15 @@ ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS marcas_relogio_ms integer;
 ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_marcas_relogio_chk;
 ALTER TABLE conferencias ADD CONSTRAINT conferencias_marcas_relogio_chk
   CHECK (marcas_relogio_ms IS NULL OR (marcas_ms IS NOT NULL AND marcas_relogio_ms >= 0));
+-- O SETUP marcado ao vivo que caiu DENTRO desse trecho, em ms. E' o unico
+-- que sai do relogio quando o grupo tem setup planejado: a troca costuma vir
+-- antes do primeiro volume, e descontar o setup da medicao inteira tiraria
+-- do relogio um tempo que ele nunca conteve. So' existe junto com o relogio.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS marcas_setup_ms integer;
+ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_marcas_setup_chk;
+ALTER TABLE conferencias ADD CONSTRAINT conferencias_marcas_setup_chk
+  CHECK (marcas_setup_ms IS NULL OR (marcas_relogio_ms IS NOT NULL
+    AND marcas_setup_ms >= 0 AND marcas_setup_ms <= marcas_relogio_ms));
 
 -- ------------------------------------------------------- motivos_parada
 -- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o

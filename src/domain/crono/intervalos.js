@@ -93,18 +93,22 @@ function normalELacunas(intervalos, fator) {
  * coleta) — somar paradas as marcas contaria essa duas vezes.
  *
  * O SETUP entra uma vez so', como em leituraDaDemanda: com setup PLANEJADO
- * (maior que zero) ele ja' saiu das horas do takt, entao o setup medido sai
- * daqui tambem. Conta com o setup da medicao inteira: o que caiu antes do
- * primeiro toque ou depois do ultimo e' raro, e sairia a mais.
+ * (maior que zero) ele ja' saiu das horas do takt, entao o setup que caiu
+ * DENTRO do trecho sai daqui tambem — e so' ele. A troca costuma vir antes
+ * do primeiro volume, fora do trecho; descontar o setup da medicao inteira
+ * tirava do relogio um tempo que ele nunca conteve, e 10 min de troca
+ * faziam uma linha de 75 s sair com 28,8 s (revisao de 19/10). O setup e'
+ * o marcado AO VIVO, que o tablet sabe onde caiu; o anotado depois fica no
+ * relogio — erro para o lado pessimista, nunca o contrario.
  *
  * Null sem dois toques ou sem relogio: a tela mostra vazio, nunca zero.
  */
 export function periodoPorPeca({
-  relogioEntreMarcasMs, volumes, setupMedidoMs = 0, setupPlanejado = false,
+  relogioEntreMarcasMs, volumes, setupNoTrechoMs = 0, setupPlanejado = false,
 } = {}) {
   const relogio = Number(relogioEntreMarcasMs) || 0;
   const n = Math.floor(Number(volumes) || 0);
-  const desconto = setupPlanejado ? Math.min(Math.max(0, Number(setupMedidoMs) || 0), relogio) : 0;
+  const desconto = setupPlanejado ? Math.min(Math.max(0, Number(setupNoTrechoMs) || 0), relogio) : 0;
   if (n < 2 || relogio <= 0 || relogio - desconto <= 0) return null;
   return (relogio - desconto) / (n - 1);
 }

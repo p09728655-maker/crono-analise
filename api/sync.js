@@ -15,7 +15,7 @@ import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, handler, json, lerCorpo, permitir } from './_lib/http.js';
 import {
   booleano, dataIso, hora, inteiro, lista, marcasDaConferencia, paradasDaConferencia, relogioDasMarcas,
-  texto, uuid,
+  setupDasMarcas, texto, uuid,
 } from './_lib/validar.js';
 
 const MAX_ITENS = 500;
@@ -113,10 +113,12 @@ export default handler(async (req, res) => {
     // e o relogio entre o primeiro e o ultimo: depois do resto validado,
     // porque so' valem contra a contagem e a duracao.
     const marcasMs = marcasDaConferencia(conferencias[i].marcasMs, { pecas: c.pecas, duracaoMs: c.duracaoMs });
+    const marcasRelogioMs = relogioDasMarcas(conferencias[i].marcasRelogioMs, { marcas: marcasMs, duracaoMs: c.duracaoMs });
     return {
       ...c,
       marcasMs,
-      marcasRelogioMs: relogioDasMarcas(conferencias[i].marcasRelogioMs, { marcas: marcasMs, duracaoMs: c.duracaoMs }),
+      marcasRelogioMs,
+      marcasSetupMs: setupDasMarcas(conferencias[i].marcasSetupMs, { marcas: marcasMs, relogio: marcasRelogioMs }),
     };
   });
 
@@ -205,13 +207,13 @@ export default handler(async (req, res) => {
         INSERT INTO conferencias
           (client_id, empresa_id, maquina, peca,
            iniciado_em, finalizado_em, duracao_ms, pecas, ciclos_por_peca, furacao_passante, observacao, salvo_em,
-           marcas_ms, marcas_relogio_ms)
+           marcas_ms, marcas_relogio_ms, marcas_setup_ms)
         SELECT ${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca},
                p.ini,
                -- Periodo que atravessa a meia-noite: o fim caiu no dia seguinte.
                CASE WHEN p.fim < p.ini THEN p.fim + interval '1 day' ELSE p.fim END,
                ${c.duracaoMs}, ${c.pecas}, ${c.ciclosPorPeca}, ${c.furacaoPassante}, ${c.observacao}, ${c.salvoEm},
-               ${c.marcasMs}::integer[], ${c.marcasRelogioMs}::integer
+               ${c.marcasMs}::integer[], ${c.marcasRelogioMs}::integer, ${c.marcasSetupMs}::integer
           FROM periodo p
         ON CONFLICT (client_id) DO NOTHING
         RETURNING id`;

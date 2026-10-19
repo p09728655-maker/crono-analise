@@ -37,6 +37,7 @@ const paraFila = (c) => ({
   // marcasDaConferencia em api/_lib/validar.js.
   marcasMs: c.marcasMs || null,
   marcasRelogioMs: c.marcasMs ? (c.marcasRelogioMs ?? null) : null,
+  marcasSetupMs: c.marcasMs ? (c.marcasSetupMs ?? null) : null,
   salvoEm: c.salvoEm,
 });
 
@@ -84,7 +85,7 @@ export function useHistoricoLocal({ aoGuardar } = {}) {
 
   const salvar = useCallback(async ({
     calculado, maquina, peca, horaInicial, horaFinal, paradas, observacao, marcasMs = null,
-    marcasRelogioMs = null,
+    marcasRelogioMs = null, marcasSetupMs = null,
   }) => {
     const registro = salvarConferencia({
       maquina: maquina.trim(),
@@ -100,6 +101,7 @@ export function useHistoricoLocal({ aoGuardar } = {}) {
       paradas,
       marcasMs,
       marcasRelogioMs: marcasMs ? marcasRelogioMs : null,
+      marcasSetupMs: marcasMs ? marcasSetupMs : null,
       pecasPorHora: calculado.pecasPorHora,
       pecasPorHoraBruto: calculado.pecasPorHoraBruto,
       paradaMs: calculado.paradaMs,

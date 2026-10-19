@@ -119,6 +119,20 @@ export function relogioDasMarcas(valor, { marcas, duracaoMs } = {}) {
 }
 
 /**
+ * O setup marcado ao vivo dentro do trecho entre o primeiro e o ultimo
+ * toque. Mesma politica: vira null quando nao serve. Nao pode passar do que
+ * o trecho parou (relogio menos o trecho rodando das marcas), e nao existe
+ * sem o relogio.
+ */
+export function setupDasMarcas(valor, { marcas, relogio } = {}) {
+  if (relogio == null || !Array.isArray(marcas) || valor == null) return null;
+  const v = Number(valor);
+  const parado = relogio - (marcas[marcas.length - 1] - marcas[0]);
+  if (!Number.isInteger(v) || v < 0 || v > parado) return null;
+  return v;
+}
+
+/**
  * Paradas de uma conferencia rapida: [{motivo, duracaoMs, observacao}].
  *
  * Guardadas como jsonb na propria conferencia, entao a validacao aqui e' a

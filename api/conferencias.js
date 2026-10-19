@@ -100,7 +100,7 @@ export default handler(async (req, res) => {
       uuid(id, 'id');
       return auth.rls(async (db) => {
         const [linha] = await db`
-          SELECT c.id, c.marcas_ms, c.marcas_relogio_ms FROM conferencias c
+          SELECT c.id, c.marcas_ms, c.marcas_relogio_ms, c.marcas_setup_ms FROM conferencias c
            WHERE c.id = ${id} AND c.empresa_id = ${empresaId}`;
         if (!linha) throw naoEncontrado('Medição não encontrada');
         return json(res, 200, { conferencia: linha });

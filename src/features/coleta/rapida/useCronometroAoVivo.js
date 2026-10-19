@@ -22,6 +22,12 @@
  * toque ha' exatamente N-1 volumes, sem a sobra antes do primeiro e depois
  * do ultimo que a duracao inteira traz. E nao conta duas vezes a parada
  * anotada depois do periodo — ela ja' esta' dentro do relogio.
+ *
+ * O SETUP ENTRE MARCAS e' o setup marcado ao vivo que caiu DENTRO desse
+ * trecho. E' so' ele que pode sair do relogio quando o grupo tem setup
+ * planejado: a troca costuma vir ANTES do primeiro volume do produto novo,
+ * fora do trecho, e descontar o setup da medicao inteira tirava do relogio
+ * um tempo que ele nunca conteve (revisao de 19/10).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TOQUE_MINIMO_MS } from '../../../domain/estatistica.js';
@@ -40,6 +46,7 @@ export function useCronometroAoVivo({ paradas }) {
   // mostra enquanto o cronometro roda. Null antes do segundo toque.
   const [ultimoIntervaloMs, setUltimoIntervaloMs] = useState(null);
   const [relogioEntreMarcasMs, setRelogioEntreMarcasMs] = useState(null);
+  const [setupEntreMarcasMs, setSetupEntreMarcasMs] = useState(null);
 
   const rodando = fase === 'rodando';
   const { decorrido, iniciar, parar } = useCronometro();
@@ -49,6 +56,10 @@ export function useCronometroAoVivo({ paradas }) {
   // O instante BRUTO de cada toque (paradas dentro), so' para o relogio
   // entre o primeiro e o ultimo — as marcas gravadas sao as do relogio rodando.
   const brutasRef = useRef([]);
+  // Setup ao vivo ja' encerrado, em ms, e o valor dele em cada toque: a
+  // diferenca entre o ultimo e o primeiro e' o setup dentro do trecho.
+  const setupAcumuladoRef = useRef(0);
+  const setupNoToqueRef = useRef([]);
   const inicioRef = useRef(0);
   // Parada ja' encerrada neste periodo, em ms — sai do relogio das marcas.
   const paradaAcumuladaRef = useRef(0);
@@ -57,9 +68,12 @@ export function useCronometroAoVivo({ paradas }) {
     setPecas(0);
     marcasRef.current = [];
     brutasRef.current = [];
+    setupNoToqueRef.current = [];
     paradaAcumuladaRef.current = 0;
+    setupAcumuladoRef.current = 0;
     setUltimoIntervaloMs(null);
     setRelogioEntreMarcasMs(null);
+    setSetupEntreMarcasMs(null);
     // O cronometro ao vivo mede o periodo inteiro; um setup que estivesse
     // correndo no formulario pertencia ao periodo anterior.
     paradas.limpar();
@@ -79,8 +93,10 @@ export function useCronometroAoVivo({ paradas }) {
     ultimoToqueRef.current = agora;
     marcasRef.current.push(Math.round(agora - inicioRef.current - paradaAcumuladaRef.current));
     brutasRef.current.push(Math.round(agora - inicioRef.current));
+    setupNoToqueRef.current.push(Math.round(setupAcumuladoRef.current));
     setUltimoIntervaloMs(ultimoIntervalo(marcasRef.current));
     setRelogioEntreMarcasMs(entrePrimeiraEUltima(brutasRef.current));
+    setSetupEntreMarcasMs(entrePrimeiraEUltima(setupNoToqueRef.current));
     vibrar(45);
     setPulso((p) => p + 1);
     setPecas((n) => n + 1);
@@ -89,8 +105,10 @@ export function useCronometroAoVivo({ paradas }) {
   const desfazer = useCallback(() => {
     marcasRef.current.pop();
     brutasRef.current.pop();
+    setupNoToqueRef.current.pop();
     setUltimoIntervaloMs(ultimoIntervalo(marcasRef.current));
     setRelogioEntreMarcasMs(entrePrimeiraEUltima(brutasRef.current));
+    setSetupEntreMarcasMs(entrePrimeiraEUltima(setupNoToqueRef.current));
     setPecas((n) => Math.max(0, n - 1));
     vibrar([25, 40, 25]);
   }, []);
@@ -110,6 +128,7 @@ export function useCronometroAoVivo({ paradas }) {
     if (ms >= 1000) {
       paradas.adicionar(emParada.motivo, (ms / 60000).toFixed(2));
       paradaAcumuladaRef.current += ms;
+      if (emParada.motivo === 'setup') setupAcumuladoRef.current += ms;
     }
     setEmParada(null);
     vibrar(45);
@@ -130,6 +149,8 @@ export function useCronometroAoVivo({ paradas }) {
     setMarcasFinais(marcasRef.current.map((m) => Math.min(m, Math.floor(total))));
     const entre = entrePrimeiraEUltima(brutasRef.current);
     setRelogioEntreMarcasMs(entre == null ? null : Math.min(entre, Math.floor(total)));
+    // Parada aberta no Encerrar cai DEPOIS do ultimo toque: fora do trecho.
+    setSetupEntreMarcasMs(entrePrimeiraEUltima(setupNoToqueRef.current));
     setFase('resultado');
     vibrar([30, 40, 30]);
   }, [parar, pecas, emParada, paradas.adicionar]);
@@ -164,7 +185,7 @@ export function useCronometroAoVivo({ paradas }) {
 
   return {
     fase, rodando, decorrido, pecas, pulso, duracaoFinal, pecasFinais, setPecasFinais, marcasFinais,
-    ultimoIntervaloMs, relogioEntreMarcasMs,
+    ultimoIntervaloMs, relogioEntreMarcasMs, setupEntreMarcasMs,
     emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
     comecar, contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, novaConferencia,
   };

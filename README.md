@@ -133,8 +133,11 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
     e aprovava no takt de 72 s uma linha de 75 s. O tablet grava esse relógio
     (`marcas_relogio_ms`), que já traz dentro a parada anotada depois:
     somá-la às marcas contaria essa parada duas vezes.
-  - Com setup planejado **maior que zero** no cadastro, o setup medido sai
-    desse relógio, como no programa. Setup zero não tira nada de lado nenhum.
+  - Com setup planejado **maior que zero** no cadastro, sai desse relógio o
+    setup marcado ao vivo **dentro do trecho** (`marcas_setup_ms`), e só ele.
+    A troca costuma vir antes do primeiro volume, fora do trecho. Setup
+    anotado depois fica no relógio, um erro para o lado pessimista. Setup
+    zero não tira nada de lado nenhum.
 - Duas camadas de **diagnóstico** dizem de onde vem a diferença:
   - **com a linha rodando**: soma dos intervalos ÷ quantidade, sem as paradas
     marcadas;
@@ -1087,7 +1090,7 @@ reenviar o mesmo lote não duplica nada.
 | Takt | tempo disponível ÷ quantidade |
 | Takt da embalagem | (horas da semana − setup planejado) × 3.600 s ÷ volumes da semana, por linha |
 | Intervalo volume a volume | marca(n) − marca(n−1), no relógio da linha rodando; o primeiro toque não tem intervalo |
-| Por volume no período (contra o takt) | (relógio entre o 1º e o último toque − setup medido, se setup planejado > 0) ÷ (volumes − 1) — paradas dentro |
+| Por volume no período (contra o takt) | (relógio entre o 1º e o último toque − setup marcado ao vivo **dentro desse trecho**, se setup planejado > 0) ÷ (volumes − 1) — paradas dentro |
 | Com a linha rodando | Σ intervalos ÷ n — paradas marcadas fora, lacunas dentro |
 | Ritmo normal | média dos intervalos que não são lacuna (repetida até estabilizar) |
 | Lacuna | intervalo > 2 × ritmo normal; excesso = Σ (lacuna − normal); volumes perdidos ≈ excesso ÷ normal |

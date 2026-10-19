@@ -74,7 +74,7 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
     const periodoPorPecaMs = periodoPorPeca({
       relogioEntreMarcasMs: carga.relogio,
       volumes: (carga.marcas || []).length,
-      setupMedidoMs: somarParadas(conferencia.paradas).setupMs,
+      setupNoTrechoMs: carga.setup,
       setupPlanejado: Boolean(takt.setupPlanejado),
     });
     const leitura = leituraPecaAPeca({ marcasMs: carga.marcas, taktMs: takt.taktMs, periodoPorPecaMs });

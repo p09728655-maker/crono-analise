@@ -120,6 +120,7 @@ export const marcasDaConferencia = (id) =>
     .then((r) => ({
       marcas: r.conferencia?.marcas_ms ?? null,
       relogio: r.conferencia?.marcas_relogio_ms ?? null,
+      setup: r.conferencia?.marcas_setup_ms ?? null,
     }));
 
 export const arquivarConferencia = (id, arquivada = true) =>
@@ -418,5 +419,7 @@ export const paraConferencia = (x) => ({
   // O relogio entre o primeiro e o ultimo toque — de onde sai o tempo por
   // volume contra o takt. Sem marcas, nao existe.
   marcasRelogioMs: Array.isArray(x.marcasMs) ? (x.marcasRelogioMs ?? null) : null,
+  // O setup marcado ao vivo DENTRO desse trecho — o unico que pode sair dele.
+  marcasSetupMs: Array.isArray(x.marcasMs) ? (x.marcasSetupMs ?? null) : null,
   salvoEm: x.salvoEm,
 });

@@ -103,11 +103,11 @@ export default function EmbalagemTaktTime({ aoSair }) {
   const descontarSetup = Boolean(takt.setupPlanejado);
   const porVolumeAoVivo = periodoPorPeca({
     relogioEntreMarcasMs: crono.relogioEntreMarcasMs, volumes: crono.pecas,
-    setupMedidoMs: paradas.total.setupMs, setupPlanejado: descontarSetup,
+    setupNoTrechoMs: crono.setupEntreMarcasMs, setupPlanejado: descontarSetup,
   });
   const porVolumeFinal = marcasConferem ? periodoPorPeca({
     relogioEntreMarcasMs: crono.relogioEntreMarcasMs, volumes: crono.marcasFinais.length,
-    setupMedidoMs: paradas.total.setupMs, setupPlanejado: descontarSetup,
+    setupNoTrechoMs: crono.setupEntreMarcasMs, setupPlanejado: descontarSetup,
   }) : null;
   const leitura = useMemo(
     () => (marcasConferem
@@ -121,6 +121,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
     horaInicial: null, horaFinal: null,
     marcasMs: marcasConferem ? crono.marcasFinais : null,
     marcasRelogioMs: marcasConferem ? crono.relogioEntreMarcasMs : null,
+    marcasSetupMs: marcasConferem ? crono.setupEntreMarcasMs : null,
   });
 
   const comecar = useCallback(() => {

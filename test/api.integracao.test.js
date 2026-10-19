@@ -810,14 +810,17 @@ rodar('API — integracao com Postgres', () => {
         conferencias: [{
           clientId, maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6',
           // 240 s de trecho rodando + 20 s de parada marcada entre os toques.
-          duracaoMs: 300000, pecas: 5, marcasMs, marcasRelogioMs: 260000, salvoEm: new Date().toISOString(),
+          duracaoMs: 300000, pecas: 5, marcasMs, marcasRelogioMs: 260000, marcasSetupMs: 15000,
+          salvoEm: new Date().toISOString(),
         }],
       },
     }), fingirRes());
 
-    const [linha] = await sql`SELECT id, marcas_ms, marcas_relogio_ms FROM conferencias WHERE client_id = ${clientId}`;
+    const [linha] = await sql`
+      SELECT id, marcas_ms, marcas_relogio_ms, marcas_setup_ms FROM conferencias WHERE client_id = ${clientId}`;
     expect(linha.marcas_ms).toEqual(marcasMs);
     expect(linha.marcas_relogio_ms).toBe(260000);
+    expect(linha.marcas_setup_ms).toBe(15000);
 
     // A lista diz que ha' marcas, mas nao as carrega.
     const lista = fingirRes();
@@ -831,6 +834,25 @@ rodar('API — integracao com Postgres', () => {
     expect(detalhe.statusCode).toBe(200);
     expect(detalhe.corpo.conferencia.marcas_ms).toEqual(marcasMs);
     expect(detalhe.corpo.conferencia.marcas_relogio_ms).toBe(260000);
+    expect(detalhe.corpo.conferencia.marcas_setup_ms).toBe(15000);
+  });
+
+  it('setup no trecho maior que o que o trecho parou vira null — o relogio fica', async () => {
+    const clientId = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          // O trecho parou 20 s (260 - 240): 30 s de setup nele e' impossivel.
+          clientId, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 5,
+          marcasMs: [30000, 90000, 150000, 210000, 270000], marcasRelogioMs: 260000, marcasSetupMs: 30000,
+          salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+    const [linha] = await sql`SELECT marcas_relogio_ms, marcas_setup_ms FROM conferencias WHERE client_id = ${clientId}`;
+    expect(linha.marcas_relogio_ms).toBe(260000);
+    expect(linha.marcas_setup_ms).toBeNull();
   });
 
   it('relogio entre toques que nao cabe (menor que o trecho rodando, maior que o periodo) vira null', async () => {

@@ -132,11 +132,11 @@ describe('volume em par e ritmo misto — o que a mediana errava', () => {
  */
 const VOLUME = unidadeDoPosto('EMBALAGEM');
 /** Uma sessao inteira: as marcas (relogio rodando) e o relogio entre toques. */
-function frase({ rodandoS, relogioS, takt = 72000, setupMedidoS = 0, setupPlanejado = false }) {
+function frase({ rodandoS, relogioS, takt = 72000, setupNoTrechoS = 0, setupPlanejado = false }) {
   const marcasMs = marcasDe(rodandoS);
   const periodoPorPecaMs = periodoPorPeca({
     relogioEntreMarcasMs: relogioS * 1000, volumes: marcasMs.length,
-    setupMedidoMs: setupMedidoS * 1000, setupPlanejado,
+    setupNoTrechoMs: setupNoTrechoS * 1000, setupPlanejado,
   });
   const leitura = leituraPecaAPeca({ marcasMs, taktMs: takt, periodoPorPecaMs });
   return frasesVolumeAVolume({ leitura, takt: { semana: '043-26' }, unidade: VOLUME });
@@ -170,11 +170,19 @@ describe('contra o takt vai o relogio entre o primeiro e o ultimo toque', () => 
     expect(semMarcar.linhas[0]).toMatch(/paradas que ninguém marcou/);
   });
 
-  it('com setup PLANEJADO o setup medido sai do relogio; sem planejado, fica', () => {
-    // 51 volumes, 3.600 s entre o primeiro e o ultimo, 600 s de setup marcado.
-    const base = { rodandoS: Array(50).fill(60), relogioS: 3600, setupMedidoS: 600 };
+  it('com setup PLANEJADO o setup DENTRO do trecho sai do relogio; sem planejado, fica', () => {
+    // 51 volumes, 3.600 s entre o primeiro e o ultimo, 600 s de setup no meio.
+    const base = { rodandoS: Array(50).fill(60), relogioS: 3600, setupNoTrechoS: 600 };
     expect(frase(base).manchete).toMatch(/a cada 72.0 s/);
     expect(frase({ ...base, setupPlanejado: true }).manchete).toMatch(/a cada 60.0 s/);
+  });
+
+  it('setup FORA do trecho (a troca antes do 1o volume) nao sai de um relogio que nunca o conteve', () => {
+    // Revisao de 19/10: 10 min de troca antes do primeiro toque, descontados
+    // do trecho, faziam esta linha de 75 s sair com 28,8 s e 60% de folga.
+    // Fora do trecho, o setup no trecho e' zero — o veredito nao muda.
+    const f = frase({ rodandoS: Array(13).fill(75), relogioS: 975, setupNoTrechoS: 0, setupPlanejado: true });
+    expect(f.manchete).toBe('No período, saiu um volume a cada 75.0 s, paradas dentro — 4% acima do takt de 72.0 s.');
   });
 
   it('sem o relogio entre toques NAO ha veredito — nunca cai para a linha rodando', () => {
