@@ -111,12 +111,16 @@ export const listarConferenciasServidor = ({ maquina, arquivadas = false } = {})
  */
 export const resumoConferencias = () => requisitar('/conferencias?resumo=1');
 /**
- * As marcas (o instante de cada toque) de UMA medicao. A lista nao as traz:
- * ver o ?id= do GET em api/conferencias.js.
+ * As marcas (o instante de cada toque) de UMA medicao e o relogio entre o
+ * primeiro e o ultimo toque. A lista nao os traz: ver o ?id= do GET em
+ * api/conferencias.js.
  */
 export const marcasDaConferencia = (id) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`)
-    .then((r) => r.conferencia?.marcas_ms ?? null);
+    .then((r) => ({
+      marcas: r.conferencia?.marcas_ms ?? null,
+      relogio: r.conferencia?.marcas_relogio_ms ?? null,
+    }));
 
 export const arquivarConferencia = (id, arquivada = true) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { arquivada } });
@@ -411,5 +415,8 @@ export const paraConferencia = (x) => ({
   // Embalagem Takt Time. Quarto dado que so' existe se este mapeador o
   // levar; item antigo, ou medicao por horarios, vai sem (null).
   marcasMs: Array.isArray(x.marcasMs) ? x.marcasMs : null,
+  // O relogio entre o primeiro e o ultimo toque — de onde sai o tempo por
+  // volume contra o takt. Sem marcas, nao existe.
+  marcasRelogioMs: Array.isArray(x.marcasMs) ? (x.marcasRelogioMs ?? null) : null,
   salvoEm: x.salvoEm,
 });

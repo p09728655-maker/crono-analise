@@ -809,13 +809,15 @@ rodar('API — integracao com Postgres', () => {
       corpo: {
         conferencias: [{
           clientId, maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6',
-          duracaoMs: 300000, pecas: 5, marcasMs, salvoEm: new Date().toISOString(),
+          // 240 s de trecho rodando + 20 s de parada marcada entre os toques.
+          duracaoMs: 300000, pecas: 5, marcasMs, marcasRelogioMs: 260000, salvoEm: new Date().toISOString(),
         }],
       },
     }), fingirRes());
 
-    const [linha] = await sql`SELECT id, marcas_ms FROM conferencias WHERE client_id = ${clientId}`;
+    const [linha] = await sql`SELECT id, marcas_ms, marcas_relogio_ms FROM conferencias WHERE client_id = ${clientId}`;
     expect(linha.marcas_ms).toEqual(marcasMs);
+    expect(linha.marcas_relogio_ms).toBe(260000);
 
     // A lista diz que ha' marcas, mas nao as carrega.
     const lista = fingirRes();
@@ -828,6 +830,39 @@ rodar('API — integracao com Postgres', () => {
     await conferenciasApi(fingirReq({ query: { id: linha.id } }), detalhe);
     expect(detalhe.statusCode).toBe(200);
     expect(detalhe.corpo.conferencia.marcas_ms).toEqual(marcasMs);
+    expect(detalhe.corpo.conferencia.marcas_relogio_ms).toBe(260000);
+  });
+
+  it('relogio entre toques que nao cabe (menor que o trecho rodando, maior que o periodo) vira null', async () => {
+    const menor = crypto.randomUUID();
+    const maior = crypto.randomUUID();
+    const marcasMs = [30000, 90000, 150000];
+    const res = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          // O trecho rodando ja' tem 120 s: relogio de 100 s e' impossivel.
+          { clientId: menor, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 3, marcasMs, marcasRelogioMs: 100000, salvoEm: new Date().toISOString() },
+          { clientId: maior, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 3, marcasMs, marcasRelogioMs: 400000, salvoEm: new Date().toISOString() },
+        ],
+      },
+    }), res);
+    expect(res.statusCode).toBe(200);
+    const linhas = await sql`
+      SELECT marcas_ms, marcas_relogio_ms FROM conferencias WHERE client_id IN (${menor}, ${maior})`;
+    // As marcas continuam; so' o relogio que nao serve cai.
+    expect(linhas.map((l) => l.marcas_relogio_ms)).toEqual([null, null]);
+    expect(linhas.every((l) => Array.isArray(l.marcas_ms))).toBe(true);
+  });
+
+  it('o banco recusa relogio entre toques sem as marcas', async () => {
+    await expect(sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em, marcas_relogio_ms)
+      VALUES (${crypto.randomUUID()}, ${EMPRESA}, 'X', 60000, 3,
+              now() - interval '1 minute', now(), now(), 50000)`)
+      .rejects.toThrow(/conferencias_marcas_relogio_chk/);
   });
 
   it('marcas que nao batem com a contagem entram como nenhuma — e nao travam a fila', async () => {

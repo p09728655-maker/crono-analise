@@ -198,10 +198,18 @@ export function leituraDaDemanda({
    * o relogio fica como veio, com tudo dentro.
    */
   const setupHoras = horasDeSetup(setup || {});
+  /**
+   * "Ha' setup planejado" e' setup MAIOR QUE ZERO nas horas. O cadastro
+   * "este grupo nao faz setup" (zero) nao tira nada das horas — entao o
+   * setup que a medicao por acaso pegou tem de ficar no relogio. Tira-lo
+   * dos dois lados fazia esse setup ser contado ZERO vezes (revisao de
+   * 19/10). A mesma regra vale para o volume a volume (taktDaMedicao).
+   */
+  const setupDescontado = setupHoras != null && setupHoras > 0;
   const setupMedidoMs = Math.max(0, Number(observado?.setupMs) || 0);
   const totalMs = Number(observado?.totalMs) || 0;
   const pecasObservadas = Number(observado?.pecas) || 0;
-  const relogioSemSetup = setupHoras != null && setupMedidoMs > 0
+  const relogioSemSetup = setupDescontado && setupMedidoMs > 0
     && totalMs > setupMedidoMs && pecasObservadas > 0
     ? (pecasObservadas * 3600000) / (totalMs - setupMedidoMs)
     : null;
@@ -264,7 +272,7 @@ export function leituraDaDemanda({
     paradas: classificarParadas({
       paradaMs: Number(observado?.paradaMs) || 0,
       setupMs: setupMedidoMs,
-      setupPlanejado: setupHoras != null,
+      setupPlanejado: setupDescontado,
       ritmoRelogio: relogio,
       ritmoRodando,
       temObservado: observado != null && Number.isFinite(Number(observado?.paradaMs)),
@@ -334,8 +342,9 @@ export function taktDaMedicao({
     taktMs: leitura.veredito?.taktMs ?? null,
     estado: leitura.estado,
     semana: leitura.semana?.chave ?? null,
-    // Com setup PLANEJADO, ele ja' saiu das horas do takt — e o que a
-    // medicao pegou de setup sai do periodo tambem (ver periodoPorPeca).
-    setupPlanejado: leitura.setup != null,
+    // Com setup PLANEJADO (maior que zero), ele ja' saiu das horas do takt
+    // — e o que a medicao pegou de setup sai do periodo tambem (ver
+    // periodoPorPeca). Zero planejado nao tira nada de lado nenhum.
+    setupPlanejado: Boolean(leitura.setup && leitura.setup.horasPorMaquina > 0),
   };
 }

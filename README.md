@@ -123,11 +123,18 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   **O PCP cola o programa da embalagem em VOLUMES**: um rack que sai em dois
   volumes conta dois. Colado em produtos, o takt sai multiplicado pelo número
   de volumes e a linha parece folgada sem estar.
-- **O que se compara com o takt é o período ÷ volumes, com as paradas
-  dentro**. É a mesma régua do veredito do programa da semana: o volume que não
-  saiu porque a linha parou também não entrou no caminhão, com a parada marcada
-  ou não. Comparar com a linha rodando premiava quem aperta "Parou". Com setup
-  planejado no cadastro, o setup medido sai do período, como no programa.
+- **O que se compara com o takt é o tempo por volume no relógio, com as
+  paradas dentro**: o relógio entre o primeiro e o último toque ÷ (volumes − 1).
+  - É a mesma régua do veredito do programa da semana: o volume que não saiu
+    porque a linha parou também não entrou no caminhão, com a parada marcada ou
+    não. Comparar com a linha rodando premiava quem aperta "Parou".
+  - A conta vai **entre toques** porque é ali que há exatamente N − 1 volumes.
+    A duração inteira ÷ N trazia a sobra antes do 1º toque e depois do último,
+    e aprovava no takt de 72 s uma linha de 75 s. O tablet grava esse relógio
+    (`marcas_relogio_ms`), que já traz dentro a parada anotada depois:
+    somá-la às marcas contaria essa parada duas vezes.
+  - Com setup planejado **maior que zero** no cadastro, o setup medido sai
+    desse relógio, como no programa. Setup zero não tira nada de lado nenhum.
 - Duas camadas de **diagnóstico** dizem de onde vem a diferença:
   - **com a linha rodando**: soma dos intervalos ÷ quantidade, sem as paradas
     marcadas;
@@ -1080,7 +1087,7 @@ reenviar o mesmo lote não duplica nada.
 | Takt | tempo disponível ÷ quantidade |
 | Takt da embalagem | (horas da semana − setup planejado) × 3.600 s ÷ volumes da semana, por linha |
 | Intervalo volume a volume | marca(n) − marca(n−1), no relógio da linha rodando; o primeiro toque não tem intervalo |
-| Por volume no período (contra o takt) | (duração − setup medido, se houver setup planejado) ÷ volumes — paradas dentro |
+| Por volume no período (contra o takt) | (relógio entre o 1º e o último toque − setup medido, se setup planejado > 0) ÷ (volumes − 1) — paradas dentro |
 | Com a linha rodando | Σ intervalos ÷ n — paradas marcadas fora, lacunas dentro |
 | Ritmo normal | média dos intervalos que não são lacuna (repetida até estabilizar) |
 | Lacuna | intervalo > 2 × ritmo normal; excesso = Σ (lacuna − normal); volumes perdidos ≈ excesso ÷ normal |

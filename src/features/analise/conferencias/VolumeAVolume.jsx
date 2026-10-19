@@ -4,6 +4,7 @@ import {
   faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
+import { frasesVolumeAVolume, numerosDaLeitura } from '../../../domain/volumeAVolume.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
 import { listarDemanda, marcasDaConferencia } from '../../../lib/api.js';
 import { claro } from '../../../theme/tokensAnalise.js';
@@ -11,7 +12,7 @@ import { LOGO_PATRIMAR } from '../../../theme/logo.js';
 import { VERSAO } from '../../../versao.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
 import { est, imp } from './estilos.js';
-import { emSegundos, porPeca } from './formato.js';
+import { emSegundos } from './formato.js';
 
 /** Lacunas listadas na folha A4: as maiores. A tela mostra todas. */
 const MAX_LACUNAS_PAPEL = 15;
@@ -29,9 +30,11 @@ const MAX_LACUNAS_PAPEL = 15;
  * Na embalagem o programa e' colado em VOLUMES, e e' por volume que o takt
  * sai — a mesma unidade do toque.
  *
- * O veredito da semana (ritmo de relogio, paradas dentro) continua sendo o
- * do quadro do programa. Aqui os intervalos sao de linha RODANDO: dizem se
- * a linha acompanha o takt quando roda, e onde ela parou sem ninguem marcar.
+ * O VEREDITO usa a mesma regua do quadro do programa — relogio, paradas
+ * dentro —, no trecho entre o primeiro e o ultimo toque (periodoPorPeca).
+ * As barras do grafico sao da linha RODANDO: mostram o passo e onde ela
+ * parou sem ninguem marcar. Frases e numeros moram em
+ * domain/volumeAVolume.js, os mesmos na tela e na folha.
  */
 export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
   const [carga, setCarga] = useState({ estado: 'carregando' });
@@ -40,12 +43,13 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
     let vivo = true;
     setCarga({ estado: 'carregando' });
     Promise.all([
+      // As marcas e o relogio entre o primeiro e o ultimo toque.
       marcasDaConferencia(conferencia.id),
       // Sem grupo nao ha' programa — e falha do programa nao derruba o
       // grafico: os intervalos continuam valendo sem a linha do takt.
       grupo ? listarDemanda(grupo.id).catch(() => null) : Promise.resolve([]),
     ])
-      .then(([marcas, demandas]) => { if (vivo) setCarga({ estado: 'pronto', marcas, demandas }); })
+      .then(([toques, demandas]) => { if (vivo) setCarga({ estado: 'pronto', ...toques, demandas }); })
       .catch((e) => { if (vivo) setCarga({ estado: 'erro', erro: e.message }); });
     return () => { vivo = false; };
   }, [conferencia.id, grupo?.id]);
@@ -65,138 +69,17 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
           pecas: conferencia.pecas,
           duracaoMs: Number(conferencia.duracao_ms),
         });
-    // O veredito e' do PERIODO, paradas dentro (ver periodoPorPeca).
+    // O veredito e' do PERIODO, paradas dentro, entre o primeiro e o ultimo
+    // toque (ver periodoPorPeca).
     const periodoPorPecaMs = periodoPorPeca({
-      duracaoMs: Number(conferencia.duracao_ms),
-      pecas: conferencia.pecas,
+      relogioEntreMarcasMs: carga.relogio,
+      volumes: (carga.marcas || []).length,
       setupMedidoMs: somarParadas(conferencia.paradas).setupMs,
       setupPlanejado: Boolean(takt.setupPlanejado),
     });
     const leitura = leituraPecaAPeca({ marcasMs: carga.marcas, taktMs: takt.taktMs, periodoPorPecaMs });
     return { estado: leitura ? 'pronto' : 'sem-marcas', leitura, takt };
   }, [carga, grupo, maquinasDoGrupo, conferencia]);
-}
-
-/** Por que nao ha' linha de takt — em palavras, nunca so' um traco. */
-function semTakt(estado, nomeGrupo) {
-  const g = nomeGrupo ? `do grupo ${nomeGrupo}` : 'do grupo';
-  switch (estado) {
-    case 'sem-grupo': return 'a máquina não está em nenhum grupo do cadastro, e sem grupo não há programa.';
-    case 'sem-demanda': return `não há programa de produção ${g} cadastrado.`;
-    case 'sem-semana': return `o programa ${g} não cobre a semana desta medição.`;
-    case 'sem-horas': return `faltam as horas disponíveis ${g} na semana.`;
-    case 'setup-excede': return `o setup cadastrado ${g} passa da jornada — confira o cadastro.`;
-    case 'erro-programa': return 'não deu para carregar o programa agora.';
-    default: return 'a medição não tem data para achar a semana.';
-  }
-}
-
-/**
- * AS FRASES — calculadas uma vez e lidas pela tela e pela folha. Escritas
- * aqui, e nao em cada uma, pelo mesmo motivo de useLeitura: papel e tela
- * dizendo coisas diferentes sobre os mesmos numeros viram discussao na
- * reuniao.
- */
-export function frasesVolumeAVolume({ leitura, takt, unidade, nomeGrupo }) {
-  const { singular, plural } = unidade;
-  if (!leitura.suficiente) {
-    return {
-      tom: 'neutro',
-      manchete: `Poucos ${plural} para ler o ritmo`,
-      linhas: [`${leitura.motivo}. O gráfico mostra o que foi tocado.`],
-    };
-  }
-
-  /**
-   * O que se compara com o takt e' o PERIODO por volume, paradas dentro —
-   * a regua do veredito da semana. As camadas de baixo dizem de onde vem a
-   * diferenca: rodando (sem as paradas marcadas) e normal (sem as lacunas).
-   * Cada uma que cai abaixo do takt aponta uma acao diferente. Ver
-   * leituraPecaAPeca e periodoPorPeca.
-   */
-  const linhas = [];
-  let tom;
-  let manchete;
-  const periodo = leitura.periodoMs ?? leitura.mediaMs;
-  const periodoTxt = emSegundos(periodo);
-  const rodandoTxt = emSegundos(leitura.mediaMs);
-  const normalTxt = emSegundos(leitura.normalMs);
-  const temLacuna = leitura.lacunas.length > 0;
-  const abertura = `No período, saiu um ${singular} a cada ${periodoTxt}, paradas dentro`;
-  if (leitura.taktMs) {
-    const alvo = leitura.taktMs;
-    const taktTxt = emSegundos(alvo);
-    const pct = Math.abs(Math.round(((periodo / alvo) - 1) * 100));
-    if (periodo <= alvo) {
-      manchete = `${abertura} — dentro do takt de ${taktTxt}, com ${pct}% de folga.`;
-      tom = temLacuna ? 'atencao' : 'atende';
-    } else {
-      manchete = `${abertura} — ${pct}% acima do takt de ${taktTxt}.`;
-      tom = 'falha';
-      if (leitura.mediaMs <= alvo) {
-        linhas.push(`Com a linha rodando seriam ${rodandoTxt} por ${singular}, dentro do takt: o que tira a linha do takt são as paradas marcadas nesta medição.`);
-      } else if (leitura.normalMs <= alvo) {
-        linhas.push(`Com a linha rodando, ${rodandoTxt}; sem as lacunas, ${normalTxt}, dentro do takt: o que tira a linha do takt são as paradas que ninguém marcou.`);
-      } else {
-        linhas.push(`Mesmo sem parada nenhuma (${normalTxt} por ${singular}), a linha não acompanha a demanda: é o passo dela que está mais lento que o takt.`);
-      }
-    }
-  } else {
-    manchete = `${abertura}; com a linha rodando, ${rodandoTxt}.`;
-    tom = temLacuna ? 'atencao' : 'neutro';
-    linhas.push(`Sem takt para comparar: ${semTakt(takt.estado, nomeGrupo)}`);
-  }
-
-  if (temLacuna) {
-    const n = leitura.lacunas.length;
-    const cerca = Math.round(leitura.pecasNoExcesso);
-    linhas.push(
-      `${n} ${n === 1 ? 'lacuna' : 'lacunas'} — intervalo maior que o dobro do normal (${normalTxt}) — `
-      + `${n === 1 ? 'somou' : 'somaram'} ${porPeca(leitura.excessoMs)} além do normal`
-      + `${cerca >= 1 ? `: cerca de ${cerca} ${cerca === 1 ? singular : plural} que ${cerca === 1 ? 'deixou' : 'deixaram'} de sair` : ''}. `
-      + 'As paradas marcadas no cronômetro já estão fora desta conta: estas, ninguém marcou.',
-    );
-  } else {
-    linhas.push('Nenhuma lacuna: nenhum intervalo passou do dobro do normal.');
-  }
-  return { tom, manchete, linhas };
-}
-
-/**
- * Os cinco numeros, na ordem em que se leem: o veredito (periodo x takt) e
- * as duas camadas do "se nao parasse". Mesma lista na tela e no papel.
- */
-function numerosDaLeitura(leitura, takt, unidade) {
-  if (!leitura.suficiente) {
-    return [{ rotulo: 'Intervalos tocados', valor: String(leitura.n), sub: `a leitura começa com ${leitura.criterios.minIntervalos}` }];
-  }
-  return [
-    {
-      rotulo: `Por ${unidade.singular} no período`,
-      valor: emSegundos(leitura.periodoMs ?? leitura.mediaMs),
-      sub: 'paradas dentro — contra o takt',
-    },
-    {
-      rotulo: 'Takt da semana',
-      valor: leitura.taktMs ? emSegundos(leitura.taktMs) : '—',
-      sub: leitura.taktMs ? `semana ${takt.semana} · por ${unidade.singular}` : 'sem programa para comparar',
-    },
-    {
-      rotulo: 'Com a linha rodando',
-      valor: emSegundos(leitura.mediaMs),
-      sub: 'sem as paradas marcadas',
-    },
-    {
-      rotulo: 'Sem as lacunas',
-      valor: emSegundos(leitura.normalMs),
-      sub: 'sem parada nenhuma',
-    },
-    {
-      rotulo: 'Lacunas',
-      valor: String(leitura.lacunas.length),
-      sub: leitura.lacunas.length ? `${porPeca(leitura.excessoMs)} além do normal` : 'nenhuma',
-    },
-  ];
 }
 
 const TOM = {

@@ -37,14 +37,14 @@ const DEMANDAS = [{
   atualizado_em: hoje.toISOString(),
 }];
 
-async function simularServidor(pagina, { conferencias = [], marcas = null, aoSincronizar } = {}) {
+async function simularServidor(pagina, { conferencias = [], marcas = null, relogio = null, aoSincronizar } = {}) {
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas: DEMANDAS } })
     : rota.fulfill({ json: CADASTRO })));
   await pagina.route('**/api/conferencias**', (rota) => {
     const url = new URL(rota.request().url());
     if (url.searchParams.get('id')) {
-      return rota.fulfill({ json: { conferencia: { id: url.searchParams.get('id'), marcas_ms: marcas } } });
+      return rota.fulfill({ json: { conferencia: { id: url.searchParams.get('id'), marcas_ms: marcas, marcas_relogio_ms: relogio } } });
     }
     return rota.fulfill({ json: { conferencias, outras: 0 } });
   });
@@ -118,6 +118,8 @@ checar(enviado?.maquina === 'EMBALAGEM 01' && enviado?.peca === 'Rack Sirius 1.6
 checar(Array.isArray(enviado?.marcasMs) && enviado.marcasMs.length === 12 && enviado.pecas === 12,
   'os 12 toques sobem como 12 marcas, uma por volume');
 checar(enviado?.marcasMs?.every((m, i, a) => i === 0 || m >= a[i - 1]), 'marcas em ordem');
+checar(enviado?.marcasRelogioMs === enviado?.marcasMs?.at(-1) - enviado?.marcasMs?.[0],
+  'sem parada, o relogio entre toques e o proprio trecho das marcas');
 /* ------------------- o RELOGIO das marcas: parada descontada e desfazer */
 await t.getByRole('button', { name: /Nova conferência/ }).click();
 await t.getByRole('button', { name: /INICIAR/ }).click();
@@ -149,6 +151,9 @@ checar(comParada?.marcasMs?.length === 5 && comParada.pecas === 5, 'desfazer tir
 checar(iv[2] > 0 && iv[2] < 1000, `parada marcada sai do intervalo seguinte (${iv[2]} ms, nao ~1.800)`);
 checar(iv[3] > 400, `apos desfazer, o intervalo conta da marca anterior (${iv[3]} ms)`);
 checar(comParada?.marcasMs?.[4] <= comParada?.duracaoMs, 'nenhuma marca passa do fim do periodo');
+const paradaNoRelogio = comParada?.marcasRelogioMs - (comParada?.marcasMs?.[4] - comParada?.marcasMs?.[0]);
+checar(paradaNoRelogio >= 1400 && paradaNoRelogio < 2500,
+  `o relogio entre toques traz a parada dentro (${paradaNoRelogio} ms a mais que o trecho rodando)`);
 
 /* ------------- contagem corrigida a mao: o aviso aparece e as marcas nao sobem */
 await t.getByRole('button', { name: /Nova conferência/ }).click();
@@ -161,7 +166,8 @@ checar(await t.getByText(/A contagem foi corrigida à mão/).count() === 1, 'con
 enviados.length = 0;
 await t.getByRole('button', { name: /salvar conferência/i }).click();
 for (let i = 0; i < 40 && !enviados.length; i++) await t.waitForTimeout(150);
-checar(enviados[0]?.pecas === 20 && enviados[0]?.marcasMs === null, 'contagem corrigida: 20 volumes, marcas nao sobem');
+checar(enviados[0]?.pecas === 20 && enviados[0]?.marcasMs === null && enviados[0]?.marcasRelogioMs === null,
+  'contagem corrigida: 20 volumes, marcas e relogio nao sobem');
 
 checar(errosTablet.length === 0, `tablet sem erro de pagina${errosTablet.length ? `: ${errosTablet[0]}` : ''}`);
 await tablet.close();
@@ -185,7 +191,8 @@ const medicao = {
   salvo_em: hoje.toISOString(), arquivada: false, com_marcas: true, paradas: [],
   observacao: 'Faltou caixa às 9h10',
 };
-await simularServidor(p, { conferencias: [medicao], marcas });
+// Sem parada marcada: o relogio entre toques e' o proprio trecho, 920 s.
+await simularServidor(p, { conferencias: [medicao], marcas, relogio: marcas.at(-1) - marcas[0] });
 
 await p.goto(`${BASE}/analise`);
 await p.getByRole('button', { name: /^Abrir$/ }).first().waitFor({ timeout: 8000 });
@@ -200,11 +207,11 @@ checar(await p.getByText('Faltou caixa às 9h10').count() > 0, 'a observacao do 
 
 await p.getByRole('button', { name: 'Volume a volume' }).click();
 const janela = p.getByRole('dialog', { name: /Volume a volume/ });
-// Periodo de 1.000 s com 14 volumes: 71,4 s por volume, paradas dentro;
-// takt 72 s. Rodando: 920 / 13 = 70,8 s. Sem a lacuna: 60 s.
-await janela.getByText(/No período, saiu um volume a cada 71.4 s, paradas dentro/).waitFor({ timeout: 8000 });
+// Relogio entre o 1o e o ultimo toque: 920 s / 13 = 70,8 s por volume,
+// paradas dentro; takt 72 s. Sem a lacuna: 60 s.
+await janela.getByText(/No período, saiu um volume a cada 70.8 s, paradas dentro/).waitFor({ timeout: 8000 });
 const textoJanela = await janela.innerText();
-checar(/dentro do takt de 72.0 s/.test(textoJanela), 'veredito pelo PERIODO: 71.4 s dentro do takt de 72.0 s');
+checar(/dentro do takt de 72.0 s, com 2% de folga/.test(textoJanela), 'veredito pelo relogio entre toques: 70.8 s dentro do takt de 72.0 s');
 checar(/COM A LINHA RODANDO[\s\S]*70.8 s/i.test(textoJanela) && /SEM AS LACUNAS[\s\S]*60.0 s/i.test(textoJanela),
   'as camadas: rodando 70.8 s, sem as lacunas 60.0 s');
 checar(/1 lacuna — intervalo maior que o dobro do normal \(60.0 s\)/.test(textoJanela), 'aponta a lacuna contra o normal de 60.0 s');

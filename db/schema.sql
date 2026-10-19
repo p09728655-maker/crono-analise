@@ -395,6 +395,15 @@ ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS marcas_ms integer[];
 ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_marcas_chk;
 ALTER TABLE conferencias ADD CONSTRAINT conferencias_marcas_chk
   CHECK (marcas_ms IS NULL OR cardinality(marcas_ms) = pecas);
+-- O RELOGIO ENTRE O PRIMEIRO E O ULTIMO TOQUE, paradas dentro, em ms. E' o
+-- que se compara com o takt (tempo por volume = relogio / (N-1)): as marcas
+-- sao do relogio RODANDO e nao sabem quanto parou entre elas, e a duracao
+-- inteira traz a sobra antes do primeiro toque e depois do ultimo. So'
+-- existe junto com as marcas.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS marcas_relogio_ms integer;
+ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_marcas_relogio_chk;
+ALTER TABLE conferencias ADD CONSTRAINT conferencias_marcas_relogio_chk
+  CHECK (marcas_relogio_ms IS NULL OR (marcas_ms IS NOT NULL AND marcas_relogio_ms >= 0));
 
 -- ------------------------------------------------------- motivos_parada
 -- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o

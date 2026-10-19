@@ -95,18 +95,20 @@ export default function EmbalagemTaktTime({ aoSair }) {
   // As marcas so' valem com a contagem que elas explicam (ver ConferenciaRapida).
   const marcasConferem = crono.marcasFinais.length > 0
     && Number(crono.pecasFinais) === crono.marcasFinais.length;
-  /* A regua do takt: o PERIODO por volume, paradas dentro (ver
-     periodoPorPeca). Ao vivo, com o relogio correndo; no resultado, com o
-     periodo fechado e as paradas como ficaram. */
+  /* A regua do takt: o tempo por volume no relogio, paradas dentro, entre o
+     primeiro e o ultimo toque (ver periodoPorPeca). Ao vivo, o relogio so'
+     anda a cada toque — uma parada em curso nao faz o aviso piscar; ela
+     entra no proximo volume. Sem toques que expliquem a contagem (contagem
+     corrigida a mao), nao ha' tempo por volume: a tela mostra vazio. */
   const descontarSetup = Boolean(takt.setupPlanejado);
   const porVolumeAoVivo = periodoPorPeca({
-    duracaoMs: crono.decorrido, pecas: crono.pecas,
+    relogioEntreMarcasMs: crono.relogioEntreMarcasMs, volumes: crono.pecas,
     setupMedidoMs: paradas.total.setupMs, setupPlanejado: descontarSetup,
   });
-  const porVolumeFinal = periodoPorPeca({
-    duracaoMs: crono.duracaoFinal, pecas: crono.pecasFinais,
+  const porVolumeFinal = marcasConferem ? periodoPorPeca({
+    relogioEntreMarcasMs: crono.relogioEntreMarcasMs, volumes: crono.marcasFinais.length,
     setupMedidoMs: paradas.total.setupMs, setupPlanejado: descontarSetup,
-  });
+  }) : null;
   const leitura = useMemo(
     () => (marcasConferem
       ? leituraPecaAPeca({ marcasMs: crono.marcasFinais, taktMs: takt.taktMs, periodoPorPecaMs: porVolumeFinal })
@@ -118,6 +120,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
     calculado: resultado, maquina: maquina?.nome || '', peca: produto, paradas: paradas.emMs, observacao,
     horaInicial: null, horaFinal: null,
     marcasMs: marcasConferem ? crono.marcasFinais : null,
+    marcasRelogioMs: marcasConferem ? crono.relogioEntreMarcasMs : null,
   });
 
   const comecar = useCallback(() => {
@@ -214,7 +217,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           unidade={VOLUME}
           modoTakt
           taktMs={takt.taktMs}
-          porVolumeMs={crono.pecas >= 2 ? porVolumeAoVivo : null}
+          porVolumeMs={porVolumeAoVivo}
         />
       )}
 
@@ -274,15 +277,15 @@ function CartaoTakt({ takt }) {
 
 /**
  * O RESUMO do periodo que fechou: o que saiu (volumes/hora, paradas dentro)
- * e como saiu (media por volume contra o takt, e as lacunas). A leitura
+ * e como saiu (tempo por volume no relogio contra o takt, e as lacunas). A leitura
  * completa, com grafico e a lista das lacunas, fica no PC.
  */
 function ResumoTakt({
   resultado, leitura, takt, porVolumeMs,
 }) {
   const suficiente = leitura?.suficiente;
-  // O periodo vale mesmo sem leitura (contagem corrigida, poucos volumes):
-  // e' contagem e duracao, nao toque.
+  // O tempo por volume vale com poucos volumes (e' relogio, nao leitura);
+  // so' some sem toques que expliquem a contagem.
   const acima = takt.taktMs > 0 && porVolumeMs > takt.taktMs;
   return (
     <>

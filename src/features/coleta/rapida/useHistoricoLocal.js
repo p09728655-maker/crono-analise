@@ -36,6 +36,7 @@ const paraFila = (c) => ({
   // O instante de cada toque do cronometro ao vivo; null no resto. Ver
   // marcasDaConferencia em api/_lib/validar.js.
   marcasMs: c.marcasMs || null,
+  marcasRelogioMs: c.marcasMs ? (c.marcasRelogioMs ?? null) : null,
   salvoEm: c.salvoEm,
 });
 
@@ -83,6 +84,7 @@ export function useHistoricoLocal({ aoGuardar } = {}) {
 
   const salvar = useCallback(async ({
     calculado, maquina, peca, horaInicial, horaFinal, paradas, observacao, marcasMs = null,
+    marcasRelogioMs = null,
   }) => {
     const registro = salvarConferencia({
       maquina: maquina.trim(),
@@ -97,6 +99,7 @@ export function useHistoricoLocal({ aoGuardar } = {}) {
       observacao: String(observacao || '').trim() || null,
       paradas,
       marcasMs,
+      marcasRelogioMs: marcasMs ? marcasRelogioMs : null,
       pecasPorHora: calculado.pecasPorHora,
       pecasPorHoraBruto: calculado.pecasPorHoraBruto,
       paradaMs: calculado.paradaMs,

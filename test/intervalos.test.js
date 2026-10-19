@@ -9,6 +9,7 @@ import {
   CRITERIOS_INTERVALOS, intervalosEntreMarcas, leituraPecaAPeca, periodoPorPeca, unidadeDoPosto,
 } from '../src/domain/cronoanalise.js';
 import { taktDaMedicao } from '../src/domain/demandaSemanal.js';
+import { frasesVolumeAVolume, numerosDaLeitura } from '../src/domain/volumeAVolume.js';
 
 /** Marcas a partir dos intervalos: [60, 60, 200] -> [0, 60, 120, 320] (em s). */
 const marcasDe = (intervalosS, inicioS = 0) => {
@@ -124,49 +125,73 @@ describe('volume em par e ritmo misto — o que a mediana errava', () => {
 });
 
 /**
- * O VEREDITO E' DO PERIODO, paradas dentro — a mesma regua do veredito da
- * semana. Caso da revisao de 19/10: comparar com a linha RODANDO fazia
- * apertar "Parou" melhorar o veredito.
+ * O VEREDITO E' DO RELOGIO, paradas dentro, entre o primeiro e o ultimo
+ * toque — a mesma regua do veredito da semana. Os testes conferem a FRASE
+ * que a tela e a folha escrevem (frasesVolumeAVolume), nao um numero
+ * intermediario: foi assim que a regua errada passou da primeira vez.
  */
-describe('contra o takt vai o periodo, paradas dentro', () => {
-  // 13 volumes a cada 60 s e uma parada de 21 min: ~33 min de periodo.
-  const duracaoMs = (13 * 60 + 1260) * 1000;
+const VOLUME = unidadeDoPosto('EMBALAGEM');
+/** Uma sessao inteira: as marcas (relogio rodando) e o relogio entre toques. */
+function frase({ rodandoS, relogioS, takt = 72000, setupMedidoS = 0, setupPlanejado = false }) {
+  const marcasMs = marcasDe(rodandoS);
+  const periodoPorPecaMs = periodoPorPeca({
+    relogioEntreMarcasMs: relogioS * 1000, volumes: marcasMs.length,
+    setupMedidoMs: setupMedidoS * 1000, setupPlanejado,
+  });
+  const leitura = leituraPecaAPeca({ marcasMs, taktMs: takt, periodoPorPecaMs });
+  return frasesVolumeAVolume({ leitura, takt: { semana: '043-26' }, unidade: VOLUME });
+}
 
-  it('periodo por volume = duracao / volumes', () => {
-    expect(periodoPorPeca({ duracaoMs, pecas: 13 })).toBeCloseTo(duracaoMs / 13, 6);
-    expect(periodoPorPeca({ duracaoMs: 0, pecas: 13 })).toBeNull();
-    expect(periodoPorPeca({ duracaoMs, pecas: 0 })).toBeNull();
+describe('contra o takt vai o relogio entre o primeiro e o ultimo toque', () => {
+  it('relogio / (N - 1): entre o primeiro e o ultimo toque ha N - 1 volumes', () => {
+    expect(periodoPorPeca({ relogioEntreMarcasMs: 975000, volumes: 14 })).toBe(75000);
+    expect(periodoPorPeca({ relogioEntreMarcasMs: 975000, volumes: 1 })).toBeNull();
+    expect(periodoPorPeca({ relogioEntreMarcasMs: null, volumes: 14 })).toBeNull();
   });
 
-  it('marcar a parada NAO melhora o veredito: o periodo e o mesmo', () => {
-    const periodo = periodoPorPeca({ duracaoMs, pecas: 13 });
-    // Sem marcar: a parada fica num intervalo. Marcada: sai do relogio rodando.
-    const semMarcar = leituraPecaAPeca({
-      marcasMs: marcasDe([...Array(12).fill(60), 1260]), taktMs: 72000, periodoPorPecaMs: periodo,
-    });
-    const marcada = leituraPecaAPeca({
-      marcasMs: marcasDe(Array(13).fill(60)), taktMs: 72000, periodoPorPecaMs: periodo,
-    });
-    expect(semMarcar.periodoVsTaktPct).toBeCloseTo(marcada.periodoVsTaktPct, 9);
-    expect(marcada.periodoVsTaktPct).toBeGreaterThan(100); // ~2.040 s / 13 = 157 s contra 72 s
-    // As camadas dizem de onde vem: marcada, rodando ja' fica dentro do takt.
-    expect(marcada.mediaMs).toBe(60000);
+  it('sem estaca de cerca: linha de 75 s em todos os volumes NAO passa no takt de 72 s', () => {
+    // Revisao de 19/10: "duracao / N" dava 69,8 s e aprovava esta linha.
+    const f = frase({ rodandoS: Array(13).fill(75), relogioS: 13 * 75 });
+    expect(f.manchete).toBe('No período, saiu um volume a cada 75.0 s, paradas dentro — 4% acima do takt de 72.0 s.');
+    expect(f.tom).toBe('falha');
+    expect(f.linhas[0]).toMatch(/é o passo dela que está mais lento que o takt/);
   });
 
-  it('com setup PLANEJADO, o setup medido sai do periodo (nao conta duas vezes)', () => {
-    const base = { duracaoMs: 3600000, pecas: 50, setupMedidoMs: 600000 };
-    expect(periodoPorPeca(base)).toBe(72000);
-    expect(periodoPorPeca({ ...base, setupPlanejado: true })).toBe(60000);
+  it('marcar "Parou" NAO melhora o veredito — cada sessao com o seu proprio relogio', () => {
+    // Linha de 60 s que parou 21 min. Sem marcar: a parada fica num
+    // intervalo. Marcada: sai do relogio rodando, mas o relogio entre os
+    // toques e' o mesmo — 13 x 60 + 1.260 = 2.040 s.
+    const semMarcar = frase({ rodandoS: [...Array(12).fill(60), 1260], relogioS: 2040 });
+    const marcada = frase({ rodandoS: Array(13).fill(60), relogioS: 13 * 60 + 1260 });
+    expect(semMarcar.manchete).toBe(marcada.manchete);
+    expect(marcada.manchete).toBe('No período, saiu um volume a cada 156.9 s, paradas dentro — 118% acima do takt de 72.0 s.');
+    // E o diagnostico diz de onde veio, em cada caso.
+    expect(marcada.linhas[0]).toMatch(/paradas marcadas nesta medição/);
+    expect(semMarcar.linhas[0]).toMatch(/paradas que ninguém marcou/);
   });
 
-  it('o takt da medicao diz se ha setup planejado', () => {
+  it('com setup PLANEJADO o setup medido sai do relogio; sem planejado, fica', () => {
+    // 51 volumes, 3.600 s entre o primeiro e o ultimo, 600 s de setup marcado.
+    const base = { rodandoS: Array(50).fill(60), relogioS: 3600, setupMedidoS: 600 };
+    expect(frase(base).manchete).toMatch(/a cada 72.0 s/);
+    expect(frase({ ...base, setupPlanejado: true }).manchete).toMatch(/a cada 60.0 s/);
+  });
+
+  it('sem o relogio entre toques NAO ha veredito — nunca cai para a linha rodando', () => {
+    const marcasMs = marcasDe(Array(13).fill(60));
+    const leitura = leituraPecaAPeca({ marcasMs, taktMs: 72000, periodoPorPecaMs: null });
+    const f = frasesVolumeAVolume({ leitura, unidade: VOLUME });
+    expect(f.manchete).toBe('Com a linha rodando, saiu um volume a cada 60.0 s.');
+    expect(f.linhas[0]).toMatch(/não há veredito contra o takt/);
+    expect(numerosDaLeitura(leitura, {}, VOLUME)[0].valor).toBe('—');
+  });
+
+  it('o takt da medicao diz se ha setup planejado — zero nao conta como planejado', () => {
     const demandas = [{ ano: 2026, numero: 43, pecas: 2200, inicio: '2026-10-19' }];
-    const sem = taktDaMedicao({ demandas, horas: 44, maquinas: 1, data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 1 });
-    const com = taktDaMedicao({
-      demandas, horas: 44, maquinas: 1, data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 1,
-      setup: { setupsDia: 2, dias: 5, minutos: 15 },
-    });
-    expect(sem.setupPlanejado).toBe(false);
+    const args = { demandas, horas: 44, maquinas: 1, data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 1 };
+    expect(taktDaMedicao(args).setupPlanejado).toBe(false);
+    expect(taktDaMedicao({ ...args, setup: { setupsDia: 0, dias: null, minutos: null } }).setupPlanejado).toBe(false);
+    const com = taktDaMedicao({ ...args, setup: { setupsDia: 2, dias: 5, minutos: 15 } });
     expect(com.setupPlanejado).toBe(true);
     // (44 - 2 x 5 x 15 / 60) h x 3.600.000 / 2.200 = 41,5 h -> 67.909 ms
     expect(com.taktMs).toBeCloseTo((41.5 * 3600000) / 2200, 6);

@@ -77,29 +77,36 @@ function normalELacunas(intervalos, fator) {
 }
 
 /**
- * O TEMPO POR VOLUME QUE SE COMPARA COM O TAKT — o do PERIODO, paradas dentro.
+ * O TEMPO POR VOLUME QUE SE COMPARA COM O TAKT — o do relogio, paradas dentro.
  *
  * E' a mesma regua do veredito da semana (vereditoDaSemana, ritmo de
  * relogio): o volume que nao saiu porque a linha estava parada tambem nao
  * entrou no caminhao, marcada a parada ou nao. Comparar o takt com a linha
- * RODANDO dava um veredito otimista do tamanho da parada — e premiava quem
- * aperta "Parou": a mesma producao saia "dentro do takt" com a parada
- * marcada e 122% acima dele sem a marca.
+ * RODANDO premiava quem aperta "Parou" (revisao de 19/10).
+ *
+ * ENTRE O PRIMEIRO E O ULTIMO TOQUE, dividido por N-1 — e nao a duracao
+ * inteira por N. A duracao traz a sobra antes do primeiro toque e depois do
+ * ultimo, e com 14 volumes de 75 s a conta "duracao / N" dava 69,8 s:
+ * aprovava no takt de 72 s uma linha mais lenta que ele em todos os volumes.
+ * Entre o primeiro e o ultimo toque ha' exatamente N-1 volumes. E o relogio
+ * ja' traz dentro a parada anotada DEPOIS do periodo (esquecida no calor da
+ * coleta) — somar paradas as marcas contaria essa duas vezes.
  *
  * O SETUP entra uma vez so', como em leituraDaDemanda: com setup PLANEJADO
- * no cadastro do grupo, ele ja' saiu das horas do takt, entao o setup que a
- * medicao pegou sai daqui tambem. Sem setup planejado, fica dentro.
+ * (maior que zero) ele ja' saiu das horas do takt, entao o setup medido sai
+ * daqui tambem. Conta com o setup da medicao inteira: o que caiu antes do
+ * primeiro toque ou depois do ultimo e' raro, e sairia a mais.
  *
- * Null sem periodo ou sem volume: a tela mostra vazio, nunca zero.
+ * Null sem dois toques ou sem relogio: a tela mostra vazio, nunca zero.
  */
 export function periodoPorPeca({
-  duracaoMs, pecas, setupMedidoMs = 0, setupPlanejado = false,
+  relogioEntreMarcasMs, volumes, setupMedidoMs = 0, setupPlanejado = false,
 } = {}) {
-  const dur = Number(duracaoMs) || 0;
-  const n = Math.floor(Number(pecas) || 0);
-  const desconto = setupPlanejado ? Math.min(Math.max(0, Number(setupMedidoMs) || 0), dur) : 0;
-  if (dur <= 0 || n <= 0 || dur - desconto <= 0) return null;
-  return (dur - desconto) / n;
+  const relogio = Number(relogioEntreMarcasMs) || 0;
+  const n = Math.floor(Number(volumes) || 0);
+  const desconto = setupPlanejado ? Math.min(Math.max(0, Number(setupMedidoMs) || 0), relogio) : 0;
+  if (n < 2 || relogio <= 0 || relogio - desconto <= 0) return null;
+  return (relogio - desconto) / (n - 1);
 }
 
 /**
@@ -111,8 +118,9 @@ export function periodoPorPeca({
  *
  * TRES CAMADAS, do que saiu ao "se nao parasse":
  *
- *  - PERIODO (periodoPorPecaMs, de fora): duracao / volumes, paradas
- *    dentro. E' o que se compara com o takt — ver periodoPorPeca.
+ *  - PERIODO (periodoPorPecaMs, de fora): relogio entre o primeiro e o
+ *    ultimo toque / (N-1), paradas dentro. E' o que se compara com o takt
+ *    — ver periodoPorPeca.
  *  - RODANDO (mediaMs): soma dos intervalos / quantidade, sem as paradas
  *    marcadas no cronometro. A diferenca para o periodo sao elas.
  *  - NORMAL (normalMs): rodando sem as lacunas. A diferenca para o rodando

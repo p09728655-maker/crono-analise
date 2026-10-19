@@ -106,6 +106,19 @@ export function marcasDaConferencia(valor, { pecas, duracaoMs } = {}) {
 }
 
 /**
+ * O relogio entre o primeiro e o ultimo toque (ms, paradas dentro). Mesma
+ * politica das marcas: nao lanca, vira null quando nao serve. Nao pode ser
+ * menor que o trecho das proprias marcas (o relogio rodando ja' e' isso,
+ * sem as paradas) nem maior que o periodo, e nao existe sem marcas.
+ */
+export function relogioDasMarcas(valor, { marcas, duracaoMs } = {}) {
+  if (!Array.isArray(marcas) || marcas.length < 2 || valor == null) return null;
+  const v = Number(valor);
+  if (!Number.isInteger(v) || v < marcas[marcas.length - 1] - marcas[0] || v > duracaoMs) return null;
+  return v;
+}
+
+/**
  * Paradas de uma conferencia rapida: [{motivo, duracaoMs, observacao}].
  *
  * Guardadas como jsonb na propria conferencia, entao a validacao aqui e' a

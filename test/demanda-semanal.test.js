@@ -988,6 +988,18 @@ describe('setup na leitura do quadro', () => {
     expect(comPlanejado.setup.medidoMs).toBe(30 * 60000);
   });
 
+  it('setup planejado ZERO nao tira o setup medido do relogio — senao ele conta zero vezes', () => {
+    // "Este grupo nao faz setup": as horas ficam inteiras, entao o setup que
+    // a medicao pegou e' perda real e fica no relogio (revisao de 19/10).
+    const observado = { pecas: 2666, totalMs: 4 * 3600000, setupMs: 30 * 60000 };
+    const zero = leituraDaDemanda({
+      ...base, ritmoRelogio: 666.5, observado, setup: { setupsDia: 0, dias: null, minutos: null },
+    });
+    expect(zero.setup.zerado).toBe(true);
+    expect(zero.veredito.ritmoRelogio).toBeCloseTo(666.5, 1);
+    expect(zero.setup.medidoMs).toBe(0);
+  });
+
   it('setup que come a jornada inteira tem estado proprio — as horas ESTAO informadas', () => {
     // 200 min no lugar de 20: 5 x 5 x 200 / 60 = 83 h numa jornada de 44.
     // Cair em 'sem-horas' mandaria "informar as horas" — correcao que nao corrige.
