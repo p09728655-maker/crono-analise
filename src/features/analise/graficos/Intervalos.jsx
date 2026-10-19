@@ -3,6 +3,7 @@ import { claro, referencia, serie } from '../../../theme/tokensAnalise.js';
 import { emSegundos } from '../conferencias/formato.js';
 import { EIXO, Legenda, Texturas, VazioGrafico, passoAgradavel, useLarguraContainer } from './comuns.jsx';
 import { est } from './estilos.js';
+import { larguraDoTexto, rotulosSemColisao } from './rotulos.js';
 
 /** Barras que ganham o valor escrito em cima (lacunas e cortadas): as maiores, ate' aqui. */
 const MAX_ROTULOS_VALOR = 6;
@@ -42,7 +43,8 @@ const COR_TEXTO_LACUNA = claro.critico;
  *
  * As linhas de referencia tem contorno branco por baixo (para nao sumirem
  * dentro das barras azuis), entrada propria na legenda e o rotulo na calha
- * da direita, fora das barras.
+ * da direita, fora das barras. Numero escrito no grafico nunca encosta em
+ * outro (rotulos.js): o que nao cabe sai inteiro.
  *
  * O TETO do eixo e' tres vezes o ritmo normal (ou um pouco acima do takt, o que
  * for maior). Uma lacuna de vinte minutos numa linha de um minuto achataria
@@ -106,30 +108,32 @@ export function GraficoIntervalos({
   for (let v = 0; v <= maxY + 1e-6; v += passoY) grades.push(v);
 
   const lacunas = new Set((leitura.lacunas || []).map((l) => l.indice));
-  // Valor escrito em cima: das lacunas e das barras cortadas no teto, as
-  // maiores primeiro.
-  const rotularValor = new Set(intervalos
+  // Lacunas e cortadas, da maior para a menor: e' a ordem de prioridade
+  // quando dois rotulos disputam o mesmo lugar.
+  const destaques = intervalos
     .map((ms, i) => ({ ms, i }))
     .filter((x) => lacunas.has(x.i) || x.ms > maxY)
-    .sort((a, b) => b.ms - a.ms)
-    .slice(0, MAX_ROTULOS_VALOR)
-    .map((x) => x.i));
+    .sort((a, b) => b.ms - a.ms);
+
+  // Valor escrito em cima: das lacunas e das barras cortadas no teto, as
+  // maiores primeiro, sem dois no mesmo lugar (ver rotulos.js).
+  const rotularValor = rotulosSemColisao(
+    destaques.map((x) => ({ chave: x.i, x: xCentro(x.i), largura: larguraDoTexto(emSegundos(x.ms)) })),
+    { maximo: MAX_ROTULOS_VALOR },
+  );
 
   // O EIXO DE BAIXO conta VOLUMES: o primeiro intervalo termina no 2o
-  // volume. Rotulo a cada passo redondo que caiba; o volume de cada lacuna
-  // sempre aparece, em destaque, e os vizinhos que colidiriam com ele saem.
+  // volume. Primeiro o numero de cada lacuna (a maior vence a vizinha),
+  // depois os redondos a cada passo que caiba, por ultimo o primeiro
+  // volume — o que encostaria num ja' escrito sai.
   const passoX = PASSOS_X.find((p) => p * banda >= ESPACO_ROTULO_X) || PASSOS_X[PASSOS_X.length - 1];
-  const xsLacuna = [...lacunas].map(xCentro);
-  const rotulosX = intervalos
-    .map((_, i) => i)
-    .filter((i) => {
-      if (lacunas.has(i)) return true;
-      const volume = i + 2;
-      const redondo = volume % passoX === 0 || (i === 0 && (passoX - (volume % passoX)) * banda >= ESPACO_ROTULO_X);
-      return redondo && xsLacuna.every((x) => Math.abs(x - xCentro(i)) >= ESPACO_ROTULO_X - 6);
-    });
-
-  const comRotuloX = new Set(rotulosX);
+  const candidatoX = (i) => ({ chave: i, x: xCentro(i), largura: larguraDoTexto(i + 2) });
+  const comRotuloX = rotulosSemColisao([
+    ...destaques.filter((x) => lacunas.has(x.i)).map((x) => candidatoX(x.i)),
+    ...intervalos.map((_, i) => i).filter((i) => (i + 2) % passoX === 0).map(candidatoX),
+    candidatoX(0),
+  ]);
+  const rotulosX = [...comRotuloX];
 
   const descricao = (ms, i) => {
     const partes = [`${capital(unidade.singular)} ${i + 2}: ${emSegundos(ms)}`];
@@ -249,14 +253,20 @@ export function GraficoIntervalos({
             );
           })}
 
+          {/* Contorno branco por baixo das linhas, TODOS antes de qualquer
+              linha: a linha atravessa as barras azuis sem sumir dentro
+              delas, e o contorno de uma nao apaga a outra quando as duas
+              estao a um pixel (takt e rodando juntos — justamente quando a
+              comparacao mais importa). O takt e' desenhado por ultimo. */}
           {linhasDeReferencia.map((r) => (
+            <line
+              key={`contorno-${r.chave}`} pointerEvents="none"
+              x1={margem.esq} x2={largura - margem.dir} y1={yDe(r.ms)} y2={yDe(r.ms)}
+              stroke={claro.papel} strokeWidth={r.espessura + 3} strokeOpacity="0.85"
+            />
+          ))}
+          {[...linhasDeReferencia].reverse().map((r) => (
             <g key={r.chave} pointerEvents="none">
-              {/* Contorno branco por baixo: a linha atravessa as barras azuis
-                  sem sumir dentro delas. */}
-              <line
-                x1={margem.esq} x2={largura - margem.dir} y1={yDe(r.ms)} y2={yDe(r.ms)}
-                stroke={claro.papel} strokeWidth={r.espessura + 3} strokeOpacity="0.85"
-              />
               <line
                 x1={margem.esq} x2={largura - margem.dir} y1={yDe(r.ms)} y2={yDe(r.ms)}
                 stroke={r.cor} strokeWidth={r.espessura} strokeDasharray={r.traco}

@@ -227,7 +227,9 @@ const janela = p.getByRole('region', { name: /Volume a volume/ });
 await janela.getByText(/No período, saiu um volume a cada 70.8 s, paradas dentro/).waitFor({ timeout: 8000 });
 const textoJanela = await janela.innerText();
 checar(/dentro do takt de 72.0 s, com 2% de folga/.test(textoJanela), 'veredito pelo relogio entre toques: 70.8 s dentro do takt de 72.0 s');
-checar(/COM A LINHA RODANDO[\s\S]*70.8 s/i.test(textoJanela) && /SEM AS LACUNAS[\s\S]*60.0 s/i.test(textoJanela),
+// O valor logo depois do rotulo do proprio cartao — nao um 70.8 qualquer
+// mais adiante (manchete, rotulo do grafico).
+checar(/POR VOLUME COM A LINHA RODANDO\s*70\.8 s/i.test(textoJanela) && /SEM AS LACUNAS\s*60\.0 s/i.test(textoJanela),
   'as camadas: rodando 70.8 s, sem as lacunas 60.0 s');
 checar(/1 lacuna — intervalo maior que o dobro do normal \(60.0 s\)/.test(textoJanela), 'aponta a lacuna contra o normal de 60.0 s');
 checar(/Faltou caixa às 9h10/.test(textoJanela), 'a observacao aparece junto da lacuna');

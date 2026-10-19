@@ -206,7 +206,8 @@ export default function VolumeAVolume({
                 )}
               </div>
 
-              <ComoLer leitura={r.leitura} unidade={unidade} />
+              {/* Os termos definidos so' aparecem com a leitura completa. */}
+              {r.leitura.suficiente && <ComoLer leitura={r.leitura} unidade={unidade} />}
             </>
           )}
         </div>
@@ -240,16 +241,19 @@ function Indicadores({
     chave: 'volumes',
     rotulo: capital(unidade.plural),
     valor: String(conferencia.pecas),
-    sub: `${leitura.n} ${leitura.n === 1 ? 'intervalo medido' : 'intervalos medidos'}`,
+    // Com a leitura insuficiente, o cartao "Intervalos tocados" ja' diz isso.
+    sub: leitura.suficiente ? `${leitura.n} ${leitura.n === 1 ? 'intervalo medido' : 'intervalos medidos'}` : null,
   };
-  // A soma das paradas marcadas na medicao inteira — o mesmo numero da
-  // coluna "Parado" da lista e do "Parado (marcado)" da folha.
+  // A soma das paradas marcadas na medicao INTEIRA — o mesmo numero da
+  // coluna "Parado" da lista e do "Parado (marcado)" da folha. Inclui a
+  // troca antes do 1o toque, que os dois tempos por volume nao contem: o
+  // subtitulo diz isso, para a diferenca entre eles nao ser lida como ela.
   const paradas = {
     chave: 'paradas',
     rotulo: 'Paradas marcadas',
     valor: par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—',
     sub: par.n > 0
-      ? `${par.n} ${par.n === 1 ? 'parada' : 'paradas'} na medição`
+      ? `${par.n} ${par.n === 1 ? 'parada' : 'paradas'} na medição inteira, também fora dos toques`
       : 'nenhuma parada marcada',
   };
   const principais = leitura.suficiente
@@ -304,14 +308,15 @@ function ValorComUnidade({ valor }) {
 /**
  * O criterio, por extenso — o mesmo da nota da folha A4, item por item.
  * Contra o takt vai o relogio entre o primeiro e o ultimo toque dividido
- * pelos INTERVALOS (volumes - 1), como faz periodoPorPeca.
+ * pelos INTERVALOS (volumes - 1), menos o setup marcado no trecho quando ha'
+ * setup planejado — exatamente periodoPorPeca.
  */
 function definicoes(leitura, unidade) {
   const toque = unidade.singular === 'volume' ? 'volume' : 'toque';
   const { fatorLacuna, minIntervalos } = leitura.criterios;
   return [
     ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo — o cronômetro começa num instante qualquer.`],
-    [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. É o que vai contra o takt — a mesma régua do programa da semana.'],
+    [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, e só quando o grupo tem setup planejado (ele já saiu das horas do takt). É o que vai contra o takt — a mesma régua do programa da semana.'],
     [`Por ${unidade.singular} com a linha rodando`, 'soma dos intervalos dividida pela quantidade de intervalos.'],
     ['Lacuna', `intervalo maior que ${fatorLacuna}× o normal — a média dos intervalos que não são lacuna (o "sem as lacunas"). Parada marcada e passo lento não viram lacuna.`],
     ['Leitura', `a partir de ${minIntervalos} intervalos.${unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é colado em volumes.' : ''}`],
@@ -338,8 +343,8 @@ function notaDoCriterio(leitura, unidade) {
   return `Intervalo = tempo de um ${unidade.singular === 'volume' ? 'volume' : 'toque'} até o seguinte, com a linha rodando: `
     + 'as paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) '
     + 'continuam dentro dos intervalos. O primeiro toque não tem intervalo — o cronômetro começa num instante '
-    + 'qualquer. Contra o takt vai o relógio do primeiro ao último toque ÷ intervalos, com as paradas dentro — '
-    + 'a mesma régua do programa da semana. '
+    + 'qualquer. Contra o takt vai o relógio do primeiro ao último toque ÷ intervalos, com as paradas dentro '
+    + '(sem o setup marcado entre os toques, quando o grupo tem setup planejado) — a mesma régua do programa da semana. '
     + 'Com a linha rodando = soma dos intervalos ÷ quantidade. '
     + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal — a média dos intervalos que não são lacuna. `
     + `Leitura a partir de ${leitura.criterios.minIntervalos} intervalos.`
