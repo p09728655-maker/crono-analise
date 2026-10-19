@@ -11,6 +11,7 @@ import MenuLateral from '../../components/MenuLateral.jsx';
 import ConfirmarSaida from '../../components/SairDoSistema.jsx';
 import MotivosParada from '../analise/MotivosParada.jsx';
 import Maquinas from '../analise/Maquinas.jsx';
+import Produtos from '../analise/Produtos.jsx';
 import Analistas from '../analise/Analistas.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import ImportarRoteiro from './ImportarRoteiro.jsx';
@@ -52,6 +53,7 @@ export default function ListaEstudos({
   const [verChaveIa, setVerChaveIa] = useState(false);
   const [verMotivos, setVerMotivos] = useState(false);
   const [verMaquinas, setVerMaquinas] = useState(false);
+  const [verProdutos, setVerProdutos] = useState(false);
   const [verAnalistas, setVerAnalistas] = useState(false);
   const [busca, setBusca] = useState('');
   const [saindo, setSaindo] = useState(false);
@@ -124,6 +126,7 @@ export default function ListaEstudos({
       aoVerChaveIa={() => setVerChaveIa(true)}
       aoVerMotivos={() => setVerMotivos(true)}
       aoVerMaquinas={() => setVerMaquinas(true)}
+      aoVerProdutos={() => setVerProdutos(true)}
       aoVerAnalistas={() => setVerAnalistas(true)}
       usuario={eu}
       aoTrocarModo={aoTrocarModo}
@@ -357,6 +360,7 @@ export default function ListaEstudos({
       {/* Cadastro dos motivos de parada — trabalho de PC, so' no menu lateral. */}
       {verMotivos && <MotivosParada aoFechar={() => setVerMotivos(false)} />}
       {verMaquinas && <Maquinas aoFechar={() => setVerMaquinas(false)} />}
+      {verProdutos && <Produtos aoFechar={() => setVerProdutos(false)} />}
 
       {verAnalistas && (
         <Analistas

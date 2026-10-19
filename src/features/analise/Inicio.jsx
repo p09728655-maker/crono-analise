@@ -11,6 +11,7 @@ import Cronometro from '../../components/Cronometro.jsx';
 import { RECURSOS } from '../../components/iconesRecursos.jsx';
 import MotivosParada from './MotivosParada.jsx';
 import Maquinas from './Maquinas.jsx';
+import Produtos from './Produtos.jsx';
 import Analistas from './Analistas.jsx';
 
 
@@ -52,6 +53,7 @@ export default function Inicio({
   const [verChaveIa, setVerChaveIa] = useState(false);
   const [verMotivos, setVerMotivos] = useState(false);
   const [verMaquinas, setVerMaquinas] = useState(false);
+  const [verProdutos, setVerProdutos] = useState(false);
   const [verAnalistas, setVerAnalistas] = useState(false);
 
   useEffect(() => {
@@ -101,6 +103,7 @@ export default function Inicio({
         aoVerChaveIa={() => setVerChaveIa(true)}
         aoVerMotivos={() => setVerMotivos(true)}
         aoVerMaquinas={() => setVerMaquinas(true)}
+        aoVerProdutos={() => setVerProdutos(true)}
         aoVerAnalistas={() => setVerAnalistas(true)}
         usuario={eu}
         aoTrocarModo={aoTrocarModo}
@@ -325,6 +328,7 @@ export default function Inicio({
       {verChaveIa && <ChaveIa modo="analise" aoFechar={() => setVerChaveIa(false)} />}
       {verMotivos && <MotivosParada aoFechar={() => setVerMotivos(false)} />}
       {verMaquinas && <Maquinas aoFechar={() => setVerMaquinas(false)} />}
+      {verProdutos && <Produtos aoFechar={() => setVerProdutos(false)} />}
       {verAnalistas && (
         <Analistas
           aoFechar={() => { setVerAnalistas(false); quemSouEu().then(setEu).catch(() => {}); }}

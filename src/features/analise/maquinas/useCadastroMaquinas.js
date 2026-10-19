@@ -1,5 +1,5 @@
 /**
- * O CADASTRO no servidor: maquinas, grupos e toda acao que os altera.
+ * O CADASTRO no servidor: maquinas, grupos, produtos e toda acao que os altera.
  *
  * Toda acao passa por `aplicar`: trava os botoes, limpa o erro anterior,
  * executa, RECARREGA o cadastro inteiro e reavisa o resto do app
@@ -18,12 +18,13 @@ import { adotarMaquinas } from '../../../lib/maquinas.js';
 export function useCadastroMaquinas() {
   const [maquinas, setMaquinas] = useState(null);
   const [grupos, setGrupos] = useState([]);
+  const [produtos, setProdutos] = useState([]);
   const [erro, setErro] = useState(null);
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
     listarCadastroMaquinas()
-      .then((c) => { setMaquinas(c.maquinas); setGrupos(c.grupos); })
+      .then((c) => { setMaquinas(c.maquinas); setGrupos(c.grupos); setProdutos(c.produtos); })
       .catch((e) => setErro(e.message));
   }, []);
 
@@ -36,6 +37,7 @@ export function useCadastroMaquinas() {
       const c = await listarCadastroMaquinas();
       setMaquinas(c.maquinas);
       setGrupos(c.grupos);
+      setProdutos(c.produtos);
       adotarMaquinas(c);
     } catch (e) { setErro(e.message); ok = false; }
     setOcupado(false);
@@ -44,5 +46,5 @@ export function useCadastroMaquinas() {
 
   const recarregar = () => aplicar(() => Promise.resolve());
 
-  return { maquinas, grupos, erro, ocupado, aplicar, recarregar };
+  return { maquinas, grupos, produtos, erro, ocupado, aplicar, recarregar };
 }

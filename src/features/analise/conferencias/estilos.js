@@ -466,6 +466,11 @@ export const est = {
   },
   vavComoLerItem: { margin: 0, ...tipo('legenda'), color: t.textoMedio, lineHeight: 1.5 },
   vavComoLerTermo: { fontWeight: 700, color: t.texto },
+  // Atalhos para os cadastros que a pagina usa (produtos, motivos): a
+  // direita, discretos — ferramenta, nao conteudo.
+  barraCadastros: {
+    display: 'flex', gap: espaco.sm, justifyContent: 'flex-end', flexWrap: 'wrap', marginBottom: espaco.md,
+  },
   // A medicao aberta no painel, na lista: fundo azul-claro e o botao
   // marcado — da' para ver qual linha esta' sendo lida la' embaixo.
   linhaSelecionada: { background: '#EEF4FC' },

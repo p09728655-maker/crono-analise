@@ -1,7 +1,7 @@
 import { formatarCronometro, formatarDuracao } from '../../../domain/cronoanalise.js';
 import Paradas from './Paradas.jsx';
 import Observacao from './Observacao.jsx';
-import { CampoMaquina, CiclosFuracao, FuracaoPassante } from './CamposDaPeca.jsx';
+import { CampoMaquina, CampoProduto, CiclosFuracao, FuracaoPassante } from './CamposDaPeca.jsx';
 import { AvisoSalvar, BotaoSalvar, ComParadas, RitmoDoPeriodo, SemAParada } from './Indicadores.jsx';
 import { est } from './estilos.js';
 
@@ -13,7 +13,7 @@ import { est } from './estilos.js';
  */
 export default function ResultadoAoVivo({
   crono, resultado, excede, totalParadaMs, motivos, paradas,
-  maquina, aoTrocarMaquina, peca, aoTrocarPeca, ciclosPorPeca, aoTrocarCiclos,
+  maquina, aoTrocarMaquina, peca, aoTrocarPeca, produtos, ciclosPorPeca, aoTrocarCiclos,
   furacaoPassante, aoTrocarPassante,
   observacao, aoTrocarObservacao, jaSalva,
   aoNovaConferencia, unidade, marcasDescartadas, salvo, aoSalvar, aoSair,
@@ -69,13 +69,9 @@ export default function ResultadoAoVivo({
           </label>
           <label style={est.campoHora}>
             <span style={est.rotuloCampo}>{rotuloPeca}</span>
-            <input
-              type="text"
-              placeholder={exemploPeca}
-              value={peca}
-              onChange={(ev) => aoTrocarPeca(ev.target.value)}
-              style={est.inputTexto}
-              aria-label={ariaPeca}
+            <CampoProduto
+              valor={peca} aoTrocar={aoTrocarPeca} produtos={produtos}
+              aria={ariaPeca} placeholder={exemploPeca}
             />
           </label>
         </div>

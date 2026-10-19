@@ -1,7 +1,7 @@
 import { vibrar } from '../../../lib/hooks.js';
 import Paradas from './Paradas.jsx';
 import Observacao from './Observacao.jsx';
-import { CampoMaquina, CiclosFuracao, FuracaoPassante } from './CamposDaPeca.jsx';
+import { CampoMaquina, CampoProduto, CiclosFuracao, FuracaoPassante } from './CamposDaPeca.jsx';
 import { est } from './estilos.js';
 import { agoraHM } from './formato.js';
 
@@ -15,7 +15,7 @@ import { agoraHM } from './formato.js';
  * descrevem: quanto daquele intervalo a maquina NAO estava produzindo.
  */
 export default function FormularioHorarios({
-  maquina, aoTrocarMaquina, peca, aoTrocarPeca, ciclosPorPeca, aoTrocarCiclos,
+  maquina, aoTrocarMaquina, peca, aoTrocarPeca, produtos, ciclosPorPeca, aoTrocarCiclos,
   furacaoPassante, aoTrocarPassante,
   horaInicial, aoTrocarHoraInicial, horaFinal, aoTrocarHoraFinal,
   pecasPeriodo, aoTrocarPecas, duracaoMs, motivos, paradas,
@@ -30,13 +30,9 @@ export default function FormularioHorarios({
         </label>
         <label style={est.campoHora}>
           <span style={est.rotuloCampo}>PEÇA</span>
-          <input
-            type="text"
-            placeholder="Ex: Lateral Mesa"
-            value={peca}
-            onChange={(ev) => aoTrocarPeca(ev.target.value)}
-            style={est.inputTexto}
-            aria-label="Nome da peça"
+          <CampoProduto
+            valor={peca} aoTrocar={aoTrocarPeca} produtos={produtos}
+            aria="Nome da peça" placeholder="Ex: Lateral Mesa"
           />
         </label>
       </div>

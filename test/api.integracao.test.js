@@ -1399,6 +1399,110 @@ rodar('API — integracao com Postgres', () => {
     await motivosApi(fingirReq({ metodo: 'POST', corpo: { motivos: muitos } }), res);
     expect(res.statusCode).toBe(400);
   });
+
+  /**
+   * MOTIVO POR GRUPO: a embalagem nao ve' "troca de broca". O que precisa
+   * ser provado e' a fronteira: grupo de outra empresa nao entra, e o setup
+   * — o unico motivo que o calculo trata diferente — nunca fica restrito.
+   */
+  it('motivo vale para grupos escolhidos; vazio = todos; setup nunca se restringe', async () => {
+    const g = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { grupo: { codigo: '0077', nome: 'EMBALAGEM MOTIVOS' } } }), g);
+    const grupoId = g.corpo.grupo.id;
+
+    const caixa = await criarMotivo({ rotulo: 'Falta de caixa', grupos: [grupoId, grupoId] });
+    expect(caixa.statusCode).toBe(201);
+    expect(caixa.corpo.motivo.grupos).toEqual([grupoId]);
+
+    const geral = await criarMotivo({ rotulo: 'Falta de energia geral' });
+    expect(geral.corpo.motivo.grupos).toEqual([]);
+
+    // Grupo de outra empresa (ou inexistente) nao entra.
+    const alheio = await criarMotivo({ rotulo: 'Motivo alheio', grupos: [crypto.randomUUID()] });
+    expect(alheio.statusCode).toBe(404);
+
+    // Volta a valer para todos com lista vazia.
+    const todos = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'PATCH', query: { id: caixa.corpo.motivo.id }, corpo: { grupos: [] } }), todos);
+    expect(todos.corpo.motivo.grupos).toEqual([]);
+
+    // O setup fica para todos — criado ou editado.
+    const semeado = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'POST', corpo: { motivos: [{ codigo: 'setup', rotulo: 'Setup / Troca' }] } }), semeado);
+    const setup = semeado.corpo.motivos.find((m) => m.codigo === 'setup');
+    const restringir = fingirRes();
+    await motivosApi(fingirReq({ metodo: 'PATCH', query: { id: setup.id }, corpo: { grupos: [grupoId] } }), restringir);
+    expect(restringir.statusCode).toBe(400);
+    expect(restringir.corpo.erro).toMatch(/setup vale para todos/);
+
+    // A lista devolve os grupos para o tablet filtrar.
+    const lista = fingirRes();
+    await motivosApi(fingirReq({}), lista);
+    expect(lista.corpo.motivos.every((m) => Array.isArray(m.grupos))).toBe(true);
+  });
+
+  /* ------------------------------------------------- cadastro de produtos */
+  /**
+   * Produtos vivem DENTRO de /api/maquinas (?produtos=1) — o projeto esta'
+   * no teto de funcoes da Vercel. O que se prova: produto e' do GRUPO, a
+   * unicidade ignora caixa dentro do grupo, o analista mantem (RLS ligada,
+   * pelo token dele), produto em uso so' se desativa, e o cadastro que o
+   * tablet guarda ja' traz a lista.
+   */
+  it('produto por grupo: cria, recusa repetido, analista mantem, em uso so desativa', async () => {
+    const g = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { grupo: { codigo: '0078', nome: 'EMBALAGEM PRODUTOS' } } }), g);
+    const grupoId = g.corpo.grupo.id;
+    const pedir = async (opcoes) => {
+      const res = fingirRes();
+      await maquinasApi(fingirReq({ ...opcoes, query: { produtos: '1', ...(opcoes.query || {}) } }), res);
+      return res;
+    };
+
+    const sem = await pedir({ metodo: 'POST', corpo: { nome: 'Rack Sirius 1.6' } });
+    expect(sem.statusCode).toBe(400);
+
+    const rack = await pedir({ metodo: 'POST', corpo: { nome: '  Rack   Sirius 1.6 ', codigo: '12345', grupoId } });
+    expect(rack.statusCode).toBe(201);
+    expect(rack.corpo.produto).toMatchObject({ nome: 'Rack Sirius 1.6', codigo: '12345', ativo: true, grupo_id: grupoId });
+
+    const repetido = await pedir({ metodo: 'POST', corpo: { nome: 'rack sirius 1.6', grupoId } });
+    expect(repetido.statusCode).toBe(409);
+
+    // O ANALISTA mantem o cadastro — pelo token dele, com a RLS avaliando.
+    const analista = await criarAnalista({
+      nome: 'Produtos Analista', email: 'produtos@patrimar.com', senha: 'senhaboa123',
+    });
+    const doAnalista = await pedir({
+      metodo: 'POST', token: tokenDe(analista.corpo.usuario.id),
+      corpo: { nome: 'Armário Encanto', grupoId },
+    });
+    expect(doAnalista.statusCode).toBe(201);
+
+    // O cadastro que o tablet guarda ja' traz os produtos.
+    const cadastro = fingirRes();
+    await maquinasApi(fingirReq({}), cadastro);
+    expect(cadastro.corpo.produtos.map((p) => p.nome)).toEqual(expect.arrayContaining(['Rack Sirius 1.6', 'Armário Encanto']));
+
+    // Em uso: uma medicao gravou o nome -> excluir recusa, desativar passa.
+    await sql`
+      INSERT INTO conferencias (empresa_id, client_id, maquina, peca, iniciado_em, finalizado_em, duracao_ms, pecas, salvo_em)
+      VALUES (${EMPRESA}, ${crypto.randomUUID()}, 'EMBALAGEM 01', 'RACK SIRIUS 1.6',
+              now() - interval '1 hour', now(), 3600000, 40, now())`;
+    const excluir = await pedir({ metodo: 'DELETE', query: { id: rack.corpo.produto.id } });
+    expect(excluir.statusCode).toBe(400);
+    const desativar = await pedir({ metodo: 'PATCH', query: { id: rack.corpo.produto.id }, corpo: { ativo: false, codigo: '' } });
+    expect(desativar.corpo.produto).toMatchObject({ ativo: false, codigo: null });
+
+    // Sem uso: exclui.
+    const fora = await pedir({ metodo: 'DELETE', query: { id: doAnalista.corpo.produto.id } });
+    expect(fora.statusCode).toBe(200);
+
+    // Grupo apagado leva os produtos dele.
+    await maquinasApi(fingirReq({ metodo: 'DELETE', query: { grupo: grupoId } }), fingirRes());
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM produtos WHERE grupo_id = ${grupoId}`;
+    expect(n).toBe(0);
+  });
   /* ------------------------------------- cadastro de analistas e sessao */
   /**
    * O que precisa ser provado aqui e' o que protege PESSOA e HISTORICO: a

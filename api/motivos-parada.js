@@ -14,12 +14,21 @@
  *  - Motivo em uso NAO se exclui, se DESATIVA. Desativado some da coleta e
  *    continua nomeando as paradas antigas. Excluir so' passa quando nada no
  *    banco aponta para aquele codigo — e' o caso do motivo criado errado.
+ *
+ *  - GRUPOS diz em que maquinas o motivo aparece: vazio = todas; com
+ *    grupos, so' no tablet das maquinas desses grupos (a embalagem nao ve'
+ *    "troca de broca"). O SETUP vale sempre para todos: e' o unico motivo
+ *    que o calculo trata diferente (sai do relogio do takt e entra no setup
+ *    do programa), e um grupo sem ele mediria troca como parada comum.
  */
 import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
 import { inteiro, lista, texto, uuid } from './_lib/validar.js';
 
 const RE_CODIGO = /^[a-z][a-z0-9_]{1,39}$/;
+
+/** O motivo que o calculo trata como troca — nunca restrito a grupos. */
+const SETUP = 'setup';
 
 /**
  * Codigo canonico a partir do que o usuario digitou.
@@ -64,8 +73,28 @@ async function estaEmUso(db, empresaId, codigo, rotulo) {
   return Boolean(usada);
 }
 
+/**
+ * Os grupos de maquina em que o motivo aparece. Lista vazia = todos. Cada
+ * id tem de ser grupo DESTA empresa: um id de fora gravaria um motivo que
+ * nao aparece em lugar nenhum, sem ninguem saber por que.
+ */
+async function gruposValidos(db, empresaId, valor, codigo) {
+  if (valor == null) return [];
+  const ids = [...new Set(lista(valor, 'grupos', { max: 50 }).map((v, i) => uuid(v, `grupos[${i}]`)))];
+  if (!ids.length) return [];
+  if (codigo === SETUP) {
+    throw erroValidacao(
+      'O setup vale para todos os grupos: e o motivo que o calculo do takt e do programa trata como troca.',
+    );
+  }
+  const achados = await db`
+    SELECT id FROM grupos_maquina WHERE empresa_id = ${empresaId} AND id IN ${db(ids)}`;
+  if (achados.length !== ids.length) throw naoEncontrado('Grupo de maquina nao encontrado');
+  return ids;
+}
+
 const listar = (db, empresaId) => db`
-  SELECT id, codigo, rotulo, acao, ordem, ativo
+  SELECT id, codigo, rotulo, acao, ordem, ativo, grupos
     FROM motivos_parada
    WHERE empresa_id = ${empresaId}
    ORDER BY ordem, criado_em`;
@@ -116,6 +145,7 @@ export default handler(async (req, res) => {
       const rotulo = texto(corpo.rotulo, 'rotulo', { obrigatorio: true, max: 60 });
       const codigo = codigoDe(corpo.codigo || rotulo);
       const acao = texto(corpo.acao, 'acao', { max: 300 });
+      const grupos = await gruposValidos(db, empresaId, corpo.grupos, codigo);
 
       const [existe] = await db`
         SELECT rotulo FROM motivos_parada WHERE empresa_id = ${empresaId} AND codigo = ${codigo}`;
@@ -127,9 +157,9 @@ export default handler(async (req, res) => {
         SELECT coalesce(max(ordem) + 1, 0) AS proxima
           FROM motivos_parada WHERE empresa_id = ${empresaId}`;
       const [motivo] = await db`
-        INSERT INTO motivos_parada (empresa_id, codigo, rotulo, acao, ordem)
-        VALUES (${empresaId}, ${codigo}, ${rotulo}, ${acao}, ${proxima})
-        RETURNING id, codigo, rotulo, acao, ordem, ativo`;
+        INSERT INTO motivos_parada (empresa_id, codigo, rotulo, acao, ordem, grupos)
+        VALUES (${empresaId}, ${codigo}, ${rotulo}, ${acao}, ${proxima}, ${grupos}::uuid[])
+        RETURNING id, codigo, rotulo, acao, ordem, ativo, grupos`;
       return json(res, 201, { motivo });
     }
 
@@ -166,9 +196,12 @@ export default handler(async (req, res) => {
           + 'Para trocar o nome que aparece na tela, mande "rotulo".',
         );
       }
-      if (!tem('rotulo') && !tem('acao') && !tem('ativo') && !tem('ordem')) {
-        throw erroValidacao('Nada a atualizar: informe "rotulo", "acao", "ativo" ou "ordem"');
+      if (!tem('rotulo') && !tem('acao') && !tem('ativo') && !tem('ordem') && !tem('grupos')) {
+        throw erroValidacao('Nada a atualizar: informe "rotulo", "acao", "ativo", "ordem" ou "grupos"');
       }
+      // Validado antes do primeiro UPDATE: grupo errado nao deixa o nome
+      // novo gravado pela metade.
+      const grupos = tem('grupos') ? await gruposValidos(db, empresaId, corpo.grupos, atual.codigo) : undefined;
 
       if (tem('rotulo')) {
         const rotulo = texto(corpo.rotulo, 'rotulo', { obrigatorio: true, max: 60 });
@@ -184,9 +217,12 @@ export default handler(async (req, res) => {
         const ordem = inteiro(corpo.ordem, 'ordem', { min: 0, max: 999, padrao: 0 });
         await db`UPDATE motivos_parada SET ordem = ${ordem} WHERE id = ${motivoId}`;
       }
+      if (grupos !== undefined) {
+        await db`UPDATE motivos_parada SET grupos = ${grupos}::uuid[] WHERE id = ${motivoId}`;
+      }
 
       const [motivo] = await db`
-        SELECT id, codigo, rotulo, acao, ordem, ativo FROM motivos_parada WHERE id = ${motivoId}`;
+        SELECT id, codigo, rotulo, acao, ordem, ativo, grupos FROM motivos_parada WHERE id = ${motivoId}`;
       return json(res, 200, { motivo });
     }
 

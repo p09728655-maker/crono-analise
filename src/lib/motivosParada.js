@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { MOTIVOS_PARADA, definirCatalogoParadas } from '../domain/cronoanalise.js';
 import { listarMotivosParada } from './api.js';
 
@@ -70,9 +70,31 @@ export const motivosAtivos = () => ativos;
 
 const assinar = (fn) => { ouvintes.add(fn); return () => ouvintes.delete(fn); };
 
-/** Hook da lista ATIVA — o que uma tela de coleta oferece. */
+/** Hook da lista ATIVA inteira — o PC, que edita parada de qualquer posto. */
 export function useMotivosParada() {
   return useSyncExternalStore(assinar, motivosAtivos, motivosAtivos);
+}
+
+/**
+ * Os motivos que o tablet oferece NUMA MAQUINA: os que valem para todos
+ * (grupos vazio) e os do grupo dela. A embalagem nao ve' "troca de broca";
+ * a furadeira nao ve' "falta de caixa".
+ *
+ * Maquina sem grupo (grupoId nulo) fica so' com os que valem para todos.
+ * Se o filtro nao deixar nada — cadastro so' com motivos de outros grupos
+ * —, volta aos motivos de fabrica: o operador diante da maquina parada
+ * nunca fica sem onde tocar.
+ */
+export function motivosDoGrupo(motivos, grupoId) {
+  const lista = (motivos || []).filter((m) => !m.grupos?.length || (grupoId && m.grupos.includes(grupoId)));
+  return lista.length ? lista : MOTIVOS_PARADA;
+}
+
+/** Hook dos motivos de UMA maquina (pelo grupo dela) — as telas de coleta. */
+export function useMotivosDoGrupo(grupoId) {
+  const ativosAgora = useSyncExternalStore(assinar, motivosAtivos, motivosAtivos);
+  // Memo: lista nova a cada render faria quem depende dela recalcular sem motivo.
+  return useMemo(() => motivosDoGrupo(ativosAgora, grupoId || null), [ativosAgora, grupoId]);
 }
 
 /**

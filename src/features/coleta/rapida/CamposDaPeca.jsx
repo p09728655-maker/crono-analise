@@ -1,4 +1,5 @@
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
+import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import { vibrar } from '../../../lib/hooks.js';
 import { est } from './estilos.js';
 
@@ -14,6 +15,26 @@ export function CampoMaquina({ valor, aoTrocar }) {
       aoTrocar={aoTrocar}
       aria="Máquina"
       ariaTexto="Nome da máquina"
+      estilos={{ input: est.inputTexto, select: est.selectMaquina, link: est.linkCadastro }}
+      aoEscolher={() => vibrar(30)}
+    />
+  );
+}
+
+/**
+ * O campo do produto/peca desta tela — a regra mora em SeletorProduto; a
+ * lista ja' chega filtrada pelo grupo da maquina (produtosDoGrupo). Sem
+ * produto cadastrado para o posto, e' o campo de texto de sempre, com o
+ * mesmo rotulo de acessibilidade de antes.
+ */
+export function CampoProduto({ valor, aoTrocar, produtos, aria, placeholder }) {
+  return (
+    <SeletorProduto
+      valor={valor}
+      aoTrocar={aoTrocar}
+      opcoes={produtos}
+      aria={aria}
+      placeholder={placeholder}
       estilos={{ input: est.inputTexto, select: est.selectMaquina, link: est.linkCadastro }}
       aoEscolher={() => vibrar(30)}
     />

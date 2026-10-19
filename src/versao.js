@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.91.0',
+    data: '2026-10-19',
+    titulo: 'Motivos de parada por grupo e cadastro de produtos no PC',
+    itens: [
+      'MOTIVOS DE PARADA POR GRUPO DE MÁQUINA. A lista era uma só para a fábrica inteira, e a padrão nasceu na furadeira ("troca de broca", "ajuste de gabarito"). Agora, em Ferramentas → Motivos de parada (ou no atalho da Embalagem Takt Time), cada motivo diz para quem vale: todas as máquinas ou só os grupos marcados. O tablet da embalagem passa a mostrar só os motivos que valem para todos e os da EMBALAGEM; a furadeira, os dela. Nada muda até alguém marcar: todo motivo já cadastrado continua valendo para todas.',
+      'O SETUP VALE SEMPRE PARA TODOS OS GRUPOS. É o único motivo que o cálculo trata diferente — sai do relógio do takt e entra no setup do programa —, então ele não pode sumir de nenhum tablet.',
+      'CADASTRO DE PRODUTOS NO PC, POR GRUPO DE MÁQUINA (Ferramentas → Produtos, ou "Produtos da embalagem" na Embalagem Takt Time): nome e, se quiser, o código do ERP. No tablet, o campo PRODUTO vira uma lista com os produtos do grupo da máquina — sem digitar, e com o mesmo nome em toda medição. "Outro produto…" continua abrindo o texto livre, e posto sem produto cadastrado segue com o campo de texto de sempre. Vale também para o campo PEÇA do Ritmo da máquina, quando o grupo da máquina tiver produtos.',
+      'Produto com medição registrada não se exclui: se desativa (some do tablet e o histórico continua com o nome certo). Quem faz análise (administrador ou analista) mantém o cadastro.',
+    ],
+  },
+  {
     versao: '2.90.0',
     data: '2026-10-19',
     titulo: 'Embalagem Takt Time: a medição abre na própria tela, números primeiro',

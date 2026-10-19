@@ -3,7 +3,7 @@ import { elevacao, espaco, raio, rotulo, tipo, transicao } from '../theme/escala
 import { LOGO_PATRIMAR } from '../theme/logo.js';
 import {
   IconeAnalistas, IconeArquivados, IconeChave, IconeDemanda, IconeEstudos, IconeImportar,
-  IconeInicio, IconeMaquinas, IconePainel, IconeParadas, IconeRitmo,
+  IconeInicio, IconeMaquinas, IconePainel, IconeParadas, IconeProdutos, IconeRitmo,
 } from './icones.jsx';
 
 /**
@@ -46,11 +46,11 @@ export default function MenuLateral({
   // diz onde voce esta' obriga a olhar o conteudo para descobrir.
   aoVerInicio, inicioAtivo, aoVerEstudos, estudosAtivo,
   aoNovoEstudo, aoImportar, aoVerConferencias, aoVerEmbalagem, aoVerArquivados, arquivados = 0,
-  aoVerChaveIa, aoVerMotivos, aoVerMaquinas, aoVerDemanda, aoVerPainel, aoVerAnalistas, usuario, aoTrocarModo,
+  aoVerChaveIa, aoVerMotivos, aoVerMaquinas, aoVerProdutos, aoVerDemanda, aoVerPainel, aoVerAnalistas, usuario, aoTrocarModo,
 }) {
   const total = grupos.reduce((acc, g) => acc + g.estudos.length, 0);
   const temFerramentas = aoBuscar || aoImportar || aoVerChaveIa || aoVerMotivos || aoVerMaquinas
-    || aoVerDemanda || aoVerPainel || aoVerAnalistas;
+    || aoVerProdutos || aoVerDemanda || aoVerPainel || aoVerAnalistas;
 
   return (
     <nav style={est.lateral} aria-label="Navegação">
@@ -365,6 +365,14 @@ export default function MenuLateral({
               <span style={est.itemComIcone}>
                 <IconeMaquinas />
                 <span style={est.itemTexto}>Máquinas</span>
+              </span>
+            </button>
+          )}
+          {aoVerProdutos && (
+            <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerProdutos}>
+              <span style={est.itemComIcone}>
+                <IconeProdutos />
+                <span style={est.itemTexto}>Produtos</span>
               </span>
             </button>
           )}

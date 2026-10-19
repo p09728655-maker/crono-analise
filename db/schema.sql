@@ -446,6 +446,21 @@ CREATE TABLE IF NOT EXISTS motivos_parada (
 CREATE UNIQUE INDEX IF NOT EXISTS motivos_parada_codigo_unq ON motivos_parada (empresa_id, codigo);
 CREATE INDEX IF NOT EXISTS motivos_parada_empresa_idx ON motivos_parada (empresa_id, ordem, criado_em);
 
+-- MOTIVO POR GRUPO DE MAQUINA. A lista era uma so' para a fabrica inteira,
+-- e a padrao nasceu na furadeira ("troca de broca", "ajuste de gabarito"):
+-- o tablet da EMBALAGEM oferecia motivo que la' nao existe, e o que la'
+-- existe (falta de caixa, troca de produto) ficava em "Outro".
+--
+-- Vazio = vale para todos os grupos — e' o que todo motivo ja' cadastrado
+-- passa a ser, entao nada muda para quem nao mexer. Com grupos, o motivo
+-- so' aparece no tablet das maquinas desses grupos; o NOME continua
+-- resolvendo em qualquer relatorio (parada antiga nao perde o rotulo).
+--
+-- Array, e nao tabela de ligacao: e' uma lista curta, lida inteira pelo
+-- tablet e guardada no cache dele, e grupo apagado so' deixa um id que
+-- nao casa com maquina nenhuma — o motivo continua valendo para os outros.
+ALTER TABLE motivos_parada ADD COLUMN IF NOT EXISTS grupos uuid[] NOT NULL DEFAULT '{}';
+
 -- --------------------------------------------------------------- maquinas
 -- Cadastro de MAQUINAS — a lista que padroniza o nome digitado.
 --
@@ -539,6 +554,44 @@ CREATE INDEX IF NOT EXISTS maquinas_empresa_idx ON maquinas (empresa_id, nome);
 
 ALTER TABLE maquinas ENABLE ROW LEVEL SECURITY;
 -- Politicas de `maquinas`: idem, na secao de RLS.
+
+-- ---------------------------------------------------------------- produtos
+-- O CADASTRO DOS PRODUTOS que vao para cronoanalise, cadastrado no PC.
+--
+-- O produto era digitado no tablet a cada medicao — o mesmo rack saia
+-- "Rack Sirius 1.6", "rack sirius" e "Sirius 1,6", e linha que nao soma
+-- no relatorio e' a mesma doenca que o cadastro de maquinas curou. O
+-- tablet passa a oferecer a lista; digitar vira excecao ("Outro produto").
+--
+-- POR GRUPO DE MAQUINA: o rack que a embalagem fecha nao e' a lateral que
+-- a furadeira fura. A lista de um posto nao pode aparecer no outro. Grupo
+-- apagado leva junto os produtos dele (como o programa da semana): produto
+-- sem posto nao e' oferecido em lugar nenhum.
+--
+-- A conferencia continua gravando TEXTO (o nome), como a maquina: o
+-- cadastro padroniza a entrada, nao muda o formato da fila offline.
+--
+-- CODIGO e' opcional e e' o do ERP: e' como o resto da fabrica chama o
+-- produto, e e' a chave para cruzar com o ERP depois, no BI.
+--
+-- Produto que sai de linha e' DESATIVADO, nao apagado: some do tablet e o
+-- historico continua com o nome certo.
+CREATE TABLE IF NOT EXISTS produtos (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id uuid NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  grupo_id   uuid NOT NULL REFERENCES grupos_maquina(id) ON DELETE CASCADE,
+  nome       text NOT NULL CHECK (length(btrim(nome)) BETWEEN 1 AND 120),
+  codigo     text CHECK (codigo IS NULL OR length(btrim(codigo)) BETWEEN 1 AND 30),
+  ativo      boolean NOT NULL DEFAULT true,
+  criado_em  timestamptz NOT NULL DEFAULT now()
+);
+-- Unicidade sem caixa, dentro do grupo: "rack sirius 1.6" e "Rack Sirius
+-- 1.6" sao o mesmo produto.
+CREATE UNIQUE INDEX IF NOT EXISTS produtos_nome_unq ON produtos (empresa_id, grupo_id, lower(btrim(nome)));
+CREATE INDEX IF NOT EXISTS produtos_empresa_idx ON produtos (empresa_id, grupo_id, nome);
+
+ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
+-- Politicas de `produtos`: idem, na secao de RLS.
 
 -- -------------------------------------------------------- demanda_semanal
 -- O PROGRAMA DE PRODUCAO, semana a semana, por grupo de maquina.
@@ -965,6 +1018,17 @@ CREATE POLICY demanda_escreve ON demanda_semanal FOR ALL TO authenticated
   USING (empresa_id = public.empresa_atual() AND public.pode_escrever())
   WITH CHECK (empresa_id = public.empresa_atual() AND public.pode_escrever());
 
+-- produtos: todo mundo le (o tablet oferece a lista) e quem faz analise
+-- mantem — escolher o que vai para cronoanalise e' trabalho de PCP, como o
+-- programa da semana.
+DROP POLICY IF EXISTS produtos_le ON produtos;
+CREATE POLICY produtos_le ON produtos FOR SELECT TO authenticated
+  USING (empresa_id = public.empresa_atual());
+DROP POLICY IF EXISTS produtos_escreve ON produtos;
+CREATE POLICY produtos_escreve ON produtos FOR ALL TO authenticated
+  USING (empresa_id = public.empresa_atual() AND public.pode_escrever())
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.pode_escrever());
+
 -- motivos_parada: todo mundo le (a coleta precisa da lista), so' admin mexe
 -- — e' a lista que da' nome a toda parada ja' registrada.
 DROP POLICY IF EXISTS motivos_le ON motivos_parada;
@@ -990,6 +1054,13 @@ CREATE POLICY configuracoes_admin ON configuracoes FOR ALL TO authenticated
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON empresas, usuarios, estudos, operacoes,
   observacoes, paradas, conferencias, configuracoes, motivos_parada,
-  demanda_semanal TO authenticated;
+  demanda_semanal, produtos, maquinas, grupos_maquina TO authenticated;
 REVOKE ALL ON empresas, usuarios, estudos, operacoes, observacoes, paradas,
-  conferencias, configuracoes, motivos_parada, demanda_semanal FROM anon;
+  conferencias, configuracoes, motivos_parada, demanda_semanal, produtos,
+  maquinas, grupos_maquina FROM anon;
+-- maquinas e grupos_maquina ficaram fora desta lista desde que nasceram e
+-- funcionavam pelo privilegio PADRAO do Supabase (que da' tudo a
+-- authenticated E a anon). Explicito aqui: o analista que cadastra produto
+-- le o grupo pela RLS, e um banco sem aquele padrao (o de teste, um
+-- restore) recusava com "permission denied" — o erro que o comentario
+-- acima descreve.

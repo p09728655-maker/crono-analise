@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   conferenciaRapida, formatarDuracao, formatarSegundos, leituraPecaAPeca, periodoPorPeca, unidadeDoPosto,
 } from '../../domain/cronoanalise.js';
-import { useMotivosParada } from '../../lib/motivosParada.js';
+import { useMotivosDoGrupo } from '../../lib/motivosParada.js';
 import { useWakeLock, vibrar } from '../../lib/hooks.js';
-import { carregarMaquinas, useCadastroMaquinas } from '../../lib/maquinas.js';
+import { carregarMaquinas, produtosDoGrupo, useCadastroMaquinas } from '../../lib/maquinas.js';
 import { useParadasDoPeriodo } from './rapida/useParadasDoPeriodo.js';
 import { useCronometroAoVivo } from './rapida/useCronometroAoVivo.js';
 import { useHistoricoLocal } from './rapida/useHistoricoLocal.js';
@@ -12,6 +12,7 @@ import { Parcial } from './rapida/Indicadores.jsx';
 import { est } from './rapida/estilos.js';
 import CronometroAoVivo from './rapida/CronometroAoVivo.jsx';
 import ResultadoAoVivo from './rapida/ResultadoAoVivo.jsx';
+import { CampoProduto } from './rapida/CamposDaPeca.jsx';
 import Historico from './rapida/Historico.jsx';
 import { motivoSemTakt, useTaktDaSemana } from './embalagem/useTaktDaSemana.js';
 
@@ -39,7 +40,6 @@ const nada = () => {};
  * chao de fabrica vira o takt que cada um acha.
  */
 export default function EmbalagemTaktTime({ aoSair }) {
-  const motivos = useMotivosParada();
   const cadastro = useCadastroMaquinas();
   /* 'buscando' | 'ok' | 'falhou'. Sem isto, o instante antes do cadastro
      chegar — ou o tablet sem rede e sem cadastro guardado — dizia "peca ao
@@ -65,6 +65,10 @@ export default function EmbalagemTaktTime({ aoSair }) {
   const maquina = maquinas.find((m) => m.id === maquinaId) || maquinas[0] || null;
   const grupo = gruposEmbalagem.find((g) => g.id === maquina?.grupo_id) || null;
   const maquinasDoGrupo = maquinas.filter((m) => m.grupo_id === grupo?.id).length;
+  // Os motivos e os produtos DA EMBALAGEM (cadastro do PC, por grupo): a
+  // embalagem nao ve' "troca de broca", e o produto e' escolhido da lista.
+  const motivos = useMotivosDoGrupo(grupo?.id);
+  const produtos = useMemo(() => produtosDoGrupo(cadastro, grupo?.id), [cadastro, grupo?.id]);
 
   const [produto, setProduto] = useState('');
   const [observacao, setObservacao] = useState('');
@@ -172,13 +176,9 @@ export default function EmbalagemTaktTime({ aoSair }) {
             </label>
             <label style={est.campoHora}>
               <span style={est.rotuloCampo}>PRODUTO</span>
-              <input
-                type="text"
-                placeholder="Ex: Rack Sirius 1.6"
-                value={produto}
-                onChange={(ev) => setProduto(ev.target.value)}
-                style={est.inputTexto}
-                aria-label="Produto embalado"
+              <CampoProduto
+                valor={produto} aoTrocar={setProduto} produtos={produtos}
+                aria="Produto embalado" placeholder="Ex: Rack Sirius 1.6"
               />
             </label>
 
@@ -231,7 +231,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           motivos={motivos}
           paradas={paradas}
           maquina={maquina?.nome || ''} aoTrocarMaquina={nada} maquinaFixa={maquina?.nome || '—'}
-          peca={produto} aoTrocarPeca={setProduto}
+          peca={produto} aoTrocarPeca={setProduto} produtos={produtos}
           ciclosPorPeca={1} aoTrocarCiclos={nada}
           furacaoPassante={false} aoTrocarPassante={nada}
           observacao={observacao} aoTrocarObservacao={setObservacao} jaSalva={historico.salvo === 'ok'}

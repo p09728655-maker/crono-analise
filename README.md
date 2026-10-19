@@ -814,6 +814,32 @@ diante da máquina parada, sem onde tocar. Os mesmos nove são o **fallback de
 nome**: código que saiu do cadastro ainda encontra rótulo e ação ali, em vez
 de aparecer cru no relatório.
 
+**Vale para (por grupo de máquina).** Cada motivo vale para todas as máquinas
+(padrão — é o que todo motivo antigo passa a ser) ou só para os grupos
+marcados (coluna `motivos_parada.grupos`, `uuid[]`, vazio = todos). O tablet
+mostra os que valem para todos e os do grupo da máquina escolhida: a
+embalagem não vê "troca de broca", a furadeira não vê "falta de caixa".
+Máquina sem grupo vê só os de todos; se o filtro não deixar nada, voltam os
+nove de fábrica. O **setup** vale sempre para todos (a API recusa restringir):
+é o único motivo que o cálculo trata como troca.
+
+### Cadastro de produtos (Ferramentas, no PC)
+
+Os produtos que vão para cronoanálise, **por grupo de máquina** (tabela
+`produtos`: nome, código do ERP opcional, grupo, ativo). No tablet, o campo
+PRODUTO da Embalagem Takt Time e o PEÇA do Ritmo da máquina viram uma lista
+com os produtos do grupo da máquina; "Outro produto…" abre o texto livre, e
+posto sem produto cadastrado segue com o campo de texto. A conferência
+continua gravando o **nome** — o cadastro padroniza a entrada, não muda a fila
+offline.
+
+- A rota mora em `/api/maquinas?produtos=1` (`api/_lib/produtos.js`): o projeto
+  está no teto de 12 funções da Vercel. A lista vem junto do cadastro de
+  máquinas (`GET /api/maquinas`), que é o que o tablet guarda em cache.
+- Quem faz análise mantém (admin ou analista — `pode_escrever()` na RLS).
+- Produto com medição registrada se desativa, não se exclui. Grupo apagado
+  leva os produtos dele.
+
 O cadastro começa vazio, e a tela oferece trazer os nove de uma vez em vez
 de pedir que sejam redigitados.
 

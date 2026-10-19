@@ -23,6 +23,7 @@ import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir } from './_lib/http.js';
 import { decimal, inteiro, texto, uuid } from './_lib/validar.js';
 import { demandaSemanal } from './_lib/demanda.js';
+import { listarProdutos, produtos } from './_lib/produtos.js';
 
 // Nome canonico: apara e recolhe espaco repetido. Caixa e acento ficam —
 // e' o nome EXIBIDO; a unicidade compara sem caixa (indice lower/btrim).
@@ -52,9 +53,12 @@ const listarMaquinas = (db, empresaId) => db`
    WHERE m.empresa_id = ${empresaId}
    ORDER BY (g.codigo IS NULL), g.codigo, lower(m.nome)`;
 
+// Os PRODUTOS vem junto: o tablet guarda o cadastro inteiro num cache so'
+// e oferece a lista sem rede — uma ida, um cache, como maquinas e grupos.
 const cadastro = async (db, empresaId) => ({
   maquinas: await listarMaquinas(db, empresaId),
   grupos: await listarGrupos(db, empresaId),
+  produtos: await listarProdutos(db, empresaId),
 });
 
 // "Em uso" olha as conferencias pela mesma comparacao da unicidade.
@@ -93,6 +97,10 @@ export default handler(async (req, res) => {
    * ANTES do exigirPapel la' embaixo. Ver api/_lib/demanda.js.
    */
   if (req.query?.demanda === '1') return demandaSemanal(req, res, auth);
+  // PRODUTOS (?produtos=1), pela mesma razao e com a mesma regra de papel
+  // da demanda: e' trabalho de PCP, nao so' de administrador. Ver
+  // api/_lib/produtos.js.
+  if (req.query?.produtos === '1') return produtos(req, res, auth);
 
   const { empresaId } = auth;
   const id = req.query?.id;

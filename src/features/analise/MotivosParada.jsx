@@ -3,8 +3,8 @@ import { claro } from '../../theme/tokensAnalise.js';
 import { elevacao, espaco, raio, rotulo, tipo, transicao } from '../../theme/escala.js';
 import { MOTIVOS_PARADA } from '../../domain/cronoanalise.js';
 import {
-  atualizarMotivoParada, criarMotivoParada, listarMotivosParada, ordenarMotivosParada,
-  removerMotivoParada, semearMotivosParada,
+  atualizarMotivoParada, criarMotivoParada, listarCadastroMaquinas, listarMotivosParada,
+  ordenarMotivosParada, removerMotivoParada, semearMotivosParada,
 } from '../../lib/api.js';
 import { adotarMotivos } from '../../lib/motivosParada.js';
 
@@ -27,6 +27,10 @@ import { adotarMotivos } from '../../lib/motivosParada.js';
  *  - A ACAO nao e' descricao: e' o que a aba Sugestoes recomenda quando
  *    aquele motivo domina o tempo parado. Motivo sem acao vira diagnostico
  *    sem tratamento, entao o campo pede para ser preenchido.
+ *  - VALE PARA: cada motivo aparece no tablet de todas as maquinas ou so'
+ *    das de alguns grupos. A lista padrao nasceu na furadeira, e a
+ *    embalagem tem as paradas dela (falta de caixa, troca de produto). O
+ *    setup vale sempre para todos — o calculo trata ele como troca.
  */
 export default function MotivosParada({ aoFechar }) {
   const [motivos, setMotivos] = useState(null);
@@ -34,6 +38,12 @@ export default function MotivosParada({ aoFechar }) {
   const [ocupado, setOcupado] = useState(false);
   const [editando, setEditando] = useState(null);   // id em edicao
   const [criando, setCriando] = useState(false);
+  // Os grupos de maquina, para o "vale para". Falha aqui nao derruba a
+  // tela: sem grupos, todo motivo vale para todas — como era antes.
+  const [grupos, setGrupos] = useState([]);
+  useEffect(() => {
+    listarCadastroMaquinas().then((c) => setGrupos(c.grupos || [])).catch(() => setGrupos([]));
+  }, []);
 
   /**
    * Falha de carga deixa `motivos` em null de proposito.
@@ -93,7 +103,9 @@ export default function MotivosParada({ aoFechar }) {
         <h2 style={est.titulo}>Motivos de parada</h2>
         <p style={est.texto}>
           É a lista que aparece no tablet quando a máquina para, e a que o
-          relatório usa para recomendar o que fazer. Vale para o app inteiro.
+          relatório usa para recomendar o que fazer. Cada motivo vale para todas as
+          máquinas ou só para os grupos escolhidos — a embalagem não vê “troca de
+          broca”, a furadeira não vê “falta de caixa”.
         </p>
 
         {motivos == null && !erro && <p style={est.texto}>Carregando cadastro...</p>}
@@ -125,6 +137,7 @@ export default function MotivosParada({ aoFechar }) {
                 <Formulario
                   key={m.id}
                   motivo={m}
+                  grupos={grupos}
                   ocupado={ocupado}
                   aoCancelar={() => setEditando(null)}
                   aoSalvar={async (dados) => {
@@ -155,6 +168,7 @@ export default function MotivosParada({ aoFechar }) {
                         {m.codigo}
                       </span>
                       {!m.ativo && <span style={est.seloInativo}>Desativado</span>}
+                      <ValePara motivo={m} grupos={grupos} />
                     </div>
                     <span style={m.acao ? est.linhaAcao : est.linhaSemAcao}>
                       {m.acao || 'Sem ação recomendada — a aba Sugestões fica sem o que propor para este motivo.'}
@@ -194,6 +208,7 @@ export default function MotivosParada({ aoFechar }) {
 
         {criando ? (
           <Formulario
+            grupos={grupos}
             ocupado={ocupado}
             aoCancelar={() => setCriando(false)}
             aoSalvar={async (dados) => {
@@ -231,15 +246,29 @@ export default function MotivosParada({ aoFechar }) {
  * que nome as paradas foram gravadas, e precisa entender por que aquele
  * campo nao aceita digitacao.
  */
-function Formulario({ motivo, ocupado, aoSalvar, aoCancelar }) {
+function Formulario({ motivo, grupos = [], ocupado, aoSalvar, aoCancelar }) {
   const [rotuloTexto, setRotulo] = useState(motivo?.rotulo || '');
   const [acao, setAcao] = useState(motivo?.acao || '');
+  const [escolhidos, setEscolhidos] = useState(() => motivo?.grupos || []);
   const novo = !motivo;
+  const ehSetup = motivo?.codigo === 'setup';
+  const alternar = (id) => setEscolhidos((atual) => (
+    atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id]
+  ));
 
   return (
     <form
       style={est.form}
-      onSubmit={(ev) => { ev.preventDefault(); aoSalvar({ rotulo: rotuloTexto.trim(), acao: acao.trim() }); }}
+      onSubmit={(ev) => {
+        ev.preventDefault();
+        aoSalvar({
+          rotulo: rotuloTexto.trim(),
+          acao: acao.trim(),
+          // So' manda quando ha' grupos cadastrados: sem eles nao ha' o que
+          // escolher, e o setup nunca se restringe.
+          ...(grupos.length && !ehSetup ? { grupos: escolhidos } : {}),
+        });
+      }}
     >
       <label style={est.campo}>
         <span style={est.rotuloCampo}>Nome que aparece na tela</span>
@@ -280,6 +309,38 @@ function Formulario({ motivo, ocupado, aoSalvar, aoCancelar }) {
         </span>
       </label>
 
+      {grupos.length > 0 && (
+        <fieldset style={est.campoGrupos}>
+          <legend style={est.rotuloCampo}>Vale para</legend>
+          {ehSetup ? (
+            <span style={est.dica}>
+              Todas as máquinas. O setup é o motivo que o cálculo do takt e do programa
+              trata como troca, então ele vale sempre para todos os grupos.
+            </span>
+          ) : (
+            <>
+              <div style={est.linhaGrupos}>
+                {grupos.map((g) => (
+                  <label key={g.id} style={est.opcaoGrupo}>
+                    <input
+                      type="checkbox"
+                      checked={escolhidos.includes(g.id)}
+                      onChange={() => alternar(g.id)}
+                    />
+                    {g.codigo} · {g.nome}
+                  </label>
+                ))}
+              </div>
+              <span style={est.dica}>
+                {escolhidos.length
+                  ? 'Só aparece no tablet das máquinas destes grupos.'
+                  : 'Nenhum marcado: aparece no tablet de todas as máquinas.'}
+              </span>
+            </>
+          )}
+        </fieldset>
+      )}
+
       <div style={est.formAcoes}>
         <button type="button" style={est.botaoTexto} onClick={aoCancelar}>Cancelar</button>
         <button type="submit" style={est.botaoPrimario} disabled={ocupado || !rotuloTexto.trim()}>
@@ -287,6 +348,18 @@ function Formulario({ motivo, ocupado, aoSalvar, aoCancelar }) {
         </button>
       </div>
     </form>
+  );
+}
+
+/** Em que maquinas o motivo aparece — no topo da linha, ao lado do codigo. */
+function ValePara({ motivo, grupos }) {
+  const ids = motivo.grupos || [];
+  if (!ids.length) return <span style={est.seloGrupo}>Todas as máquinas</span>;
+  const nomes = ids.map((id) => grupos.find((g) => g.id === id)?.nome).filter(Boolean);
+  return (
+    <span style={{ ...est.seloGrupo, ...est.seloGrupoRestrito }}>
+      Só {nomes.length ? nomes.join(', ') : `${ids.length} grupo(s)`}
+    </span>
   );
 }
 
@@ -369,6 +442,23 @@ const est = {
     fontFamily: "'Roboto Mono', 'Consolas', monospace",
   },
   formAcoes: { display: 'flex', gap: espaco.md, justifyContent: 'flex-end', alignItems: 'center' },
+  campoGrupos: {
+    margin: 0, padding: 0, border: 'none', minWidth: 0,
+    display: 'flex', flexDirection: 'column', gap: espaco.xs,
+  },
+  linhaGrupos: { display: 'flex', flexWrap: 'wrap', gap: `${espaco.xs}px ${espaco.lg}px` },
+  opcaoGrupo: {
+    display: 'inline-flex', alignItems: 'center', gap: espaco.sm,
+    ...tipo('corpo'), color: t.texto, cursor: 'pointer',
+  },
+  seloGrupo: {
+    padding: '1px 8px', borderRadius: raio.pill, background: t.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    color: t.textoMedio, ...tipo('micro'), textTransform: 'none', letterSpacing: 0,
+  },
+  // Restrito a grupos: borda escura, para destacar do "todas" — e' o que
+  // explica por que o motivo nao aparece num tablet.
+  seloGrupoRestrito: { borderColor: t.textoMedio, color: t.texto },
 
   botaoPrimario: {
     minHeight: 40, padding: `0 ${espaco.lg}px`,

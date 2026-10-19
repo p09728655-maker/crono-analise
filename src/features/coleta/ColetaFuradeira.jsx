@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ALVO_MINIMO, cores, espaco, fonte, raio, sombra, tamanho, transicao } from '../../theme/tokens.js';
 import { calcularOperacao, formatarCronometro, formatarSegundos, rotuloMotivo } from '../../domain/cronoanalise.js';
-import { useMotivosParada } from '../../lib/motivosParada.js';
+import { useMotivosDoGrupo } from '../../lib/motivosParada.js';
+import { carregarMaquinas, grupoIdDaMaquina, useCadastroMaquinas } from '../../lib/maquinas.js';
 import { TOQUE_MINIMO_MS, ultimaObservacaoAtipica } from '../../domain/estatistica.js';
 import { enfileirar, listarFila, novoId, removerDaFila } from '../../lib/filaOffline.js';
 import { useCronometro, useOnline, useWakeLock, vibrar } from '../../lib/hooks.js';
@@ -25,6 +26,11 @@ import { useCronometro, useOnline, useWakeLock, vibrar } from '../../lib/hooks.j
  */
 export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar, aoAnotar }) {
   const [tempos, setTempos] = useState(() => operacao?.tempos ?? []);
+  /* O grupo do posto do estudo (o RECURSO e' o nome da maquina): os
+     motivos de parada oferecidos sao os dele e os que valem para todos. */
+  const cadastroDeMaquinas = useCadastroMaquinas();
+  useEffect(() => { carregarMaquinas(); }, []);
+  const grupoDoPosto = grupoIdDaMaquina(cadastroDeMaquinas, estudo?.recurso);
   /* A observacao do cronoanalista para ESTA operacao. Comeca com o que ja'
      esta' no estudo (escrita antes, no tablet ou no PC) e vive aqui ate'
      ser salva de novo. */
@@ -286,6 +292,7 @@ export default function ColetaFuradeira({ estudo, operacao, aoSair, aoRegistrar,
       )}
 
       <BarraInferior
+        grupoId={grupoDoPosto}
         rodando={rodando}
         pausado={Boolean(pausa)}
         temTempos={tempos.length > 0}
@@ -442,10 +449,10 @@ function FolhaAnotacao({ inicial, aoSalvar, aoCancelar }) {
 }
 
 function BarraInferior({
-  rodando, pausado, temTempos, rodada, temAnotacao,
+  grupoId, rodando, pausado, temTempos, rodada, temAnotacao,
   aoAnotar, aoPausar, aoDesfazer, aoTrocarRodada, aoEncerrar,
 }) {
-  const motivos = useMotivosParada();
+  const motivos = useMotivosDoGrupo(grupoId);
   const [menuAberto, setMenuAberto] = useState(false);
 
   return (
