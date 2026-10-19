@@ -220,13 +220,16 @@ checar(await p.getByText('72.0 s').count() > 0, 'takt desta semana em segundos: 
 checar(await p.getByText('Faltou caixa às 9h10').count() > 0, 'a observacao do analista aparece na tabela');
 
 await p.getByRole('button', { name: 'Volume a volume' }).click();
-const janela = p.getByRole('dialog', { name: /Volume a volume/ });
+// Abre na propria pagina, abaixo da lista — nao numa janela por cima.
+const janela = p.getByRole('region', { name: /Volume a volume/ });
 // Relogio entre o 1o e o ultimo toque: 920 s / 13 = 70,8 s por volume,
 // paradas dentro; takt 72 s. Sem a lacuna: 60 s.
 await janela.getByText(/No período, saiu um volume a cada 70.8 s, paradas dentro/).waitFor({ timeout: 8000 });
 const textoJanela = await janela.innerText();
 checar(/dentro do takt de 72.0 s, com 2% de folga/.test(textoJanela), 'veredito pelo relogio entre toques: 70.8 s dentro do takt de 72.0 s');
-checar(/COM A LINHA RODANDO[\s\S]*70.8 s/i.test(textoJanela) && /SEM AS LACUNAS[\s\S]*60.0 s/i.test(textoJanela),
+// O valor logo depois do rotulo do proprio cartao — nao um 70.8 qualquer
+// mais adiante (manchete, rotulo do grafico).
+checar(/POR VOLUME COM A LINHA RODANDO\s*70\.8 s/i.test(textoJanela) && /SEM AS LACUNAS\s*60\.0 s/i.test(textoJanela),
   'as camadas: rodando 70.8 s, sem as lacunas 60.0 s');
 checar(/1 lacuna — intervalo maior que o dobro do normal \(60.0 s\)/.test(textoJanela), 'aponta a lacuna contra o normal de 60.0 s');
 checar(/Faltou caixa às 9h10/.test(textoJanela), 'a observacao aparece junto da lacuna');
@@ -235,12 +238,33 @@ checar(/Onde a linha parou sem parada marcada/.test(textoJanela) && textoJanela.
   'lista a lacuna de 200.0 s');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-volume-a-volume.png`, fullPage: true });
 
+// O PDF sai com nome proprio: o "Salvar como PDF" usa o titulo da pagina.
+await p.evaluate(() => {
+  window.print = () => { window.tituloImpresso = document.title; window.dispatchEvent(new Event('afterprint')); };
+});
+const tituloAntes = await p.title();
+await janela.getByRole('button', { name: 'Imprimir' }).click();
+const tituloImpresso = await p.evaluate(() => window.tituloImpresso);
+checar(/^Takt Time - Rack Sirius 1\.6 - EMBALAGEM 01 - \d{2}-\d{2}-\d{4} \d{2}h\d{2}$/.test(tituloImpresso || ''),
+  `o PDF sai com takt time e o produto no nome (${tituloImpresso})`);
+checar(await p.title() === tituloAntes, 'depois de imprimir, a aba volta ao nome do sistema');
+checar(await p.locator('body > .somente-impressao h1').innerText().then((t) => /Takt Time — Rack Sirius 1.6/.test(t)),
+  'a folha impressa tem o mesmo titulo do arquivo');
+
 await p.emulateMedia({ media: 'print' });
 const folha = p.locator('body > .somente-impressao');
 checar(await folha.isVisible(), 'impressao: a folha A4 da medicao aparece');
 checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some do papel');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
+
+// O detalhe mora na pagina: a linha aberta fica marcada e o mesmo botao fecha.
+const botaoDaLinha = p.getByRole('button', { name: 'Volume a volume' });
+checar(await p.getByRole('dialog').count() === 0, 'o detalhe abre na propria pagina, sem janela por cima');
+checar(await botaoDaLinha.getAttribute('aria-pressed') === 'true', 'a medicao aberta fica marcada na lista');
+await botaoDaLinha.click();
+checar(await janela.count() === 0 && await botaoDaLinha.getAttribute('aria-pressed') === 'false',
+  'clicar de novo na medicao aberta fecha o detalhe');
 
 checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${errosPc[0]}` : ''}`);
 await navegador.close();

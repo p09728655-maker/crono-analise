@@ -367,6 +367,118 @@ export const est = {
   textoModal: { ...tipo('corpo'), margin: 0, color: t.textoMedio },
   acoesModal: { display: 'flex', gap: espaco.md, marginTop: espaco.xs },
 
+  /* ---- painel VOLUME A VOLUME (Embalagem Takt Time) ----
+     Abre na propria pagina, abaixo da lista. Ordem de leitura: quem/quando
+     -> numeros -> grafico -> explicacao. O topo gruda ao rolar: o painel e'
+     comprido, e Imprimir/Fechar precisam estar sempre a um clique. */
+  vavPainel: {
+    background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.media,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.bordaForte,
+    marginBottom: espaco.xl, scrollMarginTop: espaco.lg,
+  },
+  vavTopo: {
+    position: 'sticky', top: 0, zIndex: 2, background: t.papel,
+    borderTopLeftRadius: raio.lg, borderTopRightRadius: raio.lg,
+    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+    gap: espaco.lg, flexWrap: 'wrap',
+    padding: `${espaco.lg}px ${espaco.xl}px`, borderBottom: `1px solid ${t.borda}`,
+  },
+  vavIdentidade: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: '1 1 420px' },
+  vavSobretitulo: { ...rotulo(t.vermelho) },
+  vavTitulo: { ...tipo('titulo'), margin: 0, color: t.texto, overflowWrap: 'anywhere' },
+  vavMeta: {
+    ...tipo('legenda'), ...numeros, margin: 0, color: t.textoMedio,
+    display: 'flex', flexWrap: 'wrap', columnGap: espaco.sm, rowGap: 2,
+  },
+  vavMetaForte: { color: t.texto, fontWeight: 700 },
+  vavMetaSeparador: { color: t.bordaForte },
+  vavAcoes: { display: 'flex', gap: espaco.sm, flexShrink: 0 },
+  vavCorpo: {
+    display: 'flex', flexDirection: 'column', gap: espaco.lg,
+    padding: `${espaco.lg}px ${espaco.xl}px ${espaco.xl}px`,
+  },
+  // A nota do analista: fundo areia de marca, nao cor de status — e' o
+  // registro de quem mediu, nao um alerta do sistema.
+  vavObs: {
+    ...tipo('corpo'), color: t.texto, margin: 0,
+    padding: `${espaco.sm}px ${espaco.md}px`, background: '#FBF6E2', borderRadius: raio.sm,
+    borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: '#C9A227',
+    whiteSpace: 'pre-line', overflowWrap: 'anywhere',
+  },
+  vavObsRotulo: { ...rotulo(t.textoMedio), marginRight: espaco.sm },
+  // Os cinco numa linha so' a partir de ~650px de painel (PC com a lateral
+  // aberta em 1024): partidos em 3 + 2, o quinto parecia de outro grupo.
+  vavKpis: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))', gap: espaco.md,
+  },
+  // Subgrid: rotulo, valor e descricao de todos os cartoes da mesma linha
+  // dividem as mesmas tres faixas. O rotulo que quebra em duas linhas
+  // ("Por volume com a linha rodando") nao desce o valor dele para fora do
+  // alinhamento dos outros. Navegador sem subgrid ignora e empilha normal.
+  vavKpi: {
+    display: 'grid', gridRow: 'span 3', gridTemplateRows: 'subgrid', rowGap: espaco.xs,
+    alignContent: 'start', minWidth: 0,
+    padding: `${espaco.md}px ${espaco.md}px ${espaco.md}px ${espaco.lg}px`, background: t.papel, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, boxShadow: elevacao.baixa,
+  },
+  vavKpiRotulo: { ...rotulo(t.textoMedio), alignSelf: 'start' },
+  vavKpiValor: {
+    fontSize: 30, fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.02em',
+    ...numeros, color: t.texto, whiteSpace: 'nowrap', alignSelf: 'end',
+  },
+  vavKpiUnidade: { fontSize: 15, fontWeight: 600, letterSpacing: 0, color: t.textoMedio },
+  vavKpiSub: { ...tipo('legenda'), color: t.textoMedio, lineHeight: 1.4, alignSelf: 'start' },
+  // Os numeros de apoio: existem e continuam visiveis, mas nao disputam o
+  // olho com os cinco de cima.
+  vavApoio: {
+    display: 'flex', flexWrap: 'wrap', columnGap: espaco.xl, rowGap: espaco.xs,
+    margin: `-${espaco.xs}px 0 0`, padding: `${espaco.sm}px ${espaco.md}px`,
+    background: t.fundo, borderRadius: raio.sm, ...tipo('legenda'), color: t.textoMedio,
+  },
+  vavApoioRotulo: { ...rotulo(t.textoFraco), marginRight: espaco.sm },
+  vavApoioValor: { ...numeros, fontWeight: 700, color: t.texto },
+  vavSecaoTitulo: { ...tipo('corpoF'), margin: `0 0 ${espaco.sm}px`, color: t.texto },
+  vavSecaoDica: { ...tipo('legenda'), color: t.textoFraco, margin: `-${espaco.xs}px 0 ${espaco.sm}px` },
+  vavLeituraGrade: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+    gap: espaco.lg, alignItems: 'start',
+  },
+  vavLista: { margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  vavTabelaMoldura: {
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.md, overflow: 'hidden',
+  },
+  vavTh: {
+    padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'right', ...rotulo(t.textoFraco),
+    background: '#F8F9FB', borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  vavTd: {
+    padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'right', ...tipo('corpo'), ...numeros,
+    color: t.textoMedio, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  vavTdForte: {
+    padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'right', ...tipo('corpoF'), ...numeros,
+    color: t.texto, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  vavComoLer: {
+    margin: 0, padding: `${espaco.md}px ${espaco.lg}px`, background: '#F8F9FB', borderRadius: raio.md,
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    columnGap: espaco.xl, rowGap: espaco.sm,
+  },
+  vavComoLerItem: { margin: 0, ...tipo('legenda'), color: t.textoMedio, lineHeight: 1.5 },
+  vavComoLerTermo: { fontWeight: 700, color: t.texto },
+  // A medicao aberta no painel, na lista: fundo azul-claro e o botao
+  // marcado — da' para ver qual linha esta' sendo lida la' embaixo.
+  linhaSelecionada: { background: '#EEF4FC' },
+  botaoLinhaAtivo: {
+    minHeight: 32, padding: `0 ${espaco.md}px`, background: t.texto,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.texto, borderRadius: raio.sm,
+    color: '#fff', ...tipo('legenda'), fontWeight: 600,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
+  // Texto fraco solto numa celula: com o estilo da celula (tdFraco) o
+  // span herdava a borda de baixo e ganhava um sublinhado.
+  textoFraco: { ...tipo('legenda'), color: t.textoFraco },
+
   /* ---- cadastro de paradas ---- */
   linhaBotoesParada: { display: 'flex', gap: espaco.sm, flexWrap: 'wrap' },
   // Setup com borda de atencao: e' a parada mais marcada e a unica que o

@@ -194,6 +194,19 @@ describe('contra o takt vai o relogio entre o primeiro e o ultimo toque', () => 
     expect(numerosDaLeitura(leitura, {}, VOLUME)[0].valor).toBe('—');
   });
 
+  it('os numeros tem chave fixa, e os dois tempos por volume dizem a regua no nome', () => {
+    const marcasMs = marcasDe(Array(13).fill(60));
+    const leitura = leituraPecaAPeca({ marcasMs, taktMs: 72000, periodoPorPecaMs: 60000 });
+    const k = numerosDaLeitura(leitura, { semana: '043-26' }, VOLUME);
+    // A tela escolhe destaque e apoio pela chave — a ordem e' a da folha.
+    expect(k.map((x) => x.chave)).toEqual(['periodo', 'takt', 'rodando', 'normal', 'lacunas']);
+    expect(k[0].rotulo).toBe('Por volume no período');
+    expect(k[2].rotulo).toBe('Por volume com a linha rodando');
+    // Sem lacuna, diz o que o criterio viu — nao que nao houve perda.
+    expect(k[4].valor).toBe('0');
+    expect(k[4].sub).toBe('nenhum intervalo passou de 2× o normal');
+  });
+
   it('o takt da medicao diz se ha setup planejado — zero nao conta como planejado', () => {
     const demandas = [{ ano: 2026, numero: 43, pecas: 2200, inicio: '2026-10-19' }];
     const args = { demandas, horas: 44, maquinas: 1, data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 1 };

@@ -112,28 +112,50 @@ export function frasesVolumeAVolume({
 /**
  * Os cinco numeros, na ordem em que se leem: o veredito (periodo x takt) e
  * as duas camadas do "se nao parasse". Mesma lista na tela e no papel.
+ *
+ * A `chave` e' para a tela escolher o que vai em destaque e o que vai na
+ * faixa de apoio sem depender do texto do rotulo. Os dois tempos por
+ * volume dizem no rotulo de que regua sao — "no periodo" e "com a linha
+ * rodando" lado a lado, sem o "por volume", liam-se como a mesma coisa.
+ *
+ * Sem lacuna, o numero diz so' o que o criterio viu: nenhum intervalo
+ * passou do limite. Nao diz que nao houve perda — parada marcada e passo
+ * lento nao sao lacuna.
  */
 export function numerosDaLeitura(leitura, takt = {}, unidade) {
   if (!leitura.suficiente) {
-    return [{ rotulo: 'Intervalos tocados', valor: String(leitura.n), sub: `a leitura começa com ${leitura.criterios.minIntervalos}` }];
+    return [{
+      chave: 'tocados', rotulo: 'Intervalos tocados', valor: String(leitura.n),
+      sub: `a leitura começa com ${leitura.criterios.minIntervalos}`,
+    }];
   }
   return [
     {
+      chave: 'periodo',
       rotulo: `Por ${unidade.singular} no período`,
       valor: seg(leitura.periodoMs),
-      sub: 'paradas dentro — contra o takt',
+      sub: 'com as paradas, do 1º ao último toque',
     },
     {
+      chave: 'takt',
       rotulo: 'Takt da semana',
       valor: seg(leitura.taktMs),
       sub: leitura.taktMs ? `semana ${takt.semana} · por ${unidade.singular}` : 'sem programa para comparar',
     },
-    { rotulo: 'Com a linha rodando', valor: seg(leitura.mediaMs), sub: 'sem as paradas marcadas' },
-    { rotulo: 'Sem as lacunas', valor: seg(leitura.normalMs), sub: 'sem parada nenhuma' },
     {
+      chave: 'rodando',
+      rotulo: `Por ${unidade.singular} com a linha rodando`,
+      valor: seg(leitura.mediaMs),
+      sub: 'sem as paradas marcadas',
+    },
+    { chave: 'normal', rotulo: 'Sem as lacunas', valor: seg(leitura.normalMs), sub: 'sem parada nenhuma' },
+    {
+      chave: 'lacunas',
       rotulo: 'Lacunas',
       valor: String(leitura.lacunas.length),
-      sub: leitura.lacunas.length ? `${tempoSomado(leitura.excessoMs)} além do normal` : 'nenhuma',
+      sub: leitura.lacunas.length
+        ? `${tempoSomado(leitura.excessoMs)} além do normal`
+        : `nenhum intervalo passou de ${leitura.criterios.fatorLacuna}× o normal`,
     },
   ];
 }
