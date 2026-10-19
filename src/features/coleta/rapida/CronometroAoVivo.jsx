@@ -11,15 +11,18 @@ import { est } from './estilos.js';
  */
 export default function CronometroAoVivo({
   crono, parcial, totalParadaMs, motivos, unidade,
-  // Embalagem Takt Time: o ritmo por hora da lugar ao ULTIMO intervalo e
-  // ao takt, lado a lado e em segundos — e' a comparacao que o chao faz.
+  // Embalagem Takt Time: o ritmo por hora da lugar ao ULTIMO intervalo, a'
+  // MEDIA ate' aqui e ao takt, em segundos — e' a comparacao que o chao faz.
   modoTakt = false, taktMs = null,
 }) {
   const {
     decorrido, pecas, pulso, emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
-    contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, ultimoIntervaloMs,
+    contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, ultimoIntervaloMs, mediaAteAquiMs,
   } = crono;
-  const acimaDoTakt = modoTakt && taktMs > 0 && ultimoIntervaloMs > taktMs;
+  /* O aviso vai na MEDIA, nao no ultimo: o rack de dois volumes sai com os
+     dois colados (25 s, 100 s...), e o ultimo intervalo passaria do takt a
+     cada dois volumes numa linha que atende. */
+  const acimaDoTakt = modoTakt && taktMs > 0 && mediaAteAquiMs > taktMs;
 
   return (
     <>
@@ -32,11 +35,16 @@ export default function CronometroAoVivo({
           <Parcial rotulo={maiuscula(unidade.plural)} valor={String(pecas)} />
           {modoTakt ? (
             <>
-              {/* Acima do takt, o valor ganha SETA e cor: a cor sozinha
-                  nao serve a quem olha de longe, de luva, com sol na tela. */}
               <Parcial
-                rotulo={acimaDoTakt ? 'Último ▲ takt' : 'Último'}
+                rotulo="Último"
                 valor={ultimoIntervaloMs ? formatarSegundos(ultimoIntervaloMs) : '—'}
+                sufixo="s"
+              />
+              {/* Acima do takt, a media ganha SETA no rotulo e fundo: a cor
+                  sozinha nao serve a quem olha de longe, de luva, com sol. */}
+              <Parcial
+                rotulo={acimaDoTakt ? 'Média ▲ takt' : 'Média'}
+                valor={mediaAteAquiMs ? formatarSegundos(mediaAteAquiMs) : '—'}
                 sufixo="s"
                 tom={acimaDoTakt ? 'atencao' : null}
               />
@@ -45,7 +53,12 @@ export default function CronometroAoVivo({
           ) : (
             <Parcial rotulo="Ritmo" valor={parcial && pecas > 0 ? String(Math.round(parcial.pecasPorHora)) : '—'} sufixo={`${unidade.abrev}/h`} />
           )}
-          <Parcial rotulo="Parado" valor={totalParadaMs > 0 ? formatarDuracao(totalParadaMs) : '—'} />
+          {/* No modo takt sao quatro numeros e a tela e' de celular: o
+              parado sai daqui (a parada em curso ocupa a tela inteira) e
+              volta no resultado. */}
+          {!modoTakt && (
+            <Parcial rotulo="Parado" valor={totalParadaMs > 0 ? formatarDuracao(totalParadaMs) : '—'} />
+          )}
         </div>
       </section>
 
@@ -72,7 +85,11 @@ export default function CronometroAoVivo({
         >
           <span key={pulso} style={est.contagem}>{pecas}</span>
           <span style={est.rotuloBotao}>TOQUE A CADA {unidade.singular.toUpperCase()}</span>
-          <span style={est.dicaBotao}>ou só cronometre e digite o total no fim</span>
+          {/* Na embalagem, digitar o total no fim perde o intervalo de cada
+              volume — que e' o motivo da tela. A dica nao convida a isso. */}
+          <span style={est.dicaBotao}>
+            {modoTakt ? 'o horário de cada toque é gravado sozinho' : 'ou só cronometre e digite o total no fim'}
+          </span>
         </button>
       )}
 

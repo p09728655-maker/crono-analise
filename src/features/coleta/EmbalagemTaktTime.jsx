@@ -41,7 +41,17 @@ const nada = () => {};
 export default function EmbalagemTaktTime({ aoSair }) {
   const motivos = useMotivosParada();
   const cadastro = useCadastroMaquinas();
-  useEffect(() => { carregarMaquinas(); }, []);
+  /* 'buscando' | 'ok' | 'falhou'. Sem isto, o instante antes do cadastro
+     chegar — ou o tablet sem rede e sem cadastro guardado — dizia "peca ao
+     administrador para cadastrar": culpava o cadastro quando faltava rede. */
+  const [busca, setBusca] = useState('buscando');
+  useEffect(() => {
+    let vivo = true;
+    carregarMaquinas().then(
+      (r) => { if (vivo) setBusca(r?.maquinas?.length || r?.grupos?.length ? 'ok' : 'falhou'); },
+    );
+    return () => { vivo = false; };
+  }, []);
 
   /* A maquina da embalagem: so' as do grupo EMBALAGEM, ativas. Com uma so'
      (o caso de hoje), ela ja' vem escolhida — nada a tocar antes de medir. */
@@ -167,12 +177,18 @@ export default function EmbalagemTaktTime({ aoSair }) {
             </button>
           ) : (
             <section style={est.aviso} role="status">
-              Nenhuma máquina no grupo EMBALAGEM. Peça ao administrador para cadastrar no PC,
-              em Ferramentas → Máquinas — sem ela não há takt nem relatório da embalagem.
+              {semMaquina(busca, cadastro)}
             </section>
           )}
 
-          <Historico historico={historicoDaEmbalagem} naFila={historico.naFila} aoRemover={historico.remover} />
+          <Historico
+            historico={historicoDaEmbalagem}
+            naFila={historico.naFila}
+            aoRemover={historico.remover}
+            abrev={VOLUME.abrev}
+            jaEsta="na Embalagem Takt Time, no PC"
+            vaiPara="para a Embalagem Takt Time, no PC"
+          />
           <div style={est.rodape} />
         </>
       )}
@@ -197,7 +213,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           totalParadaMs={paradas.total.totalMs}
           motivos={motivos}
           paradas={paradas}
-          maquina={maquina?.nome || ''} aoTrocarMaquina={nada}
+          maquina={maquina?.nome || ''} aoTrocarMaquina={nada} maquinaFixa={maquina?.nome || '—'}
           peca={produto} aoTrocarPeca={setProduto}
           ciclosPorPeca={1} aoTrocarCiclos={nada}
           furacaoPassante={false} aoTrocarPassante={nada}
@@ -245,11 +261,12 @@ function CartaoTakt({ takt }) {
 
 /**
  * O RESUMO do periodo que fechou: o que saiu (volumes/hora, paradas dentro)
- * e como saiu (intervalo tipico contra o takt, e as lacunas). A leitura
+ * e como saiu (media por volume contra o takt, e as lacunas). A leitura
  * completa, com grafico e a lista das lacunas, fica no PC.
  */
 function ResumoTakt({ resultado, leitura, takt }) {
   const suficiente = leitura?.suficiente;
+  const acima = suficiente && takt.taktMs > 0 && leitura.mediaMs > takt.taktMs;
   return (
     <>
       <div style={est.destaqueRitmo} aria-label="Volumes por hora no período">
@@ -259,11 +276,14 @@ function ResumoTakt({ resultado, leitura, takt }) {
         </span>
       </div>
       <div style={est.linhaParcial}>
+        {/* A MEDIA por volume (soma dos intervalos / volumes) e' o que se
+            compara com o takt: com volume em par, qualquer medida de
+            posicao mente. Ver leituraPecaAPeca. */}
         <Parcial
-          rotulo={suficiente && takt.taktMs && leitura.medianaMs > takt.taktMs ? 'Típico ▲ takt' : 'Típico'}
-          valor={suficiente ? formatarSegundos(leitura.medianaMs) : '—'}
+          rotulo={acima ? 'Média ▲ takt' : 'Média'}
+          valor={suficiente ? formatarSegundos(leitura.mediaMs) : '—'}
           sufixo="s"
-          tom={suficiente && takt.taktMs && leitura.medianaMs > takt.taktMs ? 'atencao' : null}
+          tom={acima ? 'atencao' : null}
         />
         <Parcial rotulo="Takt" valor={takt.taktMs > 0 ? formatarSegundos(takt.taktMs) : '—'} sufixo="s" />
         <Parcial rotulo="Lacunas" valor={suficiente ? String(leitura.lacunas.length) : '—'} />
@@ -271,8 +291,8 @@ function ResumoTakt({ resultado, leitura, takt }) {
       </div>
       {leitura && !suficiente && (
         <section style={est.aviso} role="status">
-          Poucos volumes para ler o intervalo: {leitura.n} intervalo(s), mínimo de{' '}
-          {leitura.criterios.minIntervalos}. O ritmo vale; o típico e as lacunas, ainda não.
+          Poucos volumes para ler o intervalo: {leitura.motivo}. O ritmo vale; a média
+          por volume e as lacunas, ainda não.
         </section>
       )}
       {!(takt.taktMs > 0) && (
@@ -280,4 +300,16 @@ function ResumoTakt({ resultado, leitura, takt }) {
       )}
     </>
   );
+}
+
+/** Por que nao ha' maquina para medir — rede, cadastro ou grupo. */
+function semMaquina(busca, cadastro) {
+  const temCadastro = (cadastro.maquinas || []).length > 0;
+  if (!temCadastro && busca === 'buscando') return 'Buscando o cadastro de máquinas…';
+  if (!temCadastro) {
+    return 'Sem rede e sem o cadastro de máquinas neste aparelho. Conecte à rede uma vez para '
+      + 'baixar o cadastro — depois ele fica guardado e a medição funciona sem rede.';
+  }
+  return 'Nenhuma máquina no grupo EMBALAGEM. Peça ao administrador para cadastrar no PC, em '
+    + 'Ferramentas → Máquinas — sem ela não há takt nem tela da embalagem no PC.';
 }

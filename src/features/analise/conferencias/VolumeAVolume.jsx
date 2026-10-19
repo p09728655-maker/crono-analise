@@ -91,7 +91,7 @@ function semTakt(estado, nomeGrupo) {
  * reuniao.
  */
 export function frasesVolumeAVolume({ leitura, takt, unidade, nomeGrupo }) {
-  const { plural } = unidade;
+  const { singular, plural } = unidade;
   if (!leitura.suficiente) {
     return {
       tom: 'neutro',
@@ -100,63 +100,82 @@ export function frasesVolumeAVolume({ leitura, takt, unidade, nomeGrupo }) {
     };
   }
 
+  /**
+   * O que se compara com o takt e' a MEDIA por volume (soma dos intervalos
+   * / volumes), lacunas dentro: e' o que de fato saiu com a linha rodando.
+   * Sem as lacunas vem ao lado, para dizer de onde vem a diferenca — do
+   * passo da linha ou dos buracos. Ver leituraPecaAPeca.
+   */
   const linhas = [];
   let tom;
   let manchete;
-  const tipico = emSegundos(leitura.medianaMs);
+  const mediaTxt = emSegundos(leitura.mediaMs);
+  const normalTxt = emSegundos(leitura.normalMs);
+  const temLacuna = leitura.lacunas.length > 0;
   if (leitura.taktMs) {
-    const pct = Math.abs(Math.round(leitura.medianaVsTaktPct));
-    if (leitura.medianaMs <= leitura.taktMs) {
-      manchete = `Com a linha rodando, o intervalo típico entre ${plural} é de ${tipico} — dentro do takt de ${emSegundos(leitura.taktMs)}, com ${pct}% de folga.`;
-      tom = leitura.lacunas.length ? 'atencao' : 'atende';
+    const taktTxt = emSegundos(leitura.taktMs);
+    const pct = Math.abs(Math.round(leitura.mediaVsTaktPct));
+    if (leitura.mediaMs <= leitura.taktMs) {
+      manchete = `Com a linha rodando, saiu um ${singular} a cada ${mediaTxt} em média — dentro do takt de ${taktTxt}, com ${pct}% de folga.`;
+      tom = temLacuna ? 'atencao' : 'atende';
+    } else if (temLacuna && leitura.normalMs <= leitura.taktMs) {
+      manchete = `Com a linha rodando, saiu um ${singular} a cada ${mediaTxt} em média — ${pct}% acima do takt de ${taktTxt}.`;
+      linhas.push(`Sem as lacunas seriam ${normalTxt} por ${singular}, dentro do takt: o que tira a linha do takt são as paradas que ninguém marcou, não o passo dela.`);
+      tom = 'falha';
     } else {
-      manchete = `Com a linha rodando, o intervalo típico entre ${plural} é de ${tipico} — ${pct}% acima do takt de ${emSegundos(leitura.taktMs)}: mesmo sem parar, a linha não acompanha a demanda.`;
+      manchete = `Com a linha rodando, saiu um ${singular} a cada ${mediaTxt} em média — ${pct}% acima do takt de ${taktTxt}.`;
+      linhas.push(temLacuna
+        ? `Mesmo sem as lacunas (${normalTxt} por ${singular}), a linha não acompanha a demanda: o passo dela é mais lento que o takt.`
+        : 'Sem lacuna nenhuma: é o passo da linha que está mais lento que o takt, não parada.');
       tom = 'falha';
     }
   } else {
-    manchete = `O intervalo típico entre ${plural} é de ${tipico}.`;
-    tom = leitura.lacunas.length ? 'atencao' : 'neutro';
+    manchete = `Com a linha rodando, saiu um ${singular} a cada ${mediaTxt} em média.`;
+    tom = temLacuna ? 'atencao' : 'neutro';
     linhas.push(`Sem takt para comparar: ${semTakt(takt.estado, nomeGrupo)}`);
   }
 
-  if (leitura.lacunas.length) {
+  if (temLacuna) {
     const n = leitura.lacunas.length;
     const cerca = Math.round(leitura.pecasNoExcesso);
     linhas.push(
-      `${n} ${n === 1 ? 'lacuna' : 'lacunas'} — intervalo maior que o dobro do típico — `
+      `${n} ${n === 1 ? 'lacuna' : 'lacunas'} — intervalo maior que o dobro do normal (${normalTxt}) — `
       + `${n === 1 ? 'somou' : 'somaram'} ${porPeca(leitura.excessoMs)} além do normal`
-      + `${cerca >= 1 ? `: cerca de ${cerca} ${cerca === 1 ? unidade.singular : plural} que deixaram de sair` : ''}. `
+      + `${cerca >= 1 ? `: cerca de ${cerca} ${cerca === 1 ? singular : plural} que ${cerca === 1 ? 'deixou' : 'deixaram'} de sair` : ''}. `
       + 'As paradas marcadas no cronômetro já estão fora desta conta: estas, ninguém marcou.',
     );
   } else {
-    linhas.push('Nenhuma lacuna: nenhum intervalo passou do dobro do típico.');
+    linhas.push('Nenhuma lacuna: nenhum intervalo passou do dobro do normal.');
   }
   return { tom, manchete, linhas };
 }
 
-/** Os cinco numeros, na ordem em que se leem. Mesma lista na tela e no papel. */
+/** Os quatro numeros, na ordem em que se leem. Mesma lista na tela e no papel. */
 function numerosDaLeitura(leitura, takt, unidade) {
   if (!leitura.suficiente) {
-    return [{ rotulo: 'Intervalos tocados', valor: String(leitura.n), sub: `mínimo de ${leitura.criterios.minIntervalos}` }];
+    return [{ rotulo: 'Intervalos tocados', valor: String(leitura.n), sub: `a leitura começa com ${leitura.criterios.minIntervalos}` }];
   }
   return [
-    { rotulo: 'Intervalo típico', valor: emSegundos(leitura.medianaMs), sub: `mediana de ${leitura.n} intervalos` },
+    {
+      rotulo: `Média por ${unidade.singular}`,
+      valor: emSegundos(leitura.mediaMs),
+      sub: `${leitura.n} intervalos, lacunas dentro`,
+    },
     {
       rotulo: 'Takt da semana',
       valor: leitura.taktMs ? emSegundos(leitura.taktMs) : '—',
       sub: leitura.taktMs ? `semana ${takt.semana} · por ${unidade.singular}` : 'sem programa para comparar',
     },
     {
-      rotulo: 'Acima do takt',
-      valor: leitura.taktMs ? `${leitura.acimaDoTakt} de ${leitura.n}` : '—',
-      sub: leitura.taktMs ? `${Math.round(leitura.acimaDoTaktPct)}% dos intervalos` : '',
+      rotulo: 'Sem as lacunas',
+      valor: emSegundos(leitura.normalMs),
+      sub: 'o passo quando a linha anda',
     },
     {
       rotulo: 'Lacunas',
       valor: String(leitura.lacunas.length),
       sub: leitura.lacunas.length ? `${porPeca(leitura.excessoMs)} além do normal` : 'nenhuma',
     },
-    { rotulo: 'Regularidade', valor: leitura.estabilidade.rotulo, sub: 'de um intervalo para o outro' },
   ];
 }
 
@@ -187,6 +206,11 @@ export default function VolumeAVolume({
           {faixaHoraria(conferencia) ? ` · ${faixaHoraria(conferencia)}` : ''}
           {' · '}{conferencia.pecas} {unidade.plural} em {formatarDuracao(Number(conferencia.duracao_ms))}
         </p>
+        {/* A nota do analista ("faltou caixa 9h10") e' muitas vezes a
+            explicacao da lacuna: precisa estar onde a lacuna aparece. */}
+        {conferencia.observacao && (
+          <p style={est.textoModal}><strong>Obs. do analista:</strong> {conferencia.observacao}</p>
+        )}
 
         {r.estado === 'carregando' && <p style={est.textoModal}>Carregando os toques desta medição…</p>}
         {r.estado === 'erro' && (
@@ -250,7 +274,8 @@ function notaDoCriterio(leitura, unidade) {
   return `Intervalo = tempo de um ${unidade.singular === 'volume' ? 'volume' : 'toque'} até o seguinte, com a linha rodando: `
     + 'as paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) '
     + 'continuam dentro dos intervalos. O primeiro toque não tem intervalo — o cronômetro começa num instante '
-    + `qualquer. Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o típico. `
+    + 'qualquer. Média = soma dos intervalos ÷ quantidade (o que se compara com o takt). '
+    + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal — a média dos intervalos que não são lacuna. `
     + `Leitura a partir de ${leitura.criterios.minIntervalos} intervalos.`
     + (unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é colado em volumes.' : '');
 }
@@ -264,7 +289,7 @@ function TabelaLacunas({ leitura, unidade }) {
           <tr>
             <th style={est.thNum}>{capital(unidade.singular)} nº</th>
             <th style={est.thNum}>Intervalo</th>
-            <th style={est.thNum}>Além do típico</th>
+            <th style={est.thNum}>Além do normal</th>
           </tr>
         </thead>
         <tbody>
@@ -272,7 +297,7 @@ function TabelaLacunas({ leitura, unidade }) {
             <tr key={l.indice}>
               <td style={est.tdNum}>{l.indice + 2}</td>
               <td style={est.tdNumForte}>{emSegundos(l.ms)}</td>
-              <td style={est.tdNum}>{emSegundos(l.ms - leitura.medianaMs)}</td>
+              <td style={est.tdNum}>{emSegundos(l.ms - leitura.normalMs)}</td>
             </tr>
           ))}
         </tbody>
@@ -323,6 +348,10 @@ function FolhaVolumeAVolume({
         ))}
       </section>
 
+      {conferencia.observacao && (
+        <p style={{ margin: '0 0 10px' }}><strong>Obs. do analista:</strong> {conferencia.observacao}</p>
+      )}
+
       {/* O destaque no papel e' a borda grossa, nao a cor: a impressora da
           fabrica e' P&B. */}
       <section style={{ border: '2px solid #000', padding: '6px 8px', marginBottom: 12, breakInside: 'avoid' }}>
@@ -330,7 +359,7 @@ function FolhaVolumeAVolume({
         {frases.linhas.map((l) => <p key={l} style={{ margin: '4px 0 0' }}>{l}</p>)}
       </section>
 
-      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(5, 1fr)' }}>
+      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(4, 1fr)' }}>
         {numerosDaLeitura(leitura, takt, unidade).map((k) => (
           <div key={k.rotulo} style={imp.campo}>
             <span style={imp.campoRotulo}>{k.rotulo}</span>
@@ -350,7 +379,7 @@ function FolhaVolumeAVolume({
               <tr>
                 <th style={imp.thNum}>{capital(unidade.singular)} nº</th>
                 <th style={imp.thNum}>Intervalo</th>
-                <th style={imp.thNum}>Além do típico</th>
+                <th style={imp.thNum}>Além do normal</th>
                 <th style={imp.th}>O que aconteceu</th>
               </tr>
             </thead>
@@ -359,7 +388,7 @@ function FolhaVolumeAVolume({
                 <tr key={l.indice}>
                   <td style={imp.tdNum}>{l.indice + 2}</td>
                   <td style={imp.tdNum}>{emSegundos(l.ms)}</td>
-                  <td style={imp.tdNum}>{emSegundos(l.ms - leitura.medianaMs)}</td>
+                  <td style={imp.tdNum}>{emSegundos(l.ms - leitura.normalMs)}</td>
                   {/* Em branco de proposito: e' para preencher a caneta na
                       conversa com a lideranca da linha. */}
                   <td style={{ ...imp.td, width: '45%' }} />

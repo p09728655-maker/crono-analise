@@ -93,8 +93,8 @@ for (let i = 0; i < 12; i++) {
   await t.waitForTimeout(260);
 }
 const painelTempo = await t.locator('[aria-label="Tempo decorrido"]').innerText();
-checar(/ÚLTIMO/i.test(painelTempo) && /TAKT/i.test(painelTempo) && painelTempo.includes('72.0'),
-  'cronometro rodando mostra ULTIMO intervalo ao lado do TAKT 72.0');
+checar(/ÚLTIMO/i.test(painelTempo) && /MÉDIA/i.test(painelTempo) && /TAKT/i.test(painelTempo)
+  && painelTempo.includes('72.0'), 'cronometro rodando mostra ULTIMO, MEDIA e TAKT 72.0');
 if (FOTOS) await t.screenshot({ path: `${FOTOS}/tablet-rodando.png` });
 
 await t.getByRole('button', { name: /Encerrar/ }).click();
@@ -102,7 +102,8 @@ const resumo = t.locator('[aria-label="Resultado da conferência"]');
 await resumo.waitFor({ timeout: 4000 });
 const textoResumo = await resumo.innerText();
 checar(/volumes\/hora/i.test(textoResumo), 'resultado em volumes/hora — nao pecas/hora');
-checar(/TÍPICO/i.test(textoResumo) && /LACUNAS/i.test(textoResumo), 'resultado traz tipico e lacunas');
+checar(/MÉDIA/i.test(textoResumo) && /LACUNAS/i.test(textoResumo), 'resultado traz media e lacunas');
+checar(await resumo.locator('select').count() === 0, 'resultado mostra a maquina, sem seletor que nao faz nada');
 checar(/PRODUTO/.test(textoResumo), 'o campo e PRODUTO, nao peca');
 checar(/Embalagem Takt Time, no PC/.test(await t.locator('main, body').first().innerText())
   && !/relatório Ritmo por máquina/.test(await t.locator('body').innerText()),
@@ -117,6 +118,51 @@ checar(enviado?.maquina === 'EMBALAGEM 01' && enviado?.peca === 'Rack Sirius 1.6
 checar(Array.isArray(enviado?.marcasMs) && enviado.marcasMs.length === 12 && enviado.pecas === 12,
   'os 12 toques sobem como 12 marcas, uma por volume');
 checar(enviado?.marcasMs?.every((m, i, a) => i === 0 || m >= a[i - 1]), 'marcas em ordem');
+/* ------------------- o RELOGIO das marcas: parada descontada e desfazer */
+await t.getByRole('button', { name: /Nova conferência/ }).click();
+await t.getByRole('button', { name: /INICIAR/ }).click();
+await alvo.waitFor({ timeout: 4000 });
+for (let i = 0; i < 3; i++) { await alvo.dispatchEvent('pointerdown'); await t.waitForTimeout(260); }
+// Parada marcada de ~1,5 s: tem de SAIR do intervalo seguinte.
+await t.getByRole('button', { name: 'Parou' }).click();
+await t.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
+await t.locator('[aria-label="Por que a máquina parou"] button').first().click();
+const voltar = t.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
+await voltar.waitFor({ timeout: 4000 });
+await t.waitForTimeout(1500);
+await voltar.dispatchEvent('pointerdown');
+await t.waitForTimeout(300);
+await alvo.dispatchEvent('pointerdown'); // 4o volume: ~300 ms rodando depois da parada
+await t.waitForTimeout(260);
+await alvo.dispatchEvent('pointerdown'); // 5o — que vai ser desfeito
+await t.getByRole('button', { name: /Desfazer/ }).click();
+await t.waitForTimeout(260);
+await alvo.dispatchEvent('pointerdown'); // o 5o de verdade
+await t.getByRole('button', { name: /Encerrar/ }).click();
+await resumo.waitFor({ timeout: 4000 });
+enviados.length = 0;
+await t.getByRole('button', { name: /salvar conferência/i }).click();
+for (let i = 0; i < 40 && !enviados.length; i++) await t.waitForTimeout(150);
+const comParada = enviados[0];
+const iv = (comParada?.marcasMs || []).slice(1).map((m, i) => m - comParada.marcasMs[i]);
+checar(comParada?.marcasMs?.length === 5 && comParada.pecas === 5, 'desfazer tira a marca junto com a contagem: 5 e 5');
+checar(iv[2] > 0 && iv[2] < 1000, `parada marcada sai do intervalo seguinte (${iv[2]} ms, nao ~1.800)`);
+checar(iv[3] > 400, `apos desfazer, o intervalo conta da marca anterior (${iv[3]} ms)`);
+checar(comParada?.marcasMs?.[4] <= comParada?.duracaoMs, 'nenhuma marca passa do fim do periodo');
+
+/* ------------- contagem corrigida a mao: o aviso aparece e as marcas nao sobem */
+await t.getByRole('button', { name: /Nova conferência/ }).click();
+await t.getByRole('button', { name: /INICIAR/ }).click();
+await alvo.waitFor({ timeout: 4000 });
+for (let i = 0; i < 4; i++) { await alvo.dispatchEvent('pointerdown'); await t.waitForTimeout(260); }
+await t.getByRole('button', { name: /Encerrar/ }).click();
+await t.locator('input[aria-label="Volumes no período"]').fill('20');
+checar(await t.getByText(/A contagem foi corrigida à mão/).count() === 1, 'contagem corrigida: o aviso aparece na hora');
+enviados.length = 0;
+await t.getByRole('button', { name: /salvar conferência/i }).click();
+for (let i = 0; i < 40 && !enviados.length; i++) await t.waitForTimeout(150);
+checar(enviados[0]?.pecas === 20 && enviados[0]?.marcasMs === null, 'contagem corrigida: 20 volumes, marcas nao sobem');
+
 checar(errosTablet.length === 0, `tablet sem erro de pagina${errosTablet.length ? `: ${errosTablet[0]}` : ''}`);
 await tablet.close();
 
@@ -134,8 +180,9 @@ for (const s of intervalosS) marcas.push(marcas[marcas.length - 1] + s * 1000);
 const medicao = {
   id: '00000000-0000-0000-0000-00000000c0f1', maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6',
   iniciado_em: new Date(hoje.getTime() - 15 * 60000).toISOString(), finalizado_em: hoje.toISOString(),
-  duracao_ms: 900000, pecas: marcas.length, ciclos_por_peca: 1, furacao_passante: false, observacao: null,
+  duracao_ms: 900000, pecas: marcas.length, ciclos_por_peca: 1, furacao_passante: false,
   salvo_em: hoje.toISOString(), arquivada: false, com_marcas: true, paradas: [],
+  observacao: 'Faltou caixa às 9h10',
 };
 await simularServidor(p, { conferencias: [medicao], marcas });
 
@@ -148,13 +195,16 @@ checar(true, 'menu leva para /analise/embalagem');
 
 await p.getByText('Takt desta semana · EMBALAGEM').waitFor({ timeout: 8000 });
 checar(await p.getByText('72.0 s').count() > 0, 'takt desta semana em segundos: 72.0 s');
+checar(await p.getByText('Faltou caixa às 9h10').count() > 0, 'a observacao do analista aparece na tabela');
 
 await p.getByRole('button', { name: 'Volume a volume' }).click();
 const janela = p.getByRole('dialog', { name: /Volume a volume/ });
-await janela.getByText(/intervalo típico entre volumes é de 60.0 s/).waitFor({ timeout: 8000 });
+// 12 x 60 s + 200 s = 920 s / 13 = 70,8 s por volume; takt 72 s.
+await janela.getByText(/saiu um volume a cada 70.8 s em média/).waitFor({ timeout: 8000 });
 const textoJanela = await janela.innerText();
-checar(/dentro do takt de 72.0 s/.test(textoJanela), 'veredito: tipico 60.0 s dentro do takt de 72.0 s');
-checar(/1 lacuna/.test(textoJanela), 'aponta a lacuna');
+checar(/dentro do takt de 72.0 s/.test(textoJanela), 'veredito pela MEDIA: 70.8 s dentro do takt de 72.0 s');
+checar(/1 lacuna — intervalo maior que o dobro do normal \(60.0 s\)/.test(textoJanela), 'aponta a lacuna contra o normal de 60.0 s');
+checar(/Faltou caixa às 9h10/.test(textoJanela), 'a observacao aparece junto da lacuna');
 checar(await janela.locator('svg[role="img"]').count() === 1, 'grafico volume a volume desenhado');
 checar(/Onde a linha parou sem parada marcada/.test(textoJanela) && textoJanela.includes('200.0 s'),
   'lista a lacuna de 200.0 s');

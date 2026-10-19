@@ -6,8 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  CRITERIOS_INTERVALOS, MAX_MARCAS, intervalosEntreMarcas, leituraPecaAPeca, marcasValidas,
-  unidadeDoPosto,
+  CRITERIOS_INTERVALOS, intervalosEntreMarcas, leituraPecaAPeca, unidadeDoPosto,
 } from '../src/domain/cronoanalise.js';
 import { taktDaMedicao } from '../src/domain/demandaSemanal.js';
 
@@ -17,31 +16,8 @@ const marcasDe = (intervalosS, inicioS = 0) => {
   for (const s of intervalosS) marcas.push(marcas[marcas.length - 1] + s * 1000);
   return marcas;
 };
-
-describe('as marcas que servem', () => {
-  it('lista em ordem, uma por volume, dentro do periodo, volta limpa', () => {
-    expect(marcasValidas([1000, 2000, 2000, 5000], { pecas: 4, duracaoMs: 6000 }))
-      .toEqual([1000, 2000, 2000, 5000]);
-  });
-
-  it('contagem corrigida a mao (marcas != volumes) nao vira intervalo falso', () => {
-    expect(marcasValidas([1000, 2000, 3000], { pecas: 4, duracaoMs: 6000 })).toBeNull();
-  });
-
-  it('fora de ordem, negativa, quebrada ou depois do fim do periodo: nenhuma', () => {
-    expect(marcasValidas([2000, 1000], { pecas: 2 })).toBeNull();
-    expect(marcasValidas([-1, 1000], { pecas: 2 })).toBeNull();
-    expect(marcasValidas([1000.5, 2000], { pecas: 2 })).toBeNull();
-    expect(marcasValidas(['x', 2000], { pecas: 2 })).toBeNull();
-    expect(marcasValidas([1000, 7000], { pecas: 2, duracaoMs: 6000 })).toBeNull();
-  });
-
-  it('vazia, ausente ou maior que o teto: nenhuma', () => {
-    expect(marcasValidas([], { pecas: 0 })).toBeNull();
-    expect(marcasValidas(null)).toBeNull();
-    expect(marcasValidas(new Array(MAX_MARCAS + 1).fill(0))).toBeNull();
-  });
-});
+/** a, b, a, b... com n intervalos. */
+const alternados = (a, b, n) => Array.from({ length: n }, (_, i) => (i % 2 ? b : a));
 
 describe('os intervalos', () => {
   it('N marcas dao N-1 intervalos — o tempo antes do primeiro toque nao entra', () => {
@@ -61,26 +37,26 @@ describe('a leitura volume a volume', () => {
     const l = leituraPecaAPeca({ marcasMs: marcasDe([60, 60, 60]) });
     expect(l.suficiente).toBe(false);
     expect(l.intervalos).toEqual([60000, 60000, 60000]);
-    expect(l.motivo).toMatch(/mínimo de 10/);
-    expect(l.medianaMs).toBeUndefined();
+    expect(l.motivo).toBe('3 intervalos — a leitura começa com 10');
+    expect(l.mediaMs).toBeUndefined();
   });
 
   /**
    * Doze volumes a cada 60 s e uma lacuna de 200 s no meio (13 intervalos).
-   *   mediana     = 60 s
-   *   limite      = 2 x 60 = 120 s  -> so' os 200 s passam
-   *   excesso     = 200 - 60 = 140 s
-   *   no excesso  = 140 / 60 = 2,33 volumes
-   *   takt 65 s   -> so' a lacuna fica acima (1 de 13)
-   *   mediana x takt = 60/65 - 1 = -7,69% (mais rapido que o takt)
+   *   media         = (12 x 60 + 200) / 13 = 920 / 13 = 70,77 s  <- contra o takt
+   *   1a volta      = limite 2 x 70,77 = 141,5 s -> os 200 s saem
+   *   2a volta      = normal 60 s, limite 120 s  -> nada muda: para
+   *   excesso       = 200 - 60 = 140 s -> 140 / 60 = 2,33 volumes
+   *   takt 65 s     -> media 8,88% ACIMA; sem a lacuna, 7,69% abaixo
    */
   const intervalosS = [60, 60, 60, 60, 60, 60, 200, 60, 60, 60, 60, 60, 60];
   const l = leituraPecaAPeca({ marcasMs: marcasDe(intervalosS, 30), taktMs: 65000 });
 
-  it('mediana e lacuna batem com a conta a mao', () => {
+  it('media, normal e lacuna batem com a conta a mao', () => {
     expect(l.suficiente).toBe(true);
     expect(l.n).toBe(13);
-    expect(l.medianaMs).toBe(60000);
+    expect(l.mediaMs).toBeCloseTo(920000 / 13, 6);
+    expect(l.normalMs).toBe(60000);
     expect(l.limiteLacunaMs).toBe(120000);
     expect(l.lacunas).toEqual([{ indice: 6, ms: 200000 }]);
     expect(l.excessoMs).toBe(140000);
@@ -89,36 +65,61 @@ describe('a leitura volume a volume', () => {
     expect(l.menorMs).toBe(60000);
   });
 
-  it('a regularidade e medida SEM a lacuna — ela ja e contada a parte', () => {
-    // Todos os outros intervalos sao 60 s: a linha anda no mesmo passo.
-    expect(l.cvPct).toBe(0);
-    expect(l.estabilidade.nivel).toBe('estavel');
-  });
-
-  it('contra o takt, pela mediana — a lacuna nao faz a linha parecer lenta', () => {
-    expect(l.acimaDoTakt).toBe(1);
-    expect(l.acimaDoTaktPct).toBeCloseTo(100 / 13, 6);
-    expect(l.medianaVsTaktPct).toBeCloseTo(-7.6923, 3);
+  it('contra o takt vai a MEDIA, com a lacuna dentro; sem ela, o "se nao parasse"', () => {
+    expect(l.mediaVsTaktPct).toBeCloseTo(((920 / 13) / 65 - 1) * 100, 6);
+    expect(l.mediaVsTaktPct).toBeGreaterThan(0);
+    expect(l.normalVsTaktPct).toBeCloseTo(-7.6923, 3);
   });
 
   it('sem takt, a leitura existe e a comparacao fica vazia — nunca zero', () => {
     const semTakt = leituraPecaAPeca({ marcasMs: marcasDe(intervalosS) });
     expect(semTakt.taktMs).toBeNull();
-    expect(semTakt.acimaDoTakt).toBeNull();
-    expect(semTakt.medianaVsTaktPct).toBeNull();
-  });
-
-  it('linha regular, sem lacuna nenhuma', () => {
-    const regular = leituraPecaAPeca({ marcasMs: marcasDe(new Array(12).fill(50)) });
-    expect(regular.lacunas).toEqual([]);
-    expect(regular.excessoMs).toBe(0);
-    expect(regular.cvPct).toBe(0);
-    expect(regular.estabilidade.nivel).toBe('estavel');
+    expect(semTakt.mediaVsTaktPct).toBeNull();
+    expect(semTakt.normalVsTaktPct).toBeNull();
   });
 
   it('o criterio e declarado junto com a leitura', () => {
     expect(l.criterios).toBe(CRITERIOS_INTERVALOS);
     expect(CRITERIOS_INTERVALOS.fatorLacuna).toBe(2);
+  });
+});
+
+/**
+ * Os tres casos da revisao de 19/10, em que a MEDIANA mentia. Ficam como
+ * trava: qualquer volta para medida de posicao quebra aqui.
+ */
+describe('volume em par e ritmo misto — o que a mediana errava', () => {
+  it('rack de 2 volumes saindo colados (25 s / 100 s): nenhuma lacuna, e atende o takt de 72 s', () => {
+    // 7 x 25 + 6 x 100 = 775 s em 13 intervalos = 59,6 s por volume.
+    const l = leituraPecaAPeca({ marcasMs: marcasDe(alternados(25, 100, 13)), taktMs: 72000 });
+    expect(l.lacunas).toEqual([]);
+    expect(l.mediaMs).toBeCloseTo(775000 / 13, 6);
+    expect(l.mediaMs).toBeLessThan(72000);
+  });
+
+  it('60 s e 115 s misturados: a linha e 31% MAIS LENTA que o takt de 65 s', () => {
+    // 7 x 60 + 6 x 115 = 1.110 s / 13 = 85,4 s por volume.
+    const l = leituraPecaAPeca({ marcasMs: marcasDe(alternados(60, 115, 13)), taktMs: 65000 });
+    expect(l.mediaMs).toBeCloseTo(1110000 / 13, 6);
+    expect(l.mediaVsTaktPct).toBeCloseTo(31.36, 1);
+    expect(l.lacunas).toEqual([]);
+  });
+
+  it('70 s e 40 s misturados: a linha ACOMPANHA o takt de 65 s', () => {
+    // 7 x 70 + 6 x 40 = 730 s / 13 = 56,2 s por volume.
+    const l = leituraPecaAPeca({ marcasMs: marcasDe(alternados(70, 40, 13)), taktMs: 65000 });
+    expect(l.mediaMs).toBeLessThan(65000);
+    expect(l.mediaVsTaktPct).toBeCloseTo(-13.6, 1);
+  });
+
+  it('uma parada enorme nao esconde a menor ao lado dela', () => {
+    // 12 x 60, 1.200 s e 200 s. Na 1a volta a media (151 s) so' pega os
+    // 1.200; sem eles o normal cai para 70,8 s e os 200 s aparecem.
+    const l = leituraPecaAPeca({
+      marcasMs: marcasDe([60, 60, 60, 60, 60, 60, 1200, 60, 60, 60, 60, 60, 60, 200]),
+    });
+    expect(l.lacunas.map((x) => x.ms)).toEqual([1200000, 200000]);
+    expect(l.normalMs).toBe(60000);
   });
 });
 

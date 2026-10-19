@@ -109,22 +109,29 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
 
 - **No tablet**, o atalho *Embalagem Takt Time* abre direto o cronômetro, com a
   máquina do grupo EMBALAGEM já escolhida. Antes de começar aparece o takt da
-  semana, em segundos. Durante a medição, o intervalo do **último volume** fica
-  ao lado do **takt**, e passa a ter "▲ takt" no rótulo quando fica acima. Um
-  toque por volume; o horário de cada toque é gravado sozinho, sem digitação.
+  semana, em segundos. Durante a medição aparecem o intervalo do **último
+  volume**, a **média até ali** e o **takt**. Quando a média passa do takt, o
+  rótulo ganha "▲ takt". Um toque por volume; o horário de cada toque é gravado
+  sozinho, sem digitação.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
   medições da embalagem. Cada medição tocada abre o **volume a volume**:
-  gráfico do intervalo de cada volume contra a linha do takt, intervalo típico
-  (mediana), quantos ficaram acima do takt, **lacunas** e folha A4.
+  gráfico do intervalo de cada volume contra a linha do takt, **média por
+  volume**, o ritmo **sem as lacunas**, as **lacunas** e folha A4.
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O PCP cola o programa da embalagem em VOLUMES**: um rack que sai em dois
   volumes conta dois. Colado em produtos, o takt sai multiplicado pelo número
   de volumes e a linha parece folgada sem estar.
-- **Lacuna** = intervalo maior que o dobro do típico. Os intervalos são medidos
-  com a linha rodando: as paradas marcadas no cronômetro já saem deles. Por
-  isso a lacuna é parada que **ninguém marcou**. A regularidade é medida sem as
-  lacunas, que já são contadas à parte.
+- **O que se compara com o takt é a média por volume** (soma dos intervalos ÷
+  quantidade), com as lacunas dentro. Não é a mediana, nem volume a volume. O
+  rack de dois volumes sai com os dois colados (25 s, 100 s, 25 s…): a mediana
+  daria 25 s e acusaria lacuna onde não houve parada nenhuma, e metade das
+  barras passaria do takt numa linha que atende.
+- **Lacuna** = intervalo maior que o dobro do **ritmo normal**, que é a média
+  dos intervalos que não são lacuna. A conta se repete até parar de mudar, para
+  que uma parada enorme não esconda as menores. Os intervalos são medidos com a
+  linha rodando: as paradas marcadas no cronômetro já saem deles. Por isso a
+  lacuna é parada que **ninguém marcou**.
 - Se o analista corrigir a contagem à mão no fim, os toques **não** são salvos
   (a tela avisa): intervalo de uma contagem que os toques não explicam seria
   número falso. O banco garante a mesma regra (`conferencias_marcas_chk`: uma
@@ -1061,7 +1068,9 @@ reenviar o mesmo lote não duplica nada.
 | Takt | tempo disponível ÷ quantidade |
 | Takt da embalagem | (horas da semana − setup planejado) × 3.600 s ÷ volumes da semana, por linha |
 | Intervalo volume a volume | marca(n) − marca(n−1), no relógio da linha rodando; o primeiro toque não tem intervalo |
-| Lacuna | intervalo > 2 × mediana; excesso = Σ (intervalo − mediana); volumes perdidos ≈ excesso ÷ mediana |
+| Média por volume (contra o takt) | Σ intervalos ÷ n — lacunas dentro |
+| Ritmo normal | média dos intervalos que não são lacuna (repetida até estabilizar) |
+| Lacuna | intervalo > 2 × ritmo normal; excesso = Σ (lacuna − normal); volumes perdidos ≈ excesso ÷ normal |
 | Tendência (estudo) | regressão linear sobre a ordem dos ciclos; % (critério) = inclinação × (n−1) ÷ média; direção só com \|%\| ≥ 5 e R² ≥ t²₉₅/(t²₉₅+n−2). No quadro, a % exibida é fim ÷ início da reta |
 | Tendência (período) | regressão do ritmo (pç/h) sobre a DATA, em dias; direção só com \|%\| ≥ 8 e R² ≥ t²₉₅/(t²₉₅+df) na regressão do ritmo dividido pela média da própria peça, com df = n − k − 1 (k = peças medidas: cada média estimada custa um grau de liberdade) |
 | Nº operadores | Σ TP ÷ Takt |

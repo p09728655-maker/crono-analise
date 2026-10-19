@@ -21,51 +21,23 @@
  * instante qualquer, e o tempo ate' a primeira marca nao e' ciclo de nada.
  * N marcas dao N-1 intervalos.
  */
-import { classificarEstabilidade, coeficienteVariacao, media, mediana } from '../estatistica.js';
+import { media } from '../estatistica.js';
 
 /**
  * Criterios declarados ANTES dos numeros, como os da conferencia.
  *
- * - minIntervalos: com menos de dez intervalos a mediana e a variacao
- *   descrevem um punhado de pecas, nao o posto. O grafico aparece mesmo
+ * - minIntervalos: com menos de dez intervalos a media e as lacunas
+ *   descrevem um punhado de volumes, nao a linha. O grafico aparece mesmo
  *   assim (e' o dado bruto); a leitura, nao.
- * - fatorLacuna: intervalo maior que o DOBRO da mediana e' lacuna. Regra
- *   que se explica numa frase na reuniao — "a caixa que demorou mais que o
- *   dobro do normal" —, por isso o dobro e nao um limite estatistico que
- *   ninguem no chao consegue conferir.
+ * - fatorLacuna: intervalo maior que o DOBRO do ritmo normal e' lacuna.
+ *   Regra que se explica numa frase na reuniao — "o volume que demorou mais
+ *   que o dobro do normal" —, e nao um limite estatistico que ninguem no
+ *   chao consegue conferir.
  */
 export const CRITERIOS_INTERVALOS = {
   minIntervalos: 10,
   fatorLacuna: 2,
 };
-
-/** Teto de marcas por medicao: mais que isso nao e' toque de gente. */
-export const MAX_MARCAS = 20000;
-
-/**
- * As marcas servem? Inteiros >= 0, em ordem, uma por peca, dentro do periodo.
- *
- * Devolve a lista limpa ou null. Null e' o caminho comum e nao um erro: a
- * medicao feita por horarios, ou com a contagem corrigida a mao no fim,
- * simplesmente nao tem marcas — e marca que nao bate com a contagem daria
- * intervalo falso, entao e' melhor nenhuma.
- */
-export function marcasValidas(marcas, { pecas, duracaoMs } = {}) {
-  if (!Array.isArray(marcas) || !marcas.length || marcas.length > MAX_MARCAS) return null;
-  const qtd = Number(pecas);
-  if (Number.isFinite(qtd) && marcas.length !== qtd) return null;
-  const teto = Number(duracaoMs);
-  let anterior = 0;
-  const limpas = [];
-  for (const m of marcas) {
-    const v = Number(m);
-    if (!Number.isInteger(v) || v < anterior) return null;
-    if (Number.isFinite(teto) && teto > 0 && v > teto) return null;
-    limpas.push(v);
-    anterior = v;
-  }
-  return limpas;
-}
 
 /** N marcas, N-1 intervalos: o tempo entre uma peca e a seguinte. */
 export function intervalosEntreMarcas(marcas) {
@@ -76,13 +48,53 @@ export function intervalosEntreMarcas(marcas) {
 }
 
 /**
- * A LEITURA de uma medicao peca a peca.
+ * O RITMO NORMAL e as LACUNAS, decididos juntos.
+ *
+ * Normal e' a MEDIA dos intervalos que nao sao lacuna; lacuna e' o que
+ * passa do dobro do normal. Como um depende do outro, a conta repete ate'
+ * parar de mudar: uma parada de vinte minutos inflaria a media a ponto de
+ * esconder a de tres minutos ao lado dela, e so' saindo a primeira a
+ * segunda aparece. Termina sempre — cada volta so' tira intervalo, e o
+ * menor deles nunca passa do dobro da media.
+ *
+ * MEDIA, e nao mediana, por causa do volume em par. O rack de dois volumes
+ * sai com os dois colados (25 s, 100 s, 25 s, 100 s...): a mediana dava
+ * 25 s, o "dobro do normal" virava 50 s e metade dos volumes saia como
+ * lacuna — numa linha que fez 59,6 s por volume, dentro de um takt de 72 s,
+ * sem parar nenhuma vez. A media pondera pelo tempo, como todo ritmo deste
+ * sistema.
+ */
+function normalELacunas(intervalos, fator) {
+  let lacunas = new Set();
+  for (let volta = 0; volta < intervalos.length; volta++) {
+    const normais = intervalos.filter((_, i) => !lacunas.has(i));
+    const normal = media(normais);
+    const novas = new Set(intervalos.map((ms, i) => (ms > normal * fator ? i : -1)).filter((i) => i >= 0));
+    if (novas.size === lacunas.size) return { normalMs: normal, lacunas: novas };
+    lacunas = novas;
+  }
+  return { normalMs: media(intervalos.filter((_, i) => !lacunas.has(i))), lacunas };
+}
+
+/**
+ * A LEITURA de uma medicao volume a volume.
  *
  * Devolve null sem pelo menos dois toques (nao ha' intervalo nenhum). Com
  * menos de `minIntervalos`, devolve so' os intervalos e o motivo: o grafico
  * pode ser desenhado, a leitura nao.
  *
- * @param marcasMs instante de cada peca, ms no relogio da linha rodando
+ * O NUMERO QUE SE COMPARA COM O TAKT e' o tempo medio por volume: soma dos
+ * intervalos dividida pela quantidade — o mesmo que dizer quantos volumes
+ * sairam no tempo em que a linha rodou. Lacuna fica DENTRO dele: parada que
+ * ninguem marcou tambem deixou de encher o caminhao. O ritmo SEM as
+ * lacunas vem ao lado, como o "se nao parasse", para dizer se o que tira a
+ * linha do takt e' o passo dela ou os buracos.
+ *
+ * Volume a volume contra o takt nao e' leitura: com volumes em par, metade
+ * passa do takt e metade fica muito abaixo, numa linha que atende. Por isso
+ * nao ha' "quantos volumes acima do takt" aqui — so' a media contra ele.
+ *
+ * @param marcasMs instante de cada volume, ms no relogio da linha rodando
  * @param taktMs   takt da semana da medicao, por maquina (opcional)
  */
 export function leituraPecaAPeca({ marcasMs, taktMs = null } = {}) {
@@ -98,62 +110,37 @@ export function leituraPecaAPeca({ marcasMs, taktMs = null } = {}) {
     return {
       ...base,
       suficiente: false,
-      motivo: `${n} intervalo(s) — mínimo de ${c.minIntervalos} para ler o ritmo peça a peça`,
+      motivo: `${n} ${n === 1 ? 'intervalo' : 'intervalos'} — a leitura começa com ${c.minIntervalos}`,
     };
   }
 
-  const medianaMs = mediana(intervalos);
+  const mediaMs = media(intervalos);
+  const { normalMs, lacunas: indices } = normalELacunas(intervalos, c.fatorLacuna);
+  const lacunas = [...indices].sort((a, b) => a - b).map((indice) => ({ indice, ms: intervalos[indice] }));
 
   /**
-   * LACUNA e o que ela custou. O excesso e' o tempo ALEM do normal — a
-   * caixa de 3 min numa linha de 1 min custou 2 min, nao 3. Dividido pela
-   * mediana, vira o que daria para ter saido nesse tempo ao ritmo que a
-   * propria linha provou: e' o numero que muda a conversa ("18 min de
-   * lacuna, umas 15 caixas"), no mesmo espirito de potencialSemParada.
+   * O que a lacuna custou. O excesso e' o tempo ALEM do normal — o volume
+   * de 3 min numa linha de 1 min custou 2 min, nao 3. Dividido pelo normal,
+   * vira o que daria para ter saido nesse tempo ao ritmo que a propria
+   * linha provou ("18 min de lacuna, umas 15 caixas"), no mesmo espirito
+   * de potencialSemParada.
    */
-  const limiteLacunaMs = medianaMs * c.fatorLacuna;
-  const lacunas = medianaMs > 0
-    ? intervalos
-      .map((ms, indice) => ({ indice, ms }))
-      .filter((x) => x.ms > limiteLacunaMs)
-    : [];
-  const excessoMs = lacunas.reduce((soma, x) => soma + (x.ms - medianaMs), 0);
-
-  /**
-   * REGULARIDADE SEM AS LACUNAS. Lacuna ja' e' contada e listada a parte;
-   * deixa-la dentro do CV dizia "alta variacao" de uma linha que bateu
-   * 60 s em todos os volumes e parou uma vez — a pergunta da regularidade
-   * e' outra: quando a linha anda, ela anda no mesmo passo?
-   */
-  const normais = intervalos.filter((ms) => !(medianaMs > 0 && ms > limiteLacunaMs));
-  const cvPct = coeficienteVariacao(normais);
-
-  /**
-   * Contra o TAKT: quantas pecas sairam mais devagar que ele, e onde fica
-   * o intervalo tipico. A mediana, e nao a media: tres lacunas grandes
-   * puxariam a media para cima e fariam a linha inteira parecer lenta,
-   * quando o que ha' sao tres buracos — e buraco se trata diferente de
-   * ritmo.
-   */
-  const acimaDoTakt = takt ? intervalos.filter((ms) => ms > takt).length : null;
+  const excessoMs = lacunas.reduce((soma, x) => soma + (x.ms - normalMs), 0);
 
   return {
     ...base,
     suficiente: true,
     motivo: null,
-    medianaMs,
-    mediaMs: media(intervalos),
+    mediaMs,
+    normalMs,
     menorMs: Math.min(...intervalos),
     maiorMs: Math.max(...intervalos),
-    cvPct,
-    estabilidade: classificarEstabilidade(cvPct),
-    limiteLacunaMs,
+    limiteLacunaMs: normalMs * c.fatorLacuna,
     lacunas,
     excessoMs,
-    pecasNoExcesso: medianaMs > 0 ? excessoMs / medianaMs : 0,
-    acimaDoTakt,
-    acimaDoTaktPct: takt ? (acimaDoTakt / n) * 100 : null,
-    // Positivo: o intervalo tipico e' MAIS LENTO que o takt.
-    medianaVsTaktPct: takt ? ((medianaMs / takt) - 1) * 100 : null,
+    pecasNoExcesso: normalMs > 0 ? excessoMs / normalMs : 0,
+    // Positivo: MAIS LENTO que o takt.
+    mediaVsTaktPct: takt ? ((mediaMs / takt) - 1) * 100 : null,
+    normalVsTaktPct: takt ? ((normalMs / takt) - 1) * 100 : null,
   };
 }

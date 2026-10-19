@@ -25,6 +25,9 @@ export default function ResultadoAoVivo({
   // Para onde a medicao vai no PC — a tela nao pode mandar procurar no
   // relatorio errado. Nulo mantem os textos do Ritmo da maquina.
   destinoObservacao, avisoSalvar = null,
+  // Maquina escolhida ANTES de comecar e que nao se troca aqui (Embalagem
+  // Takt Time): vira texto. Um seletor que nao muda nada seria pior.
+  maquinaFixa = null,
 }) {
   const { duracaoFinal, pecasFinais, setPecasFinais } = crono;
 
@@ -60,7 +63,9 @@ export default function ResultadoAoVivo({
         <div style={est.linhaResultado}>
           <label style={est.campoHora}>
             <span style={est.rotuloCampo}>MÁQUINA</span>
-            <CampoMaquina valor={maquina} aoTrocar={aoTrocarMaquina} />
+            {maquinaFixa
+              ? <span style={est.itemPeca}>{maquinaFixa}</span>
+              : <CampoMaquina valor={maquina} aoTrocar={aoTrocarMaquina} />}
           </label>
           <label style={est.campoHora}>
             <span style={est.rotuloCampo}>{rotuloPeca}</span>
@@ -101,9 +106,8 @@ export default function ResultadoAoVivo({
             aqui, ao lado do numero que causou isso, e nao descoberto no PC. */}
         {marcasDescartadas && (
           <section style={est.aviso} role="status">
-            A contagem foi corrigida à mão: o ritmo vai normalmente, mas o intervalo
-            {unidade.singular === 'volume' ? ' volume a volume' : ' peça a peça'} não
-            vai junto — os toques não batem com o número digitado.
+            A contagem foi corrigida à mão: o ritmo vai normalmente, mas o intervalo de
+            cada toque não vai junto — os toques não batem com o número digitado.
           </section>
         )}
 

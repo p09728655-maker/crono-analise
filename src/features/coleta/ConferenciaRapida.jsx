@@ -10,6 +10,8 @@ import { useCronometroAoVivo } from './rapida/useCronometroAoVivo.js';
 import { useHistoricoLocal } from './rapida/useHistoricoLocal.js';
 import { useRascunho } from './rapida/useRascunho.js';
 import { est } from './rapida/estilos.js';
+
+const PECA = unidadeDoPosto(null);
 import FormularioHorarios from './rapida/FormularioHorarios.jsx';
 import ResultadoHorarios from './rapida/ResultadoHorarios.jsx';
 import CronometroAoVivo from './rapida/CronometroAoVivo.jsx';
@@ -90,8 +92,15 @@ export default function ConferenciaRapida({ aoSair }) {
     const m = cadastroDeMaquinas.find((x) => nomeChave(x.nome) === alvo);
     return m?.grupo_nome ? String(m.grupo_nome).toUpperCase() : null;
   }, [cadastroDeMaquinas, maquina]);
-  // O que o toque conta: na embalagem, VOLUME embalado (ver unidadeDoPosto).
-  const unidade = unidadeDoPosto(seloDoPosto);
+  /**
+   * Esta tela conta PECA, em qualquer posto — a embalagem tem a dela
+   * (Embalagem Takt Time), que conta volume do comeco ao fim. Trocar a
+   * unidade so' aqui deixava "volumes no periodo" ao lado de "pecas/hora".
+   * O que muda pela embalagem e' so' o aviso das marcas: e' la' que elas
+   * sao lidas, entao e' so' la' que perde-las importa.
+   */
+  const unidade = PECA;
+  const marcasUsadas = unidadeDoPosto(seloDoPosto).singular === 'volume';
 
   // Cadastro de maquinas: atualiza o cache do aparelho quando ha rede.
   // Sem rede, a lista ja vista continua valendo (ver lib/maquinas.js).
@@ -350,7 +359,7 @@ export default function ConferenciaRapida({ aoSair }) {
           {...camposDaObservacao}
           aoNovaConferencia={novaConferencia}
           unidade={unidade}
-          marcasDescartadas={crono.marcasFinais.length > 0 && !marcasConferem}
+          marcasDescartadas={marcasUsadas && crono.marcasFinais.length > 0 && !marcasConferem}
           salvo={historico.salvo}
           aoSalvar={() => salvar(resultado, false)}
           aoSair={aoSair}

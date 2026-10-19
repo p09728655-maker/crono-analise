@@ -15,12 +15,17 @@ const MAX_ROTULOS_CORTE = 6;
  * barra solitaria que dispara diz lacuna, e lacuna se trata com outra
  * pergunta ("o que aconteceu ali?").
  *
+ * A linha tracejada fina e' a MEDIA por volume — e' ela, e nao barra por
+ * barra, que se compara com o takt. Com volume em par (rack de dois volumes
+ * saindo colados) metade das barras passa do takt numa linha que atende; a
+ * media diz a verdade.
+ *
  * LACUNA leva HACHURA, nao so' cor — sai na impressora P&B da fabrica e
  * para quem tem daltonismo, como a barra "ainda em medicao" do Ritmo por
  * maquina. As duas linhas de referencia tem rotulo escrito ao lado: takt
- * (grafite, tracejado) e tipico (a mediana, pontilhado mais fraco).
+ * (grafite, tracejado) e media (pontilhado mais fraco).
  *
- * O TETO do eixo e' tres vezes o tipico (ou um pouco acima do takt, o que
+ * O TETO do eixo e' tres vezes o ritmo normal (ou um pouco acima do takt, o que
  * for maior). Uma lacuna de vinte minutos numa linha de um minuto achataria
  * todas as outras barras numa faixa de dois pixels — e sao elas que mostram
  * o ritmo. A barra que passa do teto e' cortada com um entalhe, e as
@@ -41,9 +46,10 @@ export function GraficoIntervalos({
 
   const n = intervalos.length;
   const takt = leitura.taktMs || 0;
-  const tipico = leitura.suficiente ? leitura.medianaMs : 0;
+  const mediaMs = leitura.suficiente ? leitura.mediaMs : 0;
+  const normal = leitura.suficiente ? leitura.normalMs : 0;
   const maior = Math.max(...intervalos);
-  const tetoDesejado = tipico > 0 ? Math.max(tipico * 3, takt * 1.25) : 0;
+  const tetoDesejado = normal > 0 ? Math.max(normal * 3, mediaMs * 1.25, takt * 1.25) : 0;
   const cortar = tetoDesejado > 0 && maior > tetoDesejado;
   const maxY = cortar ? tetoDesejado : Math.max(maior, takt) * 1.12;
   const passoY = passoAgradavel(maxY / 1000) * 1000;
@@ -79,7 +85,6 @@ export function GraficoIntervalos({
   const descricao = (ms, i) => {
     const partes = [`${capital(unidade.singular)} ${i + 2}: ${emSegundos(ms)}`];
     if (lacunas.has(i)) partes.push('lacuna');
-    else if (takt && ms > takt) partes.push('acima do takt');
     return partes.join(' — ');
   };
 
@@ -88,8 +93,8 @@ export function GraficoIntervalos({
       chave: 'takt', ms: takt, rotulo: `Takt ${emSegundos(takt)}`,
       cor: referencia.linha, traco: referencia.traco, espessura: 2,
     },
-    tipico > 0 && {
-      chave: 'tipico', ms: tipico, rotulo: `Típico ${emSegundos(tipico)}`,
+    mediaMs > 0 && mediaMs <= maxY && {
+      chave: 'media', ms: mediaMs, rotulo: `Média ${emSegundos(mediaMs)}`,
       cor: claro.textoMedio, traco: '2 3', espessura: 1.5,
     },
   ].filter(Boolean);
@@ -107,7 +112,7 @@ export function GraficoIntervalos({
         itens={[
           { rotulo: 'Intervalo', cor: serie.tn },
           {
-            rotulo: 'Lacuna — mais que o dobro do típico',
+            rotulo: 'Lacuna — mais que o dobro do normal',
             cor: serie.tolerancia,
             hachura: `repeating-linear-gradient(45deg, ${serie.tolerancia} 0 3px, rgba(255,255,255,.55) 3px 5px)`,
           },
@@ -122,7 +127,7 @@ export function GraficoIntervalos({
           style={{ maxWidth: '100%', height: altura, display: 'block' }}
           role="img"
           aria-label={`Intervalo entre ${unidade.plural}: ${n} intervalos`
-            + `${tipico ? `, típico de ${emSegundos(tipico)}` : ''}`
+            + `${mediaMs ? `, média de ${emSegundos(mediaMs)}` : ''}`
             + `${takt ? `, takt de ${emSegundos(takt)}` : ''}`
             + `, ${lacunas.size} lacuna(s)`}
         >
@@ -226,7 +231,7 @@ const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
  * Onde escrever o rotulo de uma linha de referencia. Por padrao, logo acima
- * dela; quando takt e tipico ficam a menos de uma linha de texto um do
+ * dela; quando takt e media ficam a menos de uma linha de texto um do
  * outro, o de BAIXO desce para baixo da propria linha — senao os dois se
  * escrevem um por cima do outro, justamente quando estao perto (que e'
  * quando a comparacao mais importa).

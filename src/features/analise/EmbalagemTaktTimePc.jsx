@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { VERSAO } from '../../versao.js';
 import {
   conferenciaRapida, faixaHoraria, formatarDuracao, formatarSegundos, nomeChave, somarParadas,
@@ -37,8 +37,14 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
 
   useEffect(() => {
     let vivo = true;
-    Promise.all([listarCadastroMaquinas(), listarConferenciasServidor()])
-      .then(async ([cadastro, lista]) => {
+    Promise.all([
+      listarCadastroMaquinas(),
+      listarConferenciasServidor(),
+      // As arquivadas so' para CONTAR: arquivada no relatorio de ritmo some
+      // daqui tambem, e a tela precisa dizer isso em vez de "nenhuma".
+      listarConferenciasServidor({ arquivadas: true }).catch(() => ({ conferencias: [] })),
+    ])
+      .then(async ([cadastro, lista, arquivadas]) => {
         const grupos = (cadastro.grupos || []).filter(ehEmbalagem);
         // O programa de cada grupo da embalagem (hoje, um so'). Falha do
         // programa nao derruba a tela: o takt aparece como indisponivel.
@@ -46,6 +52,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
         if (vivo) {
           setCarga({
             estado: 'pronto', cadastro, grupos, conferencias: lista.conferencias || [],
+            arquivadas: arquivadas.conferencias || [],
             demandas: new Map(grupos.map((g, i) => [g.id, programas[i]])),
           });
         }
@@ -78,8 +85,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
           duracaoMs: 3600000,
         })),
     }));
+    const arquivadas = carga.arquivadas.filter((c) => grupoDaMaquina.has(nomeChave(c.maquina))).length;
     return {
-      medicoes, taktHoje, ativasDoGrupo,
+      medicoes, taktHoje, ativasDoGrupo, arquivadas,
       grupoDe: (maquina) => carga.grupos.find((g) => g.id === grupoDaMaquina.get(nomeChave(maquina))) || null,
     };
   }, [carga]);
@@ -138,6 +146,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                   <div style={est.kpiValor}>{leitura.medicoes.length}</div>
                   <div style={est.kpiSub}>
                     {leitura.medicoes.filter((c) => c.com_marcas).length} volume a volume
+                    {leitura.arquivadas > 0 ? ` · ${leitura.arquivadas} arquivada(s) fora da conta` : ''}
                   </div>
                 </div>
               </div>
@@ -146,7 +155,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                 <EstadoVazio
                   modo="analise"
                   titulo="Nenhuma medição da embalagem"
-                  texto={`Nos últimos ${DIAS} dias. A medição nasce no tablet, em Embalagem Takt Time: um toque a cada volume embalado.`}
+                  texto={`Nos últimos ${DIAS} dias.${leitura.arquivadas > 0
+                    ? ` Há ${leitura.arquivadas} medição(ões) da embalagem arquivada(s) — restaure no relatório Ritmo por máquina, em Arquivadas.`
+                    : ''} A medição nasce no tablet, em Embalagem Takt Time: um toque a cada volume embalado.`}
                 />
               ) : (
                 <TabelaEmbalagem medicoes={leitura.medicoes} aoAbrir={setAberta} />
@@ -223,7 +234,8 @@ function TabelaEmbalagem({ medicoes, aoAbrir }) {
             const calc = conferenciaRapida({ duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas });
             const par = somarParadas(c.paradas);
             return (
-              <tr key={c.id}>
+              <Fragment key={c.id}>
+              <tr>
                 <td style={est.tdFraco}>{formatarDataHora(c.salvo_em)}</td>
                 <td style={est.tdCurto}>{c.maquina || '—'}</td>
                 <td style={est.tdCurto}>{c.peca || '—'}</td>
@@ -244,6 +256,17 @@ function TabelaEmbalagem({ medicoes, aoAbrir }) {
                   )}
                 </td>
               </tr>
+              {/* A nota do analista, numa linha propria — como no relatorio
+                  de ritmo. E' muitas vezes a explicacao da lacuna. */}
+              {c.observacao && (
+                <tr>
+                  <td style={est.tdObservacao} colSpan={9}>
+                    <span style={est.rotuloObservacao}>Obs.</span>
+                    {c.observacao}
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </tbody>

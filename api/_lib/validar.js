@@ -82,14 +82,6 @@ export function lista(valor, campo, { max = 500 } = {}) {
 }
 
 /**
- * Paradas de uma conferencia rapida: [{motivo, duracaoMs, observacao}].
- *
- * Guardadas como jsonb na propria conferencia, entao a validacao aqui e' a
- * unica barreira — nao ha CHECK de coluna por campo. Lista vazia e ausente
- * significam a mesma coisa (conferencia sem parada marcada), e e' assim que
- * as conferencias antigas continuam validas.
- */
-/**
  * As MARCAS do cronometro ao vivo: um instante (ms) por peca, em ordem,
  * dentro do periodo. Espelha o CHECK conferencias_marcas_chk.
  *
@@ -113,6 +105,14 @@ export function marcasDaConferencia(valor, { pecas, duracaoMs } = {}) {
   return valor;
 }
 
+/**
+ * Paradas de uma conferencia rapida: [{motivo, duracaoMs, observacao}].
+ *
+ * Guardadas como jsonb na propria conferencia, entao a validacao aqui e' a
+ * unica barreira — nao ha CHECK de coluna por campo. Lista vazia e ausente
+ * significam a mesma coisa (conferencia sem parada marcada), e e' assim que
+ * as conferencias antigas continuam validas.
+ */
 export function paradasDaConferencia(valor, campo, { max = 50 } = {}) {
   if (valor == null) return [];
   const itens = lista(valor, `${campo}.paradas`, { max });
