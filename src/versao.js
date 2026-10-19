@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.89.0',
+    data: '2026-10-19',
+    titulo: 'Embalagem Takt Time: cada volume contra o takt, em segundos',
+    itens: [
+      'NOVA FUNÇÃO, SEPARADA DO RITMO POR MÁQUINA: EMBALAGEM TAKT TIME. No tablet, o atalho abre direto o cronômetro da embalagem, com a máquina já escolhida. Um toque a cada volume embalado; o horário de cada toque é gravado sozinho, sem digitar hora nem quantidade.',
+      'O TAKT APARECE EM SEGUNDOS NO PRÓPRIO TABLET. Antes de começar, o takt da semana. Durante a medição, o intervalo do último volume fica ao lado do takt; quando passa, o rótulo diz "▲ takt". Sem rede, o tablet usa o programa que já tinha guardado.',
+      'NO PC, CADA MEDIÇÃO ABRE VOLUME A VOLUME: um gráfico com o intervalo de cada volume contra a linha do takt, o intervalo típico, quantos volumes ficaram acima do takt e as LACUNAS — os intervalos maiores que o dobro do típico. Como as paradas marcadas no cronômetro já ficam de fora, lacuna é parada que ninguém marcou. A lista das lacunas sai na folha impressa, com espaço para escrever o que aconteceu.',
+      'O TAKT É POR VOLUME, E O PROGRAMA DA EMBALAGEM PRECISA SER COLADO EM VOLUMES. Um rack que sai em dois volumes conta dois. Colado em produtos, o takt sairia o dobro do real e a linha pareceria folgada sem estar. A conta é a mesma do quadro do programa da semana: horas da semana, menos o setup planejado, divididas pelos volumes.',
+      'Se a contagem for corrigida à mão no fim da medição, o ritmo vale normalmente, mas o intervalo volume a volume não é salvo — a tela avisa na hora. Os toques não explicariam o número digitado, e o intervalo sairia falso.',
+    ],
+  },
+  {
     versao: '2.88.2',
     data: '2026-10-19',
     titulo: 'A entrada passa a dizer por que não entrou',

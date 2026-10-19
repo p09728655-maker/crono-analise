@@ -800,6 +800,87 @@ rodar('API — integracao com Postgres', () => {
     expect(limpa.corpo.conferencia.paradas).toEqual([]);
   });
 
+  it('marcas do cronometro ao vivo sobem com a conferencia e voltam so no detalhe', async () => {
+    const clientId = crypto.randomUUID();
+    // Cinco volumes a cada minuto, num periodo de 5 min.
+    const marcasMs = [30000, 90000, 150000, 210000, 270000];
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId, maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6',
+          duracaoMs: 300000, pecas: 5, marcasMs, salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+
+    const [linha] = await sql`SELECT id, marcas_ms FROM conferencias WHERE client_id = ${clientId}`;
+    expect(linha.marcas_ms).toEqual(marcasMs);
+
+    // A lista diz que ha' marcas, mas nao as carrega.
+    const lista = fingirRes();
+    await conferenciasApi(fingirReq({}), lista);
+    const naLista = lista.corpo.conferencias.find((c) => c.id === linha.id);
+    expect(naLista.com_marcas).toBe(true);
+    expect(naLista.marcas_ms).toBeUndefined();
+
+    const detalhe = fingirRes();
+    await conferenciasApi(fingirReq({ query: { id: linha.id } }), detalhe);
+    expect(detalhe.statusCode).toBe(200);
+    expect(detalhe.corpo.conferencia.marcas_ms).toEqual(marcasMs);
+  });
+
+  it('marcas que nao batem com a contagem entram como nenhuma — e nao travam a fila', async () => {
+    const corrigida = crypto.randomUUID();
+    const foraDeOrdem = crypto.randomUUID();
+    const res = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          // Contagem corrigida a mao no fim: 6 volumes, 5 toques.
+          {
+            clientId: corrigida, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 6,
+            marcasMs: [1000, 2000, 3000, 4000, 5000], salvoEm: new Date().toISOString(),
+          },
+          {
+            clientId: foraDeOrdem, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 2,
+            marcasMs: [5000, 1000], salvoEm: new Date().toISOString(),
+          },
+        ],
+      },
+    }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.corpo.clientIds).toEqual(expect.arrayContaining([corrigida, foraDeOrdem]));
+    const linhas = await sql`
+      SELECT marcas_ms FROM conferencias WHERE client_id IN (${corrigida}, ${foraDeOrdem})`;
+    expect(linhas.map((l) => l.marcas_ms)).toEqual([null, null]);
+  });
+
+  it('o banco recusa marca que nao bate com a contagem, mesmo fora da API', async () => {
+    await expect(sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em, marcas_ms)
+      VALUES (${crypto.randomUUID()}, ${EMPRESA}, 'X', 60000, 3,
+              now() - interval '1 minute', now(), now(), ${[1000, 2000]}::integer[])`)
+      .rejects.toThrow(/conferencias_marcas_chk/);
+  });
+
+  it('marcas de conferencia de OUTRA empresa nao saem', async () => {
+    const alheia = crypto.randomUUID();
+    await sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em, marcas_ms)
+      VALUES (${alheia}, ${OUTRA_EMPRESA}, 'Alheia', 60000, 2,
+              now() - interval '1 minute', now(), now(), ${[1000, 2000]}::integer[])`;
+    const [linha] = await sql`SELECT id FROM conferencias WHERE client_id = ${alheia}`;
+
+    const res = fingirRes();
+    await conferenciasApi(fingirReq({ query: { id: linha.id } }), res);
+    expect(res.statusCode).toBe(404);
+  });
+
   it('nao arquiva nem exclui conferencia de OUTRA empresa', async () => {
     const alheia = crypto.randomUUID();
     await sql`

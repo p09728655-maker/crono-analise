@@ -110,6 +110,13 @@ export const listarConferenciasServidor = ({ maquina, arquivadas = false } = {})
  * medicoes nem as paradas de cada uma.
  */
 export const resumoConferencias = () => requisitar('/conferencias?resumo=1');
+/**
+ * As marcas (o instante de cada toque) de UMA medicao. A lista nao as traz:
+ * ver o ?id= do GET em api/conferencias.js.
+ */
+export const marcasDaConferencia = (id) =>
+  requisitar(`/conferencias?id=${encodeURIComponent(id)}`)
+    .then((r) => r.conferencia?.marcas_ms ?? null);
 
 export const arquivarConferencia = (id, arquivada = true) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { arquivada } });
@@ -400,5 +407,9 @@ export const paraConferencia = (x) => ({
     duracaoMs: Math.round(p.duracaoMs),
     observacao: p.observacao ?? null,
   })),
+  // O instante de cada toque do cronometro ao vivo — o volume a volume da
+  // Embalagem Takt Time. Quarto dado que so' existe se este mapeador o
+  // levar; item antigo, ou medicao por horarios, vai sem (null).
+  marcasMs: Array.isArray(x.marcasMs) ? x.marcasMs : null,
   salvoEm: x.salvoEm,
 });

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { conferenciaRapida, duracaoEntreHoras, nomeChave } from '../../domain/cronoanalise.js';
+import {
+  conferenciaRapida, duracaoEntreHoras, nomeChave, unidadeDoPosto,
+} from '../../domain/cronoanalise.js';
 import { useMotivosParada } from '../../lib/motivosParada.js';
 import { useWakeLock, vibrar } from '../../lib/hooks.js';
 import { carregarMaquinas, useMaquinas } from '../../lib/maquinas.js';
@@ -88,6 +90,8 @@ export default function ConferenciaRapida({ aoSair }) {
     const m = cadastroDeMaquinas.find((x) => nomeChave(x.nome) === alvo);
     return m?.grupo_nome ? String(m.grupo_nome).toUpperCase() : null;
   }, [cadastroDeMaquinas, maquina]);
+  // O que o toque conta: na embalagem, VOLUME embalado (ver unidadeDoPosto).
+  const unidade = unidadeDoPosto(seloDoPosto);
 
   // Cadastro de maquinas: atualiza o cache do aparelho quando ha rede.
   // Sem rede, a lista ja vista continua valendo (ver lib/maquinas.js).
@@ -161,11 +165,21 @@ export default function ConferenciaRapida({ aoSair }) {
   const paradasExcedem = duracaoHoras > 0 && paradas.total.totalMs >= duracaoHoras;
   const paradasExcedemVivo = crono.duracaoFinal > 0 && paradas.total.totalMs >= crono.duracaoFinal;
 
+  /**
+   * AS MARCAS so' vao junto quando batem com a contagem final. Quem leu o
+   * contador da maquina e corrigiu o numero no resultado tem uma contagem
+   * que os toques nao explicam: o intervalo volume a volume sairia falso,
+   * e e' melhor nenhum. A tela avisa (ver ResultadoAoVivo).
+   */
+  const marcasConferem = crono.marcasFinais.length > 0
+    && Number(crono.pecasFinais) === crono.marcasFinais.length;
+
   /* --------------------------------------- de um periodo ao proximo */
   const salvar = (calculado, horarios) => historico.salvar({
     calculado, maquina, peca, paradas: paradas.emMs, observacao,
     horaInicial: horarios ? horaInicial : null,
     horaFinal: horarios ? horaFinal : null,
+    marcasMs: !horarios && marcasConferem ? crono.marcasFinais : null,
   });
 
   /**
@@ -317,6 +331,7 @@ export default function ConferenciaRapida({ aoSair }) {
           parcial={parcial}
           totalParadaMs={paradas.total.totalMs}
           motivos={motivos}
+          unidade={unidade}
         />
       )}
 
@@ -334,6 +349,8 @@ export default function ConferenciaRapida({ aoSair }) {
           furacaoPassante={furacaoPassante} aoTrocarPassante={setFuracaoPassante}
           {...camposDaObservacao}
           aoNovaConferencia={novaConferencia}
+          unidade={unidade}
+          marcasDescartadas={crono.marcasFinais.length > 0 && !marcasConferem}
           salvo={historico.salvo}
           aoSalvar={() => salvar(resultado, false)}
           aoSair={aoSair}

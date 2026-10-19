@@ -133,9 +133,13 @@ describe('paraConferencia — item da fila vira payload do sync', () => {
       furacaoPassante: true,
       observacao: 'Operador novo no posto',
       paradas: [{ motivo: 'setup', duracaoMs: 60000 }],
+      marcasMs: [1000, 61000, 120500],
       salvoEm: '2026-08-28T11:53:53.448Z',
     });
     expect(corpo.ciclosPorPeca).toBe(2);
+    // As marcas do cronometro ao vivo: perdidas aqui uma vez (e2e da
+    // Embalagem Takt Time), antes de chegar ao servidor.
+    expect(corpo.marcasMs).toEqual([1000, 61000, 120500]);
     // Mesmo mapeador que ja' perdeu os ciclos uma vez: a furacao passa aqui.
     expect(corpo.furacaoPassante).toBe(true);
     // A observacao e' o terceiro dado que so' existe se este mapeador o levar.
@@ -154,6 +158,7 @@ describe('paraConferencia — item da fila vira payload do sync', () => {
     expect(corpo.observacao).toBeNull();
     expect(corpo.maquina).toBeNull();
     expect(corpo.paradas).toEqual([]);
+    expect(corpo.marcasMs).toBeNull();
   });
 });
 

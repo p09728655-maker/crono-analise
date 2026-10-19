@@ -9,6 +9,12 @@
  * e' o que passou no relogio, e a parada esta' dentro dele. O que a pausa
  * faz e' registrar quanto desse periodo a maquina passou parada, e por que
  * (a linha vai para a lista de paradas, em minutos, ainda editavel).
+ *
+ * As MARCAS sao o instante de cada toque, em ms desde o comeco, no RELOGIO
+ * DA LINHA RODANDO: o tempo das paradas marcadas aqui sai delas. E' o que
+ * deixa o PC ver o intervalo volume a volume (ver domain/crono/intervalos.js)
+ * — e, com a parada marcada fora, intervalo grande que sobra e' parada que
+ * ninguem marcou. Desfazer tira a ultima, como tira da contagem.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TOQUE_MINIMO_MS } from '../../../domain/estatistica.js';
@@ -22,17 +28,30 @@ export function useCronometroAoVivo({ paradas }) {
   const [pulso, setPulso] = useState(0);
   const [emParada, setEmParada] = useState(null); // {motivo, inicio}
   const [escolhendoMotivo, setEscolhendoMotivo] = useState(false);
+  const [marcasFinais, setMarcasFinais] = useState([]);
+  // O intervalo entre os DOIS ULTIMOS toques — o que a Embalagem Takt Time
+  // poe ao lado do takt enquanto o cronometro roda. Null antes do segundo.
+  const [ultimoIntervaloMs, setUltimoIntervaloMs] = useState(null);
 
   const rodando = fase === 'rodando';
   const { decorrido, iniciar, parar } = useCronometro();
   const ultimoToqueRef = useRef(0);
+  // Ref, nao estado: o toque precisa da lista na hora, sem esperar render.
+  const marcasRef = useRef([]);
+  const inicioRef = useRef(0);
+  // Parada ja' encerrada neste periodo, em ms — sai do relogio das marcas.
+  const paradaAcumuladaRef = useRef(0);
 
   const comecar = useCallback(() => {
     setPecas(0);
+    marcasRef.current = [];
+    paradaAcumuladaRef.current = 0;
+    setUltimoIntervaloMs(null);
     // O cronometro ao vivo mede o periodo inteiro; um setup que estivesse
     // correndo no formulario pertencia ao periodo anterior.
     paradas.limpar();
     setFase('rodando');
+    inicioRef.current = performance.now();
     iniciar();
     vibrar(45);
   }, [iniciar, paradas.limpar]);
@@ -45,12 +64,16 @@ export function useCronometroAoVivo({ paradas }) {
     const agora = performance.now();
     if (agora - ultimoToqueRef.current < TOQUE_MINIMO_MS) return;
     ultimoToqueRef.current = agora;
+    marcasRef.current.push(Math.round(agora - inicioRef.current - paradaAcumuladaRef.current));
+    setUltimoIntervaloMs(ultimoIntervalo(marcasRef.current));
     vibrar(45);
     setPulso((p) => p + 1);
     setPecas((n) => n + 1);
   }, [rodando, emParada]);
 
   const desfazer = useCallback(() => {
+    marcasRef.current.pop();
+    setUltimoIntervaloMs(ultimoIntervalo(marcasRef.current));
     setPecas((n) => Math.max(0, n - 1));
     vibrar([25, 40, 25]);
   }, []);
@@ -67,7 +90,10 @@ export function useCronometroAoVivo({ paradas }) {
     // Menos de 1s e' toque errado, nao parada. Duas casas no minuto: um
     // setup de 45s precisa entrar como 0,75 — arredondar para 0,8 jogaria
     // 3 segundos dentro do tempo de maquina rodando.
-    if (ms >= 1000) paradas.adicionar(emParada.motivo, (ms / 60000).toFixed(2));
+    if (ms >= 1000) {
+      paradas.adicionar(emParada.motivo, (ms / 60000).toFixed(2));
+      paradaAcumuladaRef.current += ms;
+    }
     setEmParada(null);
     vibrar(45);
   }, [emParada, paradas.adicionar]);
@@ -83,6 +109,8 @@ export function useCronometroAoVivo({ paradas }) {
     const total = parar();
     setDuracaoFinal(total);
     setPecasFinais(String(pecas));
+    // Nenhuma marca passa do fim do periodo: o servidor recusaria todas.
+    setMarcasFinais(marcasRef.current.map((m) => Math.min(m, Math.floor(total))));
     setFase('resultado');
     vibrar([30, 40, 30]);
   }, [parar, pecas, emParada, paradas.adicionar]);
@@ -116,8 +144,13 @@ export function useCronometroAoVivo({ paradas }) {
   const tempoParadaAtual = emParada ? performance.now() - emParada.inicio : 0;
 
   return {
-    fase, rodando, decorrido, pecas, pulso, duracaoFinal, pecasFinais, setPecasFinais,
+    fase, rodando, decorrido, pecas, pulso, duracaoFinal, pecasFinais, setPecasFinais, marcasFinais,
+    ultimoIntervaloMs,
     emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
     comecar, contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, novaConferencia,
   };
 }
+
+const ultimoIntervalo = (marcas) => (marcas.length >= 2
+  ? marcas[marcas.length - 1] - marcas[marcas.length - 2]
+  : null);

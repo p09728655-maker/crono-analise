@@ -2,11 +2,11 @@ import { formatarDuracao, formatarSegundos, potencialSemParada } from '../../../
 import { est } from './estilos.js';
 
 /** Um numero com rotulo, na linha de parciais. */
-export function Parcial({ rotulo, valor, sufixo }) {
+export function Parcial({ rotulo, valor, sufixo, tom = null }) {
   return (
     <div style={est.parcial}>
       <span style={est.parcialRotulo}>{rotulo}</span>
-      <span style={est.parcialValor}>
+      <span style={{ ...est.parcialValor, ...(tom === 'atencao' ? est.parcialAtencao : {}) }}>
         {valor}
         {sufixo && <span style={est.parcialSufixo}>{sufixo}</span>}
       </span>
@@ -175,12 +175,16 @@ export function BotaoSalvar({ salvo, aoSalvar }) {
  * Quem mede no posto precisa saber disso antes de tocar em Salvar, nao
  * depois de ver a medicao de teste aparecer no relatorio da furadeira.
  */
-export function AvisoSalvar() {
+export function AvisoSalvar({ texto = null }) {
   return (
     <section style={est.aviso}>
-      Salvar envia esta conferência para o relatório Ritmo por máquina, no PC,
-      e guarda uma cópia neste aparelho. Para registrar ciclos e calcular
-      o tempo padrão, crie um estudo.
+      {texto || (
+        <>
+          Salvar envia esta conferência para o relatório Ritmo por máquina, no PC,
+          e guarda uma cópia neste aparelho. Para registrar ciclos e calcular
+          o tempo padrão, crie um estudo.
+        </>
+      )}
     </section>
   );
 }

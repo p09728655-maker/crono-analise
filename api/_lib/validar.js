@@ -89,6 +89,30 @@ export function lista(valor, campo, { max = 500 } = {}) {
  * significam a mesma coisa (conferencia sem parada marcada), e e' assim que
  * as conferencias antigas continuam validas.
  */
+/**
+ * As MARCAS do cronometro ao vivo: um instante (ms) por peca, em ordem,
+ * dentro do periodo. Espelha o CHECK conferencias_marcas_chk.
+ *
+ * NAO LANCA, ao contrario do resto deste arquivo. Marca e' dado auxiliar
+ * (o ritmo da medicao sai da contagem e da duracao, nao delas) e chega pela
+ * fila offline: uma recusa aqui travaria a conferencia inteira na fila do
+ * tablet para sempre. Marca que nao serve vira null, e a medicao entra sem
+ * o intervalo volume a volume — que e' exatamente o que ela seria se
+ * tivesse sido feita por horarios.
+ */
+export const MAX_MARCAS = 20000;
+
+export function marcasDaConferencia(valor, { pecas, duracaoMs } = {}) {
+  if (!Array.isArray(valor) || !valor.length || valor.length > MAX_MARCAS) return null;
+  if (valor.length !== pecas) return null;
+  let anterior = 0;
+  for (const m of valor) {
+    if (!Number.isInteger(m) || m < anterior || m > duracaoMs) return null;
+    anterior = m;
+  }
+  return valor;
+}
+
 export function paradasDaConferencia(valor, campo, { max = 50 } = {}) {
   if (valor == null) return [];
   const itens = lista(valor, `${campo}.paradas`, { max });

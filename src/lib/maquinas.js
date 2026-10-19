@@ -63,6 +63,16 @@ export function useMaquinas() {
 }
 
 /**
+ * O cadastro INTEIRO ({ maquinas, grupos }), do mesmo cache. A Embalagem
+ * Takt Time precisa do grupo — jornada e setup planejado — para calcular o
+ * takt no proprio tablet, inclusive sem rede.
+ */
+const cadastroAtual = () => catalogo;
+export function useCadastroMaquinas() {
+  return useSyncExternalStore(assinar, cadastroAtual, cadastroAtual);
+}
+
+/**
  * Busca o cadastro no servidor e adota o que vier.
  *
  * Falha de rede nao propaga: sem cadastro a tela usa texto livre, que e'

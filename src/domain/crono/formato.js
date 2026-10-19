@@ -110,3 +110,25 @@ export function formatarCronometro(ms) {
   const min = Math.floor(totalSeg / 60);
   return `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}.${decimos}`;
 }
+
+/**
+ * O QUE O TOQUE CONTA, pelo grupo da maquina.
+ *
+ * Na embalagem o que sai do posto e' VOLUME embalado — o rack de dois
+ * volumes conta dois —, e o programa que o PCP cola para esse grupo vem em
+ * volumes. Chamar de "peca" ali convidava o erro que mais custa nesta
+ * conta: colar o programa em produtos e comparar com volumes contados, um
+ * takt que sai o dobro do real e uma linha que parece folgada sem estar.
+ *
+ * Pelo NOME do grupo, e nao por um campo de cadastro: e' o unico posto que
+ * conta outra coisa. Grupo renomeado para algo sem "embalagem" volta a
+ * dizer peca — erro de rotulo, nunca de conta.
+ */
+export function unidadeDoPosto(grupo) {
+  const nome = String(grupo || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLocaleLowerCase('pt-BR');
+  return nome.includes('embalagem')
+    ? { singular: 'volume', plural: 'volumes', abrev: 'vol', comArtigo: 'um volume' }
+    : { singular: 'peça', plural: 'peças', abrev: 'pç', comArtigo: 'uma peça' };
+}

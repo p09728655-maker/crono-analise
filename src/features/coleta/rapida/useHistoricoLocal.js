@@ -33,6 +33,9 @@ const paraFila = (c) => ({
   furacaoPassante: Boolean(c.furacaoPassante),
   observacao: c.observacao || null,
   paradas: c.paradas || [],
+  // O instante de cada toque do cronometro ao vivo; null no resto. Ver
+  // marcasDaConferencia em api/_lib/validar.js.
+  marcasMs: c.marcasMs || null,
   salvoEm: c.salvoEm,
 });
 
@@ -78,7 +81,9 @@ export function useHistoricoLocal({ aoGuardar } = {}) {
     })();
   }, []);
 
-  const salvar = useCallback(async ({ calculado, maquina, peca, horaInicial, horaFinal, paradas, observacao }) => {
+  const salvar = useCallback(async ({
+    calculado, maquina, peca, horaInicial, horaFinal, paradas, observacao, marcasMs = null,
+  }) => {
     const registro = salvarConferencia({
       maquina: maquina.trim(),
       peca: peca.trim(),
@@ -91,6 +96,7 @@ export function useHistoricoLocal({ aoGuardar } = {}) {
       // Nota de campo, aparada: espaco em branco nao e' observacao.
       observacao: String(observacao || '').trim() || null,
       paradas,
+      marcasMs,
       pecasPorHora: calculado.pecasPorHora,
       pecasPorHoraBruto: calculado.pecasPorHoraBruto,
       paradaMs: calculado.paradaMs,

@@ -16,7 +16,15 @@ export default function ResultadoAoVivo({
   maquina, aoTrocarMaquina, peca, aoTrocarPeca, ciclosPorPeca, aoTrocarCiclos,
   furacaoPassante, aoTrocarPassante,
   observacao, aoTrocarObservacao, jaSalva,
-  aoNovaConferencia, salvo, aoSalvar, aoSair,
+  aoNovaConferencia, unidade, marcasDescartadas, salvo, aoSalvar, aoSair,
+  // Embalagem Takt Time: sem campos de furacao, e com o RESUMO proprio no
+  // lugar da manchete de pecas/hora (intervalo, takt e lacunas em segundos).
+  semFuracao = false, resumo = null,
+  // Na embalagem o que se mede e' o PRODUTO embalado, nao a peca.
+  rotuloPeca = 'PEÇA', exemploPeca = 'Ex: Lateral Mesa', ariaPeca = 'Nome da peça',
+  // Para onde a medicao vai no PC — a tela nao pode mandar procurar no
+  // relatorio errado. Nulo mantem os textos do Ritmo da maquina.
+  destinoObservacao, avisoSalvar = null,
 }) {
   const { duracaoFinal, pecasFinais, setPecasFinais } = crono;
 
@@ -55,14 +63,14 @@ export default function ResultadoAoVivo({
             <CampoMaquina valor={maquina} aoTrocar={aoTrocarMaquina} />
           </label>
           <label style={est.campoHora}>
-            <span style={est.rotuloCampo}>PEÇA</span>
+            <span style={est.rotuloCampo}>{rotuloPeca}</span>
             <input
               type="text"
-              placeholder="Ex: Lateral Mesa"
+              placeholder={exemploPeca}
               value={peca}
               onChange={(ev) => aoTrocarPeca(ev.target.value)}
               style={est.inputTexto}
-              aria-label="Nome da peça"
+              aria-label={ariaPeca}
             />
           </label>
         </div>
@@ -73,7 +81,7 @@ export default function ResultadoAoVivo({
             <span style={est.valorTempo}>{formatarCronometro(duracaoFinal)}</span>
           </div>
           <label style={est.blocoResultado}>
-            <span style={est.rotuloTempo}>PEÇAS NO PERÍODO</span>
+            <span style={est.rotuloTempo}>{unidade.plural.toUpperCase()} NO PERÍODO</span>
             {/* Editavel de proposito: quem leu o contador da maquina
                 corrige aqui e o resultado recalcula na hora. */}
             <input
@@ -83,31 +91,50 @@ export default function ResultadoAoVivo({
               value={pecasFinais}
               onChange={(ev) => setPecasFinais(ev.target.value)}
               style={est.inputPecas}
-              aria-label="Peças no período"
+              aria-label={`${unidade.plural.charAt(0).toUpperCase()}${unidade.plural.slice(1)} no período`}
             />
           </label>
         </div>
 
+        {/* A contagem corrigida a mao nao tem toque para cada unidade: o
+            intervalo um a um sairia falso, e por isso ele nao vai. Dito
+            aqui, ao lado do numero que causou isso, e nao descoberto no PC. */}
+        {marcasDescartadas && (
+          <section style={est.aviso} role="status">
+            A contagem foi corrigida à mão: o ritmo vai normalmente, mas o intervalo
+            {unidade.singular === 'volume' ? ' volume a volume' : ' peça a peça'} não
+            vai junto — os toques não batem com o número digitado.
+          </section>
+        )}
+
         {/* Mesma hierarquia do caminho dos horarios: a manchete e' o que
             saiu do posto; o ritmo de maquina rodando fica na linha das
             paradas. O periodo nao repete aqui — esta' no TEMPO CRONOMETRADO. */}
-        <RitmoDoPeriodo calculado={resultado}>
-          <CiclosFuracao valor={ciclosPorPeca} aoTrocar={aoTrocarCiclos} compacto />
-          <FuracaoPassante valor={furacaoPassante} aoTrocar={aoTrocarPassante} compacto />
-        </RitmoDoPeriodo>
-        <ComParadas calculado={resultado} />
-        <SemAParada calculado={resultado} />
+        {resumo || (
+          <>
+            <RitmoDoPeriodo calculado={resultado}>
+              {!semFuracao && (
+                <>
+                  <CiclosFuracao valor={ciclosPorPeca} aoTrocar={aoTrocarCiclos} compacto />
+                  <FuracaoPassante valor={furacaoPassante} aoTrocar={aoTrocarPassante} compacto />
+                </>
+              )}
+            </RitmoDoPeriodo>
+            <ComParadas calculado={resultado} />
+            <SemAParada calculado={resultado} />
+          </>
+        )}
 
         {/* Editavel tambem aqui: parada esquecida no calor da coleta se
             corrige antes de salvar, sem refazer a conferencia. */}
         {editorParadas}
 
-        <Observacao valor={observacao} aoTrocar={aoTrocarObservacao} jaSalva={jaSalva} />
+        <Observacao valor={observacao} aoTrocar={aoTrocarObservacao} jaSalva={jaSalva} destino={destinoObservacao} />
 
         {resultado.pecas > 0 && <BotaoSalvar salvo={salvo} aoSalvar={aoSalvar} />}
       </section>
 
-      <AvisoSalvar />
+      <AvisoSalvar texto={avisoSalvar} />
 
       <nav style={est.barraInferior} aria-label="Ações do resultado">
         <button type="button" style={est.botaoBarra} onClick={aoSair}>

@@ -45,7 +45,7 @@ export default function MenuLateral({
   // marcam onde se esta': a lateral e' o menu do sistema, e menu que nao
   // diz onde voce esta' obriga a olhar o conteudo para descobrir.
   aoVerInicio, inicioAtivo, aoVerEstudos, estudosAtivo,
-  aoNovoEstudo, aoImportar, aoVerConferencias, aoVerArquivados, arquivados = 0,
+  aoNovoEstudo, aoImportar, aoVerConferencias, aoVerEmbalagem, aoVerArquivados, arquivados = 0,
   aoVerChaveIa, aoVerMotivos, aoVerMaquinas, aoVerDemanda, aoVerPainel, aoVerAnalistas, usuario, aoTrocarModo,
 }) {
   const total = grupos.reduce((acc, g) => acc + g.estudos.length, 0);
@@ -300,6 +300,20 @@ export default function MenuLateral({
             <span style={est.itemComIcone}>
               <IconeRitmo />
               <span style={est.itemTexto}>Abrir o relatório</span>
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* 8b. Embalagem Takt Time: funcao propria, separada do ritmo. */}
+      {aoVerEmbalagem && (
+        <div style={est.bloco}>
+          <div style={est.grupoRotulo}>Embalagem</div>
+          <div style={est.grupoDica}>Cada volume contra o takt, em segundos</div>
+          <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerEmbalagem}>
+            <span style={est.itemComIcone}>
+              <IconeRitmo />
+              <span style={est.itemTexto}>Embalagem Takt Time</span>
             </span>
           </button>
         </div>

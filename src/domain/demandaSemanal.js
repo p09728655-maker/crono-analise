@@ -37,4 +37,4 @@ export {
   horasDeSetup, maquinasNecessarias, ritmoExigido, vereditoDaSemana,
 } from './demanda/capacidade.js';
 export { comoDia, comoHoras, comoPeriodo, contaDasHoras } from './demanda/formato.js';
-export { leituraDaDemanda, resumoDaDemanda } from './demanda/programa.js';
+export { leituraDaDemanda, resumoDaDemanda, taktDaMedicao } from './demanda/programa.js';

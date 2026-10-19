@@ -301,3 +301,38 @@ export function leituraDaDemanda({
     ...base, estado: 'pronto', demanda: registro.pecas, veredito,
   };
 }
+
+/**
+ * O TAKT DA SEMANA DE UMA MEDICAO — para o quadro volume a volume.
+ *
+ * Nao ha' regra nova aqui: e' a leituraDaDemanda chamada com a data de UMA
+ * medicao, para que o takt desenhado ao lado dos volumes venha da mesma
+ * semana, da mesma jornada e do mesmo setup planejado que o quadro do
+ * programa usa. Duas contas de takt no mesmo relatorio acabariam
+ * divergindo, e o papel diria um takt e a tela outro.
+ *
+ * A UNIDADE e' a do programa colado: na embalagem o PCP cola VOLUMES, e o
+ * takt sai por volume — que e' o que o analista conta no tablet.
+ *
+ * Devolve `{ taktMs, estado, semana }`. taktMs e' null quando a leitura nao
+ * fecha (sem programa, sem jornada, semana sem programa): o `estado` diz o
+ * que falta, para a tela explicar em vez de sumir com a linha do takt.
+ */
+export function taktDaMedicao({
+  demandas, horas, maquinas, setup = null, data, pecas, duracaoMs,
+} = {}) {
+  if (!data) return { taktMs: null, estado: 'sem-data', semana: null };
+  const dur = Number(duracaoMs) || 0;
+  const qtd = Number(pecas) || 0;
+  // O veredito so' sai com ritmo medido; o da propria medicao serve, e o
+  // takt nao depende dele.
+  const ritmo = dur > 0 && qtd > 0 ? (qtd * 3600000) / dur : null;
+  const leitura = leituraDaDemanda({
+    demandas: demandas || [], horas, maquinas, setup, datas: [data], ritmoRelogio: ritmo,
+  });
+  return {
+    taktMs: leitura.veredito?.taktMs ?? null,
+    estado: leitura.estado,
+    semana: leitura.semana?.chave ?? null,
+  };
+}
