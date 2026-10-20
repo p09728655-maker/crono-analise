@@ -290,7 +290,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
 
           {aba === 'yamazumi' && (
             <>
-              <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} />
+              <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} unidade={medido.unidadeEstudo} />
               <CapacidadeEsperadoReal
                 capacidade={leitura.capacidade}
                 gargalo={analise.gargalo}

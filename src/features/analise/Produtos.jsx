@@ -72,17 +72,29 @@ export const faltamVolumes = (produto, grupo) =>
  *    sem ele, o takt do programa e a medicao da linha nao viram produto.
  */
 export default function Produtos({ aoFechar, grupoInicial = null }) {
-  const { maquinas, grupos, produtos, erro, ocupado, aplicar, recarregar } = useCadastroMaquinas();
+  const {
+    maquinas, grupos, produtos, erro, ocupado, aplicar: aplicarNoCadastro, recarregar,
+  } = useCadastroMaquinas();
   const [escolhido, setEscolhido] = useState(grupoInicial);
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [volumes, setVolumes] = useState('');
   const [editando, setEditando] = useState(null);   // { id, nome, codigo, volumes, grupoId }
   const [excluindo, setExcluindo] = useState(null); // id com a exclusao armada
+  /* O alerta vem PARA A VISTA a cada tentativa que falha, nao so' quando o
+     texto muda: volumes "0" e depois "60" dao a mesma mensagem, e na
+     segunda o alerta ficava fora da tela, sem nada mudar onde o analista
+     clicou ("o Cadastrar nao funciona"). */
   const refErro = useRef(null);
+  const [falhas, setFalhas] = useState(0);
+  const aplicar = async (acao) => {
+    const ok = await aplicarNoCadastro(acao);
+    if (!ok) setFalhas((n) => n + 1);
+    return ok;
+  };
   useEffect(() => {
     if (erro) refErro.current?.scrollIntoView?.({ block: 'nearest' });
-  }, [erro]);
+  }, [erro, falhas]);
 
   const carregando = maquinas == null && !erro;
   const naoCarregou = maquinas == null && Boolean(erro);
@@ -128,6 +140,12 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
           .produtos-colunas { flex-wrap: wrap !important; flex: none !important; }
           .produtos-lateral, .produtos-painel { max-height: none !important; overflow: visible !important; }
           .produtos-lista { flex: none !important; overflow: visible !important; }
+        }
+        /* No celular o nome, os selos e os botoes nao cabem numa linha: os
+           botoes descem para baixo do nome em vez de sair da caixa. */
+        @media (max-width: 560px) {
+          .produtos-linha { flex-wrap: wrap !important; padding-top: ${espaco.xs}px !important; padding-bottom: ${espaco.xs}px !important; }
+          .produtos-linha > .produtos-botoes { margin-left: auto; }
         }
       `}</style>
       <div className="produtos-caixa" style={est.caixa}>
@@ -239,7 +257,7 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
                       }}
                     />
                   ) : (
-                    <div key={p.id} style={{ ...loc.linha, ...(p.ativo ? {} : est.linhaInativa) }}>
+                    <div key={p.id} className="produtos-linha" style={{ ...loc.linha, ...(p.ativo ? {} : est.linhaInativa) }}>
                       <span style={loc.linhaRotulo}>{p.nome}</span>
                       {p.codigo && <span style={est.seloNominal} title="Código no ERP">{p.codigo}</span>}
                       {contaVolumes && p.volumes != null && (
@@ -253,7 +271,7 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
                         </span>
                       )}
                       {!p.ativo && <span style={est.seloInativo}>Desativado</span>}
-                      <div style={est.linhaBotoes}>
+                      <div className="produtos-botoes" style={est.linhaBotoes}>
                         {excluindo === p.id ? (
                           <>
                             <button

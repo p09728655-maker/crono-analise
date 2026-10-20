@@ -6,7 +6,7 @@ import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
 import { DIAS_MEDICAO } from '../../domain/medicaoDoEstudo.js';
 import { diferencaExibida,
-  exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porHoraExtenso, porUnidade,
+  capDaOperacao, exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porHoraExtenso, porUnidade,
   vereditoCapacidade,
 } from './estudo/textosMedicao.js';
 
@@ -183,7 +183,7 @@ export default function RelatorioImpressao({ estudo, analise, leitura, medido })
                 <td style={est.tdNum}>{r ? r.ciclosPorPeca : 1}</td>
                 <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpPorPeca) : '—'}</td>
                 <td style={est.tdNum}>{r ? r.cvPct.toFixed(1) : '—'}</td>
-                <td style={est.tdNum}>{r ? r.cap : '—'}</td>
+                <td style={est.tdNum}>{r ? capDaOperacao(r) : '—'}</td>
                 <td style={est.tdNum}>{r?.totalParada ? formatarDuracao(r.totalParada) : '—'}</td>
               </tr>
             );
@@ -301,7 +301,7 @@ export default function RelatorioImpressao({ estudo, analise, leitura, medido })
 
       <h2 style={est.tituloSecao}>Evidência gráfica</h2>
       <div style={est.grafico}>
-        <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} altura={300} />
+        <GraficoYamazumi operacoes={analise.comDados} taktMs={analise.taktMs} altura={300} unidade={unidade} />
       </div>
       {/* TENDENCIA — a ordem dos ciclos, que o TO (media) apaga.
           Vai no papel porque e' a evidencia da sugestao "tempos subindo":

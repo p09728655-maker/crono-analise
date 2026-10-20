@@ -59,7 +59,7 @@ const CADASTRO_FURADEIRA = {
   produtos: [{ id: 'p1', nome: 'PAINEL MDF 18MM', codigo: null, grupo_id: 'g1', ativo: true, volumes: null }],
 };
 // O mesmo grupo com SETUP PLANEJADO (5 trocas/dia x 5 dias x 12 min): o
-// setup marcado nas medicoes ja' esta' no takt e sai do relogio.
+// setup marcado fica no relogio, e o numero sem ele vai ao lado.
 const CADASTRO_FURADEIRA_COM_SETUP = {
   ...CADASTRO_FURADEIRA,
   grupos: [{ ...CADASTRO_FURADEIRA.grupos[0], setups_dia: 5, dias_semana: 5, setup_min: 12 }],
@@ -82,7 +82,7 @@ const MEDICOES_DE_FORA = [
 ];
 
 // Embalagem: TP do gargalo 115 s (100 s × 1,15) = 31,3 produtos/h pelo
-// tempo padrao (a tela mostra 31); takt de 144 s = 25 produtos/h exigidos.
+// tempo padrao (a tela mostra 31,3); takt de 144 s = 25 produtos/h exigidos.
 const ESTUDO_EMBALAGEM = {
   estudo: {
     id: 'estudo-2', nome: 'Embalagem rack — linha 1', produto: 'Rack Sirius 1.6',

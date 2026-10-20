@@ -476,7 +476,7 @@ O programa da embalagem é em **volumes** e o estudo da embalagem mede o
 **produto** inteiro (o ciclo é o rack, com a caixa, as laterais, o isopor).
 Com os volumes do produto no cadastro, o takt do programa entra sozinho no
 Novo estudo **por produto**: takt por volume × volumes do produto, com a conta
-escrita no painel ("72,0 s por volume × 2 volumes de RACK = 144,0 s por
+escrita no painel ("72.0 s por volume × 2 volumes de RACK = 144.0 s por
 produto") e no botão do Editar (`programaDoTakt`). Sem produto escolhido ou
 sem os volumes, não converte e não oferece o takt por volume — a tela pede o
 que falta. O takt por volume num estudo do produto deixava a linha o dobro
@@ -577,16 +577,22 @@ abas respondem **e agora**:
   dentro, e "com a linha rodando" como diagnóstico.
   - Atingimento e déficit/superávit usam o **medido** quando há amostra que
     sustente decisão (≥ 3 medições, ≥ 30 min); senão, a capacidade pelo
-    tempo padrão — e aí o veredito diz que **atenderia**, não que atende. Os
-    números escritos fecham a conta (o déficit sai dos dois números
-    mostrados; abaixo de 100/h, com uma casa).
+    tempo padrão — e aí o veredito diz que **atenderia**, não que atende. O
+    déficit escrito sai dos dois números mostrados, para a subtração fechar
+    de cabeça (abaixo de 100/h, com uma casa); se os dois caem no mesmo
+    número com a linha abaixo do exigido, sai o déficit cheio (nunca "0"
+    ao lado de "não atende"). A capacidade de cada operação (tabela, folhas,
+    Yamazumi, paradas) é escrita do mesmo jeito, do valor cheio.
   - "Do tempo padrão X%": quanto da capacidade teórica a linha entrega — a
     perda entre o estudo e o chão (paradas, ritmo, espera).
   - **O setup marcado fica no relógio**, e com setup planejado no grupo o
     número sem ele vai ao lado. O estudo grava só o número do takt, não a
     origem: o do programa já descontou o setup planejado, o digitado com a
     jornada cheia não — tirar o setup sem saber faria a linha "atender" sem
-    atender. Erro pessimista de propósito; gravar a origem do takt resolve.
+    atender. Erro pessimista de propósito, e não simétrico: no caso comum
+    (takt do programa, grupo com setup planejado) o setup conta duas vezes,
+    e o número que vale é o sem setup, ao lado. Gravar a origem do takt
+    resolve.
   - Na **embalagem** o tablet conta volume e o estudo mede o produto: o medido
     é dividido pelos **volumes do produto** do cadastro; sem os volumes, fica
     em volumes/h, fora do atingimento, e o cartão pede o cadastro.

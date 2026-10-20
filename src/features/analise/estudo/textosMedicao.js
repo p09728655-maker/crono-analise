@@ -15,9 +15,10 @@
  * volumes; "vol/h" so' quando nao pode converter, e o cartao diz por que.
  *
  * O ARREDONDAMENTO e' so' de exibicao (a conta usa o valor cheio): taxas
- * em inteiro para baixo, como a capacidade de cada operacao; percentual e
- * deficit com uma casa, porque na embalagem (25/h) uma unidade vale 4% e
- * o inteiro escondia a diferenca entre 98,6% e 100%.
+ * por hora para baixo, com uma casa abaixo de 100/h (exibirPorHora — a
+ * capacidade de cada operacao tambem); percentual e deficit com uma casa,
+ * porque na embalagem (25/h) uma unidade vale 4% e o inteiro escondia a
+ * diferenca entre 98,6% e 100%.
  */
 import {
   CRITERIOS_CONFERENCIA, formatarDuracao, unidadeDoPosto,
@@ -47,16 +48,36 @@ const comoExibe = (v) => (v < 100 ? Math.floor(v * 10 + 1e-9) / 10 : Math.floor(
 export const exibirPorHora = (v) => (Number.isFinite(v) ? comoExibe(v).toLocaleString('pt-BR', UMA_CASA) : '—');
 
 /**
+ * A capacidade de UMA operacao (o resultado de calcularOperacao) escrita
+ * como a do quadro: do valor cheio, nao do `cap` inteiro. Com o inteiro, a
+ * tabela dizia 31 na linha do gargalo e o quadro, 31,1.
+ */
+export const capDaOperacao = (r) => exibirPorHora(r && r.tpPorPeca > 0 ? 3600000 / r.tpPorPeca : null);
+
+/** Por minuto, com vírgula e uma casa ("3,7"): o toFixed escrevia ponto. */
+export const porMinuto = (porHoraValor) => (Number.isFinite(porHoraValor)
+  ? (porHoraValor / 60).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })
+  : '—');
+
+/**
  * O deficit/superavit que a tela escreve, DERIVADO dos dois numeros que
  * ela mostra (a regra de contaDasHoras): a subtracao que o analista
  * confere de cabeca bate sempre. O atingimento continua com os valores
  * cheios. Null sem base de comparacao.
+ *
+ * A excecao: os dois para baixo podem cair no MESMO numero com a linha
+ * abaixo do exigido (24,62 contra 24,66 escritos 24,6 e 24,6). "Deficit 0"
+ * ao lado de "nao atende" e' a tela se desmentindo — ai' sai o deficit
+ * cheio com uma casa, nunca menos que 0,1.
  */
 export function diferencaExibida(capacidade) {
   if (!capacidade || capacidade.diferenca === null || capacidade.diferenca === undefined) return null;
   const base = capacidade.base === 'medido' ? capacidade.medido : capacidade.real;
   if (!Number.isFinite(base) || !Number.isFinite(capacidade.esperado)) return capacidade.diferenca;
-  return Math.round((comoExibe(base) - comoExibe(capacidade.esperado)) * 10) / 10;
+  const escrita = Math.round((comoExibe(base) - comoExibe(capacidade.esperado)) * 10) / 10;
+  const cheia = base - capacidade.esperado;
+  if (cheia < 0 && escrita >= 0) return -Math.max(0.1, Math.round(-cheia * 10) / 10);
+  return escrita;
 }
 
 /**
@@ -204,7 +225,7 @@ export function lerMedido(carga, { recurso, produto } = {}) {
       };
   }
 
-  // Daqui para baixo ha' numero. Inteiro para baixo, como os outros dois.
+  // Daqui para baixo ha' numero, escrito como os outros dois (exibirPorHora).
   const u = porHora(m.unidade);
   const valor = exibirPorHora(m.ritmoRelogio);
   const rodando = `com a linha rodando: ${exibirPorHora(m.ritmoRodando)} ${u}`;

@@ -5,9 +5,9 @@
  * "nenhuma medicao" com tres guardadas no banco.
  */
 import { describe, expect, it } from 'vitest';
-import { diferencaExibida,
-  exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porHoraExtenso, porUnidade,
-  vereditoCapacidade,
+import {
+  capDaOperacao, diferencaExibida, exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora,
+  porHoraExtenso, porMinuto, porUnidade, vereditoCapacidade,
 } from '../src/features/analise/estudo/textosMedicao.js';
 import { comparativoCapacidade, unidadeDoPosto } from '../src/domain/cronoanalise.js';
 import { medicaoDoEstudo } from '../src/domain/medicaoDoEstudo.js';
@@ -38,6 +38,36 @@ describe('exibir — arredondar so para mostrar', () => {
     expect(diferencaExibida(c)).toBeCloseTo(-0.3, 9);
     expect(diferencaExibida({ ...c, base: 'capacidade' })).toBeCloseTo(5.4, 9);
     expect(diferencaExibida({ diferenca: null })).toBeNull();
+  });
+
+  it('os dois escritos iguais com a linha abaixo: nunca "deficit 0" ao lado de "nao atende"', () => {
+    // 24,62 e 24,66 escritos 24,6 e 24,6: sai o deficit cheio, para longe do zero.
+    const emb = comparativoCapacidade({ taktMs: 146000, capacidadeLinha: 31.3, medido: 24.62 });
+    expect(emb.atende).toBe(false);
+    expect(exibirPorHora(emb.medido)).toBe(exibirPorHora(emb.esperado));
+    expect(diferencaExibida(emb)).toBeCloseTo(-0.1, 9);
+    expect(exibirDiferenca(diferencaExibida(emb))).toBe('-0,1');
+    // Na furadeira (inteiro): 300,2 contra 300,5 escritos 300 e 300.
+    const fur = comparativoCapacidade({ taktMs: 11980, capacidadeLinha: 400, medido: 300.2 });
+    expect(fur.atende).toBe(false);
+    expect(exibirDiferenca(diferencaExibida(fur))).toBe('-0,3');
+    // Igual de verdade continua 0, e superavit escrito igual continua 0.
+    expect(diferencaExibida(comparativoCapacidade({ taktMs: 144000, capacidadeLinha: 31.3, medido: 25 }))).toBe(0);
+    expect(diferencaExibida(comparativoCapacidade({ taktMs: 144000, capacidadeLinha: 31.3, medido: 25.04 }))).toBe(0);
+  });
+
+  it('capacidade de uma operacao: do valor cheio, escrita como a do quadro', () => {
+    expect(capDaOperacao({ tpPorPeca: 115000 })).toBe('31,3');
+    expect(capDaOperacao({ tpPorPeca: 115600 })).toBe('31,1');
+    expect(capDaOperacao({ tpPorPeca: 3600000 / 222.7 })).toBe('222');
+    expect(capDaOperacao({ tpPorPeca: 0 })).toBe('—');
+    expect(capDaOperacao(null)).toBe('—');
+  });
+
+  it('por minuto com virgula', () => {
+    expect(porMinuto(222.7)).toBe('3,7');
+    expect(porMinuto(31.3)).toBe('0,5');
+    expect(porMinuto(null)).toBe('—');
   });
 
   it('percentual com uma casa, e abaixo de 100 nunca vira 100%', () => {

@@ -4,7 +4,8 @@ import { PRIORIDADES } from '../../domain/sugestoes.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
 import {
-  diferencaExibida, exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porUnidade, vereditoCapacidade,
+  capDaOperacao, diferencaExibida, exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porUnidade,
+  vereditoCapacidade,
 } from './estudo/textosMedicao.js';
 
 /**
@@ -188,7 +189,7 @@ export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
                 <td style={est.tdNum}>{r ? r.n : 0}</td>
                 <td style={est.tdNum}>{r ? r.cvPct.toFixed(1) : '—'}</td>
                 <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpPorPeca) : '—'}</td>
-                <td style={est.tdNum}>{r ? r.cap : '—'}</td>
+                <td style={est.tdNum}>{r ? capDaOperacao(r) : '—'}</td>
                 <td style={est.td}>{r ? r.estabilidade.rotulo : 'Sem ciclos'}</td>
               </tr>
             );

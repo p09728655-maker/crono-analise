@@ -157,12 +157,14 @@ await ctx.close();
  * medido e o setup uma vez so'.
  *
  * Numeros feitos na mao: 3 medicoes de 60 min com 10 min de setup marcado
- * e 50 volumes cada. O grupo tem setup planejado, entao o setup sai do
- * relogio: 150 volumes em 150 min = 60 vol/h; rack de 2 volumes = 30
- * produtos/h, contra 25 exigidos (takt 144 s) — atende, medido. Com o
- * setup no relogio seriam 25, no limite. O tempo padrao do gargalo e'
- * 100,6 s x 1,15 = 115,7 s: 31 produtos/h. O produto esta' DESATIVADO no
- * cadastro e os volumes valem do mesmo jeito.
+ * e 52 volumes cada. O setup fica no relogio: 156 volumes em 180 min = 52
+ * vol/h; rack de 2 volumes = 26 produtos/h, contra 25 exigidos (takt
+ * 144 s) — atende, medido, superavit +1, fora do limite (com 50 volumes
+ * dava 25 contra 25, e o "atende" dependia de igualdade exata). O grupo
+ * tem setup planejado, entao o numero sem ele vai ao lado: 156 em 150 min
+ * = 62,4 vol/h = 31,2 produtos/h. O tempo padrao do gargalo e' 115,6 s:
+ * 31,1 produtos/h. O produto esta' DESATIVADO no cadastro e os volumes
+ * valem do mesmo jeito.
  */
 {
   const ID2 = '0c0e7a52-6a55-4d1b-9d4e-6f3a2b1c9d10';
@@ -203,7 +205,7 @@ await ctx.close();
     produtos: [{ id: 'p5', nome: 'RACK SIRIUS 1.6', codigo: '12345', grupo_id: 'g5', ativo: false, volumes: 2 }],
   };
   const medicoes = [0, 1, 2].map((i) => ({
-    id: `v${i}`, maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6', duracao_ms: 3600000, pecas: 50,
+    id: `v${i}`, maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6', duracao_ms: 3600000, pecas: 52,
     ciclos_por_peca: 1, arquivada: false, com_marcas: true, iniciado_em: haDias(8 - i * 3),
     paradas: [{ motivo: 'setup', duracaoMs: 600000, observacao: null }],
   }));
@@ -227,16 +229,16 @@ await ctx.close();
   await p2.getByRole('button', { name: 'Imprimir', exact: true }).click();
   await p2.waitForFunction(() => window.__impressoes > 0, { timeout: 10000 });
   const papel2 = await p2.evaluate(() => window.__papel || '');
-  // 50 volumes por hora / 2 volumes = 25 produtos/h, com o setup marcado
-  // dentro do relogio; sem ele, 50 volumes em 50 min = 30 produtos/h.
-  checar(/Medido na linha\s*25\s*produtos\/h/i.test(papel2),
+  // 52 volumes por hora / 2 volumes = 26 produtos/h, com o setup marcado
+  // dentro do relogio; sem ele, 52 volumes em 50 min = 31,2 produtos/h.
+  checar(/Medido na linha\s*26\s*produtos\/h/i.test(papel2),
     `embalagem: o papel sai com o medido em produtos/h, ja' convertido (${(papel2.match(/Medido na linha\s*\S+\s*\S+/i) || [''])[0].replace(/\s+/g, ' ')})`);
-  checar(/com o setup marcado \(30 min\) dentro do relógio; sem ele, 30 produtos\/h/.test(papel2),
+  checar(/com o setup marcado \(30 min\) dentro do relógio; sem ele, 31,2 produtos\/h/.test(papel2),
     'o setup marcado fica no relogio (o grupo tem setup planejado) e o papel da o numero sem ele');
   checar(/Veredito: A linha atende o ritmo da demanda, medida na linha/.test(papel2),
     'o veredito do papel e o do medido');
   checar(/Exigido \(takt\)\s*25\s*produtos\/h/i.test(papel2) && /Capacidade pelo tempo padrão\s*31,1\s*produtos\/h/i.test(papel2)
-    && /Superávit\s*0\s*produtos\/h/i.test(papel2),
+    && /Superávit\s*\+1\s*produtos\/h/i.test(papel2),
     'exigido, tempo padrao e superavit tambem em produtos/h');
   checar(/A capacidade pelo tempo padrão é\s+limitada por esta operação — 31,1 produtos\/hora/.test(papel2)
     && /s por produto/.test(papel2) && !/capacidade da linha/i.test(papel2),

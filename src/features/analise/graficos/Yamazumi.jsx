@@ -3,6 +3,7 @@ import { claro, referencia, serie } from '../../../theme/tokensAnalise.js';
 import { formatarSegundos } from '../../../domain/cronoanalise.js';
 import { EIXO, Legenda, Texturas, VazioGrafico, escala, passoAgradavel, useLarguraContainer } from './comuns.jsx';
 import { est } from './estilos.js';
+import { capDaOperacao, porHora, porUnidade } from '../estudo/textosMedicao.js';
 
 /**
  * Yamazumi — carga de trabalho por operacao contra o Takt.
@@ -10,8 +11,11 @@ import { est } from './estilos.js';
  * Cada barra empilha TN (trabalho efetivo) + o acrescimo de tolerancia,
  * somando o TP. A separacao importa: mostra quanto do tempo padrao e' esforco
  * real e quanto e' fadiga/necessidades, que se tratam de formas diferentes.
+ *
+ * `unidade`: na embalagem o estudo mede o produto, e o detalhe diz
+ * "por produto" e "produtos/h", como o quadro de capacidade.
  */
-export function GraficoYamazumi({ operacoes, taktMs, altura = 340 }) {
+export function GraficoYamazumi({ operacoes, taktMs, altura = 340, unidade = 'peça' }) {
   const id = useId().replace(/:/g, '');
   const [ativo, setAtivo] = useState(null);
   const [refContainer, larguraContainer] = useLarguraContainer(360);
@@ -182,20 +186,20 @@ export function GraficoYamazumi({ operacoes, taktMs, altura = 340 }) {
           mouse — e era isso que fazia a tela tremer quando o conteudo
           estava no limite da rolagem. Vazia ela ainda ensina o gesto. */}
       {ativo !== null && dados[ativo]
-        ? <Tooltip operacao={dados[ativo]} taktMs={taktMs} />
+        ? <Tooltip operacao={dados[ativo]} taktMs={taktMs} unidade={unidade} />
         : <div style={est.tooltipVazio} aria-hidden="true">Passe o mouse sobre uma barra para ver o detalhe da operação.</div>}
     </figure>
   );
 }
 
-function Tooltip({ operacao, taktMs }) {
+function Tooltip({ operacao, taktMs, unidade }) {
   const r = operacao.resultado;
   const ocupacao = taktMs > 0 ? (r.tpPorPeca / taktMs) * 100 : null;
   return (
     <div style={est.tooltip} role="status">
       <strong>{operacao.nome}</strong>
-      <span>TP por ciclo {formatarSegundos(r.tpVal)}s · {r.ciclosPorPeca} ciclo(s) por peça</span>
-      <span>TP por peça {formatarSegundos(r.tpPorPeca)}s · {r.cap} pç/h · {r.n} ciclos coletados</span>
+      <span>TP por ciclo {formatarSegundos(r.tpVal)}s · {r.ciclosPorPeca} ciclo(s) {porUnidade(unidade)}</span>
+      <span>TP {porUnidade(unidade)} {formatarSegundos(r.tpPorPeca)}s · {capDaOperacao(r)} {porHora(unidade)} · {r.n} ciclos coletados</span>
       {ocupacao !== null && (
         <span>
           Ocupação {ocupacao.toFixed(0)}% do Takt

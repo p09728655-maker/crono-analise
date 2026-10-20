@@ -99,8 +99,9 @@ export function useMedicaoDoEstudo(estudo) {
         // Com os desativados: o rack desativado continua tendo dois
         // volumes, e o estudo de antes continua sendo dele.
         volumes: volumesDoProduto(produtosDoGrupo(cadastro, grupoId, { comInativos: true }), produto),
-        // O setup planejado do grupo: com ele, o setup marcado sai do
-        // relogio (ja' esta' no takt). Mesmos campos do Ritmo/Demanda.
+        // O setup planejado do grupo: com ele, o numero sem o setup marcado
+        // vai ao lado do medido (o setup fica no relogio — ver
+        // medicaoDoEstudo). Mesmos campos do Ritmo/Demanda.
         setup: grupo
           ? { setupsDia: grupo.setups_dia, dias: grupo.dias_semana, minutos: grupo.setup_min }
           : null,

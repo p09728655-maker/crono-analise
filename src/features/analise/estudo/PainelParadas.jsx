@@ -1,6 +1,6 @@
 import { formatarDuracao } from '../../../domain/cronoanalise.js';
 import { est } from './estilos.js';
-import { exibirPorHora, porHora } from './textosMedicao.js';
+import { exibirPorHora, porHora, porMinuto } from './textosMedicao.js';
 
 /**
  * PARADAS DO ESTUDO — a perda que a coleta ja' media e ninguem via.
@@ -69,9 +69,11 @@ export default function PainelParadas({
     ? Math.round((capacidadeLinha * paradaDoGargalo) / 3600000)
     : 0;
 
-  /* Capacidade de cada operacao, para o custo linha a linha da tabela. */
+  /* Capacidade de cada operacao, para o custo linha a linha da tabela —
+     cheia, como a da frase acima: com o `cap` inteiro, o gargalo de 222,5/h
+     parado 1 h dava 223 pecas na frase e 222 na linha dele. */
   const capPorOperacao = new Map(
-    (operacoes || []).map((o) => [o.id, o.resultado?.cap || 0]),
+    (operacoes || []).map((o) => [o.id, o.resultado?.tpPorPeca > 0 ? 3600000 / o.resultado.tpPorPeca : 0]),
   );
 
   return (
@@ -89,7 +91,7 @@ export default function PainelParadas({
           <strong>{perdidas} {unidade === 'produto' ? 'produtos' : 'peças'} deixaram de sair da linha</strong> nos
           {' '}{formatarDuracao(paradaDoGargalo)} em que <strong>{gargalo.nome}</strong> ficou parada
           — é o posto que manda no ritmo ({exibirPorHora(capacidadeLinha)} {porHora(unidade)} ·
-          {' '}{(capacidadeLinha / 60).toFixed(1)} {unidade === 'produto' ? 'produtos' : 'pç'}/min). Parada nas outras operações é absorvida
+          {' '}{porMinuto(capacidadeLinha)} {unidade === 'produto' ? 'produtos' : 'pç'}/min). Parada nas outras operações é absorvida
           pela folga delas: o custo de cada uma está na tabela abaixo.
         </p>
       )}

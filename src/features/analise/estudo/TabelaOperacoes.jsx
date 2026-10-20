@@ -1,5 +1,6 @@
 import { formatarDuracao, formatarSegundos } from '../../../domain/cronoanalise.js';
 import { corNivel, est } from './estilos.js';
+import { capDaOperacao } from './textosMedicao.js';
 
 /**
  * A TABELA DE OPERACOES — a evidencia por tras da resposta.
@@ -72,6 +73,9 @@ export default function TabelaOperacoes({ analise, metaObs, aoAdicionar, aoRemov
                   <td style={est.tdNum}>{r ? formatarSegundos(r.tpVal) : '—'}</td>
                   <td style={{ ...est.tdNum, fontWeight: 700 }}>{r ? formatarSegundos(r.tpPorPeca) : '—'}</td>
                   <td style={est.tdNum}>{r ? r.cvPct.toFixed(1) : '—'}</td>
+                  {/* Cap/h: a celula faltava, e cada coluna dali em diante
+                      aparecia sob o cabecalho da anterior. */}
+                  <td style={est.tdNum}>{r ? capDaOperacao(r) : '—'}</td>
                   <td style={est.tdNum}>
                     {r && r.totalParada > 0 ? (
                       <>

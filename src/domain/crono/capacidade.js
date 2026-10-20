@@ -41,7 +41,8 @@ export function operadoresNecessarios(somaTpMs, taktMs) {
  * de inventar uma meta.
  *
  * Os tres numeros saem CHEIOS, sem arredondar: quem exibe arredonda (a
- * tela mostra inteiro para baixo, como a capacidade de cada operacao).
+ * tela escreve para baixo, com uma casa abaixo de 100/h — exibirPorHora,
+ * em textosMedicao).
  * Arredondar antes de dividir trocava o veredito na embalagem, onde a
  * taxa e' ~25 por hora e uma unidade vale 4%: exigido 24,66 e medido
  * 24,3 viravam 24 contra 24 — "100%, atende" para uma linha abaixo do

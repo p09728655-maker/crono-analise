@@ -472,6 +472,29 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
   checar(/23\s*produtos\/h/.test(resumo), 'resumo leva o medido em produtos/h');
   checar(/25\s*produtos\/h/.test(resumo) && /Takt de 144.0 s por produto/.test(resumo) && /-2 produtos\/h de déficit/.test(resumo),
     'resumo: exigido, takt e deficit tambem por produto');
+  /* A CAPACIDADE DE CADA OPERACAO com o mesmo numero do quadro (31,3, nao
+     o `cap` inteiro 31), e a tabela com uma celula por cabecalho: o Cap/h
+     estava sem celula, e Parado e Estabilidade caiam sob o cabecalho do
+     lado. */
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Operações' }).click();
+  await p.locator('table th', { hasText: 'Cap/h' }).first().waitFor({ timeout: 4000 }).catch(() => {});
+  const tabela = await p.evaluate(() => {
+    const t = [...document.querySelectorAll('.somente-tela table')].find((x) => /Cap\/h/i.test(x.innerText));
+    if (!t) return null;
+    const cab = [...t.querySelectorAll('thead th')].map((c) => c.innerText.trim());
+    const linha = [...t.querySelectorAll('tbody tr')].find((r) => /Montar caixa/.test(r.innerText));
+    const cel = linha ? [...linha.querySelectorAll('td')].map((c) => c.innerText.trim()) : [];
+    return { cab: cab.length, cel: cel.length, cap: cel[cab.findIndex((c) => /Cap\/h/i.test(c))] };
+  });
+  checar(tabela && tabela.cab === tabela.cel && tabela.cap === '31,3',
+    `tabela de operacoes: uma celula por cabecalho, e Cap/h do gargalo 31,3 como o quadro (${JSON.stringify(tabela)})`);
+  await p.locator('[aria-label="Análise"] button', { hasText: 'Yamazumi' }).click();
+  const barra = await p.locator('svg[aria-label*="Yamazumi"]').first().locator('rect[rx="4"]').first().boundingBox();
+  if (barra) await p.mouse.move(barra.x + barra.width / 2, barra.y + barra.height / 2);
+  const detalhe = await p.locator('[role="status"]', { hasText: 'Montar caixa' }).innerText({ timeout: 4000 }).catch(() => '');
+  checar(/TP por produto 115\.0s · 31,3 produtos\/h/.test(detalhe) && !/pç\/h|por peça/.test(detalhe),
+    `yamazumi da embalagem: por produto, em produtos/h, com o numero do quadro (${detalhe.replace(/\s+/g, ' ')})`);
+  await p.mouse.move(5, 5);
   checar(erros.length === 0, `embalagem: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
   await ctx.close();
 }
