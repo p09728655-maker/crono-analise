@@ -100,8 +100,17 @@ await t.getByRole('button', { name: /Cancelar/ }).click();
 await t.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
 checar(await t.locator('[aria-label="Resultado da conferência"]').count() === 0, 'cancelar antes da largada volta ao comeco, sem resultado');
 
-await t.getByRole('button', { name: /INICIAR/ }).click();
-await largada.waitFor({ timeout: 4000 });
+/* O QUIQUE DA LUVA: o INICIAR e' onClick, e a largada ocupa o meio da tela
+   seguinte. Um segundo contato logo depois do INICIAR nao abre o relogio. */
+await t.evaluate(async () => {
+  [...document.querySelectorAll('button')].find((b) => /INICIAR/.test(b.innerText)).click();
+  await new Promise((r) => { setTimeout(r, 40); });
+  document.querySelector('button[aria-label^="Largada"]')
+    .dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+});
+await t.waitForTimeout(500);
+checar((await t.locator('[aria-label="Tempo decorrido"]').innerText()).includes('00:00.0')
+  && await largada.count() === 1, 'o quique logo depois do INICIAR nao da a largada: relogio em 00:00.0');
 // Espera armada de proposito: se o relogio contasse do INICIAR, a 1a marca
 // sairia com estes 1,5 s a mais.
 await t.waitForTimeout(1500);
@@ -155,6 +164,11 @@ checar(enviado?.marcasRelogioMs === enviado?.marcasMs?.at(-1) - enviado?.marcasM
 /* ------------------- o RELOGIO das marcas: parada descontada e desfazer */
 await t.getByRole('button', { name: /Nova conferência/ }).click();
 await t.getByRole('button', { name: /INICIAR/ }).click();
+await largada.waitFor({ timeout: 4000 });
+await t.waitForTimeout(300);
+const painelRearmado = await t.locator('[aria-label="Tempo decorrido"]').innerText();
+checar(painelRearmado.includes('00:00.0'),
+  `armado depois de uma medicao: o relogio mostra 00:00.0, nao o fim da anterior (${painelRearmado.split('\n')[1]})`);
 await largada.dispatchEvent('pointerdown');
 await alvo.waitFor({ timeout: 4000 });
 await t.waitForTimeout(260);
@@ -206,6 +220,8 @@ checar(comParada?.marcasSetupMs >= 1400 && comParada?.marcasSetupMs < 2500,
 /* ------------- contagem corrigida a mao: o aviso aparece e as marcas nao sobem */
 await t.getByRole('button', { name: /Nova conferência/ }).click();
 await t.getByRole('button', { name: /INICIAR/ }).click();
+await largada.waitFor({ timeout: 4000 });
+await t.waitForTimeout(260);
 await largada.dispatchEvent('pointerdown');
 await alvo.waitFor({ timeout: 4000 });
 await t.waitForTimeout(260);

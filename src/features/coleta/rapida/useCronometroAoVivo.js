@@ -32,11 +32,12 @@
  * A LARGADA (comLargada, so' a Embalagem Takt Time): o Comecar so' arma a
  * medicao, e o relogio abre no primeiro toque — dado quando um volume
  * fecha. Esse toque NAO conta volume: o volume que fechou ali foi embalado
- * antes do relogio, e conta-lo punha N volumes em N-1 intervalos, com o
- * volumes/hora (e o veredito do programa da semana) otimista em ~1/(N-1).
+ * antes do relogio, e conta-lo punha um volume a mais no periodo, com o
+ * volumes/hora (e o veredito do programa da semana) otimista em ~1/N.
  * Sem a largada, o relogio corria desde o Iniciar, com a espera ate' o
- * primeiro volume dentro do periodo (pedido do PPCP, 20/10). O takt nao
- * muda: continua do primeiro ao ultimo volume contado.
+ * primeiro volume dentro do periodo (pedido do PPCP, 20/10). O tempo por
+ * volume, que vai contra o takt, nao muda: continua do primeiro ao ultimo
+ * volume contado.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TOQUE_MINIMO_MS } from '../../../domain/estatistica.js';
@@ -94,6 +95,10 @@ export function useCronometroAoVivo({ paradas, comLargada = false }) {
     setFase('rodando');
     largadaPendenteRef.current = comLargada;
     setAguardandoLargada(comLargada);
+    // O INICIAR e' onClick e a largada ocupa o meio da tela seguinte: o
+    // quique da luva no INICIAR cairia nela e abriria o relogio sem ninguem
+    // ver volume fechar. A guarda de repique passa a contar dele.
+    if (comLargada) ultimoToqueRef.current = performance.now();
     if (!comLargada) {
       inicioRef.current = performance.now();
       iniciar();
@@ -134,7 +139,7 @@ export function useCronometroAoVivo({ paradas, comLargada = false }) {
     vibrar(45);
     setPulso((p) => p + 1);
     setPecas((n) => n + 1);
-  }, [rodando, emParada]);
+  }, [rodando, emParada, iniciar]);
 
   const desfazer = useCallback(() => {
     marcasRef.current.pop();

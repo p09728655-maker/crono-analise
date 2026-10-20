@@ -17,9 +17,11 @@
  * Paradas marcadas DEPOIS (no resultado do tablet ou no PC) nao sabem em
  * que ponto do periodo aconteceram, entao continuam dentro dos intervalos.
  *
- * O intervalo antes da PRIMEIRA peca nao entra: o cronometro comeca num
- * instante qualquer, e o tempo ate' a primeira marca nao e' ciclo de nada.
- * N marcas dao N-1 intervalos.
+ * O intervalo antes da PRIMEIRA peca nao entra. No Ritmo da maquina (e na
+ * embalagem antes da 2.92) o cronometro comeca num instante qualquer, e o
+ * tempo ate' a primeira marca nao e' ciclo de nada. Na embalagem com
+ * largada ele seria um volume inteiro, mas o PC nao distingue uma medicao da
+ * outra: a regra e' uma so'. N marcas dao N-1 intervalos.
  */
 import { media } from '../estatistica.js';
 

@@ -122,9 +122,15 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
     entrava no período.
   - Contar o volume da largada punha N volumes em N − 1 intervalos: o volume
     que fechou ali foi embalado antes do relógio. O volumes/hora, e com ele o
-    veredito do programa da semana, sairia otimista em ~1/(N − 1), uns 9%
-    numa medição de 12 volumes.
-  - O takt não muda: continua do primeiro ao último volume contado. O
+    veredito do programa da semana, sairia otimista em ~1/N, uns 8%
+    numa medição de 12 volumes contados.
+  - O tempo por volume, que vai contra o takt, não muda: continua do
+    primeiro ao último volume contado. O volumes/hora das medições antigas
+    traz a espera até o primeiro volume e sai um pouco mais baixo.
+  - Troca no começo da medição: dê a largada no último volume do produto
+    anterior e marque *Parou → Setup / troca*. Com a largada só no primeiro
+    volume do produto novo, a troca fica fora da medição.
+  - O
     *Cronometrar ao vivo* do Ritmo da máquina segue abrindo o relógio no
     toque do botão.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as

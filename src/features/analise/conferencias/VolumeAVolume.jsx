@@ -315,7 +315,7 @@ function definicoes(leitura, unidade) {
   const toque = unidade.singular === 'volume' ? 'volume' : 'toque';
   const { fatorLacuna, minIntervalos } = leitura.criterios;
   return [
-    ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo — o cronômetro começa num instante qualquer.`],
+    ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo: o intervalo vai de um toque ao seguinte, e o tempo antes do primeiro toque não entra.`],
     [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, e só quando o grupo tem setup planejado (ele já saiu das horas do takt). É o que vai contra o takt — a mesma régua do programa da semana.'],
     [`Por ${unidade.singular} com a linha rodando`, 'soma dos intervalos dividida pela quantidade de intervalos.'],
     ['Lacuna', `intervalo maior que ${fatorLacuna}× o normal — a média dos intervalos que não são lacuna (o "sem as lacunas"). Parada marcada e passo lento não viram lacuna.`],
@@ -342,8 +342,8 @@ function ComoLer({ leitura, unidade }) {
 function notaDoCriterio(leitura, unidade) {
   return `Intervalo = tempo de um ${unidade.singular === 'volume' ? 'volume' : 'toque'} até o seguinte, com a linha rodando: `
     + 'as paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) '
-    + 'continuam dentro dos intervalos. O primeiro toque não tem intervalo — o cronômetro começa num instante '
-    + 'qualquer. Contra o takt vai o relógio do primeiro ao último toque ÷ intervalos, com as paradas dentro '
+    + 'continuam dentro dos intervalos. O primeiro toque não tem intervalo: o intervalo vai de um toque ao '
+    + 'seguinte, e o tempo antes do primeiro toque não entra. Contra o takt vai o relógio do primeiro ao último toque ÷ intervalos, com as paradas dentro '
     + '(sem o setup marcado entre os toques, quando o grupo tem setup planejado) — a mesma régua do programa da semana. '
     + 'Com a linha rodando = soma dos intervalos ÷ quantidade. '
     + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal — a média dos intervalos que não são lacuna. `

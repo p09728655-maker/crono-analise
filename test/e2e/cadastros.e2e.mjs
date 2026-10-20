@@ -85,7 +85,10 @@ checar(await livre.inputValue() === 'Produto novo', '"Outro produto…" abre o t
 checar(await t.getByRole('button', { name: /escolher do cadastro/ }).count() === 1, 'e da para voltar a lista');
 
 await t.getByRole('button', { name: /INICIAR/ }).click();
-// Parou so' vale depois da largada: antes dela nao ha' periodo.
+// Parou so' vale depois da largada: antes dela nao ha' periodo. A espera
+// passa a guarda de repique, que conta do INICIAR.
+await t.getByRole('button', { name: /Largada/ }).waitFor({ timeout: 4000 });
+await t.waitForTimeout(260);
 await t.getByRole('button', { name: /Largada/ }).dispatchEvent('pointerdown');
 await t.getByRole('button', { name: 'Parou' }).click();
 const folha = t.locator('[aria-label="Por que a máquina parou"]');
