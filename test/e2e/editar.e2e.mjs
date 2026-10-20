@@ -98,5 +98,78 @@ checar(patches[0]?.analista === 'ODERLI GARCIA', 'campos nao tocados sao preserv
 
 checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})`);
 
+/* ----------- o posto puxa a lista de produtos e, a um clique, o takt do programa */
+/**
+ * Estudo antigo de furadeira, sem takt. O grupo 0002 tem produtos e o
+ * programa desta semana: 6.600 pecas para 6 maquinas em 44 h = 144 s por
+ * peca por maquina. Aqui o programa NUNCA entra sozinho: o estudo ja' tem
+ * um takt (ou nenhum) e so' muda quando o analista pede.
+ */
+{
+  const ID2 = 'c27e849c-da3f-4d8c-a262-81e8748c589c';
+  const furadeira = {
+    id: ID2, nome: 'Furação lateral', setor: 'Usinagem', recurso: 'FURADEIRA 04', produto: 'lateral sleep',
+    analista: 'ODERLI GARCIA', data_estudo: '2026-10-19', tolerancia_pct: '15',
+    meta_obs: 12, takt_time_ms: null, status: 'coletando',
+  };
+  const GRUPO = { id: 'g2', codigo: '0002', nome: 'FURADEIRA', horas_semana: '44.00', setups_dia: 0, setup_min: '0', dias_semana: 5 };
+  const maquinas = ['FURADEIRA 04', 'FURADEIRA 07', 'FURADEIRA 11', 'FURADEIRA 12', 'FURADEIRA 14', 'FURADEIRA 15']
+    .map((nome, i) => ({ id: `m${i + 1}`, nome, ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' }));
+  const produtos = [
+    { id: 'p1', nome: 'LATERAL SLEEP', codigo: '1001', grupo_id: 'g2', ativo: true },
+    { id: 'p2', nome: 'FUNDO SLEEP', codigo: '1002', grupo_id: 'g2', ativo: true },
+  ];
+  const hoje = new Date();
+  const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()));
+  segunda.setUTCDate(segunda.getUTCDate() - ((segunda.getUTCDay() + 6) % 7));
+  const demandas = [{ ano: segunda.getUTCFullYear(), numero: 43, pecas: 6600, inicio: segunda.toISOString().slice(0, 10) }];
+
+  const c2 = await b.newContext({ viewport: { width: 1440, height: 950 } });
+  const q = await c2.newPage();
+  await semearSessao(q);
+  const erros2 = [];
+  q.on('pageerror', (e) => erros2.push(e.message));
+  const patches2 = [];
+  await q.route('**/api/estudos**', (r) => {
+    const req = r.request();
+    if (req.method() === 'PATCH') {
+      patches2.push(JSON.parse(req.postData()));
+      return r.fulfill({ json: { estudo: furadeira } });
+    }
+    if (req.url().includes('id=')) return r.fulfill({ json: { estudo: furadeira, operacoes: estudo.operacoes } });
+    return r.fulfill({ json: { estudos: [] } });
+  });
+  await q.route('**/api/config**', (r) => r.fulfill({ json: { chaveIa: { configurada: false } } }));
+  await q.route('**/api/maquinas**', (r) => (/demanda=1/.test(r.request().url())
+    ? r.fulfill({ json: { demandas } })
+    : r.fulfill({ json: { maquinas, grupos: [GRUPO], produtos } })));
+
+  await q.goto(`${BASE}/analise/estudo/${ID2}?editar=1`);
+  const dlg = q.locator('[aria-label="Ajustes do estudo"]');
+  await dlg.waitFor({ timeout: 8000 });
+
+  const usar = dlg.getByRole('button', { name: /Usar o takt do programa da semana \d{3}-\d{2}: 144\.0 s por peça/ });
+  await usar.waitFor({ timeout: 8000 });
+  checar(true, 'ajustes: o takt do programa e oferecido em segundos, como o campo');
+  const campoTakt = dlg.locator('label', { hasText: 'Takt Time (segundos por peça)' }).locator('input');
+  checar(await campoTakt.inputValue() === '', 'ajustes: o programa nao entra sozinho no estudo');
+
+  /* Produto antigo digitado ("lateral sleep") nao some: aparece como texto,
+     com o caminho de volta para a lista do cadastro. */
+  const produtoTexto = dlg.locator('label', { hasText: 'Produto / Referência' }).locator('input');
+  checar(await produtoTexto.inputValue() === 'lateral sleep', 'ajustes: produto antigo digitado continua a mostra');
+  await dlg.getByRole('button', { name: '▾ escolher do cadastro' }).last().click();
+  await dlg.getByRole('combobox', { name: 'Produto / Referência' }).selectOption('LATERAL SLEEP');
+
+  await usar.click();
+  checar(await campoTakt.inputValue() === '144.0', `ajustes: um clique escreve o takt do programa (${await campoTakt.inputValue()})`);
+  await dlg.getByRole('button', { name: /Salvar/ }).click();
+  await q.waitForTimeout(600);
+  checar(patches2[0]?.taktTimeMs === 144000, `ajustes: PATCH leva o takt do programa (${patches2[0]?.taktTimeMs})`);
+  checar(patches2[0]?.produto === 'LATERAL SLEEP', `ajustes: PATCH leva o produto do cadastro (${patches2[0]?.produto})`);
+  checar(erros2.length === 0, `ajustes com programa: sem erro de pagina (${erros2.join('; ') || 'nenhum'})`);
+  await c2.close();
+}
+
 await b.close();
 process.exit(falhas ? 1 : 0);

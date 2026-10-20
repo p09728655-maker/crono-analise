@@ -182,5 +182,235 @@ const b = await chromium.launch({ executablePath: EXEC });
   await ctx.close();
 }
 
+/* ------------- o posto puxa o produto e o takt do grupo (programa da semana) */
+/**
+ * Harness com ?programa=1: a FURADEIRA (0002) tem produtos cadastrados e
+ * programa desta semana — 6.600 pecas para seis maquinas ativas em 44 h,
+ * takt de 02:24 por peca por maquina. A FRESADORA (0004) nao tem programa.
+ */
+{
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
+  const p = await ctx.newPage();
+  const erros = [];
+  p.on('pageerror', (e) => erros.push(e.message));
+  await p.goto(`${BASE}/test/e2e/harness-lista/index.html?modo=analise&vazio=1&programa=1`);
+  await p.waitForSelector('text=Nenhum estudo cadastrado', { timeout: 8000 });
+  await p.click('text=+ Novo estudo');
+  const form = p.locator('[aria-label="Novo estudo"]');
+  await form.waitFor({ timeout: 4000 });
+  const painel = form.locator('aside[aria-label="Ritmo / Demanda"]');
+
+  checar(await painel.getByText('Escolha o posto para trazer o takt do programa da semana.').count() === 1,
+    'programa: antes do posto, o painel diz como o takt vem do programa');
+  checar(await form.locator('input[list="produtos-conhecidos"]').count() === 1,
+    'programa: sem posto, o produto segue texto livre');
+
+  await form.getByLabel('Recurso / Posto').selectOption('FURADEIRA 04');
+  const produto = form.getByRole('combobox', { name: 'Produto / Referência' });
+  await produto.waitFor({ timeout: 4000 });
+  const opcoes = await produto.locator('option').allInnerTexts();
+  checar(opcoes.includes('LATERAL SLEEP · 1001') && opcoes.includes('Outro produto…'),
+    `programa: o produto vira a lista do cadastro do grupo (${opcoes.join(' | ')})`);
+
+  await painel.getByText('Do programa da semana').waitFor({ timeout: 4000 });
+  const texto = await painel.innerText();
+  checar(/0002 · FURADEIRA · semana \d{3}-\d{2}/.test(texto), 'programa: o painel diz o grupo e a semana');
+  checar(texto.includes('02:24'), 'programa: takt do programa = 44 h / (6.600 / 6) = 02:24 por peca');
+  checar(texto.includes('6.600 peças') && texto.includes('44h00min'), 'programa: a conta aparece (demanda e horas)');
+  checar(texto.includes('144.0 s por peça') && texto.includes('Por máquina: 44h00min de jornada, sem setup planejado.'),
+    'programa: o takt tambem em segundos, e a jornada diz se ha setup descontado');
+  checar(texto.includes('(1.100 peças)'), 'programa: a parte de cada maquina na demanda aparece');
+  checar(/6 máquinas no grupo/.test(texto), 'programa: o takt e de uma maquina, e o painel diz quantas sao');
+  checar(await painel.locator('input').count() === 0, 'programa: sem campos para digitar — o takt nao e chute');
+
+  await produto.selectOption('LATERAL SLEEP');
+  await form.getByLabel('Nome do estudo').fill('Furação lateral — programa');
+  await form.locator('button', { hasText: 'Criar estudo' }).click();
+  await p.waitForFunction(() => window.__posts.length > 0, { timeout: 4000 });
+  const post = await p.evaluate(() => window.__posts[0]);
+  checar(post.corpo.taktTimeMs === 144000, `programa: POST leva o takt do programa (${post.corpo.taktTimeMs})`);
+  checar(post.corpo.produto === 'LATERAL SLEEP', `programa: POST leva o produto do cadastro (${post.corpo.produto})`);
+  checar(post.corpo.recurso === 'FURADEIRA 04', 'programa: POST leva o posto');
+
+  /* Simular e voltar: a conta digitada continua possivel, dita como
+     simulacao, e o programa volta com um clique. */
+  await p.waitForSelector('[aria-label="Novo estudo"]', { state: 'detached', timeout: 4000 });
+  await p.evaluate(() => { window.__posts = []; });
+  await p.click('text=+ Novo estudo');
+  await form.waitFor({ timeout: 4000 });
+  await form.getByLabel('Recurso / Posto').selectOption('FURADEIRA 04');
+  await painel.getByText('Do programa da semana').waitFor({ timeout: 4000 });
+  await painel.getByRole('button', { name: 'Simular outra demanda' }).click();
+  await painel.locator('label', { hasText: 'Quantidade por dia' }).locator('input').fill('480');
+  await painel.locator('label', { hasText: 'Horas disponíveis' }).locator('input').fill('5.6');
+  const simulado = await painel.innerText();
+  checar(simulado.includes('00:42') && /Simulação\. O programa da semana \d{3}-\d{2} pede 144\.0 s por peça\./.test(simulado),
+    'simular: a conta digitada vale, e o painel lembra o que o programa pede');
+  await painel.getByRole('button', { name: /Usar o takt do programa/ }).click();
+  checar(await painel.getByText('Do programa da semana').count() === 1, 'simular: um clique volta ao programa');
+
+  /* Posto de grupo sem programa: a conta digitada de sempre, com o motivo. */
+  await form.getByLabel('Recurso / Posto').selectOption('FRESADORA 01');
+  await painel.getByText(/0004 · FRESADORA não tem programa da semana: digite a demanda\./).waitFor({ timeout: 4000 });
+  checar(true, 'sem programa: o painel diz por que a demanda e digitada');
+  checar(await painel.locator('label', { hasText: 'Quantidade por dia' }).count() === 1,
+    'sem programa: os campos da conta voltam');
+  checar(await form.locator('input[list="produtos-conhecidos"]').count() === 1,
+    'sem produto cadastrado no grupo: o produto segue texto livre');
+  await form.locator('button', { hasText: 'Cancelar' }).click();
+
+  /* Quantidade digitada ANTES do posto: o programa nao passa por cima. */
+  await p.click('text=+ Novo estudo');
+  await form.waitFor({ timeout: 4000 });
+  await painel.locator('label', { hasText: 'Quantidade por dia' }).locator('input').fill('480');
+  await form.getByLabel('Recurso / Posto').selectOption('FURADEIRA 04');
+  await painel.getByRole('button', { name: /Usar o takt do programa/ }).waitFor({ timeout: 4000 });
+  checar(await painel.locator('label', { hasText: 'Quantidade por dia' }).locator('input').inputValue() === '480',
+    'digitado antes: o programa nao apaga o que o analista digitou — so oferece');
+
+  checar(erros.length === 0, `programa: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+
+/* ---------------- trocar de posto no meio: nada do grupo anterior fica */
+/**
+ * Os caminhos que o revisor quebrou na primeira versao, cada um como um
+ * analista faria: clicar no programa da furadeira e trocar para a
+ * embalagem; escolher produto da furadeira e trocar de grupo; apagar a
+ * quantidade para corrigir; e o instante em que o programa do grupo novo
+ * ainda nao chegou.
+ */
+{
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
+  const p = await ctx.newPage();
+  const erros = [];
+  p.on('pageerror', (e) => erros.push(e.message));
+  await p.goto(`${BASE}/test/e2e/harness-lista/index.html?modo=analise&vazio=1&programa=1`);
+  await p.waitForSelector('text=Nenhum estudo cadastrado', { timeout: 8000 });
+  const form = p.locator('[aria-label="Novo estudo"]');
+  const painel = form.locator('aside[aria-label="Ritmo / Demanda"]');
+  const posto = form.getByLabel('Recurso / Posto');
+  const abrir = async () => {
+    await p.evaluate(() => { window.__posts = []; });
+    await p.click('text=+ Novo estudo');
+    await form.waitFor({ timeout: 4000 });
+    await form.getByLabel('Nome do estudo').fill('Troca de posto');
+  };
+  const criar = async () => {
+    await form.locator('button', { hasText: 'Criar estudo' }).click();
+    await p.waitForFunction(() => window.__posts.length > 0, { timeout: 4000 });
+    await form.waitFor({ state: 'detached', timeout: 4000 });
+    return (await p.evaluate(() => window.__posts[0])).corpo;
+  };
+
+  /* 1. "Usar o takt do programa" na furadeira NAO vale na embalagem. */
+  await abrir();
+  await posto.selectOption('FURADEIRA 04');
+  await painel.getByText('Do programa da semana').waitFor({ timeout: 4000 });
+  await painel.getByRole('button', { name: 'Simular outra demanda' }).click();
+  await painel.getByRole('button', { name: /Usar o takt do programa/ }).click();
+  await painel.getByText('Do programa da semana').waitFor({ timeout: 4000 });
+  await posto.selectOption('EMBALADORA 01');
+  await painel.getByRole('button', { name: 'Usar o takt do programa (72.0 s por volume)' }).waitFor({ timeout: 4000 });
+  checar(await painel.getByText('Do programa da semana').count() === 0,
+    'troca: o clique dado na furadeira nao impoe o takt por volume na embalagem');
+  checar(/O programa da semana \d{3}-\d{2} é em volumes: 72\.0 s por volume/.test(await painel.innerText()),
+    'embalagem: o programa em volumes e oferecido, com a unidade escrita');
+  let corpo = await criar();
+  checar(corpo.taktTimeMs === null, `troca: sem clique na embalagem, nada de takt por volume (${corpo.taktTimeMs})`);
+
+  /* 2. Na embalagem, o programa entra so' com o clique — e entao diz volume. */
+  await abrir();
+  await posto.selectOption('EMBALADORA 01');
+  await painel.getByRole('button', { name: /Usar o takt do programa/ }).click();
+  await painel.getByText('Do programa da semana').waitFor({ timeout: 4000 });
+  const emb = await painel.innerText();
+  checar(/0005 · EMBALAGEM · semana/.test(emb) && emb.includes('01:12') && /s\/volume/.test(emb)
+    && emb.includes('72.0 s por volume') && emb.includes('2.200 volumes'),
+    'embalagem: com o clique, o takt do programa sai por volume (01:12 = 72.0 s)');
+  corpo = await criar();
+  checar(corpo.taktTimeMs === 72000, `embalagem: POST com o takt por volume pedido (${corpo.taktTimeMs})`);
+
+  /* 3. Produto do cadastro da furadeira nao vai para o posto da embalagem —
+     nem pelo caminho "Outro produto…" -> "escolher do cadastro". */
+  await abrir();
+  await posto.selectOption('FURADEIRA 04');
+  const produto = form.getByRole('combobox', { name: 'Produto / Referência' });
+  await produto.selectOption('__outro');
+  await form.getByRole('button', { name: '▾ escolher do cadastro' }).last().click();
+  await produto.selectOption('LATERAL SLEEP');
+  await posto.selectOption('EMBALADORA 01');
+  await produto.locator('option', { hasText: 'RACK SIRIUS 1.6' }).waitFor({ state: 'attached', timeout: 4000 });
+  checar(await produto.inputValue() === '', 'produto: trocar de grupo limpa o produto do grupo antigo');
+  await produto.selectOption('RACK SIRIUS 1.6');
+  corpo = await criar();
+  checar(corpo.produto === 'RACK SIRIUS 1.6' && corpo.recurso === 'EMBALADORA 01',
+    `produto: grava o produto do grupo do posto (${corpo.produto} @ ${corpo.recurso})`);
+
+  /* 4. Produto digitado a mao continua: e' do analista. */
+  await abrir();
+  await form.locator('input[list="produtos-conhecidos"]').fill('Mesa nova');
+  await posto.selectOption('FURADEIRA 04');
+  await posto.selectOption('EMBALADORA 01');
+  await p.waitForTimeout(200);
+  checar(await form.getByLabel('Produto / Referência').inputValue() === 'Mesa nova',
+    'produto digitado a mao sobrevive a troca de posto');
+  await form.locator('button', { hasText: 'Cancelar' }).click();
+
+  /* 5. Apagar a quantidade para corrigir nao entrega o painel ao programa. */
+  await abrir();
+  const qtd = painel.locator('label', { hasText: 'Quantidade por dia' }).locator('input');
+  await qtd.fill('48');
+  await posto.selectOption('FURADEIRA 04');
+  await painel.getByRole('button', { name: /Usar o takt do programa/ }).waitFor({ timeout: 4000 });
+  await qtd.fill('');
+  await p.waitForTimeout(200);
+  checar(await qtd.count() === 1, 'corrigir: com a quantidade apagada, o campo continua la');
+  await qtd.fill('480');
+  corpo = await criar();
+  checar(corpo.taktTimeMs === 66000, `corrigir: grava a conta do analista, 480 em 8,8 h = 66 s (${corpo.taktTimeMs})`);
+
+  /* 6. No instante da troca, o programa da furadeira nao vale para a fresadora. */
+  await abrir();
+  await posto.selectOption('FURADEIRA 04');
+  await painel.getByText('Do programa da semana').waitFor({ timeout: 4000 });
+  await posto.selectOption('FRESADORA 01');
+  await painel.getByText('Buscando o programa da semana de 0004 · FRESADORA…').waitFor({ timeout: 1000 });
+  checar(await painel.getByText('Do programa da semana').count() === 0,
+    'troca: enquanto o programa da fresadora nao chega, nao aparece o da furadeira');
+  await painel.getByText('0004 · FRESADORA não tem programa da semana: digite a demanda.').waitFor({ timeout: 4000 });
+  checar(true, 'troca: chegou o programa (vazio) da fresadora, e o painel diz isso');
+  await form.locator('button', { hasText: 'Cancelar' }).click();
+
+  checar(erros.length === 0, `troca: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+
+/* -------- no celular, o painel do programa cabe sem rolagem horizontal */
+{
+  const ctx = await b.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}/test/e2e/harness-lista/index.html?modo=coleta&vazio=1&programa=1`);
+  await p.waitForSelector('text=+ Criar primeiro estudo', { timeout: 8000 });
+  await p.click('text=+ Criar primeiro estudo');
+  const form = p.locator('[aria-label="Novo estudo"]');
+  await form.waitFor({ timeout: 4000 });
+  await form.getByLabel('Recurso / Posto').selectOption('FURADEIRA 04');
+  await form.locator('aside[aria-label="Ritmo / Demanda"]').getByText('Do programa da semana').waitFor({ timeout: 4000 });
+  const larguras = await p.evaluate(() => {
+    const f = document.querySelector('[aria-label="Novo estudo"] form') || document.querySelector('form');
+    const estourados = [...document.querySelectorAll('form *')]
+      .filter((el) => !['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
+        && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== 'auto').length;
+    return { doc: document.documentElement.scrollWidth, tela: window.innerWidth, estourados,
+             form: f.scrollWidth, formVisivel: f.clientWidth };
+  });
+  checar(larguras.doc <= larguras.tela && larguras.form <= larguras.formVisivel && larguras.estourados === 0,
+    `celular: painel do programa sem estouro (${larguras.doc}/${larguras.tela}px, ${larguras.estourados} estourados)`);
+  const alvo = await form.getByRole('button', { name: 'Simular outra demanda' }).boundingBox();
+  checar(alvo && alvo.height >= 44, `celular: "Simular" tem alvo de dedo (${Math.round(alvo?.height || 0)}px)`);
+  await ctx.close();
+}
+
 await b.close();
 process.exit(falhas ? 1 : 0);

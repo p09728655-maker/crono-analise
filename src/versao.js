@@ -13,6 +13,21 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.93.0',
+    data: '2026-10-20',
+    titulo: 'Novo estudo: produto e takt vêm do grupo do posto',
+    itens: [
+      'NO NOVO ESTUDO, O POSTO PUXA O RESTO, COMO NO TABLET. Escolhido o posto, o campo de produto vira a lista do cadastro de produtos do grupo dele, e o takt vem do programa da semana do grupo. Antes o estudo tinha lista de produto e takt próprios, e o mesmo posto podia ter um takt no estudo e outro no quadro do programa.',
+      'O TAKT DO PROGRAMA É POR MÁQUINA, E O PAINEL MOSTRA A CONTA. O programa é do grupo, e cada máquina faz a parte dela. Exemplo: 6.600 peças para 6 furadeiras em 44 h dão 1.100 por máquina, 02:24 (144.0 s) por peça. O painel diz o grupo e a semana, a demanda, quantas máquinas há e o tempo de cada uma, já sem o setup planejado: "44h00min de jornada − 1h00min de setup = 43h00min". É o mesmo número do quadro "Programa da semana", também escrito em segundos.',
+      'SIMULAR CONTINUA POSSÍVEL. "Simular outra demanda" volta à conta de quantidade por dia e horas, marcada como simulação e com o takt do programa ao lado; um clique volta ao programa. Depois que você mexe na quantidade ou nas horas (inclusive apagando para corrigir), o programa não toma mais o painel: aparece só como oferta.',
+      'A ESCOLHA VALE PARA O GRUPO EM QUE FOI FEITA, E O PRODUTO ACOMPANHA O POSTO. "Usar o takt do programa" clicado na furadeira não vira takt por volume se o posto mudar para a embalagem. Trocar para um posto de outro grupo tira o produto que era da lista do grupo antigo; produto digitado à mão fica.',
+      'NA EMBALAGEM, O PROGRAMA É OFERECIDO, NÃO IMPOSTO. Ele é em volumes, e o ciclo do estudo pode ser o produto inteiro (um rack de dois volumes): usar o takt por volume faria a linha parecer o dobro mais carregada. Ele só entra se você clicar em "Usar o takt do programa".',
+      'SEM PROGRAMA PARA A SEMANA, É A CONTA DIGITADA DE SEMPRE, com o motivo numa linha: grupo sem programa, semana não coberta, posto sem grupo no cadastro ou sem rede.',
+      'NO EDITAR ESTUDO, O PRODUTO TAMBÉM VEM DA LISTA DO GRUPO, e um botão escreve o takt do programa da semana no campo, em segundos. Ali o programa nunca entra sozinho: o estudo já tem um takt. Produto digitado à mão em estudo antigo continua aparecendo como texto, com o caminho para escolher do cadastro.',
+      'O estudo grava o número do takt, como antes: se o programa mudar na semana seguinte, o estudo não muda junto. A importação do PDF do ERP segue com a conta digitada, porque cria estudos de vários postos de uma vez.',
+    ],
+  },
+  {
     versao: '2.92.1',
     data: '2026-10-20',
     titulo: 'Tablet da embalagem sem o aviso de programa não colado',

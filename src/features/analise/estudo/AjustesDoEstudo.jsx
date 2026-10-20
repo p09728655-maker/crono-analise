@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { espaco, tipo } from '../../../theme/escala.js';
 import { formatarSegundos, taktTime } from '../../../domain/cronoanalise.js';
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
+import SeletorProduto from '../../../components/SeletorProduto.jsx';
+import { programaDoTakt, useProdutoSegueOGrupo, useProgramaDoPosto } from '../../../lib/taktDaSemana.js';
 import { est } from './estilos.js';
 
 /**
@@ -11,6 +13,11 @@ import { est } from './estilos.js';
  * mudam DEPOIS de comecar a coletar: o analista descobre a demanda real, ou
  * revisa a tolerancia ao ver as condicoes do posto. Sem isto, corrigir um
  * desses campos exigiria recriar o estudo e perder os ciclos ja coletados.
+ *
+ * O posto puxa o produto e o takt do mesmo jeito que no Novo estudo: a
+ * lista de produtos do grupo e, com um clique, o takt do programa da
+ * semana. Aqui o programa nunca entra sozinho: o estudo ja' tem um takt, e
+ * troca-lo sem pedir mudaria o Yamazumi de quem so' veio corrigir um nome.
  */
 export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCancelar }) {
   const [nome, setNome] = useState(estudo.nome || '');
@@ -26,6 +33,10 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
   );
   const [calc, setCalc] = useState({ quantidade: '', horas: '' });
   const [salvando, setSalvando] = useState(false);
+  const posto = useProgramaDoPosto(recurso);
+  const programa = programaDoTakt(posto);
+  const limparProduto = useCallback(() => setProduto(''), []);
+  useProdutoSegueOGrupo({ grupoId: posto.grupo?.id || null, produtos: posto.produtos, produto, aoLimpar: limparProduto });
   const [erro, setErro] = useState(null);
 
   function aplicarCalculo(novo) {
@@ -73,12 +84,9 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
           <input style={est.input} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
         </label>
 
+        {/* Posto antes do produto: e' o grupo do posto que traz a lista de
+            produtos — a mesma ordem do Novo estudo. */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg }}>
-          <label style={est.campo}>
-            <span style={est.rotuloCampo}>Produto / Referência</span>
-            <input style={est.input} value={produto} onChange={(e) => setProduto(e.target.value)} />
-            <span style={est.dica}>Agrupa os estudos na lista.</span>
-          </label>
           <label style={est.campo}>
             <span style={est.rotuloCampo}>Recurso / Posto</span>
             {/* Mesmo campo do Novo estudo e do celular: o posto vem do
@@ -92,6 +100,27 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
               vazio="Escolha o posto…"
             />
             <span style={est.dica}>Sai no relatório impresso.</span>
+          </label>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Produto / Referência</span>
+            {posto.produtos.length > 0 ? (
+              <SeletorProduto
+                key={posto.grupo?.id || null}
+                valor={produto}
+                aoTrocar={setProduto}
+                opcoes={posto.produtos}
+                aria="Produto / Referência"
+                placeholder="Ex: Mesa Cabeceira Sleep"
+                estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
+              />
+            ) : (
+              <input style={est.input} value={produto} onChange={(e) => setProduto(e.target.value)} />
+            )}
+            <span style={est.dica}>
+              {posto.produtos.length > 0
+                ? 'Do cadastro de produtos do grupo. Agrupa os estudos na lista.'
+                : 'Agrupa os estudos na lista.'}
+            </span>
           </label>
         </div>
 
@@ -176,6 +205,26 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
                    value={taktSeg} onChange={(e) => setTaktSeg(e.target.value)} />
             <span style={est.dica}>Preenchido pela conta acima, ou digite direto.</span>
           </label>
+          {/* O takt do programa a um clique — o mesmo numero do quadro
+              "Programa da semana". Na embalagem o programa e' em volumes:
+              so' serve se cada ciclo do estudo for um volume. */}
+          {programa && (
+            <>
+              <button
+                type="button" style={est.botaoSecundario}
+                onClick={() => setTaktSeg(formatarSegundos(programa.taktMs, 1))}
+              >
+                {/* Em SEGUNDOS, como o campo logo acima: o botao escreve 144.0
+                    ali, e "02:24" no botao seria outro numero para conferir. */}
+                Usar o takt do programa da semana {programa.semana}: {formatarSegundos(programa.taktMs, 1)} s por {programa.unidade.singular}
+              </button>
+              <span style={est.dica}>
+                {programa.unidade.singular === 'volume'
+                  ? 'O programa da embalagem é em volumes: use se cada ciclo deste estudo for um volume.'
+                  : `${programa.grupo}: tempo de uma máquina na semana, menos o setup planejado, pela parte dela na demanda.`}
+              </span>
+            </>
+          )}
         </fieldset>
 
         {erro && <div style={est.erroForm}>{erro}</div>}

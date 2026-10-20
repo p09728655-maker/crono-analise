@@ -14,7 +14,8 @@ import CronometroAoVivo from './rapida/CronometroAoVivo.jsx';
 import ResultadoAoVivo from './rapida/ResultadoAoVivo.jsx';
 import { CampoProduto } from './rapida/CamposDaPeca.jsx';
 import Historico from './rapida/Historico.jsx';
-import { motivoSemTakt, useTaktDaSemana } from './embalagem/useTaktDaSemana.js';
+import { useTaktDaSemana } from '../../lib/taktDaSemana.js';
+import { motivoSemTakt } from './embalagem/motivoSemTakt.js';
 
 const VOLUME = unidadeDoPosto('EMBALAGEM');
 const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume';
