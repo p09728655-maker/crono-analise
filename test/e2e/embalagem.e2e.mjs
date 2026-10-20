@@ -84,9 +84,46 @@ checar(await t.getByRole('radio', { name: '2 ciclos' }).count() === 0, 'sem camp
 
 await t.locator('input[aria-label="Produto embalado"]').fill('Rack Sirius 1.6');
 await t.getByRole('button', { name: /INICIAR/ }).click();
+/* ARMADO: o INICIAR nao abre o relogio. Quem abre e' a LARGADA, o toque
+   dado quando um volume fecha — e ela nao conta volume. */
+const largada = t.getByRole('button', { name: /Largada/ });
+await largada.waitFor({ timeout: 4000 });
+checar(/TOQUE QUANDO FECHAR UM VOLUME/.test(await largada.innerText()), 'armado: o alvo pede a largada no fechamento de um volume');
+await t.waitForTimeout(600);
+const painelArmado = await t.locator('[aria-label="Tempo decorrido"]').innerText();
+checar(painelArmado.includes('00:00.0'), `armado: o relogio NAO corre antes da largada (${painelArmado.split('\n')[1]})`);
+checar(await t.getByRole('button', { name: 'Parou' }).isDisabled(), 'armado: Parou desabilitado — ainda nao ha periodo');
+checar(await t.getByRole('button', { name: /Cancelar/ }).count() === 1, 'armado: Encerrar vira Cancelar');
+
+// Cancelar antes da largada volta ao comeco, sem resultado de zero volumes.
+await t.getByRole('button', { name: /Cancelar/ }).click();
+await t.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
+checar(await t.locator('[aria-label="Resultado da conferência"]').count() === 0, 'cancelar antes da largada volta ao comeco, sem resultado');
+
+/* O QUIQUE DA LUVA: o INICIAR e' onClick, e a largada ocupa o meio da tela
+   seguinte. Um segundo contato logo depois do INICIAR nao abre o relogio. */
+await t.evaluate(async () => {
+  [...document.querySelectorAll('button')].find((b) => /INICIAR/.test(b.innerText)).click();
+  await new Promise((r) => { setTimeout(r, 40); });
+  document.querySelector('button[aria-label^="Largada"]')
+    .dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+});
+await t.waitForTimeout(500);
+checar((await t.locator('[aria-label="Tempo decorrido"]').innerText()).includes('00:00.0')
+  && await largada.count() === 1, 'o quique logo depois do INICIAR nao da a largada: relogio em 00:00.0');
+// Espera armada de proposito: se o relogio contasse do INICIAR, a 1a marca
+// sairia com estes 1,5 s a mais.
+await t.waitForTimeout(1500);
+await largada.dispatchEvent('pointerdown');
 const alvo = t.getByRole('button', { name: 'Contar um volume' });
 await alvo.waitFor({ timeout: 4000 });
-checar(/TOQUE A CADA VOLUME/.test(await alvo.innerText()), 'o alvo diz TOQUE A CADA VOLUME');
+// O quique da luva logo depois da largada nao vira o volume 1.
+await alvo.dispatchEvent('pointerdown');
+checar(/TOQUE A CADA VOLUME/.test(await alvo.innerText()), 'depois da largada o alvo diz TOQUE A CADA VOLUME');
+checar((await alvo.innerText()).trim().startsWith('0'), 'a largada nao conta volume, nem o quique logo depois dela');
+await t.waitForTimeout(600);
+checar(!(await t.locator('[aria-label="Tempo decorrido"]').innerText()).includes('00:00.0'), 'depois da largada o relogio corre');
+await t.waitForTimeout(260);
 
 for (let i = 0; i < 12; i++) {
   await alvo.dispatchEvent('pointerdown');
@@ -118,12 +155,23 @@ checar(enviado?.maquina === 'EMBALAGEM 01' && enviado?.peca === 'Rack Sirius 1.6
 checar(Array.isArray(enviado?.marcasMs) && enviado.marcasMs.length === 12 && enviado.pecas === 12,
   'os 12 toques sobem como 12 marcas, uma por volume');
 checar(enviado?.marcasMs?.every((m, i, a) => i === 0 || m >= a[i - 1]), 'marcas em ordem');
+// O relogio abriu na largada: o 1o volume veio ~860 ms depois dela (600 +
+// 260), e nao no instante zero — a largada nao vira marca.
+checar(enviado?.marcasMs?.[0] >= 800 && enviado?.marcasMs?.[0] < 1800,
+  `a 1a marca conta da largada, nao do INICIAR (${enviado?.marcasMs?.[0]} ms)`);
 checar(enviado?.marcasRelogioMs === enviado?.marcasMs?.at(-1) - enviado?.marcasMs?.[0],
   'sem parada, o relogio entre toques e o proprio trecho das marcas');
 /* ------------------- o RELOGIO das marcas: parada descontada e desfazer */
 await t.getByRole('button', { name: /Nova conferência/ }).click();
 await t.getByRole('button', { name: /INICIAR/ }).click();
+await largada.waitFor({ timeout: 4000 });
+await t.waitForTimeout(300);
+const painelRearmado = await t.locator('[aria-label="Tempo decorrido"]').innerText();
+checar(painelRearmado.includes('00:00.0'),
+  `armado depois de uma medicao: o relogio mostra 00:00.0, nao o fim da anterior (${painelRearmado.split('\n')[1]})`);
+await largada.dispatchEvent('pointerdown');
 await alvo.waitFor({ timeout: 4000 });
+await t.waitForTimeout(260);
 const marcarSetup = async (ms) => {
   await t.getByRole('button', { name: 'Parou' }).click();
   await t.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
@@ -172,7 +220,11 @@ checar(comParada?.marcasSetupMs >= 1400 && comParada?.marcasSetupMs < 2500,
 /* ------------- contagem corrigida a mao: o aviso aparece e as marcas nao sobem */
 await t.getByRole('button', { name: /Nova conferência/ }).click();
 await t.getByRole('button', { name: /INICIAR/ }).click();
+await largada.waitFor({ timeout: 4000 });
+await t.waitForTimeout(260);
+await largada.dispatchEvent('pointerdown');
 await alvo.waitFor({ timeout: 4000 });
+await t.waitForTimeout(260);
 for (let i = 0; i < 4; i++) { await alvo.dispatchEvent('pointerdown'); await t.waitForTimeout(260); }
 await t.getByRole('button', { name: /Encerrar/ }).click();
 await t.locator('input[aria-label="Volumes no período"]').fill('20');

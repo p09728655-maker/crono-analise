@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.92.0',
+    data: '2026-10-20',
+    titulo: 'Embalagem Takt Time: o relógio só abre quando fecha um volume',
+    itens: [
+      'NO TABLET, O INICIAR DA EMBALAGEM TAKT TIME NÃO DISPARA MAIS O RELÓGIO. Ele só arma a medição: o tempo fica em 00:00 e a tela pede "toque quando fechar um volume". O relógio abre nesse toque, a largada. Antes, o relógio corria desde o INICIAR, e a espera até o primeiro volume entrava no período.',
+      'A LARGADA NÃO CONTA VOLUME. O volume que fechou nela foi embalado antes do relógio abrir. Contá-lo punha um volume a mais no período e deixava o volumes/hora e o veredito do programa da semana otimistas (uns 8% numa medição de 12 volumes). Depois da largada, cada toque é um volume, como antes.',
+      'O TEMPO POR VOLUME, QUE VAI CONTRA O TAKT, NÃO MUDA: continua sendo o relógio do primeiro ao último volume contado, dividido pelos intervalos. Nisso as medições já salvas continuam comparáveis com as novas. O volumes/hora das antigas, não: ele traz a espera entre o INICIAR e o primeiro volume, e por isso sai um pouco mais baixo.',
+      'PARA CONTAR UMA TROCA NO COMEÇO DA MEDIÇÃO, dê a largada no último volume do produto anterior e marque Parou → Setup / troca. A troca entra no período e nas paradas. Se a largada for dada só no primeiro volume do produto novo, a troca fica fora da medição.',
+      'Antes da largada, PAROU fica desabilitado (ainda não há período para a parada caber dentro), e ENCERRAR vira CANCELAR, que volta ao começo sem gravar uma medição vazia. Um quique da luva logo depois da largada não vira o volume 1.',
+      'O "Cronometrar ao vivo" do Ritmo da máquina não mudou: lá o relógio continua abrindo no toque do botão.',
+    ],
+  },
+  {
     versao: '2.91.0',
     data: '2026-10-19',
     titulo: 'Motivos de parada por grupo e cadastro de produtos no PC',

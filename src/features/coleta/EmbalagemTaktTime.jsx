@@ -75,7 +75,8 @@ export default function EmbalagemTaktTime({ aoSair }) {
 
   const takt = useTaktDaSemana({ grupo, maquinasDoGrupo });
   const paradas = useParadasDoPeriodo(motivos);
-  const crono = useCronometroAoVivo({ paradas });
+  // Com largada: o INICIAR so' arma, e o relogio abre no primeiro toque.
+  const crono = useCronometroAoVivo({ paradas, comLargada: true });
   const historico = useHistoricoLocal();
 
   useEffect(() => {
@@ -189,7 +190,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
             /* onClick, nao onPointerDown: comecar troca a tela inteira, e o
                toque que ainda nao terminou cairia no botao de baixo. */
             <button type="button" onClick={comecar} style={{ ...est.botaoGrande, ...est.botaoIniciar, ...est.botaoVivo }}>
-              <span style={est.rotuloBotao}>▶ INICIAR — TOQUE A CADA VOLUME</span>
+              <span style={est.rotuloBotao}>▶ INICIAR MEDIÇÃO</span>
             </button>
           ) : (
             <section style={est.aviso} role="status">
