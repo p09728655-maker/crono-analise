@@ -73,13 +73,26 @@ const navegador = await chromium.launch({ executablePath: EXEC });
    */
   await p.locator('[aria-label="Análise"] button', { hasText: 'Yamazumi' }).click();
   await p.waitForTimeout(300);
-  const capacidade = await p.locator('[aria-label="Capacidade esperada e real"]').innerText();
-  checar(/Esperado \(Takt\)/i.test(capacidade) && /Real \(gargalo\)/i.test(capacidade),
-    'capacidade mostra o exigido e o entregue lado a lado');
-  checar(/300/.test(capacidade), 'esperado sai do Takt (12 s -> 300 pc/h)');
-  checar(/222/.test(capacidade), 'real sai do gargalo');
+  /* Tres numeros com o nome do que sao. O "Real (gargalo)" era conta (a
+     capacidade pelo tempo padrao), nao medicao — e a medicao da linha e'
+     o terceiro. Este harness responde o MESMO corpo para toda URL: as
+     medicoes e o cadastro chegam fora do formato, e o painel segue de pe'
+     dizendo que nao ha' medicao e como medir. */
+  const capacidade = await p.locator('[aria-label="Capacidade: exigido, tempo padrão e medido"]').innerText();
+  checar(/Exigido \(takt\)/i.test(capacidade) && /Capacidade pelo tempo padrão/i.test(capacidade)
+    && /Medido na linha/i.test(capacidade),
+    'capacidade mostra os tres numeros com o nome certo');
+  checar(!/Real \(gargalo\)/i.test(capacidade), 'o "Real (gargalo)" saiu: era conta, nao medicao');
+  checar(/300/.test(capacidade), 'exigido sai do Takt (12 s -> 300 pc/h)');
+  checar(/222/.test(capacidade), 'capacidade pelo tempo padrao sai do gargalo');
   checar(/74%/.test(capacidade), 'atingimento e o quociente dos dois');
   checar(/-78/.test(capacidade), 'deficit em pecas por hora, com sinal');
+  checar(/base: capacidade pelo tempo padrão/.test(capacidade),
+    'sem medicao, atingimento e deficit dizem que a base e a capacidade pelo tempo padrao');
+  checar(/nenhuma medição/.test(capacidade) && /Ritmo por máquina/.test(capacidade),
+    'resposta sem medicoes: diz que nao ha medicao e onde medir');
+  checar(/“Furadeira 03” não é uma máquina do cadastro/.test(capacidade),
+    'posto fora do cadastro: diz que a medicao grava a maquina e nao vai casar');
 
   await p.locator('[aria-label="Análise"] button', { hasText: 'Operadores' }).click();
   await p.waitForTimeout(300);
@@ -286,6 +299,159 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(m.temAssinatura, 'bloco de assinaturas presente');
   checar(m.semNievel, 'Nievel saiu do relatorio — nao cobra mais ciclo de ninguem');
   checar(m.temLegenda, 'legenda por extenso das abreviacoes (Obs., FR, TO...)');
+  checar(/Medido na linha/i.test(await p.locator('.somente-impressao').innerText()),
+    'a folha traz o medido na linha, mesmo sem medicao');
+}
+
+/* ----------------------------------------------------- medicao da linha */
+/**
+ * A MEDICAO REAL DA LINHA no estudo: as medicoes de ritmo do mesmo posto e
+ * do mesmo produto entram como o terceiro numero, e o atingimento passa a
+ * ser do medido. Cada cenario faz o harness responder conforme a URL
+ * (estudo, cadastro, medicoes). Numeros feitos na mao no harness.
+ */
+async function abrirCenario(cenario, largura = 1440) {
+  const ctx = await navegador.newContext({ viewport: { width: largura, height: 1000 } });
+  const p = await ctx.newPage();
+  // O Resumo executivo chama window.print: contar basta, a caixa travaria.
+  await p.addInitScript(() => { window.__impressoes = 0; window.print = () => { window.__impressoes += 1; }; });
+  const erros = [];
+  p.on('pageerror', (e) => erros.push(e.message));
+  p.on('console', (msg) => {
+    if (msg.type() === 'error' && !/favicon/i.test(msg.text()) && !/404/.test(msg.text())) erros.push(msg.text());
+  });
+  await p.goto(`${PAGINA}?cenario=${cenario}`);
+  await p.waitForSelector('[aria-label="Capacidade: exigido, tempo padrão e medido"]', { timeout: 10000 });
+  // A medicao chega depois do estudo: espera o cartao sair do "buscando".
+  await p.waitForFunction(() => !/buscando as medições/.test(
+    document.querySelector('[aria-label="Capacidade: exigido, tempo padrão e medido"]')?.innerText || '',
+  ), null, { timeout: 8000 });
+  const bloco = await p.locator('[aria-label="Capacidade: exigido, tempo padrão e medido"]').innerText();
+  return { ctx, p, erros, bloco };
+}
+
+/** Texto do cartao de um rotulo: do rotulo ate' o proximo cartao. */
+const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido, tempo padrão e medido"] div', {
+  has: p.locator(`span:text-is("${rotulo}")`),
+}).last().innerText();
+
+{
+  const { ctx, p, erros, bloco } = await abrirCenario('furadeira');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/180/.test(medido) && /pç\/h/.test(medido),
+    `furadeira: medido no relogio, so do posto e do produto (180 pç/h): ${medido.replace(/\s+/g, ' ')}`);
+  checar(/3 medições/.test(medido) && /no relógio, paradas dentro/.test(medido),
+    'diz quantas medicoes e que as paradas estao dentro');
+  checar(/com a linha rodando: 196 pç\/h/.test(medido), 'e o ritmo rodando como diagnostico');
+  checar(!/999/.test(medido), 'arquivada, velha, outro produto e outra maquina ficam de fora');
+  checar(/Exigido \(takt\)[\s\S]*300/i.test(bloco) && /Capacidade pelo tempo padrão[\s\S]*222/i.test(bloco),
+    'exigido e capacidade pelo tempo padrao continuam la');
+  checar(/60%/.test(await cartao(p, 'Atingimento')), 'atingimento passa a ser do medido: 180 / 300 = 60%');
+  checar(/-120/.test(await cartao(p, 'Déficit')), 'deficit do medido: 180 - 300 = -120 pç/h');
+  checar((bloco.match(/base: medido na linha/g) || []).length === 2,
+    'atingimento e deficit dizem que a base e o medido');
+  checar(/a linha entrega 81% do que o tempo padrão permite/.test(bloco),
+    'a perda entre o tempo padrao e o chao: 180 / 222 = 81%');
+  const largo = await p.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  checar(!largo, 'sem rolagem horizontal com o bloco novo');
+
+  // O papel: a Folha leva os tres numeros, a base e a perda.
+  await p.setViewportSize({ width: 703, height: 1200 });
+  await p.emulateMedia({ media: 'print' });
+  await p.waitForTimeout(300);
+  const folha = await p.locator('.somente-impressao').innerText();
+  checar(/Exigido \(takt\)/i.test(folha) && /Capacidade pelo tempo padrão/i.test(folha) && /Medido na linha/i.test(folha),
+    'folha impressa: exigido, tempo padrao e medido no resumo');
+  checar(/Base do atingimento e do déficit: medido na linha/.test(folha) && /81% do que o tempo padrão permite/.test(folha),
+    'folha diz a base do atingimento e a perda para o tempo padrao');
+  checar(/180 pç\/h \(3 medições/.test(folha), 'folha traz o medido com as medicoes');
+  checar(!(await p.evaluate(() => document.querySelector('.somente-impressao').scrollWidth > document.documentElement.clientWidth + 1)),
+    'folha com o medido cabe na largura util do A4');
+
+  // O Resumo executivo: um cartao a mais, na mesma ordem da tela.
+  await p.emulateMedia({ media: 'screen' });
+  await p.setViewportSize({ width: 1440, height: 1000 });
+  await p.getByRole('button', { name: 'Resumo executivo' }).click();
+  await p.waitForFunction(() => window.__impressoes > 0, null, { timeout: 5000 });
+  await p.setViewportSize({ width: 703, height: 1200 });
+  await p.emulateMedia({ media: 'print' });
+  await p.waitForTimeout(300);
+  const resumo = await p.locator('.somente-impressao').innerText();
+  checar(/Resumo Executivo/i.test(resumo) && /Medido na linha/i.test(resumo) && /180/.test(resumo),
+    'resumo executivo traz o medido na linha');
+  checar(/base: medido na linha/.test(resumo) && /60%/.test(resumo), 'e o atingimento pelo medido');
+  checar(!(await p.evaluate(() => document.querySelector('.somente-impressao').scrollWidth > document.documentElement.clientWidth + 1)),
+    'resumo com cinco cartoes cabe na largura util do A4');
+  checar(erros.length === 0, `furadeira: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  const { ctx, p, erros, bloco } = await abrirCenario('furadeira-curta');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/189/.test(medido) && /amostra curta \(2 de 3 medições\)/.test(medido) && /não entra no atingimento/.test(medido),
+    `amostra curta: mostra o numero com a ressalva (${medido.replace(/\s+/g, ' ')})`);
+  checar(/74%/.test(await cartao(p, 'Atingimento')) && /base: capacidade pelo tempo padrão/.test(bloco),
+    'e o atingimento fica na capacidade pelo tempo padrao');
+  checar(!/Do tempo padrão/i.test(bloco), 'sem medido usavel, nao ha percentual do tempo padrao');
+  checar(erros.length === 0, `amostra curta: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  const { ctx, p, erros } = await abrirCenario('sem-medicao');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/nenhuma medição de Painel MDF 18mm em Furadeira 03 nos últimos 30 dias/.test(medido),
+    'sem medicao: diz de que produto e posto nao ha medicao');
+  checar(/no tablet, Ritmo por máquina/.test(medido), 'e como medir (Ritmo por maquina, na furadeira)');
+  checar(/1 medição do posto com outro produto/.test(medido), 'e aponta a medicao do posto com outro nome de produto');
+  checar(erros.length === 0, `sem medicao: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  // A carga das medicoes falha (500): o painel continua de pe'.
+  const { ctx, p, erros, bloco } = await abrirCenario('medicao-falha');
+  checar(/não deu para buscar a medição agora/.test(await cartao(p, 'Medido na linha')),
+    'medicao fora do ar: o cartao diz que nao deu, sem derrubar o painel');
+  checar(await p.locator('text=/peças\\/hora/').count() > 0 && /74%/.test(bloco),
+    'e o resto da analise segue com a capacidade pelo tempo padrao');
+  checar(erros.length === 0, `medicao fora do ar: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  const { ctx, p, erros, bloco } = await abrirCenario('embalagem');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/23\s*produtos\/h/.test(medido),
+    `embalagem: 46 volumes/h de um rack de 2 volumes = 23 produtos/h (${medido.replace(/\s+/g, ' ')})`);
+  checar(/contados 46 vol\/h ÷ 2 volumes por produto/.test(medido), 'e mostra a conversao');
+  checar(/Exigido \(takt\)\s*25/i.test(bloco) && /Capacidade pelo tempo padrão\s*31/i.test(bloco),
+    'exigido 25 (takt 144 s) e tempo padrao 31 (TP 115 s)');
+  checar(/92%/.test(await cartao(p, 'Atingimento')) && /-2/.test(await cartao(p, 'Déficit')),
+    'atingimento do medido: 23 / 25 = 92%, deficit -2');
+  checar(/a linha entrega 74% do que o tempo padrão permite/.test(bloco), 'perda para o tempo padrao: 23 / 31 = 74%');
+
+  await p.getByRole('button', { name: 'Resumo executivo' }).click();
+  await p.waitForFunction(() => window.__impressoes > 0, null, { timeout: 5000 });
+  const resumo = await p.locator('.somente-impressao').innerText();
+  checar(/A falta está\s+no chão/.test(resumo),
+    'resumo: tempo padrao sobra e medido falta — a falta e do chao, nao do gargalo do estudo');
+  checar(/23\s*produtos\/h/.test(resumo), 'resumo leva o medido em produtos/h');
+  checar(erros.length === 0, `embalagem: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  const { ctx, p, erros, bloco } = await abrirCenario('embalagem-sem-volumes');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/46\s*vol\/h/.test(medido),
+    `sem volumes no cadastro: mostra o que mediu, em volumes (${medido.replace(/\s+/g, ' ')})`);
+  checar(/informe os volumes do produto em Produtos/.test(medido), 'e pede os volumes no cadastro de produtos');
+  checar(/124%/.test(await cartao(p, 'Atingimento')) && /base: capacidade pelo tempo padrão/.test(bloco),
+    'volume nao vira produto: o atingimento fica no tempo padrao (31 / 25 = 124%)');
+  checar(erros.length === 0, `embalagem sem volumes: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
 }
 
 await navegador.close();

@@ -65,7 +65,11 @@ await semearSessao(p);
 // Contar as chamadas e' o que interessa: quantas, e depois de que ponto.
 await p.addInitScript(() => {
   window.__impressoes = 0;
-  window.print = () => { window.__impressoes += 1; };
+  window.print = () => {
+    window.__impressoes += 1;
+    // O que estava no papel NA HORA do print — nao o que chegou depois.
+    window.__papel = document.querySelector('.somente-impressao')?.textContent || '';
+  };
 });
 
 const erros = [];
@@ -78,6 +82,14 @@ await p.route('**/api/estudos**', (r) => {
 });
 await p.route('**/api/config**', (r) => r.fulfill({ json: { chaveIa: { configurada: false } } }));
 await p.route('**/api/usuarios**', (r) => r.fulfill({ json: { usuarios: [] } }));
+// A medicao da linha carrega junto com o estudo, e o papel pedido pela
+// lista espera por ela. As medicoes chegam DEPOIS do estudo de proposito:
+// e' o caso em que imprimir na hora levaria "carregando" para o papel.
+await p.route('**/api/maquinas**', (r) => r.fulfill({ json: { maquinas: [], grupos: [], produtos: [] } }));
+await p.route('**/api/conferencias**', async (r) => {
+  await new Promise((ok) => { setTimeout(ok, 800); });
+  return r.fulfill({ json: { conferencias: [], outras: 0 } });
+});
 
 await p.goto(`${BASE}/analise/estudos`);
 await p.getByText('RACK EMBALAGEM').first().waitFor({ timeout: 8000 });
@@ -106,6 +118,9 @@ const uma = await p.evaluate(() => window.__impressoes);
 await p.waitForTimeout(500);
 checar(await p.evaluate(() => window.__impressoes) === uma && uma === 1,
   'imprime UMA vez — nao a cada render');
+const papel = await p.evaluate(() => window.__papel || '');
+checar(/Medido na linha:\s*sem produto no estudo/i.test(papel) && !/carregando/.test(papel),
+  'o papel espera a medicao da linha responder antes de imprimir');
 
 // E o que vai ao papel e' a folha com o estudo, nao uma pagina em branco.
 await p.emulateMedia({ media: 'print' });
@@ -119,12 +134,16 @@ const folha = await p.evaluate(() => {
     telaOculta: vis(tela) === false,
     temNome: /RACK EMBALAGEM/.test(rel?.innerText || ''),
     temOperacao: /MONTAR CAIXA/.test(rel?.innerText || ''),
+    // Estudo sem produto: a folha diz por que nao ha' medido, em vez de
+    // um vazio que parece "a linha nao produziu".
+    medidoExplicado: /Medido na linha:\s*sem produto no estudo/i.test(rel?.innerText || ''),
   };
 });
 checar(folha.visivel, 'a folha aparece no papel');
 checar(folha.telaOculta, 'a interface some no papel');
 checar(folha.temNome, 'a folha traz o nome do estudo');
 checar(folha.temOperacao, 'a folha traz as operacoes medidas');
+checar(folha.medidoExplicado, 'a folha traz o medido na linha, com o motivo de nao haver');
 
 checar(erros.length === 0, `sem erros de pagina${erros.length ? `: ${erros[0]}` : ''}`);
 

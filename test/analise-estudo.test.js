@@ -89,4 +89,25 @@ describe('lerEstudo', () => {
   it('sem analise nao ha leitura', () => {
     expect(lerEstudo(null)).toBeNull();
   });
+
+  it('a medicao USAVEL entra no comparativo e vira a base do atingimento', () => {
+    const medicao = { usavel: true, ritmoRelogio: 150.4, unidade: 'peça' };
+    const l = lerEstudo(analisarEstudo({ estudo, operacoes }), { medicao });
+    expect(l.capacidade.medido).toBe(150);
+    expect(l.capacidade.base).toBe('medido');
+    // 150 medidas contra 180 exigidas; o tempo padrao permitiria 272.
+    expect(l.capacidade.diferenca).toBe(-30);
+    expect(l.capacidade.pctDaCapacidade).toBeCloseTo((150 / 272) * 100, 6);
+    expect(l.medicao).toBe(medicao);
+  });
+
+  it('medicao nao usavel (amostra curta, sem volumes) segue junto mas nao muda o atingimento', () => {
+    const medicao = { usavel: false, motivo: 'amostra-insuficiente', ritmoRelogio: 150 };
+    const l = lerEstudo(analisarEstudo({ estudo, operacoes }), { medicao });
+    expect(l.capacidade.base).toBe('capacidade');
+    expect(l.capacidade.medido).toBeNull();
+    expect(l.capacidade.diferenca).toBe(92);
+    expect(l.medicao).toBe(medicao);
+    expect(lerEstudo(analisarEstudo({ estudo, operacoes })).medicao).toBeNull();
+  });
 });

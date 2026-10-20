@@ -3,6 +3,7 @@ import { formatarDuracao, formatarSegundos } from '../../domain/cronoanalise.js'
 import { PRIORIDADES } from '../../domain/sugestoes.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
+import { lerMedido } from './estudo/textosMedicao.js';
 
 /**
  * RESUMO EXECUTIVO — A4, UMA pagina.
@@ -19,8 +20,11 @@ import { VERSAO } from '../../versao.js';
  *
  * Cabe numa pagina de proposito: o corte e' o que da' valor. As sugestoes
  * saem so' as de ALTA prioridade, no maximo tres.
+ *
+ * O MEDIDO NA LINHA entra ao lado do exigido e da capacidade pelo tempo
+ * padrao, na mesma ordem da tela; o atingimento diz de qual dos dois saiu.
  */
-export default function ResumoExecutivo({ estudo, analise, leitura }) {
+export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
   const hoje = new Date().toLocaleDateString('pt-BR');
   const dataEstudo = estudo.data_estudo
     ? new Date(estudo.data_estudo).toLocaleDateString('pt-BR')
@@ -29,6 +33,13 @@ export default function ResumoExecutivo({ estudo, analise, leitura }) {
   const { capacidade } = leitura;
   const altas = leitura.sugestoes.filter((s) => s.prioridade === 'alta').slice(0, 3);
   const atinge = capacidade.atingimentoPct !== null && capacidade.atingimentoPct >= 100;
+  const doMedido = lerMedido(medido, { recurso: estudo.recurso, produto: estudo.produto });
+  const pelaMedicao = capacidade.base === 'medido';
+  /* Medido abaixo do exigido com o tempo padrao sobrando: o gargalo do
+     estudo nao explica a falta — ela esta' no chao. Dizer "o gargalo e' X"
+     nesse caso mandaria a reuniao mexer no posto errado. */
+  const faltaNoChao = pelaMedicao && capacidade.atingimentoPct !== null && !atinge
+    && capacidade.pctDaCapacidade !== null && capacidade.real >= capacidade.esperado;
 
   return (
     <div className="somente-impressao" style={est.folha}>
@@ -64,13 +75,6 @@ export default function ResumoExecutivo({ estudo, analise, leitura }) {
           sabendo se a linha entrega — o resto e' fundamentacao. */}
       <section style={est.destaques}>
         <div style={est.destaque}>
-          <span style={est.destaqueRotulo}>Capacidade da linha</span>
-          <span style={est.destaqueValor}>{analise.capacidadeLinha || '—'}<small style={est.destaqueUnidade}>pç/h</small></span>
-          <span style={est.destaqueNota}>
-            {analise.gargalo ? `limitada por ${analise.gargalo.nome}` : 'sem ciclos coletados'}
-          </span>
-        </div>
-        <div style={est.destaque}>
           <span style={est.destaqueRotulo}>Exigido pela demanda</span>
           <span style={est.destaqueValor}>
             {capacidade.esperado !== null ? capacidade.esperado : '—'}
@@ -83,6 +87,23 @@ export default function ResumoExecutivo({ estudo, analise, leitura }) {
           </span>
         </div>
         <div style={est.destaque}>
+          <span style={est.destaqueRotulo}>Capacidade pelo tempo padrão</span>
+          <span style={est.destaqueValor}>{analise.capacidadeLinha || '—'}<small style={est.destaqueUnidade}>pç/h</small></span>
+          <span style={est.destaqueNota}>
+            {analise.gargalo ? `limitada por ${analise.gargalo.nome}` : 'sem ciclos coletados'}
+          </span>
+        </div>
+        <div style={est.destaque}>
+          <span style={est.destaqueRotulo}>Medido na linha</span>
+          <span style={est.destaqueValor}>
+            {doMedido.valor}
+            {doMedido.unidade && <small style={est.destaqueUnidade}>{doMedido.unidade}</small>}
+          </span>
+          <span style={est.destaqueNota}>
+            {doMedido.linhas.map((l) => <span key={l} style={est.linhaNota}>{l}</span>)}
+          </span>
+        </div>
+        <div style={est.destaque}>
           <span style={est.destaqueRotulo}>Atingimento</span>
           <span style={est.destaqueValor}>
             {capacidade.atingimentoPct !== null ? `${capacidade.atingimentoPct.toFixed(0)}%` : '—'}
@@ -91,6 +112,11 @@ export default function ResumoExecutivo({ estudo, analise, leitura }) {
             {capacidade.diferenca === null
               ? 'sem base de comparação'
               : `${capacidade.diferenca > 0 ? '+' : ''}${capacidade.diferenca} pç/h ${capacidade.diferenca < 0 ? 'de déficit' : 'de superávit'}`}
+            {capacidade.diferenca !== null && (
+              <span style={est.linhaNota}>
+                {pelaMedicao ? 'base: medido na linha' : 'base: capacidade pelo tempo padrão'}
+              </span>
+            )}
           </span>
         </div>
         <div style={est.destaque}>
@@ -107,9 +133,16 @@ export default function ResumoExecutivo({ estudo, analise, leitura }) {
       </section>
 
       <p style={est.veredito}>
-        <strong>{atinge ? '✓ A linha atende o ritmo da demanda.' : (capacidade.esperado === null ? 'Sem Takt configurado, não há veredito de atendimento.' : '⚠ A linha não atende o ritmo da demanda.')}</strong>
+        <strong>{atinge
+          ? `✓ A linha atende o ritmo da demanda${pelaMedicao ? ', medida na linha' : ''}.`
+          : (capacidade.esperado === null ? 'Sem Takt configurado, não há veredito de atendimento.' : `⚠ A linha não atende o ritmo da demanda${pelaMedicao ? ', medida na linha' : ''}.`)}</strong>
         {' '}
-        {analise.gargalo && capacidade.esperado !== null && !atinge && (
+        {faltaNoChao && (
+          <>Pelo tempo padrão ela daria {capacidade.real} pç/h; medida, entrega {capacidade.medido} —
+          {' '}{capacidade.pctDaCapacidade.toFixed(0)}% do que o tempo padrão permite. A falta está
+          no chão (paradas, ritmo, espera), não no gargalo do estudo.</>
+        )}
+        {analise.gargalo && capacidade.esperado !== null && !atinge && !faltaNoChao && (
           <>O gargalo é <strong>{analise.gargalo.nome}</strong>, com {formatarSegundos(analise.gargalo.resultado.tpPorPeca)} s
           por peça contra {formatarSegundos(analise.taktMs)} s exigidos. Enquanto ele não ceder,
           melhoria em outro posto não muda a capacidade.</>
@@ -217,7 +250,8 @@ const est = {
   campoRotulo: { fontSize: 7, letterSpacing: 0.5, textTransform: 'uppercase', color: '#666' },
   campoValor: { fontSize: 10, fontWeight: 600 },
 
-  destaques: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 8 },
+  // Cinco cartoes: exigido, tempo padrao, medido, atingimento, operadores.
+  destaques: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 8 },
   destaque: {
     display: 'flex', flexDirection: 'column', gap: 1,
     padding: '6px 8px', border: '1px solid #999', borderRadius: 3,
@@ -226,6 +260,8 @@ const est = {
   destaqueValor: { fontSize: 17, fontWeight: 700, fontFamily: fonteAnalise.numero, lineHeight: 1.1 },
   destaqueUnidade: { fontSize: 8, fontWeight: 400, marginLeft: 3 },
   destaqueNota: { fontSize: 8, color: '#444', lineHeight: 1.3 },
+  // Cada informacao da nota numa linha: a medicao traz duas ou tres.
+  linhaNota: { display: 'block' },
 
   veredito: {
     margin: '0 0 10px', padding: '6px 8px', fontSize: 9.5, lineHeight: 1.45,

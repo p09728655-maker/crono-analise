@@ -21,11 +21,16 @@ import FormularioOperacao from './estudo/FormularioOperacao.jsx';
 import Resposta from './estudo/Resposta.jsx';
 import AnaliseIa from './estudo/AnaliseIa.jsx';
 import { CapacidadeEsperadoReal } from './estudo/Capacidade.jsx';
+import { useMedicaoDoEstudo } from './estudo/useMedicaoDoEstudo.js';
 import PainelOperadores from './estudo/PainelOperadores.jsx';
 import PainelSugestoes from './estudo/PainelSugestoes.jsx';
 import PainelTendencia from './estudo/PainelTendencia.jsx';
 import PainelParadas from './estudo/PainelParadas.jsx';
 import TabelaOperacoes from './estudo/TabelaOperacoes.jsx';
+
+/* Quanto o papel pedido pela lista espera a medicao da linha. Ela costuma
+   chegar junto com o estudo; o teto so' existe para a rede lenta. */
+const ESPERA_MEDICAO_NO_PAPEL_MS = 4000;
 
 /**
  * PAINEL DE ANALISE — desktop.
@@ -122,6 +127,11 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  /* A MEDICAO REAL DA LINHA — medicoes de ritmo do mesmo posto e produto.
+     Carrega junto com o estudo, mas por fora dele: falhar aqui nao derruba
+     o painel, so' deixa o "Medido na linha" dizendo que nao deu. */
+  const medido = useMedicaoDoEstudo(dados?.estudo);
+
   /**
    * Chegou da lista pedindo o papel (?imprimir=folha).
    *
@@ -129,22 +139,37 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
    * a folha vazia, que e' pior que nao imprimir — sai do papel parecendo um
    * relatorio de estudo sem dados. E o pedido sai da URL depois de atendido,
    * senao recarregar a pagina reabriria a caixa de impressao para sempre.
+   *
+   * Espera tambem a medicao da linha responder (ou falhar), para o papel
+   * sair com o medido — mas so' ate' um teto: rede lenta nao pode segurar a
+   * impressao que o analista pediu.
    */
   const [papelPedido, setPapelPedido] = useState(
     () => new URLSearchParams(window.location.search).get('imprimir') === 'folha',
   );
 
   useEffect(() => {
-    if (!papelPedido || estado !== 'pronto') return;
-    setPapelPedido(false);
-    const url = new URL(window.location.href);
-    url.searchParams.delete('imprimir');
-    window.history.replaceState({}, '', url);
-    imprimir('folha');
-  }, [papelPedido, estado, imprimir]);
+    if (!papelPedido || estado !== 'pronto') return undefined;
+    const atender = () => {
+      setPapelPedido(false);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('imprimir');
+      window.history.replaceState({}, '', url);
+      imprimir('folha');
+    };
+    if (medido.estado !== 'carregando') {
+      atender();
+      return undefined;
+    }
+    const espera = setTimeout(atender, ESPERA_MEDICAO_NO_PAPEL_MS);
+    return () => clearTimeout(espera);
+  }, [papelPedido, estado, medido.estado, imprimir]);
 
   const analise = useMemo(() => analisarEstudo(dados), [dados]);
-  const leitura = useMemo(() => lerEstudo(analise), [analise]);
+  const leitura = useMemo(
+    () => lerEstudo(analise, { medicao: medido.medicao }),
+    [analise, medido.medicao],
+  );
 
   if (estado === 'carregando') return <Estado texto="Carregando estudo..." />;
   if (estado === 'erro') return <Estado texto={`Falha ao carregar: ${erro}`} acao={{ rotulo: 'Tentar de novo', aoClicar: carregar }} />;
@@ -155,8 +180,8 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
     <div style={est.tela}>
       {/* Versao de impressao: escondida na tela, e' a unica coisa visivel no papel. */}
       {documento === 'resumo'
-        ? <ResumoExecutivo estudo={estudo} analise={analise} leitura={leitura} />
-        : <RelatorioImpressao estudo={estudo} analise={analise} leitura={leitura} />}
+        ? <ResumoExecutivo estudo={estudo} analise={analise} leitura={leitura} medido={medido} />
+        : <RelatorioImpressao estudo={estudo} analise={analise} leitura={leitura} medido={medido} />}
 
       <div className="somente-tela" style={est.telaComLateral}>
         {/* A MESMA navegacao da primeira tela: lateral fixa, com o estudo
@@ -269,6 +294,9 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
               <CapacidadeEsperadoReal
                 capacidade={leitura.capacidade}
                 gargalo={analise.gargalo}
+                medido={medido}
+                recurso={estudo.recurso}
+                produto={estudo.produto}
                 aoDefinirTakt={() => setEditandoEstudo(true)}
               />
             </>

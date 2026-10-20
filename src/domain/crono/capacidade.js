@@ -21,24 +21,55 @@ export function operadoresNecessarios(somaTpMs, taktMs) {
 }
 
 /**
- * Capacidade ESPERADA (o que o Takt exige) x REAL (o que o gargalo entrega).
+ * Capacidade: os TRES numeros por hora, na unidade do estudo.
  *
- * O painel ja' dizia quanto a linha produz. Faltava a outra metade da
- * pergunta — se isso e' suficiente. Sem Takt configurado nao ha esperado: o
- * comparativo devolve null em vez de inventar uma meta.
+ *   esperado  o que o Takt EXIGE (3.600.000 / takt);
+ *   real      a CAPACIDADE PELO TEMPO PADRAO — o que o gargalo do estudo
+ *             permite. O nome "real" e' de quando so' havia este numero;
+ *             fica por compatibilidade, mas nao e' medicao: e' conta;
+ *   medido    o que a linha ENTREGOU, medido no posto (relogio, paradas
+ *             dentro). Opcional: so' chega aqui quando a medicao tem
+ *             amostra suficiente e esta' na unidade do estudo.
+ *
+ * O atingimento e o deficit/superavit sao do MEDIDO contra o exigido
+ * quando ha' medido — e' a linha que enche o caminhao, nao a conta. Sem
+ * medido, continuam da capacidade pelo tempo padrao, como sempre foram, e
+ * `base` diz qual dos dois foi usado: um 74% nao pode ser lido sem saber
+ * de onde saiu.
+ *
+ * Sem Takt configurado nao ha esperado: o comparativo devolve null em vez
+ * de inventar uma meta. Os tres numeros sao inteiros para baixo, a mesma
+ * regra da capacidade de cada operacao.
  */
-export function comparativoCapacidade({ taktMs, capacidadeLinha } = {}) {
+export function comparativoCapacidade({ taktMs, capacidadeLinha, medido } = {}) {
   const takt = Number(taktMs) || 0;
   const real = Math.max(0, Math.floor(Number(capacidadeLinha) || 0));
-  if (takt <= 0) return { esperado: null, real, atingimentoPct: null, diferenca: null };
+  // So' numero (ou texto de numero) conta: null, '', booleano e objeto sao
+  // "sem medido" — Number(null) e Number(true) virariam 0 e 1 calados.
+  const bruto = typeof medido === 'number' || (typeof medido === 'string' && medido.trim())
+    ? Number(medido) : NaN;
+  const medidoH = Number.isFinite(bruto) && bruto > 0 ? Math.floor(bruto) : null;
+  const base = medidoH !== null ? 'medido' : 'capacidade';
+  const entrega = base === 'medido' ? medidoH : real;
+  /* Quanto do que o tempo padrao permite a linha de fato entrega. A
+     distancia ate' 100% e' a perda do chao — parada, ritmo, espera — que
+     o estudo sozinho nao enxerga. So' com medido e com capacidade. */
+  const pctDaCapacidade = medidoH !== null && real > 0 ? (medidoH / real) * 100 : null;
+
+  if (takt <= 0) {
+    return { esperado: null, real, medido: medidoH, base, atingimentoPct: null, diferenca: null, pctDaCapacidade };
+  }
 
   const esperado = Math.floor(MS_POR_HORA / takt);
   return {
     esperado,
     real,
-    atingimentoPct: esperado > 0 ? (real / esperado) * 100 : null,
+    medido: medidoH,
+    base,
+    atingimentoPct: esperado > 0 ? (entrega / esperado) * 100 : null,
     // Positivo sobra, negativo falta. E' o numero que vai para a reuniao.
-    diferenca: esperado > 0 ? real - esperado : null,
+    diferenca: esperado > 0 ? entrega - esperado : null,
+    pctDaCapacidade,
   };
 }
 

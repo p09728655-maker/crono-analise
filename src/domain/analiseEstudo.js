@@ -72,13 +72,21 @@ export function analisarEstudo(dados) {
  * Segundo passo: sugestoes e comparativos. Saem de um passo separado
  * porque dependem do primeiro inteiro — gargalo, Takt e paradas ja'
  * resolvidos.
+ *
+ * `medicao` e' opcional: o que medicaoDoEstudo devolveu para o posto e o
+ * produto do estudo. So' a medicao USAVEL (amostra suficiente, na unidade
+ * do estudo) entra no comparativo; as outras seguem junto, para a tela e
+ * o papel mostrarem o numero com a ressalva.
  */
-export function lerEstudo(analise) {
+export function lerEstudo(analise, { medicao = null } = {}) {
   if (!analise) return null;
   return {
     capacidade: comparativoCapacidade({
-      taktMs: analise.taktMs, capacidadeLinha: analise.capacidadeLinha,
+      taktMs: analise.taktMs,
+      capacidadeLinha: analise.capacidadeLinha,
+      medido: medicao?.usavel ? medicao.ritmoRelogio : null,
     }),
+    medicao,
     sugestoes: sugerirMelhorias({
       operacoes: analise.operacoes,
       taktMs: analise.taktMs,

@@ -1,9 +1,11 @@
 import { claro } from '../../theme/tokensAnalise.js';
-import { formatarDuracao, formatarSegundos } from '../../domain/cronoanalise.js';
+import { CRITERIOS_CONFERENCIA, formatarDuracao, formatarSegundos } from '../../domain/cronoanalise.js';
 import { PRIORIDADES } from '../../domain/sugestoes.js';
 import { GraficoTendencia, GraficoYamazumi } from './graficos.jsx';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
+import { DIAS_MEDICAO } from '../../domain/medicaoDoEstudo.js';
+import { lerMedido } from './estudo/textosMedicao.js';
 
 /**
  * RELATORIO IMPRESSO — A4 retrato.
@@ -16,11 +18,13 @@ import { VERSAO } from '../../versao.js';
  * propria confiabilidade: se a amostra nao fecha a meta, isso vai impresso,
  * nao escondido. Um numero sem contexto vira decisao errada.
  */
-export default function RelatorioImpressao({ estudo, analise, leitura }) {
+export default function RelatorioImpressao({ estudo, analise, leitura, medido }) {
   const hoje = new Date().toLocaleDateString('pt-BR');
   const dataEstudo = estudo.data_estudo
     ? new Date(estudo.data_estudo).toLocaleDateString('pt-BR')
     : '—';
+  const capacidade = leitura?.capacidade;
+  const doMedido = lerMedido(medido, { recurso: estudo.recurso, produto: estudo.produto });
 
   return (
     <div className="somente-impressao" style={est.folha}>
@@ -83,14 +87,26 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
         )}
       </section>
 
+      {/* Duas fileiras de cinco: o estudo em cima; embaixo a capacidade —
+          exigido, tempo padrao e MEDIDO NA LINHA, com o veredito e a base
+          dele. Era uma fileira e meia, e a folha nao dizia se a linha
+          atende: so' a tela dizia. */}
       <section style={est.resumo}>
         {[
           ['Operações', analise.operacoes.length, ''],
           ['Ciclos coletados', analise.totalCiclos, ''],
           ['Σ TP por peça', formatarSegundos(analise.somaTp), 's'],
-          ['Capacidade da linha', analise.capacidadeLinha || '—', 'pç/h'],
           ['Operadores', analise.operadores !== null ? analise.operadores.toFixed(2) : '—', ''],
           ['Tempo parado', analise.paradas?.totalMs ? formatarDuracao(analise.paradas.totalMs) : '—', ''],
+          ['Exigido (takt)', capacidade?.esperado ?? '—', capacidade?.esperado != null ? 'pç/h' : ''],
+          ['Capacidade pelo tempo padrão', analise.capacidadeLinha || '—', 'pç/h'],
+          ['Medido na linha', doMedido.valor, doMedido.unidade],
+          ['Atingimento', capacidade?.atingimentoPct != null ? `${capacidade.atingimentoPct.toFixed(0)}%` : '—', ''],
+          [
+            capacidade?.diferenca != null && capacidade.diferenca < 0 ? 'Déficit' : 'Superávit',
+            capacidade?.diferenca != null ? `${capacidade.diferenca > 0 ? '+' : ''}${capacidade.diferenca}` : '—',
+            capacidade?.diferenca != null ? 'pç/h' : '',
+          ],
         ].map(([k, v, s]) => (
           <div key={k} style={est.resumoItem}>
             <span style={est.resumoRotulo}>{k}</span>
@@ -98,6 +114,16 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
           </div>
         ))}
       </section>
+      <p style={est.notaCapacidade}>
+        <strong>Medido na linha:</strong> {doMedido.curto}.
+        {capacidade?.atingimentoPct != null && (
+          <> Base do atingimento e do {capacidade.diferenca < 0 ? 'déficit' : 'superávit'}:
+          {' '}{capacidade.base === 'medido' ? 'medido na linha' : 'capacidade pelo tempo padrão'}.</>
+        )}
+        {capacidade?.pctDaCapacidade != null && (
+          <> A linha entrega {capacidade.pctDaCapacidade.toFixed(0)}% do que o tempo padrão permite.</>
+        )}
+      </p>
 
       {analise.gargalo && (
         <p style={est.gargalo}>
@@ -290,6 +316,7 @@ export default function RelatorioImpressao({ estudo, analise, leitura }) {
             ['Parado', 'Tempo parado', 'tempo registrado com a produção parada (setup, falta de material, manutenção). Descontado do ciclo: não entra no TO.'],
             ['Σ TP', 'Soma dos tempos padrão', 'tempo padrão total do produto neste posto, somando as operações.'],
             ['Takt Time', 'Ritmo da demanda', 'tempo disponível por peça para atender a produção do dia (tempo ÷ quantidade). Operadores = Σ TP ÷ Takt.'],
+            ['Medido', 'Medido na linha', `ritmo das medições de Ritmo por máquina ou Embalagem Takt Time do mesmo posto e produto, nos últimos ${DIAS_MEDICAO} dias, no relógio (paradas dentro); na embalagem, volumes ÷ volumes do produto. Só entra no atingimento com ${CRITERIOS_CONFERENCIA.minConferencias} medições e ${formatarDuracao(CRITERIOS_CONFERENCIA.minTempoTotalMs)} com a linha rodando, cada uma com ${formatarDuracao(CRITERIOS_CONFERENCIA.minPeriodoMs)}.`],
             ['Tendência', 'Reta sobre os ciclos', 'reta ajustada aos ciclos na ordem da coleta; a % compara o fim da reta com o início (último ÷ primeiro ciclo ajustado). Só conta como tendência com 5% ou mais do ciclo médio e inclinação que se distingue do acaso a 95% para o número de ciclos — abaixo disso é dispersão (CV%) ou amostra curta.'],
           ].map(([sigla, nome, texto]) => (
             <div key={sigla} style={est.itemLegenda}>
@@ -332,8 +359,14 @@ const est = {
   ressalva: { padding: 9, border: '1px solid #B45309', borderLeft: '4px solid #B45309', marginBottom: 12, fontSize: 9.5 },
   ressalvaTexto: { margin: '4px 0 0' },
   ressalvaLista: { margin: '4px 0 0', paddingLeft: 16 },
-  resumo: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 12 },
-  resumoItem: { border: '1px solid #ccc', padding: '6px 8px', textAlign: 'center' },
+  resumo: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 6 },
+  notaCapacidade: { fontSize: 9, lineHeight: 1.45, margin: '0 0 12px', color: '#333' },
+  // Coluna com o valor no pe': rotulo que quebra em duas linhas ("Capacidade
+  // pelo tempo padrao") nao desalinha o numero dos vizinhos da fileira.
+  resumoItem: {
+    border: '1px solid #ccc', padding: '6px 8px', textAlign: 'center',
+    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+  },
   resumoRotulo: { display: 'block', fontSize: 7.5, textTransform: 'uppercase', letterSpacing: 0.5, color: '#666' },
   resumoValor: { display: 'block', fontSize: 16, fontWeight: 700, fontFamily: "'Consolas', monospace" },
   resumoSufixo: { fontSize: 8, fontWeight: 400, marginLeft: 2 },

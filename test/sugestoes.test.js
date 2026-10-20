@@ -145,6 +145,46 @@ describe('comparativoCapacidade', () => {
     expect(r.atingimentoPct).toBeNull();
     expect(r.real).toBe(600);
   });
+
+  it('sem medido, a base e a capacidade pelo tempo padrao — e o objeto diz isso', () => {
+    const r = comparativoCapacidade({ taktMs: 5000, capacidadeLinha: 600 });
+    expect(r.base).toBe('capacidade');
+    expect(r.medido).toBeNull();
+    expect(r.pctDaCapacidade).toBeNull();
+    for (const medido of [null, undefined, '', 0, -5, 'abc', true]) {
+      const s = comparativoCapacidade({ taktMs: 5000, capacidadeLinha: 600, medido });
+      expect(s.base).toBe('capacidade');
+      expect(s.atingimentoPct).toBeCloseTo(83.33, 2);
+    }
+  });
+
+  it('com medido, os tres numeros saem juntos e o atingimento passa a ser do MEDIDO', () => {
+    // Exigido 720/h; o tempo padrao permite 600/h; a linha entregou 480,7/h.
+    const r = comparativoCapacidade({ taktMs: 5000, capacidadeLinha: 600, medido: 480.7 });
+    expect(r.esperado).toBe(720);
+    expect(r.real).toBe(600);
+    expect(r.medido).toBe(480);
+    expect(r.base).toBe('medido');
+    expect(r.atingimentoPct).toBeCloseTo((480 / 720) * 100, 6);
+    expect(r.diferenca).toBe(-240);
+    // A linha entrega 80% do que o tempo padrao permite.
+    expect(r.pctDaCapacidade).toBeCloseTo(80, 6);
+  });
+
+  it('medido acima do exigido vira superavit; sem Takt o medido continua la', () => {
+    expect(comparativoCapacidade({ taktMs: 5000, capacidadeLinha: 600, medido: 750 }).diferenca).toBe(30);
+    const semTakt = comparativoCapacidade({ taktMs: 0, capacidadeLinha: 600, medido: 480 });
+    expect(semTakt.medido).toBe(480);
+    expect(semTakt.base).toBe('medido');
+    expect(semTakt.atingimentoPct).toBeNull();
+    expect(semTakt.pctDaCapacidade).toBeCloseTo(80, 6);
+  });
+
+  it('sem capacidade (estudo sem ciclos) nao ha percentual do tempo padrao', () => {
+    const r = comparativoCapacidade({ taktMs: 5000, capacidadeLinha: 0, medido: 480 });
+    expect(r.pctDaCapacidade).toBeNull();
+    expect(r.atingimentoPct).toBeCloseTo((480 / 720) * 100, 6);
+  });
 });
 
 describe('dimensionarOperadores', () => {
