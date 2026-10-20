@@ -15,6 +15,13 @@ import { useState } from 'react';
  * cadastro nao conhece aparece como texto, nao some num select sem a opcao.
  *
  * A conferencia continua gravando o NOME — o cadastro padroniza a entrada.
+ *
+ * `sugestoes` (opcional) liga um datalist ao texto livre — os nomes ja'
+ * usados nos estudos, quando o grupo nao tem lista. E' o MESMO campo nos
+ * dois casos de proposito: trocar de componente quando o cadastro chega
+ * apagava o que o analista estava digitando e tirava o foco.
+ * `contexto` (opcional, o grupo do posto): quando muda, a escolha "Outro
+ * produto…" feita no posto anterior deixa de valer.
  */
 export default function SeletorProduto({
   valor, aoTrocar, opcoes, estilos,
@@ -22,11 +29,20 @@ export default function SeletorProduto({
   placeholder = 'Ex: Rack Sirius 1.6',
   vazio = 'Escolha o produto…',
   aoEscolher,
+  sugestoes = null, listaId,
+  contexto,
 }) {
   const lista = opcoes || [];
   /* null = automatico (decide pelo valor e pela lista); true/false = o
-     usuario escolheu de que jeito quer preencher, e a escolha manda. */
+     usuario escolheu de que jeito quer preencher, e a escolha manda —
+     dentro do mesmo contexto. Ajustado durante o render (o padrao do
+     React para estado que depende de prop), sem remontar o campo. */
   const [modo, setModo] = useState(null);
+  const [contextoVisto, setContextoVisto] = useState(contexto);
+  if (contexto !== contextoVisto) {
+    setContextoVisto(contexto);
+    setModo(null);
+  }
   const naLista = lista.some((p) => p.nome === valor);
   const automatico = lista.length === 0 || (Boolean(valor) && !naLista);
   const livre = lista.length === 0 || (modo === null ? automatico : modo);
@@ -41,7 +57,13 @@ export default function SeletorProduto({
           onChange={(ev) => aoTrocar(ev.target.value)}
           style={estilos.input}
           aria-label={aria}
+          list={sugestoes && listaId ? listaId : undefined}
         />
+        {sugestoes && listaId && (
+          <datalist id={listaId}>
+            {sugestoes.map((nome) => <option key={nome} value={nome} />)}
+          </datalist>
+        )}
         {lista.length > 0 && (
           <button
             type="button"

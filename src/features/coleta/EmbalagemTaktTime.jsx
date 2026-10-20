@@ -14,7 +14,8 @@ import CronometroAoVivo from './rapida/CronometroAoVivo.jsx';
 import ResultadoAoVivo from './rapida/ResultadoAoVivo.jsx';
 import { CampoProduto } from './rapida/CamposDaPeca.jsx';
 import Historico from './rapida/Historico.jsx';
-import { motivoSemTakt, useTaktDaSemana } from './embalagem/useTaktDaSemana.js';
+import { useTaktDaSemana } from '../../lib/taktDaSemana.js';
+import { motivoSemTakt } from './embalagem/motivoSemTakt.js';
 
 const VOLUME = unidadeDoPosto('EMBALAGEM');
 const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume';
@@ -260,6 +261,8 @@ export default function EmbalagemTaktTime({ aoSair }) {
 
 /** O takt da semana antes de comecar — ou, sem ele, o porque. */
 function CartaoTakt({ takt }) {
+  const motivo = motivoSemTakt(takt.estado, takt);
+  if (!(takt.taktMs > 0) && !motivo) return null;
   return (
     <div style={est.destaqueRitmo} aria-label="Takt da semana">
       {takt.taktMs > 0 ? (
@@ -271,7 +274,7 @@ function CartaoTakt({ takt }) {
           </span>
         </>
       ) : (
-        <span style={est.sufixoRitmo}>Takt: {motivoSemTakt(takt.estado)}</span>
+        <span style={est.sufixoRitmo}>Takt: {motivo}</span>
       )}
     </div>
   );
@@ -316,8 +319,8 @@ function ResumoTakt({
           as lacunas, ainda não.
         </section>
       )}
-      {!(takt.taktMs > 0) && (
-        <section style={est.aviso} role="status">Sem takt para comparar: {motivoSemTakt(takt.estado)}</section>
+      {!(takt.taktMs > 0) && motivoSemTakt(takt.estado, takt) && (
+        <section style={est.aviso} role="status">Sem takt para comparar: {motivoSemTakt(takt.estado, takt)}</section>
       )}
     </>
   );

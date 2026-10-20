@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { espaco, tipo } from '../../../theme/escala.js';
-import { formatarSegundos, taktTime } from '../../../domain/cronoanalise.js';
+import { formatarSegundos, nomeChave, taktTime } from '../../../domain/cronoanalise.js';
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
+import SeletorProduto from '../../../components/SeletorProduto.jsx';
+import { ressalvasDoPrograma } from '../../../components/RitmoDemanda.jsx';
+import {
+  conflitoDoProduto, conflitoDoTakt, programaDoTakt, rotuloDoGrupo, useProgramaDoPosto,
+} from '../../../lib/taktDaSemana.js';
 import { est } from './estilos.js';
 
 /**
@@ -11,6 +16,11 @@ import { est } from './estilos.js';
  * mudam DEPOIS de comecar a coletar: o analista descobre a demanda real, ou
  * revisa a tolerancia ao ver as condicoes do posto. Sem isto, corrigir um
  * desses campos exigiria recriar o estudo e perder os ciclos ja coletados.
+ *
+ * O posto puxa o produto e o takt do mesmo jeito que no Novo estudo: a
+ * lista de produtos do grupo e, com um clique, o takt do programa da
+ * semana. Aqui o programa nunca entra sozinho: o estudo ja' tem um takt, e
+ * troca-lo sem pedir mudaria o Yamazumi de quem so' veio corrigir um nome.
  */
 export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCancelar }) {
   const [nome, setNome] = useState(estudo.nome || '');
@@ -26,9 +36,34 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
   );
   const [calc, setCalc] = useState({ quantidade: '', horas: '' });
   const [salvando, setSalvando] = useState(false);
+  const posto = useProgramaDoPosto(recurso);
+  const grupoId = posto.grupo?.id || null;
+  const programa = programaDoTakt(posto);
   const [erro, setErro] = useState(null);
 
+  /* NADA MUDA SOZINHO quando o posto muda: a tela confere e avisa.
+     - Produto de outro grupo: so' impede de gravar quando o analista mexeu
+       no posto ou no produto nesta edicao — quem veio so' corrigir o nome
+       nao fica preso porque o cadastro mudou por fora (ve o aviso e salva).
+     - Takt escrito pelo botao do programa: e' do grupo em que foi clicado
+       (a `marca`); com o posto em outro grupo, nao grava esse numero. Digitar
+       no campo desfaz a marca: o numero passa a ser do analista. */
+  const conflitoProduto = conflitoDoProduto({ produto, recurso, cadastro: posto.cadastro, grupo: posto.grupo });
+  const mexeu = nomeChave(recurso) !== nomeChave(estudo.recurso || '') || produto !== (estudo.produto || '');
+  const [marca, setMarca] = useState(null);
+  const conflitoTakt = conflitoDoTakt({ marca, grupo: posto.grupo, taktSeg });
+  function usarTaktDoPrograma() {
+    const escrito = formatarSegundos(programa.taktMs, 1);
+    setMarca({ grupoId: posto.grupo.id, grupo: rotuloDoGrupo(posto.grupo), escrito });
+    setTaktSeg(escrito);
+  }
+  function digitarTakt(valor) {
+    setMarca(null);
+    setTaktSeg(valor);
+  }
+
   function aplicarCalculo(novo) {
+    setMarca(null);
     setCalc(novo);
     const qtd = Number(novo.quantidade);
     const horas = Number(novo.horas);
@@ -41,6 +76,8 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
     setErro(null);
     const ms = taktSeg ? Math.round(Number(taktSeg) * 1000) : null;
     if (!nome.trim()) { setErro('O estudo precisa de um nome.'); setSalvando(false); return; }
+    if (conflitoProduto && mexeu) { setErro(conflitoProduto.texto); setSalvando(false); return; }
+    if (conflitoTakt) { setErro(conflitoTakt.texto); setSalvando(false); return; }
     try {
       await aoSalvar({
         nome: nome.trim(),
@@ -73,12 +110,9 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
           <input style={est.input} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
         </label>
 
+        {/* Posto antes do produto: e' o grupo do posto que traz a lista de
+            produtos — a mesma ordem do Novo estudo. */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.lg }}>
-          <label style={est.campo}>
-            <span style={est.rotuloCampo}>Produto / Referência</span>
-            <input style={est.input} value={produto} onChange={(e) => setProduto(e.target.value)} />
-            <span style={est.dica}>Agrupa os estudos na lista.</span>
-          </label>
           <label style={est.campo}>
             <span style={est.rotuloCampo}>Recurso / Posto</span>
             {/* Mesmo campo do Novo estudo e do celular: o posto vem do
@@ -92,6 +126,27 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
               vazio="Escolha o posto…"
             />
             <span style={est.dica}>Sai no relatório impresso.</span>
+          </label>
+          <label style={est.campo}>
+            <span style={est.rotuloCampo}>Produto / Referência</span>
+            {/* Um campo so': sem lista do grupo, o SeletorProduto e' o texto
+                de sempre — e o cadastro chegando nao troca o campo no meio
+                da digitacao. */}
+            <SeletorProduto
+              valor={produto}
+              aoTrocar={setProduto}
+              opcoes={posto.produtos}
+              contexto={grupoId}
+              aria="Produto / Referência"
+              placeholder="Ex: Mesa Cabeceira Sleep"
+              estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
+            />
+            {conflitoProduto && <span style={est.alertaCampo} role="alert">{conflitoProduto.texto}</span>}
+            <span style={est.dica}>
+              {posto.produtos.length > 0
+                ? 'Do cadastro de produtos do grupo. Agrupa os estudos na lista.'
+                : 'Agrupa os estudos na lista.'}
+            </span>
           </label>
         </div>
 
@@ -173,9 +228,30 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
           <label style={est.campo}>
             <span style={est.rotuloCampo}>Takt Time (segundos por peça)</span>
             <input type="number" min="0" step="0.1" style={est.input}
-                   value={taktSeg} onChange={(e) => setTaktSeg(e.target.value)} />
+                   value={taktSeg} onChange={(e) => digitarTakt(e.target.value)} />
+            {conflitoTakt && <span style={est.alertaCampo} role="alert">{conflitoTakt.texto}</span>}
             <span style={est.dica}>Preenchido pela conta acima, ou digite direto.</span>
           </label>
+          {/* O takt do programa a um clique — o mesmo numero do quadro
+              "Programa da semana". Na embalagem o programa e' em volumes:
+              so' serve se cada ciclo do estudo for um volume. */}
+          {programa && (
+            <>
+              <button type="button" style={est.botaoSecundario} onClick={usarTaktDoPrograma}>
+                {/* Em SEGUNDOS, como o campo logo acima: o botao escreve 144.0
+                    ali, e "02:24" no botao seria outro numero para conferir. */}
+                Usar o takt do programa da semana {programa.semana}: {formatarSegundos(programa.taktMs, 1)} s por {programa.unidade.singular}
+              </button>
+              <span style={est.dica}>
+                {programa.unidade.singular === 'volume'
+                  ? 'O programa da embalagem é em volumes: use se cada ciclo deste estudo for um volume.'
+                  : `${programa.grupo}: tempo de uma máquina na semana, menos o setup planejado, pela parte dela na demanda.`}
+              </span>
+              {/* As mesmas ressalvas do Novo estudo: o numero pode ser o
+                  guardado no aparelho, e a semana casada pelo numero. */}
+              {ressalvasDoPrograma(programa).map((r) => <span key={r} style={est.dica}>{r}</span>)}
+            </>
+          )}
         </fieldset>
 
         {erro && <div style={est.erroForm}>{erro}</div>}

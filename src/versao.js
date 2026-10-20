@@ -13,6 +13,32 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.93.0',
+    data: '2026-10-20',
+    titulo: 'Novo estudo: produto e takt vêm do grupo do posto',
+    itens: [
+      'NO NOVO ESTUDO, O POSTO PUXA O RESTO, COMO NO TABLET. Escolhido o posto, o campo de produto vira a lista do cadastro de produtos do grupo dele, e o takt vem do programa da semana do grupo. Antes o estudo tinha lista de produto e takt próprios, e o mesmo posto podia ter um takt no estudo e outro no quadro do programa.',
+      'O TAKT DO PROGRAMA É POR MÁQUINA, E O PAINEL MOSTRA A CONTA DE UMA MÁQUINA. O programa é do grupo, e cada máquina ativa faz a parte dela. Exemplo, sem setup: 6.600 peças para 6 furadeiras dão 1.100 por máquina; em 44h00min, 02:24 (144.0 s) por peça. Com setup planejado, ele sai antes das horas: "44h00min de jornada − 1h00min de setup planejado = 43h00min", e o takt cai para 140.7 s. Os dois cartões são de uma máquina (demanda por máquina e tempo por máquina), para a conta fechar de cabeça. É o mesmo número do quadro "Programa da semana", também escrito em segundos.',
+      'O PAINEL DIZ QUANDO O NÚMERO MERECE RESSALVA, como o quadro do programa: quando o programa é o guardado no aparelho (sem rede, ou ainda conferindo com o servidor) e quando a semana foi casada pelo número porque a linha do programa não tem data de início.',
+      'A CONTA DIGITADA CONTINUA POSSÍVEL. "Simular outra demanda" volta à quantidade por dia e horas, com o aviso de que é essa conta que o estudo grava e com o takt do programa ao lado; um clique volta ao programa. Depois que você mexe na quantidade ou nas horas (inclusive apagando para corrigir), o programa não toma mais o painel: aparece só como oferta.',
+      'NADA MUDA SOZINHO QUANDO O POSTO MUDA: A TELA CONFERE E AVISA. Produto que é de outro grupo (escolhido num posto e depois o posto trocado para outro grupo, uma máquina sem grupo ou um posto fora do cadastro) aparece com um aviso colado ao campo, e o Criar não grava a combinação; produto digitado à mão passa. "Usar o takt do programa" clicado na furadeira não vira takt por volume se o posto mudar para a embalagem. Na embalagem, a conta digitada fala em produto do começo ao fim.',
+      'NA EMBALAGEM, O PROGRAMA É OFERECIDO, NÃO IMPOSTO. Ele é em volumes, e o ciclo do estudo pode ser o produto inteiro (um rack de dois volumes): usar o takt por volume faria a linha parecer o dobro mais carregada. Ele só entra se você clicar em "Usar o takt do programa".',
+      'SEM PROGRAMA PARA A SEMANA, É A CONTA DIGITADA DE SEMPRE, com o motivo numa linha: grupo sem programa, semana não coberta, posto sem grupo, posto fora do cadastro, grupo sem máquina ativa. Sem rede, o aviso diz que é a rede — não culpa o programa nem o cadastro; e o cadastro que ainda está chegando diz "buscando".',
+      'NO EDITAR ESTUDO, O PRODUTO TAMBÉM VEM DA LISTA DO GRUPO, e um botão escreve o takt do programa da semana no campo, em segundos. Ali o programa nunca entra sozinho: o estudo já tem um takt. Se o posto mudar para outro grupo depois do clique, a tela avisa que o número é do programa do outro grupo e não o grava — digite o takt ou use o programa do grupo do posto. O aviso de produto de outro grupo só impede de salvar quando você mexeu no posto ou no produto: quem veio só corrigir o nome salva normalmente. O botão faz as mesmas ressalvas do Novo estudo (programa guardado no aparelho, semana casada pelo número). Produto digitado à mão em estudo antigo continua aparecendo como texto, com o caminho para escolher do cadastro.',
+      'O TABLET DA EMBALAGEM TROCA DE SEMANA SOZINHO. Com a tela aberta na virada da semana, o takt continuava o da semana anterior até alguém reabrir. Agora o programa é buscado de novo a cada meia hora (e na virada): a semana que o PCP colou com a tela já aberta aparece em até 30 minutos. Sem rede na virada, o tablet diz que falta rede, não que o programa não cobre a semana.',
+      'O estudo grava o número do takt, como antes: se o programa mudar na semana seguinte, o estudo não muda junto. A importação do PDF do ERP segue com a conta digitada, porque cria estudos de vários postos de uma vez.',
+    ],
+  },
+  {
+    versao: '2.92.1',
+    data: '2026-10-20',
+    titulo: 'Tablet da embalagem sem o aviso de programa não colado',
+    itens: [
+      'O TABLET DA EMBALAGEM NÃO MOSTRA MAIS "O PCP AINDA NÃO COLOU O PROGRAMA DA EMBALAGEM". Sem o programa, o tablet só não mostra o takt; a medição segue igual e grava cada volume. Quem resolve é o PCP, e a tela Embalagem Takt Time do PC continua avisando que falta o programa.',
+      'Quando o programa for colado, as medições já feitas na semana passam a ter takt no PC: ele é calculado pela data da medição.',
+    ],
+  },
+  {
     versao: '2.92.0',
     data: '2026-10-20',
     titulo: 'Embalagem Takt Time: o relógio só abre quando fecha um volume',

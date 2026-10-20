@@ -274,4 +274,48 @@ describe('o takt da semana de uma medicao', () => {
     expect(t.taktMs).toBeNull();
     expect(t.estado).toBe('sem-demanda');
   });
+
+  /**
+   * O takt e' POR MAQUINA: o programa e' do grupo, e cada maquina faz a
+   * sua parte. 3 maquinas, 44 h, 1 setup de 12 min por dia em 5 dias
+   * (1 h): cada uma tem 43 h para 2.200 / 3 pecas.
+   *   takt = 43 x 3.600.000 / (2.200 / 3) = 211.090,9 ms
+   * E a tela escreve a conta com o que sai daqui: a demanda e as horas.
+   */
+  it('diz de onde o takt saiu: demanda da semana e horas de cada maquina', () => {
+    const t = taktDaMedicao({
+      demandas, horas: 44, maquinas: 3, setup: { setupsDia: 1, dias: 5, minutos: 12 },
+      data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 3600000,
+    });
+    expect(t.taktMs).toBeCloseTo((43 * 3600000) / (2200 / 3), 3);
+    expect(t.demanda).toBe(2200);
+    expect(t.horasPorMaquina).toBeCloseTo(43, 6);
+    // As duas parcelas, para a tela escrever "44 h − 1 h de setup".
+    expect(t.jornadaPorMaquina).toBe(44);
+    expect(t.setupPorMaquina).toBeCloseTo(1, 6);
+  });
+
+  it('setup nao cadastrado e null, nao zero — zero e uma afirmacao', () => {
+    const t = taktDaMedicao({
+      demandas, horas: 44, maquinas: 1,
+      data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 3600000,
+    });
+    expect(t.setupPorMaquina).toBeNull();
+    expect(t.jornadaPorMaquina).toBe(44);
+  });
+
+  it('diz se a semana foi casada pela data ou pelo numero', () => {
+    const args = { horas: 44, maquinas: 1, data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 3600000 };
+    expect(taktDaMedicao({ ...args, demandas }).casadoPorData).toBe(true);
+    // Programa antigo, sem INICIO: casa pelo numero da semana, com ressalva.
+    expect(taktDaMedicao({ ...args, demandas: [{ ano: 2026, numero: 43, pecas: 2200 }] }).casadoPorData).toBe(false);
+  });
+
+  it('sem takt, sem conta: demanda pode vir, horas nao', () => {
+    const t = taktDaMedicao({
+      demandas, horas: null, maquinas: 1,
+      data: '2026-10-21T13:00:00Z', pecas: 50, duracaoMs: 3600000,
+    });
+    expect(t.horasPorMaquina).toBeNull();
+  });
 });

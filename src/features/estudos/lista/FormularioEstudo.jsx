@@ -1,6 +1,11 @@
 import { useRef, useState } from 'react';
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
-import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../../components/RitmoDemanda.jsx';
+import SeletorProduto from '../../../components/SeletorProduto.jsx';
+import RitmoDemanda, {
+  CALC_PADRAO, PRODUTO, avisoSemPrograma, origemDoTakt, taktMsDoEstudo,
+} from '../../../components/RitmoDemanda.jsx';
+import { conflitoDoProduto, programaDoTakt, useProgramaDoPosto } from '../../../lib/taktDaSemana.js';
+import { unidadeDoPosto } from '../../../domain/cronoanalise.js';
 
 /**
  * Novo estudo em tres etapas visuais: quem e' (identificacao), como coletar
@@ -15,6 +20,11 @@ import RitmoDemanda, { CALC_PADRAO, taktMsDoCalculo } from '../../../components/
  * cabeca, mas todo mundo sabe quanto precisa produzir e em quanto tempo —
  * entao o formulario pede esses dois numeros e mostra o ritmo calculado.
  * (Quem souber o Takt direto ajusta depois, em Ajustes do estudo.)
+ *
+ * O POSTO puxa o resto, como no tablet: o grupo dele traz a lista de
+ * produtos do cadastro e o takt do programa da semana. Sem isso o estudo
+ * tinha produto e takt proprios, e a mesma peca saia com um takt aqui e
+ * outro no quadro do programa.
  */
 export default function FormularioEstudo({
   est, t, analise, produtos = [], setores = [], analistas = [], eu, aoSalvar, aoCancelar,
@@ -28,6 +38,12 @@ export default function FormularioEstudo({
     toleranciaPct: 15, metaObs: 12,
   });
   const [calc, setCalc] = useState({ ...CALC_PADRAO });
+  /* A escolha dos botoes ("Usar o takt do programa" / "Simular") vale para
+     o GRUPO em que foi feita: o clique dado na furadeira nao pode virar
+     takt por volume na embalagem. `digitou` e' o outro lado: depois que o
+     analista mexeu na conta, o programa so' e' oferecido, em qualquer grupo. */
+  const [escolha, setEscolha] = useState({ grupoId: null, valor: null });
+  const [digitou, setDigitou] = useState(false);
   const [etapa, setEtapa] = useState(1);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState(null);
@@ -35,6 +51,21 @@ export default function FormularioEstudo({
   const refNome = useRef(null);
   const refMeta = useRef(null);
   const refQtd = useRef(null);
+
+  const posto = useProgramaDoPosto(dados.recurso);
+  const grupoId = posto.grupo?.id || null;
+  const programa = programaDoTakt(posto);
+  const origem = origemDoTakt({
+    programa, escolha: escolha.grupoId === grupoId ? escolha.valor : null, digitou,
+  });
+  /* O produto nao muda sozinho quando o posto muda: a tela confere e
+     avisa (conflitoDoProduto), e o Criar nao grava a combinacao errada. */
+  const conflito = conflitoDoProduto({
+    produto: dados.produto, recurso: dados.recurso, cadastro: posto.cadastro, grupo: posto.grupo,
+  });
+  // O estudo da embalagem mede o PRODUTO inteiro; nos outros postos, a peca.
+  const unidadeDoEstudo = posto.grupo && unidadeDoPosto(posto.grupo.nome).singular === 'volume'
+    ? PRODUTO : undefined;
 
   const campo = (k) => ({
     value: dados[k],
@@ -49,9 +80,10 @@ export default function FormularioEstudo({
   async function enviar(ev) {
     ev.preventDefault();
     if (!dados.nome.trim()) { setErro('Informe o nome do estudo.'); irParaEtapa(1); return; }
+    if (conflito) { setErro(conflito.texto); irParaEtapa(1); return; }
     setSalvando(true);
     setErro(null);
-    try { await aoSalvar({ ...dados, taktTimeMs: taktMsDoCalculo(calc) }); }
+    try { await aoSalvar({ ...dados, taktTimeMs: taktMsDoEstudo({ origem, programa, calc }) }); }
     catch (e) { setErro(e.message); setSalvando(false); }
   }
 
@@ -99,15 +131,28 @@ export default function FormularioEstudo({
                     vazio="Escolha o posto…"
                   />
                 </Campo>
+                {/* Com produtos cadastrados para o grupo do posto, o campo vira
+                    a LISTA do cadastro — a mesma do tablet. Sem eles (posto
+                    fora do cadastro, grupo sem produto), e' texto com os
+                    nomes ja' usados nos estudos: datalist sugere sem impedir
+                    texto novo, e nao cria "SLEEP BASE" ao lado de "Sleep
+                    Base" por descuido. Um campo so' nos dois casos. */}
                 <Campo est={est} label="Produto / Referência"
-                       dica={produtos.length ? 'Escolha um já usado para agrupar corretamente.' : 'Ex: Mesa Cabeceira Sleep'}>
-                  {/* datalist sugere sem impedir texto novo: o analista continua
-                      livre para cadastrar produto inedito, mas nao cria "SLEEP
-                      BASE" ao lado de "Sleep Base" por descuido. */}
-                  <input style={est.input} list="produtos-conhecidos" {...campo('produto')} />
-                  <datalist id="produtos-conhecidos">
-                    {produtos.map((nome) => <option key={nome} value={nome} />)}
-                  </datalist>
+                       dica={posto.produtos.length > 0
+                         ? 'Do cadastro de produtos do grupo. Não achou? Use “Outro produto…”.'
+                         : (produtos.length ? 'Escolha um já usado para agrupar corretamente.' : 'Ex: Mesa Cabeceira Sleep')}>
+                  <SeletorProduto
+                    valor={dados.produto}
+                    aoTrocar={(v) => setDados((d) => ({ ...d, produto: v }))}
+                    opcoes={posto.produtos}
+                    sugestoes={produtos}
+                    listaId="produtos-conhecidos"
+                    contexto={grupoId}
+                    aria="Produto / Referência"
+                    placeholder="Ex: Mesa Cabeceira Sleep"
+                    estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
+                  />
+                  {conflito && <span style={est.alertaCampo} role="alert">{conflito.texto}</span>}
                 </Campo>
                 {/* Com cadastro, o analista vira LISTA: e' o que impede a
                     mesma pessoa de virar "ODERLI", "ODERLI GARCIA" e
@@ -148,9 +193,20 @@ export default function FormularioEstudo({
             t={t}
             analise={analise}
             calc={calc}
-            aoMudar={setCalc}
+            aoMudar={(novo) => { setCalc(novo); setDigitou(true); }}
             refQuantidade={refQtd}
             aoFocar={() => setEtapa(3)}
+            programa={programa}
+            origem={origem}
+            aviso={avisoSemPrograma({
+              recurso: dados.recurso, grupo: posto.grupo, estado: posto.takt.estado,
+              semRede: posto.takt.semRede, semCadastro: posto.semCadastro,
+              buscandoCadastro: posto.buscandoCadastro, noCadastro: posto.noCadastro,
+              buscaFalhou: posto.buscaFalhou, maquinasDoGrupo: posto.maquinasDoGrupo,
+            })}
+            unidadeDoEstudo={unidadeDoEstudo}
+            aoUsarPrograma={() => setEscolha({ grupoId, valor: 'programa' })}
+            aoSimular={() => setEscolha({ grupoId, valor: 'manual' })}
           />
         </div>
 

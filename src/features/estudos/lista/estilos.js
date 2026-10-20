@@ -496,6 +496,9 @@ export function estilos(t, analise) {
       borderWidth: 1, borderStyle: 'solid', borderColor: t.critico,
       borderRadius: raio.sm, ...tipo('legenda'), color: t.texto,
     },
+    /* Aviso colado ao campo (produto de outro grupo): tom de atencao, nao o
+       vermelho da marca — e' para corrigir antes de gravar. */
+    alertaCampo: { ...tipo('legenda'), fontWeight: 600, color: t.atencao },
   };
 }
 

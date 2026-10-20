@@ -112,7 +112,8 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   semana, em segundos. Durante a medição aparecem o intervalo do **último
   volume**, o **tempo por volume** do período até ali (paradas dentro) e o
   **takt**. Quando o tempo por volume passa do takt, o rótulo ganha "▲ takt". Um toque por volume; o horário de cada toque é gravado
-  sozinho, sem digitação.
+  sozinho, sem digitação. Sem programa da embalagem colado, o tablet só não
+  mostra o takt, sem aviso: quem resolve é o PCP, e o aviso fica no PC.
 - **O INICIAR só arma a medição; o relógio abre na largada.** A largada é o
   primeiro toque, dado quando um volume fecha, e **não conta volume**. Antes
   dela o relógio fica em 00:00, *Parou* fica desabilitado (ainda não há
@@ -397,6 +398,77 @@ aparelho e não se perdem ao sair, mas só chegam ao PC no próximo acesso com
 rede) e oferece enviar antes. Confirmado, o app mostra **Sistema encerrado**
 e tenta fechar a janela; `window.close()` nem sempre é permitido, então a
 tela é a saída de verdade e o fechamento é um bônus.
+
+### O takt do estudo vem do programa da semana
+
+No **Novo estudo**, o posto escolhido puxa o resto, como no tablet: o grupo
+dele traz a lista de produtos do cadastro e o **takt do programa da semana**.
+Antes o estudo tinha produto e takt próprios (quantidade/dia × horas digitadas),
+e o mesmo posto podia sair com um takt no estudo e outro no quadro do programa.
+
+- **O número é o mesmo do quadro "Programa da semana" e do tablet da
+  embalagem**: a mesma `taktDaMedicao`, pelo hook `useTaktDaSemana`, que saiu
+  da tela da embalagem para `src/lib/taktDaSemana.js`. Horas da semana menos o
+  setup planejado, divididas pela demanda. O painel escreve o takt também em
+  segundos, como o quadro (02:24 = 144.0 s). É o takt **por
+  máquina**: o programa é do grupo, e cada máquina faz a parte dela (exemplo:
+  6.600 peças, 6 furadeiras, 44 h → 1.100 por máquina → 02:24 por peça).
+- O painel diz **de onde o número saiu** (grupo e semana) e mostra a conta
+  de **uma máquina**: a parte dela na demanda (6.600 ÷ 6 = 1.100) e o tempo
+  dela — "44h00min de jornada − 1h00min de setup planejado = 43h00min", com os
+  minutos derivados um do outro para a subtração bater. Sem setup cadastrado,
+  o painel diz que falta.
+- **As ressalvas do quadro do programa valem aqui**: programa guardado no
+  aparelho (sem rede, ou conferindo com o servidor) e semana casada pelo
+  número (linha sem data de início, com o risco e o que fazer) — no painel do
+  Novo estudo e no botão do Editar (`ressalvasDoPrograma`). Sem rede, o aviso
+  culpa a rede, não o programa nem o cadastro; e "cadastro que não chegou"
+  (busca falhou), "buscando", "posto fora do cadastro" (inclusive cadastro
+  vazio) e "posto sem grupo" são avisos diferentes (`useBuscaDoCadastro`).
+- O dia é revisto a cada minuto e o **programa é buscado de novo a cada 30
+  minutos** (`useTaktDaSemana`): tela aberta na virada da semana passa ao
+  programa novo sozinha, e a semana colada com a tela já aberta (o PCP cola de
+  manhã) aparece em até meia hora — vale para o tablet da embalagem. Sem rede
+  na virada, o tablet diz que é a rede.
+- **Simular outra demanda** volta à conta digitada — e é ela que o estudo
+  grava, como o painel diz — com o takt do programa ao lado. Um clique volta
+  ao programa.
+- **O programa não passa por cima do que foi digitado**: depois que o analista
+  mexe na conta (inclusive apagando a quantidade para corrigir), o programa só
+  aparece como oferta.
+- **A escolha vale para o grupo em que foi feita.** "Usar o takt do programa"
+  clicado na furadeira não vira takt por volume ao trocar o posto para a
+  embalagem.
+- **Nada muda sozinho quando o posto muda; a tela confere e avisa**
+  (`conflitoDoProduto`, `conflitoDoTakt`). Produto que é da lista de OUTRO grupo
+  num posto que não é desse grupo (outro grupo, máquina sem grupo, posto fora
+  do cadastro) gera um aviso colado ao campo, e o Criar/Salvar não grava a
+  combinação. Produto digitado à mão (de lista nenhuma) passa. Tentar adivinhar
+  a intenção do analista a cada troca de posto (limpar e devolver o produto)
+  falhou em três verificações seguidas — a seta do teclado, o nome pela metade,
+  o cadastro chegando atrasado —, e por isso foi trocado por conferência.
+- No **Editar estudo**, o takt escrito pelo botão do programa é do grupo em que
+  foi clicado: com o posto em outro grupo, a tela avisa e não grava esse número
+  (digitar o takt, ou usar o programa do grupo do posto, resolve). O aviso de
+  produto só impede de salvar quando o analista mexeu no posto ou no produto
+  nesta edição: quem veio só corrigir o nome não fica preso porque o cadastro
+  mudou por fora.
+- Na **embalagem**, a conta digitada fala em **produto** do começo ao fim (o
+  estudo da embalagem mede o produto inteiro), pela unidade do posto.
+- **Na embalagem o programa é oferecido, não imposto.** Ele é em volumes, e o
+  ciclo do estudo pode ser o produto inteiro (um rack de dois volumes): o takt
+  por volume faria a linha parecer o dobro mais carregada. Só entra com o
+  clique em *Usar o takt do programa*.
+- Sem programa para a semana (grupo sem programa, semana não coberta, posto
+  sem grupo, sem rede), é a conta digitada de sempre, com o motivo escrito em
+  uma linha.
+- No **Editar estudo**, o programa nunca entra sozinho — o estudo já tem um
+  takt, e trocá-lo sem pedir mudaria o Yamazumi de quem só veio corrigir um
+  nome. Um botão escreve o takt do programa no campo, em segundos.
+- O estudo grava o **número** do takt, como antes. Se o programa mudar na
+  semana seguinte, o estudo não muda junto; o Editar estudo oferece o novo.
+- A **importação** (PDF do ERP) segue com a conta digitada: ela cria estudos
+  de vários postos de uma vez, e cada grupo teria um takt diferente.
 
 ### Furação passante
 
@@ -852,9 +924,12 @@ Os produtos que vão para cronoanálise, **por grupo de máquina** (tabela
 `produtos`: nome, código do ERP opcional, grupo, ativo). No tablet, o campo
 PRODUTO da Embalagem Takt Time e o PEÇA do Ritmo da máquina viram uma lista
 com os produtos do grupo da máquina; "Outro produto…" abre o texto livre, e
-posto sem produto cadastrado segue com o campo de texto. A conferência
-continua gravando o **nome** — o cadastro padroniza a entrada, não muda a fila
-offline.
+posto sem produto cadastrado segue com o campo de texto. O **Novo estudo** e o
+**Editar estudo** usam a mesma lista, pelo grupo do posto escolhido; sem ela,
+o Novo estudo segue sugerindo os nomes já usados nos estudos (o Editar, como
+antes, é texto livre). A conferência e o
+estudo continuam gravando o **nome** — o cadastro padroniza a entrada, não
+muda a fila offline.
 
 - A rota mora em `/api/maquinas?produtos=1` (`api/_lib/produtos.js`): o projeto
   está no teto de 12 funções da Vercel. A lista vem junto do cadastro de
