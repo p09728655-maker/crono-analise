@@ -113,14 +113,20 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
     meta_obs: 12, takt_time_ms: null, status: 'coletando',
   };
   const GRUPO = { id: 'g2', codigo: '0002', nome: 'FURADEIRA', horas_semana: '44.00', setups_dia: 0, setup_min: '0', dias_semana: 5 };
+  const EMBALAGEM = { id: 'g5', codigo: '0005', nome: 'EMBALAGEM', horas_semana: '44.00', setups_dia: 0, setup_min: '0', dias_semana: 5 };
   const maquinas = ['FURADEIRA 04', 'FURADEIRA 07', 'FURADEIRA 11', 'FURADEIRA 12', 'FURADEIRA 14', 'FURADEIRA 15']
-    .map((nome, i) => ({ id: `m${i + 1}`, nome, ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' }));
+    .map((nome, i) => ({ id: `m${i + 1}`, nome, ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' }))
+    .concat([{ id: 'm9', nome: 'EMBALADORA 01', ativa: true, grupo_id: 'g5', grupo_codigo: '0005', grupo_nome: 'EMBALAGEM' }]);
   const produtos = [
     { id: 'p1', nome: 'LATERAL SLEEP', codigo: '1001', grupo_id: 'g2', ativo: true },
     { id: 'p2', nome: 'FUNDO SLEEP', codigo: '1002', grupo_id: 'g2', ativo: true },
+    { id: 'p3', nome: 'RACK SIRIUS 1.6', codigo: '2001', grupo_id: 'g5', ativo: true },
   ];
-  const hoje = new Date();
-  const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()));
+  // A segunda pelo dia de SAO PAULO, como o app casa a semana: em UTC o
+  // teste falhava no domingo a noite.
+  const [anoSp, mesSp, diaSp] = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' })
+    .format(new Date()).split('-').map(Number);
+  const segunda = new Date(Date.UTC(anoSp, mesSp - 1, diaSp));
   segunda.setUTCDate(segunda.getUTCDate() - ((segunda.getUTCDay() + 6) % 7));
   const demandas = [{ ano: segunda.getUTCFullYear(), numero: 43, pecas: 6600, inicio: segunda.toISOString().slice(0, 10) }];
 
@@ -142,7 +148,7 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
   await q.route('**/api/config**', (r) => r.fulfill({ json: { chaveIa: { configurada: false } } }));
   await q.route('**/api/maquinas**', (r) => (/demanda=1/.test(r.request().url())
     ? r.fulfill({ json: { demandas } })
-    : r.fulfill({ json: { maquinas, grupos: [GRUPO], produtos } })));
+    : r.fulfill({ json: { maquinas, grupos: [GRUPO, EMBALAGEM], produtos } })));
 
   await q.goto(`${BASE}/analise/estudo/${ID2}?editar=1`);
   const dlg = q.locator('[aria-label="Ajustes do estudo"]');
@@ -167,8 +173,85 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
   await q.waitForTimeout(600);
   checar(patches2[0]?.taktTimeMs === 144000, `ajustes: PATCH leva o takt do programa (${patches2[0]?.taktTimeMs})`);
   checar(patches2[0]?.produto === 'LATERAL SLEEP', `ajustes: PATCH leva o produto do cadastro (${patches2[0]?.produto})`);
+  const abrirEditar = async () => {
+    await q.goto(`${BASE}/analise/estudo/${ID2}?editar=1`);
+    await dlg.waitFor({ timeout: 8000 });
+    await dlg.getByRole('combobox', { name: 'Produto / Referência' }).waitFor({ timeout: 8000 });
+  };
+  const salvar = async () => {
+    const antes = patches2.length;
+    await dlg.getByRole('button', { name: /Salvar/ }).click();
+    await q.waitForFunction(() => true);
+    for (let i = 0; i < 20 && patches2.length === antes; i += 1) await q.waitForTimeout(100);
+    return patches2[patches2.length - 1];
+  };
+  const posto = dlg.getByRole('combobox', { name: 'Recurso / Posto' });
+  furadeira.produto = 'LATERAL SLEEP';
+
+  /* Trocar o posto para outro grupo tira o produto do grupo antigo. */
+  await abrirEditar();
+  await posto.selectOption('EMBALADORA 01');
+  const produtoEmb = dlg.getByRole('combobox', { name: 'Produto / Referência' });
+  await produtoEmb.locator('option', { hasText: 'RACK SIRIUS 1.6' }).waitFor({ state: 'attached', timeout: 4000 });
+  checar(await produtoEmb.inputValue() === '', 'ajustes: trocar o posto de grupo limpa o produto do grupo antigo');
+  let patch = await salvar();
+  checar(patch?.recurso === 'EMBALADORA 01' && patch?.produto === null,
+    `ajustes: PATCH sem o produto da furadeira no posto da embalagem (${patch?.produto})`);
+
+  /* Ida e volta por "Outra máquina…" para o MESMO posto: o produto fica. */
+  await abrirEditar();
+  await posto.selectOption('__outra');
+  await dlg.locator('input[aria-label="Recurso / Posto"]').pressSequentially('FURADEIRA 04');
+  await q.waitForTimeout(300);
+  patch = await salvar();
+  checar(patch?.produto === 'LATERAL SLEEP', `ajustes: ida e volta pelo texto do posto mantem o produto (${patch?.produto})`);
+
+  /* O takt que o botao escreveu e' do grupo: trocar de grupo devolve o campo. */
+  await abrirEditar();
+  await dlg.getByRole('button', { name: /Usar o takt do programa da semana .*144\.0 s por peça/ }).click();
+  checar(await campoTakt.inputValue() === '144.0', 'ajustes: o botao escreve o takt do programa da furadeira');
+  await posto.selectOption('EMBALADORA 01');
+  await q.waitForTimeout(300);
+  checar(await campoTakt.inputValue() === '', `ajustes: trocar de grupo devolve o campo ao que era (${await campoTakt.inputValue()})`);
+  patch = await salvar();
+  checar(patch?.taktTimeMs === null, `ajustes: o takt da furadeira nao e gravado no posto da embalagem (${patch?.taktTimeMs})`);
+
   checar(erros2.length === 0, `ajustes com programa: sem erro de pagina (${erros2.join('; ') || 'nenhum'})`);
   await c2.close();
+
+  /* O cadastro do SERVIDOR diferente do guardado no aparelho (a maquina foi
+     movida de grupo): o analista so' veio corrigir o nome, e o produto
+     gravado nao pode sumir sozinho. */
+  const c3 = await b.newContext({ viewport: { width: 1440, height: 950 } });
+  const r = await c3.newPage();
+  await semearSessao(r);
+  const cache = { maquinas, grupos: [GRUPO, EMBALAGEM], produtos };
+  await r.addInitScript((c) => localStorage.setItem('ritmopatrimar.maquinas', JSON.stringify(c)), cache);
+  const movida = maquinas.map((m) => (m.nome === 'FURADEIRA 04'
+    ? { ...m, grupo_id: 'g5', grupo_codigo: '0005', grupo_nome: 'EMBALAGEM' } : m));
+  const patches3 = [];
+  await r.route('**/api/estudos**', (rt) => {
+    const req = rt.request();
+    if (req.method() === 'PATCH') { patches3.push(JSON.parse(req.postData())); return rt.fulfill({ json: { estudo: furadeira } }); }
+    if (req.url().includes('id=')) return rt.fulfill({ json: { estudo: furadeira, operacoes: estudo.operacoes } });
+    return rt.fulfill({ json: { estudos: [] } });
+  });
+  await r.route('**/api/config**', (rt) => rt.fulfill({ json: { chaveIa: { configurada: false } } }));
+  await r.route('**/api/maquinas**', async (rt) => {
+    if (/demanda=1/.test(rt.request().url())) return rt.fulfill({ json: { demandas } });
+    await new Promise((ok) => setTimeout(ok, 800));
+    return rt.fulfill({ json: { maquinas: movida, grupos: [GRUPO, EMBALAGEM], produtos } });
+  });
+  await r.goto(`${BASE}/analise/estudo/${ID2}?editar=1`);
+  const d3 = r.locator('[aria-label="Ajustes do estudo"]');
+  await d3.waitFor({ timeout: 8000 });
+  await r.waitForTimeout(1500);
+  await d3.locator('label', { hasText: 'Nome do estudo' }).locator('input').fill('Furação lateral (corrigido)');
+  await d3.getByRole('button', { name: /Salvar/ }).click();
+  for (let i = 0; i < 20 && !patches3.length; i += 1) await r.waitForTimeout(100);
+  checar(patches3[0]?.produto === 'LATERAL SLEEP',
+    `ajustes: cadastro do servidor diferente do aparelho nao apaga o produto gravado (${patches3[0]?.produto})`);
+  await c3.close();
 }
 
 await b.close();

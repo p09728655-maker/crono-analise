@@ -354,6 +354,9 @@ export function taktDaMedicao({
     // quando o cadastro nao informa — e a tela diz que falta).
     jornadaPorMaquina: Number(horas) > 0 ? Number(horas) : null,
     setupPorMaquina: leitura.setup ? leitura.setup.horasPorMaquina : null,
+    // false quando a semana foi casada pelo NUMERO (linha sem INICIO): a
+    // tela faz a mesma ressalva do quadro do programa.
+    casadoPorData: leitura.casadoPorData ?? null,
     // Com setup PLANEJADO (maior que zero), ele ja' saiu das horas do takt
     // — e o que a medicao pegou de setup sai do periodo tambem (ver
     // periodoPorPeca). Zero planejado nao tira nada de lado nenhum.

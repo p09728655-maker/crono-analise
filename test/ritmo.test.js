@@ -4,10 +4,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  CALC_PADRAO, avisoSemPrograma, contaDaMaquina, formatarHorasMin, formatarTakt, origemDoTakt,
-  taktMsDoCalculo, taktMsDoEstudo,
+  CALC_PADRAO, avisoSemPrograma, contaDaMaquina, demandaPorMaquina, formatarHorasMin, formatarTakt,
+  origemDoTakt, taktMsDoCalculo, taktMsDoEstudo,
 } from '../src/components/RitmoDemanda.jsx';
-import { produtoDeOutroGrupo, programaDoTakt } from '../src/lib/taktDaSemana.js';
+import {
+  deveLimparProduto, produtoDeOutroGrupo, programaDoTakt, programaLido,
+} from '../src/lib/taktDaSemana.js';
 
 describe('taktMsDoCalculo', () => {
   it('480 pecas em 8,8h dao takt de 66s', () => {
@@ -148,6 +150,25 @@ describe('aviso sem programa', () => {
   it('com takt, nada a avisar', () => {
     expect(avisoSemPrograma({ recurso: 'FURADEIRA 04', grupo, estado: 'pronto' })).toBeNull();
   });
+  /* Sem rede, o que o aparelho guardou pode ser de outra semana: o aviso
+     culpa a rede, nao o programa do PCP. */
+  it('sem rede, a culpa e da rede', () => {
+    const semRede = 'Sem rede: o programa desta semana não chegou a este aparelho. Digite a demanda.';
+    expect(avisoSemPrograma({ recurso: 'FURADEIRA 04', grupo, estado: 'sem-semana', semRede: true })).toBe(semRede);
+    expect(avisoSemPrograma({ recurso: 'FURADEIRA 04', grupo, estado: 'sem-demanda', semRede: true })).toBe(semRede);
+    expect(avisoSemPrograma({ recurso: 'FURADEIRA 04', grupo, estado: 'sem-rede', semRede: true })).toBe(semRede);
+  });
+  it('sem cadastro no aparelho, nao diz que o posto nao tem grupo', () => {
+    expect(avisoSemPrograma({ recurso: 'FURADEIRA 04', grupo: null, estado: 'sem-grupo', semCadastro: true }))
+      .toBe('O cadastro de máquinas não chegou a este aparelho: digite a demanda.');
+  });
+  it('jornada cadastrada mas nenhuma maquina ativa: o aviso diz isso, nao "faltam as horas"', () => {
+    expect(avisoSemPrograma({
+      recurso: 'FURADEIRA 04', grupo: { ...grupo, horas_semana: '44.00' }, estado: 'sem-horas', maquinasDoGrupo: 0,
+    })).toBe('0002 · FURADEIRA não tem máquina ativa no cadastro: digite a demanda.');
+    expect(avisoSemPrograma({ recurso: 'FURADEIRA 04', grupo, estado: 'sem-horas', maquinasDoGrupo: 3 }))
+      .toMatch(/Faltam as horas da semana/);
+  });
 });
 
 describe('programaDoTakt', () => {
@@ -157,8 +178,8 @@ describe('programaDoTakt', () => {
     expect(programaDoTakt({ grupo, maquinasDoGrupo: 3, takt: { ...takt, jornadaPorMaquina: 44, setupPorMaquina: 4 } }))
       .toEqual({
         taktMs: 42000, semana: '043-26', demanda: 6000, horasPorMaquina: 40, jornadaPorMaquina: 44,
-        setupPorMaquina: 4, maquinas: 3, grupo: '0002 · FURADEIRA',
-        unidade: expect.objectContaining({ singular: 'peça' }),
+        setupPorMaquina: 4, casadoPorData: true, confirmado: true, semRede: false, maquinas: 3,
+        grupo: '0002 · FURADEIRA', unidade: expect.objectContaining({ singular: 'peça' }),
       });
     expect(programaDoTakt({ grupo: { ...grupo, nome: 'EMBALAGEM' }, maquinasDoGrupo: 1, takt }).unidade.singular)
       .toBe('volume');
@@ -166,5 +187,55 @@ describe('programaDoTakt', () => {
   it('sem grupo ou sem takt, nao ha programa', () => {
     expect(programaDoTakt({ grupo: null, maquinasDoGrupo: 0, takt })).toBeNull();
     expect(programaDoTakt({ grupo, maquinasDoGrupo: 3, takt: { taktMs: null, estado: 'sem-demanda' } })).toBeNull();
+  });
+});
+
+/**
+ * QUANDO limpar o produto: so' quando o ANALISTA troca o posto para outro
+ * grupo conhecido. Passar por "sem grupo" no meio da digitacao, ou o
+ * cadastro do servidor mudar sozinho, apagava o produto gravado.
+ */
+describe('quando limpar o produto', () => {
+  const furadeira = [{ nome: 'LATERAL SLEEP' }];
+  const embalagem = [{ nome: 'RACK SIRIUS 1.6' }];
+  const base = {
+    recursoAntes: 'FURADEIRA 04', grupoConhecido: 'g2', produto: 'LATERAL SLEEP', produtosConhecidos: furadeira,
+  };
+  it('troca de posto para outro grupo: limpa', () => {
+    expect(deveLimparProduto({ ...base, recurso: 'EMBALADORA 01', grupoId: 'g5', produtos: embalagem })).toBe(true);
+  });
+  it('posto no meio da digitacao (sem grupo): nao limpa', () => {
+    expect(deveLimparProduto({ ...base, recurso: 'FURAD', grupoId: null, produtos: [] })).toBe(false);
+    expect(deveLimparProduto({ ...base, recurso: '', grupoId: null, produtos: [] })).toBe(false);
+  });
+  it('volta ao mesmo grupo: nao limpa', () => {
+    expect(deveLimparProduto({ ...base, recursoAntes: 'FURAD', recurso: 'FURADEIRA 04', grupoId: 'g2', produtos: furadeira }))
+      .toBe(false);
+  });
+  it('o cadastro mudou sozinho (mesmo posto): nao limpa', () => {
+    expect(deveLimparProduto({ ...base, recurso: 'FURADEIRA 04', grupoId: 'g5', produtos: embalagem })).toBe(false);
+  });
+  it('produto digitado a mao: nao limpa', () => {
+    expect(deveLimparProduto({ ...base, produto: 'Mesa nova', recurso: 'EMBALADORA 01', grupoId: 'g5', produtos: embalagem }))
+      .toBe(false);
+  });
+});
+
+describe('programa lido preso ao grupo', () => {
+  it('o programa de um grupo nao vale para outro, nem por um instante', () => {
+    const lido = { grupoId: 'g2', demandas: [{ ano: 2026, numero: 43, pecas: 6600 }], semRede: false, doServidor: true };
+    expect(programaLido(lido, 'g2')).toBe(lido);
+    const outro = programaLido(lido, 'g4');
+    expect(outro.grupoId).toBe('g4');
+    expect(outro.demandas).toBeNull();
+    expect(outro.doServidor).toBe(false);
+  });
+});
+
+describe('demanda por maquina', () => {
+  it('a parte de uma maquina, para os dois cartoes fecharem a conta', () => {
+    expect(demandaPorMaquina({ demanda: 6600, maquinas: 6 })).toEqual({ valor: 1100, texto: '1.100', semana: '6.600' });
+    expect(demandaPorMaquina({ demanda: 2200, maquinas: 3 }).texto).toBe('733,3');
+    expect(demandaPorMaquina({ demanda: 2200, maquinas: 0 })).toBeNull();
   });
 });

@@ -1,4 +1,5 @@
 import { espaco, numeros, raio, rotulo, tipo } from '../theme/escala.js';
+import { ALVO_MINIMO } from '../theme/tokens.js';
 import { formatarSegundos, taktTime } from '../domain/cronoanalise.js';
 
 /**
@@ -28,7 +29,10 @@ export default function RitmoDemanda({
   // segue em pecas: e' o analista quem diz o que conta.
   const unidade = programa?.unidade || PECA;
   const conta = temPrograma ? contaDaMaquina(programa) : null;
-  const segundos = temPrograma ? `${formatarSegundos(programa.taktMs, 1)} s por ${unidade.singular}` : '';
+  // Espaco INSEPARAVEL entre o numero e o "s": no tablet a quebra de linha
+  // deixava "144.0" numa linha e "s por peça" na outra.
+  const segundos = temPrograma ? `${formatarSegundos(programa.taktMs, 1)}\u00a0s por ${unidade.singular}` : '';
+  const parte = temPrograma ? demandaPorMaquina(programa) : null;
 
   if (origem === 'programa' && temPrograma) {
     return (
@@ -37,6 +41,19 @@ export default function RitmoDemanda({
         <div style={est.origem}>
           <span style={est.origemRotulo}>Do programa da semana</span>
           <span style={est.origemTexto}>{programa.grupo} · semana {programa.semana}</span>
+          {/* As duas ressalvas do quadro do programa, aqui tambem: o numero
+              pode ser o guardado no aparelho, e a semana pode ter sido
+              casada pelo numero porque a linha nao tem data. */}
+          {!programa.confirmado && (
+            <span style={est.dica}>
+              {programa.semRede
+                ? 'Programa guardado neste aparelho: sem rede para conferir se o PCP colou outro.'
+                : 'Programa guardado neste aparelho, conferindo com o servidor…'}
+            </span>
+          )}
+          {programa.casadoPorData === false && (
+            <span style={est.dica}>Semana casada pelo número: esta linha do programa não tem data de início.</span>
+          )}
         </div>
 
         <div style={est.taktCartao}>
@@ -48,33 +65,31 @@ export default function RitmoDemanda({
           {/* Em segundos tambem, como o quadro "Programa da semana" escreve:
               o relogio grande e' leitura rapida, o segundo e' o que se confere. */}
           <span style={est.taktTexto}>
-            {formatarSegundos(programa.taktMs, 1)} s por {unidade.singular}: o tempo de cada máquina
-            para cumprir o programa desta semana.
+            {segundos}: o tempo de cada máquina para cumprir o programa desta semana.
           </span>
         </div>
 
+        {/* Os dois cartoes sao de UMA maquina, para a conta fechar de cabeca:
+            1.100 pecas em 44h00min dao os 144 s. Lado a lado com a demanda do
+            grupo inteiro, o numero parecia nao bater com o takt. */}
         <div style={est.tiles}>
           <div style={est.tile}>
-            <span style={est.tileRotulo}>Demanda da semana</span>
-            <span style={est.tileValor}>
-              {programa.demanda > 0 ? `${Number(programa.demanda).toLocaleString('pt-BR')} ${unidade.plural}` : '—'}
-            </span>
+            <span style={est.tileRotulo}>Demanda por máquina</span>
+            <span style={est.tileValor}>{parte ? `${parte.texto} ${unidade.plural}` : '—'}</span>
           </div>
           <div style={est.tile}>
             <span style={est.tileRotulo}>Tempo por máquina</span>
             <span style={est.tileValor}>{conta ? formatarHorasMin(conta.produtivoMin / 60) : '—'}</span>
           </div>
         </div>
-        {/* A conta inteira, para quem quer conferir: o tempo e' de UMA
-            maquina, ja' sem o setup planejado, porque o programa e' do grupo
-            e o estudo e' de um posto. */}
+        {parte && (
+          <span style={est.dica}>
+            {programa.maquinas === 1
+              ? `${parte.semana} ${unidade.plural} na semana, para a única máquina ativa do grupo.`
+              : `${parte.semana} ${unidade.plural} na semana, divididas entre as ${programa.maquinas} máquinas ativas do grupo.`}
+          </span>
+        )}
         {conta && <span style={est.dica}>{conta.texto}</span>}
-        <span style={est.dica}>
-          {programa.maquinas === 1
-            ? '1 máquina no grupo: o takt é esse tempo dividido pela demanda.'
-            : `${programa.maquinas} máquinas no grupo: o takt é esse tempo dividido pela parte de cada uma na demanda`
-              + `${programa.demanda > 0 ? ` (${Math.round(programa.demanda / programa.maquinas).toLocaleString('pt-BR')} ${unidade.plural})` : ''}.`}
-        </span>
 
         <button ref={refQuantidade} type="button" style={est.acao} onClick={aoSimular}>
           Simular outra demanda
@@ -147,8 +162,9 @@ export default function RitmoDemanda({
           <span style={est.dica}>
             {unidade.singular === 'volume'
               ? `O programa da semana ${programa.semana} é em volumes: ${segundos}. `
-                + 'Use se cada ciclo deste estudo for um volume; se o ciclo for o produto inteiro, simule em produtos.'
-              : `Simulação. O programa da semana ${programa.semana} pede ${segundos}.`}
+                + 'Use se cada ciclo deste estudo for um volume; se o ciclo for o produto inteiro, '
+                + 'digite acima quantos produtos precisam sair por dia.'
+              : `É a conta acima que o estudo grava. O programa da semana ${programa.semana} pede ${segundos}.`}
           </span>
           <button type="button" style={est.acao} onClick={aoUsarPrograma}>
             Usar o takt do programa ({segundos})
@@ -160,6 +176,18 @@ export default function RitmoDemanda({
 }
 
 const PECA = { singular: 'peça', plural: 'peças' };
+
+const comoQuantidade = (n) => (Number.isInteger(n)
+  ? n.toLocaleString('pt-BR')
+  : n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
+
+/** A parte de UMA maquina na demanda da semana: 6.600 / 6 = 1.100. */
+export function demandaPorMaquina({ demanda, maquinas } = {}) {
+  const d = Number(demanda);
+  const m = Math.max(0, Math.floor(Number(maquinas) || 0));
+  if (!(d > 0) || m <= 0) return null;
+  return { valor: d / m, texto: comoQuantidade(d / m), semana: comoQuantidade(d) };
+}
 
 /**
  * A CONTA DE UMA MAQUINA na semana, como o painel a escreve: jornada menos
@@ -210,16 +238,31 @@ export function origemDoTakt({ programa, escolha = null, digitou = false } = {})
  * a regra. Neutro de proposito: quem le e' o analista, que so' precisa
  * saber que a demanda e' com ele — nao de quem e' a pendencia.
  */
-export function avisoSemPrograma({ recurso, grupo, estado }) {
+export function avisoSemPrograma({
+  recurso, grupo, estado, semRede = false, semCadastro = false, maquinasDoGrupo = null,
+}) {
   if (!String(recurso || '').trim()) return 'Escolha o posto para trazer o takt do programa da semana.';
+  // Sem cadastro no aparelho, "posto sem grupo" seria mentira: o grupo
+  // pode existir, o cadastro e' que nao chegou.
+  if (!grupo && semCadastro) return 'O cadastro de máquinas não chegou a este aparelho: digite a demanda.';
   if (!grupo) return 'Posto sem grupo no cadastro de máquinas: digite a demanda.';
   const nome = [grupo.codigo, grupo.nome].filter(Boolean).join(' · ');
+  // Sem rede, o que o aparelho guardou pode ser de outra semana: dizer que
+  // o programa "nao cobre" culparia o PCP por falta de rede.
+  if (semRede && ['sem-rede', 'sem-demanda', 'sem-semana'].includes(estado)) {
+    return 'Sem rede: o programa desta semana não chegou a este aparelho. Digite a demanda.';
+  }
   switch (estado) {
     case 'carregando': return `Buscando o programa da semana de ${nome}…`;
-    case 'sem-rede': return 'Sem rede: o programa da semana não chegou. Digite a demanda.';
+    case 'sem-rede': return 'Sem rede: o programa desta semana não chegou a este aparelho. Digite a demanda.';
     case 'sem-demanda': return `${nome} não tem programa da semana: digite a demanda.`;
     case 'sem-semana': return `O programa de ${nome} não cobre esta semana: digite a demanda.`;
-    case 'sem-horas': return `Faltam as horas da semana de ${nome} no cadastro: digite a demanda.`;
+    case 'sem-horas':
+      // O dominio junta "sem jornada" e "sem maquina ativa" no mesmo estado;
+      // a correcao de cada um e' outra, entao o aviso separa.
+      return maquinasDoGrupo === 0 && Number(grupo.horas_semana) > 0
+        ? `${nome} não tem máquina ativa no cadastro: digite a demanda.`
+        : `Faltam as horas da semana de ${nome} no cadastro: digite a demanda.`;
     case 'setup-excede': return `O setup cadastrado de ${nome} passa da jornada: digite a demanda.`;
     default: return null;
   }
@@ -313,7 +356,8 @@ function estilos(t, analise) {
     /* Botao, nao link sublinhado: troca a origem do takt, e no tablet e'
        tocado de dedo. */
     acao: {
-      minHeight: 44, padding: `0 ${espaco.md}px`, background: 'transparent',
+      // No tablet, o piso de toque do projeto (de luva); no PC, o do mouse.
+      minHeight: analise ? 44 : ALVO_MINIMO, padding: `0 ${espaco.md}px`, background: 'transparent',
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
       color: t.texto, ...tipo('corpoF'), fontFamily: 'inherit', cursor: 'pointer',
     },

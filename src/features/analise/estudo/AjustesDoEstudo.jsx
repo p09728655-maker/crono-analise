@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { espaco, tipo } from '../../../theme/escala.js';
 import { formatarSegundos, taktTime } from '../../../domain/cronoanalise.js';
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
@@ -34,10 +34,29 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
   const [calc, setCalc] = useState({ quantidade: '', horas: '' });
   const [salvando, setSalvando] = useState(false);
   const posto = useProgramaDoPosto(recurso);
+  const grupoId = posto.grupo?.id || null;
   const programa = programaDoTakt(posto);
   const limparProduto = useCallback(() => setProduto(''), []);
-  useProdutoSegueOGrupo({ grupoId: posto.grupo?.id || null, produtos: posto.produtos, produto, aoLimpar: limparProduto });
+  useProdutoSegueOGrupo({ recurso, grupoId, produtos: posto.produtos, produto, aoLimpar: limparProduto });
   const [erro, setErro] = useState(null);
+
+  /* O takt que o botao do programa escreveu e' DAQUELE grupo. Trocar o
+     posto para outro grupo depois do clique devolve o campo ao que ele
+     tinha antes: sem isto o takt da furadeira era gravado no posto da
+     embalagem. Valor digitado depois do clique e' do analista e fica.
+     Passar por "sem grupo" (Outra maquina…, digitando) nao conta: e' a
+     mesma regra do produto. */
+  const [doPrograma, setDoPrograma] = useState(null);
+  useEffect(() => {
+    if (!doPrograma || !grupoId || doPrograma.grupoId === grupoId) return;
+    if (taktSeg === doPrograma.escrito) setTaktSeg(doPrograma.anterior);
+    setDoPrograma(null);
+  }, [grupoId, doPrograma, taktSeg]);
+  function usarTaktDoPrograma() {
+    const escrito = formatarSegundos(programa.taktMs, 1);
+    setDoPrograma({ grupoId, escrito, anterior: taktSeg });
+    setTaktSeg(escrito);
+  }
 
   function aplicarCalculo(novo) {
     setCalc(novo);
@@ -103,19 +122,18 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
           </label>
           <label style={est.campo}>
             <span style={est.rotuloCampo}>Produto / Referência</span>
-            {posto.produtos.length > 0 ? (
-              <SeletorProduto
-                key={posto.grupo?.id || null}
-                valor={produto}
-                aoTrocar={setProduto}
-                opcoes={posto.produtos}
-                aria="Produto / Referência"
-                placeholder="Ex: Mesa Cabeceira Sleep"
-                estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
-              />
-            ) : (
-              <input style={est.input} value={produto} onChange={(e) => setProduto(e.target.value)} />
-            )}
+            {/* Um campo so': sem lista do grupo, o SeletorProduto e' o texto
+                de sempre — e o cadastro chegando nao troca o campo no meio
+                da digitacao. */}
+            <SeletorProduto
+              valor={produto}
+              aoTrocar={setProduto}
+              opcoes={posto.produtos}
+              contexto={grupoId}
+              aria="Produto / Referência"
+              placeholder="Ex: Mesa Cabeceira Sleep"
+              estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
+            />
             <span style={est.dica}>
               {posto.produtos.length > 0
                 ? 'Do cadastro de produtos do grupo. Agrupa os estudos na lista.'
@@ -210,10 +228,7 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
               so' serve se cada ciclo do estudo for um volume. */}
           {programa && (
             <>
-              <button
-                type="button" style={est.botaoSecundario}
-                onClick={() => setTaktSeg(formatarSegundos(programa.taktMs, 1))}
-              >
+              <button type="button" style={est.botaoSecundario} onClick={usarTaktDoPrograma}>
                 {/* Em SEGUNDOS, como o campo logo acima: o botao escreve 144.0
                     ali, e "02:24" no botao seria outro numero para conferir. */}
                 Usar o takt do programa da semana {programa.semana}: {formatarSegundos(programa.taktMs, 1)} s por {programa.unidade.singular}

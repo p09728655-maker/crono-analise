@@ -413,11 +413,17 @@ e o mesmo posto podia sair com um takt no estudo e outro no quadro do programa.
   segundos, como o quadro (02:24 = 144.0 s). É o takt **por
   máquina**: o programa é do grupo, e cada máquina faz a parte dela (exemplo:
   6.600 peças, 6 furadeiras, 44 h → 1.100 por máquina → 02:24 por peça).
-- O painel diz **de onde o número saiu** (grupo e semana) e mostra a conta:
-  demanda da semana, quantas máquinas há no grupo e o tempo de cada uma —
-  "44h00min de jornada − 1h00min de setup planejado = 43h00min", com os
+- O painel diz **de onde o número saiu** (grupo e semana) e mostra a conta
+  de **uma máquina**: a parte dela na demanda (6.600 ÷ 6 = 1.100) e o tempo
+  dela — "44h00min de jornada − 1h00min de setup planejado = 43h00min", com os
   minutos derivados um do outro para a subtração bater. Sem setup cadastrado,
   o painel diz que falta.
+- **As ressalvas do quadro do programa valem aqui**: programa guardado no
+  aparelho (sem rede, ou conferindo com o servidor) e semana casada pelo
+  número (linha sem data de início). Sem rede, o aviso culpa a rede, não o
+  programa nem o cadastro.
+- O dia é revisto a cada minuto (`useTaktDaSemana`): tela aberta na virada da
+  semana passa ao programa novo sozinha — vale para o tablet da embalagem.
 - **Simular outra demanda** volta à conta digitada, marcada como simulação e
   com o takt do programa ao lado. Um clique volta ao programa.
 - **O programa não passa por cima do que foi digitado**: depois que o analista
@@ -427,8 +433,13 @@ e o mesmo posto podia sair com um takt no estudo e outro no quadro do programa.
   clicado na furadeira não vira takt por volume ao trocar o posto para a
   embalagem.
 - **O produto acompanha o grupo do posto**: trocar para um posto de outro grupo
-  tira o produto que era da lista do grupo antigo e não está na do novo.
-  Produto digitado à mão fica.
+  tira o produto que era da lista do grupo antigo e não está na do novo
+  (`deveLimparProduto`). Só conta a troca feita pelo analista entre dois
+  grupos conhecidos: passar por "Outra máquina…" (o posto some no meio da
+  digitação) ou o cadastro do servidor chegar diferente do guardado não
+  apagam nada. Produto digitado à mão fica.
+- No **Editar estudo**, o takt que o botão do programa escreveu volta ao valor
+  anterior se o posto mudar de grupo depois do clique.
 - **Na embalagem o programa é oferecido, não imposto.** Ele é em volumes, e o
   ciclo do estudo pode ser o produto inteiro (um rack de dois volumes): o takt
   por volume faria a linha parecer o dobro mais carregada. Só entra com o
@@ -900,7 +911,8 @@ PRODUTO da Embalagem Takt Time e o PEÇA do Ritmo da máquina viram uma lista
 com os produtos do grupo da máquina; "Outro produto…" abre o texto livre, e
 posto sem produto cadastrado segue com o campo de texto. O **Novo estudo** e o
 **Editar estudo** usam a mesma lista, pelo grupo do posto escolhido; sem ela,
-o campo segue sugerindo os nomes já usados nos estudos. A conferência e o
+o Novo estudo segue sugerindo os nomes já usados nos estudos (o Editar, como
+antes, é texto livre). A conferência e o
 estudo continuam gravando o **nome** — o cadastro padroniza a entrada, não
 muda a fila offline.
 

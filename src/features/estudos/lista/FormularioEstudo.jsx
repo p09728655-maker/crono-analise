@@ -58,7 +58,9 @@ export default function FormularioEstudo({
     programa, escolha: escolha.grupoId === grupoId ? escolha.valor : null, digitou,
   });
   const limparProduto = useCallback(() => setDados((d) => ({ ...d, produto: '' })), []);
-  useProdutoSegueOGrupo({ grupoId, produtos: posto.produtos, produto: dados.produto, aoLimpar: limparProduto });
+  useProdutoSegueOGrupo({
+    recurso: dados.recurso, grupoId, produtos: posto.produtos, produto: dados.produto, aoLimpar: limparProduto,
+  });
 
   const campo = (k) => ({
     value: dados[k],
@@ -125,35 +127,26 @@ export default function FormularioEstudo({
                 </Campo>
                 {/* Com produtos cadastrados para o grupo do posto, o campo vira
                     a LISTA do cadastro — a mesma do tablet. Sem eles (posto
-                    fora do cadastro, grupo sem produto), segue o texto com
-                    os nomes ja' usados nos estudos. */}
-                {posto.produtos.length > 0 ? (
-                  <Campo est={est} label="Produto / Referência"
-                         dica="Do cadastro de produtos do grupo. Não achou? Use “Outro produto…”.">
-                    {/* key pelo grupo: o seletor guarda se o analista abriu o
-                        texto livre, e isso era do posto anterior. */}
-                    <SeletorProduto
-                      key={grupoId}
-                      valor={dados.produto}
-                      aoTrocar={(v) => setDados((d) => ({ ...d, produto: v }))}
-                      opcoes={posto.produtos}
-                      aria="Produto / Referência"
-                      placeholder="Ex: Mesa Cabeceira Sleep"
-                      estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
-                    />
-                  </Campo>
-                ) : (
-                  <Campo est={est} label="Produto / Referência"
-                         dica={produtos.length ? 'Escolha um já usado para agrupar corretamente.' : 'Ex: Mesa Cabeceira Sleep'}>
-                    {/* datalist sugere sem impedir texto novo: o analista continua
-                        livre para cadastrar produto inedito, mas nao cria "SLEEP
-                        BASE" ao lado de "Sleep Base" por descuido. */}
-                    <input style={est.input} list="produtos-conhecidos" {...campo('produto')} />
-                    <datalist id="produtos-conhecidos">
-                      {produtos.map((nome) => <option key={nome} value={nome} />)}
-                    </datalist>
-                  </Campo>
-                )}
+                    fora do cadastro, grupo sem produto), e' texto com os
+                    nomes ja' usados nos estudos: datalist sugere sem impedir
+                    texto novo, e nao cria "SLEEP BASE" ao lado de "Sleep
+                    Base" por descuido. Um campo so' nos dois casos. */}
+                <Campo est={est} label="Produto / Referência"
+                       dica={posto.produtos.length > 0
+                         ? 'Do cadastro de produtos do grupo. Não achou? Use “Outro produto…”.'
+                         : (produtos.length ? 'Escolha um já usado para agrupar corretamente.' : 'Ex: Mesa Cabeceira Sleep')}>
+                  <SeletorProduto
+                    valor={dados.produto}
+                    aoTrocar={(v) => setDados((d) => ({ ...d, produto: v }))}
+                    opcoes={posto.produtos}
+                    sugestoes={produtos}
+                    listaId="produtos-conhecidos"
+                    contexto={grupoId}
+                    aria="Produto / Referência"
+                    placeholder="Ex: Mesa Cabeceira Sleep"
+                    estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
+                  />
+                </Campo>
                 {/* Com cadastro, o analista vira LISTA: e' o que impede a
                     mesma pessoa de virar "ODERLI", "ODERLI GARCIA" e
                     "ODERLI SERGIO GARCIA" em tres estudos. Sem cadastro
@@ -198,7 +191,10 @@ export default function FormularioEstudo({
             aoFocar={() => setEtapa(3)}
             programa={programa}
             origem={origem}
-            aviso={avisoSemPrograma({ recurso: dados.recurso, grupo: posto.grupo, estado: posto.takt.estado })}
+            aviso={avisoSemPrograma({
+              recurso: dados.recurso, grupo: posto.grupo, estado: posto.takt.estado,
+              semRede: posto.takt.semRede, semCadastro: posto.semCadastro, maquinasDoGrupo: posto.maquinasDoGrupo,
+            })}
             aoUsarPrograma={() => setEscolha({ grupoId, valor: 'programa' })}
             aoSimular={() => setEscolha({ grupoId, valor: 'manual' })}
           />

@@ -45,6 +45,11 @@ const umProduto = params.get('umproduto') === '1';
 // DESTA semana — o Novo estudo puxa produto e takt do grupo do posto. A
 // FRESADORA fica sem programa, para o caso "digite a demanda".
 const comPrograma = params.get('programa') === '1';
+// ?semrede=1: a busca do programa falha (o tablet sem rede) — o que vale e'
+// o guardado no aparelho. ?cadastrodevagar=1: o cadastro de maquinas chega
+// 1,5 s depois de a tela abrir (aparelho sem cache).
+const semRede = params.get('semrede') === '1';
+const cadastroDevagar = params.get('cadastrodevagar') === '1';
 window.__posts = [];
 window.__patches = [];
 window.__deletes = [];
@@ -123,8 +128,11 @@ const produtosCad = comPrograma ? [
   { id: 'p2', nome: 'FUNDO SLEEP', codigo: '1002', grupo_id: 'g2', ativo: true },
   { id: 'p3', nome: 'RACK SIRIUS 1.6', codigo: '2001', grupo_id: 'g5', ativo: true },
 ] : [];
-const hojeUtc = new Date();
-const segunda = new Date(Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth(), hojeUtc.getUTCDate()));
+// A SEGUNDA da semana pelo dia de SAO PAULO, como o app casa a semana
+// (calendario.js): calculada em UTC, o teste falhava no domingo a noite.
+const [anoSp, mesSp, diaSp] = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' })
+  .format(new Date()).split('-').map(Number);
+const segunda = new Date(Date.UTC(anoSp, mesSp - 1, diaSp));
 segunda.setUTCDate(segunda.getUTCDate() - ((segunda.getUTCDay() + 6) % 7));
 const semanaDe = (pecas) => [{
   ano: segunda.getUTCFullYear(), numero: 43, pecas, inicio: segunda.toISOString().slice(0, 10),
@@ -140,12 +148,17 @@ window.fetch = async (url, opts = {}) => {
   const alvo = String(url);
 
   if (comPrograma && alvo.includes('/maquinas') && /demanda=1/.test(alvo)) {
+    if (semRede) throw new TypeError('Failed to fetch');
     const grupo = new URL(alvo, location.origin).searchParams.get('grupo');
     if (grupo === 'g4') await new Promise((r) => setTimeout(r, 1500));
     const demandas = { g2: programaFuradeira, g5: programaEmbalagem }[grupo] || [];
     return new Response(JSON.stringify({ demandas }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  if (cadastroDevagar && alvo.includes('/maquinas') && metodo === 'GET') {
+    await new Promise((r) => setTimeout(r, 1500));
   }
 
   if (alvo.includes('/maquinas')) {

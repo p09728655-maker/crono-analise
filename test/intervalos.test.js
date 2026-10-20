@@ -304,6 +304,13 @@ describe('o takt da semana de uma medicao', () => {
     expect(t.jornadaPorMaquina).toBe(44);
   });
 
+  it('diz se a semana foi casada pela data ou pelo numero', () => {
+    const args = { horas: 44, maquinas: 1, data: '2026-10-21T13:00:00Z', pecas: 1, duracaoMs: 3600000 };
+    expect(taktDaMedicao({ ...args, demandas }).casadoPorData).toBe(true);
+    // Programa antigo, sem INICIO: casa pelo numero da semana, com ressalva.
+    expect(taktDaMedicao({ ...args, demandas: [{ ano: 2026, numero: 43, pecas: 2200 }] }).casadoPorData).toBe(false);
+  });
+
   it('sem takt, sem conta: demanda pode vir, horas nao', () => {
     const t = taktDaMedicao({
       demandas, horas: null, maquinas: 1,

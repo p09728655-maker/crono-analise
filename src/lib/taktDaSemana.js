@@ -17,6 +17,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { unidadeDoPosto } from '../domain/cronoanalise.js';
 import { taktDaMedicao } from '../domain/demandaSemanal.js';
+import { diaCivil } from '../domain/demanda/calendario.js';
 import { listarDemanda } from './api.js';
 import { grupoIdDaMaquina, produtosDoGrupo, useCadastroMaquinas } from './maquinas.js';
 
@@ -33,16 +34,35 @@ function gravarCache(grupoId, lista) {
   try { localStorage.setItem(chave(grupoId), JSON.stringify(lista)); } catch { /* segue sem cache */ }
 }
 
-const inicial = (grupoId) => ({ grupoId, demandas: grupoId ? lerCache(grupoId) : null, semRede: false });
+const inicial = (grupoId) => ({
+  grupoId, demandas: grupoId ? lerCache(grupoId) : null, semRede: false, doServidor: false,
+});
+
+/**
+ * O programa lido SO' VALE para o grupo a que pertence. No Novo estudo o
+ * analista troca de posto: sem conferir o grupo, o programa da furadeira
+ * valeria por um instante para a fresadora. Pura, para o teste provar o
+ * que a tela nao consegue ver (o instante dura um quadro).
+ */
+export const programaLido = (lido, grupoId) => (lido?.grupoId === grupoId ? lido : inicial(grupoId));
+
+/** "2026-10-26" — o dia civil da fabrica (Sao Paulo), a chave da semana. */
+const diaDeHoje = () => diaCivil(new Date())?.toISOString().slice(0, 10) ?? '';
 
 export function useTaktDaSemana({ grupo, maquinasDoGrupo }) {
   const grupoId = grupo?.id || null;
-  /* O programa fica guardado JUNTO do grupo a que pertence. No Novo estudo
-     o analista troca de posto: sem o grupo ao lado, o programa da
-     furadeira valeria por um instante para a fresadora. */
   const [lido, setLido] = useState(() => inicial(grupoId));
-  const atual = useMemo(() => (lido.grupoId === grupoId ? lido : inicial(grupoId)), [lido, grupoId]);
-  const { demandas, semRede } = atual;
+  const atual = useMemo(() => programaLido(lido, grupoId), [lido, grupoId]);
+  const { demandas, semRede, doServidor } = atual;
+
+  /* O DIA, revisto a cada minuto: o tablet da embalagem fica ligado de um
+     dia para o outro, e com a tela aberta na virada da semana o takt
+     continuava o da semana anterior. So' redesenha quando o dia muda. */
+  const [hoje, setHoje] = useState(diaDeHoje);
+  useEffect(() => {
+    const id = setInterval(() => setHoje(diaDeHoje()), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!grupoId) return undefined;
@@ -52,29 +72,35 @@ export function useTaktDaSemana({ grupo, maquinasDoGrupo }) {
       .then((lista) => {
         if (!vivo) return;
         gravarCache(grupoId, lista);
-        setLido({ grupoId, demandas: lista, semRede: false });
+        setLido({ grupoId, demandas: lista, semRede: false, doServidor: true });
       })
       .catch(() => { if (vivo) setLido((s) => (s.grupoId === grupoId ? { ...s, semRede: true } : s)); });
     return () => { vivo = false; };
   }, [grupoId]);
 
   return useMemo(() => {
-    if (!grupo) return { taktMs: null, estado: 'sem-grupo', semana: null, semRede };
+    // `confirmado` = o programa veio do servidor nesta abertura. Sem isso
+    // ele e' o guardado no aparelho (sem rede, ou a busca ainda em curso),
+    // e a tela precisa dizer, porque o PCP pode ter colado outro.
+    const base = { semRede, confirmado: doServidor };
+    if (!grupo) return { taktMs: null, estado: 'sem-grupo', semana: null, ...base };
     // Sem programa nenhum ainda (primeira abertura sem rede): nao ha' o que
     // calcular, e a tela diz que falta rede, nao que falta programa.
-    if (demandas === null) return { taktMs: null, estado: semRede ? 'sem-rede' : 'carregando', semana: null, semRede };
+    if (demandas === null) return { taktMs: null, estado: semRede ? 'sem-rede' : 'carregando', semana: null, ...base };
     const t = taktDaMedicao({
       demandas,
       horas: grupo.horas_semana,
       maquinas: maquinasDoGrupo,
       setup: { setupsDia: grupo.setups_dia, dias: grupo.dias_semana, minutos: grupo.setup_min },
-      data: new Date().toISOString(),
+      // Meio-dia do dia civil: o dia e' o que importa, e o meio-dia nao
+      // escorrega para o dia vizinho em fuso nenhum.
+      data: hoje ? `${hoje}T15:00:00Z` : new Date().toISOString(),
       // O takt nao depende do ritmo; a leitura so' precisa de algum.
       pecas: 1,
       duracaoMs: 3600000,
     });
-    return { ...t, semRede };
-  }, [grupo, maquinasDoGrupo, demandas, semRede]);
+    return { ...t, ...base };
+  }, [grupo, maquinasDoGrupo, demandas, semRede, doServidor, hoje]);
 }
 
 /**
@@ -100,7 +126,10 @@ export function useProgramaDoPosto(recurso) {
   );
   const produtos = useMemo(() => produtosDoGrupo(cadastro, grupoId), [cadastro, grupoId]);
   const takt = useTaktDaSemana({ grupo, maquinasDoGrupo });
-  return { grupo, maquinasDoGrupo, produtos, takt };
+  // Sem cadastro nenhum no aparelho (sem rede e sem cache), "posto sem
+  // grupo" seria mentira: o grupo existe, o cadastro e' que nao chegou.
+  const semCadastro = !(cadastro.maquinas || []).length;
+  return { grupo, maquinasDoGrupo, produtos, takt, semCadastro };
 }
 
 /** "0002 · FURADEIRA" — o grupo como o cadastro e a lateral o escrevem. */
@@ -120,6 +149,11 @@ export function programaDoTakt({ grupo, maquinasDoGrupo, takt } = {}) {
     horasPorMaquina: takt.horasPorMaquina ?? null,
     jornadaPorMaquina: takt.jornadaPorMaquina ?? null,
     setupPorMaquina: takt.setupPorMaquina ?? null,
+    // Semana casada pelo NUMERO (programa sem data de inicio): o quadro do
+    // programa faz a ressalva, e o painel do estudo faz a mesma.
+    casadoPorData: takt.casadoPorData ?? true,
+    confirmado: takt.confirmado ?? true,
+    semRede: Boolean(takt.semRede),
     maquinas: maquinasDoGrupo,
     grupo: rotuloDoGrupo(grupo),
     unidade: unidadeDoPosto(grupo.nome),
@@ -139,12 +173,33 @@ export function produtoDeOutroGrupo({ produto, antes, depois }) {
   return nomes(antes).has(produto) && !nomes(depois).has(produto);
 }
 
-export function useProdutoSegueOGrupo({ grupoId, produtos, produto, aoLimpar }) {
-  const anterior = useRef({ grupoId, produtos });
+/**
+ * QUANDO limpar: so' quando O ANALISTA troca o posto e o novo cai num grupo
+ * CONHECIDO e DIFERENTE do ultimo grupo conhecido.
+ *
+ * - Passar por "sem grupo" nao conta: "Outra maquina…" zera o posto, e
+ *   cada tecla digitada e' um posto que nao existe ate' o nome fechar.
+ *   Tratar isso como troca apagava o produto voltando ao MESMO grupo.
+ * - O cadastro mudar sozinho tambem nao conta (o servidor respondeu
+ *   diferente do cache: maquina movida, renomeada). O analista so' veio
+ *   corrigir um nome, e o produto gravado sumia do estudo.
+ */
+export function deveLimparProduto({ recursoAntes, recurso, grupoConhecido, grupoId, produto, produtosConhecidos, produtos }) {
+  if (recurso === recursoAntes) return false;
+  if (!grupoId || !grupoConhecido || grupoId === grupoConhecido) return false;
+  return produtoDeOutroGrupo({ produto, antes: produtosConhecidos, depois: produtos });
+}
+
+export function useProdutoSegueOGrupo({ recurso, grupoId, produtos, produto, aoLimpar }) {
+  const visto = useRef({ recurso, grupoConhecido: grupoId, produtosConhecidos: produtos });
   useEffect(() => {
-    const antes = anterior.current;
-    anterior.current = { grupoId, produtos };
-    if (antes.grupoId === grupoId) return;
-    if (produtoDeOutroGrupo({ produto, antes: antes.produtos, depois: produtos })) aoLimpar();
-  }, [grupoId, produtos, produto, aoLimpar]);
+    const antes = visto.current;
+    if (deveLimparProduto({
+      recursoAntes: antes.recurso, recurso, grupoConhecido: antes.grupoConhecido, grupoId,
+      produto, produtosConhecidos: antes.produtosConhecidos, produtos,
+    })) aoLimpar();
+    visto.current = grupoId
+      ? { recurso, grupoConhecido: grupoId, produtosConhecidos: produtos }
+      : { ...antes, recurso };
+  }, [recurso, grupoId, produtos, produto, aoLimpar]);
 }

@@ -28,9 +28,12 @@ const GRUPO = {
 const MAQUINA = { id: '00000000-0000-0000-0000-0000000000a1', nome: 'EMBALAGEM 01', ativa: true, grupo_id: GRUPO.id };
 const CADASTRO = { maquinas: [MAQUINA], grupos: [GRUPO] };
 
-// A semana de HOJE, para o takt casar pela data qualquer que seja o dia do teste.
+// A semana de HOJE, para o takt casar pela data qualquer que seja o dia do
+// teste — pelo dia de SAO PAULO, como o app: em UTC, falhava domingo a noite.
 const hoje = new Date();
-const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()));
+const [anoSp, mesSp, diaSp] = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' })
+  .format(hoje).split('-').map(Number);
+const segunda = new Date(Date.UTC(anoSp, mesSp - 1, diaSp));
 segunda.setUTCDate(segunda.getUTCDate() - ((segunda.getUTCDay() + 6) % 7));
 const DEMANDAS = [{
   ano: segunda.getUTCFullYear(), numero: 1, pecas: 2200, inicio: segunda.toISOString().slice(0, 10),
