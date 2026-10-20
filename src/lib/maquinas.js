@@ -92,21 +92,54 @@ export function useCadastroMaquinas() {
  */
 let emVoo = null;
 
+/**
+ * Como foi a ULTIMA busca do cadastro: 'nunca' | 'buscando' | 'ok' |
+ * 'falhou'. Lista vazia sozinha nao diz o que falta: "sem rede" e "a
+ * empresa ainda nao cadastrou maquina" pedem providencias de pessoas
+ * diferentes, e o aviso precisa saber qual das duas e'.
+ */
+let busca = 'nunca';
+const ouvintesBusca = new Set();
+function mudarBusca(nova) {
+  if (nova === busca) return;
+  busca = nova;
+  ouvintesBusca.forEach((fn) => fn());
+}
+const buscaAtual = () => busca;
+const assinarBusca = (fn) => { ouvintesBusca.add(fn); return () => ouvintesBusca.delete(fn); };
+export function useBuscaDoCadastro() {
+  return useSyncExternalStore(assinarBusca, buscaAtual, buscaAtual);
+}
+
 export async function carregarMaquinas() {
   if (emVoo) return emVoo;
+  mudarBusca('buscando');
   emVoo = (async () => {
     try {
       const cadastro = await listarCadastroMaquinas();
       gravarCache(cadastro);
       publicar(cadastro);
+      mudarBusca('ok');
       return cadastro;
     } catch {
+      mudarBusca('falhou');
       return null;
     } finally {
       emVoo = null;
     }
   })();
   return emVoo;
+}
+
+/**
+ * A MAQUINA do cadastro pelo nome, ou null quando o nome nao esta' la'.
+ * Separa "maquina sem grupo" (achada, grupo_id nulo) de "posto fora do
+ * cadastro" — o que inclui o nome ainda pela metade, durante a digitacao.
+ */
+export function maquinaDoCadastro(cadastro, nome) {
+  if (!nome) return null;
+  const chave = nomeChave(nome);
+  return (cadastro?.maquinas || []).find((m) => m && nomeChave(m.nome) === chave) || null;
 }
 
 /**

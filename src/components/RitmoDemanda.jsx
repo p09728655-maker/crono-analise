@@ -14,8 +14,8 @@ import { formatarSegundos, taktTime } from '../domain/cronoanalise.js';
  * DUAS ORIGENS. Com o posto num grupo que tem programa desta semana, o
  * takt vem do PROGRAMA — o mesmo numero do quadro "Programa da semana" e
  * do tablet da embalagem — e o painel diz de onde ele saiu. A conta
- * digitada continua possivel, como SIMULACAO, e o painel lembra o que o
- * programa pede. Sem programa (ou sem posto), e' a conta digitada de
+ * digitada continua possivel (e e' ela que o estudo grava, quando
+ * escolhida), e o painel lembra o que o programa pede. Sem programa (ou sem posto), e' a conta digitada de
  * sempre, com o motivo escrito. Quem nao passa `programa` (a importacao)
  * segue so' com a conta digitada.
  */
@@ -44,16 +44,7 @@ export default function RitmoDemanda({
           {/* As duas ressalvas do quadro do programa, aqui tambem: o numero
               pode ser o guardado no aparelho, e a semana pode ter sido
               casada pelo numero porque a linha nao tem data. */}
-          {!programa.confirmado && (
-            <span style={est.dica}>
-              {programa.semRede
-                ? 'Programa guardado neste aparelho: sem rede para conferir se o PCP colou outro.'
-                : 'Programa guardado neste aparelho, conferindo com o servidor…'}
-            </span>
-          )}
-          {programa.casadoPorData === false && (
-            <span style={est.dica}>Semana casada pelo número: esta linha do programa não tem data de início.</span>
-          )}
+          {ressalvasDoPrograma(programa).map((r) => <span key={r} style={est.dica}>{r}</span>)}
         </div>
 
         <div style={est.taktCartao}>
@@ -117,7 +108,13 @@ export default function RitmoDemanda({
             value={calc.quantidade}
             onChange={(ev) => aoMudar({ ...calc, quantidade: ev.target.value })}
           />
-          <span style={est.dica}>Peças que precisam sair.</span>
+          {/* Na embalagem o estudo mede o PRODUTO, e o programa vem em
+              volumes: a dica diz qual dos dois este campo conta. */}
+          <span style={est.dica}>
+            {unidade.singular === 'volume'
+              ? 'Produtos que precisam sair (um rack de 2 volumes conta 1).'
+              : 'Peças que precisam sair.'}
+          </span>
         </label>
         <label style={est.campo}>
           <span style={est.rotuloCampo}>Horas disponíveis</span>
@@ -163,7 +160,7 @@ export default function RitmoDemanda({
             {unidade.singular === 'volume'
               ? `O programa da semana ${programa.semana} é em volumes: ${segundos}. `
                 + 'Use se cada ciclo deste estudo for um volume; se o ciclo for o produto inteiro, '
-                + 'digite acima quantos produtos precisam sair por dia.'
+                + 'a conta acima, em produtos, é a que vale.'
               : `É a conta acima que o estudo grava. O programa da semana ${programa.semana} pede ${segundos}.`}
           </span>
           <button type="button" style={est.acao} onClick={aoUsarPrograma}>
@@ -176,6 +173,26 @@ export default function RitmoDemanda({
 }
 
 const PECA = { singular: 'peça', plural: 'peças' };
+
+/**
+ * As RESSALVAS do numero do programa — as mesmas do quadro "Programa da
+ * semana", no Novo estudo e no botao do Editar: o programa pode ser o
+ * guardado no aparelho, e a semana pode ter sido casada pelo numero.
+ */
+export function ressalvasDoPrograma(programa) {
+  if (!programa) return [];
+  const r = [];
+  if (programa.confirmado === false) {
+    r.push(programa.semRede
+      ? 'Programa guardado neste aparelho: sem rede para conferir se o PCP colou outro.'
+      : 'Programa guardado neste aparelho, conferindo com o servidor…');
+  }
+  if (programa.casadoPorData === false) {
+    r.push('Semana casada pelo número: esta linha do programa não tem data de início, e o número erra '
+      + 'quando a semana da fábrica desloca por feriado. Peça ao PCP o programa com a coluna INÍCIO.');
+  }
+  return r;
+}
 
 const comoQuantidade = (n) => (Number.isInteger(n)
   ? n.toLocaleString('pt-BR')
@@ -239,13 +256,19 @@ export function origemDoTakt({ programa, escolha = null, digitou = false } = {})
  * saber que a demanda e' com ele — nao de quem e' a pendencia.
  */
 export function avisoSemPrograma({
-  recurso, grupo, estado, semRede = false, semCadastro = false, maquinasDoGrupo = null,
+  recurso, grupo, estado, semRede = false, semCadastro = false, buscandoCadastro = false,
+  noCadastro = true, maquinasDoGrupo = null,
 }) {
   if (!String(recurso || '').trim()) return 'Escolha o posto para trazer o takt do programa da semana.';
-  // Sem cadastro no aparelho, "posto sem grupo" seria mentira: o grupo
-  // pode existir, o cadastro e' que nao chegou.
-  if (!grupo && semCadastro) return 'O cadastro de máquinas não chegou a este aparelho: digite a demanda.';
-  if (!grupo) return 'Posto sem grupo no cadastro de máquinas: digite a demanda.';
+  if (!grupo) {
+    // Sem cadastro no aparelho, "posto sem grupo" seria mentira: o grupo
+    // pode existir, o cadastro e' que ainda nao chegou — ou nao chegou.
+    if (buscandoCadastro) return 'Buscando o cadastro de máquinas…';
+    if (semCadastro) return 'O cadastro de máquinas não chegou a este aparelho: digite a demanda.';
+    return noCadastro
+      ? 'Posto sem grupo no cadastro de máquinas: digite a demanda.'
+      : 'Posto fora do cadastro de máquinas: digite a demanda.';
+  }
   const nome = [grupo.codigo, grupo.nome].filter(Boolean).join(' · ');
   // Sem rede, o que o aparelho guardou pode ser de outra semana: dizer que
   // o programa "nao cobre" culparia o PCP por falta de rede.

@@ -261,7 +261,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
 
 /** O takt da semana antes de comecar — ou, sem ele, o porque. */
 function CartaoTakt({ takt }) {
-  const motivo = motivoSemTakt(takt.estado);
+  const motivo = motivoSemTakt(takt.estado, takt);
   if (!(takt.taktMs > 0) && !motivo) return null;
   return (
     <div style={est.destaqueRitmo} aria-label="Takt da semana">
@@ -319,8 +319,8 @@ function ResumoTakt({
           as lacunas, ainda não.
         </section>
       )}
-      {!(takt.taktMs > 0) && motivoSemTakt(takt.estado) && (
-        <section style={est.aviso} role="status">Sem takt para comparar: {motivoSemTakt(takt.estado)}</section>
+      {!(takt.taktMs > 0) && motivoSemTakt(takt.estado, takt) && (
+        <section style={est.aviso} role="status">Sem takt para comparar: {motivoSemTakt(takt.estado, takt)}</section>
       )}
     </>
   );

@@ -420,26 +420,36 @@ e o mesmo posto podia sair com um takt no estudo e outro no quadro do programa.
   o painel diz que falta.
 - **As ressalvas do quadro do programa valem aqui**: programa guardado no
   aparelho (sem rede, ou conferindo com o servidor) e semana casada pelo
-  número (linha sem data de início). Sem rede, o aviso culpa a rede, não o
-  programa nem o cadastro.
-- O dia é revisto a cada minuto (`useTaktDaSemana`): tela aberta na virada da
-  semana passa ao programa novo sozinha — vale para o tablet da embalagem.
-- **Simular outra demanda** volta à conta digitada, marcada como simulação e
-  com o takt do programa ao lado. Um clique volta ao programa.
+  número (linha sem data de início, com o risco e o que fazer) — no painel do
+  Novo estudo e no botão do Editar (`ressalvasDoPrograma`). Sem rede, o aviso
+  culpa a rede, não o programa nem o cadastro; e "cadastro que não chegou"
+  (busca falhou), "buscando", "posto fora do cadastro" (inclusive cadastro
+  vazio) e "posto sem grupo" são avisos diferentes (`useBuscaDoCadastro`).
+- O dia é revisto a cada minuto (`useTaktDaSemana`), e o **programa é buscado
+  de novo quando o dia vira**: tela aberta na virada da semana passa ao
+  programa novo sozinha, inclusive semana colada depois de a tela abrir —
+  vale para o tablet da embalagem. Sem rede na virada, o tablet diz que é a
+  rede.
+- **Simular outra demanda** volta à conta digitada — e é ela que o estudo
+  grava, como o painel diz — com o takt do programa ao lado. Um clique volta
+  ao programa.
 - **O programa não passa por cima do que foi digitado**: depois que o analista
   mexe na conta (inclusive apagando a quantidade para corrigir), o programa só
   aparece como oferta.
 - **A escolha vale para o grupo em que foi feita.** "Usar o takt do programa"
   clicado na furadeira não vira takt por volume ao trocar o posto para a
   embalagem.
-- **O produto acompanha o grupo do posto**: trocar para um posto de outro grupo
-  tira o produto que era da lista do grupo antigo e não está na do novo
-  (`deveLimparProduto`). Só conta a troca feita pelo analista entre dois
-  grupos conhecidos: passar por "Outra máquina…" (o posto some no meio da
-  digitação) ou o cadastro do servidor chegar diferente do guardado não
-  apagam nada. Produto digitado à mão fica.
-- No **Editar estudo**, o takt que o botão do programa escreveu volta ao valor
-  anterior se o posto mudar de grupo depois do clique.
+- **O produto acompanha o grupo do posto — e volta com ele** (`proximoProduto`):
+  trocar o posto para outro grupo (inclusive máquina do cadastro sem grupo)
+  tira do campo o produto que era da lista do grupo antigo e o guarda; o posto
+  voltar ao grupo devolve o produto. Ir e voltar pela seta do teclado não apaga
+  mais o que estava gravado. Posto fora do cadastro (o nome pela metade,
+  digitando) e o cadastro do servidor chegar diferente do guardado não contam.
+  Produto digitado à mão fica.
+- No **Editar estudo**, o takt que o botão do programa escreveu segue a mesma
+  regra (`proximaMarcaTakt`): trocar o posto de grupo devolve o campo ao valor
+  anterior, voltar devolve o takt do programa, e o duplo clique não troca o
+  "anterior". Número digitado pelo analista no meio do caminho é dele.
 - **Na embalagem o programa é oferecido, não imposto.** Ele é em volumes, e o
   ciclo do estudo pode ser o produto inteiro (um rack de dois volumes): o takt
   por volume faria a linha parecer o dobro mais carregada. Só entra com o

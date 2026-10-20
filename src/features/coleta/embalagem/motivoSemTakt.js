@@ -6,7 +6,10 @@
  * esta' no tablet: la' ninguem tem o que fazer com o aviso, e a tela do PC
  * (Embalagem Takt Time) continua dizendo que falta o programa.
  */
-export function motivoSemTakt(estado) {
+export function motivoSemTakt(estado, { semRede = false } = {}) {
+  // Sem rede, o que o aparelho guardou pode ser so' de outra semana (na
+  // virada, por exemplo): dizer que o programa "nao cobre" culparia o PCP.
+  if (semRede && estado === 'sem-semana') return 'Sem rede: o programa desta semana ainda não chegou a este aparelho.';
   switch (estado) {
     case 'carregando': return 'Buscando o programa da semana…';
     case 'sem-rede': return 'Sem rede: o programa da semana ainda não chegou a este aparelho.';

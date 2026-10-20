@@ -57,9 +57,10 @@ export default function FormularioEstudo({
   const origem = origemDoTakt({
     programa, escolha: escolha.grupoId === grupoId ? escolha.valor : null, digitou,
   });
-  const limparProduto = useCallback(() => setDados((d) => ({ ...d, produto: '' })), []);
+  const trocarProduto = useCallback((produto) => setDados((d) => ({ ...d, produto })), []);
   useProdutoSegueOGrupo({
-    recurso: dados.recurso, grupoId, produtos: posto.produtos, produto: dados.produto, aoLimpar: limparProduto,
+    recurso: dados.recurso, grupoChave: posto.grupoChave, produtos: posto.produtos, produto: dados.produto,
+    aoTrocar: trocarProduto,
   });
 
   const campo = (k) => ({
@@ -193,7 +194,9 @@ export default function FormularioEstudo({
             origem={origem}
             aviso={avisoSemPrograma({
               recurso: dados.recurso, grupo: posto.grupo, estado: posto.takt.estado,
-              semRede: posto.takt.semRede, semCadastro: posto.semCadastro, maquinasDoGrupo: posto.maquinasDoGrupo,
+              semRede: posto.takt.semRede, semCadastro: posto.semCadastro,
+              buscandoCadastro: posto.buscandoCadastro, noCadastro: posto.noCadastro,
+              maquinasDoGrupo: posto.maquinasDoGrupo,
             })}
             aoUsarPrograma={() => setEscolha({ grupoId, valor: 'programa' })}
             aoSimular={() => setEscolha({ grupoId, valor: 'manual' })}

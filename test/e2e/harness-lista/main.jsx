@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import ListaEstudos from '/src/features/estudos/ListaEstudos.jsx';
 import { enfileirar } from '/src/lib/filaOffline.js';
+import { semanaIso } from '/src/domain/demanda/calendario.js';
 
 // Grafias diferentes do MESMO produto, para exercitar o agrupamento.
 const RESPOSTA = {
@@ -50,6 +51,16 @@ const comPrograma = params.get('programa') === '1';
 // 1,5 s depois de a tela abrir (aparelho sem cache).
 const semRede = params.get('semrede') === '1';
 const cadastroDevagar = params.get('cadastrodevagar') === '1';
+// ?virada=1: a semana SEGUINTE so' existe no servidor a partir da segunda
+// 00h de SP (o PCP "cola" depois de a tela abrir). ?semdata=1: o programa
+// sem INICIO, casado pelo numero da semana. ?demandadevagar=1: o programa
+// chega 1,5 s depois. ?cadastrofalha=1 / ?cadastrovazio=1: a busca do
+// cadastro de maquinas falha / responde sem maquina nenhuma.
+const virada = params.get('virada') === '1';
+const semData = params.get('semdata') === '1';
+const demandaDevagar = params.get('demandadevagar') === '1';
+const cadastroFalha = params.get('cadastrofalha') === '1';
+const cadastroVazio = params.get('cadastrovazio') === '1';
 window.__posts = [];
 window.__patches = [];
 window.__deletes = [];
@@ -134,10 +145,16 @@ const [anoSp, mesSp, diaSp] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Amer
   .format(new Date()).split('-').map(Number);
 const segunda = new Date(Date.UTC(anoSp, mesSp - 1, diaSp));
 segunda.setUTCDate(segunda.getUTCDate() - ((segunda.getUTCDay() + 6) % 7));
-const semanaDe = (pecas) => [{
-  ano: segunda.getUTCFullYear(), numero: 43, pecas, inicio: segunda.toISOString().slice(0, 10),
-}];
-const programaFuradeira = semanaDe(6600);
+// Semana ISO da segunda (para o programa sem data, casado pelo numero) —
+// pela mesma funcao do app, ao meio-dia para nao escorregar de dia.
+const iso = semanaIso(new Date(segunda.getTime() + 15 * 3600000));
+const semanaDe = (pecas) => [semData
+  ? { ano: iso.ano, numero: iso.numero, pecas }
+  : { ano: segunda.getUTCFullYear(), numero: 43, pecas, inicio: segunda.toISOString().slice(0, 10) }];
+const proximaSegunda = new Date(segunda); proximaSegunda.setUTCDate(segunda.getUTCDate() + 7);
+// 00h de segunda em SP = 03h UTC.
+const viradaEm = proximaSegunda.getTime() + 3 * 3600000;
+const programaFuradeiraBase = semanaDe(6600);
 const programaEmbalagem = semanaDe(2200);
 const codigoDe = (v) => String(v || '').trim().toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -149,7 +166,13 @@ window.fetch = async (url, opts = {}) => {
 
   if (comPrograma && alvo.includes('/maquinas') && /demanda=1/.test(alvo)) {
     if (semRede) throw new TypeError('Failed to fetch');
+    if (demandaDevagar) await new Promise((r) => setTimeout(r, 1500));
     const grupo = new URL(alvo, location.origin).searchParams.get('grupo');
+    const programaFuradeira = virada && Date.now() >= viradaEm
+      ? [...programaFuradeiraBase, {
+        ano: proximaSegunda.getUTCFullYear(), numero: 44, pecas: 8800, inicio: proximaSegunda.toISOString().slice(0, 10),
+      }]
+      : programaFuradeiraBase;
     if (grupo === 'g4') await new Promise((r) => setTimeout(r, 1500));
     const demandas = { g2: programaFuradeira, g5: programaEmbalagem }[grupo] || [];
     return new Response(JSON.stringify({ demandas }), {
@@ -159,6 +182,12 @@ window.fetch = async (url, opts = {}) => {
 
   if (cadastroDevagar && alvo.includes('/maquinas') && metodo === 'GET') {
     await new Promise((r) => setTimeout(r, 1500));
+  }
+  if (cadastroFalha && alvo.includes('/maquinas') && metodo === 'GET') throw new TypeError('Failed to fetch');
+  if (cadastroVazio && alvo.includes('/maquinas') && metodo === 'GET') {
+    return new Response(JSON.stringify({ maquinas: [], grupos: [], produtos: [] }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   if (alvo.includes('/maquinas')) {

@@ -3,7 +3,10 @@ import { espaco, tipo } from '../../../theme/escala.js';
 import { formatarSegundos, taktTime } from '../../../domain/cronoanalise.js';
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
 import SeletorProduto from '../../../components/SeletorProduto.jsx';
-import { programaDoTakt, useProdutoSegueOGrupo, useProgramaDoPosto } from '../../../lib/taktDaSemana.js';
+import { ressalvasDoPrograma } from '../../../components/RitmoDemanda.jsx';
+import {
+  marcarTaktDoPrograma, programaDoTakt, proximaMarcaTakt, useProdutoSegueOGrupo, useProgramaDoPosto,
+} from '../../../lib/taktDaSemana.js';
 import { est } from './estilos.js';
 
 /**
@@ -36,25 +39,25 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
   const posto = useProgramaDoPosto(recurso);
   const grupoId = posto.grupo?.id || null;
   const programa = programaDoTakt(posto);
-  const limparProduto = useCallback(() => setProduto(''), []);
-  useProdutoSegueOGrupo({ recurso, grupoId, produtos: posto.produtos, produto, aoLimpar: limparProduto });
+  const trocarProduto = useCallback((v) => setProduto(v), []);
+  useProdutoSegueOGrupo({
+    recurso, grupoChave: posto.grupoChave, produtos: posto.produtos, produto, aoTrocar: trocarProduto,
+  });
   const [erro, setErro] = useState(null);
 
-  /* O takt que o botao do programa escreveu e' DAQUELE grupo. Trocar o
-     posto para outro grupo depois do clique devolve o campo ao que ele
-     tinha antes: sem isto o takt da furadeira era gravado no posto da
-     embalagem. Valor digitado depois do clique e' do analista e fica.
-     Passar por "sem grupo" (Outra maquina…, digitando) nao conta: e' a
-     mesma regra do produto. */
-  const [doPrograma, setDoPrograma] = useState(null);
+  /* O takt que o botao do programa escreveu e' DAQUELE grupo: trocar o
+     posto de grupo devolve o campo ao que era, voltar devolve o takt do
+     programa (proximaMarcaTakt). Sem isto, o takt da furadeira era gravado
+     no posto da embalagem. */
+  const [marca, setMarca] = useState(null);
   useEffect(() => {
-    if (!doPrograma || !grupoId || doPrograma.grupoId === grupoId) return;
-    if (taktSeg === doPrograma.escrito) setTaktSeg(doPrograma.anterior);
-    setDoPrograma(null);
-  }, [grupoId, doPrograma, taktSeg]);
+    const r = proximaMarcaTakt(marca, { grupoChave: posto.grupoChave, taktSeg });
+    if (r.marca !== marca) setMarca(r.marca);
+    if (r.taktSeg !== taktSeg) setTaktSeg(r.taktSeg);
+  }, [posto.grupoChave, marca, taktSeg]);
   function usarTaktDoPrograma() {
     const escrito = formatarSegundos(programa.taktMs, 1);
-    setDoPrograma({ grupoId, escrito, anterior: taktSeg });
+    setMarca((m) => marcarTaktDoPrograma(m, { grupoChave: posto.grupoChave, escrito, taktSeg }));
     setTaktSeg(escrito);
   }
 
@@ -238,6 +241,9 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
                   ? 'O programa da embalagem é em volumes: use se cada ciclo deste estudo for um volume.'
                   : `${programa.grupo}: tempo de uma máquina na semana, menos o setup planejado, pela parte dela na demanda.`}
               </span>
+              {/* As mesmas ressalvas do Novo estudo: o numero pode ser o
+                  guardado no aparelho, e a semana casada pelo numero. */}
+              {ressalvasDoPrograma(programa).map((r) => <span key={r} style={est.dica}>{r}</span>)}
             </>
           )}
         </fieldset>

@@ -398,6 +398,20 @@ const b = await chromium.launch({ executablePath: EXEC });
   checar(corpo.produto === 'LATERAL SLEEP' && corpo.recurso === 'FURADEIRA 04',
     `ida e volta: "Outra máquina…" e o mesmo posto digitado mantem o produto (${corpo.produto})`);
 
+  /* 7b. Maquina do cadastro SEM grupo tambem e' troca de grupo: o produto
+     da furadeira sai — e volta quando o posto volta para a furadeira. */
+  await abrir();
+  await posto.selectOption('FURADEIRA 04');
+  await form.getByRole('combobox', { name: 'Produto / Referência' }).selectOption('LATERAL SLEEP');
+  await posto.selectOption('ESQUADREJADEIRA');
+  await p.waitForTimeout(200);
+  checar(await form.locator('input[aria-label="Produto / Referência"]').inputValue() === '',
+    'maquina sem grupo: o produto da furadeira sai do campo');
+  await posto.selectOption('FURADEIRA 04');
+  await p.waitForTimeout(200);
+  corpo = await criar();
+  checar(corpo.produto === 'LATERAL SLEEP', `ida e volta por maquina sem grupo: o produto volta (${corpo.produto})`);
+
   /* 8. "Outro produto…" escolhido na furadeira nao vale para a embalagem:
      la' o campo volta a ser a lista do cadastro do grupo novo. */
   await abrir();
@@ -450,6 +464,10 @@ const b = await chromium.launch({ executablePath: EXEC });
 
 /* ---------- o cadastro chega com o analista digitando: nada se perde */
 {
+  /* O caso real: sem cadastro no aparelho, o posto e' digitado (texto
+     livre) e o analista ja' esta' no produto quando o cadastro chega. O
+     posto vira o da FURADEIRA, com lista de produtos — e o campo do produto
+     nao pode ser trocado por outro no meio da digitacao. */
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
   const p = await ctx.newPage();
   await p.goto(`${BASE}/test/e2e/harness-lista/index.html?modo=analise&vazio=1&programa=1&cadastrodevagar=1`);
@@ -457,14 +475,100 @@ const b = await chromium.launch({ executablePath: EXEC });
   await p.click('text=+ Novo estudo');
   const form = p.locator('[aria-label="Novo estudo"]');
   await form.waitFor({ timeout: 4000 });
+  await form.locator('input[aria-label="Recurso / Posto"]').fill('FURADEIRA 04');
   const produto = form.locator('input[aria-label="Produto / Referência"]');
   await produto.click();
   await produto.pressSequentially('LAT');
-  await p.waitForTimeout(1900);
+  // O cadastro chega: o posto vira a lista, e o produto ganha a do grupo.
+  await form.getByRole('combobox', { name: 'Recurso / Posto' }).waitFor({ timeout: 4000 });
+  checar(await form.getByRole('button', { name: '▾ escolher do cadastro' }).count() >= 1,
+    'digitando: o cadastro chegou e o grupo do posto tem lista de produtos');
   await p.keyboard.type('ERAL X');
   checar(await produto.inputValue() === 'LATERAL X',
-    `digitando: o cadastro chegou e o campo do produto nao trocou no meio (${await produto.inputValue()})`);
+    `digitando: o campo do produto nao foi trocado no meio da digitacao (${await produto.inputValue()})`);
   await ctx.close();
+}
+
+/* ------- virada da semana com a tela aberta: busca o programa de novo */
+{
+  /* Domingo 23:58 em Sao Paulo, formulario aberto na FURADEIRA. A semana
+     seguinte so' existe no servidor a partir da segunda 00h (o PCP colou
+     com a tela aberta). Quatro minutos depois, o painel ja' e' o da semana
+     nova — sem ninguem reabrir. */
+  const [a, m, d] = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' })
+    .format(new Date()).split('-').map(Number);
+  const dia = new Date(Date.UTC(a, m - 1, d));
+  dia.setUTCDate(dia.getUTCDate() + ((7 - dia.getUTCDay()) % 7)); // o proximo domingo
+  const domingo2358Sp = dia.getTime() + (23 * 60 + 58) * 60000 + 3 * 3600000;
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
+  const p = await ctx.newPage();
+  await p.clock.install({ time: domingo2358Sp });
+  await p.goto(`${BASE}/test/e2e/harness-lista/index.html?modo=analise&vazio=1&programa=1&virada=1`);
+  await p.waitForSelector('text=Nenhum estudo cadastrado', { timeout: 8000 });
+  await p.click('text=+ Novo estudo');
+  const form = p.locator('[aria-label="Novo estudo"]');
+  await form.waitFor({ timeout: 4000 });
+  const painel = form.locator('aside[aria-label="Ritmo / Demanda"]');
+  await form.getByLabel('Recurso / Posto').selectOption('FURADEIRA 04');
+  await painel.getByText('02:24').waitFor({ timeout: 4000 });
+  checar(true, 'virada: domingo 23:58, o takt e o da semana que acaba (6.600 -> 02:24)');
+  await p.clock.fastForward(4 * 60000);
+  await painel.getByText('01:48').waitFor({ timeout: 6000 });
+  checar(true, 'virada: segunda 00:02, o painel busca de novo e mostra a semana colada depois (8.800 -> 01:48)');
+  await ctx.close();
+}
+
+/* ---------------- as ressalvas e os avisos, ligados na tela de verdade */
+{
+  const abrirEm = async (query, initScript) => {
+    const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
+    const p = await ctx.newPage();
+    if (initScript) await p.addInitScript(initScript);
+    await p.goto(`${BASE}/test/e2e/harness-lista/index.html?modo=analise&vazio=1&programa=1${query}`);
+    await p.waitForSelector('text=Nenhum estudo cadastrado', { timeout: 8000 });
+    await p.click('text=+ Novo estudo');
+    const form = p.locator('[aria-label="Novo estudo"]');
+    await form.waitFor({ timeout: 4000 });
+    return { ctx, p, form, painel: form.locator('aside[aria-label="Ritmo / Demanda"]') };
+  };
+
+  // Programa sem data de INICIO: casa pelo numero, com o risco e a acao.
+  let t = await abrirEm('&semdata=1');
+  await t.form.getByLabel('Recurso / Posto').selectOption('FURADEIRA 04');
+  await t.painel.getByText(/Semana casada pelo número: .*feriado.*coluna INÍCIO/).waitFor({ timeout: 4000 });
+  checar(true, 'sem data de inicio: o painel avisa que a semana foi casada pelo numero, com o risco e o que fazer');
+  await t.ctx.close();
+
+  // Programa guardado e a busca ainda em curso: "conferindo", depois o do servidor.
+  t = await abrirEm('&demandadevagar=1', () => {
+    const [a, m, d] = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' })
+      .format(new Date()).split('-').map(Number);
+    const seg = new Date(Date.UTC(a, m - 1, d));
+    seg.setUTCDate(seg.getUTCDate() - ((seg.getUTCDay() + 6) % 7));
+    localStorage.setItem('ritmopatrimar.demanda.g2', JSON.stringify([
+      { ano: seg.getUTCFullYear(), numero: 43, pecas: 3300, inicio: seg.toISOString().slice(0, 10) }]));
+  });
+  await t.form.getByLabel('Recurso / Posto').selectOption('FURADEIRA 04');
+  await t.painel.getByText('Programa guardado neste aparelho, conferindo com o servidor…').waitFor({ timeout: 4000 });
+  checar((await t.painel.innerText()).includes('04:48'), 'conferindo: enquanto a busca corre, o guardado aparece COMO guardado');
+  await t.painel.getByText('02:24').waitFor({ timeout: 6000 });
+  checar(await t.painel.getByText(/conferindo com o servidor/).count() === 0,
+    'conferindo: a resposta do servidor troca o numero e tira a ressalva');
+  await t.ctx.close();
+
+  // Cadastro que nao chegou (sem rede, sem cache): o aviso diz isso.
+  t = await abrirEm('&cadastrofalha=1');
+  await t.form.locator('input[aria-label="Recurso / Posto"]').fill('FURADEIRA 04');
+  await t.painel.getByText('O cadastro de máquinas não chegou a este aparelho: digite a demanda.').waitFor({ timeout: 4000 });
+  checar(true, 'cadastro que falhou: o aviso culpa a falta do cadastro, nao o posto');
+  await t.ctx.close();
+
+  // Cadastro que chegou VAZIO: o posto esta' fora do cadastro — nao e' rede.
+  t = await abrirEm('&cadastrovazio=1');
+  await t.form.locator('input[aria-label="Recurso / Posto"]').fill('FURADEIRA 04');
+  await t.painel.getByText('Posto fora do cadastro de máquinas: digite a demanda.').waitFor({ timeout: 4000 });
+  checar(true, 'cadastro vazio: o aviso diz que o posto esta fora do cadastro, sem culpar a rede');
+  await t.ctx.close();
 }
 
 /* -------- no celular, o painel do programa cabe sem rolagem horizontal */

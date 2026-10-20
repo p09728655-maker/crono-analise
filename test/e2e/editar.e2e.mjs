@@ -116,7 +116,11 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
   const EMBALAGEM = { id: 'g5', codigo: '0005', nome: 'EMBALAGEM', horas_semana: '44.00', setups_dia: 0, setup_min: '0', dias_semana: 5 };
   const maquinas = ['FURADEIRA 04', 'FURADEIRA 07', 'FURADEIRA 11', 'FURADEIRA 12', 'FURADEIRA 14', 'FURADEIRA 15']
     .map((nome, i) => ({ id: `m${i + 1}`, nome, ativa: true, grupo_id: 'g2', grupo_codigo: '0002', grupo_nome: 'FURADEIRA' }))
-    .concat([{ id: 'm9', nome: 'EMBALADORA 01', ativa: true, grupo_id: 'g5', grupo_codigo: '0005', grupo_nome: 'EMBALAGEM' }]);
+    .concat([
+      { id: 'm9', nome: 'EMBALADORA 01', ativa: true, grupo_id: 'g5', grupo_codigo: '0005', grupo_nome: 'EMBALAGEM' },
+      // Maquina do cadastro SEM grupo: trocar para ela tambem e' trocar de grupo.
+      { id: 'm10', nome: 'ESQUADREJADEIRA', ativa: true, grupo_id: null },
+    ]);
   const produtos = [
     { id: 'p1', nome: 'LATERAL SLEEP', codigo: '1001', grupo_id: 'g2', ativo: true },
     { id: 'p2', nome: 'FUNDO SLEEP', codigo: '1002', grupo_id: 'g2', ativo: true },
@@ -216,8 +220,73 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
   patch = await salvar();
   checar(patch?.taktTimeMs === null, `ajustes: o takt da furadeira nao e gravado no posto da embalagem (${patch?.taktTimeMs})`);
 
+  /* Ida e volta por OUTRO grupo (a seta do teclado passa por cada posto):
+     o produto sai na embalagem e volta na furadeira. */
+  await abrirEditar();
+  await posto.selectOption('EMBALADORA 01');
+  await q.waitForTimeout(200);
+  await posto.selectOption('FURADEIRA 04');
+  await q.waitForTimeout(200);
+  checar(await dlg.getByRole('combobox', { name: 'Produto / Referência' }).inputValue() === 'LATERAL SLEEP',
+    'ajustes: ida e volta por outro grupo devolve o produto');
+  patch = await salvar();
+  checar(patch?.produto === 'LATERAL SLEEP', `ajustes: PATCH com o produto devolvido (${patch?.produto})`);
+
+  /* Duplo clique no botao do programa nao faz o takt dele virar o "anterior". */
+  await abrirEditar();
+  const usarPrograma = dlg.getByRole('button', { name: /Usar o takt do programa da semana .*144\.0 s por peça/ });
+  await usarPrograma.dblclick();
+  checar(await campoTakt.inputValue() === '144.0', 'ajustes: duplo clique escreve o takt do programa');
+  await posto.selectOption('EMBALADORA 01');
+  await q.waitForTimeout(200);
+  checar(await campoTakt.inputValue() === '', `ajustes: depois do duplo clique, trocar de grupo devolve o campo vazio (${await campoTakt.inputValue()})`);
+  await posto.selectOption('FURADEIRA 04');
+  await q.waitForTimeout(200);
+  checar(await campoTakt.inputValue() === '144.0', 'ajustes: voltar a furadeira devolve o takt do programa');
+
+  /* Maquina sem grupo: o takt do programa da furadeira nao fica nela. */
+  await abrirEditar();
+  await usarPrograma.click();
+  await posto.selectOption('ESQUADREJADEIRA');
+  await q.waitForTimeout(200);
+  checar(await campoTakt.inputValue() === '', `ajustes: maquina sem grupo devolve o campo (${await campoTakt.inputValue()})`);
+  patch = await salvar();
+  checar(patch?.recurso === 'ESQUADREJADEIRA' && patch?.taktTimeMs === null,
+    `ajustes: o takt da furadeira nao e gravado na esquadrejadeira (${patch?.taktTimeMs})`);
+
+  /* "Outro produto…" escolhido num posto nao vale para o grupo seguinte. */
+  await abrirEditar();
+  await dlg.getByRole('combobox', { name: 'Produto / Referência' }).selectOption('__outro');
+  await dlg.locator('input[aria-label="Produto / Referência"]').waitFor({ timeout: 4000 });
+  await posto.selectOption('EMBALADORA 01');
+  const listaEmb = dlg.getByRole('combobox', { name: 'Produto / Referência' });
+  await listaEmb.waitFor({ timeout: 4000 });
+  checar((await listaEmb.locator('option').allInnerTexts()).includes('RACK SIRIUS 1.6 · 2001'),
+    'ajustes: o texto livre do posto anterior nao vaza — a embalagem mostra a lista dela');
+
   checar(erros2.length === 0, `ajustes com programa: sem erro de pagina (${erros2.join('; ') || 'nenhum'})`);
   await c2.close();
+
+  /* Sem rede, com o programa guardado no aparelho: o botao diz que e' o
+     guardado — um clique gravaria o numero velho sem saber. */
+  const c4 = await b.newContext({ viewport: { width: 1440, height: 950 } });
+  const w = await c4.newPage();
+  await semearSessao(w);
+  await w.addInitScript((d) => localStorage.setItem('ritmopatrimar.demanda.g2', JSON.stringify(d)),
+    [{ ...demandas[0], pecas: 3300 }]);
+  await w.route('**/api/estudos**', (rt) => (rt.request().url().includes('id=')
+    ? rt.fulfill({ json: { estudo: furadeira, operacoes: estudo.operacoes } })
+    : rt.fulfill({ json: { estudos: [] } })));
+  await w.route('**/api/config**', (rt) => rt.fulfill({ json: { chaveIa: { configurada: false } } }));
+  await w.route('**/api/maquinas**', (rt) => (/demanda=1/.test(rt.request().url())
+    ? rt.abort()
+    : rt.fulfill({ json: { maquinas, grupos: [GRUPO, EMBALAGEM], produtos } })));
+  await w.goto(`${BASE}/analise/estudo/${ID2}?editar=1`);
+  const d4 = w.locator('[aria-label="Ajustes do estudo"]');
+  await d4.getByRole('button', { name: /Usar o takt do programa da semana .*288\.0 s por peça/ }).waitFor({ timeout: 8000 });
+  checar(await d4.getByText('Programa guardado neste aparelho: sem rede para conferir se o PCP colou outro.').count() === 1,
+    'ajustes sem rede: o botao do programa diz que o numero e o guardado no aparelho');
+  await c4.close();
 
   /* O cadastro do SERVIDOR diferente do guardado no aparelho (a maquina foi
      movida de grupo): o analista so' veio corrigir o nome, e o produto

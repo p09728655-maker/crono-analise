@@ -5,11 +5,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   CALC_PADRAO, avisoSemPrograma, contaDaMaquina, demandaPorMaquina, formatarHorasMin, formatarTakt,
-  origemDoTakt, taktMsDoCalculo, taktMsDoEstudo,
+  origemDoTakt, ressalvasDoPrograma, taktMsDoCalculo, taktMsDoEstudo,
 } from '../src/components/RitmoDemanda.jsx';
 import {
-  deveLimparProduto, produtoDeOutroGrupo, programaDoTakt, programaLido,
+  marcarTaktDoPrograma, produtoDeOutroGrupo, programaDoTakt, programaLido, proximaMarcaTakt, proximoProduto,
 } from '../src/lib/taktDaSemana.js';
+import { motivoSemTakt } from '../src/features/coleta/embalagem/motivoSemTakt.js';
 
 describe('taktMsDoCalculo', () => {
   it('480 pecas em 8,8h dao takt de 66s', () => {
@@ -191,33 +192,95 @@ describe('programaDoTakt', () => {
 });
 
 /**
- * QUANDO limpar o produto: so' quando o ANALISTA troca o posto para outro
- * grupo conhecido. Passar por "sem grupo" no meio da digitacao, ou o
- * cadastro do servidor mudar sozinho, apagava o produto gravado.
+ * O PRODUTO ACOMPANHA O GRUPO e VOLTA com ele: sai quando o analista troca
+ * o posto para outro grupo (inclusive maquina sem grupo), fica guardado, e
+ * volta quando o posto volta ao grupo. A ida e volta pela seta do teclado
+ * apagava o produto gravado.
  */
-describe('quando limpar o produto', () => {
+describe('produto acompanha o grupo do posto — e volta', () => {
   const furadeira = [{ nome: 'LATERAL SLEEP' }];
   const embalagem = [{ nome: 'RACK SIRIUS 1.6' }];
-  const base = {
-    recursoAntes: 'FURADEIRA 04', grupoConhecido: 'g2', produto: 'LATERAL SLEEP', produtosConhecidos: furadeira,
-  };
-  it('troca de posto para outro grupo: limpa', () => {
-    expect(deveLimparProduto({ ...base, recurso: 'EMBALADORA 01', grupoId: 'g5', produtos: embalagem })).toBe(true);
+  const inicio = { recurso: 'FURADEIRA 04', grupoChave: 'g2', produtos: furadeira, guardado: null };
+  const passo = (estado, recurso, grupoChave, produtos, produto) => proximoProduto(estado, { recurso, grupoChave, produtos, produto });
+
+  it('troca para outro grupo: sai, guardado', () => {
+    const r = passo(inicio, 'EMBALADORA 01', 'g5', embalagem, 'LATERAL SLEEP');
+    expect(r.produto).toBe('');
+    expect(r.estado.guardado).toEqual({ grupoChave: 'g2', produto: 'LATERAL SLEEP' });
   });
-  it('posto no meio da digitacao (sem grupo): nao limpa', () => {
-    expect(deveLimparProduto({ ...base, recurso: 'FURAD', grupoId: null, produtos: [] })).toBe(false);
-    expect(deveLimparProduto({ ...base, recurso: '', grupoId: null, produtos: [] })).toBe(false);
+  it('ida e volta pela seta: o produto volta', () => {
+    const ida = passo(inicio, 'EMBALADORA 01', 'g5', embalagem, 'LATERAL SLEEP');
+    const volta = passo(ida.estado, 'FURADEIRA 15', 'g2', furadeira, ida.produto);
+    expect(volta.produto).toBe('LATERAL SLEEP');
+    expect(volta.estado.guardado).toBeNull();
   });
-  it('volta ao mesmo grupo: nao limpa', () => {
-    expect(deveLimparProduto({ ...base, recursoAntes: 'FURAD', recurso: 'FURADEIRA 04', grupoId: 'g2', produtos: furadeira }))
-      .toBe(false);
+  it('maquina do cadastro SEM grupo tambem e troca — e volta', () => {
+    const ida = passo(inicio, 'ESQUADREJADEIRA', 'sem-grupo', [], 'LATERAL SLEEP');
+    expect(ida.produto).toBe('');
+    expect(passo(ida.estado, 'FURADEIRA 04', 'g2', furadeira, '').produto).toBe('LATERAL SLEEP');
+  });
+  it('posto fora do cadastro (digitando): nao limpa', () => {
+    expect(passo(inicio, 'FURAD', null, [], 'LATERAL SLEEP').produto).toBe('LATERAL SLEEP');
+    expect(passo(inicio, '', null, [], 'LATERAL SLEEP').produto).toBe('LATERAL SLEEP');
   });
   it('o cadastro mudou sozinho (mesmo posto): nao limpa', () => {
-    expect(deveLimparProduto({ ...base, recurso: 'FURADEIRA 04', grupoId: 'g5', produtos: embalagem })).toBe(false);
+    expect(passo(inicio, 'FURADEIRA 04', 'g5', embalagem, 'LATERAL SLEEP').produto).toBe('LATERAL SLEEP');
   });
-  it('produto digitado a mao: nao limpa', () => {
-    expect(deveLimparProduto({ ...base, produto: 'Mesa nova', recurso: 'EMBALADORA 01', grupoId: 'g5', produtos: embalagem }))
-      .toBe(false);
+  it('produto digitado a mao: fica', () => {
+    expect(passo(inicio, 'EMBALADORA 01', 'g5', embalagem, 'Mesa nova').produto).toBe('Mesa nova');
+  });
+  it('produto escolhido no grupo novo nao e trocado pelo guardado', () => {
+    const ida = passo(inicio, 'EMBALADORA 01', 'g5', embalagem, 'LATERAL SLEEP');
+    const escolheu = passo(ida.estado, 'EMBALADORA 01', 'g5', embalagem, 'RACK SIRIUS 1.6');
+    expect(escolheu.produto).toBe('RACK SIRIUS 1.6');
+  });
+});
+
+describe('takt do programa no Editar: sai com o grupo e volta com ele', () => {
+  it('trocar de grupo devolve o anterior; voltar devolve o do programa', () => {
+    const marca = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '120.0' });
+    const fora = proximaMarcaTakt(marca, { grupoChave: 'g5', taktSeg: '144.0' });
+    expect(fora.taktSeg).toBe('120.0');
+    const volta = proximaMarcaTakt(fora.marca, { grupoChave: 'g2', taktSeg: '120.0' });
+    expect(volta.taktSeg).toBe('144.0');
+  });
+  it('maquina sem grupo tambem devolve o anterior', () => {
+    const marca = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '' });
+    expect(proximaMarcaTakt(marca, { grupoChave: 'sem-grupo', taktSeg: '144.0' }).taktSeg).toBe('');
+  });
+  it('posto pela metade (fora do cadastro) nao mexe', () => {
+    const marca = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '' });
+    expect(proximaMarcaTakt(marca, { grupoChave: null, taktSeg: '144.0' }).taktSeg).toBe('144.0');
+  });
+  it('duplo clique nao troca o anterior pelo proprio takt do programa', () => {
+    const um = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '' });
+    const dois = marcarTaktDoPrograma(um, { grupoChave: 'g2', escrito: '144.0', taktSeg: '144.0' });
+    expect(proximaMarcaTakt(dois, { grupoChave: 'g5', taktSeg: '144.0' }).taktSeg).toBe('');
+  });
+  it('numero digitado pelo analista e dele: a marca se desfaz', () => {
+    const marca = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '' });
+    const r = proximaMarcaTakt(marca, { grupoChave: 'g5', taktSeg: '150' });
+    expect(r).toEqual({ marca: null, taktSeg: '150' });
+  });
+});
+
+describe('ressalvas do programa e motivos sem rede', () => {
+  it('programa guardado e semana casada pelo numero viram texto, com risco e acao', () => {
+    expect(ressalvasDoPrograma({ confirmado: true, casadoPorData: true })).toEqual([]);
+    expect(ressalvasDoPrograma({ confirmado: false, semRede: true })[0]).toMatch(/sem rede para conferir/);
+    expect(ressalvasDoPrograma({ confirmado: false, semRede: false })[0]).toMatch(/conferindo com o servidor/);
+    expect(ressalvasDoPrograma({ confirmado: true, casadoPorData: false })[0]).toMatch(/feriado.*coluna INÍCIO/);
+  });
+  it('tablet sem rede na virada da semana culpa a rede, nao o programa', () => {
+    expect(motivoSemTakt('sem-semana', { semRede: true })).toMatch(/^Sem rede/);
+    expect(motivoSemTakt('sem-semana')).toBe('O programa da embalagem não cobre esta semana.');
+  });
+  it('cadastro: buscando, nao chegou, fora do cadastro e sem grupo sao avisos diferentes', () => {
+    const base = { recurso: 'FURADEIRA 04', grupo: null, estado: 'sem-grupo' };
+    expect(avisoSemPrograma({ ...base, buscandoCadastro: true })).toBe('Buscando o cadastro de máquinas…');
+    expect(avisoSemPrograma({ ...base, semCadastro: true })).toMatch(/não chegou a este aparelho/);
+    expect(avisoSemPrograma({ ...base, noCadastro: false })).toBe('Posto fora do cadastro de máquinas: digite a demanda.');
+    expect(avisoSemPrograma({ ...base, noCadastro: true })).toBe('Posto sem grupo no cadastro de máquinas: digite a demanda.');
   });
 });
 

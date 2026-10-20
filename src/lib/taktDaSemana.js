@@ -19,7 +19,9 @@ import { unidadeDoPosto } from '../domain/cronoanalise.js';
 import { taktDaMedicao } from '../domain/demandaSemanal.js';
 import { diaCivil } from '../domain/demanda/calendario.js';
 import { listarDemanda } from './api.js';
-import { grupoIdDaMaquina, produtosDoGrupo, useCadastroMaquinas } from './maquinas.js';
+import {
+  grupoIdDaMaquina, maquinaDoCadastro, produtosDoGrupo, useBuscaDoCadastro, useCadastroMaquinas,
+} from './maquinas.js';
 
 const chave = (grupoId) => `ritmopatrimar.demanda.${grupoId}`;
 
@@ -64,6 +66,10 @@ export function useTaktDaSemana({ grupo, maquinasDoGrupo }) {
     return () => clearInterval(id);
   }, []);
 
+  /* Busca de novo quando o DIA muda, nao so' quando o grupo muda: a
+     semana nova costuma ser colada com a tela ja' aberta (o tablet fica
+     ligado), e sem buscar de novo a virada dizia "nao cobre esta semana"
+     com o programa ja' no servidor. */
   useEffect(() => {
     if (!grupoId) return undefined;
     let vivo = true;
@@ -76,7 +82,7 @@ export function useTaktDaSemana({ grupo, maquinasDoGrupo }) {
       })
       .catch(() => { if (vivo) setLido((s) => (s.grupoId === grupoId ? { ...s, semRede: true } : s)); });
     return () => { vivo = false; };
-  }, [grupoId]);
+  }, [grupoId, hoje]);
 
   return useMemo(() => {
     // `confirmado` = o programa veio do servidor nesta abertura. Sem isso
@@ -114,7 +120,14 @@ export function useTaktDaSemana({ grupo, maquinasDoGrupo }) {
  */
 export function useProgramaDoPosto(recurso) {
   const cadastro = useCadastroMaquinas();
+  const busca = useBuscaDoCadastro();
   const grupoId = grupoIdDaMaquina(cadastro, recurso);
+  /* A CHAVE do grupo para "o posto mudou de grupo?": o id do grupo, ou
+     'sem-grupo' para maquina do cadastro sem grupo, ou null quando o nome
+     nao esta' no cadastro (inclusive pela metade, durante a digitacao) —
+     e ai' nao ha' como saber, entao nao conta como troca. */
+  const maquina = maquinaDoCadastro(cadastro, recurso);
+  const grupoChave = maquina ? (maquina.grupo_id || 'sem-grupo') : null;
   const grupo = useMemo(
     () => (cadastro.grupos || []).find((g) => g && g.id === grupoId) || null,
     [cadastro, grupoId],
@@ -126,10 +139,16 @@ export function useProgramaDoPosto(recurso) {
   );
   const produtos = useMemo(() => produtosDoGrupo(cadastro, grupoId), [cadastro, grupoId]);
   const takt = useTaktDaSemana({ grupo, maquinasDoGrupo });
-  // Sem cadastro nenhum no aparelho (sem rede e sem cache), "posto sem
-  // grupo" seria mentira: o grupo existe, o cadastro e' que nao chegou.
-  const semCadastro = !(cadastro.maquinas || []).length;
-  return { grupo, maquinasDoGrupo, produtos, takt, semCadastro };
+  /* Lista vazia sozinha nao diz o que falta. Vazia com a busca FALHA e'
+     cadastro que nao chegou (rede); vazia buscando e' espera; vazia com a
+     busca OK e' empresa sem maquina cadastrada — ai' "posto fora do
+     cadastro" e' a verdade. */
+  const vazio = !(cadastro.maquinas || []).length;
+  return {
+    grupo, grupoChave, noCadastro: Boolean(maquina), maquinasDoGrupo, produtos, takt,
+    semCadastro: vazio && busca === 'falhou',
+    buscandoCadastro: vazio && (busca === 'buscando' || busca === 'nunca'),
+  };
 }
 
 /** "0002 · FURADEIRA" — o grupo como o cadastro e a lateral o escrevem. */
@@ -174,32 +193,69 @@ export function produtoDeOutroGrupo({ produto, antes, depois }) {
 }
 
 /**
- * QUANDO limpar: so' quando O ANALISTA troca o posto e o novo cai num grupo
- * CONHECIDO e DIFERENTE do ultimo grupo conhecido.
+ * O PRODUTO ACOMPANHA O GRUPO DO POSTO — e volta com ele.
  *
- * - Passar por "sem grupo" nao conta: "Outra maquina…" zera o posto, e
- *   cada tecla digitada e' um posto que nao existe ate' o nome fechar.
- *   Tratar isso como troca apagava o produto voltando ao MESMO grupo.
- * - O cadastro mudar sozinho tambem nao conta (o servidor respondeu
- *   diferente do cache: maquina movida, renomeada). O analista so' veio
- *   corrigir um nome, e o produto gravado sumia do estudo.
+ * - O analista troca o posto para OUTRO grupo (inclusive uma maquina do
+ *   cadastro sem grupo): o produto que era da lista do grupo antigo e nao
+ *   esta' na do novo sai do campo, e fica GUARDADO.
+ * - O posto volta ao grupo de onde o produto saiu, com o campo vazio: o
+ *   produto volta. Ir e voltar pela seta do teclado (cada seta e' um
+ *   posto) nao apaga mais o que estava gravado.
+ * - Posto fora do cadastro (o nome pela metade, durante a digitacao) nao
+ *   conta: nao ha' como saber o grupo.
+ * - O cadastro mudar sozinho (servidor diferente do cache) tambem nao: so'
+ *   a troca feita pelo analista (o recurso mudou).
+ *
+ * Pura, para o teste provar cada caminho. estado: { recurso, grupoChave,
+ * produtos, guardado }. Devolve o estado novo e o valor do campo.
  */
-export function deveLimparProduto({ recursoAntes, recurso, grupoConhecido, grupoId, produto, produtosConhecidos, produtos }) {
-  if (recurso === recursoAntes) return false;
-  if (!grupoId || !grupoConhecido || grupoId === grupoConhecido) return false;
-  return produtoDeOutroGrupo({ produto, antes: produtosConhecidos, depois: produtos });
+export function proximoProduto(estado, { recurso, grupoChave, produtos, produto }) {
+  if (!grupoChave) return { estado: { ...estado, recurso }, produto };
+  let valor = produto;
+  let { guardado } = estado;
+  if (guardado && guardado.grupoChave === grupoChave && !produto) {
+    valor = guardado.produto;
+    guardado = null;
+  } else if (recurso !== estado.recurso && estado.grupoChave && grupoChave !== estado.grupoChave
+    && produtoDeOutroGrupo({ produto, antes: estado.produtos, depois: produtos })) {
+    guardado = { grupoChave: estado.grupoChave, produto };
+    valor = '';
+  }
+  return { estado: { recurso, grupoChave, produtos, guardado }, produto: valor };
 }
 
-export function useProdutoSegueOGrupo({ recurso, grupoId, produtos, produto, aoLimpar }) {
-  const visto = useRef({ recurso, grupoConhecido: grupoId, produtosConhecidos: produtos });
+export function useProdutoSegueOGrupo({ recurso, grupoChave, produtos, produto, aoTrocar }) {
+  const estado = useRef({ recurso, grupoChave, produtos, guardado: null });
   useEffect(() => {
-    const antes = visto.current;
-    if (deveLimparProduto({
-      recursoAntes: antes.recurso, recurso, grupoConhecido: antes.grupoConhecido, grupoId,
-      produto, produtosConhecidos: antes.produtosConhecidos, produtos,
-    })) aoLimpar();
-    visto.current = grupoId
-      ? { recurso, grupoConhecido: grupoId, produtosConhecidos: produtos }
-      : { ...antes, recurso };
-  }, [recurso, grupoId, produtos, produto, aoLimpar]);
+    const r = proximoProduto(estado.current, { recurso, grupoChave, produtos, produto });
+    estado.current = r.estado;
+    if (r.produto !== produto) aoTrocar(r.produto);
+  }, [recurso, grupoChave, produtos, produto, aoTrocar]);
+}
+
+/**
+ * O TAKT QUE O BOTAO DO PROGRAMA ESCREVEU no Editar e' DAQUELE grupo — a
+ * mesma regra do produto: trocar o posto de grupo (inclusive para maquina
+ * sem grupo) devolve o campo ao que era; voltar ao grupo devolve o takt do
+ * programa. Numero digitado pelo analista no meio do caminho e' dele, e a
+ * marca se desfaz. marca: { grupoChave, escrito, anterior, fora } | null.
+ */
+export function proximaMarcaTakt(marca, { grupoChave, taktSeg }) {
+  if (!marca || !grupoChave) return { marca, taktSeg };
+  if (grupoChave !== marca.grupoChave) {
+    if (marca.fora) return { marca, taktSeg };
+    if (taktSeg === marca.escrito) return { marca: { ...marca, fora: true }, taktSeg: marca.anterior };
+    return { marca: null, taktSeg };
+  }
+  if (!marca.fora) return { marca, taktSeg };
+  if (taktSeg === marca.anterior) return { marca: { ...marca, fora: false }, taktSeg: marca.escrito };
+  return { marca: null, taktSeg };
+}
+
+/** O clique no botao. Segundo clique no mesmo grupo nao troca o "anterior":
+ *  sem isto, o duplo clique guardava o proprio takt do programa como o
+ *  valor a devolver, e ele ia parar no posto da embalagem. */
+export function marcarTaktDoPrograma(marca, { grupoChave, escrito, taktSeg }) {
+  if (marca && marca.grupoChave === grupoChave && !marca.fora) return { ...marca, escrito };
+  return { grupoChave, escrito, anterior: taktSeg, fora: false };
 }
