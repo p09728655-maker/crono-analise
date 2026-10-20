@@ -192,67 +192,66 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
   const posto = dlg.getByRole('combobox', { name: 'Recurso / Posto' });
   furadeira.produto = 'LATERAL SLEEP';
 
-  /* Trocar o posto para outro grupo tira o produto do grupo antigo. */
+  const salvarBloqueado = async () => {
+    const antes = patches2.length;
+    await dlg.getByRole('button', { name: /Salvar/ }).click();
+    await q.waitForTimeout(500);
+    return patches2.length === antes && await dlg.count() === 1;
+  };
+
+  /* Nada muda sozinho: trocar o posto para outro grupo deixa o produto da
+     furadeira a vista, a tela avisa e o Salvar nao grava a combinacao. */
   await abrirEditar();
   await posto.selectOption('EMBALADORA 01');
-  const produtoEmb = dlg.getByRole('combobox', { name: 'Produto / Referência' });
-  await produtoEmb.locator('option', { hasText: 'RACK SIRIUS 1.6' }).waitFor({ state: 'attached', timeout: 4000 });
-  checar(await produtoEmb.inputValue() === '', 'ajustes: trocar o posto de grupo limpa o produto do grupo antigo');
+  await dlg.getByRole('alert').waitFor({ timeout: 4000 });
+  checar(/LATERAL SLEEP é produto do 0002 · FURADEIRA, e o posto EMBALADORA 01 é do 0005 · EMBALAGEM/
+    .test(await dlg.getByRole('alert').innerText()), 'ajustes: produto de outro grupo — a tela avisa na hora');
+  checar(await salvarBloqueado(), 'ajustes: o Salvar nao grava produto da furadeira no posto da embalagem');
+  await dlg.getByRole('button', { name: '▾ escolher do cadastro' }).last().click();
+  await dlg.getByRole('combobox', { name: 'Produto / Referência' }).selectOption('RACK SIRIUS 1.6');
   let patch = await salvar();
-  checar(patch?.recurso === 'EMBALADORA 01' && patch?.produto === null,
-    `ajustes: PATCH sem o produto da furadeira no posto da embalagem (${patch?.produto})`);
+  checar(patch?.recurso === 'EMBALADORA 01' && patch?.produto === 'RACK SIRIUS 1.6',
+    `ajustes: com o produto do posto, grava (${patch?.produto})`);
 
-  /* Ida e volta por "Outra máquina…" para o MESMO posto: o produto fica. */
+  /* Ida e volta por "Outra máquina…" ou pela seta: o produto nunca sai. */
   await abrirEditar();
   await posto.selectOption('__outra');
   await dlg.locator('input[aria-label="Recurso / Posto"]').pressSequentially('FURADEIRA 04');
   await q.waitForTimeout(300);
   patch = await salvar();
   checar(patch?.produto === 'LATERAL SLEEP', `ajustes: ida e volta pelo texto do posto mantem o produto (${patch?.produto})`);
-
-  /* O takt que o botao escreveu e' do grupo: trocar de grupo devolve o campo. */
-  await abrirEditar();
-  await dlg.getByRole('button', { name: /Usar o takt do programa da semana .*144\.0 s por peça/ }).click();
-  checar(await campoTakt.inputValue() === '144.0', 'ajustes: o botao escreve o takt do programa da furadeira');
-  await posto.selectOption('EMBALADORA 01');
-  await q.waitForTimeout(300);
-  checar(await campoTakt.inputValue() === '', `ajustes: trocar de grupo devolve o campo ao que era (${await campoTakt.inputValue()})`);
-  patch = await salvar();
-  checar(patch?.taktTimeMs === null, `ajustes: o takt da furadeira nao e gravado no posto da embalagem (${patch?.taktTimeMs})`);
-
-  /* Ida e volta por OUTRO grupo (a seta do teclado passa por cada posto):
-     o produto sai na embalagem e volta na furadeira. */
   await abrirEditar();
   await posto.selectOption('EMBALADORA 01');
   await q.waitForTimeout(200);
   await posto.selectOption('FURADEIRA 04');
   await q.waitForTimeout(200);
-  checar(await dlg.getByRole('combobox', { name: 'Produto / Referência' }).inputValue() === 'LATERAL SLEEP',
-    'ajustes: ida e volta por outro grupo devolve o produto');
   patch = await salvar();
-  checar(patch?.produto === 'LATERAL SLEEP', `ajustes: PATCH com o produto devolvido (${patch?.produto})`);
+  checar(patch?.produto === 'LATERAL SLEEP', `ajustes: ida e volta por outro grupo mantem o produto (${patch?.produto})`);
 
-  /* Duplo clique no botao do programa nao faz o takt dele virar o "anterior". */
-  await abrirEditar();
+  /* O takt que o botao escreveu e' do grupo em que foi clicado: com o
+     posto em outro grupo (embalagem, maquina sem grupo, posto digitado), a
+     tela avisa e nao grava esse numero. Digitar o takt resolve. */
   const usarPrograma = dlg.getByRole('button', { name: /Usar o takt do programa da semana .*144\.0 s por peça/ });
-  await usarPrograma.dblclick();
-  checar(await campoTakt.inputValue() === '144.0', 'ajustes: duplo clique escreve o takt do programa');
-  await posto.selectOption('EMBALADORA 01');
-  await q.waitForTimeout(200);
-  checar(await campoTakt.inputValue() === '', `ajustes: depois do duplo clique, trocar de grupo devolve o campo vazio (${await campoTakt.inputValue()})`);
-  await posto.selectOption('FURADEIRA 04');
-  await q.waitForTimeout(200);
-  checar(await campoTakt.inputValue() === '144.0', 'ajustes: voltar a furadeira devolve o takt do programa');
-
-  /* Maquina sem grupo: o takt do programa da furadeira nao fica nela. */
-  await abrirEditar();
-  await usarPrograma.click();
-  await posto.selectOption('ESQUADREJADEIRA');
-  await q.waitForTimeout(200);
-  checar(await campoTakt.inputValue() === '', `ajustes: maquina sem grupo devolve o campo (${await campoTakt.inputValue()})`);
+  for (const [destino, digitado] of [['EMBALADORA 01', false], ['ESQUADREJADEIRA', false], ['SERRA 02', true]]) {
+    await abrirEditar();
+    await usarPrograma.dblclick();
+    if (digitado) {
+      await posto.selectOption('__outra');
+      await dlg.locator('input[aria-label="Recurso / Posto"]').pressSequentially(destino);
+    } else {
+      await posto.selectOption(destino);
+    }
+    await dlg.getByText(/Este takt \(144\.0 s\) veio do programa do 0002 · FURADEIRA/).waitFor({ timeout: 4000 });
+    checar(await campoTakt.inputValue() === '144.0', `ajustes (${destino}): nada muda sozinho no campo do takt`);
+    checar(await salvarBloqueado(), `ajustes (${destino}): o takt da furadeira nao e gravado`);
+  }
+  await campoTakt.fill('150');
+  checar(await dlg.getByText(/Este takt .* veio do programa/).count() === 0, 'ajustes: digitar o takt desfaz o aviso');
+  // O produto da furadeira no SERRA 02 tambem conflita: escolhe outro.
+  await dlg.locator('input[aria-label="Produto / Referência"]').fill('Produto da serra');
   patch = await salvar();
-  checar(patch?.recurso === 'ESQUADREJADEIRA' && patch?.taktTimeMs === null,
-    `ajustes: o takt da furadeira nao e gravado na esquadrejadeira (${patch?.taktTimeMs})`);
+  checar(patch?.recurso === 'SERRA 02' && patch?.taktTimeMs === 150000,
+    `ajustes: com o takt digitado, grava (${patch?.taktTimeMs})`);
 
   /* "Outro produto…" escolhido num posto nao vale para o grupo seguinte. */
   await abrirEditar();

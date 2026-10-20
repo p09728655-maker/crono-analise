@@ -419,6 +419,8 @@ export const est = {
     borderWidth: 1, borderStyle: 'solid', borderColor: claro.critico,
     borderRadius: raio.sm, ...tipo('legenda'),
   },
+  // Aviso colado ao campo (produto ou takt de outro grupo), antes de gravar.
+  alertaCampo: { ...tipo('legenda'), fontWeight: 600, color: claro.atencao },
   semDados: {
     maxWidth: LARGURA_MAXIMA, margin: `${espaco.xxl}px auto`, padding: espaco.xxl,
     textAlign: 'center', ...tipo('corpo'), color: claro.textoFraco,

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { espaco, tipo } from '../../../theme/escala.js';
-import { formatarSegundos, taktTime } from '../../../domain/cronoanalise.js';
+import { formatarSegundos, nomeChave, taktTime } from '../../../domain/cronoanalise.js';
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
 import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import { ressalvasDoPrograma } from '../../../components/RitmoDemanda.jsx';
 import {
-  marcarTaktDoPrograma, programaDoTakt, proximaMarcaTakt, useProdutoSegueOGrupo, useProgramaDoPosto,
+  conflitoDoProduto, conflitoDoTakt, programaDoTakt, rotuloDoGrupo, useProgramaDoPosto,
 } from '../../../lib/taktDaSemana.js';
 import { est } from './estilos.js';
 
@@ -39,29 +39,31 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
   const posto = useProgramaDoPosto(recurso);
   const grupoId = posto.grupo?.id || null;
   const programa = programaDoTakt(posto);
-  const trocarProduto = useCallback((v) => setProduto(v), []);
-  useProdutoSegueOGrupo({
-    recurso, grupoChave: posto.grupoChave, produtos: posto.produtos, produto, aoTrocar: trocarProduto,
-  });
   const [erro, setErro] = useState(null);
 
-  /* O takt que o botao do programa escreveu e' DAQUELE grupo: trocar o
-     posto de grupo devolve o campo ao que era, voltar devolve o takt do
-     programa (proximaMarcaTakt). Sem isto, o takt da furadeira era gravado
-     no posto da embalagem. */
+  /* NADA MUDA SOZINHO quando o posto muda: a tela confere e avisa.
+     - Produto de outro grupo: so' impede de gravar quando o analista mexeu
+       no posto ou no produto nesta edicao — quem veio so' corrigir o nome
+       nao fica preso porque o cadastro mudou por fora (ve o aviso e salva).
+     - Takt escrito pelo botao do programa: e' do grupo em que foi clicado
+       (a `marca`); com o posto em outro grupo, nao grava esse numero. Digitar
+       no campo desfaz a marca: o numero passa a ser do analista. */
+  const conflitoProduto = conflitoDoProduto({ produto, recurso, cadastro: posto.cadastro, grupo: posto.grupo });
+  const mexeu = nomeChave(recurso) !== nomeChave(estudo.recurso || '') || produto !== (estudo.produto || '');
   const [marca, setMarca] = useState(null);
-  useEffect(() => {
-    const r = proximaMarcaTakt(marca, { grupoChave: posto.grupoChave, taktSeg });
-    if (r.marca !== marca) setMarca(r.marca);
-    if (r.taktSeg !== taktSeg) setTaktSeg(r.taktSeg);
-  }, [posto.grupoChave, marca, taktSeg]);
+  const conflitoTakt = conflitoDoTakt({ marca, grupo: posto.grupo, taktSeg });
   function usarTaktDoPrograma() {
     const escrito = formatarSegundos(programa.taktMs, 1);
-    setMarca((m) => marcarTaktDoPrograma(m, { grupoChave: posto.grupoChave, escrito, taktSeg }));
+    setMarca({ grupoId: posto.grupo.id, grupo: rotuloDoGrupo(posto.grupo), escrito });
     setTaktSeg(escrito);
+  }
+  function digitarTakt(valor) {
+    setMarca(null);
+    setTaktSeg(valor);
   }
 
   function aplicarCalculo(novo) {
+    setMarca(null);
     setCalc(novo);
     const qtd = Number(novo.quantidade);
     const horas = Number(novo.horas);
@@ -74,6 +76,8 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
     setErro(null);
     const ms = taktSeg ? Math.round(Number(taktSeg) * 1000) : null;
     if (!nome.trim()) { setErro('O estudo precisa de um nome.'); setSalvando(false); return; }
+    if (conflitoProduto && mexeu) { setErro(conflitoProduto.texto); setSalvando(false); return; }
+    if (conflitoTakt) { setErro(conflitoTakt.texto); setSalvando(false); return; }
     try {
       await aoSalvar({
         nome: nome.trim(),
@@ -137,6 +141,7 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
               placeholder="Ex: Mesa Cabeceira Sleep"
               estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
             />
+            {conflitoProduto && <span style={est.alertaCampo} role="alert">{conflitoProduto.texto}</span>}
             <span style={est.dica}>
               {posto.produtos.length > 0
                 ? 'Do cadastro de produtos do grupo. Agrupa os estudos na lista.'
@@ -223,7 +228,8 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
           <label style={est.campo}>
             <span style={est.rotuloCampo}>Takt Time (segundos por peça)</span>
             <input type="number" min="0" step="0.1" style={est.input}
-                   value={taktSeg} onChange={(e) => setTaktSeg(e.target.value)} />
+                   value={taktSeg} onChange={(e) => digitarTakt(e.target.value)} />
+            {conflitoTakt && <span style={est.alertaCampo} role="alert">{conflitoTakt.texto}</span>}
             <span style={est.dica}>Preenchido pela conta acima, ou digite direto.</span>
           </label>
           {/* O takt do programa a um clique — o mesmo numero do quadro

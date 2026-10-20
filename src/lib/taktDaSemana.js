@@ -14,9 +14,10 @@
  * Mora aqui, e nao na tela da embalagem, porque o Novo estudo faz a mesma
  * pergunta. Duas contas do mesmo takt acabariam em dois numeros.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { unidadeDoPosto } from '../domain/cronoanalise.js';
 import { taktDaMedicao } from '../domain/demandaSemanal.js';
+import { nomeChave } from '../domain/cronoanalise.js';
 import { diaCivil } from '../domain/demanda/calendario.js';
 import { listarDemanda } from './api.js';
 import {
@@ -50,6 +51,8 @@ export const programaLido = (lido, grupoId) => (lido?.grupoId === grupoId ? lido
 
 /** "2026-10-26" — o dia civil da fabrica (Sao Paulo), a chave da semana. */
 const diaDeHoje = () => diaCivil(new Date())?.toISOString().slice(0, 10) ?? '';
+/** O numero da meia hora corrente: muda as :00 e as :30. */
+const janelaAtual = () => Math.floor(Date.now() / 1800000);
 
 export function useTaktDaSemana({ grupo, maquinasDoGrupo }) {
   const grupoId = grupo?.id || null;
@@ -57,19 +60,23 @@ export function useTaktDaSemana({ grupo, maquinasDoGrupo }) {
   const atual = useMemo(() => programaLido(lido, grupoId), [lido, grupoId]);
   const { demandas, semRede, doServidor } = atual;
 
-  /* O DIA, revisto a cada minuto: o tablet da embalagem fica ligado de um
-     dia para o outro, e com a tela aberta na virada da semana o takt
-     continuava o da semana anterior. So' redesenha quando o dia muda. */
+  /* O DIA e a JANELA de meia hora, revistos a cada minuto. O tablet da
+     embalagem fica ligado de um dia para o outro: o dia novo troca a
+     semana do takt, e a janela faz o programa ser buscado de novo a cada
+     30 minutos — a semana nova costuma ser colada com a tela ja' aberta (o
+     PCP cola de manha), e buscar so' na virada a deixava de fora o dia
+     inteiro. A meia-noite de SP (03h UTC) cai numa troca de janela, entao
+     a virada tambem busca. So' redesenha quando um dos dois muda. */
   const [hoje, setHoje] = useState(diaDeHoje);
+  const [janela, setJanela] = useState(janelaAtual);
   useEffect(() => {
-    const id = setInterval(() => setHoje(diaDeHoje()), 60000);
+    const id = setInterval(() => { setHoje(diaDeHoje()); setJanela(janelaAtual()); }, 60000);
     return () => clearInterval(id);
   }, []);
 
-  /* Busca de novo quando o DIA muda, nao so' quando o grupo muda: a
-     semana nova costuma ser colada com a tela ja' aberta (o tablet fica
-     ligado), e sem buscar de novo a virada dizia "nao cobre esta semana"
-     com o programa ja' no servidor. */
+  /* Busca de novo a cada janela de 30 min, nao so' quando o grupo muda
+     (ver acima). Uma GET por grupo a cada meia hora, e o guardado no
+     aparelho segue valendo enquanto a busca nao responde. */
   useEffect(() => {
     if (!grupoId) return undefined;
     let vivo = true;
@@ -82,7 +89,7 @@ export function useTaktDaSemana({ grupo, maquinasDoGrupo }) {
       })
       .catch(() => { if (vivo) setLido((s) => (s.grupoId === grupoId ? { ...s, semRede: true } : s)); });
     return () => { vivo = false; };
-  }, [grupoId, hoje]);
+  }, [grupoId, janela]);
 
   return useMemo(() => {
     // `confirmado` = o programa veio do servidor nesta abertura. Sem isso
@@ -122,12 +129,8 @@ export function useProgramaDoPosto(recurso) {
   const cadastro = useCadastroMaquinas();
   const busca = useBuscaDoCadastro();
   const grupoId = grupoIdDaMaquina(cadastro, recurso);
-  /* A CHAVE do grupo para "o posto mudou de grupo?": o id do grupo, ou
-     'sem-grupo' para maquina do cadastro sem grupo, ou null quando o nome
-     nao esta' no cadastro (inclusive pela metade, durante a digitacao) —
-     e ai' nao ha' como saber, entao nao conta como troca. */
+  // A maquina do cadastro (ou null): separa "sem grupo" de "fora do cadastro".
   const maquina = maquinaDoCadastro(cadastro, recurso);
-  const grupoChave = maquina ? (maquina.grupo_id || 'sem-grupo') : null;
   const grupo = useMemo(
     () => (cadastro.grupos || []).find((g) => g && g.id === grupoId) || null,
     [cadastro, grupoId],
@@ -145,9 +148,10 @@ export function useProgramaDoPosto(recurso) {
      cadastro" e' a verdade. */
   const vazio = !(cadastro.maquinas || []).length;
   return {
-    grupo, grupoChave, noCadastro: Boolean(maquina), maquinasDoGrupo, produtos, takt,
+    cadastro, grupo, noCadastro: Boolean(maquina), maquinasDoGrupo, produtos, takt,
     semCadastro: vazio && busca === 'falhou',
     buscandoCadastro: vazio && (busca === 'buscando' || busca === 'nunca'),
+    buscaFalhou: busca === 'falhou',
   };
 }
 
@@ -180,82 +184,50 @@ export function programaDoTakt({ grupo, maquinasDoGrupo, takt } = {}) {
 }
 
 /**
- * O PRODUTO ACOMPANHA O GRUPO do posto. Trocar o posto para outro grupo
- * tira o produto que era da lista do grupo antigo e nao esta' na do novo:
- * sem isto o seletor nao achava o nome (campo vazio na tela) e o estudo
- * gravava a lateral da furadeira no posto da embalagem. Produto digitado a
- * mao, que nao e' de lista nenhuma, fica: e' do analista.
+ * O PRODUTO TEM DE SER DO POSTO — conferido, nao adivinhado.
+ *
+ * A tela nao troca o produto sozinha quando o posto muda (tentar adivinhar
+ * a intencao a cada tecla gerava um caso novo a cada revisao: a seta do
+ * teclado, o nome pela metade, o cadastro chegando atrasado). Em vez
+ * disso, ela AVISA e nao deixa gravar a combinacao errada: produto que e'
+ * da lista de OUTRO grupo num posto que nao e' desse grupo. Produto
+ * digitado a mao (de lista nenhuma) e' do analista e passa.
+ *
+ * Devolve null quando esta' tudo certo, ou { texto, grupos } para a tela.
+ * Sem cadastro no aparelho nao ha' como conferir: passa.
  */
-export function produtoDeOutroGrupo({ produto, antes, depois }) {
-  if (!produto) return false;
-  const nomes = (lista) => new Set((lista || []).map((p) => p?.nome));
-  return nomes(antes).has(produto) && !nomes(depois).has(produto);
+export function conflitoDoProduto({ produto, recurso, cadastro, grupo } = {}) {
+  const chave = nomeChave(produto || '');
+  if (!chave || !(cadastro?.produtos || []).length) return null;
+  const donos = (cadastro.produtos || []).filter((p) => p && nomeChave(p.nome) === chave);
+  if (!donos.length) return null;
+  if (grupo && donos.some((p) => p.grupo_id === grupo.id)) return null;
+  const grupos = [...new Set(donos.map((p) => p.grupo_id))]
+    .map((id) => (cadastro.grupos || []).find((g) => g && g.id === id))
+    .filter(Boolean)
+    .map(rotuloDoGrupo);
+  const posto = recurso ? `o posto ${recurso}` : 'o posto';
+  const doPosto = grupo ? `${posto} é do ${rotuloDoGrupo(grupo)}` : `${posto} não é desse grupo`;
+  return {
+    grupos,
+    texto: `${produto} é produto do ${grupos.join(' e do ') || 'cadastro de outro grupo'}, e ${doPosto}. `
+      + 'Escolha um produto deste posto, ou troque o posto.',
+  };
 }
 
 /**
- * O PRODUTO ACOMPANHA O GRUPO DO POSTO — e volta com ele.
- *
- * - O analista troca o posto para OUTRO grupo (inclusive uma maquina do
- *   cadastro sem grupo): o produto que era da lista do grupo antigo e nao
- *   esta' na do novo sai do campo, e fica GUARDADO.
- * - O posto volta ao grupo de onde o produto saiu, com o campo vazio: o
- *   produto volta. Ir e voltar pela seta do teclado (cada seta e' um
- *   posto) nao apaga mais o que estava gravado.
- * - Posto fora do cadastro (o nome pela metade, durante a digitacao) nao
- *   conta: nao ha' como saber o grupo.
- * - O cadastro mudar sozinho (servidor diferente do cache) tambem nao: so'
- *   a troca feita pelo analista (o recurso mudou).
- *
- * Pura, para o teste provar cada caminho. estado: { recurso, grupoChave,
- * produtos, guardado }. Devolve o estado novo e o valor do campo.
+ * O TAKT QUE O BOTAO DO PROGRAMA ESCREVEU (Editar estudo) e' do grupo em
+ * que foi clicado. Se o posto mudou de grupo depois, a tela avisa e nao
+ * deixa gravar esse numero — o analista digita o takt, ou usa o programa
+ * do grupo novo. Nada e' trocado sozinho. marca: { grupoId, grupo, escrito }
+ * do clique; digitar no campo desfaz a marca (o numero passa a ser dele).
  */
-export function proximoProduto(estado, { recurso, grupoChave, produtos, produto }) {
-  if (!grupoChave) return { estado: { ...estado, recurso }, produto };
-  let valor = produto;
-  let { guardado } = estado;
-  if (guardado && guardado.grupoChave === grupoChave && !produto) {
-    valor = guardado.produto;
-    guardado = null;
-  } else if (recurso !== estado.recurso && estado.grupoChave && grupoChave !== estado.grupoChave
-    && produtoDeOutroGrupo({ produto, antes: estado.produtos, depois: produtos })) {
-    guardado = { grupoChave: estado.grupoChave, produto };
-    valor = '';
-  }
-  return { estado: { recurso, grupoChave, produtos, guardado }, produto: valor };
-}
-
-export function useProdutoSegueOGrupo({ recurso, grupoChave, produtos, produto, aoTrocar }) {
-  const estado = useRef({ recurso, grupoChave, produtos, guardado: null });
-  useEffect(() => {
-    const r = proximoProduto(estado.current, { recurso, grupoChave, produtos, produto });
-    estado.current = r.estado;
-    if (r.produto !== produto) aoTrocar(r.produto);
-  }, [recurso, grupoChave, produtos, produto, aoTrocar]);
-}
-
-/**
- * O TAKT QUE O BOTAO DO PROGRAMA ESCREVEU no Editar e' DAQUELE grupo — a
- * mesma regra do produto: trocar o posto de grupo (inclusive para maquina
- * sem grupo) devolve o campo ao que era; voltar ao grupo devolve o takt do
- * programa. Numero digitado pelo analista no meio do caminho e' dele, e a
- * marca se desfaz. marca: { grupoChave, escrito, anterior, fora } | null.
- */
-export function proximaMarcaTakt(marca, { grupoChave, taktSeg }) {
-  if (!marca || !grupoChave) return { marca, taktSeg };
-  if (grupoChave !== marca.grupoChave) {
-    if (marca.fora) return { marca, taktSeg };
-    if (taktSeg === marca.escrito) return { marca: { ...marca, fora: true }, taktSeg: marca.anterior };
-    return { marca: null, taktSeg };
-  }
-  if (!marca.fora) return { marca, taktSeg };
-  if (taktSeg === marca.anterior) return { marca: { ...marca, fora: false }, taktSeg: marca.escrito };
-  return { marca: null, taktSeg };
-}
-
-/** O clique no botao. Segundo clique no mesmo grupo nao troca o "anterior":
- *  sem isto, o duplo clique guardava o proprio takt do programa como o
- *  valor a devolver, e ele ia parar no posto da embalagem. */
-export function marcarTaktDoPrograma(marca, { grupoChave, escrito, taktSeg }) {
-  if (marca && marca.grupoChave === grupoChave && !marca.fora) return { ...marca, escrito };
-  return { grupoChave, escrito, anterior: taktSeg, fora: false };
+export function conflitoDoTakt({ marca, grupo, taktSeg } = {}) {
+  if (!marca || taktSeg !== marca.escrito) return null;
+  if (grupo && grupo.id === marca.grupoId) return null;
+  return {
+    texto: `Este takt (${marca.escrito} s) veio do programa do ${marca.grupo}, e o posto agora `
+      + `${grupo ? `é do ${rotuloDoGrupo(grupo)}` : 'não é desse grupo'}. `
+      + 'Digite o takt ou use o programa do grupo do posto.',
+  };
 }

@@ -336,7 +336,8 @@ const b = await chromium.launch({ executablePath: EXEC });
   checar(corpo.taktTimeMs === 72000, `embalagem: POST com o takt por volume pedido (${corpo.taktTimeMs})`);
 
   /* 3. Produto do cadastro da furadeira nao vai para o posto da embalagem —
-     nem pelo caminho "Outro produto…" -> "escolher do cadastro". */
+     nem pelo caminho "Outro produto…" -> "escolher do cadastro". Nada muda
+     sozinho: o produto continua a vista, a tela avisa e o Criar nao grava. */
   await abrir();
   await posto.selectOption('FURADEIRA 04');
   const produto = form.getByRole('combobox', { name: 'Produto / Referência' });
@@ -344,9 +345,19 @@ const b = await chromium.launch({ executablePath: EXEC });
   await form.getByRole('button', { name: '▾ escolher do cadastro' }).last().click();
   await produto.selectOption('LATERAL SLEEP');
   await posto.selectOption('EMBALADORA 01');
-  await produto.locator('option', { hasText: 'RACK SIRIUS 1.6' }).waitFor({ state: 'attached', timeout: 4000 });
-  checar(await produto.inputValue() === '', 'produto: trocar de grupo limpa o produto do grupo antigo');
+  const aviso = form.getByRole('alert');
+  await aviso.waitFor({ timeout: 4000 });
+  checar(/LATERAL SLEEP é produto do 0002 · FURADEIRA, e o posto EMBALADORA 01 é do 0005 · EMBALAGEM/.test(await aviso.innerText()),
+    'produto de outro grupo: a tela avisa na hora, nomeando os dois grupos');
+  checar(await form.locator('input[aria-label="Produto / Referência"]').inputValue() === 'LATERAL SLEEP',
+    'produto de outro grupo: nada muda sozinho — o produto continua a vista');
+  await form.locator('button', { hasText: 'Criar estudo' }).click();
+  await p.waitForTimeout(500);
+  checar(await p.evaluate(() => window.__posts.length) === 0 && await form.count() === 1,
+    'produto de outro grupo: o Criar nao grava a combinacao errada');
+  await form.getByRole('button', { name: '▾ escolher do cadastro' }).last().click();
   await produto.selectOption('RACK SIRIUS 1.6');
+  checar(await form.getByRole('alert').count() === 0, 'produto do posto escolhido: o aviso some');
   corpo = await criar();
   checar(corpo.produto === 'RACK SIRIUS 1.6' && corpo.recurso === 'EMBALADORA 01',
     `produto: grava o produto do grupo do posto (${corpo.produto} @ ${corpo.recurso})`);
@@ -398,19 +409,44 @@ const b = await chromium.launch({ executablePath: EXEC });
   checar(corpo.produto === 'LATERAL SLEEP' && corpo.recurso === 'FURADEIRA 04',
     `ida e volta: "Outra máquina…" e o mesmo posto digitado mantem o produto (${corpo.produto})`);
 
-  /* 7b. Maquina do cadastro SEM grupo tambem e' troca de grupo: o produto
-     da furadeira sai — e volta quando o posto volta para a furadeira. */
+  /* 7b. Maquina do cadastro SEM grupo: o produto da furadeira nao combina
+     com ela — avisa. Voltar para a furadeira: o aviso some e grava. */
   await abrir();
   await posto.selectOption('FURADEIRA 04');
   await form.getByRole('combobox', { name: 'Produto / Referência' }).selectOption('LATERAL SLEEP');
   await posto.selectOption('ESQUADREJADEIRA');
-  await p.waitForTimeout(200);
-  checar(await form.locator('input[aria-label="Produto / Referência"]').inputValue() === '',
-    'maquina sem grupo: o produto da furadeira sai do campo');
+  await form.getByRole('alert').waitFor({ timeout: 4000 });
+  checar(/o posto ESQUADREJADEIRA não é desse grupo/.test(await form.getByRole('alert').innerText()),
+    'maquina sem grupo: o produto da furadeira gera aviso');
   await posto.selectOption('FURADEIRA 04');
   await p.waitForTimeout(200);
+  checar(await form.getByRole('alert').count() === 0, 'de volta a furadeira: o aviso some');
   corpo = await criar();
-  checar(corpo.produto === 'LATERAL SLEEP', `ida e volta por maquina sem grupo: o produto volta (${corpo.produto})`);
+  checar(corpo.produto === 'LATERAL SLEEP', `ida e volta por maquina sem grupo: o produto fica (${corpo.produto})`);
+
+  /* 7c. Posto FORA do cadastro digitado ("Outra máquina…" SERRA 02) com
+     produto da furadeira: avisa e nao grava — era o caminho que escapava. */
+  await abrir();
+  await posto.selectOption('FURADEIRA 04');
+  await form.getByRole('combobox', { name: 'Produto / Referência' }).selectOption('LATERAL SLEEP');
+  await posto.selectOption('__outra');
+  await form.locator('input[aria-label="Recurso / Posto"]').pressSequentially('SERRA 02');
+  await form.getByRole('alert').waitFor({ timeout: 4000 });
+  await form.locator('button', { hasText: 'Criar estudo' }).click();
+  await p.waitForTimeout(500);
+  checar(await p.evaluate(() => window.__posts.length) === 0,
+    'posto fora do cadastro com produto da furadeira: o Criar nao grava');
+  await form.locator('button', { hasText: 'Cancelar' }).click();
+
+  /* 7d. Na embalagem, a conta digitada fala em PRODUTO do comeco ao fim
+     (o estudo da embalagem mede o produto), com ou sem programa. */
+  await abrir();
+  await posto.selectOption('EMBALADORA 01');
+  await painel.locator('label', { hasText: 'Quantidade por dia' }).locator('input').fill('300');
+  const conta = (await painel.innerText()).replace(/\u00a0/g, ' ');
+  checar(/Produtos que precisam sair/.test(conta) && /s\/produto/.test(conta) && /300 produtos/.test(conta)
+    && !/peça/.test(conta), 'embalagem: a conta digitada fala em produto, sem misturar peca');
+  await form.locator('button', { hasText: 'Cancelar' }).click();
 
   /* 8. "Outro produto…" escolhido na furadeira nao vale para a embalagem:
      la' o campo volta a ser a lista do cadastro do grupo novo. */

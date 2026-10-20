@@ -8,7 +8,7 @@ import {
   origemDoTakt, ressalvasDoPrograma, taktMsDoCalculo, taktMsDoEstudo,
 } from '../src/components/RitmoDemanda.jsx';
 import {
-  marcarTaktDoPrograma, produtoDeOutroGrupo, programaDoTakt, programaLido, proximaMarcaTakt, proximoProduto,
+  conflitoDoProduto, conflitoDoTakt, programaDoTakt, programaLido,
 } from '../src/lib/taktDaSemana.js';
 import { motivoSemTakt } from '../src/features/coleta/embalagem/motivoSemTakt.js';
 
@@ -117,24 +117,6 @@ describe('conta de uma maquina na semana', () => {
   });
 });
 
-describe('produto acompanha o grupo do posto', () => {
-  const furadeira = [{ nome: 'LATERAL SLEEP' }, { nome: 'FUNDO SLEEP' }];
-  const embalagem = [{ nome: 'RACK SIRIUS 1.6' }];
-  it('produto da lista do grupo antigo sai ao trocar de grupo', () => {
-    expect(produtoDeOutroGrupo({ produto: 'LATERAL SLEEP', antes: furadeira, depois: embalagem })).toBe(true);
-  });
-  it('produto que tambem esta no grupo novo fica', () => {
-    expect(produtoDeOutroGrupo({ produto: 'LATERAL SLEEP', antes: furadeira, depois: furadeira })).toBe(false);
-  });
-  it('produto digitado a mao fica: e do analista', () => {
-    expect(produtoDeOutroGrupo({ produto: 'Mesa nova', antes: furadeira, depois: embalagem })).toBe(false);
-    expect(produtoDeOutroGrupo({ produto: 'Mesa nova', antes: [], depois: embalagem })).toBe(false);
-  });
-  it('sem produto, nada a limpar', () => {
-    expect(produtoDeOutroGrupo({ produto: '', antes: furadeira, depois: embalagem })).toBe(false);
-  });
-});
-
 describe('aviso sem programa', () => {
   const grupo = { codigo: '0002', nome: 'FURADEIRA' };
   it('antes do posto, diz o que fazer para o takt vir do programa', () => {
@@ -192,75 +174,56 @@ describe('programaDoTakt', () => {
 });
 
 /**
- * O PRODUTO ACOMPANHA O GRUPO e VOLTA com ele: sai quando o analista troca
- * o posto para outro grupo (inclusive maquina sem grupo), fica guardado, e
- * volta quando o posto volta ao grupo. A ida e volta pela seta do teclado
- * apagava o produto gravado.
+ * O PRODUTO TEM DE SER DO POSTO — conferido, nao adivinhado. Nada muda
+ * sozinho quando o posto muda; a tela avisa e nao grava a combinacao.
  */
-describe('produto acompanha o grupo do posto — e volta', () => {
-  const furadeira = [{ nome: 'LATERAL SLEEP' }];
-  const embalagem = [{ nome: 'RACK SIRIUS 1.6' }];
-  const inicio = { recurso: 'FURADEIRA 04', grupoChave: 'g2', produtos: furadeira, guardado: null };
-  const passo = (estado, recurso, grupoChave, produtos, produto) => proximoProduto(estado, { recurso, grupoChave, produtos, produto });
-
-  it('troca para outro grupo: sai, guardado', () => {
-    const r = passo(inicio, 'EMBALADORA 01', 'g5', embalagem, 'LATERAL SLEEP');
-    expect(r.produto).toBe('');
-    expect(r.estado.guardado).toEqual({ grupoChave: 'g2', produto: 'LATERAL SLEEP' });
+describe('produto do posto, conferido', () => {
+  const g2 = { id: 'g2', codigo: '0002', nome: 'FURADEIRA' };
+  const g5 = { id: 'g5', codigo: '0005', nome: 'EMBALAGEM' };
+  const cadastro = {
+    grupos: [g2, g5],
+    produtos: [
+      { id: 'p1', nome: 'LATERAL SLEEP', grupo_id: 'g2', ativo: true },
+      { id: 'p3', nome: 'RACK SIRIUS 1.6', grupo_id: 'g5', ativo: true },
+    ],
+  };
+  it('produto do grupo do posto: tudo certo (pelo nome normalizado)', () => {
+    expect(conflitoDoProduto({ produto: 'LATERAL SLEEP', recurso: 'FURADEIRA 04', cadastro, grupo: g2 })).toBeNull();
+    expect(conflitoDoProduto({ produto: 'lateral  sleep', recurso: 'FURADEIRA 04', cadastro, grupo: g2 })).toBeNull();
   });
-  it('ida e volta pela seta: o produto volta', () => {
-    const ida = passo(inicio, 'EMBALADORA 01', 'g5', embalagem, 'LATERAL SLEEP');
-    const volta = passo(ida.estado, 'FURADEIRA 15', 'g2', furadeira, ida.produto);
-    expect(volta.produto).toBe('LATERAL SLEEP');
-    expect(volta.estado.guardado).toBeNull();
+  it('produto de outro grupo: avisa, nomeando os dois grupos', () => {
+    expect(conflitoDoProduto({ produto: 'LATERAL SLEEP', recurso: 'EMBALADORA 01', cadastro, grupo: g5 }).texto)
+      .toBe('LATERAL SLEEP é produto do 0002 · FURADEIRA, e o posto EMBALADORA 01 é do 0005 · EMBALAGEM. '
+        + 'Escolha um produto deste posto, ou troque o posto.');
   });
-  it('maquina do cadastro SEM grupo tambem e troca — e volta', () => {
-    const ida = passo(inicio, 'ESQUADREJADEIRA', 'sem-grupo', [], 'LATERAL SLEEP');
-    expect(ida.produto).toBe('');
-    expect(passo(ida.estado, 'FURADEIRA 04', 'g2', furadeira, '').produto).toBe('LATERAL SLEEP');
+  it('posto sem grupo ou fora do cadastro com produto de um grupo: avisa', () => {
+    expect(conflitoDoProduto({ produto: 'LATERAL SLEEP', recurso: 'SERRA 02', cadastro, grupo: null }).texto)
+      .toMatch(/o posto SERRA 02 não é desse grupo/);
   });
-  it('posto fora do cadastro (digitando): nao limpa', () => {
-    expect(passo(inicio, 'FURAD', null, [], 'LATERAL SLEEP').produto).toBe('LATERAL SLEEP');
-    expect(passo(inicio, '', null, [], 'LATERAL SLEEP').produto).toBe('LATERAL SLEEP');
-  });
-  it('o cadastro mudou sozinho (mesmo posto): nao limpa', () => {
-    expect(passo(inicio, 'FURADEIRA 04', 'g5', embalagem, 'LATERAL SLEEP').produto).toBe('LATERAL SLEEP');
-  });
-  it('produto digitado a mao: fica', () => {
-    expect(passo(inicio, 'EMBALADORA 01', 'g5', embalagem, 'Mesa nova').produto).toBe('Mesa nova');
-  });
-  it('produto escolhido no grupo novo nao e trocado pelo guardado', () => {
-    const ida = passo(inicio, 'EMBALADORA 01', 'g5', embalagem, 'LATERAL SLEEP');
-    const escolheu = passo(ida.estado, 'EMBALADORA 01', 'g5', embalagem, 'RACK SIRIUS 1.6');
-    expect(escolheu.produto).toBe('RACK SIRIUS 1.6');
+  it('produto digitado a mao (de lista nenhuma) e sem cadastro: passa', () => {
+    expect(conflitoDoProduto({ produto: 'Mesa nova', recurso: 'EMBALADORA 01', cadastro, grupo: g5 })).toBeNull();
+    expect(conflitoDoProduto({ produto: 'LATERAL SLEEP', recurso: 'EMBALADORA 01', cadastro: { produtos: [] }, grupo: g5 }))
+      .toBeNull();
+    expect(conflitoDoProduto({ produto: '', recurso: 'EMBALADORA 01', cadastro, grupo: g5 })).toBeNull();
   });
 });
 
-describe('takt do programa no Editar: sai com o grupo e volta com ele', () => {
-  it('trocar de grupo devolve o anterior; voltar devolve o do programa', () => {
-    const marca = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '120.0' });
-    const fora = proximaMarcaTakt(marca, { grupoChave: 'g5', taktSeg: '144.0' });
-    expect(fora.taktSeg).toBe('120.0');
-    const volta = proximaMarcaTakt(fora.marca, { grupoChave: 'g2', taktSeg: '120.0' });
-    expect(volta.taktSeg).toBe('144.0');
+describe('takt do programa no Editar, conferido', () => {
+  const g2 = { id: 'g2', codigo: '0002', nome: 'FURADEIRA' };
+  const g5 = { id: 'g5', codigo: '0005', nome: 'EMBALAGEM' };
+  const marca = { grupoId: 'g2', grupo: '0002 · FURADEIRA', escrito: '144.0' };
+  it('no grupo em que foi clicado: tudo certo', () => {
+    expect(conflitoDoTakt({ marca, grupo: g2, taktSeg: '144.0' })).toBeNull();
   });
-  it('maquina sem grupo tambem devolve o anterior', () => {
-    const marca = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '' });
-    expect(proximaMarcaTakt(marca, { grupoChave: 'sem-grupo', taktSeg: '144.0' }).taktSeg).toBe('');
+  it('posto em outro grupo, sem grupo ou fora do cadastro: avisa', () => {
+    expect(conflitoDoTakt({ marca, grupo: g5, taktSeg: '144.0' }).texto)
+      .toBe('Este takt (144.0 s) veio do programa do 0002 · FURADEIRA, e o posto agora é do 0005 · EMBALAGEM. '
+        + 'Digite o takt ou use o programa do grupo do posto.');
+    expect(conflitoDoTakt({ marca, grupo: null, taktSeg: '144.0' }).texto).toMatch(/não é desse grupo/);
   });
-  it('posto pela metade (fora do cadastro) nao mexe', () => {
-    const marca = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '' });
-    expect(proximaMarcaTakt(marca, { grupoChave: null, taktSeg: '144.0' }).taktSeg).toBe('144.0');
-  });
-  it('duplo clique nao troca o anterior pelo proprio takt do programa', () => {
-    const um = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '' });
-    const dois = marcarTaktDoPrograma(um, { grupoChave: 'g2', escrito: '144.0', taktSeg: '144.0' });
-    expect(proximaMarcaTakt(dois, { grupoChave: 'g5', taktSeg: '144.0' }).taktSeg).toBe('');
-  });
-  it('numero digitado pelo analista e dele: a marca se desfaz', () => {
-    const marca = marcarTaktDoPrograma(null, { grupoChave: 'g2', escrito: '144.0', taktSeg: '' });
-    const r = proximaMarcaTakt(marca, { grupoChave: 'g5', taktSeg: '150' });
-    expect(r).toEqual({ marca: null, taktSeg: '150' });
+  it('numero diferente do escrito (o analista digitou) ou sem marca: passa', () => {
+    expect(conflitoDoTakt({ marca, grupo: g5, taktSeg: '150' })).toBeNull();
+    expect(conflitoDoTakt({ marca: null, grupo: g5, taktSeg: '144.0' })).toBeNull();
   });
 });
 

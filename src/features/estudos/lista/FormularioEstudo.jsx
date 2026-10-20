@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
 import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import RitmoDemanda, {
-  CALC_PADRAO, avisoSemPrograma, origemDoTakt, taktMsDoEstudo,
+  CALC_PADRAO, PRODUTO, avisoSemPrograma, origemDoTakt, taktMsDoEstudo,
 } from '../../../components/RitmoDemanda.jsx';
-import { programaDoTakt, useProdutoSegueOGrupo, useProgramaDoPosto } from '../../../lib/taktDaSemana.js';
+import { conflitoDoProduto, programaDoTakt, useProgramaDoPosto } from '../../../lib/taktDaSemana.js';
+import { unidadeDoPosto } from '../../../domain/cronoanalise.js';
 
 /**
  * Novo estudo em tres etapas visuais: quem e' (identificacao), como coletar
@@ -57,11 +58,14 @@ export default function FormularioEstudo({
   const origem = origemDoTakt({
     programa, escolha: escolha.grupoId === grupoId ? escolha.valor : null, digitou,
   });
-  const trocarProduto = useCallback((produto) => setDados((d) => ({ ...d, produto })), []);
-  useProdutoSegueOGrupo({
-    recurso: dados.recurso, grupoChave: posto.grupoChave, produtos: posto.produtos, produto: dados.produto,
-    aoTrocar: trocarProduto,
+  /* O produto nao muda sozinho quando o posto muda: a tela confere e
+     avisa (conflitoDoProduto), e o Criar nao grava a combinacao errada. */
+  const conflito = conflitoDoProduto({
+    produto: dados.produto, recurso: dados.recurso, cadastro: posto.cadastro, grupo: posto.grupo,
   });
+  // O estudo da embalagem mede o PRODUTO inteiro; nos outros postos, a peca.
+  const unidadeDoEstudo = posto.grupo && unidadeDoPosto(posto.grupo.nome).singular === 'volume'
+    ? PRODUTO : undefined;
 
   const campo = (k) => ({
     value: dados[k],
@@ -76,6 +80,7 @@ export default function FormularioEstudo({
   async function enviar(ev) {
     ev.preventDefault();
     if (!dados.nome.trim()) { setErro('Informe o nome do estudo.'); irParaEtapa(1); return; }
+    if (conflito) { setErro(conflito.texto); irParaEtapa(1); return; }
     setSalvando(true);
     setErro(null);
     try { await aoSalvar({ ...dados, taktTimeMs: taktMsDoEstudo({ origem, programa, calc }) }); }
@@ -147,6 +152,7 @@ export default function FormularioEstudo({
                     placeholder="Ex: Mesa Cabeceira Sleep"
                     estilos={{ input: est.input, select: est.input, link: est.linkCadastro }}
                   />
+                  {conflito && <span style={est.alertaCampo} role="alert">{conflito.texto}</span>}
                 </Campo>
                 {/* Com cadastro, o analista vira LISTA: e' o que impede a
                     mesma pessoa de virar "ODERLI", "ODERLI GARCIA" e
@@ -196,8 +202,9 @@ export default function FormularioEstudo({
               recurso: dados.recurso, grupo: posto.grupo, estado: posto.takt.estado,
               semRede: posto.takt.semRede, semCadastro: posto.semCadastro,
               buscandoCadastro: posto.buscandoCadastro, noCadastro: posto.noCadastro,
-              maquinasDoGrupo: posto.maquinasDoGrupo,
+              buscaFalhou: posto.buscaFalhou, maquinasDoGrupo: posto.maquinasDoGrupo,
             })}
+            unidadeDoEstudo={unidadeDoEstudo}
             aoUsarPrograma={() => setEscolha({ grupoId, valor: 'programa' })}
             aoSimular={() => setEscolha({ grupoId, valor: 'manual' })}
           />

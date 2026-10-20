@@ -22,6 +22,9 @@ import { formatarSegundos, taktTime } from '../domain/cronoanalise.js';
 export default function RitmoDemanda({
   t, analise, calc, aoMudar, refQuantidade, aoFocar,
   programa = null, origem = 'manual', aviso = null, aoUsarPrograma, aoSimular,
+  // A unidade do CICLO do estudo: peca, ou produto na embalagem (o estudo
+  // da embalagem mede o produto inteiro). E' dela a conta digitada.
+  unidadeDoEstudo = PECA,
 }) {
   const est = estilos(t, analise);
   const temPrograma = programa?.taktMs > 0;
@@ -109,9 +112,10 @@ export default function RitmoDemanda({
             onChange={(ev) => aoMudar({ ...calc, quantidade: ev.target.value })}
           />
           {/* Na embalagem o estudo mede o PRODUTO, e o programa vem em
-              volumes: a dica diz qual dos dois este campo conta. */}
+              volumes: a dica diz qual dos dois este campo conta — pela
+              unidade do posto, com ou sem programa. */}
           <span style={est.dica}>
-            {unidade.singular === 'volume'
+            {unidadeDoEstudo.singular === 'produto'
               ? 'Produtos que precisam sair (um rack de 2 volumes conta 1).'
               : 'Peças que precisam sair.'}
           </span>
@@ -132,11 +136,11 @@ export default function RitmoDemanda({
         <span style={est.taktRotulo}>Takt Time</span>
         <div style={est.taktValorLinha}>
           <span style={est.taktValor}>{taktMs > 0 ? formatarTakt(taktMs) : '--:--'}</span>
-          <span style={est.taktUnidade}>s/peça</span>
+          <span style={est.taktUnidade}>s/{unidadeDoEstudo.singular}</span>
         </div>
         <span style={est.taktTexto}>
           {taktMs > 0
-            ? 'Tempo disponível por peça para atender a meta diária.'
+            ? `Tempo disponível por ${unidadeDoEstudo.singular} para atender a meta diária.`
             : 'Preencha quantidade e horas para calcular o ritmo.'}
         </span>
       </div>
@@ -144,7 +148,7 @@ export default function RitmoDemanda({
       <div style={est.tiles}>
         <div style={est.tile}>
           <span style={est.tileRotulo}>Demanda diária</span>
-          <span style={est.tileValor}>{qtd > 0 ? `${qtd} peças` : '—'}</span>
+          <span style={est.tileValor}>{qtd > 0 ? `${qtd} ${unidadeDoEstudo.plural}` : '—'}</span>
         </div>
         <div style={est.tile}>
           <span style={est.tileRotulo}>Tempo disponível</span>
@@ -173,6 +177,7 @@ export default function RitmoDemanda({
 }
 
 const PECA = { singular: 'peça', plural: 'peças' };
+export const PRODUTO = { singular: 'produto', plural: 'produtos' };
 
 /**
  * As RESSALVAS do numero do programa — as mesmas do quadro "Programa da
@@ -257,7 +262,7 @@ export function origemDoTakt({ programa, escolha = null, digitou = false } = {})
  */
 export function avisoSemPrograma({
   recurso, grupo, estado, semRede = false, semCadastro = false, buscandoCadastro = false,
-  noCadastro = true, maquinasDoGrupo = null,
+  noCadastro = true, buscaFalhou = false, maquinasDoGrupo = null,
 }) {
   if (!String(recurso || '').trim()) return 'Escolha o posto para trazer o takt do programa da semana.';
   if (!grupo) {
@@ -265,6 +270,11 @@ export function avisoSemPrograma({
     // pode existir, o cadastro e' que ainda nao chegou — ou nao chegou.
     if (buscandoCadastro) return 'Buscando o cadastro de máquinas…';
     if (semCadastro) return 'O cadastro de máquinas não chegou a este aparelho: digite a demanda.';
+    // Sem rede, o cadastro na tela e' o guardado: a maquina pode ter sido
+    // cadastrada no PC depois. Culpar o cadastro seria culpar a rede.
+    if (!noCadastro && buscaFalhou) {
+      return 'Posto fora do cadastro guardado neste aparelho (sem rede para buscar o atual): digite a demanda.';
+    }
     return noCadastro
       ? 'Posto sem grupo no cadastro de máquinas: digite a demanda.'
       : 'Posto fora do cadastro de máquinas: digite a demanda.';
