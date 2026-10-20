@@ -1,7 +1,42 @@
 import { useState } from 'react';
+import { unidadeDoPosto } from '../../domain/cronoanalise.js';
 import { atualizarProduto, criarProduto, removerProduto } from '../../lib/api.js';
+import { espaco } from '../../theme/escala.js';
 import { est, t } from './maquinas/estilos.js';
 import { useCadastroMaquinas } from './maquinas/useCadastroMaquinas.js';
+
+/**
+ * O que o formulario manda de VOLUMES — validado ANTES de sair do navegador.
+ *
+ * O mesmo caminho que maquinas/nominal.js fecha: "2 caixas" digitado viraria
+ * Number("2 caixas") = NaN, o JSON manda NaN como null, e null no servidor
+ * e' "nao informado" — o numero sumiria com a tela dizendo que salvou.
+ * Vazio continua sendo "nao informado" (e' como se diz "nao sei"); texto que
+ * nao e' um numero inteiro e' ERRO, e nunca vira null nem 1 calado.
+ */
+export function lerVolumesDoFormulario(valor) {
+  const texto = String(valor ?? '').trim();
+  if (texto === '') return null;
+  if (!/^\d+$/.test(texto)) {
+    throw new Error(`"${texto}" não é um número inteiro: volumes é quantas caixas o produto leva na embalagem (ex: 1, 2 ou 3)`);
+  }
+  const n = Number(texto);
+  if (n < 1 || n > 50) throw new Error('Volumes deve ficar entre 1 e 50 caixas — ou em branco, se não souber');
+  return n;
+}
+
+/** "1 volume", "2 volumes". */
+export const rotuloVolumes = (n) => `${n} ${Number(n) === 1 ? 'volume' : 'volumes'}`;
+
+/**
+ * Produto da EMBALAGEM sem os volumes: e' o que faz o takt do programa (em
+ * volumes) nao entrar sozinho no estudo dele. Ausente (cache velho, servidor
+ * sem a coluna) e' o mesmo que nulo. Desativado nao conta: ele nao vai mais
+ * para o tablet nem para estudo novo.
+ */
+export const faltamVolumes = (produto, grupo) =>
+  unidadeDoPosto(grupo?.nome).singular === 'volume'
+  && produto?.ativo !== false && produto?.volumes == null;
 
 /**
  * CADASTRO DE PRODUTOS — os que vao para cronoanalise, trabalho de PC.
@@ -23,13 +58,18 @@ import { useCadastroMaquinas } from './maquinas/useCadastroMaquinas.js';
  *    com que foram gravadas. A dica diz isso no formulario.
  *  - O codigo e' o do ERP, opcional: e' como o resto da fabrica chama o
  *    produto, e e' a ponte para o ERP no BI.
+ *  - VOLUMES (quantas caixas o produto leva na embalagem) e' opcional e
+ *    vazio quer dizer "nao informado", nunca 1. Na embalagem, o produto
+ *    ativo sem o numero ganha um destaque: e' ele que converte o programa
+ *    (em volumes) para a unidade do estudo (produto).
  */
 export default function Produtos({ aoFechar, grupoInicial = null }) {
   const { maquinas, grupos, produtos, erro, ocupado, aplicar, recarregar } = useCadastroMaquinas();
   const [escolhido, setEscolhido] = useState(grupoInicial);
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
-  const [editando, setEditando] = useState(null);   // { id, nome, codigo, grupoId }
+  const [volumes, setVolumes] = useState('');
+  const [editando, setEditando] = useState(null);   // { id, nome, codigo, volumes, grupoId }
   const [excluindo, setExcluindo] = useState(null); // id com a exclusao armada
 
   const carregando = maquinas == null && !erro;
@@ -41,9 +81,15 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
   const cadastrar = async (ev) => {
     ev.preventDefault();
     if (!grupo || !nome.trim()) return;
-    if (await aplicar(() => criarProduto({ nome: nome.trim(), codigo: codigo.trim(), grupoId: grupo.id }))) {
+    // Os volumes sao lidos DENTRO do aplicar: a digitacao errada aparece no
+    // mesmo lugar que o erro do servidor, e nada e' enviado.
+    if (await aplicar(() => criarProduto({
+      nome: nome.trim(), codigo: codigo.trim(), grupoId: grupo.id,
+      volumes: lerVolumesDoFormulario(volumes),
+    }))) {
       setNome('');
       setCodigo('');
+      setVolumes('');
     }
   };
 
@@ -117,13 +163,25 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
                   aria-label="Código do produto no ERP"
                   style={{ ...est.input, width: 'auto', flex: '1 1 140px' }}
                 />
-                <button type="submit" style={est.botaoPrimario} disabled={ocupado || !nome.trim()}>
-                  Cadastrar
-                </button>
+                {/* Volumes e o botao quebram JUNTOS: no painel do PC os
+                    quatro nao cabem numa linha, e o Cadastrar sozinho
+                    embaixo parecia esquecido. Cortar os textos de exemplo
+                    dos campos para caber tirava a instrucao deles. */}
+                <div style={loc.fimDaLinha}>
+                  <CampoVolumes valor={volumes} aoMudar={setVolumes} />
+                  <button type="submit" style={est.botaoPrimario} disabled={ocupado || !nome.trim()}>
+                    Cadastrar
+                  </button>
+                </div>
               </form>
               <span style={est.destinoCadastro}>
                 Vai para {grupo.codigo} · {grupo.nome}
               </span>
+              <p style={est.dica}>
+                Volumes = em quantas caixas o produto sai embalado (rack em 2 caixas = 2 volumes).
+                A embalagem conta caixas e o estudo de tempos conta produtos: é este número que
+                converte um no outro. Em branco = não informado.
+              </p>
 
               {doGrupo.length === 0 ? (
                 <p style={est.dica}>
@@ -139,6 +197,7 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
                       aoSalvar={async () => {
                         if (await aplicar(() => atualizarProduto(p.id, {
                           nome: editando.nome.trim(), codigo: editando.codigo.trim(), grupoId: editando.grupoId,
+                          volumes: lerVolumesDoFormulario(editando.volumes),
                         }))) setEditando(null);
                       }}
                     />
@@ -146,6 +205,19 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
                     <div key={p.id} style={{ ...est.linha, ...(p.ativo ? {} : est.linhaInativa) }}>
                       <span style={est.linhaRotulo}>{p.nome}</span>
                       {p.codigo && <span style={est.seloNominal} title="Código no ERP">{p.codigo}</span>}
+                      {p.volumes != null && (
+                        <span style={est.seloNominal} title="Caixas do produto na embalagem">
+                          {rotuloVolumes(p.volumes)}
+                        </span>
+                      )}
+                      {faltamVolumes(p, grupo) && (
+                        <span
+                          style={loc.seloSemVolumes}
+                          title="Sem os volumes, o takt do programa da embalagem (em volumes) não entra sozinho no estudo deste produto"
+                        >
+                          volumes não informados
+                        </span>
+                      )}
                       {!p.ativo && <span style={est.seloInativo}>Desativado</span>}
                       <div style={est.linhaBotoes}>
                         {excluindo === p.id ? (
@@ -165,7 +237,8 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
                             <button
                               type="button" style={est.botaoTexto} aria-label={`Editar ${p.nome}`}
                               onClick={() => setEditando({
-                                id: p.id, nome: p.nome, codigo: p.codigo || '', grupoId: p.grupo_id,
+                                id: p.id, nome: p.nome, codigo: p.codigo || '',
+                                volumes: p.volumes == null ? '' : String(p.volumes), grupoId: p.grupo_id,
                               })}
                             >
                               Editar
@@ -212,7 +285,29 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
   );
 }
 
-/** Editar um produto: nome, codigo e o grupo (produto cadastrado no posto errado muda de grupo). */
+/**
+ * O campo de VOLUMES: numero inteiro pequeno, com o rotulo VISIVEL ao lado —
+ * so' com placeholder, um "2" no campo nao diz de que e' o 2. inputMode
+ * numeric abre o teclado de numeros no tablet; type=text (e nao number)
+ * para o navegador nao engolir calado o que nao for numero: quem decide e'
+ * lerVolumesDoFormulario, que avisa.
+ */
+function CampoVolumes({ valor, aoMudar }) {
+  return (
+    <label style={loc.campoVolumes}>
+      <span style={est.destinoCadastro}>Volumes</span>
+      <input
+        type="text" inputMode="numeric" value={valor}
+        onChange={(ev) => aoMudar(ev.target.value)}
+        placeholder="—"
+        aria-label="Volumes do produto"
+        style={loc.inputVolumes}
+      />
+    </label>
+  );
+}
+
+/** Editar um produto: nome, codigo, volumes e o grupo (produto cadastrado no posto errado muda de grupo). */
 function FormularioEdicao({
   produto, edicao, setEdicao, grupos, ocupado, aoSalvar,
 }) {
@@ -236,6 +331,7 @@ function FormularioEdicao({
           aria-label="Código do produto no ERP"
           style={{ ...est.input, width: 'auto', flex: '1 1 120px' }}
         />
+        <CampoVolumes valor={edicao.volumes} aoMudar={(v) => setEdicao({ ...edicao, volumes: v })} />
         <select
           value={edicao.grupoId}
           onChange={(ev) => setEdicao({ ...edicao, grupoId: ev.target.value })}
@@ -258,3 +354,15 @@ function FormularioEdicao({
     </form>
   );
 }
+
+/**
+ * Estilos so' desta tela, por cima dos do cadastro de maquinas (estilos.js
+ * e' a casa das duas telas; o que so' o produto tem fica aqui).
+ */
+const loc = {
+  fimDaLinha: { display: 'flex', alignItems: 'center', gap: espaco.sm, flex: '0 0 auto' },
+  campoVolumes: { display: 'flex', alignItems: 'center', gap: espaco.xs, flex: '0 0 auto' },
+  inputVolumes: { ...est.input, width: 64, textAlign: 'center' },
+  // Discreto, na cor de atencao e nao na de erro: falta um dado, nada quebrou.
+  seloSemVolumes: { ...est.seloNominal, color: t.atencao, borderColor: t.atencao, background: t.atencaoFundo },
+};

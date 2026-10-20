@@ -591,6 +591,26 @@ CREATE TABLE IF NOT EXISTS produtos (
 CREATE UNIQUE INDEX IF NOT EXISTS produtos_nome_unq ON produtos (empresa_id, grupo_id, lower(btrim(nome)));
 CREATE INDEX IF NOT EXISTS produtos_empresa_idx ON produtos (empresa_id, grupo_id, nome);
 
+-- VOLUMES POR PRODUTO: em quantas caixas (volumes) o produto sai da
+-- embalagem. E' a ponte entre as duas unidades da fabrica: a embalagem
+-- conta VOLUME (o programa da semana e as medicoes do tablet sao em
+-- volumes, ver unidadeDoPosto) e o estudo de tempos conta PRODUTO. O rack
+-- que sai em dois volumes tem, por produto, o dobro do takt por volume. O
+-- roteiro do ERP traz o numero como componente "VOL 1/N".
+--
+-- NULO = NAO INFORMADO, e nunca 1 por padrao: um 1 assumido num produto de
+-- dois volumes corta o takt do estudo pela metade sem ninguem ver. Sem o
+-- numero, o takt do programa nao entra sozinho no estudo — o analista
+-- decide. O teto (50) e' folga, nao regra de produto: barra o erro
+-- grosseiro de digitacao (200 no lugar de 2) sem limitar movel real.
+--
+-- Acrescentada DEPOIS da tabela, que ja' esta' em producao: so' ADD COLUMN,
+-- nula e sem DEFAULT (so' metadado, nao reescreve a tabela). O build de
+-- preview nao migra e usa este MESMO banco: a API le a coluna de um jeito
+-- que funciona com ou sem ela (ver api/_lib/produtos.js).
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS volumes smallint
+  CHECK (volumes IS NULL OR (volumes BETWEEN 1 AND 50));
+
 ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
 -- Politicas de `produtos`: idem, na secao de RLS.
 

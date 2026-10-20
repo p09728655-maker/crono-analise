@@ -251,8 +251,11 @@ export const limparDemanda = (grupoId) =>
    guarda; aqui so' as escritas. Mesma rota da demanda pelo mesmo teto de
    funcoes. Ver api/_lib/produtos.js. */
 const ROTA_PRODUTOS = '/maquinas?produtos=1';
-export const criarProduto = ({ nome, codigo, grupoId }) =>
-  requisitar(ROTA_PRODUTOS, { metodo: 'POST', corpo: { nome, codigo, grupoId } }).then((r) => r.produto);
+// volumes: inteiro de 1 a 50, ou null = nao informado (nunca vira 1). Ausente
+// no corpo e' o mesmo null — o servidor nao inventa numero.
+export const criarProduto = ({ nome, codigo, grupoId, volumes = null }) =>
+  requisitar(ROTA_PRODUTOS, { metodo: 'POST', corpo: { nome, codigo, grupoId, volumes } }).then((r) => r.produto);
+// Repassa `dados` inteiros: { volumes } sozinho e' um PATCH valido, e null apaga.
 export const atualizarProduto = (id, dados) =>
   requisitar(`${ROTA_PRODUTOS}&id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: dados })
     .then((r) => r.produto);

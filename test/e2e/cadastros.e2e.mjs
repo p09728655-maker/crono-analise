@@ -6,6 +6,11 @@
  * nunca os da furadeira; o PC cadastra produto no grupo certo e diz para
  * quem cada motivo vale, com o setup sempre para todos.
  *
+ * VOLUMES (quantas caixas o produto leva na embalagem): o PC grava o numero
+ * no cadastro e na edicao, vazio vai como null (nunca 1), texto que nao e'
+ * numero nao sai do navegador, e o produto ativo da embalagem sem o numero
+ * ganha o destaque — o da furadeira, nao.
+ *
  * Uso: npm run dev (porta 5199) e depois node test/e2e/cadastros.e2e.mjs
  */
 import { chromium } from 'playwright';
@@ -27,9 +32,12 @@ const CADASTRO = {
   ],
   grupos: [FUR, EMB],
   produtos: [
-    { id: 'p1', nome: 'Rack Sirius 1.6', codigo: '12345', grupo_id: EMB.id, ativo: true },
-    { id: 'p2', nome: 'Rack Antigo', codigo: null, grupo_id: EMB.id, ativo: false },
-    { id: 'p3', nome: 'Lateral Mesa', codigo: null, grupo_id: FUR.id, ativo: true },
+    { id: 'p1', nome: 'Rack Sirius 1.6', codigo: '12345', grupo_id: EMB.id, ativo: true, volumes: 2 },
+    { id: 'p2', nome: 'Rack Antigo', codigo: null, grupo_id: EMB.id, ativo: false, volumes: null },
+    { id: 'p3', nome: 'Lateral Mesa', codigo: null, grupo_id: FUR.id, ativo: true, volumes: null },
+    // Sem a chave `volumes`: o cadastro de um servidor que ainda nao a tem
+    // (ou o cache velho do tablet) — tem de valer como "nao informado".
+    { id: 'p4', nome: 'Mesa Cabeceira Sleep', codigo: null, grupo_id: EMB.id, ativo: true },
   ],
 };
 const MOTIVOS = [
@@ -44,7 +52,7 @@ async function simularServidor(pagina, escritas) {
     if (/demanda=1/.test(url)) return rota.fulfill({ json: { demandas: [] } });
     if (/produtos=1/.test(url)) {
       const corpo = rota.request().postDataJSON();
-      escritas.push({ rota: 'produtos', metodo: rota.request().method(), corpo });
+      escritas.push({ rota: 'produtos', metodo: rota.request().method(), url, corpo });
       return rota.fulfill({ status: 201, json: { produto: { id: 'p9', ativo: true, grupo_id: corpo?.grupoId, ...corpo } } });
     }
     return rota.fulfill({ json: CADASTRO });
@@ -141,7 +149,66 @@ for (let i = 0; i < 20 && !escritas.some((e) => e.rota === 'produtos'); i++) awa
 const novo = escritas.find((e) => e.rota === 'produtos');
 checar(novo?.metodo === 'POST' && novo.corpo?.nome === 'Armário Encanto' && novo.corpo?.codigo === 'A-77'
   && novo.corpo?.grupoId === EMB.id, 'PC: cadastrar manda nome, codigo e o grupo da embalagem');
+checar(novo && 'volumes' in novo.corpo && novo.corpo.volumes === null,
+  'PC: volumes em branco vai como null (nao informado), nunca 1');
+
+/* VOLUMES na lista: o selo do numero, e o destaque so' para o produto
+   ativo da embalagem que nao tem o numero. */
+const linhaDe = (nome) => cadastro.locator('div').filter({ has: p.getByText(nome, { exact: true }) }).last();
+checar(/2 volumes/.test(await linhaDe('Rack Sirius 1.6').innerText()), 'PC: a linha mostra o selo "2 volumes"');
+checar(/volumes não informados/.test(await linhaDe('Mesa Cabeceira Sleep').innerText()),
+  'PC: produto ativo da embalagem sem volumes ganha o destaque (mesmo sem a chave no cadastro)');
+checar(!/volumes não informados/.test(await linhaDe('Rack Antigo').innerText()),
+  'PC: produto desativado nao ganha o destaque');
+checar(await cadastro.getByText('volumes não informados', { exact: true }).count() === 1,
+  'PC: um destaque so, o do produto que falta');
+
+// Texto que nao e' numero: erro na tela e NADA sai para o servidor.
+const antes = escritas.length;
+await cadastro.locator('input[aria-label="Nome do produto"]').first().fill('Rack Pinus');
+await cadastro.locator('input[aria-label="Volumes do produto"]').first().fill('2 caixas');
+await cadastro.getByRole('button', { name: 'Cadastrar' }).click();
+await cadastro.getByRole('alert').waitFor({ timeout: 4000 });
+checar(/não é um número inteiro/.test(await cadastro.getByRole('alert').innerText()) && escritas.length === antes,
+  'PC: "2 caixas" em volumes da erro na tela e nao envia nada');
+
+// Numero valido: vai no POST como numero.
+await cadastro.locator('input[aria-label="Volumes do produto"]').first().fill('3');
+await cadastro.getByRole('button', { name: 'Cadastrar' }).click();
+for (let i = 0; i < 20 && escritas.length === antes; i++) await p.waitForTimeout(100);
+const comVolumes = escritas[antes];
+checar(comVolumes?.metodo === 'POST' && comVolumes.corpo?.nome === 'Rack Pinus' && comVolumes.corpo?.volumes === 3,
+  'PC: cadastrar com 3 volumes manda volumes: 3');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-produtos.png` });
+
+// EDITAR: o campo abre com o numero gravado; trocar manda o PATCH.
+await cadastro.getByRole('button', { name: 'Editar Rack Sirius 1.6' }).click();
+const edicao = cadastro.getByRole('form', { name: 'Editar Rack Sirius 1.6' });
+const campoEdicao = edicao.locator('input[aria-label="Volumes do produto"]');
+checar(await campoEdicao.inputValue() === '2', 'PC: editar abre com os volumes gravados (2)');
+if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-produtos-editar.png` });
+await campoEdicao.fill('1');
+const antesPatch = escritas.length;
+await edicao.getByRole('button', { name: 'Salvar' }).click();
+for (let i = 0; i < 20 && escritas.length === antesPatch; i++) await p.waitForTimeout(100);
+const patchProduto = escritas[antesPatch];
+checar(patchProduto?.metodo === 'PATCH' && /id=p1/.test(patchProduto.url) && patchProduto.corpo?.volumes === 1
+  && patchProduto.corpo?.nome === 'Rack Sirius 1.6', 'PC: salvar a edicao manda o PATCH com volumes: 1');
+
+// Esvaziar o campo na edicao APAGA (null), nao vira 1.
+await cadastro.getByRole('button', { name: 'Editar Rack Sirius 1.6' }).click();
+await cadastro.getByRole('form', { name: 'Editar Rack Sirius 1.6' }).locator('input[aria-label="Volumes do produto"]').fill('');
+const antesApagar = escritas.length;
+await cadastro.getByRole('form', { name: 'Editar Rack Sirius 1.6' }).getByRole('button', { name: 'Salvar' }).click();
+for (let i = 0; i < 20 && escritas.length === antesApagar; i++) await p.waitForTimeout(100);
+checar(escritas[antesApagar]?.metodo === 'PATCH' && escritas[antesApagar].corpo?.volumes === null,
+  'PC: esvaziar os volumes na edicao manda null (apaga)');
+
+// Na furadeira nao ha' o que converter: nada de destaque.
+await cadastro.getByRole('button', { name: /FURADEIRA/ }).click();
+await cadastro.getByText('Lateral Mesa', { exact: true }).waitFor({ timeout: 4000 });
+checar(await cadastro.getByText('volumes não informados', { exact: true }).count() === 0,
+  'PC: produto da furadeira sem volumes NAO ganha o destaque');
 await cadastro.getByRole('button', { name: 'Fechar' }).click();
 
 await p.getByRole('button', { name: 'Motivos de parada' }).click();

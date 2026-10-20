@@ -15,10 +15,12 @@
  *  - Quem faz analise mantem (admin ou analista): escolher o que vai para
  *    cronoanalise e' trabalho de PCP, como o programa da semana — a mesma
  *    regra de pode_escrever() que a RLS aplica no banco.
+ *  - VOLUMES (em quantas caixas o produto sai da embalagem) e' opcional e
+ *    nulo quer dizer "nao informado" — nunca vira 1. Ver db/schema.sql.
  */
 import { exigirPapel } from './auth.js';
 import { ErroHttp, erroValidacao, json, lerCorpo, naoEncontrado } from './http.js';
-import { texto, uuid } from './validar.js';
+import { inteiro, texto, uuid } from './validar.js';
 
 // Nome canonico: apara e recolhe espaco repetido. Caixa e acento ficam —
 // e' o nome EXIBIDO; a unicidade compara sem caixa (indice lower/btrim).
@@ -27,13 +29,60 @@ const nomeLimpo = (v) => String(v || '').trim().replace(/\s+/g, ' ');
 /** Codigo do ERP: opcional; vazio apaga. */
 const codigoLimpo = (v) => nomeLimpo(texto(v, 'codigo', { max: 30 })) || null;
 
-/** Na ordem da escolha no tablet: grupo (pelo codigo), depois o nome. */
+/**
+ * VOLUMES: em quantas caixas o produto sai da embalagem. Nulo ou vazio =
+ * nao informado (e' assim que se APAGA, como a jornada do grupo em
+ * api/maquinas.js); inteiro de 1 a 50; o resto e' 400. Ausente tambem e'
+ * nao informado: e' o POST do app que ainda nao conhece o campo.
+ *
+ * Vazio NUNCA vira 1: o 1 assumido num rack de dois volumes corta o takt
+ * do estudo pela metade sem ninguem ver. E so' numero ou texto passam pelo
+ * validador: Number(true) e' 1 e Number([2]) e' 2 — um booleano ou uma
+ * lista chegando aqui e' erro de quem chamou, nao um volume.
+ */
+function volumesDe(valor) {
+  if (valor == null || valor === '') return null;
+  if (typeof valor !== 'number' && typeof valor !== 'string') {
+    throw erroValidacao('Campo "volumes" deve ser um numero inteiro de 1 a 50, ou vazio (nao informado)');
+  }
+  return inteiro(valor, 'volumes', { min: 1, max: 50 });
+}
+
+/**
+ * A COLUNA `volumes` E' LIDA DE UM JEITO QUE FUNCIONA SEM ELA:
+ * (to_jsonb(p)->>'volumes')::int, e nao p.volumes.
+ *
+ * O build de PREVIEW nao migra e usa o MESMO banco da producao. Com
+ * p.volumes na consulta, o preview deste codigo responderia 42703 ate' a
+ * producao publicar — e esta consulta roda dentro do GET /api/maquinas, ou
+ * seja, o cadastro INTEIRO (maquinas, grupos, produtos) cairia junto, no
+ * PC e no tablet. Pelo jsonb da linha, coluna ausente e' so' chave ausente:
+ * sai null, que e' "nao informado". Depois de a producao migrar, o
+ * resultado e' identico ao de p.volumes.
+ *
+ * Na ESCRITA vale a mesma ideia: a coluna so' entra no INSERT/UPDATE
+ * quando ha' um numero para gravar (ver POST e PATCH). Sem a coluna, so'
+ * gravar um numero falha — com a mensagem de "coluna que falta" de http.js.
+ *
+ * A lista sai na ordem da escolha no tablet: grupo (pelo codigo), depois o
+ * nome.
+ */
 export const listarProdutos = (db, empresaId) => db`
-  SELECT p.id, p.nome, p.codigo, p.ativo, p.grupo_id
+  SELECT p.id, p.nome, p.codigo, p.ativo, p.grupo_id,
+         (to_jsonb(p)->>'volumes')::int AS volumes
     FROM produtos p
     JOIN grupos_maquina g ON g.id = p.grupo_id
    WHERE p.empresa_id = ${empresaId}
    ORDER BY g.codigo, lower(p.nome)`;
+
+/** O produto como o GET o devolve: a resposta do POST e do PATCH. */
+async function lerProduto(db, produtoId) {
+  const [produto] = await db`
+    SELECT p.id, p.nome, p.codigo, p.ativo, p.grupo_id,
+           (to_jsonb(p)->>'volumes')::int AS volumes
+      FROM produtos p WHERE p.id = ${produtoId}`;
+  return produto;
+}
 
 async function grupoValido(db, empresaId, valor) {
   if (valor == null || valor === '') throw erroValidacao('Escolha o grupo de máquina do produto');
@@ -77,24 +126,33 @@ export async function produtos(req, res, auth) {
       if (!nome) throw erroValidacao('Informe o nome do produto');
       const grupoId = await grupoValido(db, empresaId, corpo.grupoId);
       const codigo = codigoLimpo(corpo.codigo);
+      const volumes = volumesDe(corpo.volumes);
       await repetido(db, empresaId, grupoId, nome);
 
-      const [produto] = await db`
-        INSERT INTO produtos (empresa_id, grupo_id, nome, codigo)
-        VALUES (${empresaId}, ${grupoId}, ${nome}, ${codigo})
-        RETURNING id, nome, codigo, ativo, grupo_id`;
-      return json(res, 201, { produto });
+      // Sem numero, a coluna fica FORA do INSERT (nasce nula do mesmo jeito):
+      // e' o que deixa cadastrar no preview antes de a producao migrar.
+      const [criado] = volumes == null
+        ? await db`
+          INSERT INTO produtos (empresa_id, grupo_id, nome, codigo)
+          VALUES (${empresaId}, ${grupoId}, ${nome}, ${codigo})
+          RETURNING id`
+        : await db`
+          INSERT INTO produtos (empresa_id, grupo_id, nome, codigo, volumes)
+          VALUES (${empresaId}, ${grupoId}, ${nome}, ${codigo}, ${volumes})
+          RETURNING id`;
+      return json(res, 201, { produto: await lerProduto(db, criado.id) });
     }
 
     const produtoId = uuid(id, 'id');
     const [atual] = await db`
-      SELECT id, nome, grupo_id FROM produtos WHERE id = ${produtoId} AND empresa_id = ${empresaId}`;
+      SELECT p.id, p.nome, p.grupo_id, (to_jsonb(p)->>'volumes')::int AS volumes
+        FROM produtos p WHERE p.id = ${produtoId} AND p.empresa_id = ${empresaId}`;
     if (!atual) throw naoEncontrado('Produto nao encontrado');
 
     if (req.method === 'PATCH') {
       const corpo = await lerCorpo(req);
       const tem = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
-      const campos = ['nome', 'codigo', 'grupoId', 'ativo'];
+      const campos = ['nome', 'codigo', 'grupoId', 'ativo', 'volumes'];
       if (!campos.some(tem)) {
         throw erroValidacao(`Nada a atualizar: informe ${campos.map((c) => `"${c}"`).join(', ')}`);
       }
@@ -111,15 +169,20 @@ export async function produtos(req, res, auth) {
         await repetido(db, empresaId, grupoId ?? atual.grupo_id, nome ?? atual.nome, produtoId);
       }
       const codigo = tem('codigo') ? codigoLimpo(corpo.codigo) : undefined;
+      const volumes = tem('volumes') ? volumesDe(corpo.volumes) : undefined;
 
       if (nome !== undefined) await db`UPDATE produtos SET nome = ${nome} WHERE id = ${produtoId}`;
       if (grupoId !== undefined) await db`UPDATE produtos SET grupo_id = ${grupoId} WHERE id = ${produtoId}`;
       if (codigo !== undefined) await db`UPDATE produtos SET codigo = ${codigo} WHERE id = ${produtoId}`;
       if (tem('ativo')) await db`UPDATE produtos SET ativo = ${Boolean(corpo.ativo)} WHERE id = ${produtoId}`;
+      // So' grava o que MUDOU: o formulario de edicao manda volumes sempre
+      // (nulo quando o campo fica vazio), e renomear no preview, sem a
+      // coluna, nao pode cair por causa de um nulo que ja' era nulo.
+      if (volumes !== undefined && volumes !== atual.volumes) {
+        await db`UPDATE produtos SET volumes = ${volumes} WHERE id = ${produtoId}`;
+      }
 
-      const [produto] = await db`
-        SELECT id, nome, codigo, ativo, grupo_id FROM produtos WHERE id = ${produtoId}`;
-      return json(res, 200, { produto });
+      return json(res, 200, { produto: await lerProduto(db, produtoId) });
     }
 
     if (await emUso(db, empresaId, atual.nome)) {

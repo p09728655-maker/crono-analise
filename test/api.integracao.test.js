@@ -1530,6 +1530,82 @@ rodar('API — integracao com Postgres', () => {
     const [{ n }] = await sql`SELECT count(*)::int AS n FROM produtos WHERE grupo_id = ${grupoId}`;
     expect(n).toBe(0);
   });
+
+  /**
+   * VOLUMES POR PRODUTO: quantas caixas o produto leva na embalagem — o que
+   * converte o programa e as medicoes (em volumes) para produto. O que se
+   * prova no banco real: o numero grava e volta no GET que o tablet guarda,
+   * vazio e' nulo (nunca 1), PATCH so' com volumes vale, '' apaga, e o que
+   * esta' fora de 1..50 ou nao e' numero e' 400 sem mexer no que estava.
+   */
+  it('volumes por produto: grava, volta no GET, PATCH so com volumes, vazio apaga, fora da faixa e 400', async () => {
+    const g = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { grupo: { codigo: '0079', nome: 'EMBALAGEM VOLUMES' } } }), g);
+    const grupoId = g.corpo.grupo.id;
+    const pedir = async (opcoes) => {
+      const res = fingirRes();
+      await maquinasApi(fingirReq({ ...opcoes, query: { produtos: '1', ...(opcoes.query || {}) } }), res);
+      return res;
+    };
+    const volumesNoBanco = async (id) => (await sql`SELECT volumes FROM produtos WHERE id = ${id}`)[0].volumes;
+
+    const rack = await pedir({ metodo: 'POST', corpo: { nome: 'Rack Sirius 1.6', grupoId, volumes: 2 } });
+    expect(rack.statusCode).toBe(201);
+    expect(rack.corpo.produto).toMatchObject({ nome: 'Rack Sirius 1.6', volumes: 2 });
+    const rackId = rack.corpo.produto.id;
+
+    // Sem volumes: nao informado, NUNCA 1.
+    const mesa = await pedir({ metodo: 'POST', corpo: { nome: 'Mesa Cabeceira Sleep', grupoId } });
+    expect(mesa.statusCode).toBe(201);
+    expect(mesa.corpo.produto.volumes).toBeNull();
+    expect(await volumesNoBanco(mesa.corpo.produto.id)).toBeNull();
+    const vazio = await pedir({ metodo: 'POST', corpo: { nome: 'Painel Encanto', grupoId, volumes: '' } });
+    expect(vazio.corpo.produto.volumes).toBeNull();
+
+    // O cadastro que o tablet guarda traz o numero (e o nulo).
+    const cadastro = fingirRes();
+    await maquinasApi(fingirReq({}), cadastro);
+    const doGrupo = cadastro.corpo.produtos.filter((p) => p.grupo_id === grupoId);
+    expect(doGrupo.find((p) => p.id === rackId).volumes).toBe(2);
+    expect(doGrupo.find((p) => p.id === mesa.corpo.produto.id).volumes).toBeNull();
+
+    // PATCH so' com volumes vale (nao e' "Nada a atualizar").
+    const tres = await pedir({ metodo: 'PATCH', query: { id: rackId }, corpo: { volumes: 3 } });
+    expect(tres.statusCode).toBe(200);
+    expect(tres.corpo.produto).toMatchObject({ nome: 'Rack Sirius 1.6', volumes: 3 });
+    expect(await volumesNoBanco(rackId)).toBe(3);
+
+    // Fora da regra: 400, e o numero gravado continua o mesmo — nem o nome
+    // que veio junto entra.
+    for (const volumes of [0, 51, 'x', 2.5, true]) {
+      const errado = await pedir({ metodo: 'PATCH', query: { id: rackId }, corpo: { nome: 'Rack Errado', volumes } });
+      expect(errado.statusCode, JSON.stringify(volumes)).toBe(400);
+      expect(errado.corpo.erro).toMatch(/volumes/);
+    }
+    expect(await volumesNoBanco(rackId)).toBe(3);
+    const [{ nome }] = await sql`SELECT nome FROM produtos WHERE id = ${rackId}`;
+    expect(nome).toBe('Rack Sirius 1.6');
+    for (const volumes of [0, 51, 'x']) {
+      const novoErrado = await pedir({ metodo: 'POST', corpo: { nome: `Produto ${volumes}`, grupoId, volumes } });
+      expect(novoErrado.statusCode).toBe(400);
+    }
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM produtos WHERE grupo_id = ${grupoId}`;
+    expect(n).toBe(3);
+
+    // '' apaga; null tambem.
+    const apagado = await pedir({ metodo: 'PATCH', query: { id: rackId }, corpo: { volumes: '' } });
+    expect(apagado.statusCode).toBe(200);
+    expect(apagado.corpo.produto.volumes).toBeNull();
+    expect(await volumesNoBanco(rackId)).toBeNull();
+    await pedir({ metodo: 'PATCH', query: { id: rackId }, corpo: { volumes: 1 } });
+    const nulo = await pedir({ metodo: 'PATCH', query: { id: rackId }, corpo: { volumes: null } });
+    expect(nulo.corpo.produto.volumes).toBeNull();
+
+    // O CHECK do banco e' a ultima barreira, para quem gravar por fora da API.
+    await expect(sql`UPDATE produtos SET volumes = 0 WHERE id = ${rackId}`).rejects.toThrow();
+
+    await maquinasApi(fingirReq({ metodo: 'DELETE', query: { grupo: grupoId } }), fingirRes());
+  });
   /* ------------------------------------- cadastro de analistas e sessao */
   /**
    * O que precisa ser provado aqui e' o que protege PESSOA e HISTORICO: a
