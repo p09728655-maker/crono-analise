@@ -5,7 +5,7 @@ import { GraficoTendencia, GraficoYamazumi } from './graficos.jsx';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
 import { DIAS_MEDICAO } from '../../domain/medicaoDoEstudo.js';
-import {
+import { diferencaExibida,
   exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porHoraExtenso, porUnidade,
   vereditoCapacidade,
 } from './estudo/textosMedicao.js';
@@ -107,12 +107,14 @@ export default function RelatorioImpressao({ estudo, analise, leitura, medido })
           ['Operadores', analise.operadores !== null ? analise.operadores.toFixed(2) : '—', ''],
           ['Tempo parado', analise.paradas?.totalMs ? formatarDuracao(analise.paradas.totalMs) : '—', ''],
           ['Exigido (takt)', exibirPorHora(capacidade?.esperado ?? null), capacidade?.esperado != null ? u : ''],
-          ['Capacidade pelo tempo padrão', analise.capacidadeLinha || '—', u],
+          // O valor cheio, como a tela e o Resumo: o `capacidadeLinha` ja' vem
+          // inteiro para baixo, e escreveria 31 com a tela dizendo 31,3.
+          ['Capacidade pelo tempo padrão', analise.capacidadeLinha ? exibirPorHora(analise.capacidadeExata) : '—', u],
           ['Medido na linha', doMedido.valor, doMedido.unidade],
           ['Atingimento', exibirPct(capacidade?.atingimentoPct ?? null), ''],
           [
             capacidade?.diferenca != null && capacidade.diferenca < 0 ? 'Déficit' : 'Superávit',
-            exibirDiferenca(capacidade?.diferenca ?? null),
+            exibirDiferenca(diferencaExibida(capacidade)),
             capacidade?.diferenca != null ? u : '',
           ],
         ].map(([k, v, s]) => (
@@ -144,7 +146,7 @@ export default function RelatorioImpressao({ estudo, analise, leitura, medido })
           {formatarSegundos(analise.gargalo.resultado.tpPorPeca)} s {porUnidade(unidade)}
           {analise.gargalo.resultado.ciclosPorPeca > 1
             && ` (${formatarSegundos(analise.gargalo.resultado.tpVal)} s por ciclo × ${analise.gargalo.resultado.ciclosPorPeca} ciclos)`}. A capacidade pelo tempo padrão é
-          limitada por esta operação — {analise.gargalo.resultado.cap} {porHoraExtenso(unidade)}.
+          limitada por esta operação — {exibirPorHora(analise.capacidadeExata)} {porHoraExtenso(unidade)}.
           {analise.operadores !== null && (
             <> O dimensionamento indica {analise.operadores.toFixed(2)} operadores
             (arredondar para {Math.ceil(analise.operadores)}).</>

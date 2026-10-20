@@ -1,6 +1,6 @@
 import { formatarDuracao } from '../../../domain/cronoanalise.js';
 import { est } from './estilos.js';
-import { porHora } from './textosMedicao.js';
+import { exibirPorHora, porHora } from './textosMedicao.js';
 
 /**
  * PARADAS DO ESTUDO — a perda que a coleta ja' media e ninguem via.
@@ -88,7 +88,7 @@ export default function PainelParadas({
         <p style={est.custoParada} aria-label="Custo da parada em peças">
           <strong>{perdidas} {unidade === 'produto' ? 'produtos' : 'peças'} deixaram de sair da linha</strong> nos
           {' '}{formatarDuracao(paradaDoGargalo)} em que <strong>{gargalo.nome}</strong> ficou parada
-          — é o posto que manda no ritmo ({capacidadeLinha} {porHora(unidade)} ·
+          — é o posto que manda no ritmo ({exibirPorHora(capacidadeLinha)} {porHora(unidade)} ·
           {' '}{(capacidadeLinha / 60).toFixed(1)} {unidade === 'produto' ? 'produtos' : 'pç'}/min). Parada nas outras operações é absorvida
           pela folga delas: o custo de cada uma está na tabela abaixo.
         </p>

@@ -13,6 +13,21 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.94.0',
+    data: '2026-10-20',
+    titulo: 'A embalagem entra na análise: volumes por produto e o medido na linha',
+    itens: [
+      'NOVO NO CADASTRO DE PRODUTOS: VOLUMES. Em quantas caixas o produto sai embalado (rack em 2 caixas = 2). Aparece só nos grupos de embalagem. Em branco é "não informado", nunca 1 — produto sem volumes fica com o destaque "volumes não informados". É este número que converte o programa e as medições da embalagem (em volumes) para produto, a unidade do estudo.',
+      'NA EMBALAGEM, O TAKT DO PROGRAMA ENTRA SOZINHO NO ESTUDO, POR PRODUTO. Com os volumes do produto no cadastro, o takt é o do programa por volume vezes os volumes do produto, com a conta escrita: "72,0 s por volume × 2 volumes = 144,0 s por produto". Sem o produto ou sem os volumes, não entra, e a tela diz o que falta. O takt por volume deixou de ser oferecido: num estudo do produto ele deixava a linha o dobro mais carregada.',
+      'A ANÁLISE DO ESTUDO MOSTRA O QUE A LINHA ENTREGOU. O bloco de capacidade passa a ter três números com o nome do que são: Exigido (takt), Capacidade pelo tempo padrão (o gargalo — antes chamado "Real", mas é teórico) e Medido na linha: as medições do mesmo posto e produto nos últimos 30 dias (Ritmo por máquina nas furadeiras, Embalagem Takt Time na embalagem), no relógio com as paradas dentro. Vale para qualquer posto com medição.',
+      'ATINGIMENTO E DÉFICIT USAM O MEDIDO quando há amostra suficiente (3 medições, 30 minutos); senão, a capacidade pelo tempo padrão, e a tela diz que a linha ATENDERIA, não que atende. "Do tempo padrão X%" mostra quanto da capacidade teórica a linha entrega — a perda entre o estudo e o chão. Os números escritos fecham a conta, com uma casa abaixo de 100 por hora.',
+      'O SETUP MARCADO FICA NO RELÓGIO DO MEDIDO, e com setup planejado no grupo o número sem ele aparece ao lado. O estudo não guarda de onde veio o takt: o do programa já descontou o setup planejado, o digitado com a jornada cheia não. Na dúvida, o lado seguro — nunca um "atende" que a linha não confirma.',
+      'NA EMBALAGEM, O MEDIDO VIRA PRODUTOS POR HORA pelos volumes do produto; sem os volumes, fica em volumes por hora, fora do atingimento, e o cartão pede o cadastro. Medições arquivadas aparecem como arquivadas, com onde desarquivar.',
+      'O MESMO BLOCO VAI PARA O RESUMO EXECUTIVO E PARA A FOLHA IMPRESSA, e o número do topo passa a se chamar "Capacidade pelo tempo padrão", o mesmo nome do bloco. Na embalagem, todos falam em produtos por hora.',
+      'A tela de Produtos não deixa mais o Fechar por cima das últimas linhas da lista num notebook: a lista rola no espaço que sobra.',
+    ],
+  },
+  {
     versao: '2.93.0',
     data: '2026-10-20',
     titulo: 'Novo estudo: produto e takt vêm do grupo do posto',

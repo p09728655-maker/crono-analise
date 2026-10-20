@@ -188,57 +188,63 @@ describe('medicaoDoEstudo — sem o que medir', () => {
 
 describe('medicaoDoEstudo — o setup entra UMA vez so', () => {
   /* O exemplo da revisao de 20/10: tres medicoes de 60 min, cada uma com
-     10 min de setup marcado e 100 pecas. Com setup planejado no grupo, o
-     setup ja' saiu das horas do takt e sai do relogio tambem: 300 pecas em
-     150 min = 120/h. Sem setup planejado, fica no relogio: 300 em 180 min
-     = 100/h. */
+     10 min de setup marcado e 100 pecas. O estudo nao sabe se o takt dele
+     ja' descontou o setup planejado (o do programa sim, o digitado com a
+     jornada cheia nao): o setup FICA no relogio — 300 em 180 min = 100/h,
+     erro pessimista, nunca um "atende" falso. Com setup planejado no
+     grupo, o numero sem o setup marcado (300 em 150 min = 120/h) vai ao
+     lado, para quem sabe que o takt veio do programa. */
   const comSetup = [0, 1, 2].map((i) => med({
     id: `s${i}`, duracao_ms: 60 * MIN, pecas: 100, iniciado_em: `2026-10-1${i}T10:00:00Z`,
     paradas: [{ motivo: 'setup', duracaoMs: 10 * MIN }],
   }));
   const planejado = { setupsDia: 2, dias: 5, minutos: 20 };
 
-  it('setup planejado > 0: o setup marcado sai do relogio (120/h) e a medicao diz quanto saiu', () => {
+  it('setup planejado > 0: o setup fica no relogio (100/h) e o numero sem ele vai ao lado (120/h)', () => {
     const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup: planejado });
-    expect(m.ritmoRelogio).toBeCloseTo(120, 6);
+    expect(m.ritmoRelogio).toBeCloseTo(100, 6);
+    expect(m.ritmoSemSetup).toBeCloseTo(120, 6);
     expect(m.setupPlanejado).toBe(true);
     expect(m.setupMedidoMs).toBe(30 * MIN);
-    expect(m.setupDescontadoMs).toBe(30 * MIN);
-    expect(m.relogioMs).toBe(150 * MIN);
+    expect(m.relogioMs).toBe(180 * MIN);
     // O rodando nao muda: ja' era sem nenhuma parada.
     expect(m.ritmoRodando).toBeCloseTo(120, 6);
     expect(m.usavel).toBe(true);
   });
 
-  it('sem setup planejado (nao informado ou zero): o setup fica no relogio (100/h)', () => {
+  it('sem setup planejado (nao informado ou zero): o setup fica no relogio, sem numero ao lado', () => {
     for (const setup of [null, undefined, {}, { setupsDia: 0 }, { minutos: 0 }, { setupsDia: 2, dias: 5 }]) {
       const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup });
       expect(m.ritmoRelogio).toBeCloseTo(100, 6);
-      expect(m.setupDescontadoMs).toBe(0);
+      expect(m.ritmoSemSetup).toBeNull();
       expect(m.relogioMs).toBe(180 * MIN);
     }
   });
 
-  it('so o setup sai: as outras paradas continuam no relogio', () => {
+  it('o numero sem setup tira so o setup: as outras paradas continuam no relogio', () => {
     const misto = comSetup.map((c) => ({
       ...c, paradas: [...c.paradas, { motivo: 'falta_material', duracaoMs: 5 * MIN }],
     }));
     const m = medicaoDoEstudo({ ...base, conferencias: misto, setup: planejado });
-    // 300 pecas em (180 - 30) min = 120/h; os 15 min de falta de material ficam.
-    expect(m.ritmoRelogio).toBeCloseTo(120, 6);
+    // Relogio inteiro: 300 em 180 min = 100/h. Sem o setup: 300 em 150 min
+    // = 120/h — os 15 min de falta de material ficam.
+    expect(m.ritmoRelogio).toBeCloseTo(100, 6);
+    expect(m.ritmoSemSetup).toBeCloseTo(120, 6);
     // Rodando: 300 em (180 - 45) min.
     expect(m.ritmoRodando).toBeCloseTo((300 * 60) / 135, 6);
   });
 
-  it('na embalagem, desconta o setup e depois converte para produto', () => {
+  it('na embalagem, converte para produto — com e sem o setup marcado', () => {
     const vol = comSetup.map((c) => ({ ...c, maquina: 'EMBALAGEM 01', peca: 'Rack', pecas: 40 }));
     const m = medicaoDoEstudo({
       conferencias: vol, recurso: 'EMBALAGEM 01', produto: 'Rack', unidade: VOLUME, volumes: 2,
       setup: planejado, agora: AGORA,
     });
-    // 120 volumes em 150 min = 48 vol/h = 24 produtos/h.
-    expect(m.ritmoRelogioContado).toBeCloseTo(48, 6);
-    expect(m.ritmoRelogio).toBeCloseTo(24, 6);
+    // 120 volumes em 180 min = 40 vol/h = 20 produtos/h; sem o setup
+    // marcado, 120 em 150 min = 48 vol/h = 24 produtos/h.
+    expect(m.ritmoRelogioContado).toBeCloseTo(40, 6);
+    expect(m.ritmoRelogio).toBeCloseTo(20, 6);
+    expect(m.ritmoSemSetup).toBeCloseTo(24, 6);
   });
 });
 

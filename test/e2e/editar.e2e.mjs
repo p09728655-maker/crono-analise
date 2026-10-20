@@ -283,7 +283,11 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
   await w.goto(`${BASE}/analise/estudo/${ID2}?editar=1`);
   const d4 = w.locator('[aria-label="Ajustes do estudo"]');
   await d4.getByRole('button', { name: /Usar o takt do programa da semana .*288\.0 s por peça/ }).waitFor({ timeout: 8000 });
-  checar(await d4.getByText('Programa guardado neste aparelho: sem rede para conferir se o PCP colou outro.').count() === 1,
+  // O botao aparece com o guardado antes de a busca falhar (ate' la' diz
+  // "conferindo com o servidor"): espera a falha, nao le' no meio dela.
+  const avisoSemRede = d4.getByText('Programa guardado neste aparelho: sem rede para conferir se o PCP colou outro.');
+  await avisoSemRede.waitFor({ timeout: 4000 }).catch(() => {});
+  checar(await avisoSemRede.count() === 1,
     'ajustes sem rede: o botao do programa diz que o numero e o guardado no aparelho');
   await c4.close();
 

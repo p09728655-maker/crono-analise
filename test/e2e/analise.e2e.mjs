@@ -89,7 +89,10 @@ const navegador = await chromium.launch({ executablePath: EXEC });
      cartao e' so' exibicao. Arredondar antes de dividir trocava o veredito
      na embalagem (revisao de 20/10). */
   checar(/74,2%/.test(capacidade), 'atingimento e o quociente dos dois, com uma casa (222,7 / 300 = 74,2%)');
-  checar(/-77,4/.test(capacidade), 'deficit em pecas por hora, com sinal e o valor cheio (222,7 - 300)');
+  /* O deficit escrito sai dos dois numeros escritos (222 e 300), para a
+     conta fechar na tela: -78, e nao o -77,3 do valor cheio. */
+  checar(/-78\b/.test(capacidade) && !/-77/.test(capacidade),
+    'deficit em pecas por hora, com sinal, derivado dos numeros mostrados (222 - 300)');
   checar(/base: capacidade pelo tempo padrão/.test(capacidade),
     'sem medicao, atingimento e deficit dizem que a base e a capacidade pelo tempo padrao');
   checar(/nenhuma medição/.test(capacidade) && /Ritmo por máquina/.test(capacidade),
@@ -437,8 +440,8 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
   checar(/23\s*produtos\/h/.test(medido),
     `embalagem: 46 volumes/h de um rack de 2 volumes = 23 produtos/h (${medido.replace(/\s+/g, ' ')})`);
   checar(/contados 46 vol\/h ÷ 2 volumes por produto/.test(medido), 'e mostra a conversao');
-  checar(/Exigido \(takt\)\s*25/i.test(bloco) && /Capacidade pelo tempo padrão\s*31/i.test(bloco),
-    'exigido 25 (takt 144 s) e tempo padrao 31 (TP 115 s)');
+  checar(/Exigido \(takt\)\s*25/i.test(bloco) && /Capacidade pelo tempo padrão\s*31,3/i.test(bloco),
+    'exigido 25 (takt 144 s) e tempo padrao 31,3 (TP 115 s): uma casa abaixo de 100/h');
   checar(/92%/.test(await cartao(p, 'Atingimento')) && /-2/.test(await cartao(p, 'Déficit')),
     'atingimento do medido: 23 / 25 = 92%, deficit -2');
   checar(/a linha entrega 73,5% do que o tempo padrão permite/.test(bloco), 'perda para o tempo padrao: 23 / 31,3 = 73,5%');
@@ -448,12 +451,13 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
     `embalagem: exigido, tempo padrao, medido e deficit em produtos/h, nenhum pç/h (${(bloco.match(/produtos\/h/g) || []).length})`);
   checar(/takt de 144.0 s por produto/.test(await cartao(p, 'Exigido (takt)')), 'o takt e por produto');
   const topoEmb = await p.locator('[aria-label="Resultado do estudo"]').innerText();
-  checar(/Capacidade pelo tempo padrão[\s\S]*31[\s\S]*produtos\/hora/i.test(topoEmb) && /s por produto/.test(topoEmb)
+  // O topo escreve o mesmo 31,3 do quadro, nao o 31 inteiro.
+  checar(/Capacidade pelo tempo padrão[\s\S]*31,3[\s\S]*produtos\/hora/i.test(topoEmb) && /s por produto/.test(topoEmb)
     && !/peças\/hora|por peça/.test(topoEmb),
     `embalagem: o topo diz produtos/hora e por produto (${topoEmb.replace(/\s+/g, ' ').slice(0, 120)})`);
   await p.emulateMedia({ media: 'print' });
   const folhaEmb = await p.locator('.somente-impressao').innerText();
-  checar(/A capacidade pelo tempo padrão é\s+limitada por esta operação — 31 produtos\/hora/.test(folhaEmb)
+  checar(/A capacidade pelo tempo padrão é\s+limitada por esta operação — 31,3 produtos\/hora/.test(folhaEmb)
     && !/capacidade da linha/i.test(folhaEmb),
     'folha: o paragrafo do gargalo diz "capacidade pelo tempo padrao" em produtos/hora');
   checar(/Exigido \(takt\)\s*25\s*produtos\/h/i.test(folhaEmb) && /Déficit\s*-2\s*produtos\/h/i.test(folhaEmb),
@@ -503,17 +507,22 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
 }
 
 {
-  /* O SETUP UMA VEZ SO': o grupo tem setup planejado (5 x 5 x 12 min), que
-     ja' saiu das horas do takt. Os 5 min de setup marcados na segunda
-     medicao saem do relogio: 180 pecas em 55 min = 196/h, nao 180. */
+  /* O SETUP: o grupo tem setup planejado (5 x 5 x 12 min). O estudo nao
+     guarda de onde veio o takt — do programa (que ja' desconta o setup) ou
+     digitado —, entao o setup marcado FICA no relogio (180 pecas por hora,
+     o erro pessimista) e o numero sem ele (180 em 55 min = 196/h) vai ao
+     lado, dizendo quando vale. Tirar sempre contava zero vez com o takt
+     digitado. */
   const { ctx, p, erros } = await abrirCenario('furadeira-setup');
   const medido = await cartao(p, 'Medido na linha');
-  checar(/196\s*pç\/h/.test(medido) && /o setup marcado \(5 min\) saiu do relógio: já está no takt/.test(medido),
-    `setup planejado: o setup marcado sai do relogio e a tela diz (${medido.replace(/\s+/g, ' ')})`);
-  checar(/65,5%/.test(await cartao(p, 'Atingimento')), 'atingimento com o relogio sem o setup: 196,4 / 300 = 65,5%');
+  checar(/^Medido na linha\s*180\s*pç\/h/i.test(medido)
+    && /com o setup marcado \(5 min\) dentro do relógio; sem ele, 196 pç\/h/.test(medido)
+    && /veio do programa da semana/.test(medido),
+    `setup planejado: o setup fica no relogio e o numero sem ele vai ao lado (${medido.replace(/\s+/g, ' ')})`);
+  checar(/60%/.test(await cartao(p, 'Atingimento')), 'atingimento com o setup no relogio: 180 / 300 = 60%');
   await p.emulateMedia({ media: 'print' });
-  checar(/saiu do relógio: já está no takt/.test(await p.locator('.somente-impressao').innerText()),
-    'a folha tambem diz que o setup saiu do relogio');
+  checar(/com o setup marcado \(5 min\) dentro do relógio; sem ele, 196/.test(await p.locator('.somente-impressao').innerText()),
+    'a folha tambem diz que o setup ficou no relogio, e o numero sem ele');
   checar(erros.length === 0, `setup planejado: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
   await ctx.close();
 }
@@ -580,7 +589,8 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
   checar(/98,6%/.test(ating) && /abaixo do ritmo exigido/.test(ating) && !/100%/.test(ating),
     `atingimento com os valores cheios: 24,3 / 24,66 = 98,6%, abaixo (${ating.replace(/\s+/g, ' ')})`);
   const def = await cartao(p, 'Déficit');
-  checar(/^Déficit\s*-0,4/i.test(def), `e deficit de 0,4 produto por hora, nunca superavit 0 (${def.replace(/\s+/g, ' ')})`);
+  // 24,3 - 24,6 escritos no quadro: -0,3, a conta que o PPCP refaz de olho.
+  checar(/^Déficit\s*-0,3/i.test(def), `e deficit de 0,3 produto por hora, nunca superavit 0 (${def.replace(/\s+/g, ' ')})`);
   await p.getByRole('button', { name: 'Resumo executivo' }).click();
   await p.waitForFunction(() => window.__impressoes > 0, null, { timeout: 5000 });
   const resumo = await p.locator('.somente-impressao').innerText();

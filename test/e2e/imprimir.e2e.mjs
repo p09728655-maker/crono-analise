@@ -227,16 +227,18 @@ await ctx.close();
   await p2.getByRole('button', { name: 'Imprimir', exact: true }).click();
   await p2.waitForFunction(() => window.__impressoes > 0, { timeout: 10000 });
   const papel2 = await p2.evaluate(() => window.__papel || '');
-  checar(/Medido na linha\s*30\s*produtos\/h/i.test(papel2),
+  // 50 volumes por hora / 2 volumes = 25 produtos/h, com o setup marcado
+  // dentro do relogio; sem ele, 50 volumes em 50 min = 30 produtos/h.
+  checar(/Medido na linha\s*25\s*produtos\/h/i.test(papel2),
     `embalagem: o papel sai com o medido em produtos/h, ja' convertido (${(papel2.match(/Medido na linha\s*\S+\s*\S+/i) || [''])[0].replace(/\s+/g, ' ')})`);
-  checar(/o setup marcado \(30 min\) saiu do relógio: já está no takt/.test(papel2),
-    'o setup marcado sai do relogio (o grupo tem setup planejado) e o papel diz');
+  checar(/com o setup marcado \(30 min\) dentro do relógio; sem ele, 30 produtos\/h/.test(papel2),
+    'o setup marcado fica no relogio (o grupo tem setup planejado) e o papel da o numero sem ele');
   checar(/Veredito: A linha atende o ritmo da demanda, medida na linha/.test(papel2),
     'o veredito do papel e o do medido');
-  checar(/Exigido \(takt\)\s*25\s*produtos\/h/i.test(papel2) && /Capacidade pelo tempo padrão\s*31\s*produtos\/h/i.test(papel2)
-    && /Superávit\s*\+5\s*produtos\/h/i.test(papel2),
+  checar(/Exigido \(takt\)\s*25\s*produtos\/h/i.test(papel2) && /Capacidade pelo tempo padrão\s*31,1\s*produtos\/h/i.test(papel2)
+    && /Superávit\s*0\s*produtos\/h/i.test(papel2),
     'exigido, tempo padrao e superavit tambem em produtos/h');
-  checar(/A capacidade pelo tempo padrão é\s+limitada por esta operação — 31 produtos\/hora/.test(papel2)
+  checar(/A capacidade pelo tempo padrão é\s+limitada por esta operação — 31,1 produtos\/hora/.test(papel2)
     && /s por produto/.test(papel2) && !/capacidade da linha/i.test(papel2),
     'o paragrafo do gargalo diz "capacidade pelo tempo padrao", por produto');
   const capacidadeNoPapel = papel2.slice(papel2.indexOf('Exigido'), papel2.indexOf('Resultados por operação'));

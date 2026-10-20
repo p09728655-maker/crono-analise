@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { unidadeDoPosto } from '../../domain/cronoanalise.js';
 import { atualizarProduto, criarProduto, removerProduto } from '../../lib/api.js';
 import { espaco } from '../../theme/escala.js';
@@ -79,6 +79,10 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
   const [volumes, setVolumes] = useState('');
   const [editando, setEditando] = useState(null);   // { id, nome, codigo, volumes, grupoId }
   const [excluindo, setExcluindo] = useState(null); // id com a exclusao armada
+  const refErro = useRef(null);
+  useEffect(() => {
+    if (erro) refErro.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [erro]);
 
   const carregando = maquinas == null && !erro;
   const naoCarregou = maquinas == null && Boolean(erro);
@@ -119,7 +123,7 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
           (mesma tecnica de EntrarNoPc). */}
       <style>{`
         .item-grupo:not([aria-current]):hover { background: #EDF0F3; color: ${t.texto}; }
-        @media (max-width: 720px) {
+        @media (max-width: 900px) {
           .produtos-caixa { overflow-y: auto !important; }
           .produtos-colunas { flex-wrap: wrap !important; flex: none !important; }
           .produtos-lateral, .produtos-painel { max-height: none !important; overflow: visible !important; }
@@ -297,7 +301,9 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
           </div>
         )}
 
-        {erro && <div style={est.erro} role="alert">{erro}</div>}
+        {/* Na tela estreita a caixa rola inteira e o alerta fica depois da
+            lista: sem levar a vista ate' ele, quem clicou nao via nada mudar. */}
+        {erro && <div ref={refErro} style={est.erro} role="alert">{erro}</div>}
 
         {naoCarregou && (
           <button type="button" style={est.botaoSecundario} onClick={recarregar} disabled={ocupado}>
@@ -437,8 +443,10 @@ const loc = {
      flex que rola, e sem isso a de nome longo era espremida aos 40 px. */
   linha: { ...est.linha, flexShrink: 0 },
   linhaRotulo: {
-    ...est.linhaRotulo, whiteSpace: 'normal', overflowWrap: 'anywhere', textOverflow: 'clip',
-    padding: `${espaco.xs}px 0`,
+    ...est.linhaRotulo, whiteSpace: 'normal', overflowWrap: 'break-word', textOverflow: 'clip',
+    // 'anywhere' deixava o nome encolher ate' uma letra por linha numa janela
+    // de 760 px; com 'break-word' e um minimo, ele quebra entre palavras.
+    minWidth: 120, padding: `${espaco.xs}px 0`,
   },
   fimDaLinha: { display: 'flex', alignItems: 'center', gap: espaco.sm, flex: '0 0 auto' },
   campoVolumes: { display: 'flex', alignItems: 'center', gap: espaco.xs, flex: '0 0 auto' },

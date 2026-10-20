@@ -37,10 +37,27 @@ export const porUnidade = (unidade) => (unidade === 'produto' ? 'por produto' : 
 const UMA_CASA = { maximumFractionDigits: 1, useGrouping: false };
 
 /**
- * Taxa por hora para exibir: inteiro para baixo. A folga de 1e-9 e' do
- * ponto flutuante: 3.600.000 / 144.000 tem de dar 25, nao 24.
+ * A taxa por hora COMO A TELA A ESCREVE: para baixo, como a capacidade;
+ * abaixo de 100/h com uma casa — na embalagem a taxa e' ~25/h, e cada
+ * unidade inteira vale 4%: "Exigido 24 · Medido 24 · Deficit -0,4" nao
+ * fechava a conta e escondia que 24,66 era a demanda. A folga de 1e-9 e'
+ * do ponto flutuante: 3.600.000 / 144.000 tem de dar 25, nao 24.
  */
-export const exibirPorHora = (v) => (Number.isFinite(v) ? String(Math.floor(v + 1e-9)) : '—');
+const comoExibe = (v) => (v < 100 ? Math.floor(v * 10 + 1e-9) / 10 : Math.floor(v + 1e-9));
+export const exibirPorHora = (v) => (Number.isFinite(v) ? comoExibe(v).toLocaleString('pt-BR', UMA_CASA) : '—');
+
+/**
+ * O deficit/superavit que a tela escreve, DERIVADO dos dois numeros que
+ * ela mostra (a regra de contaDasHoras): a subtracao que o analista
+ * confere de cabeca bate sempre. O atingimento continua com os valores
+ * cheios. Null sem base de comparacao.
+ */
+export function diferencaExibida(capacidade) {
+  if (!capacidade || capacidade.diferenca === null || capacidade.diferenca === undefined) return null;
+  const base = capacidade.base === 'medido' ? capacidade.medido : capacidade.real;
+  if (!Number.isFinite(base) || !Number.isFinite(capacidade.esperado)) return capacidade.diferenca;
+  return Math.round((comoExibe(base) - comoExibe(capacidade.esperado)) * 10) / 10;
+}
 
 /**
  * Percentual com uma casa ("98,6%", "74%"). Abaixo de 100 nunca vira
@@ -192,11 +209,14 @@ export function lerMedido(carga, { recurso, produto } = {}) {
   const valor = exibirPorHora(m.ritmoRelogio);
   const rodando = `com a linha rodando: ${exibirPorHora(m.ritmoRodando)} ${u}`;
   const base = `${[plural(m.n, 'medição', 'medições'), periodoDaMedicao(m)].filter(Boolean).join(' ')} · no relógio, paradas dentro`;
-  /* O setup UMA vez so': com setup planejado no grupo ele ja' saiu das
-     horas do takt, e o marcado nas medicoes saiu do relogio. Dito na tela,
-     senao o analista refaz a conta com o tempo cheio e acha erro. */
-  const setup = m.setupDescontadoMs > 0
-    ? [`o setup marcado (${formatarDuracao(m.setupDescontadoMs)}) saiu do relógio: já está no takt`]
+  /* O setup marcado FICA no relogio (o estudo nao sabe se o takt dele ja'
+     descontou o setup planejado — ver medicaoDoEstudo). Com setup
+     planejado no grupo, o numero sem ele vai ao lado, dito para quando
+     vale: takt vindo do programa da semana. */
+  const setup = m.ritmoSemSetup != null
+    ? [`com o setup marcado (${formatarDuracao(m.setupMedidoMs)}) dentro do relógio; sem ele, `
+      + `${exibirPorHora(m.ritmoSemSetup)} ${u} — compare com este se o takt do estudo veio do programa `
+      + 'da semana, que já desconta o setup planejado']
     : [];
 
   if (m.motivo === 'sem-volumes') {

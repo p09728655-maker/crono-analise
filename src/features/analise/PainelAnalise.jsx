@@ -335,7 +335,9 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
           {aba === 'paradas' && (
             <PainelParadas
               resumo={analise.paradas}
-              capacidadeLinha={analise.capacidadeLinha}
+              // Cheia, como o quadro de capacidade: a inteira dava 31 aqui e
+              // 31,3 la' na embalagem.
+              capacidadeLinha={analise.capacidadeExata || analise.capacidadeLinha}
               gargalo={analise.gargalo}
               operacoes={analise.comDados}
               unidade={medido.unidadeEstudo}

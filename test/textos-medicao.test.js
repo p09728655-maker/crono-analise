@@ -5,7 +5,7 @@
  * "nenhuma medicao" com tres guardadas no banco.
  */
 import { describe, expect, it } from 'vitest';
-import {
+import { diferencaExibida,
   exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porHoraExtenso, porUnidade,
   vereditoCapacidade,
 } from '../src/features/analise/estudo/textosMedicao.js';
@@ -22,11 +22,22 @@ const base = { recurso: 'FURADEIRA 03', produto: 'Painel', unidade: unidadeDoPos
 const pronto = (medicao, extra = {}) => ({ estado: 'pronto', medicao, postoNoCadastro: true, ...extra });
 
 describe('exibir — arredondar so para mostrar', () => {
-  it('taxa por hora: inteiro para baixo, sem o erro do ponto flutuante', () => {
+  it('taxa por hora: para baixo, uma casa abaixo de 100/h, sem o erro do ponto flutuante', () => {
     expect(exibirPorHora(3600000 / 144000)).toBe('25');
-    expect(exibirPorHora(24.6575)).toBe('24');
+    // Na embalagem (~25/h) cada unidade vale 4%: a casa decimal aparece.
+    expect(exibirPorHora(24.6575)).toBe('24,6');
     expect(exibirPorHora(222.9)).toBe('222');
     expect(exibirPorHora(null)).toBe('—');
+  });
+
+  it('deficit escrito e derivado dos dois numeros escritos: a conta fecha', () => {
+    const c = { base: 'medido', medido: 24.3, real: 30, esperado: 3600 / 146, diferenca: 24.3 - 3600 / 146 };
+    // Exigido 24,6 · Medido 24,3 · Deficit -0,3 (e nao -0,4, que nao fecharia).
+    expect(exibirPorHora(c.esperado)).toBe('24,6');
+    expect(exibirPorHora(c.medido)).toBe('24,3');
+    expect(diferencaExibida(c)).toBeCloseTo(-0.3, 9);
+    expect(diferencaExibida({ ...c, base: 'capacidade' })).toBeCloseTo(5.4, 9);
+    expect(diferencaExibida({ diferenca: null })).toBeNull();
   });
 
   it('percentual com uma casa, e abaixo de 100 nunca vira 100%', () => {
@@ -114,7 +125,7 @@ describe('lerMedido', () => {
     expect(lerMedido(pronto(m), base).linhas[0]).toMatch(/nenhuma medição de Painel em FURADEIRA 03/);
   });
 
-  it('setup planejado: diz que o setup marcado saiu do relogio', () => {
+  it('setup planejado: o setup fica no relogio, e o numero sem ele vai ao lado com quando vale', () => {
     const m = medicaoDoEstudo({
       ...base,
       conferencias: [0, 1, 2].map((i) => med({
@@ -123,8 +134,8 @@ describe('lerMedido', () => {
       setup: { setupsDia: 2, dias: 5, minutos: 20 },
     });
     const l = lerMedido(pronto(m), base);
-    expect(l.valor).toBe('120');
-    expect(l.linhas).toContain('o setup marcado (30 min) saiu do relógio: já está no takt');
+    expect(l.valor).toBe('100');
+    expect(l.linhas.join(' | ')).toMatch(/com o setup marcado \(30 min\) dentro do relógio; sem ele, 120 .*veio do programa da semana/);
   });
 
   it('lista no teto: avisa no cartao', () => {

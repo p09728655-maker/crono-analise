@@ -470,6 +470,19 @@ e o mesmo posto podia sair com um takt no estudo e outro no quadro do programa.
 - A **importação** (PDF do ERP) segue com a conta digitada: ela cria estudos
   de vários postos de uma vez, e cada grupo teria um takt diferente.
 
+### Na embalagem, o takt do estudo é por produto
+
+O programa da embalagem é em **volumes** e o estudo da embalagem mede o
+**produto** inteiro (o ciclo é o rack, com a caixa, as laterais, o isopor).
+Com os volumes do produto no cadastro, o takt do programa entra sozinho no
+Novo estudo **por produto**: takt por volume × volumes do produto, com a conta
+escrita no painel ("72,0 s por volume × 2 volumes de RACK = 144,0 s por
+produto") e no botão do Editar (`programaDoTakt`). Sem produto escolhido ou
+sem os volumes, não converte e não oferece o takt por volume — a tela pede o
+que falta. O takt por volume num estudo do produto deixava a linha o dobro
+mais carregada num rack de dois volumes (simulado: 70% de atingimento e
+"gargalo acima do takt" contra 140% e nenhuma sugestão com o takt certo).
+
 ### Furação passante
 
 Ao lado dos **acionamentos do motor por peça**, a conferência rápida pergunta
@@ -555,9 +568,33 @@ abas respondem **e agora**:
   você tem hoje"*, que devolve o veredito: sobram N, faltam N, ocupação do
   time atual. Esse número é um **e-se do analista** — fica no `localStorage`
   deste computador, por estudo, e não vai para o banco nem para o papel.
-- **Capacidade esperado × real** (no Yamazumi) — o que o Takt exige contra o
-  que o gargalo entrega, o atingimento em % e o déficit/superávit em pç/h.
-  Sem Takt configurado não há esperado: o comparativo mostra vazio em vez de
+- **Capacidade — exigido × tempo padrão × medido** (no Yamazumi) — três
+  números com o nome do que são: **Exigido (takt)**, **Capacidade pelo tempo
+  padrão** (o gargalo do estudo; antes se chamava "Real", mas é teórico) e
+  **Medido na linha** (`medicaoDoEstudo`): as medições de ritmo do MESMO posto
+  e produto nos últimos 30 dias — Ritmo por máquina nas furadeiras, Embalagem
+  Takt Time na embalagem —, ponderadas pelo tempo, no relógio com as paradas
+  dentro, e "com a linha rodando" como diagnóstico.
+  - Atingimento e déficit/superávit usam o **medido** quando há amostra que
+    sustente decisão (≥ 3 medições, ≥ 30 min); senão, a capacidade pelo
+    tempo padrão — e aí o veredito diz que **atenderia**, não que atende. Os
+    números escritos fecham a conta (o déficit sai dos dois números
+    mostrados; abaixo de 100/h, com uma casa).
+  - "Do tempo padrão X%": quanto da capacidade teórica a linha entrega — a
+    perda entre o estudo e o chão (paradas, ritmo, espera).
+  - **O setup marcado fica no relógio**, e com setup planejado no grupo o
+    número sem ele vai ao lado. O estudo grava só o número do takt, não a
+    origem: o do programa já descontou o setup planejado, o digitado com a
+    jornada cheia não — tirar o setup sem saber faria a linha "atender" sem
+    atender. Erro pessimista de propósito; gravar a origem do takt resolve.
+  - Na **embalagem** o tablet conta volume e o estudo mede o produto: o medido
+    é dividido pelos **volumes do produto** do cadastro; sem os volumes, fica
+    em volumes/h, fora do atingimento, e o cartão pede o cadastro.
+  - Medições arquivadas do posto e produto são avisadas como arquivadas (e
+    onde desarquivar), não como "nenhuma medição"; a lista do servidor no teto
+    (1000) também é avisada.
+  - O mesmo bloco vai para o Resumo executivo e para a Folha impressa.
+  Sem Takt configurado não há exigido: o comparativo mostra vazio em vez de
   inventar meta.
 
 ### Dois documentos impressos
@@ -940,6 +977,20 @@ muda a fila offline.
 
 O cadastro começa vazio, e a tela oferece trazer os nove de uma vez em vez
 de pedir que sejam redigitados.
+
+**Volumes por produto** (coluna `produtos.volumes`, 1 a 50, só nos grupos de
+embalagem): em quantas caixas o produto sai embalado (rack em 2 caixas = 2).
+É o que converte o programa e as medições da embalagem — em VOLUMES — para
+PRODUTO, a unidade do estudo. **Vazio é "não informado", nunca 1**: um rack de
+dois volumes sairia com o takt pela metade e o ritmo em dobro. Produto da
+embalagem sem volumes aparece com o destaque "volumes não informados".
+
+- O SELECT lê a coluna por `to_jsonb(p)->>'volumes'`: o preview da Vercel não
+  migra e usa o mesmo banco da produção, e um `p.volumes` direto derrubaria o
+  cadastro inteiro do preview até a produção publicar. No PATCH, o UPDATE de
+  volumes vem primeiro (sem a coluna, falha antes de gravar nome e código).
+- O PDF do ERP traz o volume como componente "VOL 1/N" (família 501.xxx); a
+  importação ainda não o lê.
 
 ## Relatório impresso
 

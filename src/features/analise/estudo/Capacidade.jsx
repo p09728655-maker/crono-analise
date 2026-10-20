@@ -2,7 +2,7 @@ import { claro } from '../../../theme/tokensAnalise.js';
 import { formatarSegundos } from '../../../domain/cronoanalise.js';
 import { est } from './estilos.js';
 import {
-  exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porUnidade, vereditoCapacidade,
+  diferencaExibida, exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porUnidade, vereditoCapacidade,
 } from './textosMedicao.js';
 
 const COR_DO_NIVEL = { neutro: claro.borda, atencao: claro.atencao };
@@ -98,12 +98,15 @@ export function CapacidadeEsperadoReal({
         />
         <Kpi
           rotuloKpi={diferenca !== null && diferenca < 0 ? 'Déficit' : 'Superávit'}
-          valor={exibirDiferenca(diferenca)}
+          valor={exibirDiferenca(diferencaExibida(capacidade))}
           unidade={diferenca !== null ? u : ''}
           nota={diferenca === null
             ? '—'
             : `${diferenca < 0 ? 'faltam por hora para fechar o Takt' : 'sobram por hora sobre o Takt'} · ${daBase}`}
-          cor={diferenca === null ? claro.borda : (diferenca < 0 ? claro.critico : claro.ok)}
+          // Superavit pela capacidade do tempo padrao ainda nao foi confirmado
+          // na linha: atencao, como o cartao do atingimento — verde so' medido.
+          cor={diferenca === null ? claro.borda
+            : (diferenca < 0 ? claro.critico : (base === 'medido' ? claro.ok : claro.atencao))}
         />
         <Kpi
           rotuloKpi="Do tempo padrão"

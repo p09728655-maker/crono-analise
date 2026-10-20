@@ -1,7 +1,7 @@
 import { formatarSegundos } from '../../../domain/cronoanalise.js';
 import { IconeAnalistas, IconeCapacidade } from '../../../components/icones.jsx';
 import { est } from './estilos.js';
-import { porHoraExtenso, porUnidade } from './textosMedicao.js';
+import { exibirPorHora, porHoraExtenso, porUnidade } from './textosMedicao.js';
 
 /**
  * O que o analista veio saber.
@@ -19,9 +19,11 @@ import { porHoraExtenso, porUnidade } from './textosMedicao.js';
  * "Capacidade da linha", a conta do gargalo passava por medicao do chao,
  * a confusao que a troca do "Real (gargalo)" veio tirar. Na embalagem o
  * estudo mede o PRODUTO (`unidade`), e o numero diz "produtos/hora".
+ * O numero e' escrito como no quadro (exibirPorHora, do valor cheio): o
+ * `capacidadeLinha` inteiro dava 31 aqui em cima e 31,3 logo abaixo.
  */
 export default function Resposta({ analise, unidade = 'peça' }) {
-  const { capacidadeLinha, gargalo, operadores, taktMs } = analise;
+  const { capacidadeLinha, capacidadeExata, gargalo, operadores, taktMs } = analise;
   const semDados = !gargalo;
 
   if (semDados) {
@@ -45,7 +47,7 @@ export default function Resposta({ analise, unidade = 'peça' }) {
           Capacidade pelo tempo padrão
         </span>
         <div style={est.respostaNumeroLinha}>
-          <span style={est.respostaNumero}>{capacidadeLinha}</span>
+          <span style={est.respostaNumero}>{exibirPorHora(capacidadeExata || capacidadeLinha)}</span>
           <span style={est.respostaUnidade}>{porHoraExtenso(unidade)}</span>
         </div>
         <p style={est.respostaExplica}>

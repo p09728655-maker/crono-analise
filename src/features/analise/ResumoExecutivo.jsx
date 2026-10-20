@@ -4,7 +4,7 @@ import { PRIORIDADES } from '../../domain/sugestoes.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
 import {
-  exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porUnidade, vereditoCapacidade,
+  diferencaExibida, exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porUnidade, vereditoCapacidade,
 } from './estudo/textosMedicao.js';
 
 /**
@@ -99,7 +99,7 @@ export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
         </div>
         <div style={est.destaque}>
           <span style={est.destaqueRotulo}>Capacidade pelo tempo padrão</span>
-          <span style={est.destaqueValor}>{analise.capacidadeLinha || '—'}<small style={est.destaqueUnidade}>{u}</small></span>
+          <span style={est.destaqueValor}>{analise.capacidadeLinha ? exibirPorHora(analise.capacidadeExata || analise.capacidadeLinha) : '—'}<small style={est.destaqueUnidade}>{u}</small></span>
           <span style={est.destaqueNota}>
             {analise.gargalo ? `limitada por ${analise.gargalo.nome}` : 'sem ciclos coletados'}
           </span>
@@ -122,7 +122,7 @@ export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
           <span style={est.destaqueNota}>
             {capacidade.diferenca === null
               ? 'sem base de comparação'
-              : `${exibirDiferenca(capacidade.diferenca)} ${u} ${capacidade.diferenca < 0 ? 'de déficit' : 'de superávit'}`}
+              : `${exibirDiferenca(diferencaExibida(capacidade))} ${u} ${capacidade.diferenca < 0 ? 'de déficit' : 'de superávit'}`}
             {capacidade.diferenca !== null && (
               <span style={est.linhaNota}>
                 {pelaMedicao ? 'base: medido na linha' : 'base: capacidade pelo tempo padrão'}
