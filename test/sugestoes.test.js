@@ -163,12 +163,35 @@ describe('comparativoCapacidade', () => {
     const r = comparativoCapacidade({ taktMs: 5000, capacidadeLinha: 600, medido: 480.7 });
     expect(r.esperado).toBe(720);
     expect(r.real).toBe(600);
-    expect(r.medido).toBe(480);
+    // Cheio: o inteiro para baixo e' so' de exibicao.
+    expect(r.medido).toBe(480.7);
     expect(r.base).toBe('medido');
-    expect(r.atingimentoPct).toBeCloseTo((480 / 720) * 100, 6);
-    expect(r.diferenca).toBe(-240);
-    // A linha entrega 80% do que o tempo padrao permite.
-    expect(r.pctDaCapacidade).toBeCloseTo(80, 6);
+    expect(r.atingimentoPct).toBeCloseTo((480.7 / 720) * 100, 6);
+    expect(r.diferenca).toBeCloseTo(-239.3, 6);
+    expect(r.atende).toBe(false);
+    // A linha entrega 80,1% do que o tempo padrao permite.
+    expect(r.pctDaCapacidade).toBeCloseTo((480.7 / 600) * 100, 6);
+  });
+
+  it('atingimento e deficit com os valores CHEIOS: 24,3 medido contra 24,66 exigido e deficit, nunca 100%', () => {
+    /* A embalagem: takt de 146 s = 24,66 produtos/h exigidos; medido 24,3.
+       Arredondando antes de dividir, 24 contra 24 dava "100%, atende"
+       para uma linha abaixo do takt (revisao de 20/10). */
+    const r = comparativoCapacidade({ taktMs: 146000, capacidadeLinha: 31.3, medido: 24.3 });
+    expect(r.esperado).toBeCloseTo(24.6575, 4);
+    expect(r.atingimentoPct).toBeCloseTo(98.55, 2);
+    expect(r.atingimentoPct).toBeLessThan(100);
+    expect(r.diferenca).toBeCloseTo(-0.3575, 4);
+    expect(r.atende).toBe(false);
+    // Pela capacidade, o mesmo: 24,9 contra 24,66 atende — o inteiro (24)
+    // dizia que nao.
+    const pelaConta = comparativoCapacidade({ taktMs: 146000, capacidadeLinha: 24.9 });
+    expect(pelaConta.atende).toBe(true);
+    expect(pelaConta.diferenca).toBeGreaterThan(0);
+    // Exatamente no takt atende (100%, superavit zero).
+    const noTakt = comparativoCapacidade({ taktMs: 144000, capacidadeLinha: 31, medido: 25 });
+    expect(noTakt.atingimentoPct).toBeCloseTo(100, 9);
+    expect(noTakt.atende).toBe(true);
   });
 
   it('medido acima do exigido vira superavit; sem Takt o medido continua la', () => {
@@ -177,6 +200,7 @@ describe('comparativoCapacidade', () => {
     expect(semTakt.medido).toBe(480);
     expect(semTakt.base).toBe('medido');
     expect(semTakt.atingimentoPct).toBeNull();
+    expect(semTakt.atende).toBeNull();
     expect(semTakt.pctDaCapacidade).toBeCloseTo(80, 6);
   });
 

@@ -85,14 +85,22 @@ const navegador = await chromium.launch({ executablePath: EXEC });
   checar(!/Real \(gargalo\)/i.test(capacidade), 'o "Real (gargalo)" saiu: era conta, nao medicao');
   checar(/300/.test(capacidade), 'exigido sai do Takt (12 s -> 300 pc/h)');
   checar(/222/.test(capacidade), 'capacidade pelo tempo padrao sai do gargalo');
-  checar(/74%/.test(capacidade), 'atingimento e o quociente dos dois');
-  checar(/-78/.test(capacidade), 'deficit em pecas por hora, com sinal');
+  /* Atingimento e deficit com a capacidade CHEIA (222,7/h): o 222 do
+     cartao e' so' exibicao. Arredondar antes de dividir trocava o veredito
+     na embalagem (revisao de 20/10). */
+  checar(/74,2%/.test(capacidade), 'atingimento e o quociente dos dois, com uma casa (222,7 / 300 = 74,2%)');
+  checar(/-77,4/.test(capacidade), 'deficit em pecas por hora, com sinal e o valor cheio (222,7 - 300)');
   checar(/base: capacidade pelo tempo padrão/.test(capacidade),
     'sem medicao, atingimento e deficit dizem que a base e a capacidade pelo tempo padrao');
   checar(/nenhuma medição/.test(capacidade) && /Ritmo por máquina/.test(capacidade),
     'resposta sem medicoes: diz que nao ha medicao e onde medir');
   checar(/“Furadeira 03” não é uma máquina do cadastro/.test(capacidade),
     'posto fora do cadastro: diz que a medicao grava a maquina e nao vai casar');
+  /* O numero do topo tem o MESMO nome do cartao do quadro: "Capacidade da
+     linha" fazia a conta do gargalo passar por medicao do chao. */
+  const topo = await p.locator('[aria-label="Resultado do estudo"]').innerText();
+  checar(/Capacidade pelo tempo padrão/i.test(topo) && !/Capacidade da linha/i.test(topo),
+    `o topo se chama "Capacidade pelo tempo padrão", como o cartao (${topo.split('\n')[0]})`);
 
   await p.locator('[aria-label="Análise"] button', { hasText: 'Operadores' }).click();
   await p.waitForTimeout(300);
@@ -350,8 +358,8 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
   checar(/-120/.test(await cartao(p, 'Déficit')), 'deficit do medido: 180 - 300 = -120 pç/h');
   checar((bloco.match(/base: medido na linha/g) || []).length === 2,
     'atingimento e deficit dizem que a base e o medido');
-  checar(/a linha entrega 81% do que o tempo padrão permite/.test(bloco),
-    'a perda entre o tempo padrao e o chao: 180 / 222 = 81%');
+  checar(/a linha entrega 80,9% do que o tempo padrão permite/.test(bloco),
+    'a perda entre o tempo padrao e o chao: 180 / 222,7 = 80,9%');
   const largo = await p.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   checar(!largo, 'sem rolagem horizontal com o bloco novo');
 
@@ -362,7 +370,7 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
   const folha = await p.locator('.somente-impressao').innerText();
   checar(/Exigido \(takt\)/i.test(folha) && /Capacidade pelo tempo padrão/i.test(folha) && /Medido na linha/i.test(folha),
     'folha impressa: exigido, tempo padrao e medido no resumo');
-  checar(/Base do atingimento e do déficit: medido na linha/.test(folha) && /81% do que o tempo padrão permite/.test(folha),
+  checar(/Base do atingimento e do déficit: medido na linha/.test(folha) && /80,9% do que o tempo padrão permite/.test(folha),
     'folha diz a base do atingimento e a perda para o tempo padrao');
   checar(/180 pç\/h \(3 medições/.test(folha), 'folha traz o medido com as medicoes');
   checar(!(await p.evaluate(() => document.querySelector('.somente-impressao').scrollWidth > document.documentElement.clientWidth + 1)),
@@ -391,9 +399,12 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
   const medido = await cartao(p, 'Medido na linha');
   checar(/189/.test(medido) && /amostra curta \(2 de 3 medições\)/.test(medido) && /não entra no atingimento/.test(medido),
     `amostra curta: mostra o numero com a ressalva (${medido.replace(/\s+/g, ' ')})`);
-  checar(/74%/.test(await cartao(p, 'Atingimento')) && /base: capacidade pelo tempo padrão/.test(bloco),
+  checar(/74,2%/.test(await cartao(p, 'Atingimento')) && /base: capacidade pelo tempo padrão/.test(bloco),
     'e o atingimento fica na capacidade pelo tempo padrao');
-  checar(!/Do tempo padrão/i.test(bloco), 'sem medido usavel, nao ha percentual do tempo padrao');
+  checar(/^Do tempo padrão\s*—/i.test(await cartao(p, 'Do tempo padrão')),
+    'sem medido usavel, o percentual do tempo padrao fica vazio, no lugar');
+  checar(/abaixo do ritmo exigido pelo tempo padrão · a medição ainda não confirma: amostra curta \(2 de 3 medições\)/
+    .test(await cartao(p, 'Atingimento')), 'o atingimento diz que a medicao ainda nao confirma, e por que');
   checar(erros.length === 0, `amostra curta: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
   await ctx.close();
 }
@@ -414,7 +425,7 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
   const { ctx, p, erros, bloco } = await abrirCenario('medicao-falha');
   checar(/não deu para buscar a medição agora/.test(await cartao(p, 'Medido na linha')),
     'medicao fora do ar: o cartao diz que nao deu, sem derrubar o painel');
-  checar(await p.locator('text=/peças\\/hora/').count() > 0 && /74%/.test(bloco),
+  checar(await p.locator('text=/peças\\/hora/').count() > 0 && /74,2%/.test(bloco),
     'e o resto da analise segue com a capacidade pelo tempo padrao');
   checar(erros.length === 0, `medicao fora do ar: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
   await ctx.close();
@@ -430,7 +441,24 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
     'exigido 25 (takt 144 s) e tempo padrao 31 (TP 115 s)');
   checar(/92%/.test(await cartao(p, 'Atingimento')) && /-2/.test(await cartao(p, 'Déficit')),
     'atingimento do medido: 23 / 25 = 92%, deficit -2');
-  checar(/a linha entrega 74% do que o tempo padrão permite/.test(bloco), 'perda para o tempo padrao: 23 / 31 = 74%');
+  checar(/a linha entrega 73,5% do que o tempo padrão permite/.test(bloco), 'perda para o tempo padrao: 23 / 31,3 = 73,5%');
+  /* A embalagem mede o PRODUTO: todo numero por hora do quadro diz
+     produtos/h — nao "pç/h" num cartao e "produtos/h" no outro. */
+  checar(!/pç\/h/.test(bloco) && (bloco.match(/produtos\/h/g) || []).length >= 4,
+    `embalagem: exigido, tempo padrao, medido e deficit em produtos/h, nenhum pç/h (${(bloco.match(/produtos\/h/g) || []).length})`);
+  checar(/takt de 144.0 s por produto/.test(await cartao(p, 'Exigido (takt)')), 'o takt e por produto');
+  const topoEmb = await p.locator('[aria-label="Resultado do estudo"]').innerText();
+  checar(/Capacidade pelo tempo padrão[\s\S]*31[\s\S]*produtos\/hora/i.test(topoEmb) && /s por produto/.test(topoEmb)
+    && !/peças\/hora|por peça/.test(topoEmb),
+    `embalagem: o topo diz produtos/hora e por produto (${topoEmb.replace(/\s+/g, ' ').slice(0, 120)})`);
+  await p.emulateMedia({ media: 'print' });
+  const folhaEmb = await p.locator('.somente-impressao').innerText();
+  checar(/A capacidade pelo tempo padrão é\s+limitada por esta operação — 31 produtos\/hora/.test(folhaEmb)
+    && !/capacidade da linha/i.test(folhaEmb),
+    'folha: o paragrafo do gargalo diz "capacidade pelo tempo padrao" em produtos/hora');
+  checar(/Exigido \(takt\)\s*25\s*produtos\/h/i.test(folhaEmb) && /Déficit\s*-2\s*produtos\/h/i.test(folhaEmb),
+    'folha: exigido e deficit em produtos/h');
+  await p.emulateMedia({ media: 'screen' });
 
   await p.getByRole('button', { name: 'Resumo executivo' }).click();
   await p.waitForFunction(() => window.__impressoes > 0, null, { timeout: 5000 });
@@ -438,6 +466,8 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
   checar(/A falta está\s+no chão/.test(resumo),
     'resumo: tempo padrao sobra e medido falta — a falta e do chao, nao do gargalo do estudo');
   checar(/23\s*produtos\/h/.test(resumo), 'resumo leva o medido em produtos/h');
+  checar(/25\s*produtos\/h/.test(resumo) && /Takt de 144.0 s por produto/.test(resumo) && /-2 produtos\/h de déficit/.test(resumo),
+    'resumo: exigido, takt e deficit tambem por produto');
   checar(erros.length === 0, `embalagem: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
   await ctx.close();
 }
@@ -448,10 +478,139 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
   checar(/46\s*vol\/h/.test(medido),
     `sem volumes no cadastro: mostra o que mediu, em volumes (${medido.replace(/\s+/g, ' ')})`);
   checar(/informe os volumes do produto em Produtos/.test(medido), 'e pede os volumes no cadastro de produtos');
-  checar(/124%/.test(await cartao(p, 'Atingimento')) && /base: capacidade pelo tempo padrão/.test(bloco),
-    'volume nao vira produto: o atingimento fica no tempo padrao (31 / 25 = 124%)');
+  checar(/125,2%/.test(await cartao(p, 'Atingimento')) && /base: capacidade pelo tempo padrão/.test(bloco),
+    'volume nao vira produto: o atingimento fica no tempo padrao (31,3 / 25 = 125,2%)');
+  /* Pelo tempo padrao a linha ATENDERIA — e o medido (46 vol/h = 23
+     produtos/h, abaixo dos 25) mostra o contrario. A tela nao pode dizer
+     "a linha entrega o ritmo" (revisao de 20/10). */
+  const ating = await cartao(p, 'Atingimento');
+  checar(/pelo tempo padrão atenderia/.test(ating) && /a medição ainda não confirma: faltam os volumes do produto/.test(ating),
+    `sem medido utilizavel: "pelo tempo padrao atenderia", e por que a medicao nao confirma (${ating.replace(/\s+/g, ' ')})`);
+  checar(!/a linha entrega o ritmo/.test(bloco), 'e nunca "a linha entrega o ritmo"');
+  await p.getByRole('button', { name: 'Resumo executivo' }).click();
+  await p.waitForFunction(() => window.__impressoes > 0, null, { timeout: 5000 });
+  const resumoSv = await p.locator('.somente-impressao').innerText();
+  checar(!/A linha atende/.test(resumoSv) && /Pelo tempo padrão, a linha atenderia o ritmo da demanda — a medição ainda não confirma: faltam os volumes/.test(resumoSv),
+    'resumo: "pelo tempo padrao atenderia", nunca "a linha atende"');
+  // A Folha diz o mesmo, com as mesmas palavras.
+  await p.getByRole('button', { name: 'Imprimir relatório' }).click();
+  await p.waitForFunction(() => window.__impressoes > 1, null, { timeout: 5000 });
+  const folhaSv = await p.locator('.somente-impressao').innerText();
+  checar(/Veredito: Pelo tempo padrão, a linha atenderia o ritmo da demanda — a medição ainda não confirma/.test(folhaSv)
+    && !/A linha atende/.test(folhaSv), 'folha: o mesmo veredito, sem afirmar o que ninguem mediu');
   checar(erros.length === 0, `embalagem sem volumes: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
   await ctx.close();
+}
+
+{
+  /* O SETUP UMA VEZ SO': o grupo tem setup planejado (5 x 5 x 12 min), que
+     ja' saiu das horas do takt. Os 5 min de setup marcados na segunda
+     medicao saem do relogio: 180 pecas em 55 min = 196/h, nao 180. */
+  const { ctx, p, erros } = await abrirCenario('furadeira-setup');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/196\s*pç\/h/.test(medido) && /o setup marcado \(5 min\) saiu do relógio: já está no takt/.test(medido),
+    `setup planejado: o setup marcado sai do relogio e a tela diz (${medido.replace(/\s+/g, ' ')})`);
+  checar(/65,5%/.test(await cartao(p, 'Atingimento')), 'atingimento com o relogio sem o setup: 196,4 / 300 = 65,5%');
+  await p.emulateMedia({ media: 'print' });
+  checar(/saiu do relógio: já está no takt/.test(await p.locator('.somente-impressao').innerText()),
+    'a folha tambem diz que o setup saiu do relogio');
+  checar(erros.length === 0, `setup planejado: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  // As tres medicoes do posto e produto estao ARQUIVADAS.
+  const { ctx, p, erros } = await abrirCenario('arquivadas');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/3 medições de Painel MDF 18mm em Furadeira 03 dos últimos 30 dias estão arquivadas/.test(medido)
+    && /restaure no relatório Ritmo por máquina, em Arquivadas/.test(medido),
+    `arquivadas: diz quantas e onde restaurar (${medido.replace(/\s+/g, ' ')})`);
+  checar(!/nenhuma medição/.test(medido) && !/para medir/.test(medido),
+    'e nao manda medir de novo o que esta guardado no banco');
+  checar(/a medição ainda não confirma: as 3 medições do posto com este produto estão arquivadas/.test(await cartao(p, 'Atingimento')),
+    'o atingimento diz por que a medicao nao confirma');
+  checar(erros.length === 0, `arquivadas: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  // A lista do servidor veio no teto (1000 linhas, de todas as maquinas).
+  const { ctx, p, erros } = await abrirCenario('teto');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/180\s*pç\/h/.test(medido) && /teto de 1000 medições/.test(medido) && /podem ter ficado de fora/.test(medido),
+    'lista no teto: o cartao avisa que medicao antiga pode ter ficado de fora');
+  checar(erros.length === 0, `teto: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  // A primeira busca das medicoes falha; "Tentar de novo" busca outra vez.
+  const { ctx, p, erros } = await abrirCenario('medicao-volta');
+  checar(/não deu para buscar a medição agora/.test(await cartao(p, 'Medido na linha')),
+    'tentar de novo: a primeira busca falhou');
+  const botao = p.locator('[aria-label="Capacidade: exigido, tempo padrão e medido"] button', { hasText: 'Tentar de novo' });
+  checar(await botao.count() === 1, 'o cartao do medido com erro tem o botao "Tentar de novo"');
+  await botao.click();
+  await p.waitForFunction(() => /180/.test(
+    document.querySelector('[aria-label="Capacidade: exigido, tempo padrão e medido"]')?.innerText || '',
+  ), null, { timeout: 5000 }).catch(() => {});
+  const depois = await cartao(p, 'Medido na linha');
+  checar(/180\s*pç\/h/.test(depois) && !/não deu para buscar/.test(depois),
+    `e a segunda busca traz a medicao (${depois.replace(/\s+/g, ' ').slice(0, 80)})`);
+  checar(/60%/.test(await cartao(p, 'Atingimento')), 'e o atingimento passa para o medido');
+  checar(erros.length === 0, `tentar de novo: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  // Produto DESATIVADO no cadastro: os volumes continuam valendo.
+  const { ctx, p, erros } = await abrirCenario('embalagem-desativado');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/23\s*produtos\/h/.test(medido) && /÷ 2 volumes por produto/.test(medido),
+    `produto desativado: os volumes vem do cadastro mesmo assim (${medido.replace(/\s+/g, ' ')})`);
+  checar(erros.length === 0, `produto desativado: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  /* A FRACAO: takt de 146 s = 24,66 produtos/h; medido 24,3. No inteiro,
+     24 contra 24 dava "100%, Superavit 0, a linha atende". */
+  const { ctx, p, erros } = await abrirCenario('embalagem-fracao');
+  const ating = await cartao(p, 'Atingimento');
+  checar(/98,6%/.test(ating) && /abaixo do ritmo exigido/.test(ating) && !/100%/.test(ating),
+    `atingimento com os valores cheios: 24,3 / 24,66 = 98,6%, abaixo (${ating.replace(/\s+/g, ' ')})`);
+  const def = await cartao(p, 'Déficit');
+  checar(/^Déficit\s*-0,4/i.test(def), `e deficit de 0,4 produto por hora, nunca superavit 0 (${def.replace(/\s+/g, ' ')})`);
+  await p.getByRole('button', { name: 'Resumo executivo' }).click();
+  await p.waitForFunction(() => window.__impressoes > 0, null, { timeout: 5000 });
+  const resumo = await p.locator('.somente-impressao').innerText();
+  checar(/A linha não atende o ritmo da demanda, medida na linha/.test(resumo) && !/A linha atende/.test(resumo),
+    'resumo: nao atende, medida na linha');
+  checar(erros.length === 0, `fracao: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  /* LAYOUT: tres colunas iguais de 1024 a 1440 px — o auto-fit quebrava em
+     2 + 1 em 1024 e deixava um cartao sozinho na linha de baixo. No
+     celular, um embaixo do outro. */
+  for (const largura of [1024, 1366, 1440, 390]) {
+    const { ctx, p } = await abrirCenario('embalagem', largura);
+    const g = await p.evaluate(() => {
+      const cartoes = [...document.querySelectorAll('[aria-label="Capacidade: exigido, tempo padrão e medido"] .grade-capacidade > div')];
+      const fileiras = new Map();
+      for (const c of cartoes) {
+        const t = Math.round(c.getBoundingClientRect().top);
+        fileiras.set(t, (fileiras.get(t) || 0) + 1);
+      }
+      const larguras = new Set(cartoes.map((c) => Math.round(c.getBoundingClientRect().width)));
+      return { porFileira: [...fileiras.values()], larguras: larguras.size };
+    });
+    const esperado = largura < 900 ? '1,1,1,1,1,1' : '3,3';
+    checar(g.porFileira.join(',') === esperado && g.larguras === 1,
+      `${largura} px: cartoes por fileira ${g.porFileira.join('+')} (esperado ${esperado.replace(/,/g, '+')}), todos da mesma largura`);
+    await ctx.close();
+  }
 }
 
 await navegador.close();

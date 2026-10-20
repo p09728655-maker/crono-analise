@@ -5,7 +5,7 @@
  * embalagem e o criterio de amostra do relatorio. Numeros feitos na mao.
  */
 import { describe, expect, it } from 'vitest';
-import { medicaoDoEstudo } from '../src/domain/medicaoDoEstudo.js';
+import { TETO_LISTA_CONFERENCIAS, medicaoDoEstudo, unidadeDoEstudo } from '../src/domain/medicaoDoEstudo.js';
 import { unidadeDoPosto } from '../src/domain/cronoanalise.js';
 
 const AGORA = Date.parse('2026-10-20T12:00:00Z');
@@ -183,5 +183,103 @@ describe('medicaoDoEstudo — sem o que medir', () => {
     expect(medicaoDoEstudo({ ...base, conferencias: { estudo: {} } }).motivo).toBe('sem-medicao');
     expect(medicaoDoEstudo({ ...base, conferencias: [null, med({ duracao_ms: 0 })] }).motivo).toBe('sem-medicao');
     expect(medicaoDoEstudo().motivo).toBe('sem-posto');
+  });
+});
+
+describe('medicaoDoEstudo — o setup entra UMA vez so', () => {
+  /* O exemplo da revisao de 20/10: tres medicoes de 60 min, cada uma com
+     10 min de setup marcado e 100 pecas. Com setup planejado no grupo, o
+     setup ja' saiu das horas do takt e sai do relogio tambem: 300 pecas em
+     150 min = 120/h. Sem setup planejado, fica no relogio: 300 em 180 min
+     = 100/h. */
+  const comSetup = [0, 1, 2].map((i) => med({
+    id: `s${i}`, duracao_ms: 60 * MIN, pecas: 100, iniciado_em: `2026-10-1${i}T10:00:00Z`,
+    paradas: [{ motivo: 'setup', duracaoMs: 10 * MIN }],
+  }));
+  const planejado = { setupsDia: 2, dias: 5, minutos: 20 };
+
+  it('setup planejado > 0: o setup marcado sai do relogio (120/h) e a medicao diz quanto saiu', () => {
+    const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup: planejado });
+    expect(m.ritmoRelogio).toBeCloseTo(120, 6);
+    expect(m.setupPlanejado).toBe(true);
+    expect(m.setupMedidoMs).toBe(30 * MIN);
+    expect(m.setupDescontadoMs).toBe(30 * MIN);
+    expect(m.relogioMs).toBe(150 * MIN);
+    // O rodando nao muda: ja' era sem nenhuma parada.
+    expect(m.ritmoRodando).toBeCloseTo(120, 6);
+    expect(m.usavel).toBe(true);
+  });
+
+  it('sem setup planejado (nao informado ou zero): o setup fica no relogio (100/h)', () => {
+    for (const setup of [null, undefined, {}, { setupsDia: 0 }, { minutos: 0 }, { setupsDia: 2, dias: 5 }]) {
+      const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup });
+      expect(m.ritmoRelogio).toBeCloseTo(100, 6);
+      expect(m.setupDescontadoMs).toBe(0);
+      expect(m.relogioMs).toBe(180 * MIN);
+    }
+  });
+
+  it('so o setup sai: as outras paradas continuam no relogio', () => {
+    const misto = comSetup.map((c) => ({
+      ...c, paradas: [...c.paradas, { motivo: 'falta_material', duracaoMs: 5 * MIN }],
+    }));
+    const m = medicaoDoEstudo({ ...base, conferencias: misto, setup: planejado });
+    // 300 pecas em (180 - 30) min = 120/h; os 15 min de falta de material ficam.
+    expect(m.ritmoRelogio).toBeCloseTo(120, 6);
+    // Rodando: 300 em (180 - 45) min.
+    expect(m.ritmoRodando).toBeCloseTo((300 * 60) / 135, 6);
+  });
+
+  it('na embalagem, desconta o setup e depois converte para produto', () => {
+    const vol = comSetup.map((c) => ({ ...c, maquina: 'EMBALAGEM 01', peca: 'Rack', pecas: 40 }));
+    const m = medicaoDoEstudo({
+      conferencias: vol, recurso: 'EMBALAGEM 01', produto: 'Rack', unidade: VOLUME, volumes: 2,
+      setup: planejado, agora: AGORA,
+    });
+    // 120 volumes em 150 min = 48 vol/h = 24 produtos/h.
+    expect(m.ritmoRelogioContado).toBeCloseTo(48, 6);
+    expect(m.ritmoRelogio).toBeCloseTo(24, 6);
+  });
+});
+
+describe('medicaoDoEstudo — arquivadas e teto da lista', () => {
+  const arquivadasDoEstudo = DO_ESTUDO.map((c) => ({ ...c, arquivada: true }));
+
+  it('sem medicao ativa e com arquivadas do posto e produto: conta as da janela', () => {
+    const m = medicaoDoEstudo({
+      ...base,
+      conferencias: [],
+      arquivadas: [...arquivadasDoEstudo, med({ arquivada: true, peca: 'Lateral Sleep' }),
+        med({ arquivada: true, iniciado_em: '2026-08-01T10:00:00Z' })],
+    });
+    expect(m.motivo).toBe('sem-medicao');
+    // As tres do estudo; a de outro produto e a velha ficam de fora.
+    expect(m.arquivadas).toBe(3);
+  });
+
+  it('lista das arquivadas que nao veio: nao se sabe (null), nao e zero', () => {
+    expect(medicaoDoEstudo({ ...base, conferencias: [] }).arquivadas).toBeNull();
+    expect(medicaoDoEstudo({ ...base, conferencias: [], arquivadas: [] }).arquivadas).toBe(0);
+  });
+
+  it('lista do servidor no teto (1000): avisa que medicao antiga pode ter ficado de fora', () => {
+    const outras = Array.from({ length: TETO_LISTA_CONFERENCIAS - 3 }, (_, i) => med({ id: `o${i}`, maquina: 'FURADEIRA 09' }));
+    const cheia = medicaoDoEstudo({ ...base, conferencias: [...DO_ESTUDO, ...outras] });
+    expect(cheia.noTeto).toBe(true);
+    expect(cheia.n).toBe(3);
+    const vazia = medicaoDoEstudo({ ...base, conferencias: [...outras, med({ maquina: 'FURADEIRA 09' }), med({ maquina: 'FURADEIRA 09' }), med({ maquina: 'FURADEIRA 09' })] });
+    expect(vazia.motivo).toBe('sem-medicao');
+    expect(vazia.noTeto).toBe(true);
+    expect(medicaoDoEstudo({ ...base, conferencias: DO_ESTUDO }).noTeto).toBe(false);
+  });
+});
+
+describe('unidadeDoEstudo', () => {
+  it('embalagem mede o PRODUTO; qualquer outro grupo, ou nenhum, a peca', () => {
+    expect(unidadeDoEstudo('EMBALAGEM')).toBe('produto');
+    expect(unidadeDoEstudo('Embalagem linha 2')).toBe('produto');
+    expect(unidadeDoEstudo('FURADEIRAS')).toBe('peça');
+    expect(unidadeDoEstudo(null)).toBe('peça');
+    expect(unidadeDoEstudo(undefined)).toBe('peça');
   });
 });

@@ -3,7 +3,9 @@ import { formatarDuracao, formatarSegundos } from '../../domain/cronoanalise.js'
 import { PRIORIDADES } from '../../domain/sugestoes.js';
 import { LOGO_PATRIMAR } from '../../theme/logo.js';
 import { VERSAO } from '../../versao.js';
-import { lerMedido } from './estudo/textosMedicao.js';
+import {
+  exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora, porUnidade, vereditoCapacidade,
+} from './estudo/textosMedicao.js';
 
 /**
  * RESUMO EXECUTIVO — A4, UMA pagina.
@@ -22,7 +24,12 @@ import { lerMedido } from './estudo/textosMedicao.js';
  * saem so' as de ALTA prioridade, no maximo tres.
  *
  * O MEDIDO NA LINHA entra ao lado do exigido e da capacidade pelo tempo
- * padrao, na mesma ordem da tela; o atingimento diz de qual dos dois saiu.
+ * padrao, na mesma ordem da tela; o atingimento diz de qual dos dois saiu,
+ * e o veredito e' o mesmo da tela (vereditoCapacidade): so' o medido diz
+ * que a linha atende — pelo tempo padrao ela "atenderia".
+ *
+ * Na embalagem o estudo mede o PRODUTO, e todo numero por hora diz
+ * "produtos/h" (`medido.unidadeEstudo`).
  */
 export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -32,13 +39,17 @@ export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
 
   const { capacidade } = leitura;
   const altas = leitura.sugestoes.filter((s) => s.prioridade === 'alta').slice(0, 3);
-  const atinge = capacidade.atingimentoPct !== null && capacidade.atingimentoPct >= 100;
+  const atinge = capacidade.atende === true;
+  const unidade = medido?.unidadeEstudo || 'peça';
+  const u = porHora(unidade);
   const doMedido = lerMedido(medido, { recurso: estudo.recurso, produto: estudo.produto });
+  const veredito = vereditoCapacidade(capacidade, doMedido);
   const pelaMedicao = capacidade.base === 'medido';
   /* Medido abaixo do exigido com o tempo padrao sobrando: o gargalo do
      estudo nao explica a falta — ela esta' no chao. Dizer "o gargalo e' X"
-     nesse caso mandaria a reuniao mexer no posto errado. */
-  const faltaNoChao = pelaMedicao && capacidade.atingimentoPct !== null && !atinge
+     nesse caso mandaria a reuniao mexer no posto errado. Comparado com os
+     valores cheios, como o atingimento. */
+  const faltaNoChao = pelaMedicao && capacidade.atende === false
     && capacidade.pctDaCapacidade !== null && capacidade.real >= capacidade.esperado;
 
   return (
@@ -77,18 +88,18 @@ export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
         <div style={est.destaque}>
           <span style={est.destaqueRotulo}>Exigido pela demanda</span>
           <span style={est.destaqueValor}>
-            {capacidade.esperado !== null ? capacidade.esperado : '—'}
-            <small style={est.destaqueUnidade}>{capacidade.esperado !== null ? 'pç/h' : ''}</small>
+            {exibirPorHora(capacidade.esperado)}
+            <small style={est.destaqueUnidade}>{capacidade.esperado !== null ? u : ''}</small>
           </span>
           <span style={est.destaqueNota}>
             {capacidade.esperado !== null
-              ? `Takt de ${formatarSegundos(analise.taktMs)} s por peça`
+              ? `Takt de ${formatarSegundos(analise.taktMs)} s ${porUnidade(unidade)}`
               : 'Takt Time não configurado'}
           </span>
         </div>
         <div style={est.destaque}>
           <span style={est.destaqueRotulo}>Capacidade pelo tempo padrão</span>
-          <span style={est.destaqueValor}>{analise.capacidadeLinha || '—'}<small style={est.destaqueUnidade}>pç/h</small></span>
+          <span style={est.destaqueValor}>{analise.capacidadeLinha || '—'}<small style={est.destaqueUnidade}>{u}</small></span>
           <span style={est.destaqueNota}>
             {analise.gargalo ? `limitada por ${analise.gargalo.nome}` : 'sem ciclos coletados'}
           </span>
@@ -106,12 +117,12 @@ export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
         <div style={est.destaque}>
           <span style={est.destaqueRotulo}>Atingimento</span>
           <span style={est.destaqueValor}>
-            {capacidade.atingimentoPct !== null ? `${capacidade.atingimentoPct.toFixed(0)}%` : '—'}
+            {exibirPct(capacidade.atingimentoPct)}
           </span>
           <span style={est.destaqueNota}>
             {capacidade.diferenca === null
               ? 'sem base de comparação'
-              : `${capacidade.diferenca > 0 ? '+' : ''}${capacidade.diferenca} pç/h ${capacidade.diferenca < 0 ? 'de déficit' : 'de superávit'}`}
+              : `${exibirDiferenca(capacidade.diferenca)} ${u} ${capacidade.diferenca < 0 ? 'de déficit' : 'de superávit'}`}
             {capacidade.diferenca !== null && (
               <span style={est.linhaNota}>
                 {pelaMedicao ? 'base: medido na linha' : 'base: capacidade pelo tempo padrão'}
@@ -132,19 +143,19 @@ export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
         </div>
       </section>
 
+      {/* O veredito da tela, com as mesmas palavras: "atende" so' com o
+          medido; pelo tempo padrao, "atenderia" e o que falta para confirmar. */}
       <p style={est.veredito}>
-        <strong>{atinge
-          ? `✓ A linha atende o ritmo da demanda${pelaMedicao ? ', medida na linha' : ''}.`
-          : (capacidade.esperado === null ? 'Sem Takt configurado, não há veredito de atendimento.' : `⚠ A linha não atende o ritmo da demanda${pelaMedicao ? ', medida na linha' : ''}.`)}</strong>
+        <strong>{veredito.simbolo ? `${veredito.simbolo} ` : ''}{veredito.frase}</strong>
         {' '}
         {faltaNoChao && (
-          <>Pelo tempo padrão ela daria {capacidade.real} pç/h; medida, entrega {capacidade.medido} —
-          {' '}{capacidade.pctDaCapacidade.toFixed(0)}% do que o tempo padrão permite. A falta está
+          <>Pelo tempo padrão ela daria {exibirPorHora(capacidade.real)} {u}; medida, entrega {exibirPorHora(capacidade.medido)} —
+          {' '}{exibirPct(capacidade.pctDaCapacidade)} do que o tempo padrão permite. A falta está
           no chão (paradas, ritmo, espera), não no gargalo do estudo.</>
         )}
         {analise.gargalo && capacidade.esperado !== null && !atinge && !faltaNoChao && (
           <>O gargalo é <strong>{analise.gargalo.nome}</strong>, com {formatarSegundos(analise.gargalo.resultado.tpPorPeca)} s
-          por peça contra {formatarSegundos(analise.taktMs)} s exigidos. Enquanto ele não ceder,
+          {' '}{porUnidade(unidade)} contra {formatarSegundos(analise.taktMs)} s exigidos. Enquanto ele não ceder,
           melhoria em outro posto não muda a capacidade.</>
         )}
         {analise.paradas.n > 0 && (

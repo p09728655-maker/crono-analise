@@ -158,10 +158,15 @@ export function grupoIdDaMaquina(cadastro, nome) {
  * Os PRODUTOS ativos de um grupo, na ordem do cadastro — o que o tablet
  * oferece no campo de produto. Sem grupo, nenhum: produto e' sempre de um
  * posto (o rack da embalagem nao e' a lateral da furadeira).
+ *
+ * `comInativos` traz tambem os desativados. So' para LER dado do produto
+ * (os volumes, na analise de um estudo antigo) — nunca para oferecer na
+ * lista: desativado nao se mede mais.
  */
-export function produtosDoGrupo(cadastro, grupoId) {
+export function produtosDoGrupo(cadastro, grupoId, { comInativos = false } = {}) {
   if (!grupoId) return [];
-  return (cadastro?.produtos || []).filter((p) => p && p.ativo !== false && p.grupo_id === grupoId);
+  return (cadastro?.produtos || [])
+    .filter((p) => p && (comInativos || p.ativo !== false) && p.grupo_id === grupoId);
 }
 
 /** Adota um cadastro recem-salvo sem uma segunda ida ao servidor. */

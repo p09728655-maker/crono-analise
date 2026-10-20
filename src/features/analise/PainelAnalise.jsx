@@ -256,7 +256,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
             </div>
           ) : (
             <>
-          <Resposta analise={analise} />
+          <Resposta analise={analise} unidade={medido.unidadeEstudo} />
 
           {/* Indicadores compactos: rotulo em cima, valor em destaque, a
               unidade separada e um fio entre um e outro. Era uma linha
@@ -297,6 +297,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
                 medido={medido}
                 recurso={estudo.recurso}
                 produto={estudo.produto}
+                taktMs={analise.taktMs}
                 aoDefinirTakt={() => setEditandoEstudo(true)}
               />
             </>
@@ -337,6 +338,7 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
               capacidadeLinha={analise.capacidadeLinha}
               gargalo={analise.gargalo}
               operacoes={analise.comDados}
+              unidade={medido.unidadeEstudo}
             />
           )}
 

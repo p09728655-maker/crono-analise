@@ -1,5 +1,6 @@
 import { formatarDuracao } from '../../../domain/cronoanalise.js';
 import { est } from './estilos.js';
+import { porHora } from './textosMedicao.js';
 
 /**
  * PARADAS DO ESTUDO — a perda que a coleta ja' media e ninguem via.
@@ -16,8 +17,14 @@ import { est } from './estilos.js';
  * O percentual e' sobre o tempo com o CRONOMETRO NA MAO (ciclos + paradas),
  * nunca sobre o turno: o estudo nao observou o turno, e usar essa base
  * daria um numero que parece OEE sem ser.
+ *
+ * `unidade`: na embalagem o estudo mede o PRODUTO, e o custo da parada sai
+ * em produtos — o mesmo numero que o quadro de capacidade chama de
+ * "produtos/h" nao pode aparecer aqui como "pç/h".
  */
-export default function PainelParadas({ resumo, capacidadeLinha = 0, gargalo = null, operacoes = [] }) {
+export default function PainelParadas({
+  resumo, capacidadeLinha = 0, gargalo = null, operacoes = [], unidade = 'peça',
+}) {
   if (!resumo.n) {
     return (
       <section style={est.blocoTabela}>
@@ -79,10 +86,10 @@ export default function PainelParadas({ resumo, capacidadeLinha = 0, gargalo = n
 
       {perdidas > 0 && (
         <p style={est.custoParada} aria-label="Custo da parada em peças">
-          <strong>{perdidas} peças deixaram de sair da linha</strong> nos
+          <strong>{perdidas} {unidade === 'produto' ? 'produtos' : 'peças'} deixaram de sair da linha</strong> nos
           {' '}{formatarDuracao(paradaDoGargalo)} em que <strong>{gargalo.nome}</strong> ficou parada
-          — é o posto que manda no ritmo ({capacidadeLinha} pç/h ·
-          {' '}{(capacidadeLinha / 60).toFixed(1)} pç/min). Parada nas outras operações é absorvida
+          — é o posto que manda no ritmo ({capacidadeLinha} {porHora(unidade)} ·
+          {' '}{(capacidadeLinha / 60).toFixed(1)} {unidade === 'produto' ? 'produtos' : 'pç'}/min). Parada nas outras operações é absorvida
           pela folga delas: o custo de cada uma está na tabela abaixo.
         </p>
       )}

@@ -96,7 +96,7 @@ export const est = {
   respostaRotulo: { ...rotulo(claro.textoFraco), display: 'flex', alignItems: 'center', gap: espaco.sm },
   // O icone e' discreto de proposito: cinza do rotulo, nunca a cor da marca.
   respostaIcone: { display: 'inline-flex', color: claro.textoFraco },
-  respostaNumeroLinha: { display: 'flex', alignItems: 'baseline', gap: espaco.sm },
+  respostaNumeroLinha: { display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: espaco.sm },
   respostaNumero: { ...tipo('display'), ...numeros, fontFamily: fonteAnalise.numero },
   respostaUnidade: { ...tipo('corpo'), color: claro.textoMedio },
   respostaExplica: { ...tipo('corpo'), margin: `${espaco.xs}px 0 0`, color: claro.textoMedio },
@@ -199,7 +199,9 @@ export const est = {
     borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: claro.borda,
   },
   kpiRotulo: { ...rotulo(claro.textoFraco) },
-  kpiLinha: { display: 'flex', alignItems: 'baseline', gap: espaco.xs, minWidth: 0 },
+  // Quebra a unidade para baixo do numero quando a coluna estreita: na
+  // embalagem ela e' "produtos/h", e nao pode vazar para fora do cartao.
+  kpiLinha: { display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: espaco.xs, minWidth: 0 },
   kpiValor: { ...tipo('titulo'), ...numeros, fontFamily: fonteAnalise.numero, color: claro.texto },
   kpiUnidade: { ...tipo('legenda'), color: claro.textoFraco },
   kpiNota: { ...tipo('legenda'), color: claro.textoFraco, lineHeight: 1.4 },

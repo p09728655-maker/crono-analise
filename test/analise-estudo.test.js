@@ -30,6 +30,8 @@ describe('analisarEstudo', () => {
 
   it('a capacidade da linha e a do gargalo: 3.600.000 / 13.200 = 272 pecas/h', () => {
     expect(a.capacidadeLinha).toBe(272);
+    // A mesma, cheia: e' esta que entra no atingimento (272,7/h).
+    expect(a.capacidadeExata).toBeCloseTo(3600000 / 13200, 9);
   });
 
   it('a soma dos TP por peca so conta operacoes com ciclo, e os operadores saem do Takt', () => {
@@ -66,16 +68,19 @@ describe('analisarEstudo', () => {
     const vazio = analisarEstudo({ estudo, operacoes: [] });
     expect(vazio.gargalo).toBeNull();
     expect(vazio.capacidadeLinha).toBe(0);
+    expect(vazio.capacidadeExata).toBe(0);
   });
 });
 
 describe('lerEstudo', () => {
-  it('compara o que o Takt exige com o que o gargalo entrega', () => {
+  it('compara o que o Takt exige com o que o gargalo entrega — com o valor cheio', () => {
     const l = lerEstudo(analisarEstudo({ estudo, operacoes }));
-    // 3.600.000 / 20.000 = 180 esperadas; o gargalo entrega 272
+    // 3.600.000 / 20.000 = 180 esperadas; o gargalo entrega 272,7 (a tela
+    // mostra 272, o inteiro para baixo; a conta usa o cheio).
     expect(l.capacidade.esperado).toBe(180);
-    expect(l.capacidade.real).toBe(272);
-    expect(l.capacidade.diferenca).toBe(92);
+    expect(l.capacidade.real).toBeCloseTo(272.727, 3);
+    expect(l.capacidade.diferenca).toBeCloseTo(92.727, 3);
+    expect(l.capacidade.atende).toBe(true);
   });
 
   /* A ligacao com sugerirMelhorias precisa ser afirmada pelo EFEITO: sem
@@ -93,11 +98,12 @@ describe('lerEstudo', () => {
   it('a medicao USAVEL entra no comparativo e vira a base do atingimento', () => {
     const medicao = { usavel: true, ritmoRelogio: 150.4, unidade: 'peça' };
     const l = lerEstudo(analisarEstudo({ estudo, operacoes }), { medicao });
-    expect(l.capacidade.medido).toBe(150);
+    expect(l.capacidade.medido).toBe(150.4);
     expect(l.capacidade.base).toBe('medido');
-    // 150 medidas contra 180 exigidas; o tempo padrao permitiria 272.
-    expect(l.capacidade.diferenca).toBe(-30);
-    expect(l.capacidade.pctDaCapacidade).toBeCloseTo((150 / 272) * 100, 6);
+    // 150,4 medidas contra 180 exigidas; o tempo padrao permitiria 272,7.
+    expect(l.capacidade.diferenca).toBeCloseTo(-29.6, 6);
+    expect(l.capacidade.atende).toBe(false);
+    expect(l.capacidade.pctDaCapacidade).toBeCloseTo((150.4 / (3600000 / 13200)) * 100, 6);
     expect(l.medicao).toBe(medicao);
   });
 
@@ -106,7 +112,7 @@ describe('lerEstudo', () => {
     const l = lerEstudo(analisarEstudo({ estudo, operacoes }), { medicao });
     expect(l.capacidade.base).toBe('capacidade');
     expect(l.capacidade.medido).toBeNull();
-    expect(l.capacidade.diferenca).toBe(92);
+    expect(l.capacidade.diferenca).toBeCloseTo(92.727, 3);
     expect(l.medicao).toBe(medicao);
     expect(lerEstudo(analisarEstudo({ estudo, operacoes })).medicao).toBeNull();
   });

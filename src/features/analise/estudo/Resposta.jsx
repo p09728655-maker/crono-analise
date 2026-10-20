@@ -1,6 +1,7 @@
 import { formatarSegundos } from '../../../domain/cronoanalise.js';
 import { IconeAnalistas, IconeCapacidade } from '../../../components/icones.jsx';
 import { est } from './estilos.js';
+import { porHoraExtenso, porUnidade } from './textosMedicao.js';
 
 /**
  * O que o analista veio saber.
@@ -12,8 +13,14 @@ import { est } from './estilos.js';
  *
  * A capacidade e' ditada pelo GARGALO, nao pela media das operacoes. Por
  * isso o gargalo aparece nomeado aqui em cima, e nao escondido numa celula.
+ *
+ * O nome e' "Capacidade pelo tempo padrao" — o MESMO do quadro de
+ * capacidade logo abaixo, ao lado do "Medido na linha". Chamada aqui de
+ * "Capacidade da linha", a conta do gargalo passava por medicao do chao,
+ * a confusao que a troca do "Real (gargalo)" veio tirar. Na embalagem o
+ * estudo mede o PRODUTO (`unidade`), e o numero diz "produtos/hora".
  */
-export default function Resposta({ analise }) {
+export default function Resposta({ analise, unidade = 'peça' }) {
   const { capacidadeLinha, gargalo, operadores, taktMs } = analise;
   const semDados = !gargalo;
 
@@ -35,15 +42,15 @@ export default function Resposta({ analise }) {
       <div style={est.respostaBloco}>
         <span style={est.respostaRotulo}>
           <span style={est.respostaIcone} aria-hidden="true"><IconeCapacidade /></span>
-          Capacidade da linha
+          Capacidade pelo tempo padrão
         </span>
         <div style={est.respostaNumeroLinha}>
           <span style={est.respostaNumero}>{capacidadeLinha}</span>
-          <span style={est.respostaUnidade}>peças/hora</span>
+          <span style={est.respostaUnidade}>{porHoraExtenso(unidade)}</span>
         </div>
         <p style={est.respostaExplica}>
           Limitada por <strong>{gargalo.nome}</strong>, com{' '}
-          {formatarSegundos(gargalo.resultado.tpPorPeca)} s por peça
+          {formatarSegundos(gargalo.resultado.tpPorPeca)} s {porUnidade(unidade)}
           {gargalo.resultado.ciclosPorPeca > 1 && (
             <> ({formatarSegundos(gargalo.resultado.tpVal)} s × {gargalo.resultado.ciclosPorPeca} ciclos)</>
           )}.

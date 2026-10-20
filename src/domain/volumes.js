@@ -40,13 +40,22 @@ export function lerVolumes(valor) {
  * Dois produtos com a mesma chave (o banco separa "Armário" de "Armario",
  * a tela nao) so' dao numero se concordarem: com 1 num e 2 no outro, nao ha'
  * como saber qual o analista quis, e escolher um seria inventar.
+ *
+ * PRODUTO DESATIVADO TAMBEM VALE. Desativar tira o produto da lista do
+ * tablet (nao se mede mais), mas o estudo e as medicoes de antes continuam
+ * sendo daquele rack — e o rack continua tendo dois volumes. Sem isto, a
+ * analise de um estudo antigo perdia a conversao no dia em que alguem
+ * desativou o produto. Quem chama passa a lista do grupo COM os inativos;
+ * o ativo de mesmo nome manda quando existe (e' o cadastro de hoje), e o
+ * inativo so' entra quando nao ha' ativo com aquele nome.
  */
 export function volumesDoProduto(produtos, nome) {
   const chave = nomeChave(nome);
   if (!chave) return null;
-  const achados = (Array.isArray(produtos) ? produtos : [])
-    .filter((p) => p && nomeChave(p.nome) === chave)
-    .map((p) => lerVolumes(p.volumes));
+  const doNome = (Array.isArray(produtos) ? produtos : [])
+    .filter((p) => p && nomeChave(p.nome) === chave);
+  const ativos = doNome.filter((p) => p.ativo !== false);
+  const achados = (ativos.length ? ativos : doNome).map((p) => lerVolumes(p.volumes));
   if (!achados.length || achados.some((v) => v === null)) return null;
   return achados.every((v) => v === achados[0]) ? achados[0] : null;
 }

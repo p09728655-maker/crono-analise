@@ -38,17 +38,24 @@ export function operadoresNecessarios(somaTpMs, taktMs) {
  * de onde saiu.
  *
  * Sem Takt configurado nao ha esperado: o comparativo devolve null em vez
- * de inventar uma meta. Os tres numeros sao inteiros para baixo, a mesma
- * regra da capacidade de cada operacao.
+ * de inventar uma meta.
+ *
+ * Os tres numeros saem CHEIOS, sem arredondar: quem exibe arredonda (a
+ * tela mostra inteiro para baixo, como a capacidade de cada operacao).
+ * Arredondar antes de dividir trocava o veredito na embalagem, onde a
+ * taxa e' ~25 por hora e uma unidade vale 4%: exigido 24,66 e medido
+ * 24,3 viravam 24 contra 24 — "100%, atende" para uma linha abaixo do
+ * takt (revisao de 20/10). `atende` e' decidido aqui, com os valores
+ * cheios, para nenhuma tela refazer a conta com o numero arredondado.
  */
 export function comparativoCapacidade({ taktMs, capacidadeLinha, medido } = {}) {
   const takt = Number(taktMs) || 0;
-  const real = Math.max(0, Math.floor(Number(capacidadeLinha) || 0));
+  const real = Math.max(0, Number(capacidadeLinha) || 0);
   // So' numero (ou texto de numero) conta: null, '', booleano e objeto sao
   // "sem medido" — Number(null) e Number(true) virariam 0 e 1 calados.
   const bruto = typeof medido === 'number' || (typeof medido === 'string' && medido.trim())
     ? Number(medido) : NaN;
-  const medidoH = Number.isFinite(bruto) && bruto > 0 ? Math.floor(bruto) : null;
+  const medidoH = Number.isFinite(bruto) && bruto > 0 ? bruto : null;
   const base = medidoH !== null ? 'medido' : 'capacidade';
   const entrega = base === 'medido' ? medidoH : real;
   /* Quanto do que o tempo padrao permite a linha de fato entrega. A
@@ -57,18 +64,21 @@ export function comparativoCapacidade({ taktMs, capacidadeLinha, medido } = {}) 
   const pctDaCapacidade = medidoH !== null && real > 0 ? (medidoH / real) * 100 : null;
 
   if (takt <= 0) {
-    return { esperado: null, real, medido: medidoH, base, atingimentoPct: null, diferenca: null, pctDaCapacidade };
+    return {
+      esperado: null, real, medido: medidoH, base, atingimentoPct: null, diferenca: null, atende: null, pctDaCapacidade,
+    };
   }
 
-  const esperado = Math.floor(MS_POR_HORA / takt);
+  const esperado = MS_POR_HORA / takt;
   return {
     esperado,
     real,
     medido: medidoH,
     base,
-    atingimentoPct: esperado > 0 ? (entrega / esperado) * 100 : null,
+    atingimentoPct: (entrega / esperado) * 100,
     // Positivo sobra, negativo falta. E' o numero que vai para a reuniao.
-    diferenca: esperado > 0 ? entrega - esperado : null,
+    diferenca: entrega - esperado,
+    atende: entrega >= esperado,
     pctDaCapacidade,
   };
 }

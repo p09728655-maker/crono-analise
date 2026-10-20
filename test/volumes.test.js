@@ -56,6 +56,25 @@ describe('volumesDoProduto', () => {
     expect(volumesDoProduto(diferentes, 'armario')).toBeNull();
     expect(volumesDoProduto(umSemNumero, 'armario')).toBeNull();
   });
+
+  it('produto DESATIVADO ainda da os volumes: o estudo de antes continua sendo daquele rack', () => {
+    const desativado = [{ nome: 'Rack Sirius 1.6', volumes: 2, ativo: false }];
+    expect(volumesDoProduto(desativado, 'RACK SIRIUS 1.6')).toBe(2);
+  });
+
+  it('com ativo e desativado de mesmo nome, manda o ativo (o cadastro de hoje)', () => {
+    const recadastrado = [
+      { nome: 'Rack Sirius 1.6', volumes: 1, ativo: false },
+      { nome: 'RACK SIRIUS 1.6', volumes: 2, ativo: true },
+    ];
+    expect(volumesDoProduto(recadastrado, 'rack sirius 1.6')).toBe(2);
+    // O ativo sem numero nao herda o do desativado: "nao informado" hoje.
+    const ativoSemNumero = [
+      { nome: 'Rack Sirius 1.6', volumes: 2, ativo: false },
+      { nome: 'Rack Sirius 1.6', volumes: null, ativo: true },
+    ];
+    expect(volumesDoProduto(ativoSemNumero, 'rack sirius 1.6')).toBeNull();
+  });
 });
 
 describe('contadasPorProduto', () => {

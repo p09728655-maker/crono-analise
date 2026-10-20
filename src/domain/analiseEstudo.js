@@ -14,6 +14,7 @@ import {
   amostraSuficiente, calcularOperacao, comparativoCapacidade, operadoresNecessarios,
   resumirParadasDoEstudo,
 } from './cronoanalise.js';
+import { MS_POR_HORA } from './estatistica.js';
 import { sugerirMelhorias } from './sugestoes.js';
 
 /**
@@ -57,6 +58,12 @@ export function analisarEstudo(dados) {
        e comparativoCapacidade espera numero. Trocar por null aqui mudaria
        a tela, nao so' o dominio. */
     capacidadeLinha: gargalo ? gargalo.resultado.cap : 0,
+    // A mesma capacidade SEM o inteiro para baixo: e' esta que entra no
+    // atingimento e no deficit (ver comparativoCapacidade). O `cap` acima
+    // e' o que se exibe, igual ao da tabela de operacoes.
+    capacidadeExata: gargalo && gargalo.resultado.tpPorPeca > 0
+      ? MS_POR_HORA / gargalo.resultado.tpPorPeca
+      : 0,
     operadores: taktMs > 0 ? operadoresNecessarios(somaTp, taktMs) : null,
     totalCiclos: comDados.reduce((acc, o) => acc + o.resultado.n, 0),
     // Paradas registradas na coleta (botao Parada, com motivo). Ja' eram
@@ -83,7 +90,8 @@ export function lerEstudo(analise, { medicao = null } = {}) {
   return {
     capacidade: comparativoCapacidade({
       taktMs: analise.taktMs,
-      capacidadeLinha: analise.capacidadeLinha,
+      // Valor cheio: o arredondamento e' so' de exibicao.
+      capacidadeLinha: analise.capacidadeExata ?? analise.capacidadeLinha,
       medido: medicao?.usavel ? medicao.ritmoRelogio : null,
     }),
     medicao,
