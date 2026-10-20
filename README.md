@@ -112,7 +112,8 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   semana, em segundos. Durante a medição aparecem o intervalo do **último
   volume**, o **tempo por volume** do período até ali (paradas dentro) e o
   **takt**. Quando o tempo por volume passa do takt, o rótulo ganha "▲ takt". Um toque por volume; o horário de cada toque é gravado
-  sozinho, sem digitação.
+  sozinho, sem digitação. Sem programa da embalagem colado, o tablet só não
+  mostra o takt, sem aviso: quem resolve é o PCP, e o aviso fica no PC.
 - **O INICIAR só arma a medição; o relógio abre na largada.** A largada é o
   primeiro toque, dado quando um volume fecha, e **não conta volume**. Antes
   dela o relógio fica em 00:00, *Parou* fica desabilitado (ainda não há

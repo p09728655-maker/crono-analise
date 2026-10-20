@@ -37,9 +37,11 @@ const DEMANDAS = [{
   atualizado_em: hoje.toISOString(),
 }];
 
-async function simularServidor(pagina, { conferencias = [], marcas = null, relogio = null, aoSincronizar } = {}) {
+async function simularServidor(pagina, {
+  conferencias = [], marcas = null, relogio = null, aoSincronizar, demandas = DEMANDAS,
+} = {}) {
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
-    ? rota.fulfill({ json: { demandas: DEMANDAS } })
+    ? rota.fulfill({ json: { demandas } })
     : rota.fulfill({ json: CADASTRO })));
   await pagina.route('**/api/conferencias**', (rota) => {
     const url = new URL(rota.request().url());
@@ -319,6 +321,32 @@ checar(await janela.count() === 0 && await botaoDaLinha.getAttribute('aria-press
   'clicar de novo na medicao aberta fecha o detalhe');
 
 checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${errosPc[0]}` : ''}`);
+
+/* ---------------- sem programa colado: o tablet so' nao mostra o takt */
+{
+  /* Programa nao colado e' assunto do PCP: no tablet ninguem tem o que
+     fazer com o aviso, e o PC continua avisando. A medicao segue igual. */
+  const ctx = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  const erros = [];
+  s.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(s, { demandas: [] });
+  // O programa (vazio) precisa ter chegado: antes disso o cartao diz
+  // "buscando", e o teste passaria sem provar nada.
+  const programaChegou = s.waitForResponse(/demanda=1/, { timeout: 8000 });
+  await s.goto(`${BASE}/coleta/embalagem`);
+  await programaChegou;
+  await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 8000 });
+  await s.waitForTimeout(300);
+  checar(await s.locator('[aria-label="Takt da semana"]').count() === 0,
+    'sem programa: o cartao do takt nao aparece no tablet');
+  checar(await s.getByText(/colou/).count() === 0, 'sem programa: nenhum aviso de programa nao colado');
+  checar(!(await s.getByRole('button', { name: /INICIAR/ }).isDisabled()), 'sem programa: a medicao comeca normalmente');
+  checar(erros.length === 0, `sem programa: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+
 await navegador.close();
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTudo certo.');

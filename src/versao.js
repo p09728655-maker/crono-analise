@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.92.1',
+    data: '2026-10-20',
+    titulo: 'Tablet da embalagem sem o aviso de programa não colado',
+    itens: [
+      'O TABLET DA EMBALAGEM NÃO MOSTRA MAIS "O PCP AINDA NÃO COLOU O PROGRAMA DA EMBALAGEM". Sem o programa, o tablet só não mostra o takt; a medição segue igual e grava cada volume. Quem resolve é o PCP, e a tela Embalagem Takt Time do PC continua avisando que falta o programa.',
+      'Quando o programa for colado, as medições já feitas na semana passam a ter takt no PC: ele é calculado pela data da medição.',
+    ],
+  },
+  {
     versao: '2.92.0',
     data: '2026-10-20',
     titulo: 'Embalagem Takt Time: o relógio só abre quando fecha um volume',
