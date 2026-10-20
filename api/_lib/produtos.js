@@ -171,16 +171,21 @@ export async function produtos(req, res, auth) {
       const codigo = tem('codigo') ? codigoLimpo(corpo.codigo) : undefined;
       const volumes = tem('volumes') ? volumesDe(corpo.volumes) : undefined;
 
-      if (nome !== undefined) await db`UPDATE produtos SET nome = ${nome} WHERE id = ${produtoId}`;
-      if (grupoId !== undefined) await db`UPDATE produtos SET grupo_id = ${grupoId} WHERE id = ${produtoId}`;
-      if (codigo !== undefined) await db`UPDATE produtos SET codigo = ${codigo} WHERE id = ${produtoId}`;
-      if (tem('ativo')) await db`UPDATE produtos SET ativo = ${Boolean(corpo.ativo)} WHERE id = ${produtoId}`;
+      // VOLUMES PRIMEIRO, antes de nome, grupo, codigo e ativo. E' o unico
+      // UPDATE que pode cair por falta da coluna (o preview usa o banco da
+      // producao antes de ela migrar), e no modo token de servico nao ha'
+      // transacao: indo por ultimo, o 503 voltava com o nome e o codigo ja'
+      // gravados — a tela dizia "falhou" e metade tinha mudado.
       // So' grava o que MUDOU: o formulario de edicao manda volumes sempre
       // (nulo quando o campo fica vazio), e renomear no preview, sem a
       // coluna, nao pode cair por causa de um nulo que ja' era nulo.
       if (volumes !== undefined && volumes !== atual.volumes) {
         await db`UPDATE produtos SET volumes = ${volumes} WHERE id = ${produtoId}`;
       }
+      if (nome !== undefined) await db`UPDATE produtos SET nome = ${nome} WHERE id = ${produtoId}`;
+      if (grupoId !== undefined) await db`UPDATE produtos SET grupo_id = ${grupoId} WHERE id = ${produtoId}`;
+      if (codigo !== undefined) await db`UPDATE produtos SET codigo = ${codigo} WHERE id = ${produtoId}`;
+      if (tem('ativo')) await db`UPDATE produtos SET ativo = ${Boolean(corpo.ativo)} WHERE id = ${produtoId}`;
 
       return json(res, 200, { produto: await lerProduto(db, produtoId) });
     }

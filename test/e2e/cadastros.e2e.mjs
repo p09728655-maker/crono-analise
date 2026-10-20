@@ -9,7 +9,12 @@
  * VOLUMES (quantas caixas o produto leva na embalagem): o PC grava o numero
  * no cadastro e na edicao, vazio vai como null (nunca 1), texto que nao e'
  * numero nao sai do navegador, e o produto ativo da embalagem sem o numero
- * ganha o destaque — o da furadeira, nao.
+ * ganha o destaque. Campo, selo, destaque e dica so' existem nos grupos de
+ * EMBALAGEM: na furadeira nada disso aparece e nada de volumes e' enviado.
+ *
+ * ALTURA: num notebook (1366x657 de area util, e 1280x600) com muitos
+ * produtos e grupos, o rodape (Fechar, alerta) nao pode cair por cima da
+ * lista — clicar Desativar no ultimo produto ja' fechou o cadastro.
  *
  * Uso: npm run dev (porta 5199) e depois node test/e2e/cadastros.e2e.mjs
  */
@@ -38,6 +43,9 @@ const CADASTRO = {
     // Sem a chave `volumes`: o cadastro de um servidor que ainda nao a tem
     // (ou o cache velho do tablet) — tem de valer como "nao informado".
     { id: 'p4', nome: 'Mesa Cabeceira Sleep', codigo: null, grupo_id: EMB.id, ativo: true },
+    // Da furadeira COM numero gravado (veio da embalagem por engano e
+    // mudou de grupo): fora da embalagem o selo nao aparece.
+    { id: 'p5', nome: 'Tampo Mesa', codigo: null, grupo_id: FUR.id, ativo: true, volumes: 3 },
   ],
 };
 const MOTIVOS = [
@@ -46,7 +54,7 @@ const MOTIVOS = [
   { id: 'm3', codigo: 'troca_de_broca', rotulo: 'Troca de broca', acao: null, ordem: 2, ativo: true, grupos: [FUR.id] },
 ];
 
-async function simularServidor(pagina, escritas) {
+async function simularServidor(pagina, escritas, cadastro = CADASTRO) {
   await pagina.route('**/api/maquinas**', (rota) => {
     const url = rota.request().url();
     if (/demanda=1/.test(url)) return rota.fulfill({ json: { demandas: [] } });
@@ -55,7 +63,7 @@ async function simularServidor(pagina, escritas) {
       escritas.push({ rota: 'produtos', metodo: rota.request().method(), url, corpo });
       return rota.fulfill({ status: 201, json: { produto: { id: 'p9', ativo: true, grupo_id: corpo?.grupoId, ...corpo } } });
     }
-    return rota.fulfill({ json: CADASTRO });
+    return rota.fulfill({ json: cadastro });
   });
   await pagina.route('**/api/motivos-parada**', (rota) => {
     if (rota.request().method() === 'GET') return rota.fulfill({ json: { motivos: MOTIVOS } });
@@ -162,6 +170,11 @@ checar(!/volumes não informados/.test(await linhaDe('Rack Antigo').innerText())
   'PC: produto desativado nao ganha o destaque');
 checar(await cadastro.getByText('volumes não informados', { exact: true }).count() === 1,
   'PC: um destaque so, o do produto que falta');
+// A dica diz o que o sistema faz com o numero — e sem ele.
+const dicaEmb = await cadastro.innerText();
+checar(/takt do programa e a medição da linha entram no estudo por produto/.test(dicaEmb)
+  && /Em branco, o takt não entra sozinho e a medição fica em volumes/.test(dicaEmb),
+  'PC: a dica da embalagem diz que, com volumes, takt e medicao viram produto; sem, nada converte');
 
 // Texto que nao e' numero: erro na tela e NADA sai para o servidor.
 const antes = escritas.length;
@@ -204,11 +217,58 @@ for (let i = 0; i < 20 && escritas.length === antesApagar; i++) await p.waitForT
 checar(escritas[antesApagar]?.metodo === 'PATCH' && escritas[antesApagar].corpo?.volumes === null,
   'PC: esvaziar os volumes na edicao manda null (apaga)');
 
-// Na furadeira nao ha' o que converter: nada de destaque.
+// Mudar de grupo na EDICAO: o campo segue o grupo escolhido no formulario.
+// Indo para a furadeira, ele some e o PATCH nao leva volumes.
+await cadastro.getByRole('button', { name: 'Editar Mesa Cabeceira Sleep' }).click();
+const mover = cadastro.getByRole('form', { name: 'Editar Mesa Cabeceira Sleep' });
+checar(await mover.locator('input[aria-label="Volumes do produto"]').count() === 1,
+  'PC: editar produto da embalagem mostra o campo Volumes');
+await mover.locator('select[aria-label="Grupo do produto"]').selectOption(FUR.id);
+checar(await mover.locator('input[aria-label="Volumes do produto"]').count() === 0,
+  'PC: trocar o grupo da edicao para a furadeira esconde o campo');
+const antesMover = escritas.length;
+await mover.getByRole('button', { name: 'Salvar' }).click();
+for (let i = 0; i < 20 && escritas.length === antesMover; i++) await p.waitForTimeout(100);
+const patchMover = escritas[antesMover];
+checar(patchMover?.metodo === 'PATCH' && patchMover.corpo?.grupoId === FUR.id && !('volumes' in (patchMover.corpo || {})),
+  'PC: mover para a furadeira manda o PATCH SEM volumes');
+
+// Numero digitado na embalagem e o grupo trocado antes de cadastrar: o
+// produto da furadeira nao leva os volumes que ficaram no campo.
+await cadastro.locator('input[aria-label="Volumes do produto"]').first().fill('4');
+
+// Na furadeira nao ha' o que converter: nem campo, nem selo, nem destaque.
 await cadastro.getByRole('button', { name: /FURADEIRA/ }).click();
 await cadastro.getByText('Lateral Mesa', { exact: true }).waitFor({ timeout: 4000 });
 checar(await cadastro.getByText('volumes não informados', { exact: true }).count() === 0,
   'PC: produto da furadeira sem volumes NAO ganha o destaque');
+checar(await cadastro.locator('input[aria-label="Volumes do produto"]').count() === 0,
+  'PC: na furadeira o cadastro nao tem o campo Volumes');
+const textoFur = await cadastro.innerText();
+checar(!/3 volumes/.test(textoFur) && /Tampo Mesa/.test(textoFur),
+  'PC: produto da furadeira com numero gravado NAO mostra o selo de volumes');
+checar(!/Volumes =/.test(textoFur), 'PC: na furadeira a dica de volumes nao aparece');
+if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-produtos-furadeira.png` });
+
+await cadastro.locator('input[aria-label="Nome do produto"]').first().fill('Lateral Nova');
+const antesFur = escritas.length;
+await cadastro.getByRole('button', { name: 'Cadastrar' }).click();
+for (let i = 0; i < 20 && escritas.length === antesFur; i++) await p.waitForTimeout(100);
+const postFur = escritas[antesFur];
+checar(postFur?.metodo === 'POST' && postFur.corpo?.grupoId === FUR.id && postFur.corpo?.nome === 'Lateral Nova'
+  && !('volumes' in postFur.corpo), 'PC: cadastrar na furadeira manda o POST SEM volumes (nem o 4 que ficou digitado)');
+
+await cadastro.getByRole('button', { name: 'Editar Lateral Mesa' }).click();
+const edicaoFur = cadastro.getByRole('form', { name: 'Editar Lateral Mesa' });
+checar(await edicaoFur.locator('input[aria-label="Volumes do produto"]').count() === 0,
+  'PC: editar produto da furadeira nao mostra o campo Volumes');
+await edicaoFur.locator('input[aria-label="Nome do produto"]').fill('Lateral Mesa 2');
+const antesEdFur = escritas.length;
+await edicaoFur.getByRole('button', { name: 'Salvar' }).click();
+for (let i = 0; i < 20 && escritas.length === antesEdFur; i++) await p.waitForTimeout(100);
+const patchFur = escritas[antesEdFur];
+checar(patchFur?.metodo === 'PATCH' && /id=p3/.test(patchFur.url) && patchFur.corpo?.nome === 'Lateral Mesa 2'
+  && !('volumes' in patchFur.corpo), 'PC: editar produto da furadeira manda o PATCH SEM volumes');
 await cadastro.getByRole('button', { name: 'Fechar' }).click();
 
 await p.getByRole('button', { name: 'Motivos de parada' }).click();
@@ -231,6 +291,107 @@ for (let i = 0; i < 20 && !escritas.some((e) => e.rota === 'motivos'); i++) awai
 const patch = escritas.find((e) => e.rota === 'motivos');
 checar(patch?.metodo === 'PATCH' && JSON.stringify([...(patch.corpo?.grupos || [])].sort()) === JSON.stringify([EMB.id, FUR.id].sort()),
   'PC: salvar manda os grupos marcados');
+
+/* ============================================ ALTURA DO NOTEBOOK
+   O painel de produtos e' mais alto que o de maquinas (volumes, dica). Com
+   a lista de altura fixa, em 1366x657 o Fechar e o alerta ficavam POR
+   CIMA das ultimas linhas: o clique em "Desativar" do ultimo produto caia
+   no Fechar e o cadastro fechava sem mandar nada. O que se prova: com 14
+   produtos e 10 grupos, a lista rolada ate' o fim deixa o ultimo botao
+   livre — com e sem o alerta na tela — e o clique de verdade manda o PATCH. */
+const EXTRAS = ['SECCIONADORA', 'BORDEADEIRA', 'FRESADORA', 'LIXADEIRA', 'PINTURA', 'MONTAGEM', 'PRENSA', 'SERRA']
+  .map((nome, i) => ({ id: `00000000-0000-0000-0000-00000000010${i}`, codigo: `00${10 + i}`, nome, horas_semana: null }));
+const NOME_LONGO = 'Rack Sirius 1.6 com Painel Encanto Off White 5';
+const CHEIO = {
+  maquinas: CADASTRO.maquinas,
+  grupos: [FUR, EMB, ...EXTRAS],
+  produtos: Array.from({ length: 14 }, (_, i) => ({
+    id: `q${i + 1}`,
+    nome: i === 2 ? NOME_LONGO : `Produto ${String(i + 1).padStart(2, '0')}`,
+    codigo: i === 2 ? '12345678' : (i % 3 ? `C${i + 1}` : null),
+    grupo_id: EMB.id, ativo: true, volumes: i === 2 || i % 2 ? null : 2,
+  })),
+};
+const ULTIMO = 'Produto 14';
+
+// Rola, ate' o fim, a caixa que rola em volta do botao — como a roda do mouse.
+const rolarAteOFim = (botao) => botao.evaluate((el) => {
+  for (let a = el.parentElement; a; a = a.parentElement) {
+    if (a.scrollHeight > a.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(a).overflowY)) {
+      a.scrollTop = a.scrollHeight;
+      return;
+    }
+  }
+});
+const caixaDe = (loc) => loc.boundingBox().then((b) => b && { topo: b.y, base: b.y + b.height });
+
+for (const [largura, altura] of [[1366, 657], [1280, 600]]) {
+  const tela = `${largura}x${altura}`;
+  const ctx = await navegador.newContext({ viewport: { width: largura, height: altura } });
+  const pg = await ctx.newPage();
+  await semearSessao(pg);
+  pg.on('pageerror', (e) => erros.push(e.message));
+  const esc = [];
+  await simularServidor(pg, esc, CHEIO);
+  await pg.goto(`${BASE}/analise/embalagem`);
+  await pg.getByRole('button', { name: 'Produtos da embalagem' }).click();
+  const dlg = pg.getByRole('dialog', { name: 'Cadastro de produtos' });
+  await dlg.getByText(ULTIMO, { exact: true }).waitFor({ timeout: 8000 });
+  const fechar = dlg.getByRole('button', { name: 'Fechar' });
+
+  // O nome longo, com codigo e o selo na mesma linha: quebra, nao corta.
+  const nomeLongo = dlg.getByText(NOME_LONGO, { exact: true });
+  const cortado = await nomeLongo.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+  checar(!cortado, `${tela}: o nome longo ao lado do selo aparece inteiro (quebra linha, sem reticencias)`);
+
+  const desativarUltimo = async (rotulo) => {
+    const botao = dlg.getByRole('button', { name: `Desativar ${ULTIMO}` });
+    await rolarAteOFim(botao);
+    const b = await botao.boundingBox();
+    const x = b.x + b.width / 2;
+    const y = b.y + b.height / 2;
+    const noPonto = await pg.evaluate(([px, py]) => document.elementFromPoint(px, py)?.getAttribute('aria-label') || '', [x, y]);
+    checar(noPonto === `Desativar ${ULTIMO}`, `${tela}${rotulo}: com a lista no fim, nada cobre o Desativar do ultimo produto (no ponto: "${noPonto}")`);
+    // E nenhum outro botao que aparece na tela esta' coberto: o que se ve'
+    // e' o que se clica, em qualquer linha (nao so' na ultima).
+    const cobertos = await dlg.evaluate((d) => [...d.querySelectorAll('button[aria-label^="Desativar "]')]
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        const cy = r.top + r.height / 2;
+        return cy > 0 && cy < innerHeight && document.elementFromPoint(r.left + r.width / 2, cy) !== el
+          // fora da area visivel da lista (rolou para cima) nao conta
+          && !(() => { const l = el.closest('[style*="overflow"]').getBoundingClientRect(); return cy < l.top || cy > l.bottom; })();
+      }).map((el) => el.getAttribute('aria-label')));
+    checar(cobertos.length === 0, `${tela}${rotulo}: nenhum Desativar visivel esta' coberto${cobertos.length ? `: ${cobertos.join(', ')}` : ''}`);
+    const antes = esc.length;
+    await pg.mouse.click(x, y);
+    for (let i = 0; i < 20 && esc.length === antes; i++) await pg.waitForTimeout(100);
+    const patch = esc[antes];
+    checar(patch?.metodo === 'PATCH' && /id=q14/.test(patch.url) && patch.corpo?.ativo === false
+      && await dlg.count() === 1, `${tela}${rotulo}: o clique manda o PATCH de desativar e o cadastro continua aberto`);
+  };
+
+  const lista = await caixaDe(dlg.getByRole('button', { name: `Desativar ${ULTIMO}` }).locator('xpath=ancestor::div[contains(@style, "overflow")][1]'));
+  const grupos = await caixaDe(dlg.getByRole('navigation', { name: 'Grupos de máquina' }).locator('xpath=..'));
+  const rodape = await caixaDe(fechar);
+  checar(lista.base <= rodape.topo && grupos.base <= rodape.topo,
+    `${tela}: lista (ate' ${Math.round(lista.base)}) e grupos (ate' ${Math.round(grupos.base)}) terminam antes do Fechar (${Math.round(rodape.topo)})`);
+  await desativarUltimo('');
+
+  // Com o ALERTA na tela (digitacao errada), o rodape cresce: a lista encolhe.
+  await dlg.locator('input[aria-label="Nome do produto"]').first().fill('Rack X');
+  await dlg.locator('input[aria-label="Volumes do produto"]').first().fill('2 caixas');
+  await dlg.getByRole('button', { name: 'Cadastrar' }).click();
+  const alerta = dlg.getByRole('alert');
+  await alerta.waitFor({ timeout: 4000 });
+  const listaComAlerta = await caixaDe(dlg.getByRole('button', { name: `Desativar ${ULTIMO}` }).locator('xpath=ancestor::div[contains(@style, "overflow")][1]'));
+  const caixaAlerta = await caixaDe(alerta);
+  checar(listaComAlerta.base <= caixaAlerta.topo,
+    `${tela}: com o alerta, a lista termina (${Math.round(listaComAlerta.base)}) antes dele (${Math.round(caixaAlerta.topo)})`);
+  if (FOTOS) await pg.screenshot({ path: `${FOTOS}/pc-produtos-${tela}-alerta.png` });
+  await desativarUltimo(' com alerta');
+  await ctx.close();
+}
 
 checar(erros.length === 0, `sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
 await navegador.close();

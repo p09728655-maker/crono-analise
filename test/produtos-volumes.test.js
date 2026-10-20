@@ -236,4 +236,31 @@ describe('API de produtos num banco sem a coluna volumes', () => {
     expect(res.codigo).toBe(503);
     expect(res.corpo.erro).toMatch(/produtos\.volumes/);
   });
+
+  /* O modo token de servico nao abre transacao (auth.rls chama direto): o
+     que foi gravado antes do UPDATE que caiu FICA gravado. Por isso o de
+     volumes vem primeiro — o 503 tem de sair com nada mudado no banco. */
+  it('PATCH com nome, codigo e volumes: o 503 sai ANTES de gravar nome e codigo', async () => {
+    const res = await pedir({ metodo: 'PATCH', id: PRODUTO, corpo: { nome: 'Rack C', codigo: 'X1', volumes: 2 } });
+    expect(res.codigo).toBe(503);
+    expect(res.corpo.erro).toMatch(/produtos\.volumes/);
+    // A unica escrita tentada foi a de volumes — a que o banco recusou.
+    expect(colunas()).toEqual(['volumes']);
+  });
+});
+
+describe('API de produtos: ordem das escritas do PATCH', () => {
+  beforeEach(() => {
+    banco.consultas.length = 0;
+    banco.volumesAtual = null;
+    banco.semColuna = false;
+  });
+
+  it('com a coluna, volumes e gravado primeiro e o resto vem depois', async () => {
+    const res = await pedir({
+      metodo: 'PATCH', id: PRODUTO, corpo: { nome: 'Rack C', codigo: 'X1', ativo: true, volumes: 2 },
+    });
+    expect(res.codigo).toBe(200);
+    expect(colunas()).toEqual(['volumes', 'nome', 'codigo', 'ativo']);
+  });
 });

@@ -29,14 +29,22 @@ export function lerVolumesDoFormulario(valor) {
 export const rotuloVolumes = (n) => `${n} ${Number(n) === 1 ? 'volume' : 'volumes'}`;
 
 /**
- * Produto da EMBALAGEM sem os volumes: e' o que faz o takt do programa (em
- * volumes) nao entrar sozinho no estudo dele. Ausente (cache velho, servidor
- * sem a coluna) e' o mesmo que nulo. Desativado nao conta: ele nao vai mais
- * para o tablet nem para estudo novo.
+ * O grupo CONTA VOLUMES (a embalagem), e so' nele o numero tem uso: e' o
+ * posto que conta caixa enquanto o estudo conta produto. Na furadeira o
+ * toque ja' e' a peca — o campo ali so' seria ruido e altura na tela. A
+ * mesma regra de unidadeDoPosto, pelo nome do grupo, que o tablet usa.
+ */
+export const grupoContaVolumes = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume';
+
+/**
+ * Produto da EMBALAGEM sem os volumes: o takt do programa nao entra sozinho
+ * no estudo dele e a medicao da linha fica em volumes, sem converter para
+ * produto. Ausente (cache velho, servidor sem a coluna) e' o mesmo que
+ * nulo. Desativado nao conta: ele nao vai mais para o tablet nem para
+ * estudo novo.
  */
 export const faltamVolumes = (produto, grupo) =>
-  unidadeDoPosto(grupo?.nome).singular === 'volume'
-  && produto?.ativo !== false && produto?.volumes == null;
+  grupoContaVolumes(grupo) && produto?.ativo !== false && produto?.volumes == null;
 
 /**
  * CADASTRO DE PRODUTOS — os que vao para cronoanalise, trabalho de PC.
@@ -58,10 +66,10 @@ export const faltamVolumes = (produto, grupo) =>
  *    com que foram gravadas. A dica diz isso no formulario.
  *  - O codigo e' o do ERP, opcional: e' como o resto da fabrica chama o
  *    produto, e e' a ponte para o ERP no BI.
- *  - VOLUMES (quantas caixas o produto leva na embalagem) e' opcional e
- *    vazio quer dizer "nao informado", nunca 1. Na embalagem, o produto
- *    ativo sem o numero ganha um destaque: e' ele que converte o programa
- *    (em volumes) para a unidade do estudo (produto).
+ *  - VOLUMES (quantas caixas o produto leva) so' existe na tela nos grupos
+ *    de EMBALAGEM: campo, selo e destaque. Vazio quer dizer "nao
+ *    informado", nunca 1. O produto ativo sem o numero ganha um destaque:
+ *    sem ele, o takt do programa e a medicao da linha nao viram produto.
  */
 export default function Produtos({ aoFechar, grupoInicial = null }) {
   const { maquinas, grupos, produtos, erro, ocupado, aplicar, recarregar } = useCadastroMaquinas();
@@ -75,6 +83,7 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
   const carregando = maquinas == null && !erro;
   const naoCarregou = maquinas == null && Boolean(erro);
   const grupo = grupos.find((g) => g.id === escolhido) || grupos[0] || null;
+  const contaVolumes = grupoContaVolumes(grupo);
   const doGrupo = (produtos || []).filter((p) => p.grupo_id === grupo?.id);
   const contar = (id) => (produtos || []).filter((p) => p.grupo_id === id && p.ativo !== false).length;
 
@@ -82,10 +91,12 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
     ev.preventDefault();
     if (!grupo || !nome.trim()) return;
     // Os volumes sao lidos DENTRO do aplicar: a digitacao errada aparece no
-    // mesmo lugar que o erro do servidor, e nada e' enviado.
+    // mesmo lugar que o erro do servidor, e nada e' enviado. Fora da
+    // embalagem eles nem vao: o que ficou digitado num grupo de embalagem
+    // antes de trocar de grupo nao pode ir junto com um produto da furadeira.
     if (await aplicar(() => criarProduto({
       nome: nome.trim(), codigo: codigo.trim(), grupoId: grupo.id,
-      volumes: lerVolumesDoFormulario(volumes),
+      ...(contaVolumes ? { volumes: lerVolumesDoFormulario(volumes) } : {}),
     }))) {
       setNome('');
       setCodigo('');
@@ -95,10 +106,27 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
 
   return (
     <div style={est.modal} role="dialog" aria-label="Cadastro de produtos">
+      {/* A LISTA E' QUEM ROLA, no espaco que sobra. A moldura e' a do
+          cadastro de maquinas, mas aqui o painel e' mais alto (volumes, a
+          dica): com a lista de altura fixa (52dvh), num notebook 1366x768
+          a barra do Fechar e o alerta caiam POR CIMA das ultimas linhas, e
+          clicar Desativar no ultimo produto fechava o cadastro. Agora
+          grupos e painel ficam na altura da caixa e a lista estica e encolhe
+          entre o formulario e o rodape.
+          Na tela estreita (celular) as colunas empilham e a altura de cada
+          uma depende do conteudo: ali a CAIXA rola inteira, com o Fechar no
+          fim. !important porque o inline ja' define as mesmas propriedades
+          (mesma tecnica de EntrarNoPc). */}
       <style>{`
         .item-grupo:not([aria-current]):hover { background: #EDF0F3; color: ${t.texto}; }
+        @media (max-width: 720px) {
+          .produtos-caixa { overflow-y: auto !important; }
+          .produtos-colunas { flex-wrap: wrap !important; flex: none !important; }
+          .produtos-lateral, .produtos-painel { max-height: none !important; overflow: visible !important; }
+          .produtos-lista { flex: none !important; overflow: visible !important; }
+        }
       `}</style>
-      <div style={est.caixa}>
+      <div className="produtos-caixa" style={est.caixa}>
         <header style={est.topo}>
           <div>
             <h2 style={est.titulo}>Produtos</h2>
@@ -123,29 +151,34 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
         )}
 
         {grupo && (
-          <div style={est.colunas}>
-            <nav style={est.lateral} aria-label="Grupos de máquina">
-              <span style={est.blocoRotulo}>Grupos</span>
-              {grupos.map((g) => {
-                const ativo = g.id === grupo.id;
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    className="item-grupo"
-                    style={{ ...est.itemGrupo, ...(ativo ? est.itemGrupoAtivo : {}) }}
-                    aria-current={ativo ? 'true' : undefined}
-                    onClick={() => { setEscolhido(g.id); setEditando(null); setExcluindo(null); }}
-                  >
-                    <span style={est.codigoGrupo}>{g.codigo}</span>
-                    <span style={est.itemGrupoNome}>{g.nome}</span>
-                    <span style={est.itemGrupoContador}>{contar(g.id)}</span>
-                  </button>
-                );
-              })}
-            </nav>
+          <div className="produtos-colunas" style={loc.colunas}>
+            {/* A coluna de grupos tem uma moldura de fora que estica ate' o
+                rodape e rola; a caixa cinza de dentro continua do tamanho dos
+                grupos, como na tela de maquinas. */}
+            <div className="produtos-lateral" style={loc.lateral}>
+              <nav style={est.lateral} aria-label="Grupos de máquina">
+                <span style={est.blocoRotulo}>Grupos</span>
+                {grupos.map((g) => {
+                  const ativo = g.id === grupo.id;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      className="item-grupo"
+                      style={{ ...est.itemGrupo, ...(ativo ? est.itemGrupoAtivo : {}) }}
+                      aria-current={ativo ? 'true' : undefined}
+                      onClick={() => { setEscolhido(g.id); setEditando(null); setExcluindo(null); }}
+                    >
+                      <span style={est.codigoGrupo}>{g.codigo}</span>
+                      <span style={est.itemGrupoNome}>{g.nome}</span>
+                      <span style={est.itemGrupoContador}>{contar(g.id)}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
 
-            <section style={est.painel} aria-label={`Produtos do grupo ${grupo.nome}`}>
+            <section className="produtos-painel" style={loc.painel} aria-label={`Produtos do grupo ${grupo.nome}`}>
               {/* O cadastro no TOPO e a lista embaixo: cadastrar vinte
                   produtos seguidos e' digitar e dar Enter vinte vezes. */}
               <form style={est.novaLinha} onSubmit={cadastrar}>
@@ -163,12 +196,12 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
                   aria-label="Código do produto no ERP"
                   style={{ ...est.input, width: 'auto', flex: '1 1 140px' }}
                 />
-                {/* Volumes e o botao quebram JUNTOS: no painel do PC os
-                    quatro nao cabem numa linha, e o Cadastrar sozinho
-                    embaixo parecia esquecido. Cortar os textos de exemplo
-                    dos campos para caber tirava a instrucao deles. */}
+                {/* Na embalagem, Volumes e o botao quebram JUNTOS: no painel
+                    do PC os quatro nao cabem numa linha, e o Cadastrar
+                    sozinho embaixo parecia esquecido. Cortar os textos de
+                    exemplo dos campos para caber tirava a instrucao deles. */}
                 <div style={loc.fimDaLinha}>
-                  <CampoVolumes valor={volumes} aoMudar={setVolumes} />
+                  {contaVolumes && <CampoVolumes valor={volumes} aoMudar={setVolumes} />}
                   <button type="submit" style={est.botaoPrimario} disabled={ocupado || !nome.trim()}>
                     Cadastrar
                   </button>
@@ -177,11 +210,7 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
               <span style={est.destinoCadastro}>
                 Vai para {grupo.codigo} · {grupo.nome}
               </span>
-              <p style={est.dica}>
-                Volumes = em quantas caixas o produto sai embalado (rack em 2 caixas = 2 volumes).
-                A embalagem conta caixas e o estudo de tempos conta produtos: é este número que
-                converte um no outro. Em branco = não informado.
-              </p>
+              {contaVolumes && <p style={est.dica}>{DICA_VOLUMES}</p>}
 
               {doGrupo.length === 0 ? (
                 <p style={est.dica}>
@@ -189,32 +218,33 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
                   campo de texto livre.
                 </p>
               ) : (
-                <div style={est.listaMaquinas}>
+                <div className="produtos-lista" style={loc.lista}>
                   {doGrupo.map((p) => (editando?.id === p.id ? (
                     <FormularioEdicao
                       key={p.id} produto={p} edicao={editando} setEdicao={setEditando}
                       grupos={grupos} ocupado={ocupado}
                       aoSalvar={async () => {
+                        // Volumes so' vai quando o produto fica (ou passa a
+                        // ficar) num grupo de embalagem — o grupo escolhido
+                        // no proprio formulario. Fora dela o campo nem aparece.
+                        const destino = grupos.find((g) => g.id === editando.grupoId);
                         if (await aplicar(() => atualizarProduto(p.id, {
                           nome: editando.nome.trim(), codigo: editando.codigo.trim(), grupoId: editando.grupoId,
-                          volumes: lerVolumesDoFormulario(editando.volumes),
+                          ...(grupoContaVolumes(destino) ? { volumes: lerVolumesDoFormulario(editando.volumes) } : {}),
                         }))) setEditando(null);
                       }}
                     />
                   ) : (
-                    <div key={p.id} style={{ ...est.linha, ...(p.ativo ? {} : est.linhaInativa) }}>
-                      <span style={est.linhaRotulo}>{p.nome}</span>
+                    <div key={p.id} style={{ ...loc.linha, ...(p.ativo ? {} : est.linhaInativa) }}>
+                      <span style={loc.linhaRotulo}>{p.nome}</span>
                       {p.codigo && <span style={est.seloNominal} title="Código no ERP">{p.codigo}</span>}
-                      {p.volumes != null && (
+                      {contaVolumes && p.volumes != null && (
                         <span style={est.seloNominal} title="Caixas do produto na embalagem">
                           {rotuloVolumes(p.volumes)}
                         </span>
                       )}
                       {faltamVolumes(p, grupo) && (
-                        <span
-                          style={loc.seloSemVolumes}
-                          title="Sem os volumes, o takt do programa da embalagem (em volumes) não entra sozinho no estudo deste produto"
-                        >
+                        <span style={loc.seloSemVolumes} title={TITULO_SEM_VOLUMES}>
                           volumes não informados
                         </span>
                       )}
@@ -286,6 +316,18 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
 }
 
 /**
+ * O que os volumes fazem, dito como vai acontecer: com o numero, o takt do
+ * programa e a medicao da linha (os dois em caixas) viram produto no
+ * estudo; em branco, nada e' convertido. Prometer menos do que o sistema
+ * faz e' melhor que prometer mais — quem le' isto vai conferir no estudo.
+ */
+const DICA_VOLUMES = 'Volumes = em quantas caixas o produto sai embalado (rack em 2 caixas = 2). '
+  + 'Com o número, o takt do programa e a medição da linha entram no estudo por produto. '
+  + 'Em branco, o takt não entra sozinho e a medição fica em volumes.';
+const TITULO_SEM_VOLUMES = 'Sem os volumes, o takt do programa não entra sozinho no estudo deste produto '
+  + 'e a medição da linha fica em volumes.';
+
+/**
  * O campo de VOLUMES: numero inteiro pequeno, com o rotulo VISIVEL ao lado —
  * so' com placeholder, um "2" no campo nao diz de que e' o 2. inputMode
  * numeric abre o teclado de numeros no tablet; type=text (e nao number)
@@ -307,10 +349,15 @@ function CampoVolumes({ valor, aoMudar }) {
   );
 }
 
-/** Editar um produto: nome, codigo, volumes e o grupo (produto cadastrado no posto errado muda de grupo). */
+/**
+ * Editar um produto: nome, codigo, o grupo (produto cadastrado no posto
+ * errado muda de grupo) e, se o grupo escolhido aqui for de embalagem, os
+ * volumes.
+ */
 function FormularioEdicao({
   produto, edicao, setEdicao, grupos, ocupado, aoSalvar,
 }) {
+  const contaVolumes = grupoContaVolumes(grupos.find((g) => g.id === edicao.grupoId));
   return (
     <form
       style={est.form}
@@ -331,7 +378,9 @@ function FormularioEdicao({
           aria-label="Código do produto no ERP"
           style={{ ...est.input, width: 'auto', flex: '1 1 120px' }}
         />
-        <CampoVolumes valor={edicao.volumes} aoMudar={(v) => setEdicao({ ...edicao, volumes: v })} />
+        {contaVolumes && (
+          <CampoVolumes valor={edicao.volumes} aoMudar={(v) => setEdicao({ ...edicao, volumes: v })} />
+        )}
         <select
           value={edicao.grupoId}
           onChange={(ev) => setEdicao({ ...edicao, grupoId: ev.target.value })}
@@ -357,9 +406,40 @@ function FormularioEdicao({
 
 /**
  * Estilos so' desta tela, por cima dos do cadastro de maquinas (estilos.js
- * e' a casa das duas telas; o que so' o produto tem fica aqui).
+ * e' a casa das duas telas; o que so' o produto tem fica aqui, e a tela de
+ * maquinas nao muda).
  */
 const loc = {
+  /* A ALTURA, de cima para baixo: a caixa para na altura da janela; as
+     colunas ficam com o que sobra entre o topo e o rodape (Fechar, alerta)
+     e NAO quebram linha — so' assim grupos e painel tem a altura delas, e
+     nao a do conteudo. Com quebra de linha (o est.colunas), o painel
+     crescia ate' o fim da lista e saia da caixa por cima do rodape. */
+  colunas: { ...est.colunas, flexWrap: 'nowrap' },
+  // Muitos grupos num notebook baixo: a coluna rola, nao invade o rodape.
+  // A moldura de fora e' quem estica (stretch) e rola: maxHeight 100% na
+  // propria caixa cinza nao resolve contra a altura das colunas.
+  lateral: {
+    flex: est.lateral.flex, maxWidth: est.lateral.maxWidth, minWidth: 0, minHeight: 0,
+    alignSelf: 'stretch', overflowY: 'auto',
+  },
+  // Rede de seguranca: janela baixa demais ate' para o formulario e duas
+  // linhas da lista — o painel rola inteiro, nada passa por cima de nada.
+  painel: { ...est.painel, minHeight: 0, overflowY: 'auto' },
+  // A lista ocupa o resto do painel e rola por dentro; nunca menos que duas
+  // linhas, para continuar sendo uma lista.
+  lista: { ...est.listaMaquinas, flex: '1 1 auto', maxHeight: 'none', minHeight: 88 },
+  /* O nome QUEBRA LINHA em vez de cortar com reticencias: com o codigo e
+     o selo de volumes na mesma linha, "Rack Sirius 1.6 com Painel Encanto
+     Off White 5" ficava cortado e sem como ler inteiro. A folga em cima e
+     embaixo fica no NOME (a linha de uma linha so' continua com os 40 px de
+     sempre), e a linha nao encolhe (flexShrink 0): a lista e' uma coluna
+     flex que rola, e sem isso a de nome longo era espremida aos 40 px. */
+  linha: { ...est.linha, flexShrink: 0 },
+  linhaRotulo: {
+    ...est.linhaRotulo, whiteSpace: 'normal', overflowWrap: 'anywhere', textOverflow: 'clip',
+    padding: `${espaco.xs}px 0`,
+  },
   fimDaLinha: { display: 'flex', alignItems: 'center', gap: espaco.sm, flex: '0 0 auto' },
   campoVolumes: { display: 'flex', alignItems: 'center', gap: espaco.xs, flex: '0 0 auto' },
   inputVolumes: { ...est.input, width: 64, textAlign: 'center' },

@@ -251,9 +251,11 @@ export const limparDemanda = (grupoId) =>
    guarda; aqui so' as escritas. Mesma rota da demanda pelo mesmo teto de
    funcoes. Ver api/_lib/produtos.js. */
 const ROTA_PRODUTOS = '/maquinas?produtos=1';
-// volumes: inteiro de 1 a 50, ou null = nao informado (nunca vira 1). Ausente
-// no corpo e' o mesmo null — o servidor nao inventa numero.
-export const criarProduto = ({ nome, codigo, grupoId, volumes = null }) =>
+// volumes: inteiro de 1 a 50, ou null = nao informado (nunca vira 1). So'
+// vai no corpo quando quem chama manda: a tela so' manda na embalagem, e
+// fora dela o campo nem existe (undefined some no JSON). Ausente no corpo
+// e' o mesmo null para o servidor — ele nao inventa numero.
+export const criarProduto = ({ nome, codigo, grupoId, volumes }) =>
   requisitar(ROTA_PRODUTOS, { metodo: 'POST', corpo: { nome, codigo, grupoId, volumes } }).then((r) => r.produto);
 // Repassa `dados` inteiros: { volumes } sozinho e' um PATCH valido, e null apaga.
 export const atualizarProduto = (id, dados) =>
