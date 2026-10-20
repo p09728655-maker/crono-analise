@@ -31,6 +31,8 @@ export default function RitmoDemanda({
   // A unidade e' a DO PROGRAMA (na embalagem, volume). A conta digitada
   // segue em pecas: e' o analista quem diz o que conta.
   const unidade = programa?.unidade || PECA;
+  // A unidade em que o PROGRAMA conta (na embalagem, volume) — a da demanda.
+  const contada = programa?.unidadeContada || unidade;
   const conta = temPrograma ? contaDaMaquina(programa) : null;
   // Espaco INSEPARAVEL entre o numero e o "s": no tablet a quebra de linha
   // deixava "144.0" numa linha e "s por peça" na outra.
@@ -69,7 +71,7 @@ export default function RitmoDemanda({
         <div style={est.tiles}>
           <div style={est.tile}>
             <span style={est.tileRotulo}>Demanda por máquina</span>
-            <span style={est.tileValor}>{parte ? `${parte.texto} ${unidade.plural}` : '—'}</span>
+            <span style={est.tileValor}>{parte ? `${parte.texto} ${contada.plural}` : '—'}</span>
           </div>
           <div style={est.tile}>
             <span style={est.tileRotulo}>Tempo por máquina</span>
@@ -79,11 +81,19 @@ export default function RitmoDemanda({
         {parte && (
           <span style={est.dica}>
             {programa.maquinas === 1
-              ? `${parte.semana} ${unidade.plural} na semana, para a única máquina ativa do grupo.`
-              : `${parte.semana} ${unidade.plural} na semana, divididas entre as ${programa.maquinas} máquinas ativas do grupo.`}
+              ? `${parte.semana} ${contada.plural} na semana, para a única máquina ativa do grupo.`
+              : `${parte.semana} ${contada.plural} na semana, divididas entre as ${programa.maquinas} máquinas ativas do grupo.`}
           </span>
         )}
         {conta && <span style={est.dica}>{conta.texto}</span>}
+        {/* Na embalagem, a conversao escrita: o programa e' em volumes e o
+            estudo mede o produto inteiro, pelos volumes do cadastro. */}
+        {programa.volumes > 0 && (
+          <span style={est.dica}>
+            {`Programa em volumes: ${formatarSegundos(programa.taktPorVolumeMs, 1)}\u00a0s por volume × `
+              + `${programa.volumes} ${programa.volumes === 1 ? 'volume' : 'volumes'} de ${programa.produto} = ${segundos}.`}
+          </span>
+        )}
 
         <button ref={refQuantidade} type="button" style={est.acao} onClick={aoSimular}>
           Simular outra demanda
@@ -158,14 +168,22 @@ export default function RitmoDemanda({
 
       {/* Ha' programa e o takt e' outro: dizer o que o programa pede, para
           a simulacao nao ser confundida com ele — e voltar com um toque. */}
-      {temPrograma && (
+      {/* Embalagem sem os volumes do produto: o programa (em volumes) nao
+          vira takt por produto, e o takt por volume nao e' oferecido — o
+          estudo mede o produto inteiro. A tela diz o que falta. */}
+      {temPrograma && programa.semVolumes && (
+        <span style={est.dica}>
+          {programa.produto
+            ? `O programa da semana ${programa.semana} é em volumes. Informe em Produtos quantos volumes `
+              + `tem ${programa.produto} para o takt entrar por produto.`
+            : `O programa da semana ${programa.semana} é em volumes. Escolha o produto: com os volumes `
+              + 'dele no cadastro, o takt entra por produto.'}
+        </span>
+      )}
+      {temPrograma && !programa.semVolumes && (
         <>
           <span style={est.dica}>
-            {unidade.singular === 'volume'
-              ? `O programa da semana ${programa.semana} é em volumes: ${segundos}. `
-                + 'Use se cada ciclo deste estudo for um volume; se o ciclo for o produto inteiro, '
-                + 'a conta acima, em produtos, é a que vale.'
-              : `É a conta acima que o estudo grava. O programa da semana ${programa.semana} pede ${segundos}.`}
+            {`É a conta acima que o estudo grava. O programa da semana ${programa.semana} pede ${segundos}.`}
           </span>
           <button type="button" style={est.acao} onClick={aoUsarPrograma}>
             Usar o takt do programa ({segundos})
@@ -243,15 +261,17 @@ export function contaDaMaquina({ jornadaPorMaquina, setupPorMaquina } = {}) {
  * clique dado na furadeira nao valer na embalagem). Sem escolha, o
  * programa entra sozinho — mas nunca depois de o analista ter mexido na
  * conta (`digitou`: apagar a quantidade para corrigi-la nao entrega o
- * painel ao programa), e nunca na embalagem: la' o programa e' em VOLUMES
- * e o ciclo do estudo pode ser o produto inteiro (um rack de dois
- * volumes), e o takt por volume faria a linha parecer o dobro mais
- * carregada do que esta'. Ali o programa e' oferecido, nao imposto.
+ * painel ao programa).
+ *
+ * Na embalagem o takt do programa so' existe POR PRODUTO (takt por volume
+ * x os volumes do produto, programaDoTakt). Sem os volumes, o programa
+ * vem `semVolumes` e nao ha' takt para usar — nem pedindo: o takt por
+ * volume num estudo que mede o produto deixaria a linha o dobro mais
+ * carregada num rack de dois volumes.
  */
 export function origemDoTakt({ programa, escolha = null, digitou = false } = {}) {
-  if (!(programa?.taktMs > 0)) return 'manual';
+  if (!(programa?.taktMs > 0) || programa.semVolumes) return 'manual';
   if (escolha) return escolha;
-  if (programa.unidade?.singular === 'volume') return 'manual';
   return digitou ? 'manual' : 'programa';
 }
 

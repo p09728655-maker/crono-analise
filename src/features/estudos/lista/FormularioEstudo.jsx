@@ -54,7 +54,8 @@ export default function FormularioEstudo({
 
   const posto = useProgramaDoPosto(dados.recurso);
   const grupoId = posto.grupo?.id || null;
-  const programa = programaDoTakt(posto);
+  // Na embalagem o takt e' por produto: depende dos volumes do produto escolhido.
+  const programa = programaDoTakt(posto, dados.produto);
   const origem = origemDoTakt({
     programa, escolha: escolha.grupoId === grupoId ? escolha.valor : null, digitou,
   });

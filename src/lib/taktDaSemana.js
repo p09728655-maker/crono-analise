@@ -17,7 +17,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { unidadeDoPosto } from '../domain/cronoanalise.js';
 import { taktDaMedicao } from '../domain/demandaSemanal.js';
+import { volumesDoProduto } from '../domain/volumes.js';
 import { nomeChave } from '../domain/cronoanalise.js';
+
+/** A unidade do estudo da embalagem: o produto inteiro (o ciclo e' o produto). */
+const PRODUTO = { singular: 'produto', plural: 'produtos' };
 import { diaCivil } from '../domain/demanda/calendario.js';
 import { listarDemanda } from './api.js';
 import {
@@ -161,11 +165,19 @@ export const rotuloDoGrupo = (grupo) => [grupo?.codigo, grupo?.nome].filter(Bool
 /**
  * O takt do programa como o painel Ritmo / Demanda o mostra — ou null
  * quando nao ha' takt (sem grupo, sem programa, semana nao coberta...).
- * A unidade e' a do programa: na embalagem, volume.
+ *
+ * NA EMBALAGEM o programa e' em VOLUMES e o estudo mede o PRODUTO inteiro:
+ * o takt por produto e' o takt por volume x os volumes do produto, que vem
+ * do cadastro de Produtos (volumesDoProduto, inclusive produto desativado:
+ * o numero continua valendo). Sem produto escolhido, ou sem os volumes
+ * dele, NAO converte — vazio nunca vira 1, porque um rack de dois volumes
+ * sairia com o takt pela metade. Ai' o programa vem com `semVolumes` e a
+ * tela pede o que falta, sem oferecer o takt por volume.
  */
-export function programaDoTakt({ grupo, maquinasDoGrupo, takt } = {}) {
+export function programaDoTakt({ grupo, maquinasDoGrupo, takt, cadastro } = {}, produto = '') {
   if (!grupo || !(takt?.taktMs > 0)) return null;
-  return {
+  const unidade = unidadeDoPosto(grupo.nome);
+  const base = {
     taktMs: takt.taktMs,
     semana: takt.semana,
     demanda: takt.demanda ?? null,
@@ -179,7 +191,22 @@ export function programaDoTakt({ grupo, maquinasDoGrupo, takt } = {}) {
     semRede: Boolean(takt.semRede),
     maquinas: maquinasDoGrupo,
     grupo: rotuloDoGrupo(grupo),
-    unidade: unidadeDoPosto(grupo.nome),
+    unidade,
+  };
+  if (unidade.singular !== 'volume') return base;
+  const doGrupo = (cadastro?.produtos || []).filter((p) => p && p.grupo_id === grupo.id);
+  const volumes = volumesDoProduto(doGrupo, produto);
+  if (!volumes) return { ...base, semVolumes: true, produto: String(produto || '').trim() };
+  return {
+    ...base,
+    taktMs: takt.taktMs * volumes,
+    taktPorVolumeMs: takt.taktMs,
+    volumes,
+    produto: String(produto).trim(),
+    // A conta e' por PRODUTO; a demanda e o tempo continuam os do programa,
+    // em volumes — e' deles que o numero sai.
+    unidade: PRODUTO,
+    unidadeContada: unidade,
   };
 }
 
@@ -222,8 +249,17 @@ export function conflitoDoProduto({ produto, recurso, cadastro, grupo } = {}) {
  * do grupo novo. Nada e' trocado sozinho. marca: { grupoId, grupo, escrito }
  * do clique; digitar no campo desfaz a marca (o numero passa a ser dele).
  */
-export function conflitoDoTakt({ marca, grupo, taktSeg } = {}) {
+export function conflitoDoTakt({ marca, grupo, taktSeg, produto } = {}) {
   if (!marca || taktSeg !== marca.escrito) return null;
+  // Na embalagem o takt e' por PRODUTO (volumes do produto): trocou o
+  // produto, o numero escrito era de outro.
+  if (marca.produto != null && grupo && grupo.id === marca.grupoId
+    && nomeChave(produto || '') !== nomeChave(marca.produto)) {
+    return {
+      texto: `Este takt (${marca.escrito} s) veio do programa para ${marca.produto}; o produto agora é outro. `
+        + 'Use o takt do programa de novo ou digite o takt.',
+    };
+  }
   if (grupo && grupo.id === marca.grupoId) return null;
   return {
     texto: `Este takt (${marca.escrito} s) veio do programa do ${marca.grupo}, e o posto agora `

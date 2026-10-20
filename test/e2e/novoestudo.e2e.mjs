@@ -307,7 +307,10 @@ const b = await chromium.launch({ executablePath: EXEC });
     return (await p.evaluate(() => window.__posts[0])).corpo;
   };
 
-  /* 1. "Usar o takt do programa" na furadeira NAO vale na embalagem. */
+  const lerPainel = async () => (await painel.innerText()).replace(/\u00a0/g, ' ');
+
+  /* 1. "Usar o takt do programa" na furadeira NAO vale na embalagem — e la',
+     sem produto escolhido, nao ha' takt por produto: a tela pede o produto. */
   await abrir();
   await posto.selectOption('FURADEIRA 04');
   await painel.getByText('Do programa da semana').waitFor({ timeout: 4000 });
@@ -315,25 +318,39 @@ const b = await chromium.launch({ executablePath: EXEC });
   await painel.getByRole('button', { name: /Usar o takt do programa/ }).click();
   await painel.getByText('Do programa da semana').waitFor({ timeout: 4000 });
   await posto.selectOption('EMBALADORA 01');
-  await painel.getByRole('button', { name: /Usar o takt do programa \(72\.0\s+s por volume\)/ }).waitFor({ timeout: 4000 });
-  checar(await painel.getByText('Do programa da semana').count() === 0,
-    'troca: o clique dado na furadeira nao impoe o takt por volume na embalagem');
-  checar(/O programa da semana \d{3}-\d{2} é em volumes: 72\.0 s por volume/.test((await painel.innerText()).replace(/\u00a0/g, ' ')),
-    'embalagem: o programa em volumes e oferecido, com a unidade escrita');
+  await painel.getByText(/é em volumes\. Escolha o produto: com os volumes dele no cadastro, o takt entra por produto/)
+    .waitFor({ timeout: 4000 });
+  checar(await painel.getByText('Do programa da semana').count() === 0
+    && await painel.getByRole('button', { name: /Usar o takt do programa/ }).count() === 0,
+  'troca: o clique da furadeira nao vale na embalagem, e sem produto nao ha takt por volume oferecido');
   let corpo = await criar();
-  checar(corpo.taktTimeMs === null, `troca: sem clique na embalagem, nada de takt por volume (${corpo.taktTimeMs})`);
+  checar(corpo.taktTimeMs === null, `troca: sem produto, nada de takt por volume (${corpo.taktTimeMs})`);
 
-  /* 2. Na embalagem, o programa entra so' com o clique — e entao diz volume. */
+  /* 2. Na embalagem, com o produto de 2 volumes no cadastro, o takt entra
+     sozinho POR PRODUTO: 72 s por volume x 2 = 144 s (02:24). */
   await abrir();
   await posto.selectOption('EMBALADORA 01');
-  await painel.getByRole('button', { name: /Usar o takt do programa/ }).click();
+  await form.getByRole('combobox', { name: 'Produto / Referência' }).selectOption('RACK SIRIUS 1.6');
   await painel.getByText('Do programa da semana').waitFor({ timeout: 4000 });
-  const emb = (await painel.innerText()).replace(/\u00a0/g, ' ');
-  checar(/0005 · EMBALAGEM · semana/.test(emb) && emb.includes('01:12') && /s\/volume/.test(emb)
-    && emb.includes('72.0 s por volume') && emb.includes('2.200 volumes'),
-    'embalagem: com o clique, o takt do programa sai por volume (01:12 = 72.0 s)');
+  const emb = await lerPainel();
+  checar(/0005 · EMBALAGEM · semana/.test(emb) && emb.includes('02:24') && /s\/produto/.test(emb)
+    && emb.includes('Programa em volumes: 72.0 s por volume × 2 volumes de RACK SIRIUS 1.6 = 144.0 s por produto.')
+    && emb.includes('2.200 volumes'),
+  'embalagem: com os volumes do produto, o takt entra por produto e a conta aparece');
   corpo = await criar();
-  checar(corpo.taktTimeMs === 72000, `embalagem: POST com o takt por volume pedido (${corpo.taktTimeMs})`);
+  checar(corpo.taktTimeMs === 144000, `embalagem: POST com o takt por produto (${corpo.taktTimeMs})`);
+
+  /* 2b. Produto da embalagem SEM volumes no cadastro: nao vira 1 — a tela
+     pede os volumes, e nada de takt do programa. */
+  await abrir();
+  await posto.selectOption('EMBALADORA 01');
+  await form.getByRole('combobox', { name: 'Produto / Referência' }).selectOption('RACK SEM VOLUME');
+  await painel.getByText(/Informe em Produtos quantos volumes tem RACK SEM VOLUME para o takt entrar por produto/)
+    .waitFor({ timeout: 4000 });
+  checar(await painel.getByText('Do programa da semana').count() === 0,
+    'embalagem sem volumes: o takt do programa nao entra (vazio nunca vira 1)');
+  corpo = await criar();
+  checar(corpo.taktTimeMs === null, `embalagem sem volumes: nada de takt (${corpo.taktTimeMs})`);
 
   /* 3. Produto do cadastro da furadeira nao vai para o posto da embalagem —
      nem pelo caminho "Outro produto…" -> "escolher do cadastro". Nada muda

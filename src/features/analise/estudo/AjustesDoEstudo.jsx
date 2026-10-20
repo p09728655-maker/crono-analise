@@ -38,7 +38,7 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
   const [salvando, setSalvando] = useState(false);
   const posto = useProgramaDoPosto(recurso);
   const grupoId = posto.grupo?.id || null;
-  const programa = programaDoTakt(posto);
+  const programa = programaDoTakt(posto, produto);
   const [erro, setErro] = useState(null);
 
   /* NADA MUDA SOZINHO quando o posto muda: a tela confere e avisa.
@@ -51,10 +51,14 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
   const conflitoProduto = conflitoDoProduto({ produto, recurso, cadastro: posto.cadastro, grupo: posto.grupo });
   const mexeu = nomeChave(recurso) !== nomeChave(estudo.recurso || '') || produto !== (estudo.produto || '');
   const [marca, setMarca] = useState(null);
-  const conflitoTakt = conflitoDoTakt({ marca, grupo: posto.grupo, taktSeg });
+  const conflitoTakt = conflitoDoTakt({ marca, grupo: posto.grupo, taktSeg, produto });
   function usarTaktDoPrograma() {
     const escrito = formatarSegundos(programa.taktMs, 1);
-    setMarca({ grupoId: posto.grupo.id, grupo: rotuloDoGrupo(posto.grupo), escrito });
+    setMarca({
+      grupoId: posto.grupo.id, grupo: rotuloDoGrupo(posto.grupo), escrito,
+      // Na embalagem o takt e' por produto (volumes): guarda de qual.
+      produto: programa.volumes ? programa.produto : null,
+    });
     setTaktSeg(escrito);
   }
   function digitarTakt(valor) {
@@ -235,7 +239,17 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
           {/* O takt do programa a um clique — o mesmo numero do quadro
               "Programa da semana". Na embalagem o programa e' em volumes:
               so' serve se cada ciclo do estudo for um volume. */}
-          {programa && (
+          {/* Embalagem sem os volumes do produto: o programa e' em volumes e
+              o estudo mede o produto — sem o numero do cadastro nao ha' takt
+              por produto, e o takt por volume nao e' oferecido. */}
+          {programa?.semVolumes && (
+            <span style={est.dica}>
+              {programa.produto
+                ? `O programa da embalagem é em volumes. Informe em Produtos quantos volumes tem ${programa.produto} para usar o takt do programa por produto.`
+                : 'O programa da embalagem é em volumes. Escolha o produto: com os volumes dele no cadastro, o takt do programa vale por produto.'}
+            </span>
+          )}
+          {programa && !programa.semVolumes && (
             <>
               <button type="button" style={est.botaoSecundario} onClick={usarTaktDoPrograma}>
                 {/* Em SEGUNDOS, como o campo logo acima: o botao escreve 144.0
@@ -243,8 +257,9 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
                 Usar o takt do programa da semana {programa.semana}: {formatarSegundos(programa.taktMs, 1)} s por {programa.unidade.singular}
               </button>
               <span style={est.dica}>
-                {programa.unidade.singular === 'volume'
-                  ? 'O programa da embalagem é em volumes: use se cada ciclo deste estudo for um volume.'
+                {programa.volumes
+                  ? `${programa.grupo}: ${formatarSegundos(programa.taktPorVolumeMs, 1)} s por volume × ${programa.volumes} `
+                    + `${programa.volumes === 1 ? 'volume' : 'volumes'} de ${programa.produto}.`
                   : `${programa.grupo}: tempo de uma máquina na semana, menos o setup planejado, pela parte dela na demanda.`}
               </span>
               {/* As mesmas ressalvas do Novo estudo: o numero pode ser o

@@ -81,11 +81,16 @@ describe('origem do takt do estudo', () => {
     expect(origemDoTakt({ programa: furadeira, escolha: 'programa', digitou: true })).toBe('programa');
   });
 
-  /* O programa da embalagem e' em VOLUMES; o ciclo do estudo pode ser o
-     produto inteiro (rack de 2 volumes). Entrar sozinho dobraria a carga. */
-  it('na embalagem o programa e oferecido, nao imposto', () => {
-    expect(origemDoTakt({ programa: embalagem })).toBe('manual');
-    expect(origemDoTakt({ programa: embalagem, escolha: 'programa' })).toBe('programa');
+  /* Na embalagem o takt so' existe POR PRODUTO; sem os volumes do produto
+     o programa vem semVolumes e nao ha' takt — nem pedindo. */
+  it('embalagem sem volumes: nenhum takt do programa, nem com o clique', () => {
+    const semVolumes = { ...embalagem, semVolumes: true };
+    expect(origemDoTakt({ programa: semVolumes })).toBe('manual');
+    expect(origemDoTakt({ programa: semVolumes, escolha: 'programa' })).toBe('manual');
+  });
+  it('embalagem com volumes: o takt por produto entra sozinho, como nos outros postos', () => {
+    const porProduto = { ...embalagem, taktMs: 144000, unidade: { singular: 'produto', plural: 'produtos' }, volumes: 2 };
+    expect(origemDoTakt({ programa: porProduto })).toBe('programa');
   });
 
   it('grava o takt da origem escolhida', () => {
@@ -172,6 +177,46 @@ describe('programaDoTakt', () => {
     expect(programaDoTakt({ grupo, maquinasDoGrupo: 3, takt: { taktMs: null, estado: 'sem-demanda' } })).toBeNull();
   });
 });
+/**
+ * NA EMBALAGEM o programa e' em volumes e o estudo mede o produto: o takt
+ * por produto = takt por volume x volumes do cadastro. Vazio nunca vira 1.
+ */
+describe('programaDoTakt na embalagem: por produto, pelos volumes', () => {
+  const grupo = { id: 'g5', codigo: '0005', nome: 'EMBALAGEM' };
+  const takt = { taktMs: 72000, semana: '043-26', demanda: 2200, horasPorMaquina: 44, estado: 'pronto' };
+  const cadastro = {
+    produtos: [
+      { id: 'p3', nome: 'RACK SIRIUS 1.6', grupo_id: 'g5', ativo: true, volumes: 2 },
+      { id: 'p4', nome: 'RACK SEM VOLUME', grupo_id: 'g5', ativo: true, volumes: null },
+      { id: 'p5', nome: 'RACK ANTIGO', grupo_id: 'g5', ativo: false, volumes: 1 },
+      { id: 'p6', nome: 'RACK SIRIUS 1.6', grupo_id: 'g9', ativo: true, volumes: 5 },
+    ],
+  };
+  const posto = { grupo, maquinasDoGrupo: 1, takt, cadastro };
+  it('com volumes: takt por produto, com a conta guardada para a tela', () => {
+    const r = programaDoTakt(posto, 'rack sirius 1.6');
+    expect(r.taktMs).toBe(144000);
+    expect(r.taktPorVolumeMs).toBe(72000);
+    expect(r.volumes).toBe(2);
+    expect(r.unidade.singular).toBe('produto');
+    expect(r.unidadeContada.singular).toBe('volume');
+    expect(r.semVolumes).toBeUndefined();
+  });
+  it('so os produtos do grupo do posto contam, inclusive o desativado', () => {
+    expect(programaDoTakt(posto, 'RACK ANTIGO').taktMs).toBe(72000);
+  });
+  it('sem produto ou sem volumes: semVolumes, nunca 1 volume', () => {
+    expect(programaDoTakt(posto, '').semVolumes).toBe(true);
+    expect(programaDoTakt(posto, 'RACK SEM VOLUME')).toMatchObject({ semVolumes: true, produto: 'RACK SEM VOLUME' });
+    expect(programaDoTakt(posto, 'Produto digitado').semVolumes).toBe(true);
+  });
+  it('fora da embalagem, nada muda', () => {
+    const r = programaDoTakt({ ...posto, grupo: { id: 'g2', codigo: '0002', nome: 'FURADEIRA' } }, 'X');
+    expect(r.taktMs).toBe(72000);
+    expect(r.semVolumes).toBeUndefined();
+  });
+});
+
 
 /**
  * O PRODUTO TEM DE SER DO POSTO — conferido, nao adivinhado. Nada muda
@@ -220,6 +265,12 @@ describe('takt do programa no Editar, conferido', () => {
       .toBe('Este takt (144.0 s) veio do programa do 0002 · FURADEIRA, e o posto agora é do 0005 · EMBALAGEM. '
         + 'Digite o takt ou use o programa do grupo do posto.');
     expect(conflitoDoTakt({ marca, grupo: null, taktSeg: '144.0' }).texto).toMatch(/não é desse grupo/);
+  });
+  it('embalagem: trocar o produto depois do clique (outros volumes) avisa', () => {
+    const marcaEmb = { grupoId: 'g5', grupo: '0005 · EMBALAGEM', escrito: '144.0', produto: 'RACK SIRIUS 1.6' };
+    expect(conflitoDoTakt({ marca: marcaEmb, grupo: g5, taktSeg: '144.0', produto: 'RACK SIRIUS 1.6' })).toBeNull();
+    expect(conflitoDoTakt({ marca: marcaEmb, grupo: g5, taktSeg: '144.0', produto: 'OUTRO RACK' }).texto)
+      .toMatch(/veio do programa para RACK SIRIUS 1\.6; o produto agora é outro/);
   });
   it('numero diferente do escrito (o analista digitou) ou sem marca: passa', () => {
     expect(conflitoDoTakt({ marca, grupo: g5, taktSeg: '150' })).toBeNull();

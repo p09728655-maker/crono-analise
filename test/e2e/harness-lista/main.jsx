@@ -137,7 +137,9 @@ if (comPrograma) {
 const produtosCad = comPrograma ? [
   { id: 'p1', nome: 'LATERAL SLEEP', codigo: '1001', grupo_id: 'g2', ativo: true },
   { id: 'p2', nome: 'FUNDO SLEEP', codigo: '1002', grupo_id: 'g2', ativo: true },
-  { id: 'p3', nome: 'RACK SIRIUS 1.6', codigo: '2001', grupo_id: 'g5', ativo: true },
+  // Embalagem: um rack de 2 volumes e um sem os volumes no cadastro.
+  { id: 'p3', nome: 'RACK SIRIUS 1.6', codigo: '2001', grupo_id: 'g5', ativo: true, volumes: 2 },
+  { id: 'p4', nome: 'RACK SEM VOLUME', codigo: '2002', grupo_id: 'g5', ativo: true, volumes: null },
 ] : [];
 // A SEGUNDA da semana pelo dia de SAO PAULO, como o app casa a semana
 // (calendario.js): calculada em UTC, o teste falhava no domingo a noite.
