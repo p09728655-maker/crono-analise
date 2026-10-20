@@ -28,12 +28,21 @@
  * planejado: a troca costuma vir ANTES do primeiro volume do produto novo,
  * fora do trecho, e descontar o setup da medicao inteira tirava do relogio
  * um tempo que ele nunca conteve (revisao de 19/10).
+ *
+ * A LARGADA (comLargada, so' a Embalagem Takt Time): o Comecar so' arma a
+ * medicao, e o relogio abre no primeiro toque — dado quando um volume
+ * fecha. Esse toque NAO conta volume: o volume que fechou ali foi embalado
+ * antes do relogio, e conta-lo punha N volumes em N-1 intervalos, com o
+ * volumes/hora (e o veredito do programa da semana) otimista em ~1/(N-1).
+ * Sem a largada, o relogio corria desde o Iniciar, com a espera ate' o
+ * primeiro volume dentro do periodo (pedido do PPCP, 20/10). O takt nao
+ * muda: continua do primeiro ao ultimo volume contado.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TOQUE_MINIMO_MS } from '../../../domain/estatistica.js';
 import { useCronometro, vibrar } from '../../../lib/hooks.js';
 
-export function useCronometroAoVivo({ paradas }) {
+export function useCronometroAoVivo({ paradas, comLargada = false }) {
   const [fase, setFase] = useState('pronto'); // pronto | rodando | resultado
   const [pecas, setPecas] = useState(0);
   const [duracaoFinal, setDuracaoFinal] = useState(0);
@@ -47,6 +56,11 @@ export function useCronometroAoVivo({ paradas }) {
   const [ultimoIntervaloMs, setUltimoIntervaloMs] = useState(null);
   const [relogioEntreMarcasMs, setRelogioEntreMarcasMs] = useState(null);
   const [setupEntreMarcasMs, setSetupEntreMarcasMs] = useState(null);
+  // Armado, esperando o toque da largada: a tela do cronometro ja' esta'
+  // aberta, mas o relogio ainda nao corre. Ref ao lado do estado: o toque
+  // precisa saber na hora, sem esperar render.
+  const [aguardandoLargada, setAguardandoLargada] = useState(false);
+  const largadaPendenteRef = useRef(false);
 
   const rodando = fase === 'rodando';
   const { decorrido, iniciar, parar } = useCronometro();
@@ -78,10 +92,14 @@ export function useCronometroAoVivo({ paradas }) {
     // correndo no formulario pertencia ao periodo anterior.
     paradas.limpar();
     setFase('rodando');
-    inicioRef.current = performance.now();
-    iniciar();
+    largadaPendenteRef.current = comLargada;
+    setAguardandoLargada(comLargada);
+    if (!comLargada) {
+      inicioRef.current = performance.now();
+      iniciar();
+    }
     vibrar(45);
-  }, [iniciar, paradas.limpar]);
+  }, [iniciar, paradas.limpar, comLargada]);
 
   const contarPeca = useCallback(() => {
     if (!rodando) return;
@@ -91,6 +109,18 @@ export function useCronometroAoVivo({ paradas }) {
     const agora = performance.now();
     if (agora - ultimoToqueRef.current < TOQUE_MINIMO_MS) return;
     ultimoToqueRef.current = agora;
+    if (largadaPendenteRef.current) {
+      // A largada abre o relogio e so': nem volume, nem marca. A guarda de
+      // repique acima ja' anotou este toque — o quique da luva nao vira o
+      // volume 1.
+      largadaPendenteRef.current = false;
+      setAguardandoLargada(false);
+      inicioRef.current = agora;
+      iniciar();
+      vibrar(45);
+      setPulso((p) => p + 1);
+      return;
+    }
     const toque = momentoDoToque({
       agora, inicio: inicioRef.current,
       paradaAcumulada: paradaAcumuladaRef.current, setupAcumulado: setupAcumuladoRef.current,
@@ -119,6 +149,8 @@ export function useCronometroAoVivo({ paradas }) {
 
   const iniciarParada = useCallback((motivo) => {
     setEscolhendoMotivo(false);
+    // Antes da largada nao ha' periodo: a parada nao teria onde caber.
+    if (largadaPendenteRef.current) return;
     setEmParada({ motivo, inicio: performance.now() });
     vibrar([40, 60, 40]);
   }, []);
@@ -139,6 +171,16 @@ export function useCronometroAoVivo({ paradas }) {
   }, [emParada, paradas.adicionar]);
 
   const encerrar = useCallback(() => {
+    // Encerrar antes da largada nao mediu nada: volta ao comeco, sem
+    // resultado de zero volumes em zero segundos.
+    if (largadaPendenteRef.current) {
+      largadaPendenteRef.current = false;
+      setAguardandoLargada(false);
+      paradas.limpar();
+      setFase('pronto');
+      vibrar(30);
+      return;
+    }
     // Encerrar com parada em curso fecha a parada primeiro: o tempo dela
     // ja' passou no relogio e nao pode virar tempo de maquina rodando.
     if (emParada) {
@@ -157,7 +199,7 @@ export function useCronometroAoVivo({ paradas }) {
     setSetupEntreMarcasMs(entrePrimeiraEUltima(setupNoToqueRef.current));
     setFase('resultado');
     vibrar([30, 40, 30]);
-  }, [parar, pecas, emParada, paradas.adicionar]);
+  }, [parar, pecas, emParada, paradas.adicionar, paradas.limpar]);
 
   /** Do resultado de volta ao formulario, com o periodo zerado. */
   const novaConferencia = useCallback(() => {
@@ -188,7 +230,10 @@ export function useCronometroAoVivo({ paradas }) {
   const tempoParadaAtual = emParada ? performance.now() - emParada.inicio : 0;
 
   return {
-    fase, rodando, decorrido, pecas, pulso, duracaoFinal, pecasFinais, setPecasFinais, marcasFinais,
+    // Armado, o relogio mostra zero — e nao o fim da medicao anterior, que
+    // o cronometro guarda ate' a proxima largada.
+    fase, rodando, decorrido: aguardandoLargada ? 0 : decorrido, aguardandoLargada,
+    pecas, pulso, duracaoFinal, pecasFinais, setPecasFinais, marcasFinais,
     ultimoIntervaloMs, relogioEntreMarcasMs, setupEntreMarcasMs,
     emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
     comecar, contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, novaConferencia,

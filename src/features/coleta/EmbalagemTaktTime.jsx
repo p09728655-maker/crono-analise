@@ -75,7 +75,8 @@ export default function EmbalagemTaktTime({ aoSair }) {
 
   const takt = useTaktDaSemana({ grupo, maquinasDoGrupo });
   const paradas = useParadasDoPeriodo(motivos);
-  const crono = useCronometroAoVivo({ paradas });
+  // Com largada: o INICIAR so' arma, e o relogio abre no primeiro toque.
+  const crono = useCronometroAoVivo({ paradas, comLargada: true });
   const historico = useHistoricoLocal();
 
   useEffect(() => {

@@ -19,6 +19,7 @@ export default function CronometroAoVivo({
   const {
     decorrido, pecas, pulso, emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
     contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, ultimoIntervaloMs,
+    aguardandoLargada,
   } = crono;
   /* O aviso vai no tempo por volume do PERIODO, nao no ultimo intervalo: o
      rack de dois volumes sai com os dois colados (25 s, 100 s...), e o
@@ -78,6 +79,20 @@ export default function CronometroAoVivo({
           <span style={est.contagem}>{formatarCronometro(Math.max(0, tempoParadaAtual))}</span>
           <span style={est.rotuloBotao}>▶ VOLTOU A PRODUZIR</span>
         </button>
+      ) : aguardandoLargada ? (
+        /* Armado: o relogio abre neste toque, que nao conta volume (ver
+           useCronometroAoVivo). Outra cor, para ninguem confundir de longe
+           com o alvo que ja' esta' contando. */
+        <button
+          type="button"
+          onPointerDown={contarPeca}
+          style={{ ...est.botaoGrande, ...est.botaoIniciar }}
+          aria-label="Largada: abrir o relógio"
+        >
+          <span style={est.iconeIniciar}>▶</span>
+          <span style={est.rotuloBotao}>TOQUE QUANDO FECHAR UM {unidade.singular.toUpperCase()}</span>
+          <span style={est.dicaBotao}>o relógio começa neste toque · ele não conta {unidade.singular}</span>
+        </button>
       ) : (
         <button
           type="button"
@@ -100,17 +115,20 @@ export default function CronometroAoVivo({
           <span style={est.iconeBarra}>↩</span>
           Desfazer
         </button>
+        {/* Antes da largada nao ha' periodo para a parada caber dentro. */}
         <button
           type="button"
           style={{ ...est.botaoBarra, ...est.botaoParou }}
           onClick={() => (emParada ? encerrarParada() : setEscolhendoMotivo(true))}
+          disabled={aguardandoLargada}
         >
           <span style={est.iconeBarra}>{emParada ? '▶' : '⏸'}</span>
           {emParada ? 'Voltou' : 'Parou'}
         </button>
+        {/* Sem largada nada foi medido: o botao volta ao comeco, e diz isso. */}
         <button type="button" style={{ ...est.botaoBarra, ...est.botaoEncerrar }} onClick={encerrar}>
-          <span style={est.iconeBarra}>■</span>
-          Encerrar
+          <span style={est.iconeBarra}>{aguardandoLargada ? '✕' : '■'}</span>
+          {aguardandoLargada ? 'Cancelar' : 'Encerrar'}
         </button>
       </nav>
 

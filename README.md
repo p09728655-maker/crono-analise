@@ -113,6 +113,20 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   volume**, o **tempo por volume** do período até ali (paradas dentro) e o
   **takt**. Quando o tempo por volume passa do takt, o rótulo ganha "▲ takt". Um toque por volume; o horário de cada toque é gravado
   sozinho, sem digitação.
+- **O INICIAR só arma a medição; o relógio abre na largada.** A largada é o
+  primeiro toque, dado quando um volume fecha, e **não conta volume**. Antes
+  dela o relógio fica em 00:00, *Parou* fica desabilitado (ainda não há
+  período) e *Encerrar* vira *Cancelar* (volta ao começo sem resultado). Por
+  quê:
+  - Com o relógio correndo desde o INICIAR, a espera até o primeiro volume
+    entrava no período.
+  - Contar o volume da largada punha N volumes em N − 1 intervalos: o volume
+    que fechou ali foi embalado antes do relógio. O volumes/hora, e com ele o
+    veredito do programa da semana, sairia otimista em ~1/(N − 1), uns 9%
+    numa medição de 12 volumes.
+  - O takt não muda: continua do primeiro ao último volume contado. O
+    *Cronometrar ao vivo* do Ritmo da máquina segue abrindo o relógio no
+    toque do botão.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
   medições da embalagem. Cada medição tocada abre o **volume a volume** na
   própria página, abaixo da lista (clicar de novo fecha): identificação,
