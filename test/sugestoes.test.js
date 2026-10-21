@@ -7,7 +7,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { contarPorPrioridade, sugerirMelhorias } from '../src/domain/sugestoes.js';
-import { comparativoCapacidade, dimensionarOperadores } from '../src/domain/cronoanalise.js';
+import {
+  comparativoCapacidade, dimensionarOperadores, formatarOcupacao, formatarPctAcima,
+} from '../src/domain/cronoanalise.js';
 
 const op = (nome, resultado) => ({ id: nome, nome, resultado });
 const base = { n: 10, cvPct: 5, tpPorPeca: 5000, cap: 720, tendencia: { direcao: 'estavel', pct: 0 } };
@@ -38,6 +40,26 @@ describe('sugerirMelhorias', () => {
     expect(lista[0].diagnostico).toContain('32%');   // 6600/5000 - 1
     // A de CV 90% vem depois, mas continua sendo alta.
     expect(lista[1].prioridade).toBe('alta');
+  });
+
+  it('gargalo um fio acima do takt: "0,3% acima", nunca "0% acima" — e na embalagem, por produto', () => {
+    const gargalo = op('Montar caixa', { ...base, tpPorPeca: 144400 });
+    const [s] = sugerirMelhorias({ operacoes: [gargalo], taktMs: 144000, gargalo, unidade: 'produto' });
+    expect(s.diagnostico).toBe('144.4 s por produto contra 144.0 s exigidos — 0,3% acima do ritmo da demanda.');
+    const [p] = sugerirMelhorias({ operacoes: [gargalo], taktMs: 144000, gargalo });
+    expect(p.diagnostico).toMatch(/s por peça contra/);
+  });
+
+  it('percentual acima e ocupacao: uma casa, e nunca o limite quando passou dele', () => {
+    expect(formatarPctAcima(0.26)).toBe('0,3%');
+    expect(formatarPctAcima(0.01)).toBe('0,1%');
+    expect(formatarPctAcima(32)).toBe('32%');
+    expect(formatarPctAcima(null)).toBe('—');
+    expect(formatarOcupacao(100.26)).toBe('100,3%');
+    expect(formatarOcupacao(100.01)).toBe('100,1%');
+    expect(formatarOcupacao(99.97)).toBe('99,9%');
+    expect(formatarOcupacao(100)).toBe('100%');
+    expect(formatarOcupacao(80)).toBe('80%');
   });
 
   it('gargalo dentro do Takt nao gera sugestao — e sem Takt nao ha o que comparar', () => {

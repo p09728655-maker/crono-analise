@@ -94,6 +94,29 @@ export function numeroDecimal(valor) {
   return Number.isFinite(n) ? n : 0;
 }
 
+const UMA_CASA = { maximumFractionDigits: 1, useGrouping: false };
+
+/**
+ * Quanto passou de um limite, em %, com uma casa — e NUNCA "0%" quando
+ * passou: o gargalo 0,3% acima do takt era "0% acima do Takt" ao lado de
+ * um quadro com deficit. Abaixo de 0,1, escreve 0,1.
+ */
+export function formatarPctAcima(pct) {
+  if (!Number.isFinite(pct)) return '—';
+  return `${(pct > 0 ? Math.max(0.1, pct) : pct).toLocaleString('pt-BR', UMA_CASA)}%`;
+}
+
+/**
+ * Ocupacao de uma operacao contra o takt, em %, com uma casa: acima de 100
+ * nunca escreve "100%" (o "Ocupacao 100% do Takt — gargalo" de um TP 0,3%
+ * acima), e abaixo de 100 nunca chega a ele.
+ */
+export function formatarOcupacao(pct) {
+  if (!Number.isFinite(pct)) return '—';
+  const v = pct > 100 ? Math.max(pct, 100.1) : (pct < 100 ? Math.min(pct, 99.9) : pct);
+  return `${v.toLocaleString('pt-BR', UMA_CASA)}%`;
+}
+
 /** Formata ms como segundos com casas decimais — uso exclusivo de apresentacao. */
 export function formatarSegundos(ms, casas = 1) {
   if (!Number.isFinite(ms)) return '—';

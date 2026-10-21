@@ -1021,6 +1021,61 @@ rodar('API — integracao com Postgres', () => {
     expect(depois[0].n).toBe(antes[0].n);
   });
 
+  /**
+   * A ORIGEM DO TAKT (estudos.takt_origem) diz a analise se o setup marcado
+   * na medicao sai do relogio. O que se prova no banco: grava com o takt,
+   * nao grava sem ele, anda junto com o takt no PATCH (takt trocado sem
+   * origem apaga a velha; takt igual nao mexe) e valor fora da regra e' 400
+   * sem mexer em nada.
+   */
+  it('origem do takt: grava com o takt, anda junto no PATCH, valor estranho e 400', async () => {
+    const pedir = async (opcoes) => {
+      const res = fingirRes();
+      await estudos(fingirReq(opcoes), res);
+      return res;
+    };
+    const origemNoBanco = async (id) => (await sql`SELECT takt_origem FROM estudos WHERE id = ${id}`)[0].takt_origem;
+
+    const prog = await pedir({ metodo: 'POST', corpo: { nome: 'Do programa', taktTimeMs: 144000, taktOrigem: 'programa' } });
+    expect(prog.statusCode).toBe(201);
+    expect(prog.corpo.estudo.takt_origem).toBe('programa');
+    const id = prog.corpo.estudo.id;
+    // Volta no GET do estudo (o que o painel le').
+    const lido = await pedir({ query: { id } });
+    expect(lido.corpo.estudo.takt_origem).toBe('programa');
+
+    // Sem takt, a origem nao diz nada: nao grava.
+    const semTakt = await pedir({ metodo: 'POST', corpo: { nome: 'Sem takt', taktOrigem: 'programa' } });
+    expect(semTakt.corpo.estudo.takt_origem).toBeNull();
+    // Sem origem (cliente antigo): nulo.
+    const antigo = await pedir({ metodo: 'POST', corpo: { nome: 'Antigo', taktTimeMs: 60000 } });
+    expect(antigo.corpo.estudo.takt_origem).toBeNull();
+
+    // So' o nome: nao mexe na origem.
+    await pedir({ metodo: 'PATCH', query: { id }, corpo: { nome: 'Do programa (corrigido)' } });
+    expect(await origemNoBanco(id)).toBe('programa');
+    // O mesmo takt sem origem: nao mexe.
+    await pedir({ metodo: 'PATCH', query: { id }, corpo: { taktTimeMs: 144000 } });
+    expect(await origemNoBanco(id)).toBe('programa');
+    // Takt trocado SEM origem: a velha nao vale para o numero novo.
+    const trocado = await pedir({ metodo: 'PATCH', query: { id }, corpo: { taktTimeMs: 150000 } });
+    expect(trocado.statusCode).toBe(200);
+    expect(trocado.corpo.estudo).toMatchObject({ takt_time_ms: '150000', takt_origem: null });
+    // Com a origem dita, grava.
+    const digitado = await pedir({ metodo: 'PATCH', query: { id }, corpo: { taktTimeMs: 150000, taktOrigem: 'manual' } });
+    expect(digitado.corpo.estudo.takt_origem).toBe('manual');
+
+    // Fora da regra: 400, e nada muda.
+    for (const taktOrigem of ['qualquer', 1, true]) {
+      const ruim = await pedir({ metodo: 'PATCH', query: { id }, corpo: { taktTimeMs: 99000, taktOrigem } });
+      expect(ruim.statusCode).toBe(400);
+    }
+    expect(await origemNoBanco(id)).toBe('manual');
+    expect((await sql`SELECT takt_time_ms FROM estudos WHERE id = ${id}`)[0].takt_time_ms).toBe('150000');
+    const ruimPost = await pedir({ metodo: 'POST', corpo: { nome: 'X', taktTimeMs: 1000, taktOrigem: 'erp' } });
+    expect(ruimPost.statusCode).toBe(400);
+  });
+
   it('chave de IA: salva, resume sem expor e remove', async () => {
     const chave = 'sk-ant-teste-abcdefghijklmnop1234';
 

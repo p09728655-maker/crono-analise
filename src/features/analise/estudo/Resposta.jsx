@@ -1,4 +1,4 @@
-import { formatarSegundos } from '../../../domain/cronoanalise.js';
+import { formatarPctAcima, formatarSegundos } from '../../../domain/cronoanalise.js';
 import { IconeAnalistas, IconeCapacidade } from '../../../components/icones.jsx';
 import { est } from './estilos.js';
 import { exibirPorHora, porHoraExtenso, porUnidade } from './textosMedicao.js';
@@ -47,7 +47,7 @@ export default function Resposta({ analise, unidade = 'peça' }) {
           Capacidade pelo tempo padrão
         </span>
         <div style={est.respostaNumeroLinha}>
-          <span style={est.respostaNumero}>{exibirPorHora(capacidadeExata || capacidadeLinha)}</span>
+          <span style={est.respostaNumero}>{exibirPorHora(capacidadeExata > 0 ? capacidadeExata : capacidadeLinha)}</span>
           <span style={est.respostaUnidade}>{porHoraExtenso(unidade)}</span>
         </div>
         <p style={est.respostaExplica}>
@@ -57,7 +57,7 @@ export default function Resposta({ analise, unidade = 'peça' }) {
             <> ({formatarSegundos(gargalo.resultado.tpVal)} s × {gargalo.resultado.ciclosPorPeca} ciclos)</>
           )}.
           {ocupacao !== null && ocupacao > 100 && (
-            <> Esta operação está <strong>{(ocupacao - 100).toFixed(0)}% acima do Takt</strong>.</>
+            <> Esta operação está <strong>{formatarPctAcima(ocupacao - 100)} acima do Takt</strong>.</>
           )}
         </p>
       </div>

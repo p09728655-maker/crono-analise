@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { claro, referencia, serie } from '../../../theme/tokensAnalise.js';
-import { formatarSegundos } from '../../../domain/cronoanalise.js';
+import { formatarOcupacao, formatarSegundos } from '../../../domain/cronoanalise.js';
 import { EIXO, Legenda, Texturas, VazioGrafico, escala, passoAgradavel, useLarguraContainer } from './comuns.jsx';
 import { est } from './estilos.js';
 import { capDaOperacao, porHora, porUnidade } from '../estudo/textosMedicao.js';
@@ -202,7 +202,7 @@ function Tooltip({ operacao, taktMs, unidade }) {
       <span>TP {porUnidade(unidade)} {formatarSegundos(r.tpPorPeca)}s · {capDaOperacao(r)} {porHora(unidade)} · {r.n} ciclos coletados</span>
       {ocupacao !== null && (
         <span>
-          Ocupação {ocupacao.toFixed(0)}% do Takt
+          Ocupação {formatarOcupacao(ocupacao)} do Takt
           {ocupacao > 100 ? ' — gargalo' : ''}
         </span>
       )}

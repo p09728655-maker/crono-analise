@@ -107,9 +107,10 @@ export default function RelatorioImpressao({ estudo, analise, leitura, medido })
           ['Operadores', analise.operadores !== null ? analise.operadores.toFixed(2) : '—', ''],
           ['Tempo parado', analise.paradas?.totalMs ? formatarDuracao(analise.paradas.totalMs) : '—', ''],
           ['Exigido (takt)', exibirPorHora(capacidade?.esperado ?? null), capacidade?.esperado != null ? u : ''],
-          // O valor cheio, como a tela e o Resumo: o `capacidadeLinha` ja' vem
-          // inteiro para baixo, e escreveria 31 com a tela dizendo 31,3.
-          ['Capacidade pelo tempo padrão', analise.capacidadeLinha ? exibirPorHora(analise.capacidadeExata) : '—', u],
+          // O valor cheio, como a tela e o Resumo — e a guarda tambem nele: o
+          // `capacidadeLinha` inteiro e' 0 com mais de 1 h por peca, e o papel
+          // escrevia "—" com a tela dizendo 0,9.
+          ['Capacidade pelo tempo padrão', analise.capacidadeExata > 0 ? exibirPorHora(analise.capacidadeExata) : '—', u],
           ['Medido na linha', doMedido.valor, doMedido.unidade],
           ['Atingimento', exibirPct(capacidade?.atingimentoPct ?? null), ''],
           [
@@ -327,11 +328,11 @@ export default function RelatorioImpressao({ estudo, analise, leitura, medido })
             ['Cic/pç', 'Ciclos por peça', 'quantas vezes a operação se repete em cada peça — peça com 2 furações conta 2.'],
             ['TP peça (s)', 'Tempo Padrão da peça', 'tempo normal com tolerância, vezes os ciclos por peça (TN × (1 + Tolerância) × ciclos). É o tempo que vale para o planejamento.'],
             ['CV%', 'Coeficiente de Variação', 'quanto os ciclos variaram entre si (desvio ÷ média × 100); menor = mais estável.'],
-            ['Cap/h', 'Capacidade por hora', 'peças por hora no tempo padrão (3.600 ÷ TP da peça).'],
+            ['Cap/h', 'Capacidade por hora', `${porHoraExtenso(unidade)} no tempo padrão (3.600 ÷ TP ${unidade === 'produto' ? 'do produto' : 'da peça'}).`],
             ['Parado', 'Tempo parado', 'tempo registrado com a produção parada (setup, falta de material, manutenção). Descontado do ciclo: não entra no TO.'],
             ['Σ TP', 'Soma dos tempos padrão', 'tempo padrão total do produto neste posto, somando as operações.'],
             ['Takt Time', 'Ritmo da demanda', 'tempo disponível por peça para atender a produção do dia (tempo ÷ quantidade). Operadores = Σ TP ÷ Takt.'],
-            ['Medido', 'Medido na linha', `ritmo das medições de Ritmo por máquina ou Embalagem Takt Time do mesmo posto e produto, nos últimos ${DIAS_MEDICAO} dias, no relógio (paradas dentro; com setup planejado no grupo, o setup marcado sai do relógio, porque já saiu das horas do takt); na embalagem, volumes ÷ volumes do produto. Só entra no atingimento com ${CRITERIOS_CONFERENCIA.minConferencias} medições e ${formatarDuracao(CRITERIOS_CONFERENCIA.minTempoTotalMs)} com a linha rodando, cada uma com ${formatarDuracao(CRITERIOS_CONFERENCIA.minPeriodoMs)}.`],
+            ['Medido', 'Medido na linha', `ritmo das medições de Ritmo por máquina ou Embalagem Takt Time do mesmo posto e produto, nos últimos ${DIAS_MEDICAO} dias, no relógio, paradas dentro. Com setup planejado no grupo, o setup segue a origem do takt: takt do programa da semana (já desconta o setup planejado), o setup marcado sai do relógio; takt digitado com a jornada cheia, o setup entra pela fatia do plano do grupo; na embalagem, volumes ÷ volumes do produto. Só entra no atingimento com ${CRITERIOS_CONFERENCIA.minConferencias} medições e ${formatarDuracao(CRITERIOS_CONFERENCIA.minTempoTotalMs)} com a linha rodando, cada uma com ${formatarDuracao(CRITERIOS_CONFERENCIA.minPeriodoMs)}.`],
             ['Tendência', 'Reta sobre os ciclos', 'reta ajustada aos ciclos na ordem da coleta; a % compara o fim da reta com o início (último ÷ primeiro ciclo ajustado). Só conta como tendência com 5% ou mais do ciclo médio e inclinação que se distingue do acaso a 95% para o número de ciclos — abaixo disso é dispersão (CV%) ou amostra curta.'],
           ].map(([sigla, nome, texto]) => (
             <div key={sigla} style={est.itemLegenda}>

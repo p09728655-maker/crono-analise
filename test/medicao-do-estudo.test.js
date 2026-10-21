@@ -186,65 +186,116 @@ describe('medicaoDoEstudo — sem o que medir', () => {
   });
 });
 
-describe('medicaoDoEstudo — o setup entra UMA vez so', () => {
-  /* O exemplo da revisao de 20/10: tres medicoes de 60 min, cada uma com
-     10 min de setup marcado e 100 pecas. O estudo nao sabe se o takt dele
-     ja' descontou o setup planejado (o do programa sim, o digitado com a
-     jornada cheia nao): o setup FICA no relogio — 300 em 180 min = 100/h,
-     erro pessimista, nunca um "atende" falso. Com setup planejado no
-     grupo, o numero sem o setup marcado (300 em 150 min = 120/h) vai ao
-     lado, para quem sabe que o takt veio do programa. */
+describe('medicaoDoEstudo — o setup entra UMA vez so, pela origem do takt', () => {
+  /* Tres medicoes de 60 min, cada uma com 10 min de setup marcado e 100
+     pecas: 300 em 180 min de relogio (100/h), 300 em 150 min sem o setup
+     marcado (120/h). O grupo planeja 2 trocas de 20 min por dia, 5 dias
+     (3,33 h na semana); com 44 h de jornada, a fatia do setup e' 7,58%. */
   const comSetup = [0, 1, 2].map((i) => med({
     id: `s${i}`, duracao_ms: 60 * MIN, pecas: 100, iniciado_em: `2026-10-1${i}T10:00:00Z`,
     paradas: [{ motivo: 'setup', duracaoMs: 10 * MIN }],
   }));
-  const planejado = { setupsDia: 2, dias: 5, minutos: 20 };
+  const planejado = { setupsDia: 2, dias: 5, minutos: 20, horasSemana: 44 };
+  const fatia = (2 * 5 * 20) / 60 / 44;
 
-  it('setup planejado > 0: o setup fica no relogio (100/h) e o numero sem ele vai ao lado (120/h)', () => {
-    const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup: planejado });
+  it('takt do programa: o setup marcado sai do relogio (o programa ja descontou o planejado)', () => {
+    const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup: planejado, taktOrigem: 'programa' });
+    expect(m.regraSetup).toBe('sem-setup');
+    expect(m.ritmo).toBeCloseTo(120, 6);
+    // As reguas cruas continuam la', para a tela mostrar a conta.
     expect(m.ritmoRelogio).toBeCloseTo(100, 6);
     expect(m.ritmoSemSetup).toBeCloseTo(120, 6);
-    expect(m.setupPlanejado).toBe(true);
     expect(m.setupMedidoMs).toBe(30 * MIN);
     expect(m.relogioMs).toBe(180 * MIN);
-    // O rodando nao muda: ja' era sem nenhuma parada.
     expect(m.ritmoRodando).toBeCloseTo(120, 6);
     expect(m.usavel).toBe(true);
   });
 
-  it('sem setup planejado (nao informado ou zero): o setup fica no relogio, sem numero ao lado', () => {
-    for (const setup of [null, undefined, {}, { setupsDia: 0 }, { minutos: 0 }, { setupsDia: 2, dias: 5 }]) {
-      const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup });
-      expect(m.ritmoRelogio).toBeCloseTo(100, 6);
-      expect(m.ritmoSemSetup).toBeNull();
-      expect(m.relogioMs).toBe(180 * MIN);
+  it('takt do programa nao precisa das horas da semana: so tira o marcado', () => {
+    const { horasSemana, ...semHoras } = planejado;
+    expect(horasSemana).toBe(44);
+    const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup: semHoras, taktOrigem: 'programa' });
+    expect(m.regraSetup).toBe('sem-setup');
+    expect(m.ritmo).toBeCloseTo(120, 6);
+  });
+
+  it('takt digitado: rodando sem o setup marcado, menos a fatia do setup planejado', () => {
+    const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup: planejado, taktOrigem: 'manual' });
+    expect(m.regraSetup).toBe('fatia');
+    expect(m.fatiaSetup).toBeCloseTo(fatia, 9);
+    // 120 x (1 - 7,58%) = 110,9/h: o setup pesa o que o plano diz, nao os
+    // 17% que a amostra pegou (10 min em cada hora medida).
+    expect(m.ritmo).toBeCloseTo(120 * (1 - fatia), 6);
+    expect(m.ritmo).toBeLessThan(120);
+    expect(m.ritmo).toBeGreaterThan(100);
+  });
+
+  it('sem origem (estudo antigo, ou valor estranho): tratado como digitado', () => {
+    for (const taktOrigem of [null, undefined, '', 'outra']) {
+      const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup: planejado, taktOrigem });
+      expect(m.taktOrigem).toBeNull();
+      expect(m.regraSetup).toBe('fatia');
+      expect(m.ritmo).toBeCloseTo(120 * (1 - fatia), 6);
     }
   });
 
-  it('o numero sem setup tira so o setup: as outras paradas continuam no relogio', () => {
+  it('digitado sem as horas da semana do grupo: sem fatia, o setup marcado fica no relogio', () => {
+    for (const horasSemana of [undefined, null, '', 0, 3]) {
+      const m = medicaoDoEstudo({
+        ...base, conferencias: comSetup, setup: { ...planejado, horasSemana }, taktOrigem: 'manual',
+      });
+      expect(m.regraSetup).toBe('relogio');
+      expect(m.fatiaSetup).toBeNull();
+      expect(m.ritmo).toBeCloseTo(100, 6);
+    }
+  });
+
+  it('digitado sem setup marcado nas medicoes: o plano entra do mesmo jeito', () => {
+    const semMarca = comSetup.map((c) => ({ ...c, paradas: [] }));
+    const m = medicaoDoEstudo({ ...base, conferencias: semMarca, setup: planejado, taktOrigem: 'manual' });
+    expect(m.setupMedidoMs).toBe(0);
+    expect(m.ritmo).toBeCloseTo(100 * (1 - fatia), 6);
+  });
+
+  it('sem setup planejado (nao informado ou zero): o setup e uma parada como as outras, fica no relogio', () => {
+    for (const setup of [null, undefined, {}, { setupsDia: 0 }, { minutos: 0 }, { setupsDia: 2, dias: 5 }]) {
+      for (const taktOrigem of ['programa', 'manual', null]) {
+        const m = medicaoDoEstudo({ ...base, conferencias: comSetup, setup, taktOrigem });
+        expect(m.regraSetup).toBe('relogio');
+        expect(m.ritmo).toBeCloseTo(100, 6);
+        expect(m.ritmoRelogio).toBeCloseTo(100, 6);
+        expect(m.relogioMs).toBe(180 * MIN);
+      }
+    }
+  });
+
+  it('so o setup MARCADO sai: as outras paradas continuam no relogio', () => {
     const misto = comSetup.map((c) => ({
       ...c, paradas: [...c.paradas, { motivo: 'falta_material', duracaoMs: 5 * MIN }],
     }));
-    const m = medicaoDoEstudo({ ...base, conferencias: misto, setup: planejado });
-    // Relogio inteiro: 300 em 180 min = 100/h. Sem o setup: 300 em 150 min
-    // = 120/h — os 15 min de falta de material ficam.
+    const m = medicaoDoEstudo({ ...base, conferencias: misto, setup: planejado, taktOrigem: 'programa' });
+    // Sem o setup: 300 em 150 min = 120/h — os 15 min de falta de material ficam.
+    expect(m.ritmo).toBeCloseTo(120, 6);
     expect(m.ritmoRelogio).toBeCloseTo(100, 6);
-    expect(m.ritmoSemSetup).toBeCloseTo(120, 6);
     // Rodando: 300 em (180 - 45) min.
     expect(m.ritmoRodando).toBeCloseTo((300 * 60) / 135, 6);
   });
 
-  it('na embalagem, converte para produto — com e sem o setup marcado', () => {
+  it('na embalagem, converte para produto pela mesma regra', () => {
     const vol = comSetup.map((c) => ({ ...c, maquina: 'EMBALAGEM 01', peca: 'Rack', pecas: 40 }));
-    const m = medicaoDoEstudo({
+    const comum = {
       conferencias: vol, recurso: 'EMBALAGEM 01', produto: 'Rack', unidade: VOLUME, volumes: 2,
       setup: planejado, agora: AGORA,
-    });
+    };
     // 120 volumes em 180 min = 40 vol/h = 20 produtos/h; sem o setup
     // marcado, 120 em 150 min = 48 vol/h = 24 produtos/h.
-    expect(m.ritmoRelogioContado).toBeCloseTo(40, 6);
-    expect(m.ritmoRelogio).toBeCloseTo(20, 6);
-    expect(m.ritmoSemSetup).toBeCloseTo(24, 6);
+    const prog = medicaoDoEstudo({ ...comum, taktOrigem: 'programa' });
+    expect(prog.ritmoContado).toBeCloseTo(48, 6);
+    expect(prog.ritmo).toBeCloseTo(24, 6);
+    expect(prog.ritmoRelogioContado).toBeCloseTo(40, 6);
+    expect(prog.ritmoRelogio).toBeCloseTo(20, 6);
+    const dig = medicaoDoEstudo({ ...comum, taktOrigem: 'manual' });
+    expect(dig.ritmo).toBeCloseTo(24 * (1 - fatia), 6);
   });
 });
 

@@ -176,6 +176,7 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
   await dlg.getByRole('button', { name: /Salvar/ }).click();
   await q.waitForTimeout(600);
   checar(patches2[0]?.taktTimeMs === 144000, `ajustes: PATCH leva o takt do programa (${patches2[0]?.taktTimeMs})`);
+  checar(patches2[0]?.taktOrigem === 'programa', `ajustes: e a origem 'programa' (${patches2[0]?.taktOrigem})`);
   checar(patches2[0]?.produto === 'LATERAL SLEEP', `ajustes: PATCH leva o produto do cadastro (${patches2[0]?.produto})`);
   const abrirEditar = async () => {
     await q.goto(`${BASE}/analise/estudo/${ID2}?editar=1`);
@@ -250,8 +251,8 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
   // O produto da furadeira no SERRA 02 tambem conflita: escolhe outro.
   await dlg.locator('input[aria-label="Produto / Referência"]').fill('Produto da serra');
   patch = await salvar();
-  checar(patch?.recurso === 'SERRA 02' && patch?.taktTimeMs === 150000,
-    `ajustes: com o takt digitado, grava (${patch?.taktTimeMs})`);
+  checar(patch?.recurso === 'SERRA 02' && patch?.taktTimeMs === 150000 && patch?.taktOrigem === 'manual',
+    `ajustes: com o takt digitado, grava como manual (${patch?.taktTimeMs}, ${patch?.taktOrigem})`);
 
   /* "Outro produto…" escolhido num posto nao vale para o grupo seguinte. */
   await abrirEditar();

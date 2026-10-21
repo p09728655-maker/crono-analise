@@ -465,8 +465,12 @@ e o mesmo posto podia sair com um takt no estudo e outro no quadro do programa.
 - No **Editar estudo**, o programa nunca entra sozinho — o estudo já tem um
   takt, e trocá-lo sem pedir mudaria o Yamazumi de quem só veio corrigir um
   nome. Um botão escreve o takt do programa no campo, em segundos.
-- O estudo grava o **número** do takt, como antes. Se o programa mudar na
-  semana seguinte, o estudo não muda junto; o Editar estudo oferece o novo.
+- O estudo grava o **número** do takt, como antes, e a **origem** dele
+  (`takt_origem`: `programa` ou `manual`). Se o programa mudar na semana
+  seguinte, o estudo não muda junto; o Editar estudo oferece o novo. A origem
+  anda com o takt: o botão do programa grava `programa`, o número digitado ou
+  calculado grava `manual`, e o takt que não mudou mantém a que tinha. Ela diz
+  à análise como tratar o setup marcado nas medições da linha.
 - A **importação** (PDF do ERP) segue com a conta digitada: ela cria estudos
   de vários postos de uma vez, e cada grupo teria um takt diferente.
 
@@ -585,14 +589,23 @@ abas respondem **e agora**:
     Yamazumi, paradas) é escrita do mesmo jeito, do valor cheio.
   - "Do tempo padrão X%": quanto da capacidade teórica a linha entrega — a
     perda entre o estudo e o chão (paradas, ritmo, espera).
-  - **O setup marcado fica no relógio**, e com setup planejado no grupo o
-    número sem ele vai ao lado. O estudo grava só o número do takt, não a
-    origem: o do programa já descontou o setup planejado, o digitado com a
-    jornada cheia não — tirar o setup sem saber faria a linha "atender" sem
-    atender. Erro pessimista de propósito, e não simétrico: no caso comum
-    (takt do programa, grupo com setup planejado) o setup conta duas vezes,
-    e o número que vale é o sem setup, ao lado. Gravar a origem do takt
-    resolve.
+  - **O setup entra uma vez só, pela origem do takt** (`estudos.takt_origem`,
+    gravada pelo Novo estudo, pelo Editar e pela importação). Com setup
+    planejado no grupo:
+    - **takt do programa da semana** (já desconta o setup planejado das
+      horas): o setup **marcado** sai do relógio do medido — deixá-lo contaria
+      a troca duas vezes;
+    - **takt digitado** (jornada cheia) **ou sem origem** (estudo anterior à
+      2.94.0): o ritmo é o da linha sem o setup marcado, vezes (1 − a fatia do
+      setup planejado na jornada) — o setup pesa o que o plano diz (2 × 10 min
+      em 8,8 h = 3,8%), não o que a amostra pegou (10 min numa medição de 1 h
+      pesariam 17%);
+    - sem as horas da semana do grupo não há fatia: o setup marcado fica no
+      relógio, e o cartão diz o que falta.
+    O cartão diz qual regra valeu e mostra a conta com tudo dentro do relógio
+    ao lado. Sem setup planejado, o setup é uma parada como as outras. Só o
+    tempo **marcado** como setup sai; falta de material e manutenção são
+    perda do chão.
   - Na **embalagem** o tablet conta volume e o estudo mede o produto: o medido
     é dividido pelos **volumes do produto** do cadastro; sem os volumes, fica
     em volumes/h, fora do atingimento, e o cartão pede o cadastro.
@@ -997,6 +1010,20 @@ embalagem sem volumes aparece com o destaque "volumes não informados".
   volumes vem primeiro (sem a coluna, falha antes de gravar nome e código).
 - O PDF do ERP traz o volume como componente "VOL 1/N" (família 501.xxx); a
   importação ainda não o lê.
+
+**Origem do takt** (coluna `estudos.takt_origem`, `programa` ou `manual`, nula
+nos estudos de antes dela): de onde veio o takt gravado — o programa da semana,
+que já desconta o setup planejado, ou a conta digitada com a jornada cheia. É
+o que a análise usa para contar o setup marcado nas medições **uma vez só**
+(ver *Capacidade — exigido × tempo padrão × medido*). Nula é tratada como
+digitada.
+
+- A API descobre se a coluna existe (`information_schema`, guardado só o
+  "sim") e só a grava quando ela existe: o preview usa o banco da produção sem
+  migrar, e um INSERT com a coluna derrubaria o Criar estudo do preview.
+- PATCH: quem manda `taktOrigem` diz a origem; quem troca o takt **sem** dizer
+  a origem (cliente antigo) apaga a que estava; o mesmo takt sem origem não
+  mexe.
 
 ## Relatório impresso
 

@@ -82,13 +82,16 @@ export function useMedicaoDoEstudo(estudo) {
   // O grupo do posto, do cadastro que houver (cache ou servidor).
   const grupoId = grupoIdDaMaquina(cadastro, recurso);
   const grupo = (cadastro?.grupos || []).find((g) => g && g.id === grupoId) || null;
-  const unidadeEstudo = unidadeDoEstudo(grupo?.nome);
+  // Sem grupo (posto fora do cadastro), o nome do proprio posto: o estudo
+  // com "EMBALAGEM" no posto continua medindo o produto.
+  const unidadeEstudo = unidadeDoEstudo(grupo?.nome || recurso);
 
   const leitura = useMemo(() => {
     if (carga.estado !== 'pronto') return { medicao: null, postoNoCadastro: null };
-    // Posto fora do cadastro (ou sem grupo) conta PECA: o tablet so' conta
-    // volume na Embalagem Takt Time, que exige a maquina num grupo embalagem.
-    const unidade = unidadeDoPosto(grupo?.nome);
+    // O que o tablet contou ali: pelo grupo e, sem grupo, pelo nome do posto
+    // (a mesma reserva da unidade do estudo e de ondeMedir). Volume sem os
+    // volumes do produto nao vira produto: o cartao pede o cadastro.
+    const unidade = unidadeDoPosto(grupo?.nome || recurso);
     return {
       medicao: medicaoDoEstudo({
         conferencias: carga.conferencias,
@@ -99,19 +102,23 @@ export function useMedicaoDoEstudo(estudo) {
         // Com os desativados: o rack desativado continua tendo dois
         // volumes, e o estudo de antes continua sendo dele.
         volumes: volumesDoProduto(produtosDoGrupo(cadastro, grupoId, { comInativos: true }), produto),
-        // O setup planejado do grupo: com ele, o numero sem o setup marcado
-        // vai ao lado do medido (o setup fica no relogio — ver
-        // medicaoDoEstudo). Mesmos campos do Ritmo/Demanda.
+        // O setup planejado do grupo e a jornada dele (a fatia do setup), e
+        // a origem do takt do estudo: juntos dizem se o setup marcado sai
+        // do relogio (ver medicaoDoEstudo). Mesmos campos do Ritmo/Demanda.
         setup: grupo
-          ? { setupsDia: grupo.setups_dia, dias: grupo.dias_semana, minutos: grupo.setup_min }
+          ? {
+            setupsDia: grupo.setups_dia, dias: grupo.dias_semana, minutos: grupo.setup_min,
+            horasSemana: grupo.horas_semana,
+          }
           : null,
+        taktOrigem: estudo?.takt_origem ?? null,
         agora: Date.now(),
       }),
       // Estudo com o nome do GRUPO no posto ("EMBALAGEM") nunca casa: a
       // medicao grava a MAQUINA ("EMBALAGEM 01"). A tela precisa dizer isso.
       postoNoCadastro: (cadastro?.maquinas || []).some((m) => m && nomeChave(m.nome) === nomeChave(recurso)),
     };
-  }, [carga, cadastro, grupo, grupoId, recurso, produto]);
+  }, [carga, cadastro, grupo, grupoId, recurso, produto, estudo?.takt_origem]);
 
   return {
     estado: carga.estado, erro: carga.erro || null, ...leitura, unidadeEstudo, recarregar,

@@ -71,6 +71,15 @@ export function comparativoCapacidade({ taktMs, capacidadeLinha, medido } = {}) 
   }
 
   const esperado = MS_POR_HORA / takt;
+  /* Sem ciclos (capacidade 0) e sem medido nao ha' com o que comparar: o
+     estudo recem-criado, com o takt do programa ja' gravado, dizia
+     "Atingimento 0% · Deficit -25 · nao atende" para uma linha que ninguem
+     mediu. Exigido sim; veredito, nao. */
+  if (base === 'capacidade' && !(real > 0)) {
+    return {
+      esperado, real, medido: medidoH, base, atingimentoPct: null, diferenca: null, atende: null, pctDaCapacidade,
+    };
+  }
   return {
     esperado,
     real,

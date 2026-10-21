@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
 import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import RitmoDemanda, {
-  CALC_PADRAO, PRODUTO, avisoSemPrograma, origemDoTakt, taktMsDoEstudo,
+  CALC_PADRAO, PRODUTO, avisoSemPrograma, origemDoTakt, origemDoTaktGravado, taktMsDoEstudo,
 } from '../../../components/RitmoDemanda.jsx';
 import { conflitoDoProduto, programaDoTakt, useProgramaDoPosto } from '../../../lib/taktDaSemana.js';
 import { unidadeDoPosto } from '../../../domain/cronoanalise.js';
@@ -84,7 +84,13 @@ export default function FormularioEstudo({
     if (conflito) { setErro(conflito.texto); irParaEtapa(1); return; }
     setSalvando(true);
     setErro(null);
-    try { await aoSalvar({ ...dados, taktTimeMs: taktMsDoEstudo({ origem, programa, calc }) }); }
+    try {
+      await aoSalvar({
+        ...dados,
+        taktTimeMs: taktMsDoEstudo({ origem, programa, calc }),
+        taktOrigem: origemDoTaktGravado({ origem, programa, calc }),
+      });
+    }
     catch (e) { setErro(e.message); setSalvando(false); }
   }
 

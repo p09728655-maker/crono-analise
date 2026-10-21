@@ -530,23 +530,52 @@ const cartao = async (p, rotulo) => p.locator('[aria-label="Capacidade: exigido,
 }
 
 {
-  /* O SETUP: o grupo tem setup planejado (5 x 5 x 12 min). O estudo nao
-     guarda de onde veio o takt — do programa (que ja' desconta o setup) ou
-     digitado —, entao o setup marcado FICA no relogio (180 pecas por hora,
-     o erro pessimista) e o numero sem ele (180 em 55 min = 196/h) vai ao
-     lado, dizendo quando vale. Tirar sempre contava zero vez com o takt
-     digitado. */
+  /* O SETUP SEGUE A ORIGEM DO TAKT. O grupo planeja 5 x 5 x 12 min = 5 h
+     em 44 h (11,4% da jornada); a segunda medicao marcou 5 min de setup.
+     Takt do programa (ja' sem o setup planejado): o marcado sai do relogio,
+     180 pecas em 55 min = 196/h. Deixa-lo contaria a troca duas vezes. */
   const { ctx, p, erros } = await abrirCenario('furadeira-setup');
   const medido = await cartao(p, 'Medido na linha');
-  checar(/^Medido na linha\s*180\s*pç\/h/i.test(medido)
-    && /com o setup marcado \(5 min\) dentro do relógio; sem ele, 196 pç\/h/.test(medido)
-    && /veio do programa da semana/.test(medido),
-    `setup planejado: o setup fica no relogio e o numero sem ele vai ao lado (${medido.replace(/\s+/g, ' ')})`);
-  checar(/60%/.test(await cartao(p, 'Atingimento')), 'atingimento com o setup no relogio: 180 / 300 = 60%');
+  checar(/^Medido na linha\s*196\s*pç\/h/i.test(medido)
+    && /no relógio, paradas dentro, menos o setup marcado/.test(medido)
+    && /setup marcado \(5 min\) fora do relógio: o takt veio do programa da semana, que já desconta o setup planejado; com tudo dentro do relógio, 180 pç\/h/.test(medido),
+    `takt do programa: o setup marcado sai do relogio, e a conta com ele dentro vai ao lado (${medido.replace(/\s+/g, ' ')})`);
+  checar(/65,5%/.test(await cartao(p, 'Atingimento')), 'atingimento sem o setup marcado: 196,4 / 300 = 65,5%');
   await p.emulateMedia({ media: 'print' });
-  checar(/com o setup marcado \(5 min\) dentro do relógio; sem ele, 196/.test(await p.locator('.somente-impressao').innerText()),
-    'a folha tambem diz que o setup ficou no relogio, e o numero sem ele');
-  checar(erros.length === 0, `setup planejado: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  const folha = await p.locator('.somente-impressao').innerText();
+  checar(/setup marcado \(5 min\) fora do relógio: o takt veio do programa da semana/.test(folha),
+    'a folha diz o mesmo que o cartao');
+  /* A legenda da folha nao pode contradizer o cartao (a revisao achou "o
+     setup marcado sai do relogio" fixo na legenda, com o cartao dizendo
+     que ele ficava dentro). */
+  checar(/o setup segue a origem do takt/.test(folha) && !/porque já saiu das horas do takt/.test(folha),
+    'a legenda explica a regra pela origem do takt, sem o texto fixo antigo');
+  checar(erros.length === 0, `setup do programa: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  /* Takt DIGITADO com a jornada cheia: rodando sem o setup marcado (196/h)
+     menos a fatia do plano do grupo (11,4%) = 174/h — o setup pesa o que o
+     plano diz, nao os 5 min que a amostra pegou. */
+  const { ctx, p, erros } = await abrirCenario('furadeira-setup-digitado');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/^Medido na linha\s*174\s*pç\/h/i.test(medido)
+    && /o takt foi digitado com a jornada cheia: o setup entra como o plano do grupo \(11,4% da jornada\), não pelo marcado nas medições \(5 min\); com tudo dentro do relógio, 180 pç\/h/.test(medido),
+    `takt digitado: o setup entra pela fatia do plano (${medido.replace(/\s+/g, ' ')})`);
+  checar(/58%/.test(await cartao(p, 'Atingimento')), 'atingimento: 174 / 300 = 58%');
+  checar(erros.length === 0, `setup digitado: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
+  await ctx.close();
+}
+
+{
+  // Estudo de antes da coluna: tratado como digitado, e o cartao diz por que.
+  const { ctx, p, erros } = await abrirCenario('furadeira-setup-antigo');
+  const medido = await cartao(p, 'Medido na linha');
+  checar(/^Medido na linha\s*174\s*pç\/h/i.test(medido)
+    && /a origem do takt não foi registrada \(estudo anterior à 2\.94\.0\) e ele é tratado como digitado/.test(medido),
+    `estudo sem origem: tratado como digitado, e dito (${medido.replace(/\s+/g, ' ')})`);
+  checar(erros.length === 0, `setup sem origem: sem erros de pagina${erros.length ? `: ${erros.join(' ; ')}` : ''}`);
   await ctx.close();
 }
 

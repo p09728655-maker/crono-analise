@@ -120,6 +120,8 @@ const b = await chromium.launch({ executablePath: EXEC });
   checar(post.corpo.nome === 'Furação lateral — Linha 2', 'POST: nome do estudo');
   checar(post.corpo.setor === 'Usinagem', `POST: setor cadastrado (${post.corpo.setor})`);
   checar(post.corpo.taktTimeMs === 42000, `POST: taktTimeMs calculado = ${post.corpo.taktTimeMs}`);
+  // A origem anda com o takt: e' ela que diz a analise o que fazer com o setup.
+  checar(post.corpo.taktOrigem === 'manual', `POST: a conta digitada vai como origem manual (${post.corpo.taktOrigem})`);
   checar(await p.evaluate(() => window.__aberto) === null,
     'PC: criar NAO cai na analise vazia — fica na lista');
   await ctx.close();
@@ -233,6 +235,7 @@ const b = await chromium.launch({ executablePath: EXEC });
   await p.waitForFunction(() => window.__posts.length > 0, { timeout: 4000 });
   const post = await p.evaluate(() => window.__posts[0]);
   checar(post.corpo.taktTimeMs === 144000, `programa: POST leva o takt do programa (${post.corpo.taktTimeMs})`);
+  checar(post.corpo.taktOrigem === 'programa', `programa: e a origem 'programa' (${post.corpo.taktOrigem})`);
   checar(post.corpo.produto === 'LATERAL SLEEP', `programa: POST leva o produto do cadastro (${post.corpo.produto})`);
   checar(post.corpo.recurso === 'FURADEIRA 04', 'programa: POST leva o posto');
 
@@ -325,6 +328,7 @@ const b = await chromium.launch({ executablePath: EXEC });
   'troca: o clique da furadeira nao vale na embalagem, e sem produto nao ha takt por volume oferecido');
   let corpo = await criar();
   checar(corpo.taktTimeMs === null, `troca: sem produto, nada de takt por volume (${corpo.taktTimeMs})`);
+  checar(corpo.taktOrigem === null, `troca: sem takt, sem origem (${corpo.taktOrigem})`);
 
   /* 2. Na embalagem, com o produto de 2 volumes no cadastro, o takt entra
      sozinho POR PRODUTO: 72 s por volume x 2 = 144 s (02:24). */
@@ -339,6 +343,7 @@ const b = await chromium.launch({ executablePath: EXEC });
   'embalagem: com os volumes do produto, o takt entra por produto e a conta aparece');
   corpo = await criar();
   checar(corpo.taktTimeMs === 144000, `embalagem: POST com o takt por produto (${corpo.taktTimeMs})`);
+  checar(corpo.taktOrigem === 'programa', `embalagem: o takt por produto e' do programa (${corpo.taktOrigem})`);
 
   /* 2b. Produto da embalagem SEM volumes no cadastro: nao vira 1 — a tela
      pede os volumes, e nada de takt do programa. */
@@ -401,6 +406,7 @@ const b = await chromium.launch({ executablePath: EXEC });
   await qtd.fill('480');
   corpo = await criar();
   checar(corpo.taktTimeMs === 66000, `corrigir: grava a conta do analista, 480 em 8,8 h = 66 s (${corpo.taktTimeMs})`);
+  checar(corpo.taktOrigem === 'manual', `corrigir: e a origem manual (${corpo.taktOrigem})`);
 
   /* 6. No instante da troca, o programa da furadeira nao vale para a fresadora. */
   await abrir();

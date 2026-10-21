@@ -41,6 +41,36 @@ async function colunaAnalistaTexto(db) {
 }
 
 /**
+ * A coluna `takt_origem` existe? Descoberta por instancia, como a do
+ * analista: o preview deste codigo roda contra o banco de PRODUCAO sem
+ * migrar, e gravar uma coluna que ainda nao existe derrubaria o Criar
+ * estudo inteiro (42703). Sem ela, o estudo grava o takt como sempre e a
+ * analise trata a origem como desconhecida. So' o "sim" fica guardado: o
+ * "nao" volta a perguntar, para a instancia que sobreviver a migracao
+ * passar a gravar sem esperar o proximo deploy.
+ */
+let temOrigemDoTakt = false;
+async function colunaOrigemDoTakt(db) {
+  if (!temOrigemDoTakt) {
+    const [c] = await db`
+      SELECT 1 AS ok FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'estudos' AND column_name = 'takt_origem'`;
+    temOrigemDoTakt = Boolean(c);
+  }
+  return temOrigemDoTakt;
+}
+
+const ORIGENS_DO_TAKT = ['programa', 'manual'];
+/** 'programa' | 'manual' | null — o mesmo CHECK do schema. */
+function origemDoTakt(valor) {
+  if (valor === null || valor === undefined || valor === '') return null;
+  if (!ORIGENS_DO_TAKT.includes(valor)) {
+    throw erroValidacao(`Campo "taktOrigem" deve ser um de: ${ORIGENS_DO_TAKT.join(', ')}, ou vazio`);
+  }
+  return valor;
+}
+
+/**
  * O nome do analista que a tela e o relatorio mostram: o do cadastro quando
  * o estudo esta' ligado, o texto digitado quando e' estudo antigo.
  */
@@ -122,7 +152,10 @@ export default handler(async (req, res) => {
       toleranciaPct: decimal(c.toleranciaPct, 'toleranciaPct', { min: 0, max: 100, padrao: 15 }),
       metaObs: inteiro(c.metaObs, 'metaObs', { min: 0, max: 10000, padrao: 10 }),
       taktTimeMs: inteiro(c.taktTimeMs, 'taktTimeMs', { min: 1, max: 86400000, padrao: null }),
+      taktOrigem: origemDoTakt(c.taktOrigem),
     };
+    // Origem sem takt nao diz nada: nao grava.
+    if (valores.taktTimeMs == null) valores.taktOrigem = null;
 
     // Autoria e' de PESSOA: estudo criado no tablet pareado fica sem
     // criado_por — o aparelho nao e' quem decidiu criar o estudo.
@@ -132,7 +165,7 @@ export default handler(async (req, res) => {
     // metade deixaria um estudo capenga que o usuario teria de apagar a mao.
     const resultado = await auth.rls(async (db) => {
       const coluna = await colunaAnalistaTexto(db);
-      const [estudo] = await db`
+      let [estudo] = await db`
         INSERT INTO estudos (empresa_id, nome, produto, ${db(coluna)}, analista_id, criado_por,
                              setor, recurso, data_estudo, tolerancia_pct, meta_obs, takt_time_ms)
         VALUES (${empresaId}, ${valores.nome}, ${valores.produto}, ${valores.analista},
@@ -140,6 +173,10 @@ export default handler(async (req, res) => {
                 ${valores.setor}, ${valores.recurso}, ${valores.dataEstudo},
                 ${valores.toleranciaPct}, ${valores.metaObs}, ${valores.taktTimeMs})
         RETURNING *`;
+      if (valores.taktOrigem && await colunaOrigemDoTakt(db)) {
+        [estudo] = await db`
+          UPDATE estudos SET takt_origem = ${valores.taktOrigem} WHERE id = ${estudo.id} RETURNING *`;
+      }
 
       const criadas = [];
       for (const op of operacoes) {
@@ -163,6 +200,25 @@ export default handler(async (req, res) => {
     return auth.rls(async (db) => {
       await garantirEstudo(db, estudoId, empresaId);
       const coluna = await colunaAnalistaTexto(db);
+      /* A ORIGEM ANDA COM O TAKT. Quem manda `taktOrigem` diz a origem do
+         takt que esta' mandando (ou do que ja' esta' gravado). Quem troca o
+         takt SEM dizer a origem (cliente antigo) apaga a que estava: a
+         origem velha nao vale para o numero novo. Takt igual ao gravado,
+         sem origem, nao mexe. Roda ANTES do UPDATE de baixo, para comparar
+         com o takt ainda gravado. */
+      const novoTakt = inteiro(c.taktTimeMs, 'taktTimeMs', { min: 1, max: 86400000 });
+      const disseOrigem = Object.prototype.hasOwnProperty.call(c, 'taktOrigem');
+      const origem = disseOrigem ? origemDoTakt(c.taktOrigem) : null;
+      if ((disseOrigem || novoTakt != null) && await colunaOrigemDoTakt(db)) {
+        if (disseOrigem) {
+          await db`UPDATE estudos SET takt_origem = ${origem}
+                    WHERE id = ${estudoId} AND empresa_id = ${empresaId}`;
+        } else {
+          await db`UPDATE estudos SET takt_origem = NULL
+                    WHERE id = ${estudoId} AND empresa_id = ${empresaId}
+                      AND takt_time_ms IS DISTINCT FROM ${novoTakt}`;
+        }
+      }
       const [estudo] = await db`
         UPDATE estudos SET
           nome           = COALESCE(${texto(c.nome, 'nome', { max: 200 })}, nome),
@@ -173,7 +229,7 @@ export default handler(async (req, res) => {
           recurso        = COALESCE(${texto(c.recurso, 'recurso', { max: 120 })}, recurso),
           tolerancia_pct = COALESCE(${decimal(c.toleranciaPct, 'toleranciaPct', { min: 0, max: 100 })}, tolerancia_pct),
           meta_obs       = COALESCE(${inteiro(c.metaObs, 'metaObs', { min: 0, max: 10000 })}, meta_obs),
-          takt_time_ms   = COALESCE(${inteiro(c.taktTimeMs, 'taktTimeMs', { min: 1, max: 86400000 })}, takt_time_ms),
+          takt_time_ms   = COALESCE(${novoTakt}, takt_time_ms),
           status         = COALESCE(${statusEstudo(c.status)}, status)
         WHERE id = ${estudoId} AND empresa_id = ${empresaId}
         RETURNING *`;

@@ -1,6 +1,6 @@
 import { formatarDuracao } from '../../../domain/cronoanalise.js';
 import { est } from './estilos.js';
-import { exibirPorHora, porHora, porMinuto } from './textosMedicao.js';
+import { exibirPorHora, porHora, porMinuto, taxaEscrita } from './textosMedicao.js';
 
 /**
  * PARADAS DO ESTUDO — a perda que a coleta ja' media e ninguem via.
@@ -65,15 +65,19 @@ export default function PainelParadas({
   const paradaDoGargalo = gargalo
     ? (resumo.porOperacao.find((o) => o.id === gargalo.id)?.ms || 0)
     : 0;
-  const perdidas = capacidadeLinha > 0 && paradaDoGargalo > 0
-    ? Math.round((capacidadeLinha * paradaDoGargalo) / 3600000)
+  /* Do ritmo ESCRITO na frase (222, nao 222,69): "223 pecas em 1 h" ao
+     lado de "222 pç/h" nao fecha a conta que o analista refaz de cabeca. */
+  const ritmoEscrito = taxaEscrita(capacidadeLinha) || 0;
+  const perdidas = ritmoEscrito > 0 && paradaDoGargalo > 0
+    ? Math.round((ritmoEscrito * paradaDoGargalo) / 3600000)
     : 0;
+  const pecas = unidade === 'produto' ? 'produtos' : 'peças';
 
   /* Capacidade de cada operacao, para o custo linha a linha da tabela —
-     cheia, como a da frase acima: com o `cap` inteiro, o gargalo de 222,5/h
-     parado 1 h dava 223 pecas na frase e 222 na linha dele. */
+     a ESCRITA (a Cap/h da tabela de operacoes), como a da frase acima: a
+     linha do gargalo da' o mesmo numero da frase. */
   const capPorOperacao = new Map(
-    (operacoes || []).map((o) => [o.id, o.resultado?.tpPorPeca > 0 ? 3600000 / o.resultado.tpPorPeca : 0]),
+    (operacoes || []).map((o) => [o.id, o.resultado?.tpPorPeca > 0 ? taxaEscrita(3600000 / o.resultado.tpPorPeca) : 0]),
   );
 
   return (
@@ -87,11 +91,11 @@ export default function PainelParadas({
       </div>
 
       {perdidas > 0 && (
-        <p style={est.custoParada} aria-label="Custo da parada em peças">
-          <strong>{perdidas} {unidade === 'produto' ? 'produtos' : 'peças'} deixaram de sair da linha</strong> nos
+        <p style={est.custoParada} aria-label={`Custo da parada em ${pecas}`}>
+          <strong>{perdidas} {pecas} deixaram de sair da linha</strong> nos
           {' '}{formatarDuracao(paradaDoGargalo)} em que <strong>{gargalo.nome}</strong> ficou parada
           — é o posto que manda no ritmo ({exibirPorHora(capacidadeLinha)} {porHora(unidade)} ·
-          {' '}{porMinuto(capacidadeLinha)} {unidade === 'produto' ? 'produtos' : 'pç'}/min). Parada nas outras operações é absorvida
+          {' '}{porMinuto(ritmoEscrito, unidade)}). Parada nas outras operações é absorvida
           pela folga delas: o custo de cada uma está na tabela abaixo.
         </p>
       )}
@@ -124,7 +128,7 @@ export default function PainelParadas({
                 <th style={est.th}>Operação</th>
                 <th style={est.thNum}>Paradas</th>
                 <th style={est.thNum}>Tempo parado</th>
-                <th style={est.thNum}>Peças do posto</th>
+                <th style={est.thNum}>{unidade === 'produto' ? 'Produtos' : 'Peças'} do posto</th>
               </tr>
             </thead>
             <tbody>

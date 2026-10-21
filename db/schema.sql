@@ -203,6 +203,19 @@ BEGIN
   END IF;
 END $$;
 
+-- DE ONDE VEIO O TAKT do estudo: 'programa' (o programa da semana do grupo,
+-- que ja' desconta o setup planejado das horas) ou 'manual' (digitado ou
+-- calculado com a jornada cheia, inclusive o da importacao do ERP). Sem
+-- isso a analise nao sabe se compara o medido na linha COM ou SEM o setup
+-- marcado: no takt do programa, deixar o setup no relogio o conta duas
+-- vezes; no digitado, tira-lo nao o conta nenhuma (ver medicaoDoEstudo).
+-- NULO = estudo de antes desta coluna, ou takt trocado por quem nao disse
+-- a origem: a analise trata como 'manual', o lado que nao inventa folga.
+-- So' ADD COLUMN, nula e sem DEFAULT; a API so' le e grava a coluna quando
+-- ela existe (o preview usa este banco sem migrar — ver api/estudos.js).
+ALTER TABLE estudos ADD COLUMN IF NOT EXISTS takt_origem text
+  CHECK (takt_origem IS NULL OR takt_origem IN ('programa', 'manual'));
+
 -- ---------------------------------------------------------------- operacoes
 CREATE TABLE IF NOT EXISTS operacoes (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

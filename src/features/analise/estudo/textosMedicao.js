@@ -45,6 +45,8 @@ const UMA_CASA = { maximumFractionDigits: 1, useGrouping: false };
  * do ponto flutuante: 3.600.000 / 144.000 tem de dar 25, nao 24.
  */
 const comoExibe = (v) => (v < 100 ? Math.floor(v * 10 + 1e-9) / 10 : Math.floor(v + 1e-9));
+/** O NUMERO que exibirPorHora escreve, para conta que tem de fechar com ele. */
+export const taxaEscrita = (v) => (Number.isFinite(v) ? comoExibe(v) : null);
 export const exibirPorHora = (v) => (Number.isFinite(v) ? comoExibe(v).toLocaleString('pt-BR', UMA_CASA) : '—');
 
 /**
@@ -54,10 +56,20 @@ export const exibirPorHora = (v) => (Number.isFinite(v) ? comoExibe(v).toLocaleS
  */
 export const capDaOperacao = (r) => exibirPorHora(r && r.tpPorPeca > 0 ? 3600000 / r.tpPorPeca : null);
 
-/** Por minuto, com vírgula e uma casa ("3,7"): o toFixed escrevia ponto. */
-export const porMinuto = (porHoraValor) => (Number.isFinite(porHoraValor)
-  ? (porHoraValor / 60).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })
-  : '—');
+/**
+ * O ritmo por minuto, por extenso, com a unidade: "3,7 pç/min" a partir de
+ * 60/h; abaixo disso, "1 produto a cada 2,4 min". Uma casa por minuto na
+ * embalagem (~25/h) arredondava 4% a 20%: "25/h · 0,4/min" ao lado, e
+ * 0,4 x 60 = 24.
+ */
+export function porMinuto(porHoraValor, unidade = 'peça') {
+  if (!Number.isFinite(porHoraValor) || porHoraValor <= 0) return '—';
+  const curta = unidade === 'produto' ? 'produtos' : 'pç';
+  if (porHoraValor >= 60) {
+    return `${(porHoraValor / 60).toLocaleString('pt-BR', { minimumFractionDigits: 1, ...UMA_CASA })} ${curta}/min`;
+  }
+  return `1 ${unidade === 'produto' ? 'produto' : 'peça'} a cada ${(60 / porHoraValor).toLocaleString('pt-BR', UMA_CASA)} min`;
+}
 
 /**
  * O deficit/superavit que a tela escreve, DERIVADO dos dois numeros que
@@ -68,7 +80,8 @@ export const porMinuto = (porHoraValor) => (Number.isFinite(porHoraValor)
  * A excecao: os dois para baixo podem cair no MESMO numero com a linha
  * abaixo do exigido (24,62 contra 24,66 escritos 24,6 e 24,6). "Deficit 0"
  * ao lado de "nao atende" e' a tela se desmentindo — ai' sai o deficit
- * cheio com uma casa, nunca menos que 0,1.
+ * cheio para baixo, no passo dos numeros ao lado: -0,1 abaixo de 100/h,
+ * -1 acima (onde os numeros sao inteiros).
  */
 export function diferencaExibida(capacidade) {
   if (!capacidade || capacidade.diferenca === null || capacidade.diferenca === undefined) return null;
@@ -76,7 +89,12 @@ export function diferencaExibida(capacidade) {
   if (!Number.isFinite(base) || !Number.isFinite(capacidade.esperado)) return capacidade.diferenca;
   const escrita = Math.round((comoExibe(base) - comoExibe(capacidade.esperado)) * 10) / 10;
   const cheia = base - capacidade.esperado;
-  if (cheia < 0 && escrita >= 0) return -Math.max(0.1, Math.round(-cheia * 10) / 10);
+  if (cheia < 0 && escrita >= 0) {
+    // Para baixo no passo dos numeros ao lado: 0,1 abaixo de 100/h, 1 acima
+    // ("300 · 300 · -1", nunca "-0,7" ao lado de dois inteiros).
+    const passo = comoExibe(capacidade.esperado) >= 100 ? 1 : 0.1;
+    return Math.round(Math.floor(cheia / passo + 1e-9) * passo * 10) / 10;
+  }
   return escrita;
 }
 
@@ -227,18 +245,10 @@ export function lerMedido(carga, { recurso, produto } = {}) {
 
   // Daqui para baixo ha' numero, escrito como os outros dois (exibirPorHora).
   const u = porHora(m.unidade);
-  const valor = exibirPorHora(m.ritmoRelogio);
+  const valor = exibirPorHora(m.ritmo);
   const rodando = `com a linha rodando: ${exibirPorHora(m.ritmoRodando)} ${u}`;
-  const base = `${[plural(m.n, 'medição', 'medições'), periodoDaMedicao(m)].filter(Boolean).join(' ')} · no relógio, paradas dentro`;
-  /* O setup marcado FICA no relogio (o estudo nao sabe se o takt dele ja'
-     descontou o setup planejado — ver medicaoDoEstudo). Com setup
-     planejado no grupo, o numero sem ele vai ao lado, dito para quando
-     vale: takt vindo do programa da semana. */
-  const setup = m.ritmoSemSetup != null
-    ? [`com o setup marcado (${formatarDuracao(m.setupMedidoMs)}) dentro do relógio; sem ele, `
-      + `${exibirPorHora(m.ritmoSemSetup)} ${u} — compare com este se o takt do estudo veio do programa `
-      + 'da semana, que já desconta o setup planejado']
-    : [];
+  const base = `${[plural(m.n, 'medição', 'medições'), periodoDaMedicao(m)].filter(Boolean).join(' ')} · ${REGUA_DO_SETUP[m.regraSetup === 'relogio' && m.setupPlanejado ? 'relogio-com-plano' : m.regraSetup] || REGUA_DO_SETUP.relogio}`;
+  const setup = linhaDoSetup(m, u);
 
   if (m.motivo === 'sem-volumes') {
     const linhas = [
@@ -265,7 +275,10 @@ export function lerMedido(carga, { recurso, produto } = {}) {
 
   const linhas = [base, ...setup, rodando];
   if (m.convertido) {
-    linhas.push(`contados ${exibirPorHora(m.ritmoRelogioContado)} vol/h ÷ ${plural(m.volumes, 'volume', 'volumes')} por produto`);
+    // O contado com a precisao do convertido: "101 ÷ 2" ao lado de 50,9 nao
+    // fechava (o contado passava de 100/h e perdia a casa).
+    const contado = m.ritmo < 100 ? Math.floor(m.ritmoContado * 10 + 1e-9) / 10 : Math.floor(m.ritmoContado + 1e-9);
+    linhas.push(`contados ${contado.toLocaleString('pt-BR', UMA_CASA)} vol/h ÷ ${plural(m.volumes, 'volume', 'volumes')} por produto`);
   }
   linhas.push(...linhaDoTeto(m));
   return {
@@ -273,6 +286,44 @@ export function lerMedido(carga, { recurso, produto } = {}) {
     curto: `${valor} ${u} (${base}${setup.length ? `; ${setup[0]}` : ''})`,
     porQue: null,
   };
+}
+
+/* A REGUA do medido, na linha de base do cartao: o que ficou dentro do
+   relogio e o que saiu (medicaoDoEstudo, regraSetup). */
+const REGUA_DO_SETUP = {
+  relogio: 'no relógio, paradas dentro',
+  'relogio-com-plano': 'no relógio, paradas dentro, inclusive o setup marcado',
+  'sem-setup': 'no relógio, paradas dentro, menos o setup marcado',
+  fatia: 'no relógio, paradas dentro; o setup entra pela fatia do plano do grupo',
+};
+
+const pctDaJornada = (f) => `${(f * 100).toLocaleString('pt-BR', UMA_CASA)}% da jornada`;
+
+/**
+ * O PORQUE DA REGUA do setup, numa linha: de onde veio o takt, e o numero
+ * com o setup marcado dentro do relogio para quem quiser comparar. Vazio
+ * sem setup planejado no grupo — ali o setup e' uma parada como as outras.
+ */
+function linhaDoSetup(m, u) {
+  const marcado = m.setupMedidoMs > 0 ? formatarDuracao(m.setupMedidoMs) : null;
+  const inteiro = `com tudo dentro do relógio, ${exibirPorHora(m.ritmoRelogio)} ${u}`;
+  if (m.regraSetup === 'sem-setup') {
+    return [marcado
+      ? `setup marcado (${marcado}) fora do relógio: o takt veio do programa da semana, que já desconta o setup planejado; ${inteiro}`
+      : 'o takt veio do programa da semana, que já desconta o setup planejado'];
+  }
+  if (m.regraSetup === 'fatia') {
+    const deOnde = m.taktOrigem === 'manual'
+      ? 'o takt foi digitado com a jornada cheia'
+      : 'a origem do takt não foi registrada (estudo anterior à 2.94.0) e ele é tratado como digitado, com a jornada cheia';
+    return [`${deOnde}: o setup entra como o plano do grupo (${pctDaJornada(m.fatiaSetup)})`
+      + `${marcado ? `, não pelo marcado nas medições (${marcado})` : ''}; ${inteiro}`];
+  }
+  if (m.setupPlanejado) {
+    return [`setup marcado${marcado ? ` (${marcado})` : ''} dentro do relógio: faltam as horas da semana do grupo `
+      + 'no cadastro para contar só a fatia do setup planejado'];
+  }
+  return [];
 }
 
 /**
@@ -291,10 +342,18 @@ export function lerMedido(carga, { recurso, produto } = {}) {
  * do papel, `nota` a do cartao de atingimento, `tom` a cor da barra.
  */
 export function vereditoCapacidade(capacidade, doMedido) {
-  if (!capacidade || capacidade.esperado === null || capacidade.atende === null) {
+  if (!capacidade || capacidade.esperado === null) {
     return {
       atende: null, confirmado: false, tom: 'neutro', simbolo: '',
       frase: 'Sem Takt configurado, não há veredito de atendimento.', nota: '—',
+    };
+  }
+  // Com takt, sem ciclos e sem medicao: o exigido existe, a resposta nao.
+  if (capacidade.atende === null) {
+    return {
+      atende: null, confirmado: false, tom: 'neutro', simbolo: '',
+      frase: 'Sem ciclos coletados nem medição na linha, ainda não há veredito de atendimento.',
+      nota: 'sem ciclos nem medição: ainda não há veredito',
     };
   }
   const { atende } = capacidade;

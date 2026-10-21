@@ -378,7 +378,9 @@ for (const [largura, altura] of [[1366, 657], [1280, 600]]) {
     `${tela}: lista (ate' ${Math.round(lista.base)}) e grupos (ate' ${Math.round(grupos.base)}) terminam antes do Fechar (${Math.round(rodape.topo)})`);
   await desativarUltimo('');
 
-  // Com o ALERTA na tela (digitacao errada), o rodape cresce: a lista encolhe.
+  /* Com o ALERTA na tela (digitacao errada): ele aparece JUNTO do
+     formulario que o causou, acima da lista — no rodape ficava longe do
+     campo a corrigir — e a lista encolhe sem ficar coberta. */
   await dlg.locator('input[aria-label="Nome do produto"]').first().fill('Rack X');
   await dlg.locator('input[aria-label="Volumes do produto"]').first().fill('2 caixas');
   await dlg.getByRole('button', { name: 'Cadastrar' }).click();
@@ -386,8 +388,13 @@ for (const [largura, altura] of [[1366, 657], [1280, 600]]) {
   await alerta.waitFor({ timeout: 4000 });
   const listaComAlerta = await caixaDe(dlg.getByRole('button', { name: `Desativar ${ULTIMO}` }).locator('xpath=ancestor::div[contains(@style, "overflow")][1]'));
   const caixaAlerta = await caixaDe(alerta);
-  checar(listaComAlerta.base <= caixaAlerta.topo,
-    `${tela}: com o alerta, a lista termina (${Math.round(listaComAlerta.base)}) antes dele (${Math.round(caixaAlerta.topo)})`);
+  const campoVolumes = await caixaDe(dlg.locator('input[aria-label="Volumes do produto"]').first());
+  checar(caixaAlerta.topo >= campoVolumes.base && caixaAlerta.base <= listaComAlerta.topo
+    && caixaAlerta.base <= altura,
+    `${tela}: o alerta fica entre o formulario (${Math.round(campoVolumes.base)}) e a lista (${Math.round(listaComAlerta.topo)}), `
+    + `na vista (${Math.round(caixaAlerta.topo)}..${Math.round(caixaAlerta.base)})`);
+  checar(listaComAlerta.base <= rodape.topo,
+    `${tela}: com o alerta, a lista ainda termina (${Math.round(listaComAlerta.base)}) antes do Fechar (${Math.round(rodape.topo)})`);
   if (FOTOS) await pg.screenshot({ path: `${FOTOS}/pc-produtos-${tela}-alerta.png` });
   await desativarUltimo(' com alerta');
   await ctx.close();

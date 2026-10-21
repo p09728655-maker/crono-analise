@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { unidadeDoPosto } from '../../domain/cronoanalise.js';
 import { atualizarProduto, criarProduto, removerProduto } from '../../lib/api.js';
 import { espaco } from '../../theme/escala.js';
@@ -81,20 +81,48 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
   const [volumes, setVolumes] = useState('');
   const [editando, setEditando] = useState(null);   // { id, nome, codigo, volumes, grupoId }
   const [excluindo, setExcluindo] = useState(null); // id com a exclusao armada
-  /* O alerta vem PARA A VISTA a cada tentativa que falha, nao so' quando o
-     texto muda: volumes "0" e depois "60" dao a mesma mensagem, e na
-     segunda o alerta ficava fora da tela, sem nada mudar onde o analista
-     clicou ("o Cadastrar nao funciona"). */
+  /* O ERRO APARECE JUNTO DE QUEM O CAUSOU: embaixo do formulario de
+     cadastro, do formulario de edicao ou da linha do produto (`alvoErro`).
+     No rodape, depois da lista, ele ficava longe do campo a corrigir — no
+     celular, o alerta trazido para a vista deixava o formulario 1000 px
+     acima. O rodape fica para o que nao tem dono (a carga do cadastro).
+     A cada tentativa que falha (nao so' quando o texto muda: volumes "0" e
+     depois "60" dao a mesma mensagem) o alerta vem para a vista, e o foco
+     volta para onde estava: o botao desabilitado durante a gravacao
+     largava o foco no corpo da pagina, e o Tab seguinte caia no Fechar. */
   const refErro = useRef(null);
+  const devolverFoco = useRef(null);
   const [falhas, setFalhas] = useState(0);
-  const aplicar = async (acao) => {
+  const [alvoErro, setAlvoErro] = useState(null);
+  const aplicar = async (acao, alvo = null) => {
+    const antes = document.activeElement;
+    setAlvoErro(alvo);
     const ok = await aplicarNoCadastro(acao);
+    // Com sucesso tambem: o Desativar vira Reativar no mesmo lugar, e o foco
+    // continua nele em vez de cair no corpo da pagina.
+    devolverFoco.current = antes;
     if (!ok) setFalhas((n) => n + 1);
     return ok;
   };
+  // Depois da gravacao (o botao volta a ficar habilitado): o foco volta, e o
+  // alerta, se houver, vem para a vista.
   useEffect(() => {
+    if (ocupado) return;
+    const el = devolverFoco.current;
+    devolverFoco.current = null;
+    if (el && el !== document.body && el.isConnected && !el.disabled && document.activeElement !== el) {
+      el.focus({ preventScroll: true });
+    }
     if (erro) refErro.current?.scrollIntoView?.({ block: 'nearest' });
-  }, [erro, falhas]);
+  }, [erro, falhas, ocupado]);
+  /* O botao que some leva o foco junto: Cancelar a exclusao devolve o foco
+     ao Excluir daquele produto, e Salvar a edicao, ao Editar dele. */
+  const [focarDepois, setFocarDepois] = useState(null);
+  useEffect(() => {
+    if (!focarDepois) return;
+    document.querySelector(focarDepois)?.focus();
+    setFocarDepois(null);
+  }, [focarDepois]);
 
   const carregando = maquinas == null && !erro;
   const naoCarregou = maquinas == null && Boolean(erro);
@@ -102,6 +130,17 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
   const contaVolumes = grupoContaVolumes(grupo);
   const doGrupo = (produtos || []).filter((p) => p.grupo_id === grupo?.id);
   const contar = (id) => (produtos || []).filter((p) => p.grupo_id === id && p.ativo !== false).length;
+
+  // O alvo do erro esta' na tela? Senao (trocou de grupo, a linha saiu), o
+  // rodape mostra.
+  const alvoNaTela = Boolean(grupo) && (
+    alvoErro === 'cadastro'
+    || (alvoErro === 'edicao' && Boolean(editando))
+    || doGrupo.some((p) => alvoErro === `linha:${p.id}` && editando?.id !== p.id)
+  );
+  const alertaEm = (alvo) => (erro && alvoNaTela && alvoErro === alvo
+    ? <div ref={refErro} style={est.erro} role="alert">{erro}</div>
+    : null);
 
   const cadastrar = async (ev) => {
     ev.preventDefault();
@@ -113,7 +152,7 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
     if (await aplicar(() => criarProduto({
       nome: nome.trim(), codigo: codigo.trim(), grupoId: grupo.id,
       ...(contaVolumes ? { volumes: lerVolumesDoFormulario(volumes) } : {}),
-    }))) {
+    }), 'cadastro')) {
       setNome('');
       setCodigo('');
       setVolumes('');
@@ -140,12 +179,6 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
           .produtos-colunas { flex-wrap: wrap !important; flex: none !important; }
           .produtos-lateral, .produtos-painel { max-height: none !important; overflow: visible !important; }
           .produtos-lista { flex: none !important; overflow: visible !important; }
-        }
-        /* No celular o nome, os selos e os botoes nao cabem numa linha: os
-           botoes descem para baixo do nome em vez de sair da caixa. */
-        @media (max-width: 560px) {
-          .produtos-linha { flex-wrap: wrap !important; padding-top: ${espaco.xs}px !important; padding-bottom: ${espaco.xs}px !important; }
-          .produtos-linha > .produtos-botoes { margin-left: auto; }
         }
       `}</style>
       <div className="produtos-caixa" style={est.caixa}>
@@ -232,6 +265,7 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
               <span style={est.destinoCadastro}>
                 Vai para {grupo.codigo} · {grupo.nome}
               </span>
+              {alertaEm('cadastro')}
               {contaVolumes && <p style={est.dica}>{DICA_VOLUMES}</p>}
 
               {doGrupo.length === 0 ? (
@@ -242,76 +276,97 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
               ) : (
                 <div className="produtos-lista" style={loc.lista}>
                   {doGrupo.map((p) => (editando?.id === p.id ? (
-                    <FormularioEdicao
-                      key={p.id} produto={p} edicao={editando} setEdicao={setEditando}
-                      grupos={grupos} ocupado={ocupado}
-                      aoSalvar={async () => {
-                        // Volumes so' vai quando o produto fica (ou passa a
-                        // ficar) num grupo de embalagem — o grupo escolhido
-                        // no proprio formulario. Fora dela o campo nem aparece.
-                        const destino = grupos.find((g) => g.id === editando.grupoId);
-                        if (await aplicar(() => atualizarProduto(p.id, {
-                          nome: editando.nome.trim(), codigo: editando.codigo.trim(), grupoId: editando.grupoId,
-                          ...(grupoContaVolumes(destino) ? { volumes: lerVolumesDoFormulario(editando.volumes) } : {}),
-                        }))) setEditando(null);
-                      }}
-                    />
+                    <Fragment key={p.id}>
+                      <FormularioEdicao
+                        produto={p} edicao={editando} setEdicao={setEditando}
+                        grupos={grupos} ocupado={ocupado}
+                        aoSalvar={async () => {
+                          // Volumes so' vai quando o produto fica (ou passa a
+                          // ficar) num grupo de embalagem — o grupo escolhido
+                          // no proprio formulario. Fora dela o campo nem aparece.
+                          const destino = grupos.find((g) => g.id === editando.grupoId);
+                          if (await aplicar(() => atualizarProduto(p.id, {
+                            nome: editando.nome.trim(), codigo: editando.codigo.trim(), grupoId: editando.grupoId,
+                            ...(grupoContaVolumes(destino) ? { volumes: lerVolumesDoFormulario(editando.volumes) } : {}),
+                          }), 'edicao')) {
+                            setEditando(null);
+                            setFocarDepois(`[data-editar="${p.id}"]`);
+                          }
+                        }}
+                      />
+                      {alertaEm('edicao')}
+                    </Fragment>
                   ) : (
-                    <div key={p.id} className="produtos-linha" style={{ ...loc.linha, ...(p.ativo ? {} : est.linhaInativa) }}>
-                      <span style={loc.linhaRotulo}>{p.nome}</span>
-                      {p.codigo && <span style={est.seloNominal} title="Código no ERP">{p.codigo}</span>}
-                      {contaVolumes && p.volumes != null && (
-                        <span style={est.seloNominal} title="Caixas do produto na embalagem">
-                          {rotuloVolumes(p.volumes)}
-                        </span>
-                      )}
-                      {faltamVolumes(p, grupo) && (
-                        <span style={loc.seloSemVolumes} title={TITULO_SEM_VOLUMES}>
-                          volumes não informados
-                        </span>
-                      )}
-                      {!p.ativo && <span style={est.seloInativo}>Desativado</span>}
-                      <div className="produtos-botoes" style={est.linhaBotoes}>
-                        {excluindo === p.id ? (
-                          <>
-                            <button
-                              type="button" style={est.botaoPerigo} disabled={ocupado}
-                              onClick={async () => { if (await aplicar(() => removerProduto(p.id))) setExcluindo(null); }}
-                            >
-                              Confirmar exclusão
-                            </button>
-                            <button type="button" style={est.botaoTexto} onClick={() => setExcluindo(null)}>
-                              Cancelar
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              type="button" style={est.botaoTexto} aria-label={`Editar ${p.nome}`}
-                              onClick={() => setEditando({
-                                id: p.id, nome: p.nome, codigo: p.codigo || '',
-                                volumes: p.volumes == null ? '' : String(p.volumes), grupoId: p.grupo_id,
-                              })}
-                            >
-                              Editar
-                            </button>
-                            <button
-                              type="button" style={est.botaoTexto} disabled={ocupado}
-                              aria-label={`${p.ativo ? 'Desativar' : 'Reativar'} ${p.nome}`}
-                              onClick={() => aplicar(() => atualizarProduto(p.id, { ativo: !p.ativo }))}
-                            >
-                              {p.ativo ? 'Desativar' : 'Reativar'}
-                            </button>
-                            <button
-                              type="button" style={est.botaoExcluir} aria-label={`Excluir ${p.nome}`}
-                              onClick={() => setExcluindo(p.id)}
-                            >
-                              Excluir
-                            </button>
-                          </>
+                    <Fragment key={p.id}>
+                      <div className="produtos-linha" style={{ ...loc.linha, ...(p.ativo ? {} : est.linhaInativa) }}>
+                        <span style={loc.linhaRotulo}>{p.nome}</span>
+                        {p.codigo && <span style={est.seloNominal} title="Código no ERP">{p.codigo}</span>}
+                        {contaVolumes && p.volumes != null && (
+                          <span style={est.seloNominal} title="Caixas do produto na embalagem">
+                            {rotuloVolumes(p.volumes)}
+                          </span>
                         )}
+                        {faltamVolumes(p, grupo) && (
+                          <span style={loc.seloSemVolumes} title={TITULO_SEM_VOLUMES}>
+                            volumes não informados
+                          </span>
+                        )}
+                        {!p.ativo && <span style={est.seloInativo}>Desativado</span>}
+                        <div className="produtos-botoes" style={loc.botoes}>
+                          {excluindo === p.id ? (
+                            <>
+                              <button
+                                key="confirmar" type="button" style={est.botaoPerigo} disabled={ocupado}
+                                onClick={async () => {
+                                  if (await aplicar(() => removerProduto(p.id), `linha:${p.id}`)) setExcluindo(null);
+                                }}
+                              >
+                                Confirmar exclusão
+                              </button>
+                              {/* O foco vai para a opcao SEGURA: armada pelo
+                                  teclado, o Tab seguinte pulava as duas. As
+                                  chaves fazem o React montar botoes novos —
+                                  sem elas ele reaproveita o no' do Desativar,
+                                  e o autoFocus (so' na montagem) nao age. */}
+                              <button
+                                key="cancelar" type="button" style={est.botaoTexto} autoFocus
+                                onClick={() => { setExcluindo(null); setFocarDepois(`[data-excluir="${p.id}"]`); }}
+                              >
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                key="editar" type="button" style={est.botaoTexto} aria-label={`Editar ${p.nome}`}
+                                data-editar={p.id}
+                                onClick={() => setEditando({
+                                  id: p.id, nome: p.nome, codigo: p.codigo || '',
+                                  volumes: p.volumes == null ? '' : String(p.volumes), grupoId: p.grupo_id,
+                                })}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                key="desativar" type="button" style={est.botaoTexto} disabled={ocupado}
+                                aria-label={`${p.ativo ? 'Desativar' : 'Reativar'} ${p.nome}`}
+                                onClick={() => aplicar(() => atualizarProduto(p.id, { ativo: !p.ativo }), `linha:${p.id}`)}
+                              >
+                                {p.ativo ? 'Desativar' : 'Reativar'}
+                              </button>
+                              <button
+                                key="excluir" type="button" style={est.botaoExcluir} aria-label={`Excluir ${p.nome}`}
+                                data-excluir={p.id}
+                                onClick={() => setExcluindo(p.id)}
+                              >
+                                Excluir
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                      {alertaEm(`linha:${p.id}`)}
+                    </Fragment>
                   )))}
                 </div>
               )}
@@ -319,9 +374,9 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
           </div>
         )}
 
-        {/* Na tela estreita a caixa rola inteira e o alerta fica depois da
-            lista: sem levar a vista ate' ele, quem clicou nao via nada mudar. */}
-        {erro && <div ref={refErro} style={est.erro} role="alert">{erro}</div>}
+        {/* O erro sem dono na tela (a carga do cadastro, ou o alvo que saiu
+            da lista) fica no rodape, como sempre. */}
+        {erro && !alvoNaTela && <div ref={refErro} style={est.erro} role="alert">{erro}</div>}
 
         {naoCarregou && (
           <button type="button" style={est.botaoSecundario} onClick={recarregar} disabled={ocupado}>
@@ -459,7 +514,12 @@ const loc = {
      embaixo fica no NOME (a linha de uma linha so' continua com os 40 px de
      sempre), e a linha nao encolhe (flexShrink 0): a lista e' uma coluna
      flex que rola, e sem isso a de nome longo era espremida aos 40 px. */
-  linha: { ...est.linha, flexShrink: 0 },
+  /* E QUEBRA quando nao cabe, em qualquer largura: a largura que importa e'
+     a do painel, que fica estreito tambem no notebook com as duas colunas
+     lado a lado. Os botoes descem para baixo do nome, a direita, em vez de
+     sair da caixa. */
+  linha: { ...est.linha, flexShrink: 0, flexWrap: 'wrap', rowGap: espaco.xs },
+  botoes: { ...est.linhaBotoes, marginLeft: 'auto' },
   linhaRotulo: {
     ...est.linhaRotulo, whiteSpace: 'normal', overflowWrap: 'break-word', textOverflow: 'clip',
     // 'anywhere' deixava o nome encolher ate' uma letra por linha numa janela

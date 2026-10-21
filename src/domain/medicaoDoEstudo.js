@@ -19,17 +19,25 @@
  * As duas sao ponderadas pelo tempo (soma sobre soma), nunca media de
  * taxas — a mesma conta de resumirConferencias, que e' quem faz a soma.
  *
- * O SETUP FICA NO RELOGIO, e a tela mostra tambem o numero sem ele. O
- * estudo grava so' o numero do takt, nao de onde ele veio: o do programa
- * da semana ja' descontou o setup planejado (ai' tirar o setup marcado do
- * relogio e' o certo — a regra de leituraDaDemanda), mas o digitado com a
- * jornada cheia (o padrao e' 8,8 h) nao descontou, e tirar o setup do
- * relogio contaria a troca ZERO vezes — o veredito virava "atende" sem a
- * linha atender (revisao de 20/10). Sem saber a origem, fica o lado
- * seguro: setup dentro (erro pessimista, nunca um "atende" falso), e com
- * setup planejado no grupo o numero sem o setup marcado vai ao lado, para
- * quem sabe que o takt veio do programa. Gravar a origem do takt no estudo
- * resolve de vez.
+ * O SETUP, PELA ORIGEM DO TAKT (estudos.takt_origem). O numero que vai
+ * contra o takt e' o `ritmo`, e com setup planejado no grupo ele depende de
+ * como o takt foi feito — o setup tem de entrar UMA vez na comparacao:
+ *   - 'programa': o takt do programa da semana ja' tirou o setup planejado
+ *     das horas. O setup MARCADO sai do relogio (a regra de
+ *     leituraDaDemanda); deixa-lo contaria a troca duas vezes — uma hora de
+ *     medicao com 10 min de setup derrubava o medido em 17%, e a tela dizia
+ *     "nao atende" com a linha atendendo.
+ *   - 'manual' ou sem origem (estudo de antes da coluna): o takt digitado
+ *     usa a jornada cheia. O ritmo e' o da linha rodando sem o setup
+ *     marcado vezes (1 − a fatia do setup planejado na jornada): o setup
+ *     entra na proporcao do plano, nao na da amostra — uma medicao de 1 h
+ *     que pegou uma troca de 10 min pesaria 17%, e o plano de 2 trocas de
+ *     10 min numa jornada de 8,8 h pesa 3,8%.
+ *   - Sem as horas da semana do grupo nao ha' fatia: o setup marcado fica
+ *     no relogio (o lado que nao inventa folga), e a tela diz por que.
+ * Sem setup planejado (ou "este grupo nao faz setup"), o setup e' uma
+ * parada como as outras: fica no relogio. So' o MARCADO como setup sai;
+ * falta de material e manutencao sao perda do chao.
  */
 import { CRITERIOS_CONFERENCIA, nomeChave, resumirConferencias } from './crono/conferencia.js';
 import { unidadeDoPosto } from './crono/formato.js';
@@ -52,9 +60,11 @@ export const TETO_LISTA_CONFERENCIAS = 1000;
 /**
  * A UNIDADE DO ESTUDO pelo grupo do posto no cadastro: na embalagem o
  * estudo mede o PRODUTO inteiro (o ciclo do "RACK SIRIUS 1.6" comeca em
- * "CX 1/1" e termina no rack embalado), fora dela, a peca. Posto fora do
- * cadastro (ou sem grupo) fica em peca — a mesma regra da medicao: o
- * tablet so' conta volume na maquina de um grupo embalagem.
+ * "CX 1/1" e termina no rack embalado), fora dela, a peca. Quem chama passa
+ * o nome do grupo e, sem grupo (posto fora do cadastro, como o estudo com
+ * "EMBALAGEM" no posto), o nome do proprio posto — a mesma reserva de
+ * ondeMedir: senao o quadro dizia "pç/h" e, no mesmo cartao, mandava medir
+ * na Embalagem Takt Time.
  */
 export function unidadeDoEstudo(nomeDoGrupo) {
   return unidadeDoPosto(nomeDoGrupo).singular === 'volume' ? 'produto' : 'peça';
@@ -86,13 +96,15 @@ const duracaoDe = (c) => Number(c?.duracaoMs ?? c?.duracao_ms) || 0;
  * CONTAR as do posto e produto — ou null quando nao se sabe (falhou).
  * `unidade`: unidadeDoPosto do grupo do posto ('peça' ou 'volume').
  * `volumes`: os volumes do produto (volumesDoProduto), ou null.
- * `setup`: o setup planejado do grupo { setupsDia, dias, minutos }, como
- * leituraDaDemanda recebe; ausente vale "nao informado".
+ * `setup`: o setup planejado do grupo { setupsDia, dias, minutos,
+ * horasSemana }, como leituraDaDemanda recebe; ausente vale "nao
+ * informado". `horasSemana` e' a jornada do grupo: da' a fatia do setup.
+ * `taktOrigem`: 'programa' | 'manual' | null — ver o cabecalho.
  * `agora`: ms ou Date — a janela conta a partir dele.
  */
 export function medicaoDoEstudo({
   conferencias, arquivadas = null, recurso, produto, unidade, volumes, setup = null,
-  agora = Date.now(), dias = DIAS_MEDICAO,
+  taktOrigem = null, agora = Date.now(), dias = DIAS_MEDICAO,
 } = {}) {
   const contada = singularDe(unidade);
   const instante = agora instanceof Date ? agora.getTime() : Number(agora);
@@ -106,6 +118,19 @@ export function medicaoDoEstudo({
   // "Ha' setup planejado" e' MAIOR QUE ZERO: o "este grupo nao faz setup"
   // (zero) nao tirou nada das horas, e o setup medido fica no relogio.
   const setupPlanejado = horasSetup != null && horasSetup > 0;
+  const horasSemana = Number(setup?.horasSemana);
+  // A fatia do setup planejado na jornada: 2 x 10 min x 5 dias em 44 h = 3,8%.
+  const fatiaSetup = setupPlanejado && Number.isFinite(horasSemana) && horasSemana > horasSetup
+    ? horasSetup / horasSemana : null;
+  const origem = taktOrigem === 'programa' || taktOrigem === 'manual' ? taktOrigem : null;
+  /* A REGRA do setup (ver o cabecalho):
+       'relogio'    setup marcado dentro (sem setup planejado, ou sem a fatia)
+       'sem-setup'  takt do programa: setup marcado fora
+       'fatia'      takt digitado ou sem origem: rodando sem o setup marcado,
+                    menos a fatia do setup planejado */
+  const regraSetup = !setupPlanejado ? 'relogio'
+    : origem === 'programa' ? 'sem-setup'
+      : fatiaSetup != null ? 'fatia' : 'relogio';
 
   // Mesmo formato em todos os caminhos: a tela le' os campos sem perguntar
   // antes se a medicao existe.
@@ -113,6 +138,7 @@ export function medicaoDoEstudo({
     motivo, usavel: false, dias, contada, unidade: null, volumes: null, convertido: false,
     n: 0, desde: null, ate: null, totalMs: 0, produtivoMs: 0, paradaMs: 0, contadas: 0,
     relogioMs: 0, setupPlanejado, setupMedidoMs: 0, ritmoSemSetup: null,
+    taktOrigem: origem, regraSetup, fatiaSetup, ritmo: null, ritmoContado: null,
     ritmoRelogio: null, ritmoRodando: null, ritmoRelogioContado: null, ritmoRodandoContado: null,
     suficiente: false, faltas: null, motivosAmostra: [], outrosProdutos: 0, antigas: 0,
     arquivadas: null, noTeto: false,
@@ -176,16 +202,18 @@ export function medicaoDoEstudo({
     ? 'sem-volumes'
     : (g.confiavel ? null : 'amostra-insuficiente');
 
-  /* O relogio do medido, com TODAS as paradas dentro, inclusive o setup
-     marcado (ver o cabecalho). Com setup planejado no grupo, o ritmo SEM o
-     setup marcado vai ao lado — so' o MARCADO como setup sai; falta de
-     material e manutencao sao perda do chao. Medicao que foi so' setup nao
-     chega aqui (resumirConferencias a descarta: nao ha' ritmo nela). */
+  /* As reguas do setup (ver o cabecalho). O relogio inteiro tem TODAS as
+     paradas dentro; o "sem setup" tira so' o tempo MARCADO como setup.
+     Medicao que foi so' setup nao chega aqui (resumirConferencias a
+     descarta: nao ha' ritmo nela); a guarda do > e' a rede. */
   const setupMedidoMs = g.totalSetupMs || 0;
   const relogioMs = g.totalMs;
   const ritmoRelogioContado = (g.totalPecas * MS_POR_HORA) / relogioMs;
-  const ritmoSemSetupContado = setupPlanejado && setupMedidoMs > 0 && g.totalMs > setupMedidoMs
-    ? (g.totalPecas * MS_POR_HORA) / (g.totalMs - setupMedidoMs) : null;
+  const ritmoSemSetupContado = g.totalMs > setupMedidoMs
+    ? (g.totalPecas * MS_POR_HORA) / (g.totalMs - setupMedidoMs) : ritmoRelogioContado;
+  const ritmoContado = regraSetup === 'sem-setup' ? ritmoSemSetupContado
+    : regraSetup === 'fatia' ? ritmoSemSetupContado * (1 - fatiaSetup)
+      : ritmoRelogioContado;
 
   return {
     motivo,
@@ -208,9 +236,16 @@ export function medicaoDoEstudo({
     relogioMs,
     setupPlanejado,
     setupMedidoMs,
-    // Sem o setup marcado (so' com setup planejado no grupo): o numero a
-    // comparar quando o takt do estudo veio do programa da semana.
-    ritmoSemSetup: ritmoSemSetupContado == null ? null : ritmoSemSetupContado / divisor,
+    taktOrigem: origem,
+    regraSetup,
+    fatiaSetup,
+    // O NUMERO QUE VAI CONTRA O TAKT, na unidade do estudo, pela regra do
+    // setup. E' este que entra no atingimento.
+    ritmo: ritmoContado / divisor,
+    ritmoContado,
+    // As reguas cruas, para a tela mostrar a conta: sem o setup marcado e
+    // com tudo dentro.
+    ritmoSemSetup: ritmoSemSetupContado / divisor,
     ritmoRelogio: ritmoRelogioContado / divisor,
     ritmoRodando: g.ritmoMedio / divisor,
     // O que o posto contou por hora, antes de converter (vol/h na embalagem).

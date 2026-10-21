@@ -30,6 +30,6 @@ export {
   comparativoCapacidade, dimensionarOperadores, oee, operadoresNecessarios, taktTime,
 } from './crono/capacidade.js';
 export {
-  duracaoEntreHoras, faixaHoraria, formatarCronometro, formatarDuracao, formatarSegundos,
-  numeroDecimal, textoDecimal, unidadeDoPosto,
+  duracaoEntreHoras, faixaHoraria, formatarCronometro, formatarDuracao, formatarOcupacao,
+  formatarPctAcima, formatarSegundos, numeroDecimal, textoDecimal, unidadeDoPosto,
 } from './crono/formato.js';

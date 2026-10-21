@@ -58,8 +58,8 @@ const CADASTRO_FURADEIRA = {
   grupos: [{ id: 'g1', codigo: '0001', nome: 'FURADEIRAS', horas_semana: '44.00' }],
   produtos: [{ id: 'p1', nome: 'PAINEL MDF 18MM', codigo: null, grupo_id: 'g1', ativo: true, volumes: null }],
 };
-// O mesmo grupo com SETUP PLANEJADO (5 trocas/dia x 5 dias x 12 min): o
-// setup marcado fica no relogio, e o numero sem ele vai ao lado.
+// O mesmo grupo com SETUP PLANEJADO (5 trocas/dia x 5 dias x 12 min): a
+// regua do setup no medido segue a origem do takt do estudo.
 const CADASTRO_FURADEIRA_COM_SETUP = {
   ...CADASTRO_FURADEIRA,
   grupos: [{ ...CADASTRO_FURADEIRA.grupos[0], setups_dia: 5, dias_semana: 5, setup_min: 12 }],
@@ -120,9 +120,23 @@ const LISTA_NO_TETO = [
   ...Array.from({ length: 997 }, (_, i) => medicao({ id: `t${i}`, maquina: 'FURADEIRA 09', iniciado_em: haDias(1) })),
 ];
 
+// O MESMO estudo com a origem do takt gravada (estudos.takt_origem): e' ela
+// que diz se o setup marcado sai do relogio (ver medicaoDoEstudo).
+const comOrigem = (resposta, takt_origem) => ({ ...resposta, estudo: { ...resposta.estudo, takt_origem } });
+
 const CENARIOS = {
   furadeira: { estudo: RESPOSTA, cadastro: CADASTRO_FURADEIRA, conferencias: [...MEDICOES_FURADEIRA, ...MEDICOES_DE_FORA] },
-  'furadeira-setup': { estudo: RESPOSTA, cadastro: CADASTRO_FURADEIRA_COM_SETUP, conferencias: MEDICOES_FURADEIRA },
+  // Setup planejado de 5 x 5 x 12 min = 5 h em 44 h (fatia de 11,4%); 5 min
+  // de setup marcado na segunda medicao. Do programa: o marcado sai (196/h).
+  'furadeira-setup': {
+    estudo: comOrigem(RESPOSTA, 'programa'), cadastro: CADASTRO_FURADEIRA_COM_SETUP, conferencias: MEDICOES_FURADEIRA,
+  },
+  // Digitado: rodando sem o marcado, menos a fatia do plano (196 x 0,886 = 174/h).
+  'furadeira-setup-digitado': {
+    estudo: comOrigem(RESPOSTA, 'manual'), cadastro: CADASTRO_FURADEIRA_COM_SETUP, conferencias: MEDICOES_FURADEIRA,
+  },
+  // Estudo de antes da coluna (sem origem): tratado como digitado, e o diz.
+  'furadeira-setup-antigo': { estudo: RESPOSTA, cadastro: CADASTRO_FURADEIRA_COM_SETUP, conferencias: MEDICOES_FURADEIRA },
   // As tres do posto e produto estao ARQUIVADAS: a lista ativa nao as traz.
   arquivadas: {
     estudo: RESPOSTA, cadastro: CADASTRO_FURADEIRA, conferencias: [],

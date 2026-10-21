@@ -103,6 +103,8 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
       toleranciaPct: Number(campos.toleranciaPct) || 15,
       metaObs: Number(campos.metaObs) || 12,
       taktTimeMs: taktMsDoCalculo(calc),
+      // A importacao so' tem a conta digitada (ver README): origem manual.
+      taktOrigem: taktMsDoCalculo(calc) ? 'manual' : null,
       operacoes: planilha.operacoes.map((op) => ({ nome: op.nome, frPct: op.fr, ordem: op.ordem })),
     });
 
@@ -150,6 +152,7 @@ export default function ImportarRoteiro({ t, analise, produtosExistentes = [], s
           toleranciaPct: Number(campos.toleranciaPct) || 15,
           metaObs: Number(campos.metaObs) || 12,
           taktTimeMs: taktMsDoCalculo(calc),
+          taktOrigem: taktMsDoCalculo(calc) ? 'manual' : null,
           operacoes: grupo.pecas.map((p, i) => ({
             nome: p.descricao,
             descricao: descricaoErp(p),

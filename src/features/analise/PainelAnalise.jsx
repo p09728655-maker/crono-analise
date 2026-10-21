@@ -167,8 +167,8 @@ export default function PainelAnalise({ estudoId, aoVoltar, aoColetar }) {
 
   const analise = useMemo(() => analisarEstudo(dados), [dados]);
   const leitura = useMemo(
-    () => lerEstudo(analise, { medicao: medido.medicao }),
-    [analise, medido.medicao],
+    () => lerEstudo(analise, { medicao: medido.medicao, unidade: medido.unidadeEstudo }),
+    [analise, medido.medicao, medido.unidadeEstudo],
   );
 
   if (estado === 'carregando') return <Estado texto="Carregando estudo..." />;

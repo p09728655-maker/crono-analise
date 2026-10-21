@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { espaco, tipo } from '../../../theme/escala.js';
 import { formatarSegundos, nomeChave, taktTime } from '../../../domain/cronoanalise.js';
+import { horasDeSetup } from '../../../domain/demanda/capacidade.js';
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
 import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import { ressalvasDoPrograma } from '../../../components/RitmoDemanda.jsx';
@@ -31,9 +32,8 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
   const [analistaId, setAnalistaId] = useState(estudo.analista_id || '');
   const [tolerancia, setTolerancia] = useState(Number(estudo.tolerancia_pct) || 15);
   const [metaObs, setMetaObs] = useState(Number(estudo.meta_obs) || 12);
-  const [taktSeg, setTaktSeg] = useState(
-    estudo.takt_time_ms ? formatarSegundos(Number(estudo.takt_time_ms), 1) : '',
-  );
+  const taktGravado = estudo.takt_time_ms ? formatarSegundos(Number(estudo.takt_time_ms), 1) : '';
+  const [taktSeg, setTaktSeg] = useState(taktGravado);
   const [calc, setCalc] = useState({ quantidade: '', horas: '' });
   const [salvando, setSalvando] = useState(false);
   const posto = useProgramaDoPosto(recurso);
@@ -65,6 +65,19 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
     setMarca(null);
     setTaktSeg(valor);
   }
+  /* A ORIGEM do takt que vai ser gravado (estudos.takt_origem): do botao do
+     programa, 'programa'; o numero que ja' estava, a origem que ja' estava;
+     digitado ou pela conta, 'manual'. E' ela que diz a analise se o setup
+     marcado na medicao sai do relogio (ver medicaoDoEstudo). */
+  const origem = !(Number(taktSeg) > 0) ? null
+    : marca ? 'programa'
+      : taktSeg === taktGravado ? (estudo.takt_origem ?? null)
+        : 'manual';
+  // So' com setup planejado no grupo a origem muda a conta: sem ele, nem se diz.
+  const g = posto.grupo;
+  const setupPlanejado = Boolean(g) && (horasDeSetup({
+    setupsDia: g.setups_dia, dias: g.dias_semana, minutos: g.setup_min,
+  }) || 0) > 0;
 
   function aplicarCalculo(novo) {
     setMarca(null);
@@ -93,6 +106,7 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
         toleranciaPct: Number(tolerancia),
         metaObs: Number(metaObs),
         taktTimeMs: ms && ms > 0 ? ms : null,
+        taktOrigem: ms && ms > 0 ? origem : null,
       });
     } catch (e) { setErro(e.message); setSalvando(false); }
   }
@@ -235,6 +249,8 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
                    value={taktSeg} onChange={(e) => digitarTakt(e.target.value)} />
             {conflitoTakt && <span style={est.alertaCampo} role="alert">{conflitoTakt.texto}</span>}
             <span style={est.dica}>Preenchido pela conta acima, ou digite direto.</span>
+            {setupPlanejado && origem && <span style={est.dica}>{TEXTO_DA_ORIGEM[origem]}</span>}
+            {setupPlanejado && !origem && Number(taktSeg) > 0 && <span style={est.dica}>{TEXTO_SEM_ORIGEM}</span>}
           </label>
           {/* O takt do programa a um clique — o mesmo numero do quadro
               "Programa da semana". Na embalagem o programa e' em volumes:
@@ -284,3 +300,11 @@ export default function AjustesDoEstudo({ estudo, analistas = [], aoSalvar, aoCa
   );
 }
 
+/* De onde veio o takt, dito embaixo do campo: e' o que decide como a
+   analise trata o setup marcado nas medicoes da linha. */
+const TEXTO_DA_ORIGEM = {
+  programa: 'Takt do programa da semana: ele já desconta o setup planejado, então a análise tira do medido o setup marcado nas medições.',
+  manual: 'Takt digitado, com a jornada cheia: a análise conta o setup pelo plano do grupo (a fatia dele na jornada), não pelo marcado nas medições.',
+};
+const TEXTO_SEM_ORIGEM = 'Origem do takt não registrada (estudo anterior à 2.94.0): a análise trata como digitado. '
+  + 'Se ele veio do programa, use o botão do programa da semana.';

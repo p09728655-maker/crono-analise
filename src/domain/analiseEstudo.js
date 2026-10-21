@@ -59,8 +59,9 @@ export function analisarEstudo(dados) {
        a tela, nao so' o dominio. */
     capacidadeLinha: gargalo ? gargalo.resultado.cap : 0,
     // A mesma capacidade SEM o inteiro para baixo: e' esta que entra no
-    // atingimento e no deficit (ver comparativoCapacidade). O `cap` acima
-    // e' o que se exibe, igual ao da tabela de operacoes.
+    // atingimento e no deficit (ver comparativoCapacidade), e e' esta que
+    // as telas e as folhas escrevem (exibirPorHora/capDaOperacao, em
+    // textosMedicao). O `cap` inteiro acima so' sobra como reserva.
     capacidadeExata: gargalo && gargalo.resultado.tpPorPeca > 0
       ? MS_POR_HORA / gargalo.resultado.tpPorPeca
       : 0,
@@ -85,14 +86,14 @@ export function analisarEstudo(dados) {
  * do estudo) entra no comparativo; as outras seguem junto, para a tela e
  * o papel mostrarem o numero com a ressalva.
  */
-export function lerEstudo(analise, { medicao = null } = {}) {
+export function lerEstudo(analise, { medicao = null, unidade = 'peça' } = {}) {
   if (!analise) return null;
   return {
     capacidade: comparativoCapacidade({
       taktMs: analise.taktMs,
       // Valor cheio: o arredondamento e' so' de exibicao.
       capacidadeLinha: analise.capacidadeExata ?? analise.capacidadeLinha,
-      medido: medicao?.usavel ? medicao.ritmoRelogio : null,
+      medido: medicao?.usavel ? medicao.ritmo : null,
     }),
     medicao,
     sugestoes: sugerirMelhorias({
@@ -100,6 +101,7 @@ export function lerEstudo(analise, { medicao = null } = {}) {
       taktMs: analise.taktMs,
       gargalo: analise.gargalo,
       paradas: analise.paradas,
+      unidade,
     }),
   };
 }

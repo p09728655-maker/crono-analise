@@ -18,7 +18,7 @@
  * Funcao pura: recebe numeros ja' calculados, devolve dados. Nao conhece
  * React, nem tela, nem o formato do relatorio.
  */
-import { acaoDoMotivo, formatarDuracao, formatarSegundos } from './cronoanalise.js';
+import { acaoDoMotivo, formatarDuracao, formatarPctAcima, formatarSegundos } from './cronoanalise.js';
 
 const ORDEM = { alta: 0, media: 1, baixa: 2 };
 
@@ -45,9 +45,15 @@ export const PRIORIDADES = {
  * @param operacoes  [{ id, nome, resultado }] — resultado de calcularOperacao
  * @param taktMs     ritmo exigido pela demanda (0 = nao configurado)
  * @param gargalo    a operacao de maior TP por peca, ou null
+ * @param unidade    'peça' ou 'produto' (embalagem): a unidade dos textos
  * @param paradas    resumo de resumirParadasDoEstudo, ou null
  */
-export function sugerirMelhorias({ operacoes = [], taktMs = 0, gargalo = null, paradas = null } = {}) {
+export function sugerirMelhorias({
+  operacoes = [], taktMs = 0, gargalo = null, paradas = null, unidade = 'peça',
+} = {}) {
+  // Na embalagem o estudo mede o PRODUTO: o mesmo TP que o topo chama de
+  // "por produto" nao pode virar "por peça" aqui.
+  const porUnidade = unidade === 'produto' ? 'por produto' : 'por peça';
   const lista = [];
   const comDados = (operacoes || []).filter((o) => o?.resultado);
 
@@ -126,7 +132,7 @@ export function sugerirMelhorias({ operacoes = [], taktMs = 0, gargalo = null, p
       peso: acima,
       operacao: gargalo.nome,
       titulo: 'Gargalo acima do Takt',
-      diagnostico: `${formatarSegundos(gargalo.resultado.tpPorPeca)} s por peça contra ${formatarSegundos(taktMs)} s exigidos — ${acima.toFixed(0)}% acima do ritmo da demanda.`,
+      diagnostico: `${formatarSegundos(gargalo.resultado.tpPorPeca)} s ${porUnidade} contra ${formatarSegundos(taktMs)} s exigidos — ${formatarPctAcima(acima)} acima do ritmo da demanda.`,
       acao: 'Balancear a linha: mover elemento desta operação para outra com folga, dividir o posto ou reduzir o conteúdo de trabalho. Sem isso a linha não atinge o Takt.',
     });
   }
@@ -165,7 +171,7 @@ export function sugerirMelhorias({ operacoes = [], taktMs = 0, gargalo = null, p
         peso: 0,
         operacao: null,
         titulo: 'Todas as operações bem abaixo do Takt',
-        diagnostico: `Nenhuma passa de metade dos ${formatarSegundos(taktMs)} s exigidos por peça.`,
+        diagnostico: `Nenhuma passa de metade dos ${formatarSegundos(taktMs)} s exigidos ${porUnidade}.`,
         acao: 'Avaliar acumular operações no mesmo operador — ou rever o Takt, se a demanda usada no cálculo já não é a atual.',
       });
     }

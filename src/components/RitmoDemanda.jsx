@@ -328,6 +328,19 @@ export function taktMsDoEstudo({ origem, programa, calc }) {
 }
 
 /**
+ * A ORIGEM que vai junto com o takt gravado (estudos.takt_origem):
+ * 'programa' quando o numero e' o do programa da semana — que ja' tirou o
+ * setup planejado das horas —, 'manual' quando e' a conta digitada, e null
+ * sem takt. E' o que diz a analise se o setup marcado na medicao sai ou
+ * fica no relogio. Mesma regra de taktMsDoEstudo, para os dois nunca
+ * discordarem.
+ */
+export function origemDoTaktGravado({ origem, programa, calc }) {
+  if (origem === 'programa' && programa?.taktMs > 0) return 'programa';
+  return taktMsDoCalculo(calc) ? 'manual' : null;
+}
+
+/**
  * Ponto de partida do painel: jornada padrao da fabrica de 8,8 h/dia
  * (8h48min — 44h semanais em 5 dias). O analista so digita a quantidade;
  * quem tiver turno diferente ajusta as horas na hora.

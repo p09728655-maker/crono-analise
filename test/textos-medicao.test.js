@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   capDaOperacao, diferencaExibida, exibirDiferenca, exibirPct, exibirPorHora, lerMedido, porHora,
-  porHoraExtenso, porMinuto, porUnidade, vereditoCapacidade,
+  porHoraExtenso, porMinuto, porUnidade, taxaEscrita, vereditoCapacidade,
 } from '../src/features/analise/estudo/textosMedicao.js';
 import { comparativoCapacidade, unidadeDoPosto } from '../src/domain/cronoanalise.js';
 import { medicaoDoEstudo } from '../src/domain/medicaoDoEstudo.js';
@@ -47,10 +47,11 @@ describe('exibir — arredondar so para mostrar', () => {
     expect(exibirPorHora(emb.medido)).toBe(exibirPorHora(emb.esperado));
     expect(diferencaExibida(emb)).toBeCloseTo(-0.1, 9);
     expect(exibirDiferenca(diferencaExibida(emb))).toBe('-0,1');
-    // Na furadeira (inteiro): 300,2 contra 300,5 escritos 300 e 300.
+    // Na furadeira (inteiro): 300,2 contra 300,5 escritos 300 e 300 — sai
+    // -1, o passo dos numeros ao lado, nunca a fracao "-0,3".
     const fur = comparativoCapacidade({ taktMs: 11980, capacidadeLinha: 400, medido: 300.2 });
     expect(fur.atende).toBe(false);
-    expect(exibirDiferenca(diferencaExibida(fur))).toBe('-0,3');
+    expect(exibirDiferenca(diferencaExibida(fur))).toBe('-1');
     // Igual de verdade continua 0, e superavit escrito igual continua 0.
     expect(diferencaExibida(comparativoCapacidade({ taktMs: 144000, capacidadeLinha: 31.3, medido: 25 }))).toBe(0);
     expect(diferencaExibida(comparativoCapacidade({ taktMs: 144000, capacidadeLinha: 31.3, medido: 25.04 }))).toBe(0);
@@ -64,10 +65,20 @@ describe('exibir — arredondar so para mostrar', () => {
     expect(capDaOperacao(null)).toBe('—');
   });
 
-  it('por minuto com virgula', () => {
-    expect(porMinuto(222.7)).toBe('3,7');
-    expect(porMinuto(31.3)).toBe('0,5');
+  it('por minuto com virgula — e, abaixo de 60/h, "1 a cada X min"', () => {
+    expect(porMinuto(222.7)).toBe('3,7 pç/min');
+    expect(porMinuto(60, 'produto')).toBe('1,0 produtos/min');
+    // 25,7/h: "0,4/min" dava 24/h; o inverso fecha a conta.
+    expect(porMinuto(25.7, 'produto')).toBe('1 produto a cada 2,3 min');
+    expect(porMinuto(2)).toBe('1 peça a cada 30 min');
     expect(porMinuto(null)).toBe('—');
+    expect(porMinuto(0)).toBe('—');
+  });
+
+  it('taxaEscrita: o numero que exibirPorHora escreve', () => {
+    expect(taxaEscrita(222.69)).toBe(222);
+    expect(taxaEscrita(31.34)).toBe(31.3);
+    expect(taxaEscrita(null)).toBeNull();
   });
 
   it('percentual com uma casa, e abaixo de 100 nunca vira 100%', () => {
@@ -128,6 +139,20 @@ describe('vereditoCapacidade', () => {
     expect(exibirPct(c.atingimentoPct)).toBe('98,6%');
   });
 
+  it('com takt e sem ciclos nem medicao: exigido sim, veredito nao (nunca "0%, nao atende")', () => {
+    const c = comparativoCapacidade({ taktMs: 144000, capacidadeLinha: 0 });
+    expect(c.esperado).toBeCloseTo(25, 9);
+    expect(c.atingimentoPct).toBeNull();
+    expect(c.diferenca).toBeNull();
+    expect(c.atende).toBeNull();
+    const v = vereditoCapacidade(c, { porQue: null });
+    expect(v.atende).toBeNull();
+    expect(v.frase).toMatch(/Sem ciclos coletados nem medição na linha/);
+    expect(v.frase).not.toMatch(/Sem Takt/);
+    // Com medicao, o medido responde mesmo sem ciclos.
+    expect(comparativoCapacidade({ taktMs: 144000, capacidadeLinha: 0, medido: 26 }).atende).toBe(true);
+  });
+
   it('sem Takt nao ha veredito', () => {
     const v = vereditoCapacidade(comparativoCapacidade({ taktMs: 0, capacidadeLinha: 222 }), {});
     expect(v.atende).toBeNull();
@@ -155,17 +180,49 @@ describe('lerMedido', () => {
     expect(lerMedido(pronto(m), base).linhas[0]).toMatch(/nenhuma medição de Painel em FURADEIRA 03/);
   });
 
-  it('setup planejado: o setup fica no relogio, e o numero sem ele vai ao lado com quando vale', () => {
-    const m = medicaoDoEstudo({
-      ...base,
-      conferencias: [0, 1, 2].map((i) => med({
-        iniciado_em: `2026-10-1${i}T10:00:00Z`, paradas: [{ motivo: 'setup', duracaoMs: 10 * MIN }],
-      })),
-      setup: { setupsDia: 2, dias: 5, minutos: 20 },
-    });
-    const l = lerMedido(pronto(m), base);
-    expect(l.valor).toBe('100');
-    expect(l.linhas.join(' | ')).toMatch(/com o setup marcado \(30 min\) dentro do relógio; sem ele, 120 .*veio do programa da semana/);
+  it('setup planejado: a regua segue a origem do takt, e o cartao diz qual', () => {
+    const conferencias = [0, 1, 2].map((i) => med({
+      iniciado_em: `2026-10-1${i}T10:00:00Z`, paradas: [{ motivo: 'setup', duracaoMs: 10 * MIN }],
+    }));
+    const setup = { setupsDia: 2, dias: 5, minutos: 20, horasSemana: 44 };
+    const ler = (extra) => lerMedido(pronto(medicaoDoEstudo({ ...base, conferencias, setup, ...extra })), base);
+
+    // Do programa: 300 em 150 min = 120/h, e a conta com tudo dentro ao lado.
+    const prog = ler({ taktOrigem: 'programa' });
+    expect(prog.valor).toBe('120');
+    expect(prog.linhas[0]).toMatch(/no relógio, paradas dentro, menos o setup marcado$/);
+    expect(prog.linhas.join(' | ')).toMatch(
+      /setup marcado \(30 min\) fora do relógio: o takt veio do programa da semana, que já desconta o setup planejado; com tudo dentro do relógio, 100 pç\/h/,
+    );
+
+    // Digitado: 120 x (1 - 7,58%) = 110,9 -> 110; o plano, nao a amostra.
+    const dig = ler({ taktOrigem: 'manual' });
+    expect(dig.valor).toBe('110');
+    expect(dig.linhas.join(' | ')).toMatch(
+      /o takt foi digitado com a jornada cheia: o setup entra como o plano do grupo \(7,6% da jornada\), não pelo marcado nas medições \(30 min\); com tudo dentro do relógio, 100 pç\/h/,
+    );
+
+    // Sem origem gravada: diz que e' estudo antigo, tratado como digitado.
+    expect(ler({ taktOrigem: null }).linhas.join(' | ')).toMatch(/a origem do takt não foi registrada \(estudo anterior à 2\.94\.0\)/);
+
+    // Digitado sem as horas da semana: o setup fica dentro, e diz o que falta.
+    const semHoras = lerMedido(pronto(medicaoDoEstudo({
+      ...base, conferencias, setup: { ...setup, horasSemana: null }, taktOrigem: 'manual',
+    })), base);
+    expect(semHoras.valor).toBe('100');
+    expect(semHoras.linhas.join(' | ')).toMatch(/setup marcado \(30 min\) dentro do relógio: faltam as horas da semana do grupo/);
+  });
+
+  it('embalagem: o contado escrito com a precisao do convertido (a divisao fecha)', () => {
+    // 509 volumes em 300 min = 101,8 vol/h; rack de 2 volumes = 50,9 produtos/h.
+    const emb = { recurso: 'EMBALAGEM 01', produto: 'Rack', unidade: unidadeDoPosto('EMBALAGEM'), agora: AGORA };
+    const conferencias = [0, 1, 2].map((i) => med({
+      maquina: 'EMBALAGEM 01', peca: 'Rack', duracao_ms: 100 * MIN, pecas: i === 0 ? 171 : 169,
+      iniciado_em: `2026-10-1${i}T10:00:00Z`,
+    }));
+    const l = lerMedido(pronto(medicaoDoEstudo({ ...emb, conferencias, volumes: 2 })), emb);
+    expect(l.valor).toBe('50,9');
+    expect(l.linhas.join(' | ')).toMatch(/contados 101,8 vol\/h ÷ 2 volumes por produto/);
   });
 
   it('lista no teto: avisa no cartao', () => {

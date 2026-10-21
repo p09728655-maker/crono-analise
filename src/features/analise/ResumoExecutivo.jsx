@@ -100,7 +100,7 @@ export default function ResumoExecutivo({ estudo, analise, leitura, medido }) {
         </div>
         <div style={est.destaque}>
           <span style={est.destaqueRotulo}>Capacidade pelo tempo padrão</span>
-          <span style={est.destaqueValor}>{analise.capacidadeLinha ? exibirPorHora(analise.capacidadeExata || analise.capacidadeLinha) : '—'}<small style={est.destaqueUnidade}>{u}</small></span>
+          <span style={est.destaqueValor}>{analise.capacidadeExata > 0 ? exibirPorHora(analise.capacidadeExata) : '—'}<small style={est.destaqueUnidade}>{u}</small></span>
           <span style={est.destaqueNota}>
             {analise.gargalo ? `limitada por ${analise.gargalo.nome}` : 'sem ciclos coletados'}
           </span>

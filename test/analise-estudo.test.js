@@ -91,12 +91,21 @@ describe('lerEstudo', () => {
     expect(l.sugestoes.map((s) => s.titulo)).toContain('Parada: Setup / Troca');
   });
 
+  it('na embalagem, a sugestao do gargalo fala em produto, como o topo', () => {
+    const l = lerEstudo(analisarEstudo({ estudo: { ...estudo, takt_time_ms: 5000 }, operacoes }), { unidade: 'produto' });
+    const g = l.sugestoes.find((s) => s.id === 'gargalo');
+    expect(g.diagnostico).toMatch(/s por produto contra 5\.0 s exigidos/);
+    expect(g.diagnostico).not.toMatch(/por peça/);
+  });
+
   it('sem analise nao ha leitura', () => {
     expect(lerEstudo(null)).toBeNull();
   });
 
   it('a medicao USAVEL entra no comparativo e vira a base do atingimento', () => {
-    const medicao = { usavel: true, ritmoRelogio: 150.4, unidade: 'peça' };
+    // `ritmo` e' o numero que vai contra o takt (a regra do setup ja'
+    // aplicada); o relogio inteiro e' so' para a tela.
+    const medicao = { usavel: true, ritmo: 150.4, ritmoRelogio: 140, unidade: 'peça' };
     const l = lerEstudo(analisarEstudo({ estudo, operacoes }), { medicao });
     expect(l.capacidade.medido).toBe(150.4);
     expect(l.capacidade.base).toBe('medido');
