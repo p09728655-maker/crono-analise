@@ -259,7 +259,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     medicoes={leitura.medicoes}
                     abertaId={aberta?.id ?? null}
                     aoAbrir={abrir}
-                    analiseFalhou={analises.falhou}
+                    pendenciaDe={analises.pendencia}
                   />
                   {aberta && (
                     <div ref={refDetalhe} className="embalagem-detalhe" style={est.embDetalhe}>
@@ -297,8 +297,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
 
 // A janela vai escrita: uma medicao de 31 dias sem analise ja' nao conta,
 // e "todas analisadas" diria que ela foi lida.
-function subAAnalisar({ analisaveis, aAnalisar }) {
-  if (analisaveis === 0) return `nenhuma medição volume a volume em ${DIAS} dias`;
+function subAAnalisar({ tocadas, analisaveis, aAnalisar }) {
+  if (tocadas === 0) return `nenhuma medição volume a volume em ${DIAS} dias`;
+  if (analisaveis === 0) return 'só medições de um toque, sem intervalo para analisar';
   if (aAnalisar === 0) return `nenhuma pendente nos últimos ${DIAS} dias`;
   return `de ${analisaveis} ${analisaveis === 1 ? 'medição' : 'medições'} volume a volume em ${DIAS} dias`;
 }
@@ -325,8 +326,15 @@ function semTaktCurto(estado) {
  * da linha (o teclado chega nele) e a linha inteira abre com o mouse. As
  * feitas por horarios nao tem intervalo, e a linha diz isso por escrito.
  */
+/** O aviso da linha para cada pendencia de analise (ver useAnalisesDoPcp). */
+const AVISO_PENDENCIA = {
+  'salvar-recusado': { texto: 'Análise não salva — abra para ver o motivo', estilo: est.embPendenciaCritica },
+  'reabrir-recusado': { texto: 'Não reabriu — abra para ver o motivo', estilo: est.embPendenciaCritica },
+  'nota-nao-salva': { texto: 'Nota digitada, ainda não salva', estilo: est.embPendenciaAtencao },
+};
+
 function TabelaEmbalagem({
-  medicoes, abertaId, aoAbrir, analiseFalhou,
+  medicoes, abertaId, aoAbrir, pendenciaDe,
 }) {
   const variasMaquinas = new Set(medicoes.map((c) => nomeChave(c.maquina))).size > 1;
   return (
@@ -361,6 +369,7 @@ function TabelaEmbalagem({
             const estiloLinha = selecionada ? est.linhaSelecionada : (abre ? est.embLinhaClicavel : undefined);
             const classeLinha = abre && !selecionada ? 'embalagem-linha' : undefined;
             const aoClicarLinha = abre ? () => aoAbrir(c) : undefined;
+            const aviso = AVISO_PENDENCIA[pendenciaDe(c)];
             return (
               <Fragment key={c.id}>
               <tr style={estiloLinha} className={classeLinha} onClick={aoClicarLinha}>
@@ -389,11 +398,10 @@ function TabelaEmbalagem({
                       ✓ Analisada{c.analisada_por ? ` · ${c.analisada_por}` : ''}
                     </span>
                   )}
-                  {/* A recusa que chegou com o painel em outra medicao: sem
-                      isto, ninguem saberia que a analise nao entrou. */}
-                  {abre && analiseFalhou(c.id) && (
-                    <span style={est.embAnaliseFalhou}>Análise não salva — abra para ver o motivo</span>
-                  )}
+                  {/* A recusa que chegou com o painel em outra medicao, ou a nota
+                      digitada e deixada para tras: sem isto, ninguem saberia.
+                      Na aberta, o painel ja' diz. */}
+                  {abre && !selecionada && aviso && <span style={aviso.estilo}>{aviso.texto}</span>}
                   {!abre && (
                     <span style={est.embSub} title="Medida por horários ou com a contagem corrigida à mão">
                       sem toques — não abre volume a volume

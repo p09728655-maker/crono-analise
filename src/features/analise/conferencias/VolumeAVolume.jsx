@@ -103,7 +103,9 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
  * painel some ao fechar: guardado nele, Fechar apagava a nota digitada e a
  * recusa que chegasse depois de fechado nao aparecia em lugar nenhum. Aqui
  * a nota nao salva sobrevive a fechar e reabrir, e a recusa fica com a
- * medicao (a linha da lista avisa) ate' a proxima tentativa.
+ * medicao (a linha da lista avisa) ate' a proxima tentativa. O rascunho
+ * vive enquanto a TELA esta' aberta: saiu dela, ele se vai — por isso a
+ * linha avisa quando ha' nota digitada e nao salva.
  *
  * `aplicar(atualizada, { fechar })` e' quem muda a lista e fecha o painel.
  * Sem rascunho, o campo comeca na nota salva — a que ficou ao reabrir.
@@ -111,7 +113,7 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
 export function useAnalisesDoPcp(aplicar) {
   const [rascunhos, setRascunhos] = useState({}); // id -> texto
   const [salvando, setSalvando] = useState({}); // id -> true
-  const [falhas, setFalhas] = useState({}); // id -> mensagem
+  const [falhas, setFalhas] = useState({}); // id -> { mensagem, reabrir }
   const sem = (mapa, id) => {
     if (!(id in mapa)) return mapa;
     const resto = { ...mapa };
@@ -133,7 +135,7 @@ export function useAnalisesDoPcp(aplicar) {
       // Fecha so' ao salvar; reabrir deixa o painel aberto, com a nota.
       aplicar(atualizada, { fechar: analisar });
     } catch (e) {
-      setFalhas((m) => ({ ...m, [id]: e.message }));
+      setFalhas((m) => ({ ...m, [id]: { mensagem: e.message, reabrir: !analisar } }));
     } finally {
       setSalvando((m) => sem(m, id));
     }
@@ -141,13 +143,23 @@ export function useAnalisesDoPcp(aplicar) {
 
   return {
     salvando: (id) => Boolean(salvando[id]),
-    falhou: (id) => id in falhas,
+    /**
+     * O que a LINHA precisa avisar de uma medicao fechada: a recusa (de
+     * salvar ou de reabrir — reabrir recusado deixa a analise salva, e o
+     * aviso nao pode dizer o contrario) ou a nota digitada e nao salva.
+     */
+    pendencia: (c) => {
+      if (falhas[c.id]) return falhas[c.id].reabrir ? 'reabrir-recusado' : 'salvar-recusado';
+      const digitada = c.id in rascunhos ? rascunhos[c.id].trim() : null;
+      if (!c.analisada_em && digitada !== null && digitada !== (c.analise_nota || '').trim()) return 'nota-nao-salva';
+      return null;
+    },
     /** O que o painel da medicao `c` precisa. */
     da: (c) => ({
       nota: notaDe(c),
       mudarNota: (texto) => setRascunhos((m) => ({ ...m, [c.id]: texto })),
       salvando: Boolean(salvando[c.id]),
-      erro: falhas[c.id] || null,
+      erro: falhas[c.id]?.mensagem || null,
       salvar: (analisar) => salvar(c, analisar),
     }),
   };

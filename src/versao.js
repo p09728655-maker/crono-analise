@@ -19,10 +19,11 @@ export const HISTORICO = [
     itens: [
       'NOVO BOTÃO "SALVAR ANÁLISE E FECHAR" no alto do volume a volume, ao lado de Imprimir e Fechar. Lida a medição, um clique registra que o PCP a analisou (quem e quando) e fecha o resultado. A medição em si já estava salva desde o tablet; o que passa a ficar guardado é a sua leitura dela.',
       'COMENTÁRIO DO PCP, OPCIONAL. Logo depois da Leitura da medição há o campo "Análise do PCP" para escrever a conclusão (ex.: "lacunas por falta de caixa às 9h"). Ele vai junto quando você clica em Salvar. É separado da observação de quem mediu, que continua vindo do tablet.',
-      'NOVO CARTÃO "A ANALISAR", ao lado de Medições em 30 dias: quantas medições volume a volume ainda não têm análise salva. Na lista, a medição analisada ganha o selo "✓ Analisada" com o nome de quem salvou.',
+      'NOVO CARTÃO "A ANALISAR", ao lado de Medições em 30 dias: quantas medições volume a volume dos últimos 30 dias ainda não têm análise salva. Medição de um toque só não entra: sem intervalo, não há leitura para analisar. Na lista, a medição analisada ganha o selo "✓ Analisada" com o nome de quem salvou.',
       'ABERTA DE NOVO, A MEDIÇÃO MOSTRA quem analisou, quando e o comentário. "Reabrir análise" a devolve para A analisar, com o comentário no campo para corrigir e salvar de novo. Serve também para desfazer um clique errado.',
       'A FOLHA IMPRESSA LEVA A ANÁLISE: quem, quando e o comentário, logo abaixo da observação.',
-      'Se o servidor recusar (por exemplo, usuário sem permissão de análise), o aviso aparece logo abaixo do botão, o resultado continua aberto e o comentário digitado não se perde. Salvar a análise não muda nenhum número, gráfico ou veredito.',
+      'O COMENTÁRIO DIGITADO E AINDA NÃO SALVO fica em cada medição enquanto a tela estiver aberta: dá para escrever numa, abrir outra, escrever e voltar, ou clicar em Fechar e reabrir, sem perder o texto. Na lista, a medição aparece com "Nota digitada, ainda não salva". Sair da tela Embalagem Takt Time sem salvar descarta o comentário.',
+      'Se o servidor recusar (por exemplo, usuário sem permissão de análise), o aviso aparece logo abaixo do botão, o resultado continua aberto e o comentário fica no campo. Se você já tiver passado para outra medição, a linha da recusada avisa "Análise não salva — abra para ver o motivo". Enquanto salva, Fechar e o campo ficam travados. Salvar a análise não muda nenhum número, gráfico ou veredito.',
     ],
   },
   {

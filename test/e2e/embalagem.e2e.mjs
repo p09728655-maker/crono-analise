@@ -460,6 +460,12 @@ await p.setViewportSize({ width: 1440, height: 1000 });
   await abrirMedicao('Toucador Magic New');
   checar(await nota.inputValue() === '  Lacunas por falta de caixa  ',
     'de volta, a nota digitada continua no campo — mesmo depois de escrever na outra');
+  checar(/Nota digitada, ainda não salva/.test(
+    await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().innerText(),
+  ), 'a linha da outra avisa que tem nota digitada e nao salva');
+  checar(!/abra para ver o motivo|ainda não salva/.test(
+    await lista.getByRole('row').filter({ hasText: 'Toucador Magic New' }).first().innerText(),
+  ), 'a linha aberta nao repete o aviso: o painel ja\' diz');
   checar(/Não deu para salvar/.test(await janela.innerText()), 'de volta, a recusa dela continua no painel');
   await abrirMedicao('Rack Sirius 1.6');
   checar(await nota.inputValue() === 'nota do rack', 'e a da outra tambem');
@@ -531,6 +537,24 @@ await p.setViewportSize({ width: 1440, height: 1000 });
   checar(/Não deu para salvar: Seu papel nao permite/.test(await janela.getByRole('alert').innerText())
     && await nota.inputValue() === 'nota do rack',
   'aberta, ela mostra o motivo e a nota digitada');
+
+  // Reabrir recusado: a analise continua salva, e a linha nao pode dizer
+  // "nao salva" ao lado do selo.
+  recusarAnalise = false;
+  atrasoAnalise = 0;
+  await salvar.click();
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+  // Analisada nao tem campo de nota: espera o botao, nao o campo.
+  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
+  await janela.getByRole('button', { name: 'Reabrir análise' }).waitFor({ timeout: 8000 });
+  recusarAnalise = true;
+  atrasoAnalise = 600;
+  await janela.getByRole('button', { name: 'Reabrir análise' }).click();
+  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
+  await linhaRack.getByText('Não reabriu — abra para ver o motivo').waitFor({ timeout: 4000 });
+  const textoRack = await linhaRack.innerText();
+  checar(/✓ Analisada/.test(textoRack) && !/Análise não salva/.test(textoRack),
+    'reabrir recusado: a linha segue analisada e diz que nao reabriu, nao que a analise nao foi salva');
   recusarAnalise = false;
   atrasoAnalise = 0;
   if (FOTOS) {
