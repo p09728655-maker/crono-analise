@@ -541,6 +541,98 @@ rodar('API — integracao com Postgres', () => {
   });
 
   /**
+   * ANALISE DO PCP.
+   *
+   * Lida a medicao no PC, o PCP salva quem, quando e a nota — e' o que tira
+   * a medicao de "a analisar". Pelo caminho de PRODUCAO (token do analista,
+   * RLS ligada): no modo de servico a politica nem e' avaliada, e nao
+   * haveria nome de quem salvou para conferir.
+   */
+  async function medicaoDaEmbalagem() {
+    const clientId = crypto.randomUUID();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [{
+          clientId, maquina: 'EMBALAGEM 01', peca: 'Toucador Magic New', duracaoMs: 1500000, pecas: 70,
+          salvoEm: new Date().toISOString(),
+        }],
+      },
+    }), fingirRes());
+    const [medicao] = await sql`SELECT id FROM conferencias WHERE client_id = ${clientId}`;
+    return medicao.id;
+  }
+
+  it('salva a analise do PCP com quem e quando, e reabrir guarda a nota', async () => {
+    const id = await medicaoDaEmbalagem();
+    const analista = await criarAnalista({
+      nome: 'Analise PCP', email: 'analise.pcp@patrimar.com', senha: 'senhaboa123',
+    });
+    const token = tokenDe(analista.corpo.usuario.id);
+    const patch = async (corpo) => {
+      const res = fingirRes();
+      await conferenciasApi(fingirReq({ metodo: 'PATCH', token, query: { id }, corpo }), res);
+      return res;
+    };
+
+    // Recusado ANTES de escrever: "false" em texto nao vira true, e a nota
+    // sozinha nao diz se a medicao foi analisada.
+    expect((await patch({ analisada: 'false' })).statusCode).toBe(400);
+    expect((await patch({ analiseNota: 'sozinha' })).statusCode).toBe(400);
+    expect((await patch({ analisada: false, analiseNota: 'ao reabrir' })).statusCode).toBe(400);
+    const [intacta] = await sql`SELECT analisada_em, analise_nota FROM conferencias WHERE id = ${id}`;
+    expect(intacta).toEqual({ analisada_em: null, analise_nota: null });
+
+    const antes = Date.now();
+    const salva = await patch({ analisada: true, analiseNota: '  Lacunas por falta de caixa  ' });
+    expect(salva.statusCode).toBe(200);
+    expect(salva.corpo.conferencia.analisada_por).toBe('Analise PCP');
+    expect(salva.corpo.conferencia.analise_nota).toBe('Lacunas por falta de caixa');
+    expect(new Date(salva.corpo.conferencia.analisada_em).getTime()).toBeGreaterThan(antes - 60000);
+
+    // A lista traz os tres campos: e' dela que a tela tira o selo e o
+    // cartao "A analisar".
+    const lista = fingirRes();
+    await conferenciasApi(fingirReq({ token }), lista);
+    const naLista = lista.corpo.conferencias.find((c) => c.id === id);
+    expect(naLista.analisada_em).toBeTruthy();
+    expect(naLista.analisada_por).toBe('Analise PCP');
+    expect(naLista.analise_nota).toBe('Lacunas por falta de caixa');
+
+    // Reabrir: volta a "a analisar"; a nota fica, para corrigir e salvar.
+    const reaberta = await patch({ analisada: false });
+    expect(reaberta.statusCode).toBe(200);
+    expect(reaberta.corpo.conferencia.analisada_em).toBeNull();
+    expect(reaberta.corpo.conferencia.analisada_por).toBeNull();
+    expect(reaberta.corpo.conferencia.analise_nota).toBe('Lacunas por falta de caixa');
+
+    // Salvar com o campo apagado: a nota em branco vira nula, nao "".
+    const semNota = await patch({ analisada: true, analiseNota: '   ' });
+    expect(semNota.corpo.conferencia.analisada_em).toBeTruthy();
+    expect(semNota.corpo.conferencia.analise_nota).toBeNull();
+
+    await sql`DELETE FROM conferencias WHERE id = ${id}`;
+  });
+
+  it('o tablet (coletor) nao salva analise: 403, e a medicao continua a analisar', async () => {
+    const id = await medicaoDaEmbalagem();
+    const gerado = fingirRes();
+    await dispositivosApi(fingirReq({ metodo: 'POST', corpo: { acao: 'codigo' } }), gerado);
+    const pareado = await parear({ codigo: gerado.corpo.codigo, nome: 'Tablet embalagem' });
+
+    const res = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', token: tokenDe(pareado.corpo.dispositivo.id), query: { id },
+      corpo: { analisada: true, analiseNota: 'do tablet' },
+    }), res);
+    expect(res.statusCode).toBe(403);
+    const [depois] = await sql`SELECT analisada_em, analise_nota FROM conferencias WHERE id = ${id}`;
+    expect(depois).toEqual({ analisada_em: null, analise_nota: null });
+
+    await sql`DELETE FROM conferencias WHERE id = ${id}`;
+  });
+
+  /**
    * RENOMEAR A PECA.
    *
    * O nome nao vem de cadastro: e' digitado no aparelho, medicao a medicao.

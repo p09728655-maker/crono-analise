@@ -35,6 +35,10 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  * volume abrem o detalhe (grafico, lacunas, folha A4) AO LADO da lista,
  * que continua a vista para trocar de medicao. Abaixo de 1280 px a grade
  * empilha e o detalhe vem embaixo, como antes.
+ *
+ * Lida a medicao, o PCP salva a analise no rodape do detalhe e ele fecha.
+ * O cartao A ANALISAR conta as volume a volume que ainda nao tem analise
+ * salva — e' o que falta ler.
  */
 const ESTILO_GRADE = `
   @media (max-width: 1279px) {
@@ -107,8 +111,12 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
         })),
     }));
     const arquivadas = carga.arquivadas.filter((c) => grupoDaMaquina.has(nomeChave(c.maquina))).length;
+    // So' as volume a volume entram: as outras nao abrem o detalhe, entao
+    // nao ha' onde salvar analise delas.
+    const tocadas = medicoes.filter((c) => c.com_marcas);
+    const aAnalisar = tocadas.filter((c) => !c.analisada_em).length;
     return {
-      medicoes, taktHoje, ativasDoGrupo, arquivadas,
+      medicoes, taktHoje, ativasDoGrupo, arquivadas, tocadas: tocadas.length, aAnalisar,
       grupoDe: (maquina) => carga.grupos.find((g) => g.id === grupoDaMaquina.get(nomeChave(maquina))) || null,
     };
   }, [carga]);
@@ -137,6 +145,18 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   const abrir = (c) => {
     setPorClique(true);
     setAberta((atual) => (atual?.id === c.id ? null : c));
+  };
+
+  /* A analise salva no painel muda a linha e o cartao na hora, sem buscar
+     a lista de novo. Fecha so' se a aberta ainda for a salva: quem trocou
+     de linha enquanto o servidor respondia continua na que escolheu. */
+  const aoSalvarAnalise = (atualizada, { fechar }) => {
+    const juntar = (c) => (c.id === atualizada.id ? { ...c, ...atualizada } : c);
+    setCarga((atual) => ({ ...atual, conferencias: atual.conferencias.map(juntar) }));
+    setAberta((a) => {
+      if (a?.id !== atualizada.id) return a;
+      return fechar ? null : juntar(a);
+    });
   };
 
   const grupoAberto = aberta && leitura ? leitura.grupoDe(aberta.maquina) : null;
@@ -201,11 +221,16 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                   <div style={est.kpiRotulo}>Medições em {DIAS} dias</div>
                   <div style={est.kpiValor}>{leitura.medicoes.length}</div>
                   <div style={est.kpiSub}>
-                    {leitura.medicoes.filter((c) => c.com_marcas).length} volume a volume
+                    {leitura.tocadas} volume a volume
                     {leitura.arquivadas > 0
                       ? ` · ${leitura.arquivadas} ${leitura.arquivadas === 1 ? 'arquivada' : 'arquivadas'} fora da conta`
                       : ''}
                   </div>
+                </div>
+                <div style={est.kpi}>
+                  <div style={est.kpiRotulo}>A analisar</div>
+                  <div style={est.kpiValor}>{leitura.aAnalisar}</div>
+                  <div style={est.kpiSub}>{subAAnalisar(leitura)}</div>
                 </div>
               </div>
 
@@ -236,6 +261,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                         grupo={grupoAberto}
                         maquinasDoGrupo={grupoAberto ? leitura.ativasDoGrupo(grupoAberto.id) : 0}
                         aoFechar={() => setAberta(null)}
+                        aoSalvarAnalise={aoSalvarAnalise}
                         rolar={porClique}
                       />
                     </div>
@@ -260,6 +286,12 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
       {cadastroAberto === 'motivos' && <MotivosParada aoFechar={() => setCadastroAberto(null)} />}
     </div>
   );
+}
+
+function subAAnalisar({ tocadas, aAnalisar }) {
+  if (tocadas === 0) return `nenhuma medição volume a volume em ${DIAS} dias`;
+  if (aAnalisar === 0) return 'todas as volume a volume já têm análise salva';
+  return `de ${tocadas} volume a volume, sem análise salva`;
 }
 
 function semTaktCurto(estado) {
@@ -292,8 +324,8 @@ function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
         <div style={est.painelTopoTexto}>
           <h2 style={est.painelTitulo}>Medições da embalagem</h2>
           <p style={est.painelDica}>
-            Clique numa medição para abrir o volume a volume. Volumes/hora do período
-            inteiro, com as paradas dentro — o que de fato saiu.
+            Clique numa medição para abrir o volume a volume; lida, salve a análise no alto
+            dela. Volumes/hora do período inteiro, com as paradas dentro — o que de fato saiu.
           </p>
         </div>
       </div>
@@ -341,6 +373,11 @@ function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
                     <span style={est.embProdutoTexto}>{c.peca || '—'}</span>
                   )}
                   {variasMaquinas && <span style={est.embSub}>{c.maquina || '—'}</span>}
+                  {abre && c.analisada_em && (
+                    <span style={est.embAnalisada} title={c.analise_nota || undefined}>
+                      ✓ Analisada{c.analisada_por ? ` · ${c.analisada_por}` : ''}
+                    </span>
+                  )}
                   {!abre && (
                     <span style={est.embSub} title="Medida por horários ou com a contagem corrigida à mão">
                       sem toques — não abre volume a volume

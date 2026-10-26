@@ -6,7 +6,7 @@ import {
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import { frasesVolumeAVolume, numerosDaLeitura } from '../../../domain/volumeAVolume.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
-import { listarDemanda, marcasDaConferencia } from '../../../lib/api.js';
+import { listarDemanda, marcasDaConferencia, salvarAnaliseConferencia } from '../../../lib/api.js';
 import { dataDoArquivo, imprimirComo, nomeDoArquivo } from '../../../lib/impressao.js';
 import { claro } from '../../../theme/tokensAnalise.js';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
@@ -40,6 +40,13 @@ const MAX_LACUNAS_PAPEL = 15;
  * As barras do grafico sao da linha RODANDO: mostram o passo e onde ela
  * parou sem ninguem marcar. Frases e numeros moram em
  * domain/volumeAVolume.js, os mesmos na tela e na folha.
+ *
+ * A ANALISE DO PCP: lida a medicao, o PCP salva (com a conclusao, se
+ * quiser) e o painel fecha. E' o que tira a medicao de "a analisar" na
+ * lista. O botao mora no TOPO, ao lado de Imprimir e Fechar: o topo gruda
+ * e esta' sempre a' vista. O fundo do painel nao — com a pagina no alto,
+ * ele fica abaixo da dobra (o painel comeca abaixo dos cartoes e mede a
+ * altura da janela), e um botao ali seria um botao escondido.
  */
 export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
   const [carga, setCarga] = useState({ estado: 'carregando' });
@@ -98,13 +105,17 @@ const TOM = {
 const COR_DO_TOM = { atende: claro.ok, falha: claro.critico, atencao: claro.atencao };
 
 export default function VolumeAVolume({
-  conferencia, grupo, maquinasDoGrupo, aoFechar, rolar = true,
+  conferencia, grupo, maquinasDoGrupo, aoFechar, aoSalvarAnalise, rolar = true,
 }) {
   const unidade = unidadeDoPosto(grupo?.nome);
   const r = useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo });
   const titulo = `${capital(unidade.singular)} a ${unidade.singular}`;
   const pronto = r.estado === 'pronto';
   const frases = pronto ? frasesVolumeAVolume({ ...r, unidade, nomeGrupo: grupo?.nome }) : null;
+  // So' com a leitura na tela: nao se analisa o que nao carregou.
+  const podeAnalisar = pronto && Boolean(aoSalvarAnalise);
+  const analisada = Boolean(conferencia.analisada_em);
+  const analise = useAnaliseDoPcp(conferencia, aoSalvarAnalise);
   const quando = conferencia.iniciado_em || conferencia.salvo_em;
   const meta = [
     formatarDataHora(quando),
@@ -143,8 +154,31 @@ export default function VolumeAVolume({
                 </Fragment>
               ))}
             </p>
+            {analisada && (
+              <p style={est.vavAnaliseSelo}>
+                {['✓ Analisada', conferencia.analisada_por, `em ${formatarDataHora(conferencia.analisada_em)}`]
+                  .filter(Boolean).join(' · ')}
+              </p>
+            )}
           </div>
           <div style={est.vavAcoes}>
+            {/* Salvar fecha o painel; reabrir o deixa aberto, com a nota no
+                campo para corrigir (e desfaz o clique errado). */}
+            {podeAnalisar && (analisada ? (
+              <button
+                type="button" style={est.botaoSecundario}
+                onClick={() => analise.salvar(false)} disabled={analise.salvando}
+              >
+                {analise.salvando ? 'Reabrindo…' : 'Reabrir análise'}
+              </button>
+            ) : (
+              <button
+                type="button" style={est.botaoSalvarAnalise}
+                onClick={() => analise.salvar(true)} disabled={analise.salvando}
+              >
+                {analise.salvando ? 'Salvando…' : 'Salvar análise e fechar'}
+              </button>
+            ))}
             {pronto && (
               /* O PDF sai com o nome da folha — "Takt Time - Rack Sirius 1.6 -
                  EMBALAGEM 01 - 19-10-2026 13h36" —, nao com o do sistema. */
@@ -163,6 +197,13 @@ export default function VolumeAVolume({
             )}
             <button type="button" style={est.botaoSecundario} onClick={aoFechar}>Fechar</button>
           </div>
+          {/* A recusa aparece colada ao botao, e o painel NAO fecha: fechar
+              seria dizer que salvou. */}
+          {analise.erro && (
+            <div style={est.vavAnaliseErro} role="alert">
+              {analisada ? 'Não deu para reabrir' : 'Não deu para salvar'}: {analise.erro}
+            </div>
+          )}
         </header>
 
         <div style={est.vavCorpo}>
@@ -212,6 +253,34 @@ export default function VolumeAVolume({
                 )}
               </div>
 
+              {/* 5. A CONCLUSAO DO PCP — logo depois da leitura, que e' a que
+                  ela responde. Salva pelo botao do topo. */}
+              {podeAnalisar && (
+                <section aria-label="Análise do PCP">
+                  <h3 style={est.vavSecaoTitulo}>Análise do PCP</h3>
+                  {analisada ? (
+                    <p style={conferencia.analise_nota ? est.vavAnaliseNota : est.vavSecaoDica}>
+                      {conferencia.analise_nota || 'Salva sem comentário.'}
+                    </p>
+                  ) : (
+                    <>
+                      <p style={est.vavSecaoDica}>
+                        Opcional. Vai junto quando você clica em Salvar análise e fechar, no alto do painel.
+                      </p>
+                      <textarea
+                        aria-label="Análise do PCP"
+                        rows={3}
+                        maxLength={2000}
+                        value={analise.nota}
+                        onChange={(ev) => analise.mudarNota(ev.target.value)}
+                        placeholder="Ex.: lacunas por falta de caixa às 9h; abastecer antes da troca de turno"
+                        style={est.vavAnaliseEntrada}
+                      />
+                    </>
+                  )}
+                </section>
+              )}
+
               {/* Os termos definidos so' aparecem com a leitura completa. */}
               {r.leitura.suficiente && <ComoLer leitura={r.leitura} unidade={unidade} />}
             </>
@@ -227,6 +296,43 @@ export default function VolumeAVolume({
       )}
     </>
   );
+}
+
+/**
+ * ANALISE DO PCP — o estado do botao do topo e da nota.
+ *
+ * A nota digitada, o "Salvando…" e a recusa sao DA MEDICAO: o painel nao
+ * desmonta ao trocar de linha, e sem o id junto a nota de uma apareceria
+ * na outra — ou o "Salvando…" da que ficou para tras travaria a nova.
+ * Sem rascunho, o campo comeca na nota salva (a que ficou ao reabrir).
+ */
+function useAnaliseDoPcp(conferencia, aoSalvar) {
+  const { id } = conferencia;
+  const [rascunho, setRascunho] = useState(null); // { id, texto }
+  const [ocupada, setOcupada] = useState(null); // id em gravacao
+  const [falha, setFalha] = useState(null); // { id, mensagem }
+  const nota = rascunho?.id === id ? rascunho.texto : (conferencia.analise_nota || '');
+
+  async function salvar(analisar) {
+    setOcupada(id);
+    setFalha(null);
+    try {
+      const atualizada = await salvarAnaliseConferencia(id, { analisada: analisar, nota: nota.trim() });
+      aoSalvar(atualizada, { fechar: analisar });
+    } catch (e) {
+      setFalha({ id, mensagem: e.message });
+    } finally {
+      setOcupada((atual) => (atual === id ? null : atual));
+    }
+  }
+
+  return {
+    nota,
+    mudarNota: (texto) => setRascunho({ id, texto }),
+    salvando: ocupada === id,
+    erro: falha?.id === id ? falha.mensagem : null,
+    salvar,
+  };
 }
 
 /**
@@ -437,6 +543,15 @@ function FolhaVolumeAVolume({
 
       {conferencia.observacao && (
         <p style={{ margin: '0 0 10px' }}><strong>Obs. do analista:</strong> {conferencia.observacao}</p>
+      )}
+      {/* A analise salva vai junto: a folha que chega a' reuniao diz se o
+          PCP ja' leu a medicao, e o que concluiu. */}
+      {conferencia.analisada_em && (
+        <p style={{ margin: '0 0 10px' }}>
+          <strong>Análise do PCP</strong>
+          {' '}({[conferencia.analisada_por, formatarDataHora(conferencia.analisada_em)].filter(Boolean).join(', ')})
+          {conferencia.analise_nota ? `: ${conferencia.analise_nota}` : ''}
+        </p>
       )}
 
       {/* O destaque no papel e' a borda grossa, nao a cor: a impressora da

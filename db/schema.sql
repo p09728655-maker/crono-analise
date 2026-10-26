@@ -414,6 +414,26 @@ ALTER TABLE conferencias ADD CONSTRAINT conferencias_marcas_setup_chk
   CHECK (marcas_setup_ms IS NULL OR (marcas_relogio_ms IS NOT NULL
     AND marcas_setup_ms >= 0 AND marcas_setup_ms <= marcas_relogio_ms));
 
+-- ANALISE DO PCP: a medicao foi lida no PC e a conclusao ficou registrada.
+-- Antes, ler a medicao nao deixava rastro: fechar o painel era igual a
+-- nunca ter aberto, e nao havia como saber o que ainda faltava ler.
+--
+-- NULA = A ANALISAR. Nao entra em calculo nenhum: e' controle do trabalho
+-- do PCP, nao dado de medicao.
+--  - analisada_em: quando o PCP salvou a analise.
+--  - analisada_por: o NOME de quem salvou, copiado na hora. Texto e nao
+--    chave para usuarios: o registro continua dizendo quem foi mesmo
+--    depois que o usuario sair do cadastro.
+--  - analise_nota: a conclusao do PCP, opcional ("lacunas por falta de
+--    caixa"). Separada da `observacao`, que e' de quem mediu, no posto.
+--    Sobrevive ao reabrir: quem reabre para corrigir nao reescreve tudo.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS analisada_em  timestamptz;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS analisada_por text;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS analise_nota  text;
+ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_analise_chk;
+ALTER TABLE conferencias ADD CONSTRAINT conferencias_analise_chk
+  CHECK (analisada_por IS NULL OR analisada_em IS NOT NULL);
+
 -- ------------------------------------------------------- motivos_parada
 -- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o
 -- relatorio interpreta.
@@ -972,8 +992,9 @@ DROP POLICY IF EXISTS paradas_apaga ON paradas;
 CREATE POLICY paradas_apaga ON paradas FOR DELETE TO authenticated
   USING (public.parada_e_minha(operacao_id, conferencia_id) AND public.pode_escrever());
 
--- conferencias: nascem na coleta; arquivar/marcar parada e' analise;
--- excluir medicao e' admin — a operacao sem volta deste relatorio.
+-- conferencias: nascem na coleta; arquivar/marcar parada/salvar a analise
+-- do PCP e' analise; excluir medicao e' admin — a operacao sem volta deste
+-- relatorio.
 DROP POLICY IF EXISTS conferencias_le ON conferencias;
 CREATE POLICY conferencias_le ON conferencias FOR SELECT TO authenticated
   USING (empresa_id = public.empresa_atual());

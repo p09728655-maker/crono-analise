@@ -136,11 +136,20 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
     toque do botão.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
   medições da embalagem. Cada medição tocada abre o **volume a volume** na
-  própria página, abaixo da lista (clicar de novo fecha): identificação,
-  cinco cartões (volumes, **tempo por volume no período**, **tempo por volume
-  com a linha rodando**, paradas marcadas, **lacunas**), o gráfico do
-  intervalo de cada volume contra a linha do takt, a leitura em palavras e a
-  folha A4. O PDF sai nomeado "Takt Time - produto - máquina - data hora".
+  própria página, ao lado da lista (abaixo dela em tela com menos de 1280 px;
+  clicar de novo fecha): identificação, cinco cartões (volumes, **tempo por
+  volume no período**, **tempo por volume com a linha rodando**, paradas
+  marcadas, **lacunas**), o gráfico do intervalo de cada volume contra a linha
+  do takt, a leitura em palavras e a folha A4. O PDF sai nomeado "Takt Time -
+  produto - máquina - data hora".
+- **Análise do PCP.** Lida a medição, *Salvar análise e fechar* (no alto do
+  painel) registra quem analisou, quando e o comentário opcional do campo
+  *Análise do PCP* (`analisada_em`, `analisada_por`, `analise_nota` em
+  `conferencias`), e fecha o painel. O cartão **A analisar** conta as medições
+  volume a volume sem análise salva; na lista, a analisada ganha o selo
+  "✓ Analisada". *Reabrir análise* devolve a medição para "a analisar" com o
+  comentário no campo. Não muda número nenhum: é controle do que falta ler.
+  Salvar é de analista ou administrador (o tablet, coletor, recebe 403).
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O PCP cola o programa da embalagem em VOLUMES**: um rack que sai em dois

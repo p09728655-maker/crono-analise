@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.94.0',
+    data: '2026-10-26',
+    titulo: 'Embalagem Takt Time: salvar a análise e fechar',
+    itens: [
+      'NOVO BOTÃO "SALVAR ANÁLISE E FECHAR" no alto do volume a volume, ao lado de Imprimir e Fechar. Lida a medição, um clique registra que o PCP a analisou (quem e quando) e fecha o resultado. A medição em si já estava salva desde o tablet; o que passa a ficar guardado é a sua leitura dela.',
+      'COMENTÁRIO DO PCP, OPCIONAL. Logo depois da Leitura da medição há o campo "Análise do PCP" para escrever a conclusão (ex.: "lacunas por falta de caixa às 9h"). Ele vai junto quando você clica em Salvar. É separado da observação de quem mediu, que continua vindo do tablet.',
+      'NOVO CARTÃO "A ANALISAR", ao lado de Medições em 30 dias: quantas medições volume a volume ainda não têm análise salva. Na lista, a medição analisada ganha o selo "✓ Analisada" com o nome de quem salvou.',
+      'ABERTA DE NOVO, A MEDIÇÃO MOSTRA quem analisou, quando e o comentário. "Reabrir análise" a devolve para A analisar, com o comentário no campo para corrigir e salvar de novo. Serve também para desfazer um clique errado.',
+      'A FOLHA IMPRESSA LEVA A ANÁLISE: quem, quando e o comentário, logo abaixo da observação.',
+      'Se o servidor recusar (por exemplo, usuário sem permissão de análise), o aviso aparece logo abaixo do botão, o resultado continua aberto e o comentário digitado não se perde. Salvar a análise não muda nenhum número, gráfico ou veredito.',
+    ],
+  },
+  {
     versao: '2.93.1',
     data: '2026-10-26',
     titulo: 'Embalagem Takt Time no PC: a medição abre ao lado da lista',

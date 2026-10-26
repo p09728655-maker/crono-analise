@@ -422,6 +422,8 @@ export const est = {
   embForte: { display: 'block', ...tipo('corpoF'), color: t.texto, whiteSpace: 'nowrap' },
   embProdutoTexto: { display: 'block', ...tipo('corpoF'), color: t.texto, overflowWrap: 'anywhere' },
   embSub: { display: 'block', ...tipo('legenda'), color: t.textoFraco },
+  // A medicao com analise salva: o selo diz por escrito, a cor so' reforca.
+  embAnalisada: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.ok },
 
   /* ---- painel VOLUME A VOLUME (Embalagem Takt Time) ----
      Abre na propria pagina, ao lado da lista (abaixo dela, em tela
@@ -449,7 +451,7 @@ export const est = {
   },
   vavMetaForte: { color: t.texto, fontWeight: 700 },
   vavMetaSeparador: { color: t.bordaForte },
-  vavAcoes: { display: 'flex', gap: espaco.sm, flexShrink: 0 },
+  vavAcoes: { display: 'flex', gap: espaco.sm, flexShrink: 0, flexWrap: 'wrap' },
   vavCorpo: {
     display: 'flex', flexDirection: 'column', gap: espaco.lg,
     padding: `${espaco.lg}px ${espaco.xl}px ${espaco.xl}px`,
@@ -523,6 +525,33 @@ export const est = {
   },
   vavComoLerItem: { margin: 0, ...tipo('legenda'), color: t.textoMedio, lineHeight: 1.5 },
   vavComoLerTermo: { fontWeight: 700, color: t.texto },
+  /* A ANALISE DO PCP: o botao no topo (que gruda), a nota na secao logo
+     depois da leitura. */
+  vavAnaliseSelo: { ...tipo('legenda'), fontWeight: 700, color: t.ok, margin: 0 },
+  vavAnaliseEntrada: {
+    display: 'block', width: '100%', boxSizing: 'border-box', minHeight: 64,
+    padding: `${espaco.sm}px ${espaco.md}px`, background: t.fundo,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.texto, ...tipo('corpo'), fontFamily: 'inherit', resize: 'vertical',
+  },
+  // A acao principal do painel: o vermelho de acao da tela de analise.
+  botaoSalvarAnalise: {
+    minHeight: 40, padding: `0 ${espaco.lg}px`,
+    background: t.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
+    ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa,
+    whiteSpace: 'nowrap',
+  },
+  vavAnaliseNota: {
+    ...tipo('corpo'), color: t.texto, margin: 0,
+    padding: `${espaco.sm}px ${espaco.md}px`, background: t.fundo, borderRadius: raio.sm,
+    whiteSpace: 'pre-line', overflowWrap: 'anywhere',
+  },
+  // Linha inteira do topo, embaixo dos botoes: o topo quebra linha (flexWrap).
+  vavAnaliseErro: {
+    flexBasis: '100%', padding: espaco.md, background: t.criticoFundo, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.critico,
+    ...tipo('legenda'), color: t.texto,
+  },
   // Atalhos para os cadastros que a pagina usa (produtos, motivos): a
   // direita, discretos — ferramenta, nao conteudo.
   barraCadastros: {

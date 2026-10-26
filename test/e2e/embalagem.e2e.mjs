@@ -41,13 +41,19 @@ const DEMANDAS = [{
 }];
 
 async function simularServidor(pagina, {
-  conferencias = [], marcas = null, relogio = null, aoSincronizar, demandas = DEMANDAS,
+  conferencias = [], marcas = null, relogio = null, aoSincronizar, demandas = DEMANDAS, aoAlterar,
 } = {}) {
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas } })
     : rota.fulfill({ json: CADASTRO })));
   await pagina.route('**/api/conferencias**', (rota) => {
     const url = new URL(rota.request().url());
+    // PATCH de UMA medicao (a analise do PCP): quem testa decide a resposta.
+    if (rota.request().method() === 'PATCH') {
+      return rota.fulfill(aoAlterar
+        ? aoAlterar(url.searchParams.get('id'), rota.request().postDataJSON())
+        : { status: 405, json: { erro: 'PATCH nao simulado' } });
+    }
     if (url.searchParams.get('id')) {
       return rota.fulfill({ json: { conferencia: { id: url.searchParams.get('id'), marcas_ms: marcas, marcas_relogio_ms: relogio } } });
     }
@@ -269,8 +275,28 @@ const medicao2 = {
   finalizado_em: new Date(hoje.getTime() - 8000000).toISOString(),
   salvo_em: new Date(hoje.getTime() - 8000000).toISOString(),
 };
+/* O PATCH da analise: grava o pedido e responde como a API — recusando
+   enquanto `recusarAnalise` estiver ligado, para provar que a recusa
+   aparece e o painel nao fecha. */
+const pedidosAnalise = [];
+let recusarAnalise = false;
+const aoAlterar = (id, corpo) => {
+  pedidosAnalise.push({ id, corpo });
+  if (recusarAnalise) {
+    return { status: 403, json: { erro: 'Seu papel nao permite esta operacao' } };
+  }
+  return {
+    json: {
+      conferencia: corpo.analisada
+        ? { id, analisada_em: new Date().toISOString(), analisada_por: 'Mauricio PCP', analise_nota: corpo.analiseNota }
+        : { id, analisada_em: null, analisada_por: null, analise_nota: 'Lacunas por falta de caixa' },
+    },
+  };
+};
 // Sem parada marcada: o relogio entre toques e' o proprio trecho, 920 s.
-await simularServidor(p, { conferencias: [medicao, medicao2], marcas, relogio: marcas.at(-1) - marcas[0] });
+await simularServidor(p, {
+  conferencias: [medicao, medicao2], marcas, relogio: marcas.at(-1) - marcas[0], aoAlterar,
+});
 
 await p.goto(`${BASE}/analise`);
 await p.getByRole('button', { name: /^Abrir$/ }).first().waitFor({ timeout: 8000 });
@@ -369,6 +395,93 @@ await p.setViewportSize({ width: 1440, height: 1000 });
   const topoDetalhe = await detalhe.evaluate((el) => el.scrollTop);
   checar(yDepois === yAntes && topoDetalhe === 0,
     `trocar com o detalhe rolado: a pagina nao pula (scrollY ${yAntes} -> ${yDepois}) e a nova abre no topo (${topoDetalhe})`);
+}
+
+/* ANALISE DO PCP: lida a medicao, salvar grava e fecha o painel; a linha
+   ganha o selo e o cartao "A analisar" desce. Aberta agora: Toucador. */
+{
+  // O rotulo sai em caixa alta (CSS): o cartao e' o pai dele.
+  const cartao = p.getByText('A analisar', { exact: true }).locator('..');
+  checar(/A analisar\s*2/i.test(await cartao.innerText()), 'cartao "A analisar": as 2 medicoes volume a volume, nenhuma analisada');
+  const salvar = janela.getByRole('button', { name: 'Salvar análise e fechar' });
+  const nota = janela.getByRole('textbox', { name: 'Análise do PCP' });
+  // No topo, ao lado de Imprimir e Fechar: a' vista com a pagina no alto,
+  // sem rolar nada. O fundo do painel fica abaixo da dobra.
+  {
+    const bs = await salvar.boundingBox();
+    const bf = await janela.getByRole('button', { name: 'Fechar', exact: true }).boundingBox();
+    checar(bs && bs.y >= 0 && bs.y + bs.height <= 1000 && Math.abs(bs.y - bf.y) < 4,
+      `"Salvar análise e fechar" no topo, junto de Fechar, a' vista (y ${Math.round(bs?.y)} px)`);
+  }
+  await nota.fill('  Lacunas por falta de caixa  ');
+
+  // Recusado: o aviso aparece no topo, junto do botao, e o painel NAO fecha.
+  recusarAnalise = true;
+  await salvar.click();
+  const aviso = janela.getByRole('alert');
+  await aviso.waitFor({ timeout: 4000 });
+  checar(/Não deu para salvar: Seu papel nao permite/.test(await aviso.innerText()),
+    'recusa do servidor aparece no painel');
+  {
+    const ba = await aviso.boundingBox();
+    const bs = await salvar.boundingBox();
+    checar(ba.y > bs.y && ba.y - (bs.y + bs.height) < 60, 'a recusa aparece logo abaixo do botao clicado');
+  }
+  checar(await janela.count() === 1, 'recusado, o painel continua aberto — fechar seria dizer que salvou');
+  checar(await nota.inputValue() === '  Lacunas por falta de caixa  ', 'recusado, a nota digitada continua no campo');
+
+  // A nota e' DA MEDICAO: trocar de linha nao a leva junto, e voltar a traz.
+  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
+  await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
+  await nota.waitFor({ timeout: 8000 });
+  checar(await nota.inputValue() === '' && await janela.getByRole('alert').count() === 0,
+    'outra medicao abre com o campo vazio e sem a recusa da anterior');
+  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
+  await janela.getByRole('heading', { name: 'Toucador Magic New' }).waitFor({ timeout: 4000 });
+  await nota.waitFor({ timeout: 8000 });
+  checar(await nota.inputValue() === '  Lacunas por falta de caixa  ', 'de volta, a nota digitada continua no campo');
+
+  recusarAnalise = false;
+  await salvar.click();
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+  const pedido = pedidosAnalise.at(-1);
+  checar(pedido?.id === medicao2.id && pedido.corpo.analisada === true
+    && pedido.corpo.analiseNota === 'Lacunas por falta de caixa',
+  `salvar manda analisada + a nota aparada, da medicao aberta (${JSON.stringify(pedido?.corpo)})`);
+  checar(await janela.count() === 0, 'salvo, o painel fecha');
+  const linha = lista.getByRole('row').filter({ hasText: 'Toucador Magic New' }).first();
+  checar(/✓ Analisada · Mauricio PCP/.test(await linha.innerText()), 'a linha ganha o selo "✓ Analisada" com quem salvou');
+  checar(!/Analisada/.test(await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().innerText()),
+    'a outra medicao continua sem selo');
+  checar(/A analisar\s*1/i.test(await cartao.innerText()), 'o cartao "A analisar" desce para 1 sem recarregar');
+  if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-analisada-lista.png` });
+
+  // Aberta de novo: quem, quando e a nota; Reabrir volta a "a analisar",
+  // deixa o painel aberto e devolve a nota ao campo.
+  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
+  await janela.getByText(/No período, saiu um volume/).waitFor({ timeout: 8000 });
+  const textoAberta = await janela.innerText();
+  checar(/✓ Analisada · Mauricio PCP · em \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/.test(textoAberta)
+    && /Lacunas por falta de caixa/.test(textoAberta),
+  'aberta de novo, o painel mostra quem analisou, quando e a nota');
+  if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-analisada-painel.png` });
+  // A folha A4 leva a analise: quem, quando e a nota.
+  checar(/Análise do PCP \(Mauricio PCP, \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}\): Lacunas por falta de caixa/
+    .test(await p.locator('body > .somente-impressao').innerText()),
+  'a folha A4 leva a analise do PCP com quem, quando e a nota');
+  await janela.getByRole('button', { name: 'Reabrir análise' }).click();
+  await salvar.waitFor({ timeout: 4000 });
+  checar(pedidosAnalise.at(-1)?.corpo.analisada === false, 'reabrir manda analisada: false');
+  checar(await janela.count() === 1, 'reabrir deixa o painel aberto');
+  checar(await nota.inputValue() === 'Lacunas por falta de caixa', 'reaberta, a nota volta ao campo para corrigir');
+  checar(/A analisar\s*2/i.test(await cartao.innerText()), 'reaberta, volta a contar no "A analisar"');
+  checar(!/Análise do PCP \(/.test(await p.locator('body > .somente-impressao').innerText()),
+    'reaberta, a folha A4 deixa de dizer que foi analisada');
+  if (FOTOS) {
+    await p.screenshot({ path: `${FOTOS}/pc-a-analisar.png` });
+    await nota.scrollIntoViewIfNeeded();
+    await p.screenshot({ path: `${FOTOS}/pc-nota.png` });
+  }
 }
 
 // Empilhado (tela estreita), a medicao que abre SOZINHA ao carregar nasce
