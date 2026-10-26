@@ -424,6 +424,7 @@ export const est = {
   embSub: { display: 'block', ...tipo('legenda'), color: t.textoFraco },
   // A medicao com analise salva: o selo diz por escrito, a cor so' reforca.
   embAnalisada: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.ok },
+  embAnaliseFalhou: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.critico },
 
   /* ---- painel VOLUME A VOLUME (Embalagem Takt Time) ----
      Abre na propria pagina, ao lado da lista (abaixo dela, em tela

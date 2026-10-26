@@ -46,13 +46,16 @@ async function simularServidor(pagina, {
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas } })
     : rota.fulfill({ json: CADASTRO })));
-  await pagina.route('**/api/conferencias**', (rota) => {
+  await pagina.route('**/api/conferencias**', async (rota) => {
     const url = new URL(rota.request().url());
-    // PATCH de UMA medicao (a analise do PCP): quem testa decide a resposta.
+    // PATCH de UMA medicao (a analise do PCP): quem testa decide a resposta
+    // e quanto ela demora (`atraso`, em ms).
     if (rota.request().method() === 'PATCH') {
-      return rota.fulfill(aoAlterar
+      const { atraso = 0, ...resposta } = aoAlterar
         ? aoAlterar(url.searchParams.get('id'), rota.request().postDataJSON())
-        : { status: 405, json: { erro: 'PATCH nao simulado' } });
+        : { status: 405, json: { erro: 'PATCH nao simulado' } };
+      if (atraso) await new Promise((r) => { setTimeout(r, atraso); });
+      return rota.fulfill(resposta);
     }
     if (url.searchParams.get('id')) {
       return rota.fulfill({ json: { conferencia: { id: url.searchParams.get('id'), marcas_ms: marcas, marcas_relogio_ms: relogio } } });
@@ -280,12 +283,14 @@ const medicao2 = {
    aparece e o painel nao fecha. */
 const pedidosAnalise = [];
 let recusarAnalise = false;
+let atrasoAnalise = 0;
 const aoAlterar = (id, corpo) => {
   pedidosAnalise.push({ id, corpo });
   if (recusarAnalise) {
-    return { status: 403, json: { erro: 'Seu papel nao permite esta operacao' } };
+    return { atraso: atrasoAnalise, status: 403, json: { erro: 'Seu papel nao permite esta operacao' } };
   }
   return {
+    atraso: atrasoAnalise,
     json: {
       conferencia: corpo.analisada
         ? { id, analisada_em: new Date().toISOString(), analisada_por: 'Mauricio PCP', analise_nota: corpo.analiseNota }
@@ -293,9 +298,17 @@ const aoAlterar = (id, corpo) => {
     },
   };
 };
+// Uma de UM toque: tocada, mas sem intervalo — o detalhe nao tem leitura
+// nem botao de analise, entao ela nao pode contar em "A analisar".
+const medicao3 = {
+  ...medicao2, id: '00000000-0000-0000-0000-00000000c0f3', peca: 'Painel Sirius 1.4', pecas: 1,
+  iniciado_em: new Date(hoje.getTime() - 12000000).toISOString(),
+  finalizado_em: new Date(hoje.getTime() - 11000000).toISOString(),
+  salvo_em: new Date(hoje.getTime() - 11000000).toISOString(),
+};
 // Sem parada marcada: o relogio entre toques e' o proprio trecho, 920 s.
 await simularServidor(p, {
-  conferencias: [medicao, medicao2], marcas, relogio: marcas.at(-1) - marcas[0], aoAlterar,
+  conferencias: [medicao, medicao2, medicao3], marcas, relogio: marcas.at(-1) - marcas[0], aoAlterar,
 });
 
 await p.goto(`${BASE}/analise`);
@@ -402,7 +415,8 @@ await p.setViewportSize({ width: 1440, height: 1000 });
 {
   // O rotulo sai em caixa alta (CSS): o cartao e' o pai dele.
   const cartao = p.getByText('A analisar', { exact: true }).locator('..');
-  checar(/A analisar\s*2/i.test(await cartao.innerText()), 'cartao "A analisar": as 2 medicoes volume a volume, nenhuma analisada');
+  checar(/A analisar\s*2\s*de 2 medições volume a volume em 30 dias/i.test(await cartao.innerText()),
+    `cartao "A analisar": 2 de 2 em 30 dias — a de um toque so' nao conta (${(await cartao.innerText()).replace(/\n/g, ' | ')})`);
   const salvar = janela.getByRole('button', { name: 'Salvar análise e fechar' });
   const nota = janela.getByRole('textbox', { name: 'Análise do PCP' });
   // No topo, ao lado de Imprimir e Fechar: a' vista com a pagina no alto,
@@ -436,14 +450,39 @@ await p.setViewportSize({ width: 1440, height: 1000 });
   await nota.waitFor({ timeout: 8000 });
   checar(await nota.inputValue() === '' && await janela.getByRole('alert').count() === 0,
     'outra medicao abre com o campo vazio e sem a recusa da anterior');
-  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
-  await janela.getByRole('heading', { name: 'Toucador Magic New' }).waitFor({ timeout: 4000 });
-  await nota.waitFor({ timeout: 8000 });
-  checar(await nota.inputValue() === '  Lacunas por falta de caixa  ', 'de volta, a nota digitada continua no campo');
-
-  recusarAnalise = false;
-  await salvar.click();
+  // O PCP compara: escreve nas duas, e cada nota fica onde foi deixada.
+  await nota.fill('nota do rack');
+  const abrirMedicao = async (nome) => {
+    await lista.getByRole('button', { name: nome }).click();
+    await janela.getByRole('heading', { name: nome }).waitFor({ timeout: 4000 });
+    await nota.waitFor({ timeout: 8000 });
+  };
+  await abrirMedicao('Toucador Magic New');
+  checar(await nota.inputValue() === '  Lacunas por falta de caixa  ',
+    'de volta, a nota digitada continua no campo — mesmo depois de escrever na outra');
+  checar(/Não deu para salvar/.test(await janela.innerText()), 'de volta, a recusa dela continua no painel');
+  await abrirMedicao('Rack Sirius 1.6');
+  checar(await nota.inputValue() === 'nota do rack', 'e a da outra tambem');
+  // Fechar nao apaga o que foi digitado: reaberta, a nota esta' la'.
+  await janela.getByRole('button', { name: 'Fechar', exact: true }).click();
   await janela.waitFor({ state: 'detached', timeout: 4000 });
+  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
+  await nota.waitFor({ timeout: 8000 });
+  checar(await nota.inputValue() === 'nota do rack', 'Fechar sem salvar mantem a nota digitada para quando reabrir');
+  await abrirMedicao('Toucador Magic New');
+
+  // Enquanto salva, Fechar, o campo e o clique na linha aberta ficam
+  // travados: fechado no meio, ninguem veria uma recusa.
+  recusarAnalise = false;
+  atrasoAnalise = 800;
+  await salvar.click();
+  await janela.getByRole('button', { name: 'Salvando…' }).waitFor({ timeout: 2000 });
+  checar(await janela.getByRole('button', { name: 'Fechar', exact: true }).isDisabled() && await nota.isDisabled(),
+    'salvando: Fechar e o campo da nota travados');
+  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
+  checar(await janela.count() === 1, 'salvando: clicar na linha aberta nao fecha o painel');
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+  atrasoAnalise = 0;
   const pedido = pedidosAnalise.at(-1);
   checar(pedido?.id === medicao2.id && pedido.corpo.analisada === true
     && pedido.corpo.analiseNota === 'Lacunas por falta de caixa',
@@ -477,6 +516,23 @@ await p.setViewportSize({ width: 1440, height: 1000 });
   checar(/A analisar\s*2/i.test(await cartao.innerText()), 'reaberta, volta a contar no "A analisar"');
   checar(!/Análise do PCP \(/.test(await p.locator('body > .somente-impressao').innerText()),
     'reaberta, a folha A4 deixa de dizer que foi analisada');
+
+  // Recusa que chega com o painel em OUTRA medicao: a linha avisa, e
+  // abrir mostra o motivo com a nota intacta.
+  await abrirMedicao('Rack Sirius 1.6');
+  recusarAnalise = true;
+  atrasoAnalise = 600;
+  await salvar.click();
+  await abrirMedicao('Toucador Magic New');
+  const linhaRack = lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first();
+  await linhaRack.getByText('Análise não salva — abra para ver o motivo').waitFor({ timeout: 4000 });
+  checar(true, 'recusa chegada com o painel em outra medicao: a linha avisa que a analise nao foi salva');
+  await abrirMedicao('Rack Sirius 1.6');
+  checar(/Não deu para salvar: Seu papel nao permite/.test(await janela.getByRole('alert').innerText())
+    && await nota.inputValue() === 'nota do rack',
+  'aberta, ela mostra o motivo e a nota digitada');
+  recusarAnalise = false;
+  atrasoAnalise = 0;
   if (FOTOS) {
     await p.screenshot({ path: `${FOTOS}/pc-a-analisar.png` });
     await nota.scrollIntoViewIfNeeded();

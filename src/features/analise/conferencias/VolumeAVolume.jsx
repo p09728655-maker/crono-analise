@@ -94,6 +94,65 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
   }, [carga, grupo, maquinasDoGrupo, conferencia]);
 }
 
+/**
+ * ANALISE DO PCP — a nota digitada, o "Salvando…" e a recusa de CADA
+ * medicao, guardados pela TELA, nao pelo painel.
+ *
+ * Por medicao, porque o PCP compara: escreve em uma, abre outra, escreve,
+ * volta — e cada nota tem de estar onde foi deixada. Na tela, porque o
+ * painel some ao fechar: guardado nele, Fechar apagava a nota digitada e a
+ * recusa que chegasse depois de fechado nao aparecia em lugar nenhum. Aqui
+ * a nota nao salva sobrevive a fechar e reabrir, e a recusa fica com a
+ * medicao (a linha da lista avisa) ate' a proxima tentativa.
+ *
+ * `aplicar(atualizada, { fechar })` e' quem muda a lista e fecha o painel.
+ * Sem rascunho, o campo comeca na nota salva — a que ficou ao reabrir.
+ */
+export function useAnalisesDoPcp(aplicar) {
+  const [rascunhos, setRascunhos] = useState({}); // id -> texto
+  const [salvando, setSalvando] = useState({}); // id -> true
+  const [falhas, setFalhas] = useState({}); // id -> mensagem
+  const sem = (mapa, id) => {
+    if (!(id in mapa)) return mapa;
+    const resto = { ...mapa };
+    delete resto[id];
+    return resto;
+  };
+  const notaDe = (c) => (c.id in rascunhos ? rascunhos[c.id] : (c.analise_nota || ''));
+
+  async function salvar(conferencia, analisar) {
+    const { id } = conferencia;
+    setSalvando((m) => ({ ...m, [id]: true }));
+    setFalhas((m) => sem(m, id));
+    try {
+      const atualizada = await salvarAnaliseConferencia(id, {
+        analisada: analisar, nota: notaDe(conferencia).trim(),
+      });
+      // Salvo, o rascunho cumpriu o papel: o campo volta a ler o banco.
+      setRascunhos((m) => sem(m, id));
+      // Fecha so' ao salvar; reabrir deixa o painel aberto, com a nota.
+      aplicar(atualizada, { fechar: analisar });
+    } catch (e) {
+      setFalhas((m) => ({ ...m, [id]: e.message }));
+    } finally {
+      setSalvando((m) => sem(m, id));
+    }
+  }
+
+  return {
+    salvando: (id) => Boolean(salvando[id]),
+    falhou: (id) => id in falhas,
+    /** O que o painel da medicao `c` precisa. */
+    da: (c) => ({
+      nota: notaDe(c),
+      mudarNota: (texto) => setRascunhos((m) => ({ ...m, [c.id]: texto })),
+      salvando: Boolean(salvando[c.id]),
+      erro: falhas[c.id] || null,
+      salvar: (analisar) => salvar(c, analisar),
+    }),
+  };
+}
+
 const TOM = {
   atende: est.vereditoAtende,
   falha: est.vereditoFalha,
@@ -105,17 +164,19 @@ const TOM = {
 const COR_DO_TOM = { atende: claro.ok, falha: claro.critico, atencao: claro.atencao };
 
 export default function VolumeAVolume({
-  conferencia, grupo, maquinasDoGrupo, aoFechar, aoSalvarAnalise, rolar = true,
+  conferencia, grupo, maquinasDoGrupo, aoFechar, analise, rolar = true,
 }) {
   const unidade = unidadeDoPosto(grupo?.nome);
   const r = useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo });
   const titulo = `${capital(unidade.singular)} a ${unidade.singular}`;
   const pronto = r.estado === 'pronto';
   const frases = pronto ? frasesVolumeAVolume({ ...r, unidade, nomeGrupo: grupo?.nome }) : null;
-  // So' com a leitura na tela: nao se analisa o que nao carregou.
-  const podeAnalisar = pronto && Boolean(aoSalvarAnalise);
+  // So' com a leitura na tela: nao se analisa o que nao carregou. O estado
+  // da analise (nota digitada, "Salvando…", recusa) vem da tela — ver
+  // useAnalisesDoPcp.
+  const podeAnalisar = pronto && Boolean(analise);
   const analisada = Boolean(conferencia.analisada_em);
-  const analise = useAnaliseDoPcp(conferencia, aoSalvarAnalise);
+  const salvando = Boolean(analise?.salvando);
   const quando = conferencia.iniciado_em || conferencia.salvo_em;
   const meta = [
     formatarDataHora(quando),
@@ -167,16 +228,16 @@ export default function VolumeAVolume({
             {podeAnalisar && (analisada ? (
               <button
                 type="button" style={est.botaoSecundario}
-                onClick={() => analise.salvar(false)} disabled={analise.salvando}
+                onClick={() => analise.salvar(false)} disabled={salvando}
               >
-                {analise.salvando ? 'Reabrindo…' : 'Reabrir análise'}
+                {salvando ? 'Reabrindo…' : 'Reabrir análise'}
               </button>
             ) : (
               <button
                 type="button" style={est.botaoSalvarAnalise}
-                onClick={() => analise.salvar(true)} disabled={analise.salvando}
+                onClick={() => analise.salvar(true)} disabled={salvando}
               >
-                {analise.salvando ? 'Salvando…' : 'Salvar análise e fechar'}
+                {salvando ? 'Salvando…' : 'Salvar análise e fechar'}
               </button>
             ))}
             {pronto && (
@@ -195,11 +256,15 @@ export default function VolumeAVolume({
                 Imprimir
               </button>
             )}
-            <button type="button" style={est.botaoSecundario} onClick={aoFechar}>Fechar</button>
+            {/* Travado enquanto salva: fechado no meio, o painel nao estaria
+                aqui para dizer se o servidor recusou. */}
+            <button type="button" style={est.botaoSecundario} onClick={aoFechar} disabled={salvando}>
+              Fechar
+            </button>
           </div>
           {/* A recusa aparece colada ao botao, e o painel NAO fecha: fechar
               seria dizer que salvou. */}
-          {analise.erro && (
+          {analise?.erro && (
             <div style={est.vavAnaliseErro} role="alert">
               {analisada ? 'Não deu para reabrir' : 'Não deu para salvar'}: {analise.erro}
             </div>
@@ -273,6 +338,8 @@ export default function VolumeAVolume({
                         maxLength={2000}
                         value={analise.nota}
                         onChange={(ev) => analise.mudarNota(ev.target.value)}
+                        // O que se digitasse durante o envio nao iria junto.
+                        disabled={salvando}
                         placeholder="Ex.: lacunas por falta de caixa às 9h; abastecer antes da troca de turno"
                         style={est.vavAnaliseEntrada}
                       />
@@ -296,43 +363,6 @@ export default function VolumeAVolume({
       )}
     </>
   );
-}
-
-/**
- * ANALISE DO PCP — o estado do botao do topo e da nota.
- *
- * A nota digitada, o "Salvando…" e a recusa sao DA MEDICAO: o painel nao
- * desmonta ao trocar de linha, e sem o id junto a nota de uma apareceria
- * na outra — ou o "Salvando…" da que ficou para tras travaria a nova.
- * Sem rascunho, o campo comeca na nota salva (a que ficou ao reabrir).
- */
-function useAnaliseDoPcp(conferencia, aoSalvar) {
-  const { id } = conferencia;
-  const [rascunho, setRascunho] = useState(null); // { id, texto }
-  const [ocupada, setOcupada] = useState(null); // id em gravacao
-  const [falha, setFalha] = useState(null); // { id, mensagem }
-  const nota = rascunho?.id === id ? rascunho.texto : (conferencia.analise_nota || '');
-
-  async function salvar(analisar) {
-    setOcupada(id);
-    setFalha(null);
-    try {
-      const atualizada = await salvarAnaliseConferencia(id, { analisada: analisar, nota: nota.trim() });
-      aoSalvar(atualizada, { fechar: analisar });
-    } catch (e) {
-      setFalha({ id, mensagem: e.message });
-    } finally {
-      setOcupada((atual) => (atual === id ? null : atual));
-    }
-  }
-
-  return {
-    nota,
-    mudarNota: (texto) => setRascunho({ id, texto }),
-    salvando: ocupada === id,
-    erro: falha?.id === id ? falha.mensagem : null,
-    salvar,
-  };
 }
 
 /**
@@ -547,7 +577,7 @@ function FolhaVolumeAVolume({
       {/* A analise salva vai junto: a folha que chega a' reuniao diz se o
           PCP ja' leu a medicao, e o que concluiu. */}
       {conferencia.analisada_em && (
-        <p style={{ margin: '0 0 10px' }}>
+        <p style={{ margin: '0 0 10px', whiteSpace: 'pre-line' }}>
           <strong>Análise do PCP</strong>
           {' '}({[conferencia.analisada_por, formatarDataHora(conferencia.analisada_em)].filter(Boolean).join(', ')})
           {conferencia.analise_nota ? `: ${conferencia.analise_nota}` : ''}

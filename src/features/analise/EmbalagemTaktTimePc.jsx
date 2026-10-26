@@ -12,7 +12,7 @@ import { listarCadastroMaquinas, listarConferenciasServidor, listarDemanda } fro
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
-import VolumeAVolume from './conferencias/VolumeAVolume.jsx';
+import VolumeAVolume, { useAnalisesDoPcp } from './conferencias/VolumeAVolume.jsx';
 import Produtos from './Produtos.jsx';
 import MotivosParada from './MotivosParada.jsx';
 import { est } from './conferencias/estilos.js';
@@ -36,9 +36,9 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  * que continua a vista para trocar de medicao. Abaixo de 1280 px a grade
  * empilha e o detalhe vem embaixo, como antes.
  *
- * Lida a medicao, o PCP salva a analise no rodape do detalhe e ele fecha.
- * O cartao A ANALISAR conta as volume a volume que ainda nao tem analise
- * salva — e' o que falta ler.
+ * Lida a medicao, o PCP salva a analise pelo botao do topo do detalhe, e
+ * ele fecha. O cartao A ANALISAR conta as volume a volume que ainda nao
+ * tem analise salva — e' o que falta ler.
  */
 const ESTILO_GRADE = `
   @media (max-width: 1279px) {
@@ -111,12 +111,14 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
         })),
     }));
     const arquivadas = carga.arquivadas.filter((c) => grupoDaMaquina.has(nomeChave(c.maquina))).length;
-    // So' as volume a volume entram: as outras nao abrem o detalhe, entao
-    // nao ha' onde salvar analise delas.
-    const tocadas = medicoes.filter((c) => c.com_marcas);
-    const aAnalisar = tocadas.filter((c) => !c.analisada_em).length;
+    const tocadas = medicoes.filter((c) => c.com_marcas).length;
+    // A analisar, so' as que o detalhe deixa analisar: tocadas volume a
+    // volume e com dois toques ou mais. Com um toque nao ha' intervalo, o
+    // detalhe nao tem leitura nem botao — contada, ela nunca sairia daqui.
+    const analisaveis = medicoes.filter((c) => c.com_marcas && Number(c.pecas) >= 2);
+    const aAnalisar = analisaveis.filter((c) => !c.analisada_em).length;
     return {
-      medicoes, taktHoje, ativasDoGrupo, arquivadas, tocadas: tocadas.length, aAnalisar,
+      medicoes, taktHoje, ativasDoGrupo, arquivadas, tocadas, analisaveis: analisaveis.length, aAnalisar,
       grupoDe: (maquina) => carga.grupos.find((g) => g.id === grupoDaMaquina.get(nomeChave(maquina))) || null,
     };
   }, [carga]);
@@ -141,21 +143,25 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     if (refDetalhe.current) refDetalhe.current.scrollTop = 0;
   }, [aberta?.id]);
 
-  // Clicar de novo na medicao aberta fecha o painel.
-  const abrir = (c) => {
-    setPorClique(true);
-    setAberta((atual) => (atual?.id === c.id ? null : c));
-  };
-
   /* A analise salva no painel muda a linha e o cartao na hora, sem buscar
      a lista de novo. Fecha so' se a aberta ainda for a salva: quem trocou
      de linha enquanto o servidor respondia continua na que escolheu. */
-  const aoSalvarAnalise = (atualizada, { fechar }) => {
+  const analises = useAnalisesDoPcp((atualizada, { fechar }) => {
     const juntar = (c) => (c.id === atualizada.id ? { ...c, ...atualizada } : c);
     setCarga((atual) => ({ ...atual, conferencias: atual.conferencias.map(juntar) }));
     setAberta((a) => {
       if (a?.id !== atualizada.id) return a;
       return fechar ? null : juntar(a);
+    });
+  });
+
+  // Clicar de novo na medicao aberta fecha o painel — menos enquanto a
+  // analise dela esta' sendo salva, como o botao Fechar.
+  const abrir = (c) => {
+    setPorClique(true);
+    setAberta((atual) => {
+      if (atual?.id !== c.id) return c;
+      return analises.salvando(c.id) ? atual : null;
     });
   };
 
@@ -253,6 +259,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     medicoes={leitura.medicoes}
                     abertaId={aberta?.id ?? null}
                     aoAbrir={abrir}
+                    analiseFalhou={analises.falhou}
                   />
                   {aberta && (
                     <div ref={refDetalhe} className="embalagem-detalhe" style={est.embDetalhe}>
@@ -261,7 +268,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                         grupo={grupoAberto}
                         maquinasDoGrupo={grupoAberto ? leitura.ativasDoGrupo(grupoAberto.id) : 0}
                         aoFechar={() => setAberta(null)}
-                        aoSalvarAnalise={aoSalvarAnalise}
+                        analise={analises.da(aberta)}
                         rolar={porClique}
                       />
                     </div>
@@ -288,10 +295,12 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   );
 }
 
-function subAAnalisar({ tocadas, aAnalisar }) {
-  if (tocadas === 0) return `nenhuma medição volume a volume em ${DIAS} dias`;
-  if (aAnalisar === 0) return 'todas as volume a volume já têm análise salva';
-  return `de ${tocadas} volume a volume, sem análise salva`;
+// A janela vai escrita: uma medicao de 31 dias sem analise ja' nao conta,
+// e "todas analisadas" diria que ela foi lida.
+function subAAnalisar({ analisaveis, aAnalisar }) {
+  if (analisaveis === 0) return `nenhuma medição volume a volume em ${DIAS} dias`;
+  if (aAnalisar === 0) return `nenhuma pendente nos últimos ${DIAS} dias`;
+  return `de ${analisaveis} ${analisaveis === 1 ? 'medição' : 'medições'} volume a volume em ${DIAS} dias`;
 }
 
 function semTaktCurto(estado) {
@@ -316,7 +325,9 @@ function semTaktCurto(estado) {
  * da linha (o teclado chega nele) e a linha inteira abre com o mouse. As
  * feitas por horarios nao tem intervalo, e a linha diz isso por escrito.
  */
-function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
+function TabelaEmbalagem({
+  medicoes, abertaId, aoAbrir, analiseFalhou,
+}) {
   const variasMaquinas = new Set(medicoes.map((c) => nomeChave(c.maquina))).size > 1;
   return (
     <section style={est.painel} aria-label="Medições da embalagem">
@@ -377,6 +388,11 @@ function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
                     <span style={est.embAnalisada} title={c.analise_nota || undefined}>
                       ✓ Analisada{c.analisada_por ? ` · ${c.analisada_por}` : ''}
                     </span>
+                  )}
+                  {/* A recusa que chegou com o painel em outra medicao: sem
+                      isto, ninguem saberia que a analise nao entrou. */}
+                  {abre && analiseFalhou(c.id) && (
+                    <span style={est.embAnaliseFalhou}>Análise não salva — abra para ver o motivo</span>
                   )}
                   {!abre && (
                     <span style={est.embSub} title="Medida por horários ou com a contagem corrigida à mão">
