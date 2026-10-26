@@ -1,4 +1,6 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import {
+  Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState,
+} from 'react';
 import { VERSAO } from '../../versao.js';
 import {
   conferenciaRapida, faixaHoraria, formatarDuracao, formatarSegundos, nomeChave, somarParadas,
@@ -30,12 +32,26 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  *
  * No topo, o TAKT DESTA SEMANA — e' o numero que o chao precisa ter na
  * cabeca. Abaixo, as medicoes da embalagem; as que foram tocadas volume a
- * volume abrem o detalhe (grafico, lacunas, folha A4) logo abaixo da lista.
+ * volume abrem o detalhe (grafico, lacunas, folha A4) AO LADO da lista,
+ * que continua a vista para trocar de medicao. Abaixo de 1280 px a grade
+ * empilha e o detalhe vem embaixo, como antes.
  */
+const ESTILO_GRADE = `
+  @media (max-width: 1279px) {
+    .embalagem-dividida { grid-template-columns: minmax(0, 1fr) !important; }
+    .embalagem-detalhe { position: static !important; max-height: none !important; overflow: visible !important; }
+  }
+  .embalagem-linha:hover > td { background: #F5F8FC; }
+`;
 export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [aberta, setAberta] = useState(null);
+  // Aberta por clique rola ate' o detalhe quando ele nasce fora da vista;
+  // a que a tela abre sozinha ao carregar, nunca.
+  const [porClique, setPorClique] = useState(false);
+  const abriuSozinha = useRef(false);
+  const refDetalhe = useRef(null);
   // Os dois cadastros que a embalagem pede no tablet: o que se embala e por
   // que a linha para. Aqui a um clique, sem caçar no menu de outra tela.
   const [cadastroAberto, setCadastroAberto] = useState(null); // 'produtos' | 'motivos' | null
@@ -97,10 +113,37 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     };
   }, [carga]);
 
+  /* A medicao mais recente tocada volume a volume ja' chega aberta: a
+     coluna da direita nao nasce vazia, e o PCP le o ultimo resultado sem
+     clicar. So' na chegada — fechar depois e' escolha de quem esta' lendo. */
+  useEffect(() => {
+    if (!leitura || abriuSozinha.current) return;
+    abriuSozinha.current = true;
+    const primeira = leitura.medicoes.find((c) => c.com_marcas);
+    if (primeira) setAberta(primeira);
+  }, [leitura]);
+
+  /* Trocou de medicao: o detalhe, que rola sozinho ao lado da lista, volta
+     ao topo — a nova nao pode abrir no meio, onde a anterior foi deixada.
+     LAYOUT effect de proposito: o efeito do filho (VolumeAVolume) roda
+     antes do efeito comum do pai e mede o painel para decidir se rola a
+     pagina. Medido ainda rolado por dentro, ele parecia fora da vista e a
+     pagina pulava, tirando a linha clicada de baixo do cursor. */
+  useLayoutEffect(() => {
+    if (refDetalhe.current) refDetalhe.current.scrollTop = 0;
+  }, [aberta?.id]);
+
+  // Clicar de novo na medicao aberta fecha o painel.
+  const abrir = (c) => {
+    setPorClique(true);
+    setAberta((atual) => (atual?.id === c.id ? null : c));
+  };
+
   const grupoAberto = aberta && leitura ? leitura.grupoDe(aberta.maquina) : null;
 
   return (
     <div style={est.tela}>
+      <style>{ESTILO_GRADE}</style>
       <div className="somente-tela" style={est.telaComLateral}>
         <MenuLateral
           versao={VERSAO}
@@ -175,22 +218,29 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     : ''} A medição nasce no tablet, em Embalagem Takt Time: um toque a cada volume embalado.`}
                 />
               ) : (
-                <TabelaEmbalagem
-                  medicoes={leitura.medicoes}
-                  abertaId={aberta?.id ?? null}
-                  // Clicar de novo na medicao aberta fecha o painel.
-                  aoAbrir={(c) => setAberta((atual) => (atual?.id === c.id ? null : c))}
-                />
-              )}
-
-              {/* A medicao selecionada abre AQUI, abaixo da lista. */}
-              {aberta && (
-                <VolumeAVolume
-                  conferencia={aberta}
-                  grupo={grupoAberto}
-                  maquinasDoGrupo={grupoAberto ? leitura.ativasDoGrupo(grupoAberto.id) : 0}
-                  aoFechar={() => setAberta(null)}
-                />
+                /* A medicao selecionada abre AQUI, ao lado da lista. Sem
+                   nenhuma aberta, a lista ocupa a largura toda. */
+                <div
+                  className={aberta ? 'embalagem-dividida' : undefined}
+                  style={aberta ? est.embDividida : undefined}
+                >
+                  <TabelaEmbalagem
+                    medicoes={leitura.medicoes}
+                    abertaId={aberta?.id ?? null}
+                    aoAbrir={abrir}
+                  />
+                  {aberta && (
+                    <div ref={refDetalhe} className="embalagem-detalhe" style={est.embDetalhe}>
+                      <VolumeAVolume
+                        conferencia={aberta}
+                        grupo={grupoAberto}
+                        maquinasDoGrupo={grupoAberto ? leitura.ativasDoGrupo(grupoAberto.id) : 0}
+                        aoFechar={() => setAberta(null)}
+                        rolar={porClique}
+                      />
+                    </div>
+                  )}
+                </div>
               )}
 
               <p style={est.painelDica}>
@@ -224,34 +274,36 @@ function semTaktCurto(estado) {
 }
 
 /**
- * As medicoes da embalagem, uma por linha. So' as tocadas volume a volume
- * abrem o detalhe: as feitas por horarios nao tem intervalo, e o botao
- * desabilitado diria isso pior do que uma frase.
+ * As medicoes da embalagem, uma por linha — COMPACTA, para caber na coluna
+ * da esquerda ao lado do detalhe: cada celula tem o principal em cima e o
+ * complemento embaixo (data e horarios; periodo e parado; volumes/hora e
+ * volumes). A maquina so' aparece quando ha' mais de uma — com uma so',
+ * era a mesma palavra em todas as linhas.
+ *
+ * So' as tocadas volume a volume abrem o detalhe: o produto vira o botao
+ * da linha (o teclado chega nele) e a linha inteira abre com o mouse. As
+ * feitas por horarios nao tem intervalo, e a linha diz isso por escrito.
  */
 function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
+  const variasMaquinas = new Set(medicoes.map((c) => nomeChave(c.maquina))).size > 1;
   return (
     <section style={est.painel} aria-label="Medições da embalagem">
       <div style={est.painelTopo}>
         <div style={est.painelTopoTexto}>
           <h2 style={est.painelTitulo}>Medições da embalagem</h2>
           <p style={est.painelDica}>
-            Volumes/hora do período inteiro, com as paradas dentro — o que de fato saiu.
-            Em “Volume a volume”, a medição abre aqui embaixo, com cada volume.
+            Clique numa medição para abrir o volume a volume. Volumes/hora do período
+            inteiro, com as paradas dentro — o que de fato saiu.
           </p>
         </div>
       </div>
       <table style={est.tabela}>
         <thead>
           <tr>
-            <th style={est.th}>Data</th>
-            <th style={est.th}>Máquina</th>
-            <th style={est.th}>Produto</th>
-            <th style={est.th}>Horários</th>
-            <th style={est.thNum}>Período</th>
-            <th style={est.thNum}>Parado</th>
-            <th style={est.thNum}>Volumes</th>
-            <th style={est.thNum}>Volumes/hora</th>
-            <th style={est.th} aria-label="Detalhe" />
+            <th style={est.embTh}>Quando</th>
+            <th style={est.embTh}>Produto</th>
+            <th style={est.embThNum}>Período</th>
+            <th style={est.embThNum}>Volumes/<wbr />hora</th>
           </tr>
         </thead>
         <tbody>
@@ -259,39 +311,59 @@ function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
             const calc = conferenciaRapida({ duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas });
             const par = somarParadas(c.paradas);
             const selecionada = c.id === abertaId;
+            const abre = Boolean(c.com_marcas);
+            // O dia em que se MEDIU, o mesmo do detalhe e do corte dos 30 dias
+            // (salvo_em e' o dia em que sincronizou: offline, pode ser outro).
+            const [dia, hora] = formatarDataHora(c.iniciado_em || c.salvo_em).split(' ');
+            const estiloLinha = selecionada ? est.linhaSelecionada : (abre ? est.embLinhaClicavel : undefined);
+            const classeLinha = abre && !selecionada ? 'embalagem-linha' : undefined;
+            const aoClicarLinha = abre ? () => aoAbrir(c) : undefined;
             return (
               <Fragment key={c.id}>
-              <tr style={selecionada ? est.linhaSelecionada : undefined}>
-                <td style={est.tdFraco}>{formatarDataHora(c.salvo_em)}</td>
-                <td style={est.tdCurto}>{c.maquina || '—'}</td>
-                <td style={est.tdCurto}>{c.peca || '—'}</td>
-                <td style={est.tdFraco}>{faixaHoraria(c) || '—'}</td>
-                <td style={est.tdNum}>{formatarDuracao(Number(c.duracao_ms))}</td>
-                <td style={est.tdNum}>{par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'}</td>
-                <td style={est.tdNum}>{c.pecas}</td>
-                <td style={est.tdNumForte}>{calc ? Math.round(calc.pecasPorHoraBruto) : '—'}</td>
-                <td style={est.tdAcoes}>
-                  {c.com_marcas ? (
+              <tr style={estiloLinha} className={classeLinha} onClick={aoClicarLinha}>
+                <td style={est.embTdQuando}>
+                  <span style={est.embForte}>{dia}</span>
+                  <span style={est.embSub}>{faixaHoraria(c) || hora || '—'}</span>
+                </td>
+                <td style={est.embTd}>
+                  {abre ? (
                     <button
                       type="button"
-                      style={selecionada ? est.botaoLinhaAtivo : est.botaoLinha}
+                      style={est.embProduto}
                       aria-pressed={selecionada}
-                      onClick={() => aoAbrir(c)}
+                      // A linha tambem abre: sem isto, o clique no botao
+                      // abriria e a linha fecharia logo em seguida.
+                      onClick={(ev) => { ev.stopPropagation(); aoAbrir(c); }}
                     >
-                      Volume a volume
+                      {c.peca || 'Produto não informado'}
                     </button>
                   ) : (
-                    <span style={est.textoFraco} title="Medida por horários ou com a contagem corrigida à mão">
-                      sem toques
+                    <span style={est.embProdutoTexto}>{c.peca || '—'}</span>
+                  )}
+                  {variasMaquinas && <span style={est.embSub}>{c.maquina || '—'}</span>}
+                  {!abre && (
+                    <span style={est.embSub} title="Medida por horários ou com a contagem corrigida à mão">
+                      sem toques — não abre volume a volume
                     </span>
                   )}
+                </td>
+                <td style={est.embTdNum}>
+                  <span style={est.embForte}>{formatarDuracao(Number(c.duracao_ms))}</span>
+                  {/* Lista estreita quebra "parado / 6 min", nunca "parado 6 / min". */}
+                  <span style={est.embSub}>
+                    {par.totalMs > 0 ? `parado ${formatarDuracao(par.totalMs).replace(/ /g, '\u00a0')}` : 'sem parada marcada'}
+                  </span>
+                </td>
+                <td style={est.embTdNum}>
+                  <span style={est.embForte}>{calc ? Math.round(calc.pecasPorHoraBruto) : '—'}</span>
+                  <span style={est.embSub}>{c.pecas} {Number(c.pecas) === 1 ? 'volume' : 'volumes'}</span>
                 </td>
               </tr>
               {/* A nota do analista, numa linha propria — como no relatorio
                   de ritmo. E' muitas vezes a explicacao da lacuna. */}
               {c.observacao && (
-                <tr style={selecionada ? est.linhaSelecionada : undefined}>
-                  <td style={est.tdObservacao} colSpan={9}>
+                <tr style={estiloLinha} className={classeLinha} onClick={aoClicarLinha}>
+                  <td style={est.tdObservacao} colSpan={4}>
                     <span style={est.rotuloObservacao}>Obs.</span>
                     {c.observacao}
                   </td>
