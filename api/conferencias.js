@@ -30,6 +30,12 @@
  * a tela, que ja' agrupa por maquina com a chave normalizada; mandar a
  * lista de ids evita que o servidor precise repetir essa normalizacao e
  * garante que o que foi arquivado e' exatamente o que estava na tela.
+ *
+ * SALVAR A ANALISE DO PCP (PATCH com `analisada`) e' a quarta escrita: o
+ * PCP leu a medicao no PC e registra que leu — quando, quem e, se quiser,
+ * a conclusao (`analiseNota`). `analisada: false` reabre: a medicao volta
+ * a "a analisar" e a nota fica, para ser corrigida e salva de novo. Nao
+ * mexe em numero nenhum; e' o controle do que ainda falta ler.
  */
 import { autenticar, exigirPapel } from './_lib/auth.js';
 import { erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir, proibido } from './_lib/http.js';
@@ -113,6 +119,7 @@ export default handler(async (req, res) => {
       // que elas deixaram de morar dentro da conferencia.
       const linhas = await db`
         SELECT c.id, c.maquina, c.peca, c.iniciado_em, c.finalizado_em, c.duracao_ms, c.pecas, c.ciclos_por_peca, c.furacao_passante, c.observacao, c.salvo_em, c.arquivada,
+               c.analisada_em, c.analisada_por, c.analise_nota,
                (c.marcas_ms IS NOT NULL) AS com_marcas,
                coalesce((
                  SELECT jsonb_agg(jsonb_build_object(
@@ -201,8 +208,8 @@ export default handler(async (req, res) => {
     if (req.method === 'PATCH') {
       const corpo = await lerCorpo(req);
       const tem = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
-      if (!tem('arquivada') && !tem('paradas') && !tem('peca')) {
-        throw erroValidacao('Nada a atualizar: informe "arquivada", "paradas" ou "peca"');
+      if (!tem('arquivada') && !tem('paradas') && !tem('peca') && !tem('analisada')) {
+        throw erroValidacao('Nada a atualizar: informe "arquivada", "paradas", "peca" ou "analisada"');
       }
       // Toda validacao ANTES de qualquer escrita: no modo de servico a
       // requisicao nao e' uma transacao, entao recusar no meio deixaria
@@ -210,6 +217,20 @@ export default handler(async (req, res) => {
       // escrito nada.
       const pecaNova = tem('peca')
         ? texto(corpo.peca, 'peca', { obrigatorio: true, max: 120 })
+        : null;
+
+      // A analise do PCP. Booleano de verdade: com Boolean(), um "false"
+      // em texto marcaria a medicao como analisada. A nota so' vai junto
+      // de `analisada: true` — sozinha, ou ao reabrir, ela nao teria onde
+      // cair sem mudar o estado que a tela mostra.
+      if (tem('analisada') && typeof corpo.analisada !== 'boolean') {
+        throw erroValidacao('Campo "analisada" deve ser true ou false');
+      }
+      if (tem('analiseNota') && corpo.analisada !== true) {
+        throw erroValidacao('"analiseNota" só vai junto de "analisada": true');
+      }
+      const analiseNota = corpo.analisada === true
+        ? texto(corpo.analiseNota, 'analiseNota', { max: 2000 })
         : null;
 
       // Paradas cadastradas no PC: o analista marcou o setup depois, olhando
@@ -247,6 +268,29 @@ export default handler(async (req, res) => {
         if (!alteradas.length) throw nadaMudou();
       }
 
+      /**
+       * Quem salvou fica pelo NOME da sessao (ver analisada_por no schema).
+       * No modo de servico pode nao haver usuario: a analise vale, so' sem
+       * nome — a tela mostra quando, e nao inventa quem.
+       *
+       * Salvar de novo uma medicao ja' analisada troca quando, quem e a
+       * nota: o registro e' da ultima leitura, nao da primeira.
+       */
+      if (tem('analisada')) {
+        const alteradas = corpo.analisada
+          ? await db`
+            UPDATE conferencias
+               SET analisada_em = now(), analisada_por = ${auth.usuario?.nome || null},
+                   analise_nota = ${analiseNota}
+             WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}
+            RETURNING id`
+          : await db`
+            UPDATE conferencias SET analisada_em = NULL, analisada_por = NULL
+             WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}
+            RETURNING id`;
+        if (!alteradas.length) throw nadaMudou();
+      }
+
       if (tem('arquivada')) {
         // RETURNING nao e' enfeite: sem ele, um UPDATE barrado pela politica
         // do banco volta 200 sem ter mudado nada, e o botao "Arquivar" fica
@@ -259,7 +303,7 @@ export default handler(async (req, res) => {
       }
 
       const [linha] = await db`
-        SELECT c.id, c.arquivada, c.peca,
+        SELECT c.id, c.arquivada, c.peca, c.analisada_em, c.analisada_por, c.analise_nota,
                coalesce((
                  SELECT jsonb_agg(jsonb_build_object(
                           'motivo', p.motivo,

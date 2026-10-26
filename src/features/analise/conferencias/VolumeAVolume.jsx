@@ -6,7 +6,7 @@ import {
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import { frasesVolumeAVolume, numerosDaLeitura } from '../../../domain/volumeAVolume.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
-import { listarDemanda, marcasDaConferencia } from '../../../lib/api.js';
+import { listarDemanda, marcasDaConferencia, salvarAnaliseConferencia } from '../../../lib/api.js';
 import { dataDoArquivo, imprimirComo, nomeDoArquivo } from '../../../lib/impressao.js';
 import { claro } from '../../../theme/tokensAnalise.js';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
@@ -40,6 +40,13 @@ const MAX_LACUNAS_PAPEL = 15;
  * As barras do grafico sao da linha RODANDO: mostram o passo e onde ela
  * parou sem ninguem marcar. Frases e numeros moram em
  * domain/volumeAVolume.js, os mesmos na tela e na folha.
+ *
+ * A ANALISE DO PCP: lida a medicao, o PCP salva (com a conclusao, se
+ * quiser) e o painel fecha. E' o que tira a medicao de "a analisar" na
+ * lista. O botao mora no TOPO, ao lado de Imprimir e Fechar: o topo gruda
+ * e esta' sempre a' vista. O fundo do painel nao — com a pagina no alto,
+ * ele fica abaixo da dobra (o painel comeca abaixo dos cartoes e mede a
+ * altura da janela), e um botao ali seria um botao escondido.
  */
 export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
   const [carga, setCarga] = useState({ estado: 'carregando' });
@@ -87,6 +94,77 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
   }, [carga, grupo, maquinasDoGrupo, conferencia]);
 }
 
+/**
+ * ANALISE DO PCP — a nota digitada, o "Salvando…" e a recusa de CADA
+ * medicao, guardados pela TELA, nao pelo painel.
+ *
+ * Por medicao, porque o PCP compara: escreve em uma, abre outra, escreve,
+ * volta — e cada nota tem de estar onde foi deixada. Na tela, porque o
+ * painel some ao fechar: guardado nele, Fechar apagava a nota digitada e a
+ * recusa que chegasse depois de fechado nao aparecia em lugar nenhum. Aqui
+ * a nota nao salva sobrevive a fechar e reabrir, e a recusa fica com a
+ * medicao (a linha da lista avisa) ate' a proxima tentativa. O rascunho
+ * vive enquanto a TELA esta' aberta: saiu dela, ele se vai — por isso a
+ * linha avisa quando ha' nota digitada e nao salva.
+ *
+ * `aplicar(atualizada, { fechar })` e' quem muda a lista e fecha o painel.
+ * Sem rascunho, o campo comeca na nota salva — a que ficou ao reabrir.
+ */
+export function useAnalisesDoPcp(aplicar) {
+  const [rascunhos, setRascunhos] = useState({}); // id -> texto
+  const [salvando, setSalvando] = useState({}); // id -> true
+  const [falhas, setFalhas] = useState({}); // id -> { mensagem, reabrir }
+  const sem = (mapa, id) => {
+    if (!(id in mapa)) return mapa;
+    const resto = { ...mapa };
+    delete resto[id];
+    return resto;
+  };
+  const notaDe = (c) => (c.id in rascunhos ? rascunhos[c.id] : (c.analise_nota || ''));
+
+  async function salvar(conferencia, analisar) {
+    const { id } = conferencia;
+    setSalvando((m) => ({ ...m, [id]: true }));
+    setFalhas((m) => sem(m, id));
+    try {
+      const atualizada = await salvarAnaliseConferencia(id, {
+        analisada: analisar, nota: notaDe(conferencia).trim(),
+      });
+      // Salvo, o rascunho cumpriu o papel: o campo volta a ler o banco.
+      setRascunhos((m) => sem(m, id));
+      // Fecha so' ao salvar; reabrir deixa o painel aberto, com a nota.
+      aplicar(atualizada, { fechar: analisar });
+    } catch (e) {
+      setFalhas((m) => ({ ...m, [id]: { mensagem: e.message, reabrir: !analisar } }));
+    } finally {
+      setSalvando((m) => sem(m, id));
+    }
+  }
+
+  return {
+    salvando: (id) => Boolean(salvando[id]),
+    /**
+     * O que a LINHA precisa avisar de uma medicao fechada: a recusa (de
+     * salvar ou de reabrir — reabrir recusado deixa a analise salva, e o
+     * aviso nao pode dizer o contrario) ou a nota digitada e nao salva.
+     */
+    pendencia: (c) => {
+      if (falhas[c.id]) return falhas[c.id].reabrir ? 'reabrir-recusado' : 'salvar-recusado';
+      const digitada = c.id in rascunhos ? rascunhos[c.id].trim() : null;
+      if (!c.analisada_em && digitada !== null && digitada !== (c.analise_nota || '').trim()) return 'nota-nao-salva';
+      return null;
+    },
+    /** O que o painel da medicao `c` precisa. */
+    da: (c) => ({
+      nota: notaDe(c),
+      mudarNota: (texto) => setRascunhos((m) => ({ ...m, [c.id]: texto })),
+      salvando: Boolean(salvando[c.id]),
+      erro: falhas[c.id]?.mensagem || null,
+      salvar: (analisar) => salvar(c, analisar),
+    }),
+  };
+}
+
 const TOM = {
   atende: est.vereditoAtende,
   falha: est.vereditoFalha,
@@ -98,13 +176,19 @@ const TOM = {
 const COR_DO_TOM = { atende: claro.ok, falha: claro.critico, atencao: claro.atencao };
 
 export default function VolumeAVolume({
-  conferencia, grupo, maquinasDoGrupo, aoFechar, rolar = true,
+  conferencia, grupo, maquinasDoGrupo, aoFechar, analise, rolar = true,
 }) {
   const unidade = unidadeDoPosto(grupo?.nome);
   const r = useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo });
   const titulo = `${capital(unidade.singular)} a ${unidade.singular}`;
   const pronto = r.estado === 'pronto';
   const frases = pronto ? frasesVolumeAVolume({ ...r, unidade, nomeGrupo: grupo?.nome }) : null;
+  // So' com a leitura na tela: nao se analisa o que nao carregou. O estado
+  // da analise (nota digitada, "Salvando…", recusa) vem da tela — ver
+  // useAnalisesDoPcp.
+  const podeAnalisar = pronto && Boolean(analise);
+  const analisada = Boolean(conferencia.analisada_em);
+  const salvando = Boolean(analise?.salvando);
   const quando = conferencia.iniciado_em || conferencia.salvo_em;
   const meta = [
     formatarDataHora(quando),
@@ -143,8 +227,31 @@ export default function VolumeAVolume({
                 </Fragment>
               ))}
             </p>
+            {analisada && (
+              <p style={est.vavAnaliseSelo}>
+                {['✓ Analisada', conferencia.analisada_por, `em ${formatarDataHora(conferencia.analisada_em)}`]
+                  .filter(Boolean).join(' · ')}
+              </p>
+            )}
           </div>
           <div style={est.vavAcoes}>
+            {/* Salvar fecha o painel; reabrir o deixa aberto, com a nota no
+                campo para corrigir (e desfaz o clique errado). */}
+            {podeAnalisar && (analisada ? (
+              <button
+                type="button" style={est.botaoSecundario}
+                onClick={() => analise.salvar(false)} disabled={salvando}
+              >
+                {salvando ? 'Reabrindo…' : 'Reabrir análise'}
+              </button>
+            ) : (
+              <button
+                type="button" style={est.botaoSalvarAnalise}
+                onClick={() => analise.salvar(true)} disabled={salvando}
+              >
+                {salvando ? 'Salvando…' : 'Salvar análise e fechar'}
+              </button>
+            ))}
             {pronto && (
               /* O PDF sai com o nome da folha — "Takt Time - Rack Sirius 1.6 -
                  EMBALAGEM 01 - 19-10-2026 13h36" —, nao com o do sistema. */
@@ -161,8 +268,19 @@ export default function VolumeAVolume({
                 Imprimir
               </button>
             )}
-            <button type="button" style={est.botaoSecundario} onClick={aoFechar}>Fechar</button>
+            {/* Travado enquanto salva: fechado no meio, o painel nao estaria
+                aqui para dizer se o servidor recusou. */}
+            <button type="button" style={est.botaoSecundario} onClick={aoFechar} disabled={salvando}>
+              Fechar
+            </button>
           </div>
+          {/* A recusa aparece colada ao botao, e o painel NAO fecha: fechar
+              seria dizer que salvou. */}
+          {analise?.erro && (
+            <div style={est.vavAnaliseErro} role="alert">
+              {analisada ? 'Não deu para reabrir' : 'Não deu para salvar'}: {analise.erro}
+            </div>
+          )}
         </header>
 
         <div style={est.vavCorpo}>
@@ -211,6 +329,36 @@ export default function VolumeAVolume({
                   <TabelaLacunas leitura={r.leitura} unidade={unidade} />
                 )}
               </div>
+
+              {/* 5. A CONCLUSAO DO PCP — logo depois da leitura, que e' a que
+                  ela responde. Salva pelo botao do topo. */}
+              {podeAnalisar && (
+                <section aria-label="Análise do PCP">
+                  <h3 style={est.vavSecaoTitulo}>Análise do PCP</h3>
+                  {analisada ? (
+                    <p style={conferencia.analise_nota ? est.vavAnaliseNota : est.vavSecaoDica}>
+                      {conferencia.analise_nota || 'Salva sem comentário.'}
+                    </p>
+                  ) : (
+                    <>
+                      <p style={est.vavSecaoDica}>
+                        Opcional. Vai junto quando você clica em Salvar análise e fechar, no alto do painel.
+                      </p>
+                      <textarea
+                        aria-label="Análise do PCP"
+                        rows={3}
+                        maxLength={2000}
+                        value={analise.nota}
+                        onChange={(ev) => analise.mudarNota(ev.target.value)}
+                        // O que se digitasse durante o envio nao iria junto.
+                        disabled={salvando}
+                        placeholder="Ex.: lacunas por falta de caixa às 9h; abastecer antes da troca de turno"
+                        style={est.vavAnaliseEntrada}
+                      />
+                    </>
+                  )}
+                </section>
+              )}
 
               {/* Os termos definidos so' aparecem com a leitura completa. */}
               {r.leitura.suficiente && <ComoLer leitura={r.leitura} unidade={unidade} />}
@@ -437,6 +585,15 @@ function FolhaVolumeAVolume({
 
       {conferencia.observacao && (
         <p style={{ margin: '0 0 10px' }}><strong>Obs. do analista:</strong> {conferencia.observacao}</p>
+      )}
+      {/* A analise salva vai junto: a folha que chega a' reuniao diz se o
+          PCP ja' leu a medicao, e o que concluiu. */}
+      {conferencia.analisada_em && (
+        <p style={{ margin: '0 0 10px', whiteSpace: 'pre-line' }}>
+          <strong>Análise do PCP</strong>
+          {' '}({[conferencia.analisada_por, formatarDataHora(conferencia.analisada_em)].filter(Boolean).join(', ')})
+          {conferencia.analise_nota ? `: ${conferencia.analise_nota}` : ''}
+        </p>
       )}
 
       {/* O destaque no papel e' a borda grossa, nao a cor: a impressora da

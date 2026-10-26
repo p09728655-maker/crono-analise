@@ -168,6 +168,17 @@ export const renomearPecaConferencias = (ids, peca) =>
 // nao um acrescimo: assim corrigir e apagar usam o mesmo caminho.
 export const salvarParadasConferencia = (id, paradas) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { paradas } });
+/**
+ * A ANALISE DO PCP de uma medicao: `analisada: true` registra quem, quando
+ * e a nota (opcional); `false` reabre e a medicao volta a "a analisar",
+ * com a nota guardada. Devolve a medicao com os campos novos, para a lista
+ * mudar sem buscar tudo de novo.
+ */
+export const salvarAnaliseConferencia = (id, { analisada, nota }) =>
+  requisitar(`/conferencias?id=${encodeURIComponent(id)}`, {
+    metodo: 'PATCH',
+    corpo: analisada ? { analisada: true, analiseNota: nota || null } : { analisada: false },
+  }).then((r) => r.conferencia);
 export const excluirConferencia = (id) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 export const analisarConferenciasComIa = (dados) =>
