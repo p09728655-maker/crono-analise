@@ -388,18 +388,28 @@ export const est = {
     ...rotulo(t.textoFraco), background: '#F8F9FB',
     borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
   },
+  // Os numeros nao tem whiteSpace nowrap na celula: so' o numero principal
+  // (embForte) nao quebra. O complemento e o titulo quebram quando a lista
+  // estreita (1280 px), senao as tres colunas de numero tomavam a largura e
+  // espremiam o produto ate' quebrar no meio da palavra.
   embThNum: {
     textAlign: 'right', padding: `${espaco.sm}px ${espaco.md}px`,
     ...rotulo(t.textoFraco), background: '#F8F9FB',
-    borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+    borderBottom: `1px solid ${t.borda}`,
   },
   embTd: {
     padding: `${espaco.sm}px ${espaco.md}px`, ...tipo('corpo'), color: t.textoMedio,
     borderBottom: `1px solid ${t.borda}`, verticalAlign: 'top',
   },
+  // Data e horarios nunca quebram: com quebra livre, a coluna encolhia ate'
+  // a data sair partida ("26/10/2" / "026") quando um produto era comprido.
+  embTdQuando: {
+    padding: `${espaco.sm}px ${espaco.md}px`, ...tipo('corpo'), color: t.textoMedio,
+    borderBottom: `1px solid ${t.borda}`, verticalAlign: 'top', whiteSpace: 'nowrap',
+  },
   embTdNum: {
     padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'right', ...tipo('corpo'), ...numeros,
-    color: t.textoMedio, borderBottom: `1px solid ${t.borda}`, verticalAlign: 'top', whiteSpace: 'nowrap',
+    color: t.textoMedio, borderBottom: `1px solid ${t.borda}`, verticalAlign: 'top',
   },
   embLinhaClicavel: { cursor: 'pointer' },
   // O produto e' o botao da linha: e' por ele que o PCP procura a medicao,
@@ -409,7 +419,8 @@ export const est = {
     textAlign: 'left', ...tipo('corpoF'), color: t.texto, cursor: 'pointer', fontFamily: 'inherit',
     overflowWrap: 'anywhere',
   },
-  embForte: { display: 'block', ...tipo('corpoF'), color: t.texto, overflowWrap: 'anywhere' },
+  embForte: { display: 'block', ...tipo('corpoF'), color: t.texto, whiteSpace: 'nowrap' },
+  embProdutoTexto: { display: 'block', ...tipo('corpoF'), color: t.texto, overflowWrap: 'anywhere' },
   embSub: { display: 'block', ...tipo('legenda'), color: t.textoFraco },
 
   /* ---- painel VOLUME A VOLUME (Embalagem Takt Time) ----

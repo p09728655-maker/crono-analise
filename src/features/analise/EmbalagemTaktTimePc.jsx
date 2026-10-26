@@ -1,5 +1,5 @@
 import {
-  Fragment, useEffect, useMemo, useRef, useState,
+  Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState,
 } from 'react';
 import { VERSAO } from '../../versao.js';
 import {
@@ -123,9 +123,13 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     if (primeira) setAberta(primeira);
   }, [leitura]);
 
-  // Trocou de medicao: o detalhe, que rola sozinho ao lado da lista, volta
-  // ao topo — a nova nao pode abrir no meio, onde a anterior foi deixada.
-  useEffect(() => {
+  /* Trocou de medicao: o detalhe, que rola sozinho ao lado da lista, volta
+     ao topo — a nova nao pode abrir no meio, onde a anterior foi deixada.
+     LAYOUT effect de proposito: o efeito do filho (VolumeAVolume) roda
+     antes do efeito comum do pai e mede o painel para decidir se rola a
+     pagina. Medido ainda rolado por dentro, ele parecia fora da vista e a
+     pagina pulava, tirando a linha clicada de baixo do cursor. */
+  useLayoutEffect(() => {
     if (refDetalhe.current) refDetalhe.current.scrollTop = 0;
   }, [aberta?.id]);
 
@@ -288,7 +292,7 @@ function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
         <div style={est.painelTopoTexto}>
           <h2 style={est.painelTitulo}>Medições da embalagem</h2>
           <p style={est.painelDica}>
-            Clique numa medição para ver volume a volume ao lado. Volumes/hora do período
+            Clique numa medição para abrir o volume a volume. Volumes/hora do período
             inteiro, com as paradas dentro — o que de fato saiu.
           </p>
         </div>
@@ -299,7 +303,7 @@ function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
             <th style={est.embTh}>Quando</th>
             <th style={est.embTh}>Produto</th>
             <th style={est.embThNum}>Período</th>
-            <th style={est.embThNum}>Volumes/hora</th>
+            <th style={est.embThNum}>Volumes/<wbr />hora</th>
           </tr>
         </thead>
         <tbody>
@@ -308,14 +312,16 @@ function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
             const par = somarParadas(c.paradas);
             const selecionada = c.id === abertaId;
             const abre = Boolean(c.com_marcas);
-            const [dia, hora] = formatarDataHora(c.salvo_em).split(' ');
+            // O dia em que se MEDIU, o mesmo do detalhe e do corte dos 30 dias
+            // (salvo_em e' o dia em que sincronizou: offline, pode ser outro).
+            const [dia, hora] = formatarDataHora(c.iniciado_em || c.salvo_em).split(' ');
             const estiloLinha = selecionada ? est.linhaSelecionada : (abre ? est.embLinhaClicavel : undefined);
             const classeLinha = abre && !selecionada ? 'embalagem-linha' : undefined;
             const aoClicarLinha = abre ? () => aoAbrir(c) : undefined;
             return (
               <Fragment key={c.id}>
               <tr style={estiloLinha} className={classeLinha} onClick={aoClicarLinha}>
-                <td style={est.embTd}>
+                <td style={est.embTdQuando}>
                   <span style={est.embForte}>{dia}</span>
                   <span style={est.embSub}>{faixaHoraria(c) || hora || '—'}</span>
                 </td>
@@ -332,16 +338,21 @@ function TabelaEmbalagem({ medicoes, abertaId, aoAbrir }) {
                       {c.peca || 'Produto não informado'}
                     </button>
                   ) : (
-                    <span style={est.embForte}>{c.peca || '—'}</span>
+                    <span style={est.embProdutoTexto}>{c.peca || '—'}</span>
                   )}
                   {variasMaquinas && <span style={est.embSub}>{c.maquina || '—'}</span>}
                   {!abre && (
-                    <span style={est.embSub}>sem toques: medida por horários ou com a contagem corrigida à mão</span>
+                    <span style={est.embSub} title="Medida por horários ou com a contagem corrigida à mão">
+                      sem toques — não abre volume a volume
+                    </span>
                   )}
                 </td>
                 <td style={est.embTdNum}>
                   <span style={est.embForte}>{formatarDuracao(Number(c.duracao_ms))}</span>
-                  <span style={est.embSub}>{par.totalMs > 0 ? `parado ${formatarDuracao(par.totalMs)}` : 'sem parada'}</span>
+                  {/* Lista estreita quebra "parado / 6 min", nunca "parado 6 / min". */}
+                  <span style={est.embSub}>
+                    {par.totalMs > 0 ? `parado ${formatarDuracao(par.totalMs).replace(/ /g, '\u00a0')}` : 'sem parada marcada'}
+                  </span>
                 </td>
                 <td style={est.embTdNum}>
                   <span style={est.embForte}>{calc ? Math.round(calc.pecasPorHoraBruto) : '—'}</span>

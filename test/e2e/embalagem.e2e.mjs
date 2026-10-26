@@ -262,8 +262,15 @@ const medicao = {
   salvo_em: hoje.toISOString(), arquivada: false, com_marcas: true, paradas: [],
   observacao: 'Faltou caixa às 9h10',
 };
+// Uma segunda, mais antiga: para trocar de medicao com o detalhe rolado.
+const medicao2 = {
+  ...medicao, id: '00000000-0000-0000-0000-00000000c0f2', peca: 'Toucador Magic New', observacao: '',
+  iniciado_em: new Date(hoje.getTime() - 9000000).toISOString(),
+  finalizado_em: new Date(hoje.getTime() - 8000000).toISOString(),
+  salvo_em: new Date(hoje.getTime() - 8000000).toISOString(),
+};
 // Sem parada marcada: o relogio entre toques e' o proprio trecho, 920 s.
-await simularServidor(p, { conferencias: [medicao], marcas, relogio: marcas.at(-1) - marcas[0] });
+await simularServidor(p, { conferencias: [medicao, medicao2], marcas, relogio: marcas.at(-1) - marcas[0] });
 
 await p.goto(`${BASE}/analise`);
 await p.getByRole('button', { name: /^Abrir$/ }).first().waitFor({ timeout: 8000 });
@@ -345,6 +352,36 @@ await p.waitForTimeout(200);
   checar(cj.y >= cl.y + cl.height - 1, 'tela estreita (1100 px): o detalhe empilha abaixo da lista');
 }
 await p.setViewportSize({ width: 1440, height: 1000 });
+
+// Trocar de medicao com o detalhe rolado POR DENTRO: a pagina nao pula
+// (a linha clicada fica debaixo do cursor) e a nova abre no topo.
+{
+  const detalhe = p.locator('.embalagem-detalhe');
+  await detalhe.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await p.waitForTimeout(100);
+  const rolouPorDentro = await detalhe.evaluate((el) => el.scrollTop);
+  const yAntes = await p.evaluate(() => window.scrollY);
+  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
+  await janela.getByRole('heading', { name: 'Toucador Magic New' }).waitFor({ timeout: 4000 });
+  await p.waitForTimeout(600);
+  checar(rolouPorDentro > 0, `pre-condicao: o detalhe rolou por dentro (${rolouPorDentro} px)`);
+  const yDepois = await p.evaluate(() => window.scrollY);
+  const topoDetalhe = await detalhe.evaluate((el) => el.scrollTop);
+  checar(yDepois === yAntes && topoDetalhe === 0,
+    `trocar com o detalhe rolado: a pagina nao pula (scrollY ${yAntes} -> ${yDepois}) e a nova abre no topo (${topoDetalhe})`);
+}
+
+// Empilhado (tela estreita), a medicao que abre SOZINHA ao carregar nasce
+// abaixo da lista e mesmo assim nao leva a pagina para baixo.
+await p.setViewportSize({ width: 1100, height: 700 });
+await p.reload();
+await janela.getByText(/No período, saiu um volume/).waitFor({ timeout: 8000 });
+await p.waitForTimeout(600);
+{
+  const cj = await janela.boundingBox();
+  checar(cj.y > 700 * 0.6, `pre-condicao: empilhado, o detalhe nasce fora da vista (top ${Math.round(cj.y)} px)`);
+  checar(await p.evaluate(() => window.scrollY) === 0, 'empilhado: abrir sozinho ao carregar nao rola a pagina');
+}
 
 checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${errosPc[0]}` : ''}`);
 
