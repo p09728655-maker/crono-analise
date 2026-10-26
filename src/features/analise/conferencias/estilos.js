@@ -367,8 +367,54 @@ export const est = {
   textoModal: { ...tipo('corpo'), margin: 0, color: t.textoMedio },
   acoesModal: { display: 'flex', gap: espaco.md, marginTop: espaco.xs },
 
+  /* ---- Embalagem Takt Time: lista e detalhe LADO A LADO ----
+     A medicao abria abaixo da lista: com quinze linhas, cada clique levava
+     a pagina para baixo e a lista sumia de vista (apontado em 26/10). Na
+     tela larga do PC, a lista fica a esquerda e o detalhe a direita, preso
+     no alto enquanto a lista rola, com rolagem propria. Abaixo de 1280 px
+     a grade vira uma coluna so' (a <style> da tela, classes embalagem-*). */
+  embDividida: {
+    display: 'grid', gridTemplateColumns: 'minmax(420px, 2fr) minmax(0, 3fr)',
+    gap: espaco.lg, alignItems: 'start',
+  },
+  embDetalhe: {
+    position: 'sticky', top: espaco.lg, minWidth: 0,
+    maxHeight: `calc(100dvh - ${espaco.lg * 2}px)`, overflowY: 'auto',
+  },
+  // A lista compacta: duas linhas por celula (o principal em cima, o
+  // complemento embaixo) cabem na coluna da esquerda sem rolar de lado.
+  embTh: {
+    textAlign: 'left', padding: `${espaco.sm}px ${espaco.md}px`,
+    ...rotulo(t.textoFraco), background: '#F8F9FB',
+    borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  embThNum: {
+    textAlign: 'right', padding: `${espaco.sm}px ${espaco.md}px`,
+    ...rotulo(t.textoFraco), background: '#F8F9FB',
+    borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  embTd: {
+    padding: `${espaco.sm}px ${espaco.md}px`, ...tipo('corpo'), color: t.textoMedio,
+    borderBottom: `1px solid ${t.borda}`, verticalAlign: 'top',
+  },
+  embTdNum: {
+    padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'right', ...tipo('corpo'), ...numeros,
+    color: t.textoMedio, borderBottom: `1px solid ${t.borda}`, verticalAlign: 'top', whiteSpace: 'nowrap',
+  },
+  embLinhaClicavel: { cursor: 'pointer' },
+  // O produto e' o botao da linha: e' por ele que o PCP procura a medicao,
+  // e o teclado chega nele (a linha inteira tambem abre, com o mouse).
+  embProduto: {
+    display: 'block', width: '100%', padding: 0, margin: 0, background: 'transparent', border: 'none',
+    textAlign: 'left', ...tipo('corpoF'), color: t.texto, cursor: 'pointer', fontFamily: 'inherit',
+    overflowWrap: 'anywhere',
+  },
+  embForte: { display: 'block', ...tipo('corpoF'), color: t.texto, overflowWrap: 'anywhere' },
+  embSub: { display: 'block', ...tipo('legenda'), color: t.textoFraco },
+
   /* ---- painel VOLUME A VOLUME (Embalagem Takt Time) ----
-     Abre na propria pagina, abaixo da lista. Ordem de leitura: quem/quando
+     Abre na propria pagina, ao lado da lista (abaixo dela, em tela
+     estreita). Ordem de leitura: quem/quando
      -> numeros -> grafico -> explicacao. O topo gruda ao rolar: o painel e'
      comprido, e Imprimir/Fechar precisam estar sempre a um clique. */
   vavPainel: {
@@ -472,7 +518,7 @@ export const est = {
     display: 'flex', gap: espaco.sm, justifyContent: 'flex-end', flexWrap: 'wrap', marginBottom: espaco.md,
   },
   // A medicao aberta no painel, na lista: fundo azul-claro e o botao
-  // marcado — da' para ver qual linha esta' sendo lida la' embaixo.
+  // marcado — da' para ver qual linha esta' sendo lida no detalhe.
   linhaSelecionada: { background: '#EEF4FC' },
   botaoLinhaAtivo: {
     minHeight: 32, padding: `0 ${espaco.md}px`, background: t.texto,

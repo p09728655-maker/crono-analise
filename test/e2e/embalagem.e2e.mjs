@@ -276,8 +276,9 @@ await p.getByText('Takt desta semana · EMBALAGEM').waitFor({ timeout: 8000 });
 checar(await p.getByText('72.0 s').count() > 0, 'takt desta semana em segundos: 72.0 s');
 checar(await p.getByText('Faltou caixa às 9h10').count() > 0, 'a observacao do analista aparece na tabela');
 
-await p.getByRole('button', { name: 'Volume a volume' }).click();
-// Abre na propria pagina, abaixo da lista — nao numa janela por cima.
+// A medicao mais recente tocada volume a volume ja' chega aberta, na
+// propria pagina, AO LADO da lista — nem janela por cima, nem embaixo.
+const lista = p.getByRole('region', { name: 'Medições da embalagem' });
 const janela = p.getByRole('region', { name: /Volume a volume/ });
 // Relogio entre o 1o e o ultimo toque: 920 s / 13 = 70,8 s por volume,
 // paradas dentro; takt 72 s. Sem a lacuna: 60 s.
@@ -293,6 +294,13 @@ checar(/Faltou caixa às 9h10/.test(textoJanela), 'a observacao aparece junto da
 checar(await janela.locator('svg[role="img"]').count() === 1, 'grafico volume a volume desenhado');
 checar(/Onde a linha parou sem parada marcada/.test(textoJanela) && textoJanela.includes('200.0 s'),
   'lista a lacuna de 200.0 s');
+{
+  const cl = await lista.boundingBox();
+  const cj = await janela.boundingBox();
+  checar(cj.x >= cl.x + cl.width - 1 && Math.abs(cj.y - cl.y) < 40,
+    'tela larga: o detalhe abre AO LADO da lista, nao embaixo dela');
+  checar(await p.evaluate(() => window.scrollY) === 0, 'abrir sozinho ao carregar nao rola a pagina');
+}
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-volume-a-volume.png`, fullPage: true });
 
 // O PDF sai com nome proprio: o "Salvar como PDF" usa o titulo da pagina.
@@ -315,13 +323,28 @@ checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some 
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
 
-// O detalhe mora na pagina: a linha aberta fica marcada e o mesmo botao fecha.
-const botaoDaLinha = p.getByRole('button', { name: 'Volume a volume' });
+// O detalhe mora na pagina: a linha aberta fica marcada e o produto, que e'
+// o botao da linha, fecha e abre de novo.
+const botaoDaLinha = lista.getByRole('button', { name: 'Rack Sirius 1.6' });
 checar(await p.getByRole('dialog').count() === 0, 'o detalhe abre na propria pagina, sem janela por cima');
 checar(await botaoDaLinha.getAttribute('aria-pressed') === 'true', 'a medicao aberta fica marcada na lista');
 await botaoDaLinha.click();
 checar(await janela.count() === 0 && await botaoDaLinha.getAttribute('aria-pressed') === 'false',
   'clicar de novo na medicao aberta fecha o detalhe');
+// A linha inteira abre, nao so' o nome do produto.
+await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().getByRole('cell').first().click();
+await janela.waitFor({ timeout: 4000 });
+checar(await botaoDaLinha.getAttribute('aria-pressed') === 'true', 'clicar na linha abre a medicao de novo');
+checar(await p.evaluate(() => window.scrollY) === 0, 'ao lado da lista, abrir por clique nao rola a pagina');
+// Tela estreita: a grade empilha e o detalhe volta para baixo da lista.
+await p.setViewportSize({ width: 1100, height: 1000 });
+await p.waitForTimeout(200);
+{
+  const cl = await lista.boundingBox();
+  const cj = await janela.boundingBox();
+  checar(cj.y >= cl.y + cl.height - 1, 'tela estreita (1100 px): o detalhe empilha abaixo da lista');
+}
+await p.setViewportSize({ width: 1440, height: 1000 });
 
 checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${errosPc[0]}` : ''}`);
 

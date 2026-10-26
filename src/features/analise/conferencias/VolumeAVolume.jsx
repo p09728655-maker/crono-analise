@@ -23,9 +23,10 @@ const MAX_LACUNAS_PAPEL = 15;
  * takt da semana em que ela foi feita.
  *
  * Abre pela linha da medicao (so' as que tem marcas: cronometro ao vivo,
- * contagem por toque), NA PROPRIA PAGINA, logo abaixo da lista — nao numa
- * janela por cima: a lista continua a vista para trocar de medicao, e a
- * tela larga do PC deixa de sobrar vazia. O ritmo da medicao ja' estava no
+ * contagem por toque), NA PROPRIA PAGINA, ao lado da lista — nao numa
+ * janela por cima, nem abaixo dela: a lista continua a vista para trocar
+ * de medicao. Em tela estreita a pagina empilha, e ai' o painel vem
+ * abaixo da lista (quem monta a grade e' a tela). O ritmo da medicao ja' estava no
  * relatorio; o que este painel acrescenta e' COMO ele saiu — regular,
  * lento ou aos trancos.
  *
@@ -97,7 +98,7 @@ const TOM = {
 const COR_DO_TOM = { atende: claro.ok, falha: claro.critico, atencao: claro.atencao };
 
 export default function VolumeAVolume({
-  conferencia, grupo, maquinasDoGrupo, aoFechar,
+  conferencia, grupo, maquinasDoGrupo, aoFechar, rolar = true,
 }) {
   const unidade = unidadeDoPosto(grupo?.nome);
   const r = useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo });
@@ -111,12 +112,17 @@ export default function VolumeAVolume({
     `${formatarDuracao(Number(conferencia.duracao_ms))} de medição`,
   ].filter(Boolean);
 
-  // Selecionou outra medicao: a leitura dela aparece logo abaixo da lista,
-  // e a pagina rola ate' ela — com trinta medicoes, o detalhe nasceria
-  // fora da vista.
+  /* Selecionou outra medicao: a pagina rola ate' ela SO' se ela nasceu fora
+     da vista — empilhada abaixo da lista, em tela estreita. Ao lado da
+     lista o painel ja' esta' a vista, e rolar tiraria a lista de vista,
+     que e' o defeito que a grade lado a lado veio resolver. `rolar` falso
+     (a medicao que a tela abre sozinha ao carregar) nunca rola. */
   const refPainel = useRef(null);
   useEffect(() => {
-    refPainel.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    const el = refPainel.current;
+    if (!rolar || !el?.scrollIntoView) return;
+    const { top } = el.getBoundingClientRect();
+    if (top < 0 || top > window.innerHeight * 0.6) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [conferencia.id]);
 
   return (

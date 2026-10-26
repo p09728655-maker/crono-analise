@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.93.1',
+    data: '2026-10-26',
+    titulo: 'Embalagem Takt Time no PC: a medição abre ao lado da lista',
+    itens: [
+      'O VOLUME A VOLUME ABRE AO LADO DA LISTA, NÃO MAIS EMBAIXO. Antes, clicar numa medição levava a página para baixo da lista inteira, e para ver outra era preciso subir de novo. Agora a lista fica à esquerda e o resultado à direita, preso no alto da tela enquanto a lista rola. Trocar de medição é um clique, sem rolar a página.',
+      'A MEDIÇÃO MAIS RECENTE JÁ CHEGA ABERTA. A tela abre mostrando o volume a volume da última medição tocada, sem precisar clicar. Clicar de novo na medição aberta (ou em Fechar) fecha o resultado, e a lista volta a ocupar a largura toda.',
+      'A LISTA FICOU MAIS ENXUTA, SEM PERDER NADA. A linha inteira abre a medição, e o botão "Volume a volume" repetido em todas as linhas saiu. Cada coluna mostra dois números: data e horários; período e tempo parado; volumes/hora e quantos volumes. A coluna Máquina só aparece quando há mais de uma máquina na embalagem: com uma só, era a mesma palavra em todas as linhas. Medição sem toques continua na lista, com o aviso de que não abre volume a volume.',
+      'Em tela com menos de 1280 px de largura, o resultado continua aparecendo abaixo da lista, como antes. Os números, o gráfico e a folha impressa não mudaram.',
+    ],
+  },
+  {
     versao: '2.93.0',
     data: '2026-10-20',
     titulo: 'Novo estudo: produto e takt vêm do grupo do posto',
