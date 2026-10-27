@@ -367,11 +367,24 @@ export const est = {
   textoModal: { ...tipo('corpo'), margin: 0, color: t.textoMedio },
   acoesModal: { display: 'flex', gap: espaco.md, marginTop: espaco.xs },
 
-  /* ---- Embalagem Takt Time: a lista ----
-     A medicao aberta toma o lugar da lista (ver EmbalagemTaktTimePc): ao
-     lado dela, o detalhe ficava espremido (apontado em 27/10).
-     A lista compacta: duas linhas por celula (o principal em cima, o
-     complemento embaixo). */
+  /* ---- Embalagem Takt Time: lista e detalhe LADO A LADO ----
+     A medicao abria abaixo da lista: com quinze linhas, cada clique levava
+     a pagina para baixo e a lista sumia de vista (apontado em 26/10). Na
+     tela larga do PC, a lista fica a esquerda e o detalhe a direita, preso
+     no alto enquanto a lista rola, com rolagem propria. Abaixo de 1280 px
+     a grade vira uma coluna so' (a <style> da tela, classes embalagem-*).
+     No lugar da lista (v2.94.1) o PCP perdia a fila do que falta ler; a
+     fila agora encurta sozinha: a medicao analisada sai dela (27/10). */
+  embDividida: {
+    display: 'grid', gridTemplateColumns: 'minmax(420px, 2fr) minmax(0, 3fr)',
+    gap: espaco.lg, alignItems: 'start',
+  },
+  embDetalhe: {
+    position: 'sticky', top: espaco.lg, minWidth: 0,
+    maxHeight: `calc(100dvh - ${espaco.lg * 2}px)`, overflowY: 'auto',
+  },
+  // A lista compacta: duas linhas por celula (o principal em cima, o
+  // complemento embaixo) cabem na coluna da esquerda sem rolar de lado.
   embTh: {
     textAlign: 'left', padding: `${espaco.sm}px ${espaco.md}px`,
     ...rotulo(t.textoFraco), background: '#F8F9FB',
@@ -379,7 +392,7 @@ export const est = {
   },
   // Os numeros nao tem whiteSpace nowrap na celula: so' o numero principal
   // (embForte) nao quebra. O complemento e o titulo quebram quando a lista
-  // estreita, senao as tres colunas de numero tomavam a largura e
+  // estreita (1280 px), senao as tres colunas de numero tomavam a largura e
   // espremiam o produto ate' quebrar no meio da palavra.
   embThNum: {
     textAlign: 'right', padding: `${espaco.sm}px ${espaco.md}px`,
@@ -417,13 +430,14 @@ export const est = {
   embPendenciaAtencao: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.atencao },
 
   /* ---- painel VOLUME A VOLUME (Embalagem Takt Time) ----
-     Abre na propria pagina, no lugar da lista. Ordem de leitura: quem/quando
+     Abre na propria pagina, ao lado da lista (abaixo dela, em tela
+     estreita). Ordem de leitura: quem/quando
      -> numeros -> grafico -> explicacao. O topo gruda ao rolar: o painel e'
-     comprido, e Salvar/Imprimir/Voltar precisam estar sempre a um clique. */
+     comprido, e Salvar/Imprimir/Fechar precisam estar sempre a um clique. */
   vavPainel: {
     background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.media,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.bordaForte,
-    marginBottom: espaco.xl,
+    marginBottom: espaco.xl, scrollMarginTop: espaco.lg,
   },
   vavTopo: {
     position: 'sticky', top: 0, zIndex: 2, background: t.papel,
@@ -547,6 +561,12 @@ export const est = {
   barraCadastros: {
     display: 'flex', gap: espaco.sm, justifyContent: 'flex-end', flexWrap: 'wrap', marginBottom: espaco.md,
   },
+  // A medicao aberta no painel, na lista: fundo azul-claro e o botao
+  // marcado — da' para ver qual linha esta' sendo lida no detalhe.
+  linhaSelecionada: { background: '#EEF4FC' },
+  // "Nao analisadas / Analisadas": a analisada sai da fila e fica a um
+  // clique, para reabrir ou imprimir.
+  embVistas: { display: 'flex', gap: espaco.xs, flexWrap: 'wrap', marginTop: espaco.sm },
   botaoLinhaAtivo: {
     minHeight: 32, padding: `0 ${espaco.md}px`, background: t.texto,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.texto, borderRadius: raio.sm,

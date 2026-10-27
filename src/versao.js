@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.95.1',
+    data: '2026-10-27',
+    titulo: 'Embalagem Takt Time: a medição volta a abrir ao lado da lista, e a analisada sai dela',
+    itens: [
+      'A MEDIÇÃO VOLTA A ABRIR AO LADO DA LISTA, como na v2.94.0: a lista continua à vista enquanto você lê o volume a volume. Clicar de novo na linha, em "Fechar" ou no Voltar do navegador fecha o painel. Em tela estreita, o painel vem abaixo da lista.',
+      'A MEDIÇÃO ANALISADA SAI DA LISTA. "Salvar análise e fechar" grava a análise, fecha o painel e tira a medição da lista: o que fica é só o que falta ler ("Não analisadas"). As lidas ficam em "Analisadas", a um clique, com o selo de quem analisou, para reabrir ou imprimir. "Reabrir análise" devolve a medição para a lista.',
+      'Continuam valendo: a tela chega na lista sem abrir medição sozinha; o segundo clique de um duplo clique não vale; F5 reabre a medição aberta; e sair da tela com nota digitada e não salva pergunta antes.',
+    ],
+  },
+  {
     versao: '2.95.0',
     data: '2026-10-27',
     titulo: 'Embalagem: o programa vem sozinho da planilha do PCP',
