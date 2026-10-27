@@ -11,10 +11,12 @@
  * lado e ve' na hora se a 034-26 aqui diz 31/08 a 04/09 ou outra coisa.
  * Numero de semana ninguem confere de cabeca; data, sim.
  *
- * `somenteLeitura`: o programa que vem da planilha do PCP (a embalagem) nao
- * se apaga aqui — a proxima leitura o traria de volta, e o botao mentiria.
- * So' a semana COLADA (sem `dias`) desse grupo tem Apagar: e' o caminho para
- * a semana da planilha que ficou de fora por ter o mesmo numero.
+ * `somenteLeitura`: a semana lida da planilha do PCP (a embalagem) nao se
+ * apaga aqui — so' a planilha a muda, e o servidor recusa. So' a semana
+ * COLADA (sem `dias`) desse grupo tem Apagar: e' o caminho para a semana da
+ * planilha que ficou de fora por ter o mesmo numero. `apagarTudo` decide o
+ * "Apagar o programa deste grupo" (fora com a leitura configurada e semana
+ * lida: levaria a historia que a planilha nao regrava).
  *
  * DIAS: a semana da planilha traz os dias programados, e o exigido e o takt
  * dela usam as horas so' desses dias (fracaoDaSemana) — os mesmos numeros
@@ -31,7 +33,7 @@ import { est } from './estilos.js';
 
 export default function ProgramaGravado({
   semanas, horasNum, maquinasDoGrupo, setupHoras, ocupado, aoApagarSemana, aoApagarTudo,
-  somenteLeitura = false, diasDaJornada = null,
+  somenteLeitura = false, apagarTudo: podeApagarTudo = true, diasDaJornada = null,
 }) {
   const comDias = (semanas || []).some((s) => s.dias != null);
   const apagavel = (s) => !somenteLeitura || s.dias == null;
@@ -41,13 +43,21 @@ export default function ProgramaGravado({
   /* A variacao compara semanas INTEIRAS: a de Finados (4 dias) e a que o
      PCP ainda esta' programando (1 dia) nao sao semanas fracas, sao semanas
      pela metade — e "da menor para a maior sao 11x" mediria isso. A semana
-     da planilha sem a jornada em dias nao se sabe se e' inteira: fica de fora. */
-  const inteiras = useMemo(
-    () => (semanas || []).filter((s) => fracaoDaSemana(s, diasDaJornada).fator === 1),
-    [semanas, diasDaJornada],
-  );
-  const emParte = (semanas || []).length - inteiras.length;
+     da planilha sem a jornada em dias nao se sabe se e' inteira: fica de
+     fora tambem, e o texto diz por que (nao e' por ser "em parte"). */
+  const { inteiras, emParte, semDias } = useMemo(() => {
+    const fracoes = (semanas || []).map((s) => [s, fracaoDaSemana(s, diasDaJornada).fator]);
+    return {
+      inteiras: fracoes.filter(([, f]) => f === 1).map(([s]) => s),
+      emParte: fracoes.filter(([, f]) => f != null && f < 1).length,
+      semDias: fracoes.filter(([, f]) => f == null).length,
+    };
+  }, [semanas, diasDaJornada]);
   const resumo = useMemo(() => resumoDaDemanda(inteiras), [inteiras]);
+  const deFora = [
+    emParte > 0 && `${emParte} ${emParte === 1 ? 'programada' : 'programadas'} só em parte`,
+    semDias > 0 && `${semDias} da planilha, que sem os dias de produção do grupo não se sabe se ${semDias === 1 ? 'é inteira' : 'são inteiras'}`,
+  ].filter(Boolean);
   const periodos = useMemo(
     () => new Map(periodosDoPrograma(semanas || []).map((x) => [chaveSemana(x.semana), x])),
     [semanas],
@@ -61,10 +71,19 @@ export default function ProgramaGravado({
   return (
     <div style={est.bloco}>
       <div style={est.blocoTitulo}>Programa gravado</div>
-      {resumo && (
+      {/* Uma semana so' nao tem media nem variacao: "da menor para a maior
+          sao 1,00x" seria conta sem assunto. */}
+      {resumo?.n === 1 && (
         <p style={est.blocoTexto}>
-          {resumo.n} {emParte > 0 ? 'semanas inteiras' : 'semanas'}, {faixaDeSemanas(resumo.primeira, resumo.ultima)}
-          {emParte > 0 && ` (fora ${emParte} ${emParte === 1 ? 'programada' : 'programadas'} só em parte)`}.
+          1 semana{deFora.length > 0 && ' inteira'}, a {nomeDaSemana(resumo.primeira)}, com{' '}
+          {resumo.primeira.pecas.toLocaleString('pt-BR')} peças
+          {deFora.length > 0 && ` (fora ${deFora.join(' e ')})`}.
+        </p>
+      )}
+      {resumo?.n > 1 && (
+        <p style={est.blocoTexto}>
+          {resumo.n} semanas{deFora.length > 0 && ' inteiras'}, {faixaDeSemanas(resumo.primeira, resumo.ultima)}
+          {deFora.length > 0 && ` (fora ${deFora.join(' e ')})`}.
           Média de <strong>{Math.round(resumo.media).toLocaleString('pt-BR')}</strong> peças,
           variação de <strong>{resumo.cvPct.toFixed(1)}%</strong> —
           da menor ({nomeDaSemana(resumo.menor)}, {resumo.menor.pecas.toLocaleString('pt-BR')})
@@ -150,7 +169,7 @@ export default function ProgramaGravado({
           grupo: é com eles que se sabe que parte da semana são os dias programados.
         </p>
       )}
-      {!somenteLeitura && (
+      {podeApagarTudo && (
         <div style={est.acoes}>
           {confirmarLimpeza ? (
             <>

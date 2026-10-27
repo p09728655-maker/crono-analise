@@ -27,11 +27,17 @@ import { porMinuto } from './formato.js';
  */
 export default function PainelDemanda({
   leitura, grupoNome, aoConfigurar, aoTrocarSemana, noPapel, aoAlternarPapel,
+  // A planilha do PCP alimenta o grupo (lendo bem ou falhando): ai' colar e'
+  // recusado, e nenhum texto do quadro pode mandar colar. Ver
+  // api/_lib/demanda.js.
+  daPlanilha: planilhaAtiva = false,
 }) {
   const {
     estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas, programa, medicao,
     casadoPorData, setup, conta, paradas, escolhaAutomatica, dias,
   } = leitura;
+  // Da planilha: o grupo que ela alimenta, ou programa com semana lida dela.
+  const daPlanilha = planilhaAtiva || Boolean(programa?.daPlanilha);
 
   /* O periodo de cada semana cadastrada, para o seletor dizer de que dias
      fala cada opcao. Trinta e seis linhas: conta barata, feita a cada
@@ -46,7 +52,7 @@ export default function PainelDemanda({
       <section style={est.chamadaDemanda} aria-label="Programa da semana">
         <div style={est.chamadaTexto}>
           <strong>{titulo(estado)}</strong>{' '}
-          {explicacao(estado, semana, demanda, grupoNome, programa, medicao)}
+          {explicacao(estado, semana, demanda, grupoNome, programa, medicao, daPlanilha)}
         </div>
         {/* O SELETOR TAMBEM AQUI. A janela de cada semana e' de sete dias
             fixos, e um dia util perdido num feriado longo fica sem programa
@@ -324,12 +330,12 @@ export default function PainelDemanda({
           número sem idade não levanta suspeita em ninguém. */}
       {programa?.n > 0 && (
         <p style={est.comparativoNota}>
-          {programa.daPlanilha ? 'Programa lido da planilha do PCP, mudado por último' : 'Programa colado'}
+          {daPlanilha ? 'Programa lido da planilha do PCP, mudado por último' : 'Programa colado'}
           {programa.atualizadoEm
             ? ` em ${programa.atualizadoEm.toLocaleDateString('pt-BR')}`
             : ''}
           : {programa.n} semanas, {faixaDoPrograma(programa)}.{' '}
-          {programa.daPlanilha
+          {daPlanilha
             ? 'O veredito vale para o programa da planilha nesse momento; a planilha é relida sozinha.'
             : 'O veredito vale para a demanda desse programa — se o PCP reprogramou depois, cole a planilha de novo.'}
           {/* CASADO POR NUMERO e' o caso pior, e ele precisa aparecer: a
@@ -354,7 +360,7 @@ export default function PainelDemanda({
             <> <strong>Esta semana está cadastrada sem data de início</strong>: o período
               acima é o do calendário, não o da planilha, e sem data a medição casa pelo
               NÚMERO da semana — que erra quando a semana da fábrica desloca por feriado.
-              Cole a planilha com a coluna INÍCIO.</>
+              {daPlanilha ? '' : ' Cole a planilha com a coluna INÍCIO.'}</>
           )}
         </p>
       )}
@@ -389,7 +395,7 @@ function cobertura(programa) {
   return ` Cadastradas: ${programa.n} semanas, ${faixaDoPrograma(programa)}.`;
 }
 
-function explicacao(estado, semana, demanda, grupoNome, programa, medicao) {
+function explicacao(estado, semana, demanda, grupoNome, programa, medicao, daPlanilha) {
   if (estado === 'varios-grupos') {
     /**
      * O quadro SUMIA calado quando a tela misturava grupos, e quem nunca
@@ -400,7 +406,9 @@ function explicacao(estado, semana, demanda, grupoNome, programa, medicao) {
     return 'O programa é de um grupo de máquina, e a tela está mostrando mais de um. Escolha uma máquina em MÁQUINAS, na lateral, e o quadro aparece com o exigido, o entregue e quantas máquinas o programa pede.';
   }
   if (estado === 'sem-demanda') {
-    return `Sem a demanda${grupoNome ? ` de ${grupoNome}` : ''}, o relatório diz quanto o posto entrega, mas não se isso atende. O programa entra colando a planilha do PCP.`;
+    return daPlanilha
+      ? `O programa${grupoNome ? ` de ${grupoNome}` : ''} vem sozinho da planilha do PCP e ainda não tem semana gravada. Se a leitura falhou, Demanda semanal diz o motivo.`
+      : `Sem a demanda${grupoNome ? ` de ${grupoNome}` : ''}, o relatório diz quanto o posto entrega, mas não se isso atende. O programa entra colando a planilha do PCP.`;
   }
   if (estado === 'sem-semana') {
     /**
@@ -409,7 +417,7 @@ function explicacao(estado, semana, demanda, grupoNome, programa, medicao) {
      * que pode existir com outro numero. A data ele acha na planilha.
      */
     const quando = programa?.temData && medicao ? ` de ${comoDia(medicao, { ano: true })}` : '';
-    const saida = programa?.daPlanilha
+    const saida = daPlanilha
       ? 'A planilha do PCP não tem lote programado nessa semana (ou ainda não foi lida).'
       : 'Escolha a semana a comparar aqui mesmo, ou cole a semana que falta em Demanda semanal.';
     return `A medição mais recente${quando} não cai em nenhuma semana do programa cadastrado.${cobertura(programa)} ${saida}`;

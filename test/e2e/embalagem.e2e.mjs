@@ -681,7 +681,8 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
     demandas: [{ ...DEMANDAS[0], dias: 4 }],
     planilha: {
       estado: 'ok', ativa: true, grupoId: GRUPO.id, lidaEm: new Date(Date.now() - 300000).toISOString(),
-      semanas: 5, linhas: 312, ignoradas: { semData: 0, semQuantidade: 2, duplicadas: 0 }, mudaram: 0, conflitos: [],
+      semanas: 5, linhas: 312, ignoradas: { semData: 0, semQuantidade: 2, duplicadas: 0 }, mudaram: 0,
+      conflitos: [{ inicio: '2026-11-16', colada: { ano: 2026, numero: 47, inicio: '2026-09-07' } }],
     },
   });
   const diaDaSegunda = `${String(segunda.getUTCDate()).padStart(2, '0')}/${String(segunda.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -702,7 +703,8 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
   await origem.waitFor({ timeout: 8000 });
   const textoOrigem = await origem.innerText();
   checar(/Última leitura hoje às \d{2}:\d{2}: 312 linhas lidas, 5 semanas gravadas/.test(textoOrigem)
-    && /2 linhas ficaram de fora: 2 sem quantidade/.test(textoOrigem),
+    && /2 linhas ficaram de fora: 2 sem quantidade/.test(textoOrigem)
+    && /A semana de 16\/11 da planilha não entrou: o número dela já é o da semana colada 047-26, de 07\/09, que foi mantida\. Para a da planilha entrar, apague a colada/.test(textoOrigem.replace(/\s+/g, ' ')),
   `Programa da semana: diz que vem da planilha, quando foi lida e o que ficou de fora (${textoOrigem.replace(/\n/g, ' | ')})`);
   await demanda.locator('table').waitFor({ timeout: 8000 });
   const linhaDaSemana = await demanda.locator('tbody tr').first().innerText();
@@ -740,10 +742,45 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
   const demanda = s.locator('[aria-label="Demanda semanal"]');
   await demanda.locator('[aria-label="Origem do programa"]').getByRole('alert').waitFor({ timeout: 8000 });
   await demanda.locator('table').waitFor({ timeout: 8000 });
+  // Aqui o programa e' so' colado (nenhuma semana lida ainda): apagar tudo
+  // nao leva historia da planilha, e o servidor aceita.
   checar(await demanda.locator('textarea').count() === 0
     && await demanda.getByRole('button', { name: 'Apagar', exact: true }).count() === 1
-    && await demanda.getByRole('button', { name: 'Apagar o programa deste grupo' }).count() === 0,
-  'planilha nao lida: sem colagem; so\' a semana colada tem Apagar, e o programa inteiro nao se apaga');
+    && await demanda.getByRole('button', { name: 'Apagar o programa deste grupo' }).count() === 1,
+  'planilha nao lida: sem colagem; a semana colada tem Apagar');
+  await ctx.close();
+}
+
+/* ------- semana da planilha sem os dias de producao: o campo vem aberto */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  await simularServidor(s, {
+    conferencias: [medicao], marcas, relogio: marcas.at(-1) - marcas[0],
+    // A lida desta semana e uma colada antiga (semana inteira, sem dias).
+    demandas: [
+      { ...DEMANDAS[0], dias: 4 },
+      { ...DEMANDAS[0], numero: 2, inicio: new Date(segunda.getTime() - (14 * 86400000)).toISOString().slice(0, 10) },
+    ],
+    cadastro: { ...CADASTRO, grupos: [{ ...GRUPO, dias_semana: null }] },
+    planilha: {
+      estado: 'ok', ativa: true, grupoId: GRUPO.id, lidaEm: new Date().toISOString(),
+      semanas: 1, linhas: 10, ignoradas: { semData: 0, semQuantidade: 0, duplicadas: 0 }, mudaram: 0, conflitos: [],
+    },
+  });
+  await s.goto(`${BASE}/analise/conferencias`);
+  await s.getByRole('button', { name: 'Demanda semanal' }).click();
+  const demanda = s.locator('[aria-label="Demanda semanal"]');
+  await demanda.locator('table').waitFor({ timeout: 8000 });
+  const resumo = (await demanda.getByText(/semanas? inteiras?/).first().innerText().catch(() => ''));
+  checar(await demanda.getByText('Dias de produção').count() > 0,
+    'sem os dias de producao: o Tempo disponivel vem aberto, com o campo a vista');
+  checar(/Nas semanas lidas da planilha, o takt também precisa dos dias de produção/.test(await demanda.innerText()),
+    'sem os dias de producao: o programa gravado diz o que falta');
+  checar(/^1 semana inteira, a 002-26, com 2\.200 peças \(fora 1 da planilha, que sem os dias de produção do grupo não se sabe se é inteira\)/.test(resumo.replace(/\s+/g, ' '))
+    && !/só em parte/.test(resumo),
+  `sem os dias de producao: o resumo diz por que a semana da planilha ficou de fora (${resumo.replace(/\s+/g, ' ')})`);
   await ctx.close();
 }
 

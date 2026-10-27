@@ -86,6 +86,13 @@ export function useDemanda(grupoInicial) {
 
   const apagarSemana = (s) => aplicar(async () => {
     setSemanas(comChave(await removerSemanaDemanda(grupoId, s)));
+    // No grupo da planilha, a colada apagada pode ter travado uma semana
+    // dela: o servidor le de novo, e o quadro traz a semana e o aviso novos.
+    // Falha aqui nao desfaz o apagar, que ja' deu certo.
+    if (planilha) {
+      const r = await lerDemanda(grupoId).catch(() => null);
+      if (r) { setSemanas(comChave(r.demandas)); setPlanilha(r.planilha); }
+    }
   });
 
   const apagarTudo = () => aplicar(async () => {

@@ -42,17 +42,35 @@ export function linhasDeFora(ignoradas) {
  * guardado, e a semana ainda nao lida fica sem takt — colar nao e' saida (o
  * codigo de semana do PCP cairia por cima de outra semana; ver
  * api/_lib/programaEmbalagem.js). Planilha configurada mas PARADA (falta
- * variavel, dois grupos): vale o colado — e a colagem segue aberta.
+ * variavel, dois grupos): vale o que esta' gravado.
  */
 export function textoDaFalha(planilha, agora = new Date()) {
   if (planilha?.estado !== 'erro') return null;
   if (!planilha.ativa) {
     return `A leitura da planilha do PCP está configurada, mas parada: ${planilha.mensagem}. `
-      + 'Enquanto isso, vale o programa colado aqui.';
+      + 'Enquanto isso, vale o programa que está gravado.';
   }
   const quando = quandoLida(planilha.lidaEm, agora);
   return `Não deu para ler a planilha do PCP: ${planilha.mensagem}. `
     + `Continua valendo o programa guardado${quando ? ` (lido ${quando})` : ''}, e a leitura tenta de novo `
     + 'em 1 minuto. Semana que ainda não foi lida fica sem takt até a leitura voltar: corrija o que '
     + 'o motivo aponta.';
+}
+
+/**
+ * Por que a colagem NAO aparece no grupo — ou null quando ela aparece, ou
+ * quando o quadro da planilha ja' diz (lendo: "altere a planilha").
+ *
+ * Grupo com semana lida da planilha nao recebe colagem em estado nenhum: a
+ * lida e' numerada pelo calendario e a colagem traz o codigo de semana do
+ * PCP, e uma cairia por cima de outra (api/_lib/demanda.js). Parada, a saida
+ * e' corrigir a leitura; desligada, apagar o programa do grupo.
+ */
+export function porQueSemColagem({ planilha, lidas }) {
+  if (planilha?.ativa || !lidas) return null;
+  const motivo = 'Colar fica fechado: o grupo tem semanas lidas da planilha do PCP, numeradas pelo '
+    + 'calendário, e a colagem traz o código de semana do PCP — uma semana cairia por cima de outra.';
+  return planilha
+    ? `${motivo} Corrija a leitura (o motivo está acima).`
+    : `${motivo} A leitura está desligada: para voltar a colar, apague o programa do grupo, abaixo.`;
 }

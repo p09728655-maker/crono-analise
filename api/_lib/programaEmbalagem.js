@@ -38,7 +38,7 @@
  * mostrar um takt de idade desconhecida.
  */
 import { unidadeDoPosto } from '../../src/domain/crono/formato.js';
-import { diaCivil } from '../../src/domain/demanda/calendario.js';
+import { diaCivil, semanaIso } from '../../src/domain/demanda/calendario.js';
 import { empresaDaInstalacao } from './auth.js';
 import { sql } from './db.js';
 import { idDaPlanilha, lerAbas, lerContaServico } from './planilhaGoogle.js';
@@ -51,9 +51,20 @@ const UM_DIA = 86400000;
 
 let ultima = null; // { quando, grupoId, resultado }
 let emAndamento = null;
+// Sobe a cada lerDeNovo(): a leitura que comecou antes nao guarda o que viu.
+let geracao = 0;
+
+/**
+ * O programa do grupo mudou por fora da leitura (a semana colada que
+ * travava uma da planilha foi apagada): a proxima pergunta le de novo, sem
+ * esperar os 10 minutos. A leitura em curso pode ter visto a linha antes de
+ * ela sair, entao o resultado dela nao fica guardado. Vale nesta instancia
+ * do servidor; outra relê no prazo dela.
+ */
+export function lerDeNovo() { ultima = null; emAndamento = null; geracao += 1; }
 
 /** So' para os testes. */
-export function _esquecer() { ultima = null; emAndamento = null; }
+export const _esquecer = lerDeNovo;
 
 /**
  * A configuracao do ambiente, ou null quando a leitura esta' desligada (as
@@ -133,31 +144,37 @@ const CHAVE_LIDA_EM = 'programa_embalagem_lida_em';
  * Da segunda `desde` em diante o programa do grupo e' o da planilha: semana
  * guardada que nao veio dela sai, inclusive a futura colada a mao.
  *
- * Semana SEM DATA tambem sai (ou recebe a da planilha, se tiver o mesmo
- * numero): colada com o codigo do PCP enquanto a leitura estava parada,
- * ela nao tem lugar no tempo, e no grupo numerado pelo ISO so' casaria com
- * a medicao pelo numero de outra semana.
+ * Semana SEM DATA (colada sem a coluna INICIO) so' tem o numero para dizer
+ * de quando e'. Com numero da janela em diante, ela sai (ou recebe a da
+ * planilha, se o numero for o mesmo): no grupo numerado pelo ISO ela so'
+ * casaria com a medicao pelo numero de outra semana. Com numero de antes da
+ * janela, e' historia e fica, como a semana antiga com data — e nao trava
+ * nada, porque nenhuma semana da janela tem numero tao baixo.
  *
  * A gravacao casa por (ano, numero), e a semana CONGELADA (com data antes
  * da janela) pode ter o mesmo numero de outra numeracao — colada pela
  * coluna S da planilha da fabrica, por exemplo. Sobrescreve-la trocaria o
  * programa de uma semana antiga pelo de outra. Essa semana da planilha nao
- * entra e volta em `conflitos`, para a tela dizer; a colada pode ser
- * apagada em Demanda semanal (o apagar so' alcanca semana colada).
+ * entra e volta em `conflitos`, com a colada que a travou, para a tela
+ * dizer qual apagar (o apagar so' alcanca semana colada).
  *
  * Devolve quantas linhas mudaram (gravadas ou apagadas; a regravada igual
  * nao conta) e as semanas que nao entraram.
  */
 async function gravar(empresaId, grupoId, semanas, desde) {
   const vindas = new Set(semanas.map((s) => `${s.ano}-${s.numero}`));
+  const janela = semanaIso(new Date(`${desde}T12:00:00Z`));
+  const numeroAntes = (l) => l.ano < janela.ano || (l.ano === janela.ano && l.numero < janela.numero);
   return sql.begin(async (tx) => {
     let mudaram = 0;
-    // `na_janela` e' null na semana sem data: ela nao congela, sai.
+    // `na_janela` e' null na semana sem data: decide o numero dela.
     const doGrupo = await tx`
-      SELECT id, ano, numero, inicio >= ${desde}::date AS na_janela FROM demanda_semanal
+      SELECT id, ano, numero, to_char(inicio, 'YYYY-MM-DD') AS inicio,
+             inicio >= ${desde}::date AS na_janela
+        FROM demanda_semanal
        WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}`;
-    const congelada = (l) => l.na_janela === false;
-    const congeladas = new Set(doGrupo.filter(congelada).map((l) => `${l.ano}-${l.numero}`));
+    const congelada = (l) => (l.na_janela === null ? numeroAntes(l) : !l.na_janela);
+    const congeladas = new Map(doGrupo.filter(congelada).map((l) => [`${l.ano}-${l.numero}`, l]));
     for (const linha of doGrupo) {
       if (congelada(linha) || vindas.has(`${linha.ano}-${linha.numero}`)) continue;
       await tx`DELETE FROM demanda_semanal WHERE id = ${linha.id}`;
@@ -165,8 +182,9 @@ async function gravar(empresaId, grupoId, semanas, desde) {
     }
     const conflitos = [];
     for (const s of semanas) {
-      if (congeladas.has(`${s.ano}-${s.numero}`)) {
-        conflitos.push(s.inicio);
+      const colada = congeladas.get(`${s.ano}-${s.numero}`);
+      if (colada) {
+        conflitos.push({ inicio: s.inicio, colada: { ano: colada.ano, numero: colada.numero, inicio: colada.inicio } });
         continue;
       }
       const gravada = await tx`
@@ -202,6 +220,7 @@ async function lidaPorUltimo(empresaId) {
 async function sincronizar({
   config, empresaId, grupoId, agora, buscar,
 }) {
+  const daGeracao = geracao;
   let resultado;
   try {
     const abas = await lerAbas({
@@ -247,7 +266,7 @@ async function sincronizar({
       lidaEm: await lidaPorUltimo(empresaId),
     };
   }
-  ultima = { quando: agora, grupoId, resultado };
+  if (daGeracao === geracao) ultima = { quando: agora, grupoId, resultado };
   return resultado;
 }
 
@@ -259,14 +278,16 @@ async function sincronizar({
  * `ativa` diz se a planilha MANDA no programa (le e grava; colar e'
  * recusado, mesmo com a leitura falhando). Configurada mas parada (falta
  * variavel, dois grupos de embalagem), ela informa o motivo com
- * `ativa: false` e a colagem segue.
+ * `ativa: false` e a colagem segue — so' no grupo que ainda nao tem semana
+ * lida da planilha (ver api/_lib/demanda.js).
  */
 export async function programaDaPlanilha({
   empresaId, grupoId = null, agora = Date.now(), buscar,
 } = {}) {
   const alvo = await grupoDaPlanilha(empresaId);
   if (!alvo) return null;
-  if (grupoId && !alvo.grupos.includes(grupoId)) return null;
+  // Minusculo: o Postgres aceita o uuid em maiusculas, e a comparacao nao.
+  if (grupoId && !alvo.grupos.includes(String(grupoId).toLowerCase())) return null;
   if (alvo.erro) {
     return {
       estado: 'erro', ativa: false, grupoId, mensagem: alvo.erro, lidaEm: null,
@@ -277,21 +298,29 @@ export async function programaDaPlanilha({
   if (ultima && ultima.grupoId === alvo.grupoId && agora - ultima.quando < espera) return ultima.resultado;
   // Dois pedidos juntos (lista + programa, ao abrir a tela) leem uma vez so'.
   if (!emAndamento) {
-    emAndamento = sincronizar({
+    const leitura = sincronizar({
       config: alvo.config, empresaId, grupoId: alvo.grupoId, agora, buscar,
-    }).finally(() => { emAndamento = null; });
+    }).finally(() => { if (emAndamento === leitura) emAndamento = null; });
+    emAndamento = leitura;
   }
   return emAndamento;
 }
 
 /**
- * A planilha MANDA no programa deste grupo? Sim enquanto estiver configurada
- * para ele — lendo bem ou falhando (ver o comeco do arquivo: colar com o
- * codigo do PCP caia por cima de outra semana). Nao vai ao Google: e' so'
- * a configuracao e o cadastro.
+ * O que a planilha diz sobre colar e apagar neste grupo, sem ir ao Google
+ * (so' a configuracao e o cadastro):
+ *   manda       configurada PARA ele, lendo bem ou falhando (ver o comeco
+ *               do arquivo: colar com o codigo do PCP caia por cima de
+ *               outra semana);
+ *   configurada ele e' grupo de embalagem com a leitura configurada —
+ *               mandando, ou parada (variavel quebrada, dois grupos).
  */
-export async function planilhaMandaNoGrupo(empresaId, grupoId) {
+export async function planilhaNoGrupo(empresaId, grupoId) {
   const alvo = await grupoDaPlanilha(empresaId);
   // Minusculo: o Postgres aceita o uuid em maiusculas, e a recusa nao pode.
-  return Boolean(alvo?.grupoId && alvo.grupoId === String(grupoId).toLowerCase());
+  const id = String(grupoId || '').toLowerCase();
+  return {
+    manda: Boolean(alvo?.grupoId && alvo.grupoId === id),
+    configurada: Boolean(alvo?.grupos?.includes(id)),
+  };
 }

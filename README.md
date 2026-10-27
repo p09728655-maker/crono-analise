@@ -189,17 +189,24 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   congelada com o mesmo número não é sobrescrita (a da planilha fica de fora,
   e a tela diz). Dentro da janela a planilha manda: semana que não veio dela
   sai. Aba `PROGRAMACAO` vazia (lida no meio de uma edição) não é gravada.
-  Colar no grupo da embalagem é recusado (409), **com a leitura boa ou
-  falhando**: a colagem traz o código de semana do PCP ("043-26" = 26/10), e a
-  planilha grava pelo número ISO (26/10 é a 44); a colagem cairia por cima de
-  outra semana. Apagar só alcança semana colada (sem `dias`), que é a saída
-  para a semana da planilha que ficou de fora por número repetido; o
-  programa inteiro não se apaga. Semana sem data no grupo sai na leitura (ou
-  recebe a da planilha, se tiver o mesmo número). Falha de leitura não
-  derruba nada: vale o programa guardado, a hora da última leitura boa fica
-  no banco (`configuracoes`), a tela diz o motivo, e semana ainda não lida
-  fica sem takt até a leitura voltar. Sem as variáveis, nada muda: cola-se o
-  programa como em qualquer grupo.
+  **Semana lida da planilha (a que tem `dias`), só a planilha muda.** A
+  colagem traz o código de semana do PCP ("043-26" = 26/10), e a planilha
+  grava pelo número ISO (26/10 é a 44); misturadas, uma semana cairia por
+  cima de outra. Por isso colar é recusado (409) no grupo que a planilha
+  alimenta, **com a leitura boa ou falhando**, e em qualquer grupo que já
+  tenha semana lida — também com a leitura parada (variável quebrada, dois
+  grupos EMBALAGEM) ou desligada. Apagar uma semana só alcança a colada (sem
+  `dias`): é a saída para a semana da planilha que ficou de fora por número
+  repetido, e o aviso diz qual colada a travou; a leitura seguinte não espera
+  os 10 minutos. Apagar o programa inteiro é recusado enquanto a leitura
+  estiver configurada e houver semana lida; com a leitura **desligada**, é o
+  caminho de volta à colagem. Semana colada sem data, com número da janela em
+  diante, sai na leitura (ou recebe a da planilha, se tiver o mesmo número);
+  com número de antes da janela, fica, como a história com data. Falha de
+  leitura não derruba nada: vale o programa guardado, a hora da última
+  leitura boa fica no banco (`configuracoes`), a tela diz o motivo, e semana
+  ainda não lida fica sem takt até a leitura voltar. Sem as variáveis e sem
+  semana lida, nada muda: cola-se o programa como em qualquer grupo.
 - **O que se compara com o takt é o tempo por volume no relógio, com as
   paradas dentro**: o relógio entre o primeiro e o último toque ÷ (volumes − 1).
   - É a mesma régua do veredito do programa da semana: o volume que não saiu

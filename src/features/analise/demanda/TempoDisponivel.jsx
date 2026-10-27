@@ -9,7 +9,9 @@
 import { useEffect, useState } from 'react';
 import { est } from './estilos.js';
 
-export default function TempoDisponivel({ tempo, grupo, maquinasDoGrupo, ocupado, aoSalvar }) {
+export default function TempoDisponivel({
+  tempo, grupo, maquinasDoGrupo, ocupado, aoSalvar, precisaDias = false,
+}) {
   const {
     horas, setHoras, diasSemana, setDiasSemana, setupsDia, setSetupsDia, setupMin, setSetupMin,
     horasNum, setupHoras, conta, setupComeTudo, valores, houveMudanca,
@@ -26,9 +28,11 @@ export default function TempoDisponivel({ tempo, grupo, maquinasDoGrupo, ocupado
    * Recolher nunca esconde trabalho: fica aberto enquanto NAO ha' jornada
    * cadastrada (ai' preencher e' o proprio assunto do quadro) e enquanto
    * houver mudanca por salvar. Trocar de grupo fecha de novo, porque a
-   * pergunta volta a ser a do grupo novo.
+   * pergunta volta a ser a do grupo novo. No grupo da planilha do PCP os
+   * dias de producao tambem sao jornada (`precisaDias`): sem eles a semana
+   * lida nao tem takt, e o campo nao pode ficar atras de um clique.
    */
-  const configurado = grupo?.horas_semana != null;
+  const configurado = grupo?.horas_semana != null && (!precisaDias || grupo?.dias_semana != null);
   const [abertoNaMao, setAbertoNaMao] = useState(false);
   useEffect(() => { setAbertoNaMao(false); }, [grupo?.id]);
   const aberto = abertoNaMao || !configurado || houveMudanca;

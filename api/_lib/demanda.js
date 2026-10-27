@@ -40,7 +40,7 @@ import {
   ErroHttp, erroValidacao, json, lerCorpo, naoEncontrado,
 } from './http.js';
 import { inteiro, lista, uuid } from './validar.js';
-import { planilhaMandaNoGrupo, programaDaPlanilha } from './programaEmbalagem.js';
+import { lerDeNovo, planilhaNoGrupo, programaDaPlanilha } from './programaEmbalagem.js';
 
 /** Duas planilhas de ano cheio numa colagem so' — teto do que faz sentido. */
 const MAX_SEMANAS = 120;
@@ -124,21 +124,41 @@ export async function demandaSemanal(req, res, auth) {
   exigirPapel(auth, ['admin', 'analista'], 'So quem faz analise mantem o programa de producao');
 
   /**
-   * O grupo que a planilha alimenta nao recebe colagem — nem com a leitura
-   * falhando: o codigo de semana do PCP nao e' o numero ISO que a planilha
-   * grava, e a colagem caia por cima de outra semana (programaEmbalagem.js).
-   * Apagar, so' a semana COLADA (sem `dias`; de antes da planilha, ou de
-   * quando ela estava parada): a lida, a proxima leitura traria de volta, e
-   * o "tudo" levaria junto a historia que a planilha nao regrava.
+   * A SEMANA LIDA DA PLANILHA (a que tem `dias`) so' a planilha muda. Ela e'
+   * numerada pelo calendario (ISO) e a colagem traz o codigo de semana do
+   * PCP — os dois numeram a mesma semana de jeitos diferentes, e a colagem
+   * caia por cima de OUTRA semana (programaEmbalagem.js). Entao:
+   *  - colar e' recusado no grupo que a planilha alimenta (lendo bem ou
+   *    falhando) e em qualquer grupo que ja' tenha semana lida — inclusive
+   *    com a leitura parada ou desligada;
+   *  - apagar uma semana alcanca so' a COLADA (sem `dias`), em qualquer
+   *    grupo; a lida, so' a planilha muda;
+   *  - apagar o programa inteiro do grupo com semana lida e' recusado
+   *    enquanto a leitura estiver configurada para ele: levaria a historia
+   *    que a planilha nao regrava. Desligada a leitura, e' o caminho de
+   *    volta a' colagem.
    */
-  const daPlanilha = Boolean(req.query?.grupo) && await planilhaMandaNoGrupo(empresaId, req.query.grupo);
-  const recusa = () => new ErroHttp(409, 'O programa da embalagem vem da planilha do PCP (abas PROGRAMACAO e '
-    + 'PROGRAMACAO_CONCLUIDA) e é lido sozinho: altere a planilha, não o programa aqui');
-  if (daPlanilha && (req.method === 'POST' || req.query?.tudo === '1')) throw recusa();
+  const naPlanilha = req.query?.grupo
+    ? await planilhaNoGrupo(empresaId, req.query.grupo)
+    : { manda: false, configurada: false };
+  if (naPlanilha.manda && req.method === 'POST') {
+    throw new ErroHttp(409, 'O programa da embalagem vem da planilha do PCP (abas PROGRAMACAO e '
+      + 'PROGRAMACAO_CONCLUIDA) e é lido sozinho: altere a planilha, não o programa aqui');
+  }
   return auth.rls(async (db) => {
     const grupoId = await grupoDaEmpresa(db, empresaId, req.query?.grupo);
+    const [{ lidas }] = await db`
+      SELECT count(*)::int AS lidas FROM demanda_semanal
+       WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId} AND dias IS NOT NULL`;
 
     if (req.method === 'POST') {
+      if (lidas > 0) {
+        throw new ErroHttp(409, 'Este grupo tem semanas lidas da planilha do PCP, numeradas pelo calendário, e a '
+          + 'colagem traz o código de semana do PCP: uma semana cairia por cima de outra. '
+          + (naPlanilha.configurada
+            ? 'A leitura está parada; o aviso em Demanda semanal diz por quê.'
+            : 'Com a leitura desligada, apague antes o programa do grupo para voltar a colar.'));
+      }
       const corpo = await lerCorpo(req);
       const cruas = lista(corpo.semanas, 'semanas', { max: MAX_SEMANAS });
       if (!cruas.length) throw erroValidacao('Nenhuma semana para gravar');
@@ -191,6 +211,10 @@ export async function demandaSemanal(req, res, auth) {
      * semana por semana; e ele exige o grupo, entao nunca alcanca outro.
      */
     if (req.query?.tudo === '1') {
+      if (lidas > 0 && naPlanilha.configurada) {
+        throw new ErroHttp(409, 'O programa deste grupo vem da planilha do PCP: apagá-lo inteiro levaria as '
+          + 'semanas antigas, que a planilha não grava de novo');
+      }
       const apagadas = await db`
         DELETE FROM demanda_semanal
          WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
@@ -203,26 +227,25 @@ export async function demandaSemanal(req, res, auth) {
     if (ano === null || numero === null) {
       throw erroValidacao('Informe a semana a apagar (ano e numero) ou tudo=1');
     }
-    const [apagada] = daPlanilha
-      ? await db`
-        DELETE FROM demanda_semanal
-         WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
-           AND ano = ${ano} AND numero = ${numero} AND dias IS NULL
-         RETURNING id`
-      : await db`
-        DELETE FROM demanda_semanal
-         WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
-           AND ano = ${ano} AND numero = ${numero}
-         RETURNING id`;
+    const [apagada] = await db`
+      DELETE FROM demanda_semanal
+       WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
+         AND ano = ${ano} AND numero = ${numero} AND dias IS NULL
+       RETURNING id`;
     if (!apagada) {
-      if (daPlanilha) {
-        const [lida] = await db`
-          SELECT 1 FROM demanda_semanal
-           WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId} AND ano = ${ano} AND numero = ${numero}`;
-        if (lida) throw recusa();
+      const [lida] = await db`
+        SELECT 1 FROM demanda_semanal
+         WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId} AND ano = ${ano} AND numero = ${numero}`;
+      if (lida) {
+        throw new ErroHttp(409, naPlanilha.configurada
+          ? 'Esta semana foi lida da planilha do PCP: só a planilha a muda'
+          : 'Esta semana foi lida da planilha do PCP, e a leitura está desligada: para voltar a colar, apague o programa inteiro do grupo');
       }
       throw naoEncontrado('Semana nao encontrada neste grupo');
     }
+    // A colada apagada pode ter travado uma semana da planilha (conflito):
+    // a proxima pergunta le de novo, sem esperar os 10 minutos.
+    if (naPlanilha.configurada) lerDeNovo();
     return json(res, 200, { demandas: await listar(db, empresaId, grupoId) });
   });
 }

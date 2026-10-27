@@ -176,7 +176,22 @@ rodar('Programa da embalagem lido da planilha — integracao', () => {
     const r = await programa(grupoEmb);
     expect(semanaDe(r, segunda(-10))?.pecas, 'a congelada continua com o programa dela').toBe(7200);
     expect(semanaDe(r, segunda(0)), 'a da planilha nao entra por cima').toBeUndefined();
-    expect(r.corpo.planilha).toMatchObject({ estado: 'ok', semanas: 1, conflitos: [iso(segunda(0))] });
+    expect(r.corpo.planilha).toMatchObject({
+      estado: 'ok', semanas: 1, conflitos: [{ inicio: iso(segunda(0)), colada: { ano, numero, inicio: iso(segunda(-10)) } }],
+    });
+
+    // Apagar a colada que trava: a proxima pergunta le de novo (sem esperar
+    // os 10 minutos), e a semana da planilha entra.
+    const chamadas = chamadasGoogle.length;
+    const apagar = res();
+    await maquinasApi(req({
+      metodo: 'DELETE', query: { demanda: '1', grupo: grupoEmb, ano: String(ano), numero: String(numero) },
+    }), apagar);
+    expect(apagar.statusCode).toBe(200);
+    const depois = await programa(grupoEmb);
+    expect(chamadasGoogle.length).toBeGreaterThan(chamadas);
+    expect(semanaDe(depois, segunda(0))?.pecas).toBe(500);
+    expect(depois.corpo.planilha.conflitos).toEqual([]);
   });
 
   it("aba PROGRAMACAO vazia (lida no meio de uma edicao) nao derruba a semana para so' o concluido", async () => {
@@ -230,17 +245,84 @@ rodar('Programa da embalagem lido da planilha — integracao', () => {
     expect(semanaDe(apagarColada, segunda(-10))).toBeUndefined();
   });
 
-  it("semana colada SEM data no grupo da planilha: a de mesmo numero recebe a da planilha; a outra sai", async () => {
+  it("semana colada SEM data: da janela em diante sai (ou vira a da planilha); de antes, e' historia e fica", async () => {
     const { ano, numero } = semanaIso(new Date(`${iso(segunda(0))}T12:00:00Z`));
+    const recente = semanaIso(new Date(`${iso(segunda(-3))}T12:00:00Z`));
+    const antiga = semanaIso(new Date(`${iso(segunda(-12))}T12:00:00Z`));
     await sql`
       INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas) VALUES
         (${EMPRESA}, ${grupoEmb}, ${ano}, ${numero}, 4242),
-        (${EMPRESA}, ${grupoEmb}, 2000, 9, 31)`;
+        (${EMPRESA}, ${grupoEmb}, ${recente.ano}, ${recente.numero}, 31),
+        (${EMPRESA}, ${grupoEmb}, ${antiga.ano}, ${antiga.numero}, 77)`;
     const r = await programa(grupoEmb);
     expect(semanaDe(r, segunda(0)), 'mesmo numero: vira a semana da planilha, com data e dias')
       .toMatchObject({ pecas: 500, dias: 1 });
-    expect(r.corpo.demandas.filter((d) => !d.inicio), 'sem data nao fica no grupo da planilha').toHaveLength(0);
+    const semData = r.corpo.demandas.filter((d) => !d.inicio);
+    expect(semData, "so' a de antes da janela fica").toEqual([expect.objectContaining({ ...antiga, pecas: 77 })]);
     expect(r.corpo.planilha).toMatchObject({ estado: 'ok', conflitos: [] });
+  });
+
+  it("uuid do grupo em maiusculas: o GET le a planilha e a colagem e' recusada do mesmo jeito", async () => {
+    const maiusculo = String(grupoEmb).toUpperCase();
+    const r = await programa(maiusculo);
+    expect(r.corpo.planilha).toMatchObject({ estado: 'ok', ativa: true });
+    const colar = res();
+    await maquinasApi(req({
+      metodo: 'POST', query: { demanda: '1', grupo: maiusculo }, corpo: { semanas: [{ ano: 2026, numero: 40, pecas: 1 }] },
+    }), colar);
+    expect(colar.statusCode).toBe(409);
+  });
+
+  it("leitura PARADA com semanas lidas no grupo: colar e apagar tudo recusados — a lida nao vira outra semana", async () => {
+    await programa(grupoEmb);
+    const guardada = process.env.GOOGLE_CONTA_SERVICO;
+    process.env.GOOGLE_CONTA_SERVICO = '{nao e json';
+    try {
+      const { ano, numero } = semanaIso(new Date(`${iso(segunda(-1))}T12:00:00Z`));
+      const colar = res();
+      await maquinasApi(req({
+        metodo: 'POST', query: { demanda: '1', grupo: grupoEmb },
+        corpo: { semanas: [{ ano, numero, pecas: 640, inicio: iso(segunda(0)) }] },
+      }), colar);
+      expect(colar.statusCode).toBe(409);
+      expect(colar.corpo.erro).toMatch(/leitura está parada/);
+      const tudo = res();
+      await maquinasApi(req({ metodo: 'DELETE', query: { demanda: '1', grupo: grupoEmb, tudo: '1' } }), tudo);
+      expect(tudo.statusCode).toBe(409);
+      const lida = res();
+      await maquinasApi(req({
+        metodo: 'DELETE', query: { demanda: '1', grupo: grupoEmb, ano: String(ano), numero: String(numero) },
+      }), lida);
+      expect(lida.statusCode).toBe(409);
+      const linhas = await sql`
+        SELECT pecas, to_char(inicio, 'YYYY-MM-DD') AS inicio, dias FROM demanda_semanal
+         WHERE grupo_id = ${grupoEmb} AND ano = ${ano} AND numero = ${numero}`;
+      expect(linhas).toEqual([{ pecas: 1000, inicio: iso(segunda(-1)), dias: 1 }]);
+    } finally {
+      process.env.GOOGLE_CONTA_SERVICO = guardada;
+    }
+  });
+
+  it('leitura DESLIGADA com semanas lidas: colar pede apagar o programa antes, e apagar tudo e\' a volta', async () => {
+    await programa(grupoEmb);
+    const guardadas = [process.env.GOOGLE_CONTA_SERVICO, process.env.PROGRAMA_EMBALAGEM_PLANILHA];
+    delete process.env.GOOGLE_CONTA_SERVICO;
+    delete process.env.PROGRAMA_EMBALAGEM_PLANILHA;
+    try {
+      const semanas = [{ ano: 2026, numero: 40, pecas: 100, inicio: iso(segunda(0)) }];
+      const colar = res();
+      await maquinasApi(req({ metodo: 'POST', query: { demanda: '1', grupo: grupoEmb }, corpo: { semanas } }), colar);
+      expect(colar.statusCode).toBe(409);
+      expect(colar.corpo.erro).toMatch(/apague antes o programa do grupo/);
+      const tudo = res();
+      await maquinasApi(req({ metodo: 'DELETE', query: { demanda: '1', grupo: grupoEmb, tudo: '1' } }), tudo);
+      expect(tudo.statusCode).toBe(200);
+      const deNovo = res();
+      await maquinasApi(req({ metodo: 'POST', query: { demanda: '1', grupo: grupoEmb }, corpo: { semanas } }), deNovo);
+      expect(deNovo.statusCode).toBe(201);
+    } finally {
+      [process.env.GOOGLE_CONTA_SERVICO, process.env.PROGRAMA_EMBALAGEM_PLANILHA] = guardadas;
+    }
   });
 
   it("com a planilha lida, apagar o programa do grupo tambem e' recusado", async () => {
