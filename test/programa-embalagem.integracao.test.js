@@ -66,6 +66,7 @@ const CAB = ['Lote', 'Data', 'Ordem', 'Codigo', 'Descricao', 'Qtd_cx'];
 const linha = (lote, dia, qtd) => [String(lote), serial(dia), '1', `501.${lote}`, 'VOL 1/1 X', qtd];
 
 let maquinasApi;
+let semanaIso;
 let sql;
 let esquecer;
 let esquecerToken;
@@ -92,6 +93,7 @@ rodar('Programa da embalagem lido da planilha — integracao', () => {
     const { _definirJwks } = await import('../api/_lib/jwt.js');
     _definirJwks([{ ...ec.publicKey.export({ format: 'jwk' }), kid: 'kid-planilha', alg: 'ES256' }]);
     maquinasApi = (await import('../api/maquinas.js')).default;
+    ({ semanaIso } = await import('../src/domain/demanda/calendario.js'));
     esquecer = (await import('../api/_lib/programaEmbalagem.js'))._esquecer;
     esquecerToken = (await import('../api/_lib/planilhaGoogle.js'))._esquecerToken;
 
@@ -157,11 +159,71 @@ rodar('Programa da embalagem lido da planilha — integracao', () => {
     expect(r.statusCode).toBe(200);
     expect(semanaDe(r, segunda(0))?.pecas).toBe(500);
     expect(semanaDe(r, segunda(-1))?.pecas).toBe(1000);
+    // Os dias programados vao junto: o takt usa as horas so' desses dias.
+    expect(semanaDe(r, segunda(0))?.dias).toBe(1);
     expect(r.corpo.planilha).toMatchObject({
       estado: 'ok', ativa: true, grupoId: grupoEmb, semanas: 2, linhas: 3, mudaram: 2,
-      ignoradas: { semData: 0, semQuantidade: 0, duplicadas: 0 },
+      ignoradas: { semData: 0, semQuantidade: 0, duplicadas: 0 }, conflitos: [],
     });
     expect(chamadasGoogle).toHaveLength(2); // token + planilha
+  });
+
+  it("semana congelada com o MESMO numero (outra numeracao) nao e' sobrescrita: a da planilha fica de fora, dita", async () => {
+    const { ano, numero } = semanaIso(new Date(`${iso(segunda(0))}T12:00:00Z`));
+    await sql`
+      INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas, inicio)
+      VALUES (${EMPRESA}, ${grupoEmb}, ${ano}, ${numero}, 7200, ${iso(segunda(-10))})`;
+    const r = await programa(grupoEmb);
+    expect(semanaDe(r, segunda(-10))?.pecas, 'a congelada continua com o programa dela').toBe(7200);
+    expect(semanaDe(r, segunda(0)), 'a da planilha nao entra por cima').toBeUndefined();
+    expect(r.corpo.planilha).toMatchObject({ estado: 'ok', semanas: 1, conflitos: [iso(segunda(0))] });
+  });
+
+  it("aba PROGRAMACAO vazia (lida no meio de uma edicao) nao derruba a semana para so' o concluido", async () => {
+    await programa(grupoEmb);
+    esquecer();
+    abas.PROGRAMACAO = [CAB];
+    const r = await programa(grupoEmb);
+    expect(r.corpo.planilha.estado).toBe('erro');
+    expect(r.corpo.planilha.mensagem).toMatch(/aba PROGRAMACAO veio sem nenhum lote/);
+    expect(semanaDe(r, segunda(0))?.pecas).toBe(500);
+  });
+
+  it('planilha falhando: a idade do programa vem do banco, e colar/apagar voltam como saida', async () => {
+    const boa = await programa(grupoEmb);
+    esquecer(); // outra instancia: sem memoria da leitura boa
+    esquecerToken();
+    respostaGoogle = { status: 403, corpo: { error: { message: 'The caller does not have permission' } } };
+    const r = await programa(grupoEmb);
+    expect(r.corpo.planilha).toMatchObject({ estado: 'erro', ativa: true });
+    expect(new Date(r.corpo.planilha.lidaEm).getTime())
+      .toBeGreaterThanOrEqual(new Date(boa.corpo.planilha.lidaEm).getTime() - 5000);
+
+    // Colar a semana que falta: aceito, e o colado e' a semana inteira (dias nulo).
+    const { ano, numero } = semanaIso(new Date(`${iso(segunda(0))}T12:00:00Z`));
+    const colar = res();
+    await maquinasApi(req({
+      metodo: 'POST', query: { demanda: '1', grupo: grupoEmb },
+      corpo: { semanas: [{ ano, numero, pecas: 640, inicio: iso(segunda(0)) }] },
+    }), colar);
+    expect(colar.statusCode).toBe(201);
+    const colada = colar.corpo.demandas.find((d) => d.inicio === iso(segunda(0)));
+    expect(colada).toMatchObject({ pecas: 640, dias: null });
+
+    const apagar = res();
+    await maquinasApi(req({
+      metodo: 'DELETE', query: { demanda: '1', grupo: grupoEmb, ano: String(ano), numero: String(numero) },
+    }), apagar);
+    expect(apagar.statusCode).toBe(200);
+  });
+
+  it("com a planilha lida, apagar o programa do grupo tambem e' recusado", async () => {
+    await programa(grupoEmb);
+    const apagar = res();
+    await maquinasApi(req({ metodo: 'DELETE', query: { demanda: '1', grupo: grupoEmb, tudo: '1' } }), apagar);
+    expect(apagar.statusCode).toBe(409);
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM demanda_semanal WHERE grupo_id = ${grupoEmb}`;
+    expect(n).toBe(2);
   });
 
   it('dentro de 10 minutos le do banco, sem ir ao Google; releitura igual nao muda nada', async () => {
@@ -205,7 +267,7 @@ rodar('Programa da embalagem lido da planilha — integracao', () => {
   it('planilha sem nenhum lote recente nao apaga o programa', async () => {
     await programa(grupoEmb);
     esquecer();
-    abas = { PROGRAMACAO: [CAB], PROGRAMACAO_CONCLUIDA: [CAB, linha(9, segunda(-20), 50)] };
+    abas = { PROGRAMACAO: [CAB, linha(8, segunda(-21), 30)], PROGRAMACAO_CONCLUIDA: [CAB, linha(9, segunda(-20), 50)] };
     const r = await programa(grupoEmb);
     expect(r.corpo.planilha.estado).toBe('erro');
     expect(r.corpo.planilha.mensagem).toMatch(/não tem lote programado desde/);

@@ -8,11 +8,11 @@
  * setembro, que e' o erro que um "pega a ultima cadastrada" produziria.
  */
 import { chaveSemana, ordenarSemanas } from './leitura.js';
-import { horasDeSetup, vereditoDaSemana } from './capacidade.js';
+import { fracaoDaSemana, horasDeSetup, vereditoDaSemana } from './capacidade.js';
 import {
   diaCivil, intervaloIso, periodoDaSemana, periodosDoPrograma, semanaIso, semanaQueContem,
 } from './calendario.js';
-import { contaDasHoras } from './formato.js';
+import { contaDasHoras, rotuloDaSemana } from './formato.js';
 
 /**
  * Leitura do programa: media, variacao e extremos.
@@ -186,6 +186,9 @@ export function leituraDaDemanda({
     // veredito casado por numero merece ressalva, na tela e no papel.
     temData,
     semData: semanas.filter((s) => !s.inicio).length,
+    // Lido da planilha do PCP (a embalagem): as linhas trazem os dias
+    // programados. A tela troca "colado" por "lido da planilha".
+    daPlanilha: semanas.some((s) => s.dias != null),
   };
 
   /**
@@ -198,6 +201,12 @@ export function leituraDaDemanda({
    * o relogio fica como veio, com tudo dentro.
    */
   const setupHoras = horasDeSetup(setup || {});
+  // A semana programada so' em parte (feriado, programa ainda sendo
+  // montado) usa as horas e o setup dos DIAS programados — so' na linha que
+  // os traz (a da planilha da embalagem). Ver fracaoDaSemana.
+  const fracao = fracaoDaSemana(registro, setup?.dias);
+  const horasDaSemana = Number(horas) > 0 ? Number(horas) * fracao.fator : horas;
+  const setupDaSemana = setupHoras == null ? null : setupHoras * fracao.fator;
   /**
    * "Ha' setup planejado" e' setup MAIOR QUE ZERO nas horas. O cadastro
    * "este grupo nao faz setup" (zero) nao tira nada das horas — entao o
@@ -219,7 +228,13 @@ export function leituraDaDemanda({
   const base = {
     semanas,
     programa,
-    semana: { ...alvo, chave: chaveSemana(alvo) },
+    semana: { ...alvo, chave: chaveSemana(alvo), rotulo: rotuloDaSemana(alvo) },
+    // As horas de CADA maquina na semana, ja' so' dos dias programados
+    // quando a linha os traz; e quantos dias sao, para a tela dizer.
+    horasDaSemana: Number(horasDaSemana) > 0 ? horasDaSemana : null,
+    dias: fracao.programados
+      ? { programados: fracao.programados, daJornada: fracao.daJornada, jornadaInformada: fracao.jornadaInformada }
+      : null,
     // O periodo da PLANILHA quando ele existe; o do calendario ISO quando
     // nao. A tela escreve "de 31/08 a 04/09" nos dois casos, e so' o
     // primeiro e' a semana de verdade da fabrica.
@@ -249,9 +264,11 @@ export function leituraDaDemanda({
       // setup" vale com dias e minutos vazios, e a tela nao pode imprimir
       // "0 por dia × 0 dias × 0 min" para um cadastro que so' disse 0.
       setupsDia: numeroOuNulo(setup.setupsDia),
-      dias: numeroOuNulo(setup.dias),
+      // Na semana programada so' em parte, os dias da conta sao os
+      // programados: "25 × 4 dias × 20 min" fecha com as horas de setup.
+      dias: fracao.programados ?? numeroOuNulo(setup.dias),
       minutos: numeroOuNulo(setup.minutos),
-      horasPorMaquina: setupHoras,
+      horasPorMaquina: setupDaSemana,
       zerado: setupHoras === 0,
       // Quanto de troca/setup as medicoes pegaram e foi tirado do relogio
       // para nao contar duas vezes. Zero na pratica de hoje (< 1 min).
@@ -259,7 +276,7 @@ export function leituraDaDemanda({
     },
     // A conta das horas como a tela escreve, com os numeros derivados um
     // do outro para a subtracao fechar. Null enquanto falta jornada.
-    conta: contaDasHoras({ horas, setupHoras, maquinas }),
+    conta: contaDasHoras({ horas: horasDaSemana, setupHoras: setupDaSemana, maquinas }),
     /**
      * O QUE AS PARADAS MARCADAS DIZEM, decidido aqui e nao por diferenca
      * de taxa na tela: 'nenhuma' (nada marcado), 'so-setup' (a unica
@@ -286,7 +303,7 @@ export function leituraDaDemanda({
   // Setup que come a jornada inteira e' cadastro errado (200 min no lugar
   // de 20), nao folga negativa. Estado PROPRIO: mandar "informar as horas"
   // aqui apontaria uma correcao que nao corrige — as horas estao la'.
-  if (setupHoras != null && setupHoras >= Number(horas)) {
+  if (setupDaSemana != null && setupDaSemana >= Number(horasDaSemana)) {
     return { ...base, estado: 'setup-excede', demanda: registro.pecas, veredito: null };
   }
   /**
@@ -302,7 +319,7 @@ export function leituraDaDemanda({
    * com o programa de setembro" que este arquivo inteiro recusa.
    */
   const veredito = semMedicao ? null : vereditoDaSemana({
-    pecas: registro.pecas, horas, maquinas, ritmoRelogio: relogio, ritmoRodando, setupHoras,
+    pecas: registro.pecas, horas: horasDaSemana, maquinas, ritmoRelogio: relogio, ritmoRodando, setupHoras: setupDaSemana,
   });
   if (!veredito) return { ...base, estado: 'sem-ritmo', demanda: registro.pecas, veredito: null };
   return {
@@ -341,7 +358,11 @@ export function taktDaMedicao({
   return {
     taktMs: leitura.veredito?.taktMs ?? null,
     estado: leitura.estado,
-    semana: leitura.semana?.chave ?? null,
+    // O rotulo: "038-26" no programa colado, "de 26/10" no da planilha.
+    semana: leitura.semana?.rotulo ?? null,
+    // Semana programada so' em parte: { programados, daJornada } — a tela
+    // escreve "4 de 5 dias", e o takt ja' usa as horas so' desses dias.
+    dias: leitura.dias ?? null,
     // De onde o takt saiu, para a tela escrever a conta em vez de so' o
     // resultado: a demanda da semana e as horas produtivas de CADA maquina
     // (jornada menos o setup planejado).
@@ -352,7 +373,7 @@ export function taktDaMedicao({
     // As duas parcelas da conta acima, para a tela escrever "44 h − 1 h de
     // setup": a jornada de cada maquina e o setup planejado dela (null
     // quando o cadastro nao informa — e a tela diz que falta).
-    jornadaPorMaquina: Number(horas) > 0 ? Number(horas) : null,
+    jornadaPorMaquina: leitura.horasDaSemana ?? (Number(horas) > 0 ? Number(horas) : null),
     setupPorMaquina: leitura.setup ? leitura.setup.horasPorMaquina : null,
     // false quando a semana foi casada pelo NUMERO (linha sem INICIO): a
     // tela faz a mesma ressalva do quadro do programa.

@@ -40,7 +40,7 @@ import {
   ErroHttp, erroValidacao, json, lerCorpo, naoEncontrado,
 } from './http.js';
 import { inteiro, lista, uuid } from './validar.js';
-import { grupoDaPlanilha, programaDaPlanilha } from './programaEmbalagem.js';
+import { planilhaMandaNoGrupo, programaDaPlanilha } from './programaEmbalagem.js';
 
 /** Duas planilhas de ano cheio numa colagem so' — teto do que faz sentido. */
 const MAX_SEMANAS = 120;
@@ -82,13 +82,13 @@ function diaDaSemana(valor, campo) {
 const listar = (db, empresaId, grupoId) => (grupoId
   ? db`
     SELECT id, grupo_id, ano, numero, pecas,
-           to_char(inicio, 'YYYY-MM-DD') AS inicio, atualizado_em
+           to_char(inicio, 'YYYY-MM-DD') AS inicio, dias, atualizado_em
       FROM demanda_semanal
      WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
      ORDER BY ano, numero`
   : db`
     SELECT id, grupo_id, ano, numero, pecas,
-           to_char(inicio, 'YYYY-MM-DD') AS inicio, atualizado_em
+           to_char(inicio, 'YYYY-MM-DD') AS inicio, dias, atualizado_em
       FROM demanda_semanal
      WHERE empresa_id = ${empresaId}
      ORDER BY grupo_id, ano, numero`);
@@ -123,14 +123,13 @@ export async function demandaSemanal(req, res, auth) {
 
   exigirPapel(auth, ['admin', 'analista'], 'So quem faz analise mantem o programa de producao');
 
-  // O grupo alimentado pela planilha nao recebe colagem: a proxima leitura
-  // sobrescreveria o colado sem aviso, e quem colou acharia que valeu.
-  if (req.method === 'POST' && req.query?.grupo) {
-    const alvo = await grupoDaPlanilha(empresaId);
-    if (alvo?.grupoId && alvo.grupoId === req.query.grupo) {
-      throw new ErroHttp(409, 'O programa da embalagem vem da planilha do PCP (aba PROGRAMACAO) e é lido sozinho: '
-        + 'altere a planilha, não cole aqui');
-    }
+  // O grupo cuja planilha foi LIDA nao recebe colagem nem exclusao: a
+  // proxima leitura sobrescreveria o colado sem aviso, e o apagado antes da
+  // janela a planilha nao regrava. Com a leitura falhando, as duas voltam —
+  // e' a saida do PCP enquanto a planilha nao e' lida.
+  if (req.query?.grupo && await planilhaMandaNoGrupo(empresaId, req.query.grupo)) {
+    throw new ErroHttp(409, 'O programa da embalagem vem da planilha do PCP (abas PROGRAMACAO e '
+      + 'PROGRAMACAO_CONCLUIDA) e é lido sozinho: altere a planilha, não o programa aqui');
   }
   return auth.rls(async (db) => {
     const grupoId = await grupoDaEmpresa(db, empresaId, req.query?.grupo);
@@ -171,6 +170,9 @@ export async function demandaSemanal(req, res, auth) {
           VALUES (${empresaId}, ${grupoId}, ${s.ano}, ${s.numero}, ${s.pecas}, ${s.inicio})
           ON CONFLICT (empresa_id, grupo_id, ano, numero)
           DO UPDATE SET pecas = EXCLUDED.pecas,
+                        -- Colado e' a semana inteira: os dias que uma leitura
+                        -- da planilha tinha gravado nao valem mais para ela.
+                        dias = NULL,
                         -- Colagem SEM a coluna INICIO nao apaga a data que
                         -- ja' estava gravada: ela so' nao veio desta vez.
                         inicio = COALESCE(EXCLUDED.inicio, demanda_semanal.inicio)`;

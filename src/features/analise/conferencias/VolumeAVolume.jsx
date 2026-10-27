@@ -31,7 +31,7 @@ const MAX_LACUNAS_PAPEL = 15;
  *
  * O TAKT vem de taktDaMedicao: o mesmo programa, a mesma jornada e o mesmo
  * setup planejado do quadro "Programa da semana", na semana DESTA medicao.
- * Na embalagem o programa e' colado em VOLUMES, e e' por volume que o takt
+ * Na embalagem o programa e' em VOLUMES, e e' por volume que o takt
  * sai — a mesma unidade do toque.
  *
  * O VEREDITO usa a mesma regua do quadro do programa — relogio, paradas
@@ -477,7 +477,7 @@ function definicoes(leitura, unidade) {
     [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, e só quando o grupo tem setup planejado (ele já saiu das horas do takt). É o que vai contra o takt — a mesma régua do programa da semana.'],
     [`Por ${unidade.singular} com a linha rodando`, 'soma dos intervalos dividida pela quantidade de intervalos.'],
     ['Lacuna', `intervalo maior que ${fatorLacuna}× o normal — a média dos intervalos que não são lacuna (o "sem as lacunas"). Parada marcada e passo lento não viram lacuna.`],
-    ['Leitura', `a partir de ${minIntervalos} intervalos.${unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é colado em volumes.' : ''}`],
+    ['Leitura', `a partir de ${minIntervalos} intervalos.${unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é em volumes, e o takt usa as horas dos dias programados.' : ''}`],
   ];
 }
 
@@ -506,7 +506,7 @@ function notaDoCriterio(leitura, unidade) {
     + 'Com a linha rodando = soma dos intervalos ÷ quantidade. '
     + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal — a média dos intervalos que não são lacuna. `
     + `Leitura a partir de ${leitura.criterios.minIntervalos} intervalos.`
-    + (unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é colado em volumes.' : '');
+    + (unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é em volumes, e o takt usa as horas dos dias programados.' : '');
 }
 
 function TabelaLacunas({ leitura, unidade }) {

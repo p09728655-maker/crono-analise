@@ -1,4 +1,6 @@
-import { comoDia, comoPeriodo, periodosDoPrograma } from '../../../domain/demandaSemanal.js';
+import {
+  comoDia, comoPeriodo, periodosDoPrograma, rotuloDaSemana,
+} from '../../../domain/demandaSemanal.js';
 import { est } from './estilos.js';
 import { porMinuto } from './formato.js';
 
@@ -28,7 +30,7 @@ export default function PainelDemanda({
 }) {
   const {
     estado, semana, semanas, demanda, veredito, intervalo, semanasMedidas, programa, medicao,
-    casadoPorData, setup, conta, paradas, escolhaAutomatica,
+    casadoPorData, setup, conta, paradas, escolhaAutomatica, dias,
   } = leitura;
 
   /* O periodo de cada semana cadastrada, para o seletor dizer de que dias
@@ -62,7 +64,7 @@ export default function PainelDemanda({
               <option value="">escolha a semana</option>
               {[...semanas].reverse().map((s) => (
                 <option key={s.chave} value={s.chave}>
-                  {s.chave}{periodoDe.get(s.chave) ? ` · ${periodoDe.get(s.chave)}` : ''}
+                  {rotuloDaSemana(s)}{periodoDe.get(s.chave) ? ` · ${periodoDe.get(s.chave)}` : ''}
                 </option>
               ))}
             </select>
@@ -96,7 +98,7 @@ export default function PainelDemanda({
       <div style={est.comparativoTopo}>
         <div style={est.demandaTopoLinha}>
           <h2 style={est.comparativoTitulo}>
-            O programa da semana {semana.chave}
+            O programa da semana {semana.rotulo ?? semana.chave}
             {grupoNome ? ` — ${grupoNome}` : ''}
           </h2>
           <div style={est.demandaAcoes}>
@@ -132,7 +134,7 @@ export default function PainelDemanda({
                     existe para resolver. */}
                 {[...semanas].reverse().map((s) => (
                   <option key={s.chave} value={s.chave}>
-                    {s.chave}{periodoDe.get(s.chave) ? ` · ${periodoDe.get(s.chave)}` : ''}
+                    {rotuloDaSemana(s)}{periodoDe.get(s.chave) ? ` · ${periodoDe.get(s.chave)}` : ''}
                   </option>
                 ))}
               </select>
@@ -305,6 +307,12 @@ export default function PainelDemanda({
               </>
             ))
           : <>O grupo tem {conta?.texto.jornada ?? Math.round(v.horasDisponiveis)} horas-máquina na semana.</>}
+        {/* Semana programada so' em parte (feriado, programa sendo montado):
+            as horas acima ja' sao so' as dos dias com lote. */}
+        {dias && dias.programados < dias.daJornada && (
+          <> Semana com <strong>{dias.programados} de {dias.daJornada} dias programados</strong>:
+            as horas são só as desses dias{dias.jornadaInformada ? '' : ' (jornada de 5 dias, o cadastro não diz quantos)'}.</>
+        )}
         {semanasMedidas > 1 && (
           <> As medições em tela cobrem <strong>{semanasMedidas} semanas</strong> — o ritmo
             é o médio do período observado, não só o desta semana.</>
@@ -316,13 +324,14 @@ export default function PainelDemanda({
           número sem idade não levanta suspeita em ninguém. */}
       {programa?.n > 0 && (
         <p style={est.comparativoNota}>
-          Programa colado
+          {programa.daPlanilha ? 'Programa lido da planilha do PCP, mudado por último' : 'Programa colado'}
           {programa.atualizadoEm
             ? ` em ${programa.atualizadoEm.toLocaleDateString('pt-BR')}`
             : ''}
-          : {programa.n} semanas, de {comoOPcpEscreve(programa.primeira)} a{' '}
-          {comoOPcpEscreve(programa.ultima)}. O veredito vale para a demanda desse
-          programa — se o PCP reprogramou depois, cole a planilha de novo.
+          : {programa.n} semanas, {faixaDoPrograma(programa)}.{' '}
+          {programa.daPlanilha
+            ? 'O veredito vale para o programa da planilha nesse momento; a planilha é relida sozinha.'
+            : 'O veredito vale para a demanda desse programa — se o PCP reprogramou depois, cole a planilha de novo.'}
           {/* CASADO POR NUMERO e' o caso pior, e ele precisa aparecer: a
               semana da fabrica desloca por feriado e o rotulo da planilha
               corre a frente do calendario, entao o numero acerta por
@@ -367,10 +376,21 @@ const titulo = (estado) => ({
 /** "de S02 a S39" — a semana como o PCP escreve, não como o app guarda. */
 const comoOPcpEscreve = (s) => (s ? `S${String(s.numero).padStart(2, '0')}` : '');
 
+/**
+ * As semanas do programa, de qual a qual. A colada pelo rotulo do PCP; a
+ * lida da planilha da embalagem (semana ISO) pela DATA — o numero ISO
+ * escrito como "S44" apontaria outra semana do PCP.
+ */
+function faixaDoPrograma(programa) {
+  if (programa.daPlanilha) {
+    return `da semana ${rotuloDaSemana(programa.primeira)} à ${rotuloDaSemana(programa.ultima)}`;
+  }
+  return `de ${comoOPcpEscreve(programa.primeira)} a ${comoOPcpEscreve(programa.ultima)}`;
+}
+
 function cobertura(programa) {
   if (!programa?.n) return '';
-  const ate = ` Cadastradas: ${programa.n} semanas, de ${comoOPcpEscreve(programa.primeira)} a ${comoOPcpEscreve(programa.ultima)}.`;
-  return ate;
+  return ` Cadastradas: ${programa.n} semanas, ${faixaDoPrograma(programa)}.`;
 }
 
 function explicacao(estado, semana, demanda, grupoNome, programa, medicao) {
@@ -393,7 +413,10 @@ function explicacao(estado, semana, demanda, grupoNome, programa, medicao) {
      * que pode existir com outro numero. A data ele acha na planilha.
      */
     const quando = programa?.temData && medicao ? ` de ${comoDia(medicao, { ano: true })}` : '';
-    return `A medição mais recente${quando} não cai em nenhuma semana do programa cadastrado.${cobertura(programa)} Escolha a semana a comparar aqui mesmo, ou cole a semana que falta em Demanda semanal.`;
+    const saida = programa?.daPlanilha
+      ? 'A planilha do PCP não tem lote programado nessa semana (ou ainda não foi lida).'
+      : 'Escolha a semana a comparar aqui mesmo, ou cole a semana que falta em Demanda semanal.';
+    return `A medição mais recente${quando} não cai em nenhuma semana do programa cadastrado.${cobertura(programa)} ${saida}`;
   }
   if (estado === 'setup-excede') {
     // As horas ESTAO informadas: mandar informa-las apontaria uma correcao

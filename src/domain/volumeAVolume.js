@@ -140,7 +140,12 @@ export function numerosDaLeitura(leitura, takt = {}, unidade) {
       chave: 'takt',
       rotulo: 'Takt da semana',
       valor: seg(leitura.taktMs),
-      sub: leitura.taktMs ? `semana ${takt.semana} · por ${unidade.singular}` : 'sem programa para comparar',
+      // Semana programada so' em parte: o takt ja' usa as horas so' dos
+      // dias com lote, e o papel diz quantos — senao 35,2 h parece erro.
+      sub: leitura.taktMs
+        ? `semana ${takt.semana} · por ${unidade.singular}${takt.dias && takt.dias.programados < takt.dias.daJornada
+          ? ` · ${takt.dias.programados} de ${takt.dias.daJornada} dias programados` : ''}`
+        : 'sem programa para comparar',
     },
     {
       chave: 'rodando',

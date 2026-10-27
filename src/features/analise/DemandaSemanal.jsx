@@ -33,9 +33,10 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
   const {
     cadastro, grupo, grupoId, escolherGrupo, maquinasDoGrupo, semanas, planilha, erro, ocupado,
   } = demanda;
-  // A planilha do PCP manda no programa deste grupo: colar e digitar saem
-  // (o servidor recusaria, e a proxima leitura apagaria).
-  const daPlanilha = Boolean(planilha?.ativa);
+  // A planilha do PCP foi LIDA e manda no programa deste grupo: colar,
+  // digitar e apagar saem (o servidor recusaria, e a proxima leitura
+  // desfaria). Com a leitura falhando, eles voltam: e' a saida do PCP.
+  const daPlanilha = Boolean(planilha?.ativa && planilha.estado === 'ok');
   // O tempo disponivel e' de dois quadros: onde se digita e a tabela, que
   // calcula o exigido de cada semana com ele.
   const tempo = useTempoDisponivel(grupo, maquinasDoGrupo);
@@ -119,7 +120,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                 semanas={semanas} horasNum={tempo.horasNum} maquinasDoGrupo={maquinasDoGrupo}
                 setupHoras={tempo.setupHoras} ocupado={ocupado}
                 aoApagarSemana={demanda.apagarSemana} aoApagarTudo={demanda.apagarTudo}
-                somenteLeitura={daPlanilha}
+                somenteLeitura={daPlanilha} diasDaJornada={grupo?.dias_semana}
               />
             )}
           </>
@@ -145,10 +146,11 @@ function OrigemPlanilha({ planilha }) {
     <div style={est.bloco} aria-label="Origem do programa">
       <div style={est.blocoTitulo}>Programa lido da planilha do PCP</div>
       <p style={est.blocoTexto}>
-        Este grupo não recebe colagem: o programa vem sozinho das abas PROGRAMACAO e
-        PROGRAMACAO_CONCLUIDA da planilha da embalagem, somando os volumes de cada semana
-        pela data programada. A leitura se repete a cada 10 minutos; para mudar o programa,
-        altere a planilha.
+        O programa deste grupo vem sozinho das abas PROGRAMACAO e PROGRAMACAO_CONCLUIDA da
+        planilha da embalagem: os volumes de cada semana pela data programada, e os dias com
+        lote — o takt usa as horas só desses dias. A planilha é lida quando alguém abre o
+        programa (o tablet, a cada meia hora), no máximo a cada 10 minutos. Para mudar o
+        programa, altere a planilha.
       </p>
       {planilha.estado === 'ok' && (
         <p style={est.blocoResumo}>
@@ -158,6 +160,15 @@ function OrigemPlanilha({ planilha }) {
         </p>
       )}
       {deFora && <div style={est.aviso}>{deFora}</div>}
+      {planilha.conflitos?.length > 0 && (
+        <div style={est.aviso}>
+          {planilha.conflitos.length === 1 ? 'A semana' : 'As semanas'} de{' '}
+          {planilha.conflitos.map((d) => d.split('-').reverse().slice(0, 2).join('/')).join(', ')} da planilha
+          não {planilha.conflitos.length === 1 ? 'entrou' : 'entraram'}: o mesmo número de semana já existe no
+          programa, de antes da janela de leitura (colado com outra numeração). A semana antiga foi
+          mantida; para a da planilha entrar, ela precisa ser apagada do programa.
+        </div>
+      )}
       {falha && <div style={est.erro} role="alert">{falha}</div>}
     </div>
   );

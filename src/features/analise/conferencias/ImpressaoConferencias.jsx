@@ -117,7 +117,7 @@ export default function ImpressaoConferencias({
               a semana da fabrica desloca por feriado e o rotulo da planilha
               corre a frente do calendario. Com as datas, o PCP confere. */}
           <h2 style={imp.tituloSecao}>
-            O programa da semana {demanda.semana.chave}
+            O programa da semana {demanda.semana.rotulo ?? demanda.semana.chave}
             {/* SO' O PERIODO DA PLANILHA. Sem a coluna INICIO, o intervalo que
                 a leitura devolve e' o da semana ISO do calendario — e a 036-26
                 da fabrica rodou de 24/08 a 28/08, uma semana inteira longe da
@@ -169,7 +169,12 @@ export default function ImpressaoConferencias({
               ? ` produtivas (${demanda.conta.texto.jornada} h de jornada − ${demanda.conta.texto.setup} h de setup: ${demanda.setup.setupsDia}/dia × ${demanda.setup.dias} dias × ${demanda.setup.minutos} min por máquina)`
               : ''}
             {demanda.setup?.zerado ? ' (grupo cadastrado sem troca de peça: setup zero)' : ''}
-            {' '}na semana. O veredito usa o ritmo de RELÓGIO (paradas dentro
+            {' '}na semana
+            {/* Semana programada so' em parte: as horas ja' sao so' as dos
+                dias com lote, e o papel diz quantos — como a tela. */}
+            {demanda.dias && demanda.dias.programados < demanda.dias.daJornada
+              ? ` (${demanda.dias.programados} de ${demanda.dias.daJornada} dias programados: as horas são só as desses dias)`
+              : ''}. O veredito usa o ritmo de RELÓGIO (paradas dentro
             {demanda.setup?.medidoMs > 0
               ? `, exceto ${demanda.setup.medidoMs >= 60000 ? `${Math.round(demanda.setup.medidoMs / 60000)} min` : 'menos de 1 min'} de troca/setup marcados nas medições — já contados no setup planejado, saíram do relógio para não contar duas vezes`
               : ''}

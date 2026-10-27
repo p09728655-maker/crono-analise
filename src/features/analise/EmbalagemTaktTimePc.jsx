@@ -360,6 +360,10 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     </div>
                     <div style={est.kpiSub}>
                       {t.taktMs > 0 ? `por volume · semana ${t.semana}` : semTaktCurto(t.estado)}
+                      {/* Semana com feriado ou ainda sendo programada: o takt usa
+                          as horas so' dos dias com lote, e diz quantos. */}
+                      {t.taktMs > 0 && t.dias && t.dias.programados < t.dias.daJornada
+                        && ` · ${t.dias.programados} de ${t.dias.daJornada} dias programados`}
                       {/* De quando e' o programa: takt sem idade e' o risco. */}
                       {t.planilha?.estado === 'ok' && ` · da planilha do PCP, lida ${quandoLida(t.planilha.lidaEm)}`}
                     </div>
@@ -399,9 +403,10 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
               )}
 
               <p style={est.painelDica}>
-                O takt é o programa da semana do grupo EMBALAGEM — colado em VOLUMES, não em
-                produtos — dividido pelas horas da semana, descontado o setup planejado. Um
-                produto que sai em dois volumes conta dois.
+                O takt é o programa da semana do grupo EMBALAGEM — em VOLUMES, não em produtos,
+                lido da planilha do PCP quando a leitura está ligada — dividido pelas horas dos
+                dias programados, descontado o setup planejado. Um produto que sai em dois
+                volumes conta dois.
               </p>
             </>
           )}

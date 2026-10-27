@@ -13,17 +13,29 @@
  *
  * `somenteLeitura`: o programa que vem da planilha do PCP (a embalagem) nao
  * se apaga aqui — a proxima leitura o traria de volta, e o botao mentiria.
+ *
+ * DIAS: a semana da planilha traz os dias programados, e o exigido e o takt
+ * dela usam as horas so' desses dias (fracaoDaSemana) — os mesmos numeros
+ * do takt da medicao. A coluna so' aparece quando alguma semana os traz.
  */
 import { useMemo, useState } from 'react';
 import {
-  chaveSemana, comoPeriodo, periodosDoPrograma, resumoDaDemanda, ritmoExigido,
+  chaveSemana, comoPeriodo, fracaoDaSemana, periodosDoPrograma, resumoDaDemanda, ritmoExigido,
+  rotuloDaSemana,
 } from '../../../domain/demandaSemanal.js';
 import { est } from './estilos.js';
 
+/** "038-26" na colada; "semana de 26/10" na lida da planilha (ver rotuloDaSemana). */
+const nomeDaSemana = (s) => (s?.dias != null ? `semana ${rotuloDaSemana(s)}` : rotuloDaSemana(s));
+const faixa = ({ primeira, ultima }) => (primeira?.dias != null
+  ? `da ${nomeDaSemana(primeira)} à ${rotuloDaSemana(ultima)}`
+  : `de ${rotuloDaSemana(primeira)} a ${rotuloDaSemana(ultima)}`);
+
 export default function ProgramaGravado({
   semanas, horasNum, maquinasDoGrupo, setupHoras, ocupado, aoApagarSemana, aoApagarTudo,
-  somenteLeitura = false,
+  somenteLeitura = false, diasDaJornada = null,
 }) {
+  const comDias = (semanas || []).some((s) => s.dias != null);
   const [confirmarLimpeza, setConfirmarLimpeza] = useState(false);
 
   const resumo = useMemo(() => resumoDaDemanda(semanas || []), [semanas]);
@@ -42,11 +54,11 @@ export default function ProgramaGravado({
       <div style={est.blocoTitulo}>Programa gravado</div>
       {resumo && (
         <p style={est.blocoTexto}>
-          {resumo.n} semanas, de {resumo.primeira.chave} a {resumo.ultima.chave}.
+          {resumo.n} semanas, {faixa(resumo)}.
           Média de <strong>{Math.round(resumo.media).toLocaleString('pt-BR')}</strong> peças,
           variação de <strong>{resumo.cvPct.toFixed(1)}%</strong> —
-          da menor ({resumo.menor.chave}, {resumo.menor.pecas.toLocaleString('pt-BR')})
-          para a maior ({resumo.maior.chave}, {resumo.maior.pecas.toLocaleString('pt-BR')})
+          da menor ({nomeDaSemana(resumo.menor)}, {resumo.menor.pecas.toLocaleString('pt-BR')})
+          para a maior ({nomeDaSemana(resumo.maior)}, {resumo.maior.pecas.toLocaleString('pt-BR')})
           são {(resumo.maior.pecas / resumo.menor.pecas).toFixed(2)}x.
           {resumo.cvPct >= 10 && ' É essa variação que impede um takt fixo: o número tem de vir com a semana.'}
         </p>
@@ -60,6 +72,11 @@ export default function ProgramaGravado({
                 Período
               </th>
               <th style={est.thNum}>Peças</th>
+              {comDias && (
+                <th style={est.thNum} title="Dias com lote programado na semana: as horas do takt são as desses dias">
+                  Dias
+                </th>
+              )}
               <th style={est.thNum} title="Peças por hora que cada máquina do grupo precisa fazer">
                 Exigido por máquina
               </th>
@@ -69,17 +86,23 @@ export default function ProgramaGravado({
           </thead>
           <tbody>
             {[...semanas].reverse().map((s) => {
+              const fracao = fracaoDaSemana(s, diasDaJornada);
               const r = ritmoExigido({
-                pecas: s.pecas, horas: horasNum, maquinas: maquinasDoGrupo,
-                setupHoras: setupHoras ?? 0,
+                pecas: s.pecas, horas: horasNum * fracao.fator, maquinas: maquinasDoGrupo,
+                setupHoras: (setupHoras ?? 0) * fracao.fator,
               });
               return (
                 <tr key={s.chave}>
-                  <td style={est.td}>{s.chave}</td>
+                  <td style={est.td}>{rotuloDaSemana(s)}</td>
                   <td style={est.tdPeriodo}>
                     {comoPeriodo(periodos.get(s.chave)) || 'sem data'}
                   </td>
                   <td style={est.tdNum}>{s.pecas.toLocaleString('pt-BR')}</td>
+                  {comDias && (
+                    <td style={est.tdNum}>
+                      {fracao.programados ? `${fracao.programados} de ${fracao.daJornada}` : '—'}
+                    </td>
+                  )}
                   <td style={est.tdNum}>
                     {r ? `${Math.round(r.pecasPorHoraMaquina).toLocaleString('pt-BR')} pç/h` : '—'}
                   </td>

@@ -167,20 +167,32 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
     23/10, não da de hoje;
   - **por semana ISO** (segunda a domingo; o casamento com a medição é pela
     data, o número só rotula);
-  - linha nas duas abas (mesmo lote e código, no instante da mudança) conta uma
-    vez; linha sem data ou sem quantidade fica de fora **contada**, e a tela diz
-    quantas.
+  - linha nas duas abas (mesmo lote, código e data, no instante da mudança)
+    conta uma vez; linha sem data ou sem quantidade fica de fora **contada**, e a
+    tela diz quantas;
+  - com os **dias programados** de cada semana (datas com lote). O takt usa as
+    horas só desses dias (`fracaoDaSemana`): na semana de Finados, 4 de 5 dias,
+    44 h × 4/5 = 35,2 h. Com a jornada inteira ele saía 25% frouxo. A jornada
+    em dias vem do grupo (`dias_semana`; sem ela, 5, e a tela diz). Programa
+    colado não tem dias e vale a semana inteira, como sempre;
+  - a semana aparece **pela data** ("semana de 26/10"): o número ISO não é o
+    código do PCP para os mesmos dias.
 
-  A leitura acontece no GET do programa, no máximo a cada 10 minutos (1 minuto
-  depois de uma falha). O tablet já busca o programa a cada meia hora, então a
-  semana nova chega sem ninguém abrir o PC. O servidor grava **da 4ª semana
-  passada em diante** (os 30 dias da tela); semana mais antiga fica congelada,
-  para uma limpeza de linhas velhas na planilha não reescrever a história.
-  Dentro dessa janela a planilha manda: semana que não veio dela sai, e colar
-  programa no grupo da embalagem é recusado (409). Falha de leitura não derruba
-  nada: vale o programa guardado, e a tela da embalagem e o "Programa da
-  semana" dizem o motivo e o que fazer. Sem as variáveis, nada muda: cola-se o
-  programa como em qualquer grupo.
+  A leitura acontece no GET do programa — quando alguém o pede —, no máximo a
+  cada 10 minutos por instância (1 minuto depois de uma falha). O tablet ligado
+  pede a cada meia hora, então a semana nova chega sem ninguém abrir o PC;
+  com tudo desligado, não há leitura. O servidor grava **da 4ª semana passada
+  em diante** (os 30 dias da tela); semana mais antiga fica congelada, para uma
+  limpeza de linhas velhas na planilha não reescrever a história, e semana
+  congelada com o mesmo número não é sobrescrita (a da planilha fica de fora,
+  e a tela diz). Dentro da janela a planilha manda: semana que não veio dela
+  sai. Aba `PROGRAMACAO` vazia (lida no meio de uma edição) não é gravada.
+  Com a última leitura boa, colar ou apagar programa no grupo da embalagem é
+  recusado (409); com a leitura falhando, os dois voltam — é a saída do PCP, e
+  a próxima leitura boa substitui o colado. Falha de leitura não derruba nada:
+  vale o programa guardado, a hora da última leitura boa fica no banco
+  (`configuracoes`), e a tela diz o motivo e a saída. Sem as variáveis, nada
+  muda: cola-se o programa como em qualquer grupo.
 - **O que se compara com o takt é o tempo por volume no relógio, com as
   paradas dentro**: o relógio entre o primeiro e o último toque ÷ (volumes − 1).
   - É a mesma régua do veredito do programa da semana: o volume que não saiu
@@ -1176,7 +1188,10 @@ de produção num endereço público.
    `PROGRAMA_EMBALAGEM_PLANILHA` = o endereço da planilha. Publique um deploy
    novo (variável nova só vale depois dele). `/api/status` mostra se as duas
    chegaram.
-6. Abra *Embalagem Takt Time* no PC: o takt diz "da planilha do PCP, lida hoje
+6. Confira o grupo **EMBALAGEM** em Ferramentas → Máquinas / Demanda semanal:
+   sem **horas por semana** (e dias da semana) o takt não sai, com ou sem
+   planilha.
+7. Abra *Embalagem Takt Time* no PC: o takt diz "da planilha do PCP, lida hoje
    às…", ou o motivo da falha.
 
 > Se o passo 3 for recusado com "a criação de chaves de conta de serviço está

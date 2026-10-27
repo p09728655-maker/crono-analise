@@ -51,9 +51,24 @@ describe('semanasDaPlanilha — o programa da embalagem por semana', () => {
   it('a semana soma as DUAS abas pela data programada: 8.750 em aberto + 200 concluidos = 8.950', () => {
     const r = semanasDaPlanilha(planilha([ATRASADO, ...DIA_26, ...outrosDias], CONCLUIDAS), { hoje: HOJE });
     const semana26 = r.semanas.find((s) => s.inicio === '2026-10-26');
-    expect(semana26).toMatchObject({ ano: 2026, numero: 44, pecas: 8950 });
-    // So' a PROGRAMACAO daria 8.750: e encolheria a cada lote terminado.
-    expect(semana26.pecas - 200).toBe(8750);
+    expect(semana26).toMatchObject({ ano: 2026, numero: 44, pecas: 8950, dias: 5 });
+    // So' a PROGRAMACAO daria 8.750 — e encolheria a cada lote terminado.
+    const soAbertos = semanasDaPlanilha(planilha([ATRASADO, ...DIA_26, ...outrosDias], []), { hoje: HOJE });
+    expect(soAbertos.semanas.find((s) => s.inicio === '2026-10-26').pecas).toBe(8750);
+    expect(r.porAba).toEqual({ PROGRAMACAO_CONCLUIDA: 3, PROGRAMACAO: 1 + 7 + 55 });
+  });
+
+  it('a semana conta os DIAS programados: Finados (segunda) deixa quatro', () => {
+    const r = semanasDaPlanilha(planilha([
+      ['1', '03/11', '1', '1', 'X', '100'],
+      ['2', '03/11', '2', '2', 'X', '50'],
+      ['3', '04/11', '1', '3', 'X', '100'],
+      ['4', '05/11', '1', '4', 'X', '100'],
+      ['5', '06/11', '1', '5', 'X', '100'],
+    ], []), { hoje: HOJE });
+    expect(r.semanas).toEqual([{
+      ano: 2026, numero: 45, inicio: '2026-11-02', pecas: 450, linhas: 5, dias: 4,
+    }]);
   });
 
   it('o lote atrasado conta na semana em que foi programado, nao na de hoje', () => {
@@ -68,6 +83,14 @@ describe('semanasDaPlanilha — o programa da embalagem por semana', () => {
     expect(r.ignoradas.duplicadas).toBe(1);
   });
 
+  it("mesmo lote e codigo em OUTRO dia nao e' repetida: e' outra linha do programa", () => {
+    const outroDia = ['25343', '27/10', '4', '501.138.003', 'VOL 1/1 LIVREIRO TAURUS CINAMOMO', '100'];
+    const concluida = ['25343', '26/10/2026', '4', '501138003', 'VOL 1/1 LIVREIRO TAURUS CINAMOMO', '240'];
+    const r = semanasDaPlanilha(planilha([outroDia], [concluida]), { hoje: HOJE });
+    expect(r.semanas[0].pecas).toBe(340);
+    expect(r.ignoradas.duplicadas).toBe(0);
+  });
+
   it('dentro da mesma aba, duas linhas iguais sao duas linhas do programa', () => {
     const r = semanasDaPlanilha(planilha([DIA_26[0], DIA_26[0]], []), { hoje: HOJE });
     expect(r.semanas[0].pecas).toBe(640);
@@ -76,7 +99,9 @@ describe('semanasDaPlanilha — o programa da embalagem por semana', () => {
 
   it('data em numero de serie (o que a API devolve) vale o mesmo que o texto', () => {
     const r = semanasDaPlanilha(planilha([['1', 46321, '1', '1', 'X', 320]], []), { hoje: HOJE });
-    expect(r.semanas).toEqual([{ ano: 2026, numero: 44, inicio: '2026-10-26', pecas: 320, linhas: 1 }]);
+    expect(r.semanas).toEqual([{
+      ano: 2026, numero: 44, inicio: '2026-10-26', pecas: 320, linhas: 1, dias: 1,
+    }]);
   });
 
   it('linha sem data ou sem quantidade fica de fora CONTADA; linha vazia nao conta', () => {
@@ -105,7 +130,9 @@ describe('semanasDaPlanilha — o programa da embalagem por semana', () => {
       ['1', '31/12/2026', '1', '1', 'X', '10'],
       ['2', '01/01/2027', '1', '2', 'X', '20'],
     ]), { hoje: HOJE });
-    expect(r.semanas).toEqual([{ ano: 2026, numero: 53, inicio: '2026-12-28', pecas: 30, linhas: 2 }]);
+    expect(r.semanas).toEqual([{
+      ano: 2026, numero: 53, inicio: '2026-12-28', pecas: 30, linhas: 2, dias: 2,
+    }]);
   });
 });
 
@@ -114,6 +141,10 @@ describe('lerDia — "23/10" sem ano', () => {
     expect(lerDia('28/12', new Date('2027-01-05T12:00:00Z'))).toBe('2026-12-28');
     expect(lerDia('05/01', new Date('2026-12-20T12:00:00Z'))).toBe('2027-01-05');
     expect(lerDia('23/10', HOJE)).toBe('2026-10-23');
+  });
+  it('nunca mais de 4 meses a frente: "15/03" lido em outubro e\' de marco que passou', () => {
+    expect(lerDia('15/03', HOJE)).toBe('2026-03-15');
+    expect(lerDia('20/02', HOJE)).toBe('2027-02-20');
   });
   it("recusa data que nao existe e texto que nao e' data", () => {
     expect(lerDia('31/02/2026', HOJE)).toBeNull();

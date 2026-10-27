@@ -50,5 +50,7 @@ export function textoDaFalha(planilha, agora = new Date()) {
   }
   const quando = quandoLida(planilha.lidaEm, agora);
   return `Não deu para ler a planilha do PCP: ${planilha.mensagem}. `
-    + `Continua valendo o programa guardado${quando ? ` (lido ${quando})` : ''}; a leitura tenta de novo em 1 minuto.`;
+    + `Continua valendo o programa guardado${quando ? ` (lido ${quando})` : ''}, e a leitura tenta de novo `
+    + 'em 1 minuto. Enquanto não for lida, dá para colar a semana que falta em Demanda semanal; '
+    + 'a próxima leitura boa a substitui.';
 }

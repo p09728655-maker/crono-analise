@@ -7,6 +7,7 @@
  * dos outros de proposito — o que a tela mostra pode ficar a um decimo do
  * exato, e "264 − 50 = 214" bate sempre.
  */
+import { chaveSemana } from './leitura.js';
 
 /**
  * A data do programa em pt-BR — SEM deslocar o dia.
@@ -76,3 +77,17 @@ export function contaDasHoras({ horas, setupHoras = null, maquinas = 1 } = {}) {
 export const comoPeriodo = (periodo, { ano = false } = {}) => (periodo?.inicio && periodo?.fim
   ? `${comoDia(periodo.inicio)} a ${comoDia(periodo.fim, { ano })}`
   : '');
+
+/**
+ * Como a tela CHAMA uma semana do programa. A colada leva o codigo do PCP
+ * (038-26). A lida da planilha da embalagem (a que traz `dias`) e' semana
+ * ISO: o numero dela nao e' o do PCP para os mesmos dias, e escrito no
+ * formato do PCP apontaria outra semana. Ela leva a data: "de 26/10".
+ */
+export function rotuloDaSemana(semana) {
+  if (semana?.dias != null && semana.inicio) {
+    const d = new Date(`${semana.inicio}T00:00:00Z`);
+    if (!Number.isNaN(d.getTime())) return `de ${comoDia(d)}`;
+  }
+  return semana ? chaveSemana(semana) : '';
+}

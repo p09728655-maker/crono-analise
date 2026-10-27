@@ -7,10 +7,12 @@
  * paralelo esperando para divergir. O servidor le e grava sozinho; o tablet
  * e o PC leem o programa guardado, como o de qualquer grupo.
  *
- * QUANDO: no GET do programa (?demanda=1), no maximo a cada 10 minutos por
- * instancia do servidor (1 minuto depois de uma falha). O tablet ja' busca
- * o programa a cada meia hora, entao a semana nova chega sem ninguem abrir
- * o PC. Sem cron: o plano Hobby da Vercel so' roda cron uma vez por dia.
+ * QUANDO: no GET do programa (?demanda=1) — quando alguem pede o programa,
+ * e no maximo a cada 10 minutos por instancia do servidor (1 minuto depois
+ * de uma falha). O tablet ligado pede a cada meia hora, entao a semana nova
+ * chega sem ninguem abrir o PC; fim de semana com tudo desligado, nao ha'
+ * leitura nenhuma. Sem cron: o plano Hobby da Vercel so' roda cron uma vez
+ * por dia.
  *
  * QUEM GRAVA: o servidor, fora da RLS (`sql`), com empresa e grupo no WHERE.
  * O dado nao vem de quem pediu — vem da planilha —, e o tablet (coletor),
@@ -86,7 +88,11 @@ export async function grupoDaPlanilha(empresaId) {
   try {
     daInstalacao = await empresaDaInstalacao();
   } catch (e) {
-    return { config, grupos: ids, erro: e.message };
+    // Mais de uma empresa e sem EMPRESA_ID: nao da' para saber de quem e' a
+    // planilha. Nao grava — e nao conta o motivo a quem pediu, que pode ser
+    // de outra empresa. Fica no log para quem administra.
+    console.error('[ritmopatrimar] programa da embalagem — empresa da instalacao:', e.message);
+    return null;
   }
   if (daInstalacao !== empresaId) return null;
   if (config.erro) return { config, grupos: ids, erro: config.erro };
@@ -111,38 +117,70 @@ function segundaDaJanela(agora, semanas) {
   return new Date(dia.getTime() - (((dds - 1) + (7 * semanas)) * UM_DIA)).toISOString().slice(0, 10);
 }
 
+/** Onde fica a hora da ultima leitura boa: sobrevive a' troca de instancia. */
+const CHAVE_LIDA_EM = 'programa_embalagem_lida_em';
+
 /**
  * Grava as semanas, numa transacao: a planilha toda entra, ou nada muda.
  * Da segunda `desde` em diante o programa do grupo e' o da planilha: semana
- * guardada que nao veio dela sai, inclusive a futura colada a mao. Devolve
- * quantas linhas mudaram (gravadas ou apagadas) — a regravada igual nao conta.
+ * guardada que nao veio dela sai, inclusive a futura colada a mao.
+ *
+ * A gravacao casa por (ano, numero), e a semana CONGELADA (antes da janela,
+ * ou sem data) pode ter o mesmo numero de outra numeracao — colada pela
+ * coluna S da planilha da fabrica, por exemplo. Sobrescreve-la trocaria o
+ * programa de uma semana antiga pelo de outra. Essa semana da planilha nao
+ * entra e volta em `conflitos`, para a tela dizer.
+ *
+ * Devolve quantas linhas mudaram (gravadas ou apagadas; a regravada igual
+ * nao conta) e as semanas que nao entraram.
  */
 async function gravar(empresaId, grupoId, semanas, desde) {
   const vindas = new Set(semanas.map((s) => `${s.ano}-${s.numero}`));
   return sql.begin(async (tx) => {
     let mudaram = 0;
-    const naJanela = await tx`
-      SELECT id, ano, numero FROM demanda_semanal
-       WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
-         AND inicio >= ${desde}::date`;
-    for (const linha of naJanela) {
-      if (vindas.has(`${linha.ano}-${linha.numero}`)) continue;
+    const doGrupo = await tx`
+      SELECT id, ano, numero, inicio >= ${desde}::date AS na_janela FROM demanda_semanal
+       WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}`;
+    const congeladas = new Set(doGrupo.filter((l) => !l.na_janela).map((l) => `${l.ano}-${l.numero}`));
+    for (const linha of doGrupo) {
+      if (!linha.na_janela || vindas.has(`${linha.ano}-${linha.numero}`)) continue;
       await tx`DELETE FROM demanda_semanal WHERE id = ${linha.id}`;
       mudaram += 1;
     }
+    const conflitos = [];
     for (const s of semanas) {
+      if (congeladas.has(`${s.ano}-${s.numero}`)) {
+        conflitos.push(s.inicio);
+        continue;
+      }
       const gravada = await tx`
-        INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas, inicio)
-        VALUES (${empresaId}, ${grupoId}, ${s.ano}, ${s.numero}, ${s.pecas}, ${s.inicio}::date)
+        INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas, inicio, dias)
+        VALUES (${empresaId}, ${grupoId}, ${s.ano}, ${s.numero}, ${s.pecas}, ${s.inicio}::date, ${s.dias})
         ON CONFLICT (empresa_id, grupo_id, ano, numero)
-        DO UPDATE SET pecas = EXCLUDED.pecas, inicio = EXCLUDED.inicio
+        DO UPDATE SET pecas = EXCLUDED.pecas, inicio = EXCLUDED.inicio, dias = EXCLUDED.dias
          WHERE demanda_semanal.pecas IS DISTINCT FROM EXCLUDED.pecas
             OR demanda_semanal.inicio IS DISTINCT FROM EXCLUDED.inicio
+            OR demanda_semanal.dias IS DISTINCT FROM EXCLUDED.dias
         RETURNING id`;
       mudaram += gravada.length;
     }
-    return mudaram;
+    await tx`
+      INSERT INTO configuracoes (empresa_id, chave, valor)
+      VALUES (${empresaId}, ${CHAVE_LIDA_EM}, ${new Date().toISOString()})
+      ON CONFLICT (empresa_id, chave) DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`;
+    return { mudaram, conflitos };
   });
+}
+
+/** A hora da ultima leitura boa, do banco — ou null. */
+async function lidaPorUltimo(empresaId) {
+  try {
+    const [linha] = await sql`
+      SELECT valor FROM configuracoes WHERE empresa_id = ${empresaId} AND chave = ${CHAVE_LIDA_EM}`;
+    return linha?.valor ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function sincronizar({
@@ -154,6 +192,12 @@ async function sincronizar({
       conta: config.conta, planilhaId: config.planilhaId, abas: ABAS_DO_PROGRAMA, buscar, agora,
     });
     const lido = semanasDaPlanilha(abas, { hoje: new Date(agora) });
+    // A aba de abertos nunca fica vazia numa fabrica rodando: vazia, ela foi
+    // lida no meio de uma reescrita (ou apagada). Gravar a leitura assim
+    // derrubaria a semana para so' o que ja' foi concluido.
+    if (!lido.porAba.PROGRAMACAO) {
+      throw new Error('A aba PROGRAMACAO veio sem nenhum lote (no meio de uma edição?): nada foi gravado');
+    }
     const desde = segundaDaJanela(agora, SEMANAS_PASSADAS);
     const semanas = lido.semanas.filter((s) => s.inicio >= desde);
     // Planilha sem nenhuma semana recente: lida torta ou esvaziada. Nao se
@@ -161,16 +205,17 @@ async function sincronizar({
     if (!semanas.length) {
       throw new Error(`A planilha não tem lote programado desde ${desde.split('-').reverse().join('/')}`);
     }
-    const mudaram = await gravar(empresaId, grupoId, semanas, desde);
+    const { mudaram, conflitos } = await gravar(empresaId, grupoId, semanas, desde);
     resultado = {
       estado: 'ok',
       ativa: true,
       grupoId,
       lidaEm: new Date(agora).toISOString(),
-      semanas: semanas.length,
+      semanas: semanas.length - conflitos.length,
       linhas: lido.linhas,
       ignoradas: lido.ignoradas,
       mudaram,
+      conflitos,
     };
   } catch (e) {
     console.error('[ritmopatrimar] programa da embalagem — planilha nao lida:', e.message);
@@ -180,9 +225,10 @@ async function sincronizar({
       grupoId,
       mensagem: e.message,
       tentadaEm: new Date(agora).toISOString(),
-      // A ultima leitura boa desta instancia: a tela diz de quando e' o
-      // programa que continua valendo.
-      lidaEm: ultima?.resultado?.lidaEm ?? null,
+      // A ultima leitura boa, do BANCO (a memoria e' so' desta instancia, e
+      // a instancia nova nao saberia): a tela diz de quando e' o programa
+      // que continua valendo.
+      lidaEm: await lidaPorUltimo(empresaId),
     };
   }
   ultima = { quando: agora, grupoId, resultado };
@@ -219,4 +265,15 @@ export async function programaDaPlanilha({
     }).finally(() => { emAndamento = null; });
   }
   return emAndamento;
+}
+
+/**
+ * A planilha MANDA no programa deste grupo agora? So' com a ultima leitura
+ * boa. Configurada mas falhando (planilha descompartilhada, Google fora),
+ * o PCP pode colar a semana que falta — a proxima leitura boa a substitui.
+ * Sem isto, a unica saida seria apagar a variavel na Vercel.
+ */
+export async function planilhaMandaNoGrupo(empresaId, grupoId) {
+  const planilha = await programaDaPlanilha({ empresaId, grupoId });
+  return Boolean(planilha?.ativa && planilha.estado === 'ok');
 }

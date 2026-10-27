@@ -33,6 +33,7 @@ import { semanaIso } from '../../src/domain/demanda/calendario.js';
 export const ABAS_DO_PROGRAMA = ['PROGRAMACAO', 'PROGRAMACAO_CONCLUIDA'];
 
 const UM_DIA = 86400000;
+const MAX_A_FRENTE_MS = 120 * UM_DIA;
 // O Sheets conta datas em dias desde 30/12/1899 (a mesma epoca do Excel).
 const EPOCA_SHEETS = Date.UTC(1899, 11, 30);
 
@@ -62,7 +63,9 @@ function diaValido(ano, mes, dia) {
  * com UNFORMATTED_VALUE: o ano vem junto, sem adivinhar) e com o TEXTO
  * "23/10" ou "23/10/2026". O "23/10" sem ano — a PROGRAMACAO mostra assim
  * — fica no ano que poe a data mais perto de `hoje`: em janeiro, "28/12"
- * e' do ano que passou, e em dezembro "05/01" e' do proximo.
+ * e' do ano que passou, e em dezembro "05/01" e' do proximo. Mas nunca mais
+ * de 4 meses a frente: o PCP nao programa tao longe, e "15/03" lido em
+ * outubro e' a linha velha de marco, nao um lote do ano que vem.
  */
 export function lerDia(valor, hoje = new Date()) {
   if (typeof valor === 'number' && Number.isFinite(valor)) {
@@ -81,7 +84,7 @@ export function lerDia(valor, hoje = new Date()) {
   const base = hoje.getUTCFullYear();
   const candidatas = [base - 1, base, base + 1]
     .map((ano) => diaValido(ano, mes, dia))
-    .filter(Boolean)
+    .filter((d) => d && d - hoje <= MAX_A_FRENTE_MS)
     .sort((a, b) => Math.abs(a - hoje) - Math.abs(b - hoje));
   return candidatas.length ? isoDoDia(candidatas[0]) : null;
 }
@@ -122,18 +125,24 @@ function colunasDa(aba, cabecalho) {
  * As linhas das duas abas -> as semanas do programa.
  *
  * `abas` e' { PROGRAMACAO: [[cabecalho...], [linha...], ...], ... }, como
- * o Sheets devolve. A linha que aparece nas DUAS abas (mesmo lote e mesmo
- * codigo — acontece no instante em que ela muda de aba) conta uma vez.
+ * o Sheets devolve. A linha que aparece nas DUAS abas (mesmo lote, codigo
+ * e data — acontece no instante em que ela muda de aba) conta uma vez.
  *
- * Devolve as semanas (so' as com volume) e o que ficou de fora, contado:
- * linha com quantidade e sem data legivel, com data e sem quantidade, e a
- * duplicada entre abas. A tela mostra esses numeros — linha ignorada calada
- * e' volume que some do programa sem ninguem saber.
+ * Cada semana traz os DIAS PROGRAMADOS (datas distintas com lote): a semana
+ * de Finados tem quatro, e o takt dela usa as horas de quatro dias, nao a
+ * jornada da semana inteira (ver fracaoDaSemana).
+ *
+ * Devolve as semanas (so' as com volume), quantas linhas cada aba deu, e o
+ * que ficou de fora, contado: linha com quantidade e sem data legivel, com
+ * data e sem quantidade, e a duplicada entre abas. A tela mostra esses
+ * numeros — linha ignorada calada e' volume que some do programa sem
+ * ninguem saber.
  */
 export function semanasDaPlanilha(abas, { hoje = new Date() } = {}) {
   const porSemana = new Map();
   const vistas = new Set();
   const ignoradas = { semData: 0, semQuantidade: 0, duplicadas: 0 };
+  const porAba = {};
   let linhas = 0;
 
   // A concluida primeiro: na linha repetida entre abas, vale a que terminou.
@@ -142,6 +151,7 @@ export function semanasDaPlanilha(abas, { hoje = new Date() } = {}) {
     if (!cabecalho) throw new Error(`A aba ${aba} veio vazia, sem cabeçalho`);
     const cols = colunasDa(aba, cabecalho);
     const desta = new Set();
+    porAba[aba] = 0;
 
     for (const linha of corpo) {
       const celula = (i) => (i >= 0 ? linha?.[i] : undefined);
@@ -156,15 +166,19 @@ export function semanasDaPlanilha(abas, { hoje = new Date() } = {}) {
 
       const lote = String(celula(cols.lote) ?? '').trim();
       const codigo = String(celula(cols.codigo) ?? '').replace(/\D/g, '');
-      const chave = lote && codigo ? `${lote}|${codigo}` : null;
+      const chave = lote && codigo ? `${lote}|${codigo}|${dia}` : null;
       if (chave && vistas.has(chave)) { ignoradas.duplicadas += 1; continue; }
       if (chave) desta.add(chave);
 
       const inicio = segundaDe(dia);
-      const atual = porSemana.get(inicio) || { inicio, pecas: 0, linhas: 0 };
+      const atual = porSemana.get(inicio) || {
+        inicio, pecas: 0, linhas: 0, dias: new Set(),
+      };
       atual.pecas += qtd;
       atual.linhas += 1;
+      atual.dias.add(dia);
       porSemana.set(inicio, atual);
+      porAba[aba] += 1;
       linhas += 1;
     }
     // So' entre abas: dentro da mesma aba, duas linhas iguais sao duas
@@ -176,7 +190,11 @@ export function semanasDaPlanilha(abas, { hoje = new Date() } = {}) {
     .sort((a, b) => (a.inicio < b.inicio ? -1 : 1))
     .map((s) => {
       const { ano, numero } = semanaIso(new Date(`${s.inicio}T12:00:00Z`));
-      return { ano, numero, inicio: s.inicio, pecas: s.pecas, linhas: s.linhas };
+      return {
+        ano, numero, inicio: s.inicio, pecas: s.pecas, linhas: s.linhas, dias: s.dias.size,
+      };
     });
-  return { semanas, linhas, ignoradas };
+  return {
+    semanas, linhas, porAba, ignoradas,
+  };
 }

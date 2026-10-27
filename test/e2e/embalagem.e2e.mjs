@@ -674,18 +674,23 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
   await semearSessao(s);
   const erros = [];
   s.on('pageerror', (e) => erros.push(e.message));
+  // A semana da planilha traz os DIAS programados: 4 (Finados, por
+  // exemplo). 2.200 volumes em 4 de 5 dias de 44 h -> 35,2 h -> 57,6 s.
   await simularServidor(s, {
     conferencias: [medicao], marcas, relogio: marcas.at(-1) - marcas[0],
+    demandas: [{ ...DEMANDAS[0], dias: 4 }],
     planilha: {
       estado: 'ok', ativa: true, grupoId: GRUPO.id, lidaEm: new Date(Date.now() - 300000).toISOString(),
-      semanas: 5, linhas: 312, ignoradas: { semData: 0, semQuantidade: 2, duplicadas: 0 }, mudaram: 0,
+      semanas: 5, linhas: 312, ignoradas: { semData: 0, semQuantidade: 2, duplicadas: 0 }, mudaram: 0, conflitos: [],
     },
   });
+  const diaDaSegunda = `${String(segunda.getUTCDate()).padStart(2, '0')}/${String(segunda.getUTCMonth() + 1).padStart(2, '0')}`;
   await s.goto(`${BASE}/analise/embalagem`);
   const kpi = s.getByText('Takt desta semana · EMBALAGEM').locator('..');
   await kpi.waitFor({ timeout: 8000 });
-  checar(/72\.0 s[\s\S]*por volume · semana .+ · da planilha do PCP, lida hoje às \d{2}:\d{2}/.test(await kpi.innerText()),
-    `planilha lida: o takt diz que veio da planilha do PCP e quando (${(await kpi.innerText()).replace(/\n/g, ' | ')})`);
+  const textoKpi = (await kpi.innerText()).replace(/\n/g, ' | ');
+  checar(new RegExp(`57\\.6 s[\\s\\S]*por volume · semana de ${diaDaSegunda} · 4 de 5 dias programados · da planilha do PCP, lida hoje às \\d{2}:\\d{2}`).test(await kpi.innerText()),
+    `planilha lida: takt pelas horas dos 4 dias (57.6 s), semana pela data, de onde e quando (${textoKpi})`);
   checar(await s.getByRole('alert').count() === 0, 'planilha lida: nenhum aviso de falha');
 
   // O programa da semana do grupo: sem colar, sem digitar, sem apagar — e
@@ -700,6 +705,9 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
     && /2 linhas ficaram de fora: 2 sem quantidade/.test(textoOrigem),
   `Programa da semana: diz que vem da planilha, quando foi lida e o que ficou de fora (${textoOrigem.replace(/\n/g, ' | ')})`);
   await demanda.locator('table').waitFor({ timeout: 8000 });
+  const linhaDaSemana = await demanda.locator('tbody tr').first().innerText();
+  checar(/4 de 5/.test(linhaDaSemana) && /57\.6s/.test(linhaDaSemana),
+    `Programa da semana: a linha diz 4 de 5 dias e o takt e' o mesmo da tela (${linhaDaSemana.replace(/\s+/g, ' ')})`);
   checar(await demanda.locator('textarea').count() === 0
     && await demanda.getByRole('button', { name: 'Apagar' }).count() === 0
     && await demanda.getByRole('button', { name: 'Apagar o programa deste grupo' }).count() === 0,
@@ -722,9 +730,16 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
   const alerta = s.getByRole('alert');
   await alerta.waitFor({ timeout: 8000 });
   const kpi = s.getByText('Takt desta semana · EMBALAGEM').locator('..');
-  checar(/Não deu para ler a planilha do PCP: A planilha não está compartilhada .*\(leitor\)\. Continua valendo o programa guardado; a leitura tenta de novo em 1 minuto/
+  checar(/Não deu para ler a planilha do PCP: A planilha não está compartilhada .*\(leitor\)\. Continua valendo o programa guardado, e a leitura tenta de novo em 1 minuto\. Enquanto não for lida, dá para colar a semana que falta em Demanda semanal/
     .test(await alerta.innerText()) && /72\.0 s/.test(await kpi.innerText()) && !/da planilha do PCP, lida/.test(await kpi.innerText()),
-  'planilha nao lida: o aviso diz o motivo e o que fazer, e o takt e\' o do programa guardado');
+  'planilha nao lida: o aviso diz o motivo e a saida, e o takt e\' o do programa guardado');
+  // A saida existe de verdade: com a leitura falhando, a colagem volta.
+  await s.goto(`${BASE}/analise/conferencias`);
+  await s.getByRole('button', { name: 'Demanda semanal' }).click();
+  const demanda = s.locator('[aria-label="Demanda semanal"]');
+  await demanda.locator('[aria-label="Origem do programa"]').getByRole('alert').waitFor({ timeout: 8000 });
+  checar(await demanda.locator('textarea').count() === 1,
+    'planilha nao lida: a colagem volta em Demanda semanal, com o motivo da falha a vista');
   await ctx.close();
 }
 
