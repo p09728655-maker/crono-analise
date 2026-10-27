@@ -12,7 +12,7 @@ import { listarCadastroMaquinas, listarConferenciasServidor, listarDemanda } fro
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
-import VolumeAVolume, { useAnalisesDoPcp } from './conferencias/VolumeAVolume.jsx';
+import VolumeAVolume, { cliqueSimples, useAnalisesDoPcp } from './conferencias/VolumeAVolume.jsx';
 import Produtos from './Produtos.jsx';
 import MotivosParada from './MotivosParada.jsx';
 import { est } from './conferencias/estilos.js';
@@ -37,11 +37,17 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  * e a lista, comprimida (apontado em 27/10): quem analisa le uma medicao
  * por vez. "Voltar a' lista" devolve a lista na rolagem em que foi deixada.
  *
+ * A medicao aberta tem entrada propria no historico do navegador: o
+ * Voltar do navegador (e o botao lateral do mouse) volta a' lista, como o
+ * botao da tela — sem ela, saia da tela e levava as notas digitadas.
+ *
  * Lida a medicao, o PCP salva a analise pelo botao do topo do detalhe, e
  * volta para a lista. O cartao A ANALISAR conta as volume a volume que
  * ainda nao tem analise salva — e' o que falta ler.
  */
 const ESTILO_LINHA = '.embalagem-linha:hover > td { background: #F5F8FC; }';
+/** No estado da entrada do historico: o id da medicao aberta. */
+const CHAVE_HISTORICO = 'embalagemMedicao';
 export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [carga, setCarga] = useState({ estado: 'carregando' });
@@ -50,6 +56,11 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   // lista reaparece no mesmo ponto, com o foco na linha de onde se saiu.
   const rolagemDaLista = useRef(0);
   const saiuDe = useRef(null);
+  // O Voltar do navegador chega por evento, fora do render: ele le daqui o
+  // que esta' aberto, as medicoes e se ha' analise salvando. E sabe se quem
+  // voltou foi a propria tela (Voltar à lista, Salvar), que nunca e' barrada.
+  const atual = useRef({ aberta: null, medicoes: [], ocupado: false });
+  const voltandoPelaTela = useRef(false);
   // Os dois cadastros que a embalagem pede no tablet: o que se embala e por
   // que a linha para. Aqui a um clique, sem caçar no menu de outra tela.
   const [cadastroAberto, setCadastroAberto] = useState(null); // 'produtos' | 'motivos' | null
@@ -132,22 +143,83 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     saiuDe.current = null;
   }, [aberta?.id]);
 
+  // Mostra a medicao no lugar da lista, guardando onde a lista estava.
+  const mostrar = (c) => {
+    rolagemDaLista.current = window.scrollY;
+    saiuDe.current = c.id;
+    setAberta(c);
+  };
+  const abrir = (c) => {
+    window.history.pushState({ [CHAVE_HISTORICO]: c.id }, '');
+    mostrar(c);
+  };
+  // Desfaz a entrada que abrir criou: depois de voltar, o historico fica
+  // como se a medicao nao tivesse sido aberta. Quem fecha e' o popstate.
+  const voltarALista = () => {
+    if (window.history.state?.[CHAVE_HISTORICO]) {
+      voltandoPelaTela.current = true;
+      window.history.back();
+    } else {
+      setAberta(null);
+    }
+  };
+
+  /* Voltar e Avancar do navegador andam entre a lista e a medicao. Com a
+     analise salvando, o Voltar do navegador nao fecha: a entrada da
+     medicao volta ao historico, porque a recusa precisa de onde aparecer
+     (o botao Voltar à lista fica travado pelo mesmo motivo). */
+  useEffect(() => {
+    // Recarregada com uma medicao aberta, a tela volta na lista: a entrada
+    // que dizia "aberta" vira entrada da lista, senao o Voltar a reabriria.
+    if (window.history.state?.[CHAVE_HISTORICO]) window.history.replaceState({}, '');
+    const aoNavegar = () => {
+      const id = window.history.state?.[CHAVE_HISTORICO] ?? null;
+      const { aberta: daTela, medicoes, ocupado } = atual.current;
+      const pelaTela = voltandoPelaTela.current;
+      voltandoPelaTela.current = false;
+      if (id === (daTela?.id ?? null)) return;
+      if (daTela && ocupado && !pelaTela) {
+        window.history.pushState({ [CHAVE_HISTORICO]: daTela.id }, '');
+        return;
+      }
+      if (id === null) {
+        setAberta(null);
+        return;
+      }
+      const c = medicoes.find((m) => m.id === id && m.com_marcas);
+      if (c) mostrar(c);
+    };
+    window.addEventListener('popstate', aoNavegar);
+    return () => window.removeEventListener('popstate', aoNavegar);
+  }, []);
+
   /* A analise salva no painel muda a linha e o cartao na hora, sem buscar
      a lista de novo. Salvar volta para a lista (so' se a aberta ainda for
      a salva); reabrir deixa o detalhe aberto, com a nota no campo. */
   const analises = useAnalisesDoPcp((atualizada, { fechar }) => {
     const juntar = (c) => (c.id === atualizada.id ? { ...c, ...atualizada } : c);
-    setCarga((atual) => ({ ...atual, conferencias: atual.conferencias.map(juntar) }));
-    setAberta((a) => {
-      if (a?.id !== atualizada.id) return a;
-      return fechar ? null : juntar(a);
-    });
+    setCarga((carregada) => ({ ...carregada, conferencias: carregada.conferencias.map(juntar) }));
+    if (atual.current.aberta?.id !== atualizada.id) return;
+    if (fechar) voltarALista();
+    else setAberta((a) => (a ? juntar(a) : a));
   });
 
-  const abrir = (c) => {
-    rolagemDaLista.current = window.scrollY;
-    saiuDe.current = c.id;
-    setAberta(c);
+  useLayoutEffect(() => {
+    atual.current = { aberta, medicoes: leitura?.medicoes || [], ocupado: analises.ocupado };
+  });
+
+  /* Sair da tela descarta a nota digitada e nao salva, e uma analise ainda
+     salvando perde onde mostrar a recusa: a lateral pergunta antes. */
+  const sairDaTela = (ir) => {
+    const naoSalvas = leitura ? leitura.medicoes.filter(analises.notaNaoSalva).length : 0;
+    if (!analises.ocupado && naoSalvas === 0) {
+      ir();
+      return;
+    }
+    const motivo = analises.ocupado
+      ? 'A análise ainda está sendo salva. Saindo agora, você não fica sabendo se o servidor recusar.'
+      : `${naoSalvas === 1 ? 'Há 1 comentário digitado e não salvo' : `Há ${naoSalvas} comentários digitados e não salvos`}. Sair da tela ${naoSalvas === 1 ? 'descarta esse comentário' : 'descarta esses comentários'}.`;
+    if (window.confirm(`${motivo}\n\nSair mesmo assim?`)) ir();
   };
 
   const grupoAberto = aberta && leitura ? leitura.grupoDe(aberta.maquina) : null;
@@ -159,9 +231,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
         <MenuLateral
           versao={VERSAO}
           aoVerVersao={() => setVerVersoes(true)}
-          aoVoltar={aoVoltar}
+          aoVoltar={() => sairDaTela(aoVoltar)}
           voltarRotulo="Estudos"
-          aoVerInicio={aoVerInicio}
+          aoVerInicio={aoVerInicio && (() => sairDaTela(aoVerInicio))}
           contexto={{
             rotulo: 'Embalagem',
             titulo: 'Embalagem Takt Time',
@@ -184,7 +256,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
               conferencia={aberta}
               grupo={grupoAberto}
               maquinasDoGrupo={grupoAberto ? leitura.ativasDoGrupo(grupoAberto.id) : 0}
-              aoFechar={() => setAberta(null)}
+              aoFechar={voltarALista}
               analise={analises.da(aberta)}
             />
           )}
@@ -192,10 +264,12 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
           {leitura && !aberta && (
             <>
               <div style={est.barraCadastros}>
-                <button type="button" style={est.botaoLinha} onClick={() => setCadastroAberto('produtos')}>
+                {/* Guardados contra o duplo clique: o Voltar à lista fica neste
+                    mesmo canto, e o segundo clique abria o cadastro. */}
+                <button type="button" style={est.botaoLinha} onClick={cliqueSimples(() => setCadastroAberto('produtos'))}>
                   Produtos da embalagem
                 </button>
-                <button type="button" style={est.botaoLinha} onClick={() => setCadastroAberto('motivos')}>
+                <button type="button" style={est.botaoLinha} onClick={cliqueSimples(() => setCadastroAberto('motivos'))}>
                   Motivos de parada
                 </button>
               </div>
@@ -342,7 +416,8 @@ function TabelaEmbalagem({ medicoes, aoAbrir, pendenciaDe }) {
             const [dia, hora] = formatarDataHora(c.iniciado_em || c.salvo_em).split(' ');
             const estiloLinha = abre ? est.embLinhaClicavel : undefined;
             const classeLinha = abre ? 'embalagem-linha' : undefined;
-            const aoClicarLinha = abre ? () => aoAbrir(c) : undefined;
+            // O segundo clique de um duplo clique nao abre: ver cliqueSimples.
+            const aoClicarLinha = abre ? cliqueSimples(() => aoAbrir(c)) : undefined;
             const aviso = AVISO_PENDENCIA[pendenciaDe(c)];
             return (
               <Fragment key={c.id}>
@@ -358,7 +433,10 @@ function TabelaEmbalagem({ medicoes, aoAbrir, pendenciaDe }) {
                       style={est.embProduto}
                       data-medicao={c.id}
                       // A linha tambem abre: sem isto, o clique abriria duas vezes.
-                      onClick={(ev) => { ev.stopPropagation(); aoAbrir(c); }}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        aoClicarLinha(ev);
+                      }}
                     >
                       {c.peca || 'Produto não informado'}
                     </button>

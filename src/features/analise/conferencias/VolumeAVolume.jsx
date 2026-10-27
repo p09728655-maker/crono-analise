@@ -118,6 +118,12 @@ export function useAnalisesDoPcp(aplicar) {
     return resto;
   };
   const notaDe = (c) => (c.id in rascunhos ? rascunhos[c.id] : (c.analise_nota || ''));
+  // Digitada e diferente da salva, numa medicao ainda nao analisada: e' o
+  // que se perde ao sair da tela.
+  const notaNaoSalva = (c) => {
+    const digitada = c.id in rascunhos ? rascunhos[c.id].trim() : null;
+    return !c.analisada_em && digitada !== null && digitada !== (c.analise_nota || '').trim();
+  };
 
   async function salvar(conferencia, analisar) {
     const { id } = conferencia;
@@ -139,7 +145,9 @@ export function useAnalisesDoPcp(aplicar) {
   }
 
   return {
-    salvando: (id) => Boolean(salvando[id]),
+    /** Ha' alguma analise indo para o servidor (a tela nao deve sair). */
+    ocupado: Object.keys(salvando).length > 0,
+    notaNaoSalva,
     /**
      * O que a LINHA precisa avisar de uma medicao fechada: a recusa (de
      * salvar ou de reabrir — reabrir recusado deixa a analise salva, e o
@@ -147,9 +155,7 @@ export function useAnalisesDoPcp(aplicar) {
      */
     pendencia: (c) => {
       if (falhas[c.id]) return falhas[c.id].reabrir ? 'reabrir-recusado' : 'salvar-recusado';
-      const digitada = c.id in rascunhos ? rascunhos[c.id].trim() : null;
-      if (!c.analisada_em && digitada !== null && digitada !== (c.analise_nota || '').trim()) return 'nota-nao-salva';
-      return null;
+      return notaNaoSalva(c) ? 'nota-nao-salva' : null;
     },
     /** O que o painel da medicao `c` precisa. */
     da: (c) => ({
@@ -161,6 +167,19 @@ export function useAnalisesDoPcp(aplicar) {
     }),
   };
 }
+
+/**
+ * O clique que e' o SEGUNDO de um duplo clique nao vale. O painel abre no
+ * lugar da lista, debaixo do cursor: quem abria a linha com duplo clique
+ * acertava "Salvar análise e voltar" com o segundo, e a medicao ficava
+ * analisada sem ninguem ler. O mesmo vale ao contrario — o Voltar devolve
+ * a lista, e o segundo clique abria outra linha. Teclado (detail 0) e
+ * clique simples passam.
+ */
+export const cliqueSimples = (fazer) => (ev) => {
+  if (ev.detail > 1) return;
+  fazer(ev);
+};
 
 const TOM = {
   atende: est.vereditoAtende,
@@ -224,14 +243,14 @@ export default function VolumeAVolume({
             {podeAnalisar && (analisada ? (
               <button
                 type="button" style={est.botaoSecundario}
-                onClick={() => analise.salvar(false)} disabled={salvando}
+                onClick={cliqueSimples(() => analise.salvar(false))} disabled={salvando}
               >
                 {salvando ? 'Reabrindo…' : 'Reabrir análise'}
               </button>
             ) : (
               <button
                 type="button" style={est.botaoSalvarAnalise}
-                onClick={() => analise.salvar(true)} disabled={salvando}
+                onClick={cliqueSimples(() => analise.salvar(true))} disabled={salvando}
               >
                 {salvando ? 'Salvando…' : 'Salvar análise e voltar'}
               </button>
@@ -242,19 +261,19 @@ export default function VolumeAVolume({
               <button
                 type="button"
                 style={est.botaoSecundario}
-                onClick={() => imprimirComo(nomeDoArquivo(
+                onClick={cliqueSimples(() => imprimirComo(nomeDoArquivo(
                   'Takt Time',
                   conferencia.peca || 'sem produto',
                   conferencia.maquina,
                   dataDoArquivo(quando),
-                ))}
+                )))}
               >
                 Imprimir
               </button>
             )}
             {/* Travado enquanto salva: de volta a' lista no meio, o painel nao
                 estaria aqui para dizer se o servidor recusou. */}
-            <button type="button" style={est.botaoSecundario} onClick={aoFechar} disabled={salvando}>
+            <button type="button" style={est.botaoSecundario} onClick={cliqueSimples(aoFechar)} disabled={salvando}>
               Voltar à lista
             </button>
           </div>

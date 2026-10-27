@@ -20,7 +20,9 @@ export const HISTORICO = [
       'A MEDIÇÃO ABRE NA TELA INTEIRA, NÃO MAIS AO LADO DA LISTA. Clicar no produto (ou em qualquer ponto da linha) troca a lista pelo volume a volume, com a largura toda: cartões, gráfico e leitura sem aperto. Ao lado da lista, o resultado ficava espremido e a lista, comprimida.',
       '"VOLTAR À LISTA" NO ALTO, no lugar de Fechar. "Salvar análise e fechar" passou a se chamar "SALVAR ANÁLISE E VOLTAR": salva e devolve a lista, já com o selo "✓ Analisada" na linha e o cartão A analisar atualizado. A lista volta na mesma posição em que você estava.',
       'A TELA CHEGA NA LISTA. A medição mais recente não abre mais sozinha: você escolhe qual analisar.',
-      'Para trocar de medição, volte à lista e clique na outra. O comentário digitado e ainda não salvo continua guardado em cada medição enquanto a tela estiver aberta, e a linha avisa "Nota digitada, ainda não salva". Os números, o gráfico e a folha impressa não mudaram.',
+      'O VOLTAR DO NAVEGADOR (e o botão lateral do mouse) também volta para a lista, sem sair da tela; Avançar reabre a medição. Enquanto a análise está sendo salva, ele não fecha a medição: se o servidor recusar, o aviso aparece ali.',
+      'DUPLO CLIQUE NÃO SALVA MAIS POR ENGANO. A medição abre debaixo do cursor, e o segundo clique de um duplo clique na linha caía em "Salvar análise e voltar", marcando como analisada uma medição que ninguém leu. Agora o segundo clique não vale nos botões do alto, nas linhas da lista nem nos cadastros.',
+      'Para trocar de medição, volte à lista e clique na outra. O comentário digitado e ainda não salvo continua guardado em cada medição enquanto a tela estiver aberta, e a linha avisa "Nota digitada, ainda não salva". Sair da tela pelo menu lateral (Estudos ou Início) com comentário não salvo, ou com uma análise ainda salvando, agora pergunta antes: sair descarta o comentário. Os números, o gráfico e a folha impressa não mudaram.',
     ],
   },
   {

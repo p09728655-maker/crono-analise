@@ -423,7 +423,7 @@ export const est = {
   vavPainel: {
     background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.media,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.bordaForte,
-    marginBottom: espaco.xl, scrollMarginTop: espaco.lg,
+    marginBottom: espaco.xl,
   },
   vavTopo: {
     position: 'sticky', top: 0, zIndex: 2, background: t.papel,
@@ -547,9 +547,6 @@ export const est = {
   barraCadastros: {
     display: 'flex', gap: espaco.sm, justifyContent: 'flex-end', flexWrap: 'wrap', marginBottom: espaco.md,
   },
-  // A medicao aberta no painel, na lista: fundo azul-claro e o botao
-  // marcado — da' para ver qual linha esta' sendo lida no detalhe.
-  linhaSelecionada: { background: '#EEF4FC' },
   botaoLinhaAtivo: {
     minHeight: 32, padding: `0 ${espaco.md}px`, background: t.texto,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.texto, borderRadius: raio.sm,

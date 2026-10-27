@@ -136,8 +136,9 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
     toque do botão.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
   medições da embalagem. Cada medição tocada abre o **volume a volume** no
-  lugar da lista, com a largura toda (*Voltar à lista* devolve a lista na
-  mesma rolagem): identificação, cinco cartões (volumes, **tempo por
+  lugar da lista, com a largura toda (*Voltar à lista*, ou o Voltar do
+  navegador, devolve a lista na mesma rolagem; o segundo clique de um duplo
+  clique não vale nos botões do alto): identificação, cinco cartões (volumes, **tempo por
   volume no período**, **tempo por volume com a linha rodando**, paradas
   marcadas, **lacunas**), o gráfico do intervalo de cada volume contra a linha
   do takt, a leitura em palavras e a folha A4. O PDF sai nomeado "Takt Time -
