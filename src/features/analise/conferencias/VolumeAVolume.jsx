@@ -119,10 +119,11 @@ export function useAnalisesDoPcp(aplicar) {
   };
   const notaDe = (c) => (c.id in rascunhos ? rascunhos[c.id] : (c.analise_nota || ''));
   // Digitada e diferente da salva, numa medicao ainda nao analisada: e' o
-  // que se perde ao sair da tela.
+  // que se perde ao sair da tela. A que esta' indo para o servidor nao
+  // conta — ela ja' saiu; se for recusada, volta a contar.
   const notaNaoSalva = (c) => {
     const digitada = c.id in rascunhos ? rascunhos[c.id].trim() : null;
-    return !c.analisada_em && digitada !== null && digitada !== (c.analise_nota || '').trim();
+    return !c.analisada_em && !salvando[c.id] && digitada !== null && digitada !== (c.analise_nota || '').trim();
   };
 
   async function salvar(conferencia, analisar) {

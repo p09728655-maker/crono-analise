@@ -59,7 +59,12 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   // O Voltar do navegador chega por evento, fora do render: ele le daqui o
   // que esta' aberto, as medicoes e se ha' analise salvando. E sabe se quem
   // voltou foi a propria tela (Voltar à lista, Salvar), que nunca e' barrada.
-  const atual = useRef({ aberta: null, medicoes: [], ocupado: false });
+  const atual = useRef({
+    aberta: null, carregada: false, medicoes: [], ocupado: false,
+  });
+  // Salvamento que responde depois de a tela ter sido deixada nao mexe em
+  // nada: a tela de agora pode ter reaberto a MESMA medicao.
+  const montada = useRef(false);
   const voltandoPelaTela = useRef(false);
   const abrirAoCarregar = useRef(null);
   // Os dois cadastros que a embalagem pede no tablet: o que se embala e por
@@ -174,18 +179,29 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
      (o botao Voltar à lista fica travado pelo mesmo motivo). */
   useEffect(() => {
     const caminho = window.location.pathname;
+    montada.current = true;
     // Recarregada (F5) ou de volta de outra tela com a medicao aberta, ela
     // reabre quando a lista chegar — a entrada do historico e' dela.
     abrirAoCarregar.current = window.history.state?.[CHAVE_HISTORICO] ?? null;
     // A tela cuida da propria rolagem (lista no mesmo ponto, medicao no
     // topo). A do navegador pulava a pagina no Voltar barrado ao salvar.
-    const restauracao = window.history.scrollRestoration;
+    // O modo fica gravado na entrada do historico: na saida, volta a 'auto'
+    // (o padrao do resto do app), nao ao que estava — que pode ser o
+    // 'manual' deixado por esta mesma tela numa visita anterior.
     window.history.scrollRestoration = 'manual';
     const aoNavegar = () => {
       // O Voltar que ja' saiu da tela e' do App, nao daqui.
       if (window.location.pathname !== caminho) return;
       const id = window.history.state?.[CHAVE_HISTORICO] ?? null;
-      const { aberta: daTela, medicoes, ocupado } = atual.current;
+      const {
+        aberta: daTela, carregada, medicoes, ocupado,
+      } = atual.current;
+      // Antes da lista chegar nao ha' o que abrir: vale a entrada de AGORA
+      // quando ela chegar, nao a de quando a tela montou.
+      if (!carregada) {
+        abrirAoCarregar.current = id;
+        return;
+      }
       const pelaTela = voltandoPelaTela.current;
       voltandoPelaTela.current = false;
       if (id === (daTela?.id ?? null)) return;
@@ -202,25 +218,28 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     };
     window.addEventListener('popstate', aoNavegar);
     return () => {
+      montada.current = false;
       window.removeEventListener('popstate', aoNavegar);
-      window.history.scrollRestoration = restauracao;
+      window.history.scrollRestoration = 'auto';
     };
   }, []);
 
   useEffect(() => {
     const id = abrirAoCarregar.current;
-    if (!leitura || !id) return;
+    if (!id || carga.estado === 'carregando') return;
     abrirAoCarregar.current = null;
-    const c = leitura.medicoes.find((m) => m.id === id && m.com_marcas);
-    // Sumiu da lista (arquivada, fora dos 30 dias): a entrada vira da lista.
+    const c = leitura?.medicoes.find((m) => m.id === id && m.com_marcas);
+    // Sumiu da lista (arquivada, fora dos 30 dias) ou a lista nao veio: a
+    // entrada vira da lista, senao o Voltar seguinte nao mudaria nada.
     if (c) mostrar(c);
     else window.history.replaceState({}, '');
-  }, [leitura]);
+  }, [carga.estado, leitura]);
 
   /* A analise salva no painel muda a linha e o cartao na hora, sem buscar
      a lista de novo. Salvar volta para a lista (so' se a aberta ainda for
      a salva); reabrir deixa o detalhe aberto, com a nota no campo. */
   const analises = useAnalisesDoPcp((atualizada, { fechar }) => {
+    if (!montada.current) return;
     const juntar = (c) => (c.id === atualizada.id ? { ...c, ...atualizada } : c);
     setCarga((carregada) => ({ ...carregada, conferencias: carregada.conferencias.map(juntar) }));
     if (atual.current.aberta?.id !== atualizada.id) return;
@@ -229,7 +248,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   });
 
   useLayoutEffect(() => {
-    atual.current = { aberta, medicoes: leitura?.medicoes || [], ocupado: analises.ocupado };
+    atual.current = {
+      aberta, carregada: Boolean(leitura), medicoes: leitura?.medicoes || [], ocupado: analises.ocupado,
+    };
   });
 
   /* Sair da tela descarta a nota digitada e nao salva, e uma analise ainda

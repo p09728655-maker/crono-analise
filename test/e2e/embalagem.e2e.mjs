@@ -40,6 +40,9 @@ const DEMANDAS = [{
   atualizado_em: hoje.toISOString(),
 }];
 
+// Demora da LISTA de medicoes (ms): para o Voltar que chega antes dela.
+let atrasoLista = 0;
+
 async function simularServidor(pagina, {
   conferencias = [], marcas = null, relogio = null, aoSincronizar, demandas = DEMANDAS, aoAlterar,
 } = {}) {
@@ -60,6 +63,7 @@ async function simularServidor(pagina, {
     if (url.searchParams.get('id')) {
       return rota.fulfill({ json: { conferencia: { id: url.searchParams.get('id'), marcas_ms: marcas, marcas_relogio_ms: relogio } } });
     }
+    if (atrasoLista) await new Promise((r) => { setTimeout(r, atrasoLista); });
     return rota.fulfill({ json: { conferencias, outras: 0 } });
   });
   await pagina.route('**/api/sync**', async (rota) => {
@@ -433,6 +437,18 @@ await voltarALista();
   await janela.waitFor({ state: 'detached', timeout: 4000 });
   checar(new URL(p.url()).pathname === '/analise/embalagem' && await lista.isVisible(),
     'depois do F5, o Voltar do navegador fecha a medicao e fica na lista');
+  // F5 com a lista lenta e Voltar ANTES de ela chegar: vale a entrada de
+  // agora (a lista), nao a de quando a tela montou (a medicao).
+  await p.goForward();
+  await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
+  atrasoLista = 1500;
+  await p.reload();
+  await p.goBack();
+  await lista.waitFor({ timeout: 8000 });
+  await p.waitForTimeout(300);
+  atrasoLista = 0;
+  checar(await janela.count() === 0 && new URL(p.url()).pathname === '/analise/embalagem',
+    'F5 e Voltar antes de a lista chegar: a lista aparece, a medicao nao reabre sozinha');
   // Sem nota digitada nem analise salvando, recarregar nao pergunta nada.
   checar(!(await p.evaluate(() => {
     const ev = new Event('beforeunload', { cancelable: true });
@@ -543,11 +559,21 @@ await voltarALista();
   // Enquanto salva, Voltar e o campo ficam travados: de volta a' lista no
   // meio, ninguem veria uma recusa.
   recusarAnalise = false;
-  atrasoAnalise = 800;
+  atrasoAnalise = 1500;
   await salvar.click();
   await janela.getByRole('button', { name: 'Salvando…' }).waitFor({ timeout: 2000 });
   checar(await botaoVoltar.isDisabled() && await nota.isDisabled(),
     'salvando: Voltar à lista e o campo da nota travados');
+  // Sair agora pergunta pelo envio, e nao chama de "nao salva" a nota que
+  // esta' indo junto com ele: so' a do Rack (digitada e deixada) conta.
+  {
+    let pergunta = '';
+    p.once('dialog', (d) => { pergunta = d.message(); d.dismiss(); });
+    await p.getByRole('button', { name: 'Início' }).click();
+    await p.waitForTimeout(100);
+    checar(/indo para o servidor/.test(pergunta) && /Há 1 nota digitada e não salva/.test(pergunta),
+      `salvando: sair pergunta pelo envio e conta so' a nota do Rack, nao a que vai no envio (${pergunta.split('\n').join(' | ')})`);
+  }
   // O Voltar do navegador tambem nao fecha: a recusa precisaria de onde aparecer.
   await p.goBack();
   await p.waitForTimeout(100);
