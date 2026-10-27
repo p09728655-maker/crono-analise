@@ -36,8 +36,11 @@
  *    pode_escrever() que a RLS aplica no banco.
  */
 import { exigirPapel } from './auth.js';
-import { erroValidacao, json, lerCorpo, naoEncontrado } from './http.js';
+import {
+  ErroHttp, erroValidacao, json, lerCorpo, naoEncontrado,
+} from './http.js';
 import { inteiro, lista, uuid } from './validar.js';
+import { grupoDaPlanilha, programaDaPlanilha } from './programaEmbalagem.js';
 
 /** Duas planilhas de ano cheio numa colagem so' — teto do que faz sentido. */
 const MAX_SEMANAS = 120;
@@ -103,15 +106,32 @@ export async function demandaSemanal(req, res, auth) {
   const { empresaId } = auth;
 
   if (req.method === 'GET') {
+    // A planilha da embalagem antes da RLS: ela grava pela conexao do
+    // servidor, e a RLS segura a unica conexao da instancia ate' o COMMIT.
+    // `planilha` so' vai na resposta quando ela se aplica a este pedido.
+    const planilha = await programaDaPlanilha({ empresaId, grupoId: req.query?.grupo || null });
     return auth.rls(async (db) => {
       const grupoId = req.query?.grupo
         ? await grupoDaEmpresa(db, empresaId, req.query.grupo)
         : null;
-      return json(res, 200, { demandas: await listar(db, empresaId, grupoId) });
+      return json(res, 200, {
+        demandas: await listar(db, empresaId, grupoId),
+        ...(planilha ? { planilha } : {}),
+      });
     });
   }
 
   exigirPapel(auth, ['admin', 'analista'], 'So quem faz analise mantem o programa de producao');
+
+  // O grupo alimentado pela planilha nao recebe colagem: a proxima leitura
+  // sobrescreveria o colado sem aviso, e quem colou acharia que valeu.
+  if (req.method === 'POST' && req.query?.grupo) {
+    const alvo = await grupoDaPlanilha(empresaId);
+    if (alvo?.grupoId && alvo.grupoId === req.query.grupo) {
+      throw new ErroHttp(409, 'O programa da embalagem vem da planilha do PCP (aba PROGRAMACAO) e é lido sozinho: '
+        + 'altere a planilha, não cole aqui');
+    }
+  }
   return auth.rls(async (db) => {
     const grupoId = await grupoDaEmpresa(db, empresaId, req.query?.grupo);
 
