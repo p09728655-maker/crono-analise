@@ -136,20 +136,22 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
     toque do botão.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
   medições da embalagem. Cada medição tocada abre o **volume a volume** ao
-  lado da lista (abaixo dela, em tela estreita); clicar de novo na linha,
-  *Fechar* ou o Voltar do navegador fecham o painel, e o segundo clique de um
-  duplo clique não vale: identificação, cinco cartões (volumes, **tempo por
-  volume no período**, **tempo por volume com a linha rodando**, paradas
-  marcadas, **lacunas**), o gráfico do intervalo de cada volume contra a linha
-  do takt, a leitura em palavras e a folha A4. O PDF sai nomeado "Takt Time -
-  produto - máquina - data hora".
+  lado da lista (abaixo dela, em tela estreita), com identificação, cinco
+  cartões (volumes, **tempo por volume no período**, **tempo por volume com a
+  linha rodando**, paradas marcadas, **lacunas**), o gráfico do intervalo de
+  cada volume contra a linha do takt, a leitura em palavras e a folha A4. O
+  PDF sai nomeado "Takt Time - produto - máquina - data hora". Clicar de novo
+  na linha, *Fechar* ou o Voltar do navegador fecham o painel — menos
+  enquanto a análise daquela medição está sendo salva. O segundo clique de um
+  duplo clique não vale.
 - **Análise do PCP.** Lida a medição, *Salvar análise e fechar* (no alto do
   painel) registra quem analisou, quando e o comentário opcional do campo
   *Análise do PCP* (`analisada_em`, `analisada_por`, `analise_nota` em
   `conferencias`), fecha o painel e **tira a medição da lista**: a lista é a
-  fila do que falta ler (*Não analisadas*), e a analisada vai para
-  *Analisadas*, com o selo "✓ Analisada", para reabrir ou imprimir. O cartão
-  **A analisar** conta as medições volume a volume sem análise salva.
+  fila do que falta ler (*Não analisadas*, a mesma conta do cartão **A
+  analisar**), e a analisada vai para *Analisadas*, com o selo "✓ Analisada",
+  para reabrir ou imprimir. A que não se analisa (medida por horários, com a
+  contagem corrigida à mão ou com um toque só) fica em *Sem intervalos*.
   *Reabrir análise* devolve a medição para a fila com o comentário no campo.
   Não muda número nenhum: é controle do que falta ler.
   Salvar é de analista ou administrador (o tablet, coletor, recebe 403).

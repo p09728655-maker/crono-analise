@@ -344,9 +344,11 @@ await lista.waitFor({ timeout: 8000 });
 checar(await janela.count() === 0, 'a tela chega na lista: nenhuma medicao abre sozinha');
 checar(/A analisar\s*2\s*de 2 medições volume a volume em 30 dias/i.test(await cartao.innerText()),
   `cartao "A analisar": 2 de 2 em 30 dias — a de um toque so' nao conta (${(await cartao.innerText()).replace(/\n/g, ' | ')})`);
-checar(await lista.getByRole('button', { name: 'Não analisadas (3)' }).count() === 1
-  && await lista.getByRole('button', { name: 'Analisadas (0)' }).count() === 1,
-'a lista mostra as nao analisadas (3) e oferece as analisadas (0)');
+checar(await lista.getByRole('button', { name: 'Não analisadas (2)' }).count() === 1
+  && await lista.getByRole('button', { name: 'Analisadas (0)', exact: true }).count() === 1
+  && await lista.getByRole('button', { name: 'Sem intervalos (1)' }).count() === 1
+  && await lista.getByRole('row').filter({ hasText: 'Painel Sirius 1.4' }).count() === 0,
+'a fila conta o mesmo que o cartao (2); a de um toque fica em "Sem intervalos", fora da fila');
 
 await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
 // Relogio entre o 1o e o ultimo toque: 920 s / 13 = 70,8 s por volume,
@@ -411,17 +413,46 @@ checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detal
   checar(await janela.count() === 0, 'clicar de novo na linha aberta fecha o detalhe');
 }
 
-// Abrir nao mexe na pagina (o detalhe rola por dentro), e fechar devolve o
-// foco ao produto de onde se saiu.
+// Com a pagina rolada, abrir ao lado nao a mexe (o detalhe rola por
+// dentro), e fechar devolve o foco ao produto de onde se saiu.
 {
+  await p.setViewportSize({ width: 1440, height: 520 });
+  await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   const y0 = await p.evaluate(() => window.scrollY);
   await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
-  await janela.getByRole('heading', { name: 'Toucador Magic New' }).waitFor({ timeout: 4000 });
+  await janela.getByText(/No período, saiu um volume/).waitFor({ timeout: 4000 });
+  await p.waitForTimeout(600);
   const y1 = await p.evaluate(() => window.scrollY);
   await fechar();
   const foco = await p.evaluate(() => document.activeElement?.textContent);
-  checar(y0 === y1, `abrir ao lado nao rola a pagina (${y0} -> ${y1})`);
+  checar(y0 > 0, `pre-condicao: a pagina estava rolada (${y0} px)`);
+  checar(Math.abs(y1 - y0) <= 40, `abrir ao lado nao rola a pagina (${y0} -> ${y1})`);
   checar(foco === 'Toucador Magic New', `fechar devolve o foco ao produto de onde saiu (${foco})`);
+  await p.setViewportSize({ width: 1440, height: 1000 });
+}
+
+// Tela estreita (< 1280 px): o painel vem ABAIXO da lista. Abrir rola ate'
+// ele quando a leitura chega (nao para no meio com "Carregando"), e fechar
+// traz de volta a' vista a linha que recebe o foco.
+{
+  await p.setViewportSize({ width: 1200, height: 800 });
+  await p.evaluate(() => window.scrollTo(0, 0));
+  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
+  await janela.getByText(/No período, saiu um volume/).waitFor({ timeout: 4000 });
+  await p.waitForTimeout(900);
+  const bl = await lista.boundingBox();
+  const bj = await janela.boundingBox();
+  checar(bj.y > bl.y + bl.height - 1 && bj.y >= -1 && bj.y < 120,
+    `estreita: o painel vem abaixo da lista e a pagina o traz ao alto (topo em ${Math.round(bj.y)} px)`);
+  await fechar();
+  await p.waitForTimeout(300);
+  const linha = await p.evaluate(() => {
+    const r = document.activeElement?.getBoundingClientRect();
+    return r ? { texto: document.activeElement.textContent, top: r.top, bottom: r.bottom } : null;
+  });
+  checar(linha?.texto === 'Rack Sirius 1.6' && linha.top >= 0 && linha.bottom <= 800,
+    `estreita: fechar traz a' vista a linha que recebe o foco (${JSON.stringify(linha)})`);
+  await p.setViewportSize({ width: 1440, height: 1000 });
 }
 
 // O Voltar do navegador (e o botao lateral do mouse) fecha o painel, como
@@ -601,13 +632,21 @@ checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detal
     'salvo, o painel fecha e a medicao analisada SAI da lista; a outra fica');
   {
     const foco = await p.evaluate(() => document.activeElement?.textContent);
-    checar(foco === 'Painel Sirius 1.4', `salvo, o foco vai a' linha seguinte da lista (${foco})`);
+    checar(foco === 'Rack Sirius 1.6', `salvo, o foco vai a' outra medicao da fila (${foco})`);
   }
   checar(/A analisar\s*1/i.test(await cartao.innerText())
-    && await lista.getByRole('button', { name: 'Não analisadas (2)' }).count() === 1
-    && await lista.getByRole('button', { name: 'Analisadas (1)' }).count() === 1,
-  'o cartao "A analisar" desce para 1 e as contagens das vistas mudam, sem recarregar');
+    && await lista.getByRole('button', { name: 'Não analisadas (1)' }).count() === 1
+    && await lista.getByRole('button', { name: 'Analisadas (1)', exact: true }).count() === 1,
+  'o cartao "A analisar" e a fila descem juntos para 1, sem recarregar');
   if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-analisada-lista.png` });
+
+  // O Avancar reabre a salva: a lista vai para Analisadas, com a linha marcada.
+  await p.goForward();
+  await janela.getByRole('heading', { name: 'Toucador Magic New' }).waitFor({ timeout: 4000 });
+  checar(await lista.getByRole('button', { name: 'Analisadas (1)', exact: true, pressed: true }).count() === 1
+    && /Toucador Magic New/.test(await lista.locator('table').getByRole('button', { pressed: true }).innerText()),
+  'Avancar reabre a analisada com a lista em Analisadas e a linha marcada ao lado');
+  await fechar();
 
   // Em Analisadas: o selo com quem salvou; a nao analisada nao aparece.
   await verVista('Analisadas');
@@ -630,8 +669,10 @@ checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detal
   await janela.getByRole('button', { name: 'Reabrir análise' }).click();
   await salvar.waitFor({ timeout: 4000 });
   checar(pedidosAnalise.at(-1)?.corpo.analisada === false, 'reabrir manda analisada: false');
-  checar(await janela.count() === 1 && await linhaDe('Toucador Magic New').count() === 0,
-    'reabrir deixa o painel aberto, e a medicao sai de Analisadas');
+  checar(await janela.count() === 1
+    && await lista.getByRole('button', { name: /^Não analisadas/, pressed: true }).count() === 1
+    && /Toucador Magic New/.test(await lista.locator('table').getByRole('button', { pressed: true }).innerText()),
+  'reabrir deixa o painel aberto, e a lista volta para a fila com a linha marcada');
   checar(await nota.inputValue() === 'Lacunas por falta de caixa', 'reaberta, a nota volta ao campo para corrigir');
   checar(!/Análise do PCP \(/.test(await p.locator('body > .somente-impressao').innerText()),
     'reaberta, a folha A4 deixa de dizer que foi analisada');
@@ -660,11 +701,30 @@ checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detal
     && !/Análise não salva/.test(textoRack),
   'reabrir recusado: a linha segue em Analisadas e diz que nao reabriu, nao que a analise nao foi salva');
   recusarAnalise = false;
-  await verVista('Não analisadas');
+
+  // A trava e' da medicao que salva, nao da tela: com a do Toucador indo
+  // para o servidor, a do Rack abre e fecha pela linha normalmente.
+  await abrirMedicao('Rack Sirius 1.6', { esperar: reabrir });
+  await reabrir.click();
+  await salvar.waitFor({ timeout: 4000 });
+  await fechar();
+  atrasoAnalise = 1500;
+  await abrirMedicao('Toucador Magic New');
+  await salvar.click();
+  await janela.getByRole('button', { name: 'Salvando…' }).waitFor({ timeout: 2000 });
+  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
+  await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
+  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+  checar(await janela.count() === 0, 'com outra analise salvando, clicar na linha aberta (de outra medicao) fecha o painel');
+  await linhaDe('Toucador Magic New').waitFor({ state: 'detached', timeout: 4000 });
+  atrasoAnalise = 0;
+  checar(await janela.count() === 0 && await linhaDe('Rack Sirius 1.6').count() === 1,
+    'a analise que terminou depois nao reabre nem fecha nada: so\' tira a dela da fila');
   if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-a-analisar.png` });
 
   // Sair da tela pela lateral com nota digitada e nao salva: pergunta antes.
-  await abrirMedicao('Toucador Magic New');
+  await abrirMedicao('Rack Sirius 1.6');
   await nota.fill('nota que ninguem salvou');
   await fechar();
   let pergunta = null;
@@ -673,7 +733,7 @@ checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detal
   await p.waitForTimeout(200);
   checar(/Há 1 nota digitada e não salva/.test(pergunta || '')
     && new URL(p.url()).pathname === '/analise/embalagem'
-    && /Nota digitada, ainda não salva/.test(await linhaDe('Toucador Magic New').innerText()),
+    && /Nota digitada, ainda não salva/.test(await linhaDe('Rack Sirius 1.6').innerText()),
   `sair com nota nao salva pergunta antes; cancelar fica na tela com a nota (${(pergunta || '').split('\n')[0]})`);
   checar(await p.evaluate(() => {
     const ev = new Event('beforeunload', { cancelable: true });

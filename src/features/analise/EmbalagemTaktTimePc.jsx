@@ -58,6 +58,20 @@ const ESTILO_GRADE = `
 `;
 /** No estado da entrada do historico: o id da medicao aberta. */
 const CHAVE_HISTORICO = 'embalagemMedicao';
+/**
+ * Da' para analisar: tocada volume a volume e com dois toques ou mais. Com
+ * um toque nao ha' intervalo, e a feita por horarios (ou com a contagem
+ * corrigida a' mao) nao tem toque: o detalhe nao tem leitura nem botao, e
+ * na fila ela nunca sairia dali.
+ */
+const analisavel = (c) => Boolean(c.com_marcas) && Number(c.pecas) >= 2;
+/** Em que vista da lista a medicao mora: a fila, as analisadas ou as outras. */
+const vistaDe = (c) => {
+  if (!analisavel(c)) return 'outras';
+  return c.analisada_em ? 'analisadas' : 'fila';
+};
+/** O que recebe o foco quando o painel fecha: a linha, ou o botao de uma vista. */
+const seletorDaLinha = (id) => `[data-medicao="${id}"]`;
 export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [carga, setCarga] = useState({ estado: 'carregando' });
@@ -68,14 +82,15 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   // (tela estreita); a que o F5 reabre, nunca.
   const [porClique, setPorClique] = useState(true);
   const refDetalhe = useRef(null);
-  // A linha que recebe o foco quando o painel fecha: a de onde se saiu ou,
-  // se ela saiu da lista (analisada), a seguinte. O teclado continua dali.
+  // O que recebe o foco quando o painel fecha (um seletor): a linha de onde
+  // se saiu ou, se ela saiu da lista (analisada), a seguinte. O teclado
+  // continua dali.
   const focarAoFechar = useRef(null);
   // O Voltar do navegador chega por evento, fora do render: ele le daqui o
-  // que esta' aberto, as medicoes e se ha' analise salvando. E sabe se quem
+  // que esta' aberto, as medicoes e se a analise da aberta esta' salvando. E sabe se quem
   // voltou foi a propria tela (Fechar, Salvar), que nunca e' barrada.
   const atual = useRef({
-    aberta: null, carregada: false, medicoes: [], ocupado: false,
+    aberta: null, carregada: false, medicoes: [], salvandoAberta: false,
   });
   // Salvamento que responde depois de a tela ter sido deixada nao mexe em
   // nada: a tela de agora pode ter reaberto a MESMA medicao.
@@ -141,10 +156,8 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     }));
     const arquivadas = carga.arquivadas.filter((c) => grupoDaMaquina.has(nomeChave(c.maquina))).length;
     const tocadas = medicoes.filter((c) => c.com_marcas).length;
-    // A analisar, so' as que o detalhe deixa analisar: tocadas volume a
-    // volume e com dois toques ou mais. Com um toque nao ha' intervalo, o
-    // detalhe nao tem leitura nem botao — contada, ela nunca sairia daqui.
-    const analisaveis = medicoes.filter((c) => c.com_marcas && Number(c.pecas) >= 2);
+    // A analisar, so' as que o detalhe deixa analisar (ver analisavel).
+    const analisaveis = medicoes.filter(analisavel);
     const aAnalisar = analisaveis.filter((c) => !c.analisada_em).length;
     return {
       medicoes, taktHoje, ativasDoGrupo, arquivadas, tocadas, analisaveis: analisaveis.length, aAnalisar,
@@ -165,23 +178,33 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
       return;
     }
     if (focarAoFechar.current === null) return;
-    document.querySelector(`[data-medicao="${focarAoFechar.current}"]`)?.focus({ preventScroll: true });
+    const el = document.querySelector(focarAoFechar.current);
     focarAoFechar.current = null;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    // Em tela estreita o painel vinha abaixo da lista, e a pagina rolou ate'
+    // ele: a linha que recebe o foco ficou fora da tela. Ai' a tela vai ate'
+    // ela; ao lado da lista, ela ja' esta' a' vista e nada se mexe.
+    const { top, bottom } = el.getBoundingClientRect();
+    if (top < 0 || bottom > window.innerHeight) el.scrollIntoView?.({ block: 'center' });
   }, [aberta?.id]);
 
+  // A lista vai para a vista em que a medicao mora: aberta pelo Avancar, F5
+  // ou Reabrir, a linha marcada tem de estar ao lado do painel.
   const mostrar = (c, { clique = true } = {}) => {
-    focarAoFechar.current = c.id;
+    focarAoFechar.current = seletorDaLinha(c.id);
+    setVista(vistaDe(c));
     setPorClique(clique);
     setAberta(c);
   };
   // Com o painel ja' aberto, a outra medicao TROCA a entrada do historico:
   // o Voltar fecha o painel, nao passeia pelas medicoes vistas. Clicar na
-  // aberta fecha — menos enquanto a analise dela esta' sendo salva, como o
-  // botao Fechar.
+  // aberta fecha — menos enquanto a analise DELA esta' sendo salva, como o
+  // botao Fechar (a de outra medicao avisa na linha dela).
   const abrir = (c) => {
     const daTela = atual.current.aberta;
     if (daTela?.id === c.id) {
-      if (!atual.current.ocupado) fecharPainel();
+      if (!atual.current.salvandoAberta) fecharPainel();
       return;
     }
     if (daTela && window.history.state?.[CHAVE_HISTORICO] === daTela.id) {
@@ -227,7 +250,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
       if (window.location.pathname !== caminho) return;
       const id = window.history.state?.[CHAVE_HISTORICO] ?? null;
       const {
-        aberta: daTela, carregada, medicoes, ocupado,
+        aberta: daTela, carregada, medicoes, salvandoAberta,
       } = atual.current;
       // Antes da lista chegar nao ha' o que abrir: vale a entrada de AGORA
       // quando ela chegar, nao a de quando a tela montou.
@@ -238,7 +261,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
       const pelaTela = voltandoPelaTela.current;
       voltandoPelaTela.current = false;
       if (id === (daTela?.id ?? null)) return;
-      if (daTela && ocupado && !pelaTela) {
+      if (daTela && salvandoAberta && !pelaTela) {
         window.history.pushState({ [CHAVE_HISTORICO]: daTela.id }, '');
         return;
       }
@@ -265,34 +288,38 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     // Sumiu da lista (arquivada, fora dos 30 dias): a entrada vira da lista,
     // senao o Voltar seguinte nao mudaria nada. Lista que nao veio (erro)
     // nao mexe na entrada: o proximo F5, com a lista boa, ainda reabre.
-    if (c) {
-      // Analisada: a lista ao lado mostra as analisadas, onde ela esta'.
-      if (c.analisada_em) setVista('analisadas');
-      mostrar(c, { clique: false });
-    } else window.history.replaceState({}, '');
+    if (c) mostrar(c, { clique: false });
+    else window.history.replaceState({}, '');
   }, [leitura]);
 
   /* A analise salva no painel muda a linha e o cartao na hora, sem buscar
      a lista de novo. Salvar fecha o painel (so' se a aberta ainda for a
-     salva) e a medicao sai da fila; o foco vai a' linha seguinte. Reabrir
-     deixa o detalhe aberto, com a nota no campo. */
+     salva) e a medicao sai da fila; o foco vai a' linha seguinte da fila
+     (sem seguinte, ao botao Analisadas). Reabrir deixa o detalhe aberto,
+     com a nota no campo, e a lista volta para a fila, onde ela esta'. */
   const analises = useAnalisesDoPcp((atualizada, { fechar }) => {
     if (!montada.current) return;
     const juntar = (c) => (c.id === atualizada.id ? { ...c, ...atualizada } : c);
     setCarga((carregada) => ({ ...carregada, conferencias: carregada.conferencias.map(juntar) }));
     if (atual.current.aberta?.id !== atualizada.id) return;
     if (fechar) {
-      const fila = atual.current.medicoes.filter((m) => !m.analisada_em);
+      const fila = atual.current.medicoes.filter((m) => vistaDe(m) === 'fila');
       const i = fila.findIndex((m) => m.id === atualizada.id);
-      const seguinte = fila.slice(i + 1).find((m) => m.com_marcas) || fila.slice(0, i).reverse().find((m) => m.com_marcas);
+      const seguinte = fila[i + 1] || fila[i - 1];
       fecharPainel();
-      focarAoFechar.current = seguinte?.id ?? null;
-    } else setAberta((a) => (a ? juntar(a) : a));
+      focarAoFechar.current = seguinte ? seletorDaLinha(seguinte.id) : '[data-vista="analisadas"]';
+    } else {
+      setAberta((a) => (a ? juntar(a) : a));
+      setVista(vistaDe(juntar(atual.current.aberta)));
+    }
   });
 
   useLayoutEffect(() => {
     atual.current = {
-      aberta, carregada: Boolean(leitura), medicoes: leitura?.medicoes || [], ocupado: analises.ocupado,
+      aberta,
+      carregada: Boolean(leitura),
+      medicoes: leitura?.medicoes || [],
+      salvandoAberta: aberta ? analises.salvandoA(aberta.id) : false,
     };
   });
 
@@ -432,6 +459,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     abertaId={aberta?.id ?? null}
                     aoAbrir={abrir}
                     pendenciaDe={analises.pendencia}
+                    ocupado={analises.ocupado}
                   />
                   {aberta && (
                     <div ref={refDetalhe} className="embalagem-detalhe" style={est.embDetalhe}>
@@ -499,9 +527,13 @@ function semTaktCurto(estado) {
  * da linha (o teclado chega nele) e a linha inteira abre com o mouse. As
  * feitas por horarios nao tem intervalo, e a linha diz isso por escrito.
  *
- * DUAS VISTAS: "Não analisadas" e' a fila — a medicao com analise salva
- * sai dela — e "Analisadas" guarda as lidas, para reabrir ou imprimir. A
- * feita por horarios nao se analisa, e fica na fila como informacao.
+ * AS VISTAS: "Não analisadas" e' a fila — a medicao com analise salva sai
+ * dela, e ela conta o mesmo que o cartao A ANALISAR — e "Analisadas" guarda
+ * as lidas, para reabrir ou imprimir. A que nao se analisa (por horarios,
+ * contagem corrigida a' mao, um toque so') fica em "Sem intervalos": na
+ * fila, ela nunca sairia, e a fila nunca esvaziaria. As vistas travam
+ * enquanto uma analise salva: a recusa avisa na linha, e a linha tem de
+ * estar a' vista.
  */
 /** O aviso da linha para cada pendencia de analise (ver useAnalisesDoPcp). */
 const AVISO_PENDENCIA = {
@@ -511,20 +543,23 @@ const AVISO_PENDENCIA = {
 };
 
 function TabelaEmbalagem({
-  medicoes: todas, vista, aoTrocarVista, abertaId, aoAbrir, pendenciaDe,
+  medicoes: todas, vista, aoTrocarVista, abertaId, aoAbrir, pendenciaDe, ocupado = false,
 }) {
   const variasMaquinas = new Set(todas.map((c) => nomeChave(c.maquina))).size > 1;
-  const fila = todas.filter((c) => !c.analisada_em);
-  const lidas = todas.filter((c) => c.analisada_em);
-  const medicoes = vista === 'analisadas' ? lidas : fila;
-  const botaoVista = (qual, rotulo) => (
+  const porVista = { fila: [], analisadas: [], outras: [] };
+  todas.forEach((c) => porVista[vistaDe(c)].push(c));
+  const medicoes = porVista[vista];
+  const botaoVista = (qual, rotulo, titulo) => (
     <button
       type="button"
       style={vista === qual ? est.botaoLinhaAtivo : est.botaoLinha}
       aria-pressed={vista === qual}
+      data-vista={qual}
+      title={titulo}
+      disabled={ocupado}
       onClick={cliqueSimples(() => aoTrocarVista(qual))}
     >
-      {rotulo}
+      {rotulo} ({porVista[qual].length})
     </button>
   );
   return (
@@ -533,21 +568,33 @@ function TabelaEmbalagem({
         <div style={est.painelTopoTexto}>
           <h2 style={est.painelTitulo}>Medições da embalagem</h2>
           <p style={est.painelDica}>
-            Clique numa medição para abrir o volume a volume ao lado. Lida, salve a análise no
-            alto dela: a medição sai desta lista e vai para Analisadas. Volumes/hora do período
-            inteiro, com as paradas dentro — o que de fato saiu.
+            Clique numa medição para abrir o volume a volume (ao lado da lista; abaixo dela, em
+            tela estreita). Lida, salve a análise no alto dela: a medição sai desta lista e vai
+            para Analisadas. Volumes/hora do período inteiro, com as paradas dentro — o que de
+            fato saiu.
           </p>
           <div style={est.embVistas}>
-            {botaoVista('fila', `Não analisadas (${fila.length})`)}
-            {botaoVista('analisadas', `Analisadas (${lidas.length})`)}
+            {botaoVista('fila', 'Não analisadas')}
+            {botaoVista('analisadas', 'Analisadas')}
+            {porVista.outras.length > 0 && botaoVista(
+              'outras',
+              'Sem intervalos',
+              'Medidas por horários, com a contagem corrigida à mão ou com um toque só: não há intervalo entre volumes para ler',
+            )}
           </div>
         </div>
       </div>
+      {vista === 'outras' && (
+        <p style={est.painelDica}>
+          Medidas por horários, com a contagem corrigida à mão ou com um toque só: não há
+          intervalo entre volumes para ler, e elas não entram na análise.
+        </p>
+      )}
       {medicoes.length === 0 && (
         <p style={est.painelDica} role="status">
           {vista === 'analisadas'
             ? `Nenhuma medição analisada nos últimos ${DIAS} dias.`
-            : `Tudo analisado nos últimos ${DIAS} dias. As lidas estão em Analisadas.`}
+            : `Nada para analisar nos últimos ${DIAS} dias. As lidas estão em Analisadas.`}
         </p>
       )}
       {medicoes.length > 0 && (

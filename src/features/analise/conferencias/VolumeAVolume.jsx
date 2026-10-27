@@ -149,6 +149,8 @@ export function useAnalisesDoPcp(aplicar) {
   return {
     /** Ha' alguma analise indo para o servidor (a tela nao deve sair). */
     ocupado: Object.keys(salvando).length > 0,
+    /** A analise DESTA medicao esta' indo para o servidor (o painel dela nao fecha). */
+    salvandoA: (id) => Boolean(salvando[id]),
     notaNaoSalva,
     /**
      * O que a LINHA precisa avisar de uma medicao fechada: a recusa (de
@@ -217,14 +219,17 @@ export default function VolumeAVolume({
   /* Selecionou outra medicao: a pagina rola ate' ela SO' se ela nasceu fora
      da vista — empilhada abaixo da lista, em tela estreita. Ao lado da
      lista o painel ja' esta' a vista, e rolar tiraria a lista de vista.
-     `rolar` falso (a medicao que a tela reabre sozinha, no F5) nunca rola. */
+     `rolar` falso (a medicao que a tela reabre sozinha, no F5) nunca rola.
+     Confere de novo quando a leitura chega: "Carregando os toques…" e'
+     baixo, a pagina nao tinha altura para trazer o painel ao alto, e ele
+     parava no meio da tela, so' com o cabecalho a' vista. */
   const refPainel = useRef(null);
   useEffect(() => {
     const el = refPainel.current;
     if (!rolar || !el?.scrollIntoView) return;
     const { top } = el.getBoundingClientRect();
     if (top < 0 || top > window.innerHeight * 0.6) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [conferencia.id]);
+  }, [conferencia.id, pronto]);
 
   return (
     <>
