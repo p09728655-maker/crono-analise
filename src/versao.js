@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.94.1',
+    data: '2026-10-27',
+    titulo: 'Embalagem Takt Time: a medição abre na tela inteira',
+    itens: [
+      'A MEDIÇÃO ABRE NA TELA INTEIRA, NÃO MAIS AO LADO DA LISTA. Clicar no produto (ou em qualquer ponto da linha) troca a lista pelo volume a volume, com a largura toda: cartões, gráfico e leitura sem aperto. Ao lado da lista, o resultado ficava espremido e a lista, comprimida.',
+      '"VOLTAR À LISTA" NO ALTO, no lugar de Fechar. "Salvar análise e fechar" passou a se chamar "SALVAR ANÁLISE E VOLTAR": salva e devolve a lista, já com o selo "✓ Analisada" na linha e o cartão A analisar atualizado. A lista volta na mesma posição em que você estava.',
+      'A TELA CHEGA NA LISTA. A medição mais recente não abre mais sozinha: você escolhe qual analisar.',
+      'Para trocar de medição, volte à lista e clique na outra. O comentário digitado e ainda não salvo continua guardado em cada medição enquanto a tela estiver aberta, e a linha avisa "Nota digitada, ainda não salva". Os números, o gráfico e a folha impressa não mudaram.',
+    ],
+  },
+  {
     versao: '2.94.0',
     data: '2026-10-26',
     titulo: 'Embalagem Takt Time: salvar a análise e fechar',

@@ -32,30 +32,24 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  *
  * No topo, o TAKT DESTA SEMANA — e' o numero que o chao precisa ter na
  * cabeca. Abaixo, as medicoes da embalagem; as que foram tocadas volume a
- * volume abrem o detalhe (grafico, lacunas, folha A4) AO LADO da lista,
- * que continua a vista para trocar de medicao. Abaixo de 1280 px a grade
- * empilha e o detalhe vem embaixo, como antes.
+ * volume abrem o detalhe (grafico, lacunas, folha A4) NO LUGAR da lista,
+ * com a largura toda. Ao lado da lista (v2.93.1) o detalhe ficava espremido
+ * e a lista, comprimida (apontado em 27/10): quem analisa le uma medicao
+ * por vez. "Voltar a' lista" devolve a lista na rolagem em que foi deixada.
  *
  * Lida a medicao, o PCP salva a analise pelo botao do topo do detalhe, e
- * ele fecha. O cartao A ANALISAR conta as volume a volume que ainda nao
- * tem analise salva — e' o que falta ler.
+ * volta para a lista. O cartao A ANALISAR conta as volume a volume que
+ * ainda nao tem analise salva — e' o que falta ler.
  */
-const ESTILO_GRADE = `
-  @media (max-width: 1279px) {
-    .embalagem-dividida { grid-template-columns: minmax(0, 1fr) !important; }
-    .embalagem-detalhe { position: static !important; max-height: none !important; overflow: visible !important; }
-  }
-  .embalagem-linha:hover > td { background: #F5F8FC; }
-`;
+const ESTILO_LINHA = '.embalagem-linha:hover > td { background: #F5F8FC; }';
 export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [aberta, setAberta] = useState(null);
-  // Aberta por clique rola ate' o detalhe quando ele nasce fora da vista;
-  // a que a tela abre sozinha ao carregar, nunca.
-  const [porClique, setPorClique] = useState(false);
-  const abriuSozinha = useRef(false);
-  const refDetalhe = useRef(null);
+  // Onde a lista estava rolada e de qual medicao se saiu: na volta, a
+  // lista reaparece no mesmo ponto, com o foco na linha de onde se saiu.
+  const rolagemDaLista = useRef(0);
+  const saiuDe = useRef(null);
   // Os dois cadastros que a embalagem pede no tablet: o que se embala e por
   // que a linha para. Aqui a um clique, sem caçar no menu de outra tela.
   const [cadastroAberto, setCadastroAberto] = useState(null); // 'produtos' | 'motivos' | null
@@ -123,29 +117,24 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     };
   }, [carga]);
 
-  /* A medicao mais recente tocada volume a volume ja' chega aberta: a
-     coluna da direita nao nasce vazia, e o PCP le o ultimo resultado sem
-     clicar. So' na chegada — fechar depois e' escolha de quem esta' lendo. */
-  useEffect(() => {
-    if (!leitura || abriuSozinha.current) return;
-    abriuSozinha.current = true;
-    const primeira = leitura.medicoes.find((c) => c.com_marcas);
-    if (primeira) setAberta(primeira);
-  }, [leitura]);
-
-  /* Trocou de medicao: o detalhe, que rola sozinho ao lado da lista, volta
-     ao topo — a nova nao pode abrir no meio, onde a anterior foi deixada.
-     LAYOUT effect de proposito: o efeito do filho (VolumeAVolume) roda
-     antes do efeito comum do pai e mede o painel para decidir se rola a
-     pagina. Medido ainda rolado por dentro, ele parecia fora da vista e a
-     pagina pulava, tirando a linha clicada de baixo do cursor. */
+  /* Abriu uma medicao: a pagina vai ao topo, onde o detalhe comeca — quem
+     clicou na ultima linha nao pode cair no meio dele. Voltou a' lista: a
+     rolagem de antes, e o foco no produto de onde saiu (o teclado continua
+     dali). LAYOUT effect: rola antes de pintar, sem o quadro no lugar errado. */
   useLayoutEffect(() => {
-    if (refDetalhe.current) refDetalhe.current.scrollTop = 0;
+    if (aberta) {
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (saiuDe.current === null) return;
+    window.scrollTo(0, rolagemDaLista.current);
+    document.querySelector(`[data-medicao="${saiuDe.current}"]`)?.focus({ preventScroll: true });
+    saiuDe.current = null;
   }, [aberta?.id]);
 
   /* A analise salva no painel muda a linha e o cartao na hora, sem buscar
-     a lista de novo. Fecha so' se a aberta ainda for a salva: quem trocou
-     de linha enquanto o servidor respondia continua na que escolheu. */
+     a lista de novo. Salvar volta para a lista (so' se a aberta ainda for
+     a salva); reabrir deixa o detalhe aberto, com a nota no campo. */
   const analises = useAnalisesDoPcp((atualizada, { fechar }) => {
     const juntar = (c) => (c.id === atualizada.id ? { ...c, ...atualizada } : c);
     setCarga((atual) => ({ ...atual, conferencias: atual.conferencias.map(juntar) }));
@@ -155,21 +144,17 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     });
   });
 
-  // Clicar de novo na medicao aberta fecha o painel — menos enquanto a
-  // analise dela esta' sendo salva, como o botao Fechar.
   const abrir = (c) => {
-    setPorClique(true);
-    setAberta((atual) => {
-      if (atual?.id !== c.id) return c;
-      return analises.salvando(c.id) ? atual : null;
-    });
+    rolagemDaLista.current = window.scrollY;
+    saiuDe.current = c.id;
+    setAberta(c);
   };
 
   const grupoAberto = aberta && leitura ? leitura.grupoDe(aberta.maquina) : null;
 
   return (
     <div style={est.tela}>
-      <style>{ESTILO_GRADE}</style>
+      <style>{ESTILO_LINHA}</style>
       <div className="somente-tela" style={est.telaComLateral}>
         <MenuLateral
           versao={VERSAO}
@@ -192,7 +177,19 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
             <div style={est.faixaErro} role="alert">Não deu para carregar: {carga.erro}</div>
           )}
 
-          {leitura && (
+          {/* A medicao aberta toma a tela: cartoes e lista saem enquanto se
+              analisa, e voltam com "Voltar à lista". */}
+          {leitura && aberta && (
+            <VolumeAVolume
+              conferencia={aberta}
+              grupo={grupoAberto}
+              maquinasDoGrupo={grupoAberto ? leitura.ativasDoGrupo(grupoAberto.id) : 0}
+              aoFechar={() => setAberta(null)}
+              analise={analises.da(aberta)}
+            />
+          )}
+
+          {leitura && !aberta && (
             <>
               <div style={est.barraCadastros}>
                 <button type="button" style={est.botaoLinha} onClick={() => setCadastroAberto('produtos')}>
@@ -249,31 +246,11 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     : ''} A medição nasce no tablet, em Embalagem Takt Time: um toque a cada volume embalado.`}
                 />
               ) : (
-                /* A medicao selecionada abre AQUI, ao lado da lista. Sem
-                   nenhuma aberta, a lista ocupa a largura toda. */
-                <div
-                  className={aberta ? 'embalagem-dividida' : undefined}
-                  style={aberta ? est.embDividida : undefined}
-                >
-                  <TabelaEmbalagem
-                    medicoes={leitura.medicoes}
-                    abertaId={aberta?.id ?? null}
-                    aoAbrir={abrir}
-                    pendenciaDe={analises.pendencia}
-                  />
-                  {aberta && (
-                    <div ref={refDetalhe} className="embalagem-detalhe" style={est.embDetalhe}>
-                      <VolumeAVolume
-                        conferencia={aberta}
-                        grupo={grupoAberto}
-                        maquinasDoGrupo={grupoAberto ? leitura.ativasDoGrupo(grupoAberto.id) : 0}
-                        aoFechar={() => setAberta(null)}
-                        analise={analises.da(aberta)}
-                        rolar={porClique}
-                      />
-                    </div>
-                  )}
-                </div>
+                <TabelaEmbalagem
+                  medicoes={leitura.medicoes}
+                  aoAbrir={abrir}
+                  pendenciaDe={analises.pendencia}
+                />
               )}
 
               <p style={est.painelDica}>
@@ -316,11 +293,10 @@ function semTaktCurto(estado) {
 }
 
 /**
- * As medicoes da embalagem, uma por linha — COMPACTA, para caber na coluna
- * da esquerda ao lado do detalhe: cada celula tem o principal em cima e o
- * complemento embaixo (data e horarios; periodo e parado; volumes/hora e
- * volumes). A maquina so' aparece quando ha' mais de uma — com uma so',
- * era a mesma palavra em todas as linhas.
+ * As medicoes da embalagem, uma por linha — COMPACTA: cada celula tem o
+ * principal em cima e o complemento embaixo (data e horarios; periodo e
+ * parado; volumes/hora e volumes). A maquina so' aparece quando ha' mais
+ * de uma — com uma so', era a mesma palavra em todas as linhas.
  *
  * So' as tocadas volume a volume abrem o detalhe: o produto vira o botao
  * da linha (o teclado chega nele) e a linha inteira abre com o mouse. As
@@ -333,9 +309,7 @@ const AVISO_PENDENCIA = {
   'nota-nao-salva': { texto: 'Nota digitada, ainda não salva', estilo: est.embPendenciaAtencao },
 };
 
-function TabelaEmbalagem({
-  medicoes, abertaId, aoAbrir, pendenciaDe,
-}) {
+function TabelaEmbalagem({ medicoes, aoAbrir, pendenciaDe }) {
   const variasMaquinas = new Set(medicoes.map((c) => nomeChave(c.maquina))).size > 1;
   return (
     <section style={est.painel} aria-label="Medições da embalagem">
@@ -344,7 +318,8 @@ function TabelaEmbalagem({
           <h2 style={est.painelTitulo}>Medições da embalagem</h2>
           <p style={est.painelDica}>
             Clique numa medição para abrir o volume a volume; lida, salve a análise no alto
-            dela. Volumes/hora do período inteiro, com as paradas dentro — o que de fato saiu.
+            dela e você volta para cá. Volumes/hora do período inteiro, com as paradas
+            dentro — o que de fato saiu.
           </p>
         </div>
       </div>
@@ -361,13 +336,12 @@ function TabelaEmbalagem({
           {medicoes.map((c) => {
             const calc = conferenciaRapida({ duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas });
             const par = somarParadas(c.paradas);
-            const selecionada = c.id === abertaId;
             const abre = Boolean(c.com_marcas);
             // O dia em que se MEDIU, o mesmo do detalhe e do corte dos 30 dias
             // (salvo_em e' o dia em que sincronizou: offline, pode ser outro).
             const [dia, hora] = formatarDataHora(c.iniciado_em || c.salvo_em).split(' ');
-            const estiloLinha = selecionada ? est.linhaSelecionada : (abre ? est.embLinhaClicavel : undefined);
-            const classeLinha = abre && !selecionada ? 'embalagem-linha' : undefined;
+            const estiloLinha = abre ? est.embLinhaClicavel : undefined;
+            const classeLinha = abre ? 'embalagem-linha' : undefined;
             const aoClicarLinha = abre ? () => aoAbrir(c) : undefined;
             const aviso = AVISO_PENDENCIA[pendenciaDe(c)];
             return (
@@ -382,9 +356,8 @@ function TabelaEmbalagem({
                     <button
                       type="button"
                       style={est.embProduto}
-                      aria-pressed={selecionada}
-                      // A linha tambem abre: sem isto, o clique no botao
-                      // abriria e a linha fecharia logo em seguida.
+                      data-medicao={c.id}
+                      // A linha tambem abre: sem isto, o clique abriria duas vezes.
                       onClick={(ev) => { ev.stopPropagation(); aoAbrir(c); }}
                     >
                       {c.peca || 'Produto não informado'}
@@ -398,10 +371,10 @@ function TabelaEmbalagem({
                       ✓ Analisada{c.analisada_por ? ` · ${c.analisada_por}` : ''}
                     </span>
                   )}
-                  {/* A recusa que chegou com o painel em outra medicao, ou a nota
-                      digitada e deixada para tras: sem isto, ninguem saberia.
-                      Na aberta, o painel ja' diz. */}
-                  {abre && !selecionada && aviso && <span style={aviso.estilo}>{aviso.texto}</span>}
+                  {/* A recusa que ficou sem resolver, ou a nota digitada e
+                      deixada para tras: de volta a' lista, sem isto ninguem
+                      saberia. */}
+                  {abre && aviso && <span style={aviso.estilo}>{aviso.texto}</span>}
                   {!abre && (
                     <span style={est.embSub} title="Medida por horários ou com a contagem corrigida à mão">
                       sem toques — não abre volume a volume
