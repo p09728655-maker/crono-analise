@@ -226,14 +226,15 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
 
   useEffect(() => {
     const id = abrirAoCarregar.current;
-    if (!id || carga.estado === 'carregando') return;
+    if (!leitura || !id) return;
     abrirAoCarregar.current = null;
-    const c = leitura?.medicoes.find((m) => m.id === id && m.com_marcas);
-    // Sumiu da lista (arquivada, fora dos 30 dias) ou a lista nao veio: a
-    // entrada vira da lista, senao o Voltar seguinte nao mudaria nada.
+    const c = leitura.medicoes.find((m) => m.id === id && m.com_marcas);
+    // Sumiu da lista (arquivada, fora dos 30 dias): a entrada vira da lista,
+    // senao o Voltar seguinte nao mudaria nada. Lista que nao veio (erro)
+    // nao mexe na entrada: o proximo F5, com a lista boa, ainda reabre.
     if (c) mostrar(c);
     else window.history.replaceState({}, '');
-  }, [carga.estado, leitura]);
+  }, [leitura]);
 
   /* A analise salva no painel muda a linha e o cartao na hora, sem buscar
      a lista de novo. Salvar volta para a lista (so' se a aberta ainda for
