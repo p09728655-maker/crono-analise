@@ -82,6 +82,16 @@ async function resolverEmpresa() {
 }
 
 /**
+ * A empresa DESTA instalacao — a mesma regra do token de servico. Quem traz
+ * dado de fora (a planilha do programa da embalagem) grava so' nela: num
+ * banco com mais de uma empresa e sem EMPRESA_ID, a planilha de uma fabrica
+ * nao pode cair no programa de outra.
+ */
+export async function empresaDaInstalacao() {
+  return (await resolverEmpresa()).empresaId;
+}
+
+/**
  * Identidade do bundle antigo: sessao propria via X-Sessao.
  *
  * So' o modo de servico ainda passa por aqui, e so' ate a tabela `sessoes`

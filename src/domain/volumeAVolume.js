@@ -10,6 +10,7 @@
  * numero certo e a tela escrevia outro.
  */
 import { formatarSegundos } from './crono/formato.js';
+import { diasProgramados } from './demanda/formato.js';
 
 /** Takt e intervalo em SEGUNDOS, sempre: "72.0 s", nunca "1min12s". */
 const seg = (ms) => (Number.isFinite(ms) && ms > 0 ? `${formatarSegundos(ms)} s` : '—');
@@ -30,6 +31,7 @@ export function semTakt(estado, nomeGrupo) {
     case 'sem-demanda': return `não há programa de produção ${g} cadastrado.`;
     case 'sem-semana': return `o programa ${g} não cobre a semana desta medição.`;
     case 'sem-horas': return `faltam as horas disponíveis ${g} na semana.`;
+    case 'sem-dias': return `faltam os dias de produção da semana ${g} no cadastro: sem eles não se sabe que parte da semana são os dias programados.`;
     case 'setup-excede': return `o setup cadastrado ${g} passa da jornada — confira o cadastro.`;
     case 'erro-programa': return 'não deu para carregar o programa agora.';
     default: return 'a medição não tem data para achar a semana.';
@@ -140,7 +142,11 @@ export function numerosDaLeitura(leitura, takt = {}, unidade) {
       chave: 'takt',
       rotulo: 'Takt da semana',
       valor: seg(leitura.taktMs),
-      sub: leitura.taktMs ? `semana ${takt.semana} · por ${unidade.singular}` : 'sem programa para comparar',
+      // Semana programada so' em parte: o takt ja' usa as horas so' dos
+      // dias com lote, e o papel diz quantos — senao 35,2 h parece erro.
+      sub: leitura.taktMs
+        ? `semana ${takt.semana} · por ${unidade.singular}${diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}`
+        : 'sem programa para comparar',
     },
     {
       chave: 'rodando',

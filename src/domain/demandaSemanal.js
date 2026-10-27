@@ -34,7 +34,9 @@ export {
   emUtc, intervaloIso, periodoDaSemana, periodosDoPrograma, semanaIso, semanaQueContem,
 } from './demanda/calendario.js';
 export {
-  horasDeSetup, maquinasNecessarias, ritmoExigido, vereditoDaSemana,
+  fracaoDaSemana, horasDeSetup, maquinasNecessarias, ritmoExigido, vereditoDaSemana,
 } from './demanda/capacidade.js';
-export { comoDia, comoHoras, comoPeriodo, contaDasHoras } from './demanda/formato.js';
+export {
+  comoDia, comoHoras, comoPeriodo, contaDasHoras, diasProgramados, faixaDeSemanas, nomeDaSemana, rotuloDaSemana,
+} from './demanda/formato.js';
 export { leituraDaDemanda, resumoDaDemanda, taktDaMedicao } from './demanda/programa.js';

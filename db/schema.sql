@@ -659,6 +659,13 @@ CREATE TABLE IF NOT EXISTS demanda_semanal (
   atualizado_em timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE demanda_semanal ADD COLUMN IF NOT EXISTS inicio date;
+-- Os DIAS PROGRAMADOS da semana (datas com lote), so' no programa lido da
+-- planilha do PCP (a embalagem, ver api/_lib/programaEmbalagem.js). A
+-- semana de Finados tem quatro: o takt dela usa as horas de quatro dias,
+-- nao a jornada inteira — com a jornada inteira ele saia 25% frouxo. NULA
+-- no programa colado: a semana vale inteira, como sempre.
+ALTER TABLE demanda_semanal ADD COLUMN IF NOT EXISTS dias smallint
+  CHECK (dias IS NULL OR dias BETWEEN 1 AND 7);
 CREATE UNIQUE INDEX IF NOT EXISTS demanda_semanal_unq
   ON demanda_semanal (empresa_id, grupo_id, ano, numero);
 CREATE INDEX IF NOT EXISTS demanda_semanal_grupo_idx

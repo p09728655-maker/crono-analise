@@ -13,6 +13,33 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.95.0',
+    data: '2026-10-27',
+    titulo: 'Embalagem: o programa vem sozinho da planilha do PCP',
+    itens: [
+      'O PROGRAMA DA EMBALAGEM VEM DA PLANILHA DO PCP, SOZINHO. Com a leitura configurada (passo a passo no README, em Deploy), o servidor lê as abas PROGRAMACAO e PROGRAMACAO_CONCLUIDA e grava o programa da semana do grupo EMBALAGEM. A planilha é lida quando alguém abre o programa (o tablet ligado pede a cada meia hora), no máximo a cada 10 minutos. Ninguém precisa colar nada: o takt do tablet e do PC acompanha a planilha.',
+      'A SEMANA SOMA AS DUAS ABAS, pela data programada de cada lote, em volumes (caixas). Lendo só a PROGRAMACAO, o programa encolheria a cada lote concluído e o takt ficaria mais folgado dia após dia. O lote atrasado conta na semana em que foi programado, não na de hoje. Exemplo da planilha real: a semana de 26/10 tem 8.750 volumes em aberto e 200 já concluídos, 8.950 no total.',
+      'O TAKT USA AS HORAS DOS DIAS PROGRAMADOS. Na semana de Finados (02/11) os lotes caem em quatro dias: o takt usa 4 de 5 dias da jornada (44 h × 4/5 = 35,2 h), e não as 44 h inteiras, que o deixariam 25% mais folgado. Vale também para a semana que o PCP ainda está programando. O tablet, a tela do PC, o Novo estudo, o programa da semana e o papel dizem "4 de 5 dias programados". Numa semana completa, nada muda. Para isso o grupo EMBALAGEM precisa dos DIAS DE PRODUÇÃO no cadastro (junto das horas por semana): sem eles a tela diz que faltam, em vez de presumir 5 dias.',
+      'A SEMANA DA PLANILHA APARECE PELA DATA: "semana de 26/10". O número dela é o do calendário (ISO), que não é o código do PCP para os mesmos dias, e escrito como "044-26" apontaria outra semana.',
+      'O TAKT DIZ DE ONDE VEIO: na Embalagem Takt Time aparece "da planilha do PCP, lida hoje às 10:32". Se a planilha não puder ser lida (não compartilhada, Google fora do ar, aba renomeada ou vazia), um aviso vermelho diz o motivo e de quando é o programa que continua valendo. Semana que ainda não foi lida fica sem takt até a leitura voltar.',
+      'NO "PROGRAMA DA SEMANA" DO GRUPO EMBALAGEM, a colagem, a semana digitada e o apagar saem, também com a leitura falhando ou parada: o código de semana do PCP (043-26) não é o número que a planilha grava, e a colagem cairia em outra semana. Só uma semana colada antes (sem dias) ainda pode ser apagada. O quadro diz que o programa vem da planilha, quando foi lido, quantas linhas ficaram de fora (sem data, sem quantidade, repetidas entre as abas) e quantos dias cada semana tem. Para mudar o programa, altere a planilha. O relatório de ritmo também passa a dizer "lido da planilha do PCP" em vez de "colado".',
+      'PROTEÇÕES: o servidor grava da 4ª semana passada em diante; semana mais antiga fica como estava, mesmo que linhas velhas sejam apagadas da planilha. Aba PROGRAMACAO vazia (lida no meio de uma edição) não é gravada. Semana antiga com o mesmo número não é sobrescrita: a da planilha fica de fora, e a tela diz qual semana colada a travou e que é só apagá-la. A comparação entre a menor e a maior semana usa só semanas inteiras. Os outros grupos continuam com o programa colado, como antes, e sem a leitura configurada a embalagem também.',
+    ],
+  },
+  {
+    versao: '2.94.1',
+    data: '2026-10-27',
+    titulo: 'Embalagem Takt Time: a medição abre na tela inteira',
+    itens: [
+      'A MEDIÇÃO ABRE NA TELA INTEIRA, NÃO MAIS AO LADO DA LISTA. Clicar no produto (ou em qualquer ponto da linha) troca a lista pelo volume a volume, com a largura toda: cartões, gráfico e leitura sem aperto. Ao lado da lista, o resultado ficava espremido e a lista, comprimida.',
+      '"VOLTAR À LISTA" NO ALTO, no lugar de Fechar. "Salvar análise e fechar" passou a se chamar "SALVAR ANÁLISE E VOLTAR": salva e devolve a lista, já com o selo "✓ Analisada" na linha e o cartão A analisar atualizado. A lista volta na mesma posição em que você estava.',
+      'A TELA CHEGA NA LISTA. A medição mais recente não abre mais sozinha: você escolhe qual analisar.',
+      'O VOLTAR DO NAVEGADOR (e o botão lateral do mouse) também volta para a lista, sem sair da tela; Avançar reabre a medição. Recarregar a página (F5) com uma medição aberta reabre a mesma medição. Enquanto a análise está sendo salva, o Voltar não fecha a medição: se o servidor recusar, o aviso aparece ali.',
+      'DUPLO CLIQUE NÃO SALVA MAIS POR ENGANO. A medição abre debaixo do cursor, e o segundo clique de um duplo clique na linha caía em "Salvar análise e voltar", marcando como analisada uma medição que ninguém leu. Agora o segundo clique não vale nos botões do alto, nas linhas da lista nem nos cadastros.',
+      'Para trocar de medição, volte à lista e clique na outra. A nota digitada no campo Análise do PCP e ainda não salva continua guardada em cada medição enquanto a tela estiver aberta, e a linha avisa "Nota digitada, ainda não salva". Com nota digitada e não salva, ou com uma análise ainda indo para o servidor, sair pelo menu lateral (Estudos ou Início), recarregar a página ou fechar a aba agora pergunta antes. O Voltar do navegador a partir da lista ainda sai sem perguntar, e a nota não salva se perde. Os números, o gráfico e a folha impressa não mudaram.',
+    ],
+  },
+  {
     versao: '2.94.0',
     data: '2026-10-26',
     titulo: 'Embalagem Takt Time: salvar a análise e fechar',

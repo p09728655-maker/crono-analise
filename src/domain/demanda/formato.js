@@ -7,6 +7,7 @@
  * dos outros de proposito — o que a tela mostra pode ficar a um decimo do
  * exato, e "264 − 50 = 214" bate sempre.
  */
+import { chaveSemana } from './leitura.js';
 
 /**
  * A data do programa em pt-BR — SEM deslocar o dia.
@@ -76,3 +77,45 @@ export function contaDasHoras({ horas, setupHoras = null, maquinas = 1 } = {}) {
 export const comoPeriodo = (periodo, { ano = false } = {}) => (periodo?.inicio && periodo?.fim
   ? `${comoDia(periodo.inicio)} a ${comoDia(periodo.fim, { ano })}`
   : '');
+
+/**
+ * Como a tela CHAMA uma semana do programa. A colada leva o codigo do PCP
+ * (038-26). A lida da planilha da embalagem (a que traz `dias`) e' semana
+ * ISO: o numero dela nao e' o do PCP para os mesmos dias, e escrito no
+ * formato do PCP apontaria outra semana. Ela leva a data: "de 26/10".
+ */
+export function rotuloDaSemana(semana) {
+  if (semana?.dias != null && semana.inicio) {
+    const d = new Date(`${semana.inicio}T00:00:00Z`);
+    if (!Number.isNaN(d.getTime())) return `de ${comoDia(d)}`;
+  }
+  return semana ? chaveSemana(semana) : '';
+}
+
+/** "semana de 26/10" na lida da planilha; "038-26" na colada. */
+export const nomeDaSemana = (semana) => (semana?.dias != null
+  ? `semana ${rotuloDaSemana(semana)}`
+  : rotuloDaSemana(semana));
+
+/**
+ * "da semana de 26/10 à semana de 02/11", "de 038-26 a 040-26" — cada ponta
+ * pelo proprio tipo, porque um programa pode ter as duas (semana colada
+ * antes de a planilha ser ligada). `rotular` troca o rotulo da colada (o
+ * relatorio escreve "S38").
+ */
+export function faixaDeSemanas(primeira, ultima, rotular = rotuloDaSemana) {
+  const ponta = (s, solta, contraida) => (s?.dias != null
+    ? `${contraida} ${nomeDaSemana(s)}`
+    : `${solta} ${rotular(s)}`);
+  return `${ponta(primeira, 'de', 'da')} ${ponta(ultima, 'a', 'à')}`;
+}
+
+/**
+ * "4 de 5 dias programados" — so' na semana da planilha programada em
+ * parte (feriado, programa ainda sendo montado), onde o takt usa as horas
+ * so' desses dias. Null na semana inteira e na colada. `dias` e' o
+ * { programados, daJornada } da leitura do programa.
+ */
+export const diasProgramados = (dias) => (dias?.programados && dias.daJornada && dias.programados < dias.daJornada
+  ? `${dias.programados} de ${dias.daJornada} dias programados`
+  : null);

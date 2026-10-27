@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   conferenciaRapida, formatarDuracao, formatarSegundos, leituraPecaAPeca, periodoPorPeca, unidadeDoPosto,
 } from '../../domain/cronoanalise.js';
+import { diasProgramados } from '../../domain/demandaSemanal.js';
 import { useMotivosDoGrupo } from '../../lib/motivosParada.js';
 import { useWakeLock, vibrar } from '../../lib/hooks.js';
 import { carregarMaquinas, produtosDoGrupo, useCadastroMaquinas } from '../../lib/maquinas.js';
@@ -270,6 +271,9 @@ function CartaoTakt({ takt }) {
           <span style={est.valorRitmo}>{formatarSegundos(takt.taktMs)}</span>
           <span style={est.sufixoRitmo}>
             s por volume — takt da semana {takt.semana}
+            {/* Semana com feriado ou ainda sendo programada: o takt usa as
+                horas so' dos dias com lote, e o tablet diz quantos. */}
+            {diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}
             {takt.semRede ? ' (programa guardado neste aparelho)' : ''}
           </span>
         </>

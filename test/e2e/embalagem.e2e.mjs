@@ -40,12 +40,18 @@ const DEMANDAS = [{
   atualizado_em: hoje.toISOString(),
 }];
 
+// Demora da LISTA de medicoes (ms): para o Voltar que chega antes dela.
+let atrasoLista = 0;
+
 async function simularServidor(pagina, {
   conferencias = [], marcas = null, relogio = null, aoSincronizar, demandas = DEMANDAS, aoAlterar,
+  planilha = null, cadastro = CADASTRO,
 } = {}) {
+  // `planilha`: o estado da leitura da planilha do PCP que o servidor manda
+  // junto do programa da embalagem (ver api/_lib/programaEmbalagem.js).
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
-    ? rota.fulfill({ json: { demandas } })
-    : rota.fulfill({ json: CADASTRO })));
+    ? rota.fulfill({ json: { demandas, ...(planilha ? { planilha } : {}) } })
+    : rota.fulfill({ json: cadastro })));
   await pagina.route('**/api/conferencias**', async (rota) => {
     const url = new URL(rota.request().url());
     // PATCH de UMA medicao (a analise do PCP): quem testa decide a resposta
@@ -60,6 +66,7 @@ async function simularServidor(pagina, {
     if (url.searchParams.get('id')) {
       return rota.fulfill({ json: { conferencia: { id: url.searchParams.get('id'), marcas_ms: marcas, marcas_relogio_ms: relogio } } });
     }
+    if (atrasoLista) await new Promise((r) => { setTimeout(r, atrasoLista); });
     return rota.fulfill({ json: { conferencias, outras: 0 } });
   });
   await pagina.route('**/api/sync**', async (rota) => {
@@ -271,7 +278,7 @@ const medicao = {
   salvo_em: hoje.toISOString(), arquivada: false, com_marcas: true, paradas: [],
   observacao: 'Faltou caixa às 9h10',
 };
-// Uma segunda, mais antiga: para trocar de medicao com o detalhe rolado.
+// Uma segunda, mais antiga: para trocar de medicao e salvar a analise.
 const medicao2 = {
   ...medicao, id: '00000000-0000-0000-0000-00000000c0f2', peca: 'Toucador Magic New', observacao: '',
   iniciado_em: new Date(hoje.getTime() - 9000000).toISOString(),
@@ -322,13 +329,29 @@ await p.getByText('Takt desta semana · EMBALAGEM').waitFor({ timeout: 8000 });
 checar(await p.getByText('72.0 s').count() > 0, 'takt desta semana em segundos: 72.0 s');
 checar(await p.getByText('Faltou caixa às 9h10').count() > 0, 'a observacao do analista aparece na tabela');
 
-// A medicao mais recente tocada volume a volume ja' chega aberta, na
-// propria pagina, AO LADO da lista — nem janela por cima, nem embaixo.
+// A tela chega na LISTA: nada abre sozinho. Clicar no produto abre o
+// volume a volume NO LUGAR da lista, com a largura toda — nem janela por
+// cima, nem espremido ao lado dela.
 const lista = p.getByRole('region', { name: 'Medições da embalagem' });
 const janela = p.getByRole('region', { name: /Volume a volume/ });
+const botaoVoltar = janela.getByRole('button', { name: 'Voltar à lista' });
+// O rotulo sai em caixa alta (CSS): o cartao e' o pai dele.
+const cartao = p.getByText('A analisar', { exact: true }).locator('..');
+await lista.waitFor({ timeout: 8000 });
+checar(await janela.count() === 0, 'a tela chega na lista: nenhuma medicao abre sozinha');
+checar(/A analisar\s*2\s*de 2 medições volume a volume em 30 dias/i.test(await cartao.innerText()),
+  `cartao "A analisar": 2 de 2 em 30 dias — a de um toque so' nao conta (${(await cartao.innerText()).replace(/\n/g, ' | ')})`);
+
+await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
 // Relogio entre o 1o e o ultimo toque: 920 s / 13 = 70,8 s por volume,
 // paradas dentro; takt 72 s. Sem a lacuna: 60 s.
 await janela.getByText(/No período, saiu um volume a cada 70.8 s, paradas dentro/).waitFor({ timeout: 8000 });
+checar(await lista.count() === 0 && await cartao.count() === 0, 'aberta a medicao, a lista e os cartoes saem da tela');
+checar(await p.getByRole('dialog').count() === 0, 'o detalhe abre na propria pagina, sem janela por cima');
+{
+  const cj = await janela.boundingBox();
+  checar(cj.width > 1000, `o detalhe ocupa a largura toda da area de conteudo (${Math.round(cj.width)} px)`);
+}
 const textoJanela = await janela.innerText();
 checar(/dentro do takt de 72.0 s, com 2% de folga/.test(textoJanela), 'veredito pelo relogio entre toques: 70.8 s dentro do takt de 72.0 s');
 // O valor logo depois do rotulo do proprio cartao — nao um 70.8 qualquer
@@ -340,13 +363,6 @@ checar(/Faltou caixa às 9h10/.test(textoJanela), 'a observacao aparece junto da
 checar(await janela.locator('svg[role="img"]').count() === 1, 'grafico volume a volume desenhado');
 checar(/Onde a linha parou sem parada marcada/.test(textoJanela) && textoJanela.includes('200.0 s'),
   'lista a lacuna de 200.0 s');
-{
-  const cl = await lista.boundingBox();
-  const cj = await janela.boundingBox();
-  checar(cj.x >= cl.x + cl.width - 1 && Math.abs(cj.y - cl.y) < 40,
-    'tela larga: o detalhe abre AO LADO da lista, nao embaixo dela');
-  checar(await p.evaluate(() => window.scrollY) === 0, 'abrir sozinho ao carregar nao rola a pagina');
-}
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-volume-a-volume.png`, fullPage: true });
 
 // O PDF sai com nome proprio: o "Salvar como PDF" usa o titulo da pagina.
@@ -369,67 +385,147 @@ checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some 
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
 
-// O detalhe mora na pagina: a linha aberta fica marcada e o produto, que e'
-// o botao da linha, fecha e abre de novo.
-const botaoDaLinha = lista.getByRole('button', { name: 'Rack Sirius 1.6' });
-checar(await p.getByRole('dialog').count() === 0, 'o detalhe abre na propria pagina, sem janela por cima');
-checar(await botaoDaLinha.getAttribute('aria-pressed') === 'true', 'a medicao aberta fica marcada na lista');
-await botaoDaLinha.click();
-checar(await janela.count() === 0 && await botaoDaLinha.getAttribute('aria-pressed') === 'false',
-  'clicar de novo na medicao aberta fecha o detalhe');
+const voltarALista = async () => {
+  await botaoVoltar.click();
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+};
+await voltarALista();
+checar(await lista.isVisible() && await cartao.isVisible(), 'Voltar à lista devolve a lista e os cartoes');
 // A linha inteira abre, nao so' o nome do produto.
 await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().getByRole('cell').first().click();
 await janela.waitFor({ timeout: 4000 });
-checar(await botaoDaLinha.getAttribute('aria-pressed') === 'true', 'clicar na linha abre a medicao de novo');
-checar(await p.evaluate(() => window.scrollY) === 0, 'ao lado da lista, abrir por clique nao rola a pagina');
-// Tela estreita: a grade empilha e o detalhe volta para baixo da lista.
-await p.setViewportSize({ width: 1100, height: 1000 });
-await p.waitForTimeout(200);
-{
-  const cl = await lista.boundingBox();
-  const cj = await janela.boundingBox();
-  checar(cj.y >= cl.y + cl.height - 1, 'tela estreita (1100 px): o detalhe empilha abaixo da lista');
-}
-await p.setViewportSize({ width: 1440, height: 1000 });
+checar(await lista.count() === 0, 'clicar na linha, fora do nome, tambem abre a medicao');
+await voltarALista();
 
-// Trocar de medicao com o detalhe rolado POR DENTRO: a pagina nao pula
-// (a linha clicada fica debaixo do cursor) e a nova abre no topo.
+// Lista rolada: abrir leva ao topo do detalhe, e voltar devolve a lista no
+// mesmo ponto, com o foco no produto de onde se saiu.
 {
-  const detalhe = p.locator('.embalagem-detalhe');
-  await detalhe.evaluate((el) => { el.scrollTop = el.scrollHeight; });
-  await p.waitForTimeout(100);
-  const rolouPorDentro = await detalhe.evaluate((el) => el.scrollTop);
-  const yAntes = await p.evaluate(() => window.scrollY);
-  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
+  await p.setViewportSize({ width: 1440, height: 400 });
+  const botao = lista.getByRole('button', { name: 'Toucador Magic New' });
+  await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await botao.scrollIntoViewIfNeeded();
+  const yLista = await p.evaluate(() => window.scrollY);
+  await botao.click();
   await janela.getByRole('heading', { name: 'Toucador Magic New' }).waitFor({ timeout: 4000 });
-  await p.waitForTimeout(600);
-  checar(rolouPorDentro > 0, `pre-condicao: o detalhe rolou por dentro (${rolouPorDentro} px)`);
-  const yDepois = await p.evaluate(() => window.scrollY);
-  const topoDetalhe = await detalhe.evaluate((el) => el.scrollTop);
-  checar(yDepois === yAntes && topoDetalhe === 0,
-    `trocar com o detalhe rolado: a pagina nao pula (scrollY ${yAntes} -> ${yDepois}) e a nova abre no topo (${topoDetalhe})`);
+  const yDetalhe = await p.evaluate(() => window.scrollY);
+  await voltarALista();
+  const yVolta = await p.evaluate(() => window.scrollY);
+  const foco = await p.evaluate(() => document.activeElement?.textContent);
+  checar(yLista > 0, `pre-condicao: a lista estava rolada (${yLista} px)`);
+  checar(yDetalhe === 0, `abrir com a lista rolada leva ao topo do detalhe (scrollY ${yDetalhe})`);
+  checar(yVolta === yLista, `voltar devolve a lista na mesma rolagem (${yLista} -> ${yVolta})`);
+  checar(foco === 'Toucador Magic New', `o foco volta ao produto de onde saiu (${foco})`);
+  await p.setViewportSize({ width: 1440, height: 1000 });
 }
 
-/* ANALISE DO PCP: lida a medicao, salvar grava e fecha o painel; a linha
-   ganha o selo e o cartao "A analisar" desce. Aberta agora: Toucador. */
+// O Voltar do navegador (e o botao lateral do mouse) volta a' lista, como
+// o botao da tela — nao sai da tela levando as notas. Avancar reabre.
 {
-  // O rotulo sai em caixa alta (CSS): o cartao e' o pai dele.
-  const cartao = p.getByText('A analisar', { exact: true }).locator('..');
-  checar(/A analisar\s*2\s*de 2 medições volume a volume em 30 dias/i.test(await cartao.innerText()),
-    `cartao "A analisar": 2 de 2 em 30 dias — a de um toque so' nao conta (${(await cartao.innerText()).replace(/\n/g, ' | ')})`);
-  const salvar = janela.getByRole('button', { name: 'Salvar análise e fechar' });
+  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
+  await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
+  await p.goBack();
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+  const caminho = new URL(p.url()).pathname;
+  checar(caminho === '/analise/embalagem' && await lista.isVisible(),
+    `Voltar do navegador fecha a medicao e fica na lista (${caminho})`);
+  await p.goForward();
+  await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
+  checar(await lista.count() === 0, 'Avancar do navegador reabre a medicao');
+  // Recarregada (F5) com a medicao aberta, ela reabre — a entrada do
+  // historico e' dela, e o Voltar seguinte fecha, sem entrada morta.
+  await p.reload();
+  await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 8000 });
+  checar(await lista.count() === 0, 'F5 com a medicao aberta: ela reabre');
+  await p.goBack();
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+  checar(new URL(p.url()).pathname === '/analise/embalagem' && await lista.isVisible(),
+    'depois do F5, o Voltar do navegador fecha a medicao e fica na lista');
+  // F5 com a lista lenta e Voltar ANTES de ela chegar: vale a entrada de
+  // agora (a lista), nao a de quando a tela montou (a medicao).
+  await p.goForward();
+  await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
+  atrasoLista = 1500;
+  await p.reload();
+  await p.goBack();
+  await lista.waitFor({ timeout: 8000 });
+  await p.waitForTimeout(300);
+  atrasoLista = 0;
+  checar(await janela.count() === 0 && new URL(p.url()).pathname === '/analise/embalagem',
+    'F5 e Voltar antes de a lista chegar: a lista aparece, a medicao nao reabre sozinha');
+  // Sem nota digitada nem analise salvando, recarregar nao pergunta nada.
+  checar(!(await p.evaluate(() => {
+    const ev = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  })), 'sem nada pendente, recarregar ou fechar a aba nao pergunta');
+}
+
+/* DUPLO CLIQUE: o detalhe nasce no lugar da lista, debaixo do cursor. O
+   segundo clique de quem abria a linha com duplo clique caia em "Salvar
+   análise e voltar" e marcava como analisada uma medicao nao lida. */
+{
+  const salvarTopo = janela.getByRole('button', { name: 'Salvar análise e voltar' });
+  const nPedidos = pedidosAnalise.length;
+  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
+  await salvarTopo.waitFor({ timeout: 8000 });
+  await salvarTopo.dispatchEvent('click', { detail: 2 });
+  await botaoVoltar.dispatchEvent('click', { detail: 2 });
+  await p.waitForTimeout(300);
+  checar(pedidosAnalise.length === nPedidos && await janela.count() === 1,
+    'o 2o clique de um duplo clique em Salvar ou Voltar nao vale: nada salvo, a medicao segue aberta');
+  // Com o mouse de verdade: o 1o clique volta, o 2o nao abre nada no lugar
+  // (o botao "Motivos de parada" da lista fica bem ali).
+  const bv = await botaoVoltar.boundingBox();
+  await p.mouse.dblclick(bv.x + bv.width / 2, bv.y + bv.height / 2);
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+  await p.waitForTimeout(300);
+  checar(await lista.isVisible() && await janela.count() === 0 && await p.getByRole('dialog').count() === 0,
+    'duplo clique em Voltar à lista: volta, e o 2o clique nao reabre medicao nem abre cadastro');
+  await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().getByRole('cell').first()
+    .dispatchEvent('click', { detail: 2 });
+  await p.waitForTimeout(300);
+  checar(await janela.count() === 0, 'na lista, o 2o clique de um duplo clique nao abre a linha');
+  // Os cadastros ficam no canto do Voltar à lista: o 2o clique nao os abre.
+  await p.getByRole('button', { name: 'Motivos de parada' }).dispatchEvent('click', { detail: 2 });
+  await p.getByRole('button', { name: 'Produtos da embalagem' }).dispatchEvent('click', { detail: 2 });
+  await p.waitForTimeout(300);
+  checar(await p.getByRole('dialog').count() === 0, 'o 2o clique de um duplo clique nao abre os cadastros');
+}
+
+/* ANALISE DO PCP: lida a medicao, salvar grava e volta para a lista; a
+   linha ganha o selo e o cartao "A analisar" desce. */
+{
+  const salvar = janela.getByRole('button', { name: 'Salvar análise e voltar' });
   const nota = janela.getByRole('textbox', { name: 'Análise do PCP' });
-  // No topo, ao lado de Imprimir e Fechar: a' vista com a pagina no alto,
+  const linhaDe = (nome) => lista.getByRole('row').filter({ hasText: nome }).first();
+  // Como o PCP faz: com uma aberta, volta a' lista e abre a outra.
+  const abrirMedicao = async (nome, { esperar = nota } = {}) => {
+    if (await janela.count()) await voltarALista();
+    await lista.getByRole('button', { name: nome }).click();
+    await janela.getByRole('heading', { name: nome }).waitFor({ timeout: 4000 });
+    await esperar.waitFor({ timeout: 8000 });
+  };
+
+  await abrirMedicao('Toucador Magic New');
+  // No topo, ao lado de Imprimir e Voltar: a' vista com a pagina no alto,
   // sem rolar nada. O fundo do painel fica abaixo da dobra.
   {
     const bs = await salvar.boundingBox();
-    const bf = await janela.getByRole('button', { name: 'Fechar', exact: true }).boundingBox();
-    checar(bs && bs.y >= 0 && bs.y + bs.height <= 1000 && Math.abs(bs.y - bf.y) < 4,
-      `"Salvar análise e fechar" no topo, junto de Fechar, a' vista (y ${Math.round(bs?.y)} px)`);
+    const bv = await botaoVoltar.boundingBox();
+    checar(bs && bs.y >= 0 && bs.y + bs.height <= 1000 && Math.abs(bs.y - bv.y) < 4,
+      `"Salvar análise e voltar" no topo, junto de Voltar à lista, a' vista (y ${Math.round(bs?.y)} px)`);
+  }
+  // Rolado ate' o campo da nota, o topo gruda: os botoes seguem a' vista.
+  await nota.scrollIntoViewIfNeeded();
+  {
+    const y = await p.evaluate(() => window.scrollY);
+    const bs = await salvar.boundingBox();
+    checar(bs && bs.y >= -1 && bs.y + bs.height <= 1000,
+      `rolado ate a nota (scrollY ${y}), Salvar continua a vista no topo (y ${Math.round(bs?.y)} px)`);
   }
   await nota.fill('  Lacunas por falta de caixa  ');
 
-  // Recusado: o aviso aparece no topo, junto do botao, e o painel NAO fecha.
+  // Recusado: o aviso aparece no topo, junto do botao, e a tela NAO volta.
   recusarAnalise = true;
   await salvar.click();
   const aviso = janela.getByRole('alert');
@@ -441,70 +537,71 @@ await p.setViewportSize({ width: 1440, height: 1000 });
     const bs = await salvar.boundingBox();
     checar(ba.y > bs.y && ba.y - (bs.y + bs.height) < 60, 'a recusa aparece logo abaixo do botao clicado');
   }
-  checar(await janela.count() === 1, 'recusado, o painel continua aberto — fechar seria dizer que salvou');
+  checar(await janela.count() === 1, 'recusado, o painel continua aberto — voltar seria dizer que salvou');
   checar(await nota.inputValue() === '  Lacunas por falta de caixa  ', 'recusado, a nota digitada continua no campo');
 
-  // A nota e' DA MEDICAO: trocar de linha nao a leva junto, e voltar a traz.
-  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
-  await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
-  await nota.waitFor({ timeout: 8000 });
+  // A nota e' DA MEDICAO: outra abre com o campo vazio, e voltar a' lista
+  // nao apaga o que foi digitado.
+  await abrirMedicao('Rack Sirius 1.6');
   checar(await nota.inputValue() === '' && await janela.getByRole('alert').count() === 0,
     'outra medicao abre com o campo vazio e sem a recusa da anterior');
-  // O PCP compara: escreve nas duas, e cada nota fica onde foi deixada.
   await nota.fill('nota do rack');
-  const abrirMedicao = async (nome) => {
-    await lista.getByRole('button', { name: nome }).click();
-    await janela.getByRole('heading', { name: nome }).waitFor({ timeout: 4000 });
-    await nota.waitFor({ timeout: 8000 });
-  };
+  await voltarALista();
+  checar(/Nota digitada, ainda não salva/.test(await linhaDe('Rack Sirius 1.6').innerText()),
+    'de volta a lista, a linha avisa que tem nota digitada e nao salva');
+  checar(/Análise não salva — abra para ver o motivo/.test(await linhaDe('Toucador Magic New').innerText()),
+    'e a recusada avisa que a analise nao foi salva');
   await abrirMedicao('Toucador Magic New');
   checar(await nota.inputValue() === '  Lacunas por falta de caixa  ',
-    'de volta, a nota digitada continua no campo — mesmo depois de escrever na outra');
-  checar(/Nota digitada, ainda não salva/.test(
-    await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().innerText(),
-  ), 'a linha da outra avisa que tem nota digitada e nao salva');
-  checar(!/abra para ver o motivo|ainda não salva/.test(
-    await lista.getByRole('row').filter({ hasText: 'Toucador Magic New' }).first().innerText(),
-  ), 'a linha aberta nao repete o aviso: o painel ja\' diz');
-  checar(/Não deu para salvar/.test(await janela.innerText()), 'de volta, a recusa dela continua no painel');
+    'reaberta, a nota digitada continua no campo — mesmo depois de escrever na outra');
+  checar(/Não deu para salvar/.test(await janela.innerText()), 'reaberta, a recusa dela continua no painel');
   await abrirMedicao('Rack Sirius 1.6');
   checar(await nota.inputValue() === 'nota do rack', 'e a da outra tambem');
-  // Fechar nao apaga o que foi digitado: reaberta, a nota esta' la'.
-  await janela.getByRole('button', { name: 'Fechar', exact: true }).click();
-  await janela.waitFor({ state: 'detached', timeout: 4000 });
-  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
-  await nota.waitFor({ timeout: 8000 });
-  checar(await nota.inputValue() === 'nota do rack', 'Fechar sem salvar mantem a nota digitada para quando reabrir');
   await abrirMedicao('Toucador Magic New');
 
-  // Enquanto salva, Fechar, o campo e o clique na linha aberta ficam
-  // travados: fechado no meio, ninguem veria uma recusa.
+  // Enquanto salva, Voltar e o campo ficam travados: de volta a' lista no
+  // meio, ninguem veria uma recusa.
   recusarAnalise = false;
-  atrasoAnalise = 800;
+  atrasoAnalise = 1500;
   await salvar.click();
   await janela.getByRole('button', { name: 'Salvando…' }).waitFor({ timeout: 2000 });
-  checar(await janela.getByRole('button', { name: 'Fechar', exact: true }).isDisabled() && await nota.isDisabled(),
-    'salvando: Fechar e o campo da nota travados');
-  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
-  checar(await janela.count() === 1, 'salvando: clicar na linha aberta nao fecha o painel');
+  checar(await botaoVoltar.isDisabled() && await nota.isDisabled(),
+    'salvando: Voltar à lista e o campo da nota travados');
+  // Sair agora pergunta pelo envio, e nao chama de "nao salva" a nota que
+  // esta' indo junto com ele: so' a do Rack (digitada e deixada) conta.
+  {
+    let pergunta = '';
+    p.once('dialog', (d) => { pergunta = d.message(); d.dismiss(); });
+    await p.getByRole('button', { name: 'Início' }).click();
+    await p.waitForTimeout(100);
+    checar(/indo para o servidor/.test(pergunta) && /Há 1 nota digitada e não salva/.test(pergunta),
+      `salvando: sair pergunta pelo envio e conta so' a nota do Rack, nao a que vai no envio (${pergunta.split('\n').join(' | ')})`);
+  }
+  // O Voltar do navegador tambem nao fecha: a recusa precisaria de onde aparecer.
+  await p.goBack();
+  await p.waitForTimeout(100);
+  checar(await janela.count() === 1 && new URL(p.url()).pathname === '/analise/embalagem',
+    'salvando: o Voltar do navegador nao fecha a medicao');
   await janela.waitFor({ state: 'detached', timeout: 4000 });
   atrasoAnalise = 0;
   const pedido = pedidosAnalise.at(-1);
   checar(pedido?.id === medicao2.id && pedido.corpo.analisada === true
     && pedido.corpo.analiseNota === 'Lacunas por falta de caixa',
   `salvar manda analisada + a nota aparada, da medicao aberta (${JSON.stringify(pedido?.corpo)})`);
-  checar(await janela.count() === 0, 'salvo, o painel fecha');
-  const linha = lista.getByRole('row').filter({ hasText: 'Toucador Magic New' }).first();
-  checar(/✓ Analisada · Mauricio PCP/.test(await linha.innerText()), 'a linha ganha o selo "✓ Analisada" com quem salvou');
-  checar(!/Analisada/.test(await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().innerText()),
-    'a outra medicao continua sem selo');
+  checar(await lista.isVisible(), 'salvo, a tela volta para a lista');
+  {
+    const foco = await p.evaluate(() => document.activeElement?.textContent);
+    checar(foco === 'Toucador Magic New', `salvo, o foco volta ao produto da medicao salva (${foco})`);
+  }
+  checar(/✓ Analisada · Mauricio PCP/.test(await linhaDe('Toucador Magic New').innerText()),
+    'a linha ganha o selo "✓ Analisada" com quem salvou');
+  checar(!/Analisada/.test(await linhaDe('Rack Sirius 1.6').innerText()), 'a outra medicao continua sem selo');
   checar(/A analisar\s*1/i.test(await cartao.innerText()), 'o cartao "A analisar" desce para 1 sem recarregar');
   if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-analisada-lista.png` });
 
   // Aberta de novo: quem, quando e a nota; Reabrir volta a "a analisar",
   // deixa o painel aberto e devolve a nota ao campo.
-  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
-  await janela.getByText(/No período, saiu um volume/).waitFor({ timeout: 8000 });
+  await abrirMedicao('Toucador Magic New', { esperar: janela.getByText(/No período, saiu um volume/) });
   const textoAberta = await janela.innerText();
   checar(/✓ Analisada · Mauricio PCP · em \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/.test(textoAberta)
     && /Lacunas por falta de caixa/.test(textoAberta),
@@ -519,64 +616,207 @@ await p.setViewportSize({ width: 1440, height: 1000 });
   checar(pedidosAnalise.at(-1)?.corpo.analisada === false, 'reabrir manda analisada: false');
   checar(await janela.count() === 1, 'reabrir deixa o painel aberto');
   checar(await nota.inputValue() === 'Lacunas por falta de caixa', 'reaberta, a nota volta ao campo para corrigir');
-  checar(/A analisar\s*2/i.test(await cartao.innerText()), 'reaberta, volta a contar no "A analisar"');
   checar(!/Análise do PCP \(/.test(await p.locator('body > .somente-impressao').innerText()),
     'reaberta, a folha A4 deixa de dizer que foi analisada');
-
-  // Recusa que chega com o painel em OUTRA medicao: a linha avisa, e
-  // abrir mostra o motivo com a nota intacta.
-  await abrirMedicao('Rack Sirius 1.6');
-  recusarAnalise = true;
-  atrasoAnalise = 600;
-  await salvar.click();
-  await abrirMedicao('Toucador Magic New');
-  const linhaRack = lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first();
-  await linhaRack.getByText('Análise não salva — abra para ver o motivo').waitFor({ timeout: 4000 });
-  checar(true, 'recusa chegada com o painel em outra medicao: a linha avisa que a analise nao foi salva');
-  await abrirMedicao('Rack Sirius 1.6');
-  checar(/Não deu para salvar: Seu papel nao permite/.test(await janela.getByRole('alert').innerText())
-    && await nota.inputValue() === 'nota do rack',
-  'aberta, ela mostra o motivo e a nota digitada');
+  await voltarALista();
+  checar(/A analisar\s*2/i.test(await cartao.innerText()), 'reaberta, volta a contar no "A analisar"');
 
   // Reabrir recusado: a analise continua salva, e a linha nao pode dizer
   // "nao salva" ao lado do selo.
-  recusarAnalise = false;
-  atrasoAnalise = 0;
+  await abrirMedicao('Rack Sirius 1.6');
   await salvar.click();
   await janela.waitFor({ state: 'detached', timeout: 4000 });
   // Analisada nao tem campo de nota: espera o botao, nao o campo.
-  await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
-  await janela.getByRole('button', { name: 'Reabrir análise' }).waitFor({ timeout: 8000 });
+  const reabrir = janela.getByRole('button', { name: 'Reabrir análise' });
+  await abrirMedicao('Rack Sirius 1.6', { esperar: reabrir });
   recusarAnalise = true;
-  atrasoAnalise = 600;
-  await janela.getByRole('button', { name: 'Reabrir análise' }).click();
-  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
-  await linhaRack.getByText('Não reabriu — abra para ver o motivo').waitFor({ timeout: 4000 });
-  const textoRack = await linhaRack.innerText();
-  checar(/✓ Analisada/.test(textoRack) && !/Análise não salva/.test(textoRack),
-    'reabrir recusado: a linha segue analisada e diz que nao reabriu, nao que a analise nao foi salva');
+  await reabrir.click();
+  await janela.getByRole('alert').waitFor({ timeout: 4000 });
+  checar(/Não deu para reabrir: Seu papel nao permite/.test(await janela.getByRole('alert').innerText()),
+    'reabrir recusado: o motivo aparece no painel');
+  await voltarALista();
+  const textoRack = await linhaDe('Rack Sirius 1.6').innerText();
+  checar(/✓ Analisada/.test(textoRack) && /Não reabriu — abra para ver o motivo/.test(textoRack)
+    && !/Análise não salva/.test(textoRack),
+  'reabrir recusado: a linha segue analisada e diz que nao reabriu, nao que a analise nao foi salva');
   recusarAnalise = false;
-  atrasoAnalise = 0;
-  if (FOTOS) {
-    await p.screenshot({ path: `${FOTOS}/pc-a-analisar.png` });
-    await nota.scrollIntoViewIfNeeded();
-    await p.screenshot({ path: `${FOTOS}/pc-nota.png` });
-  }
-}
+  if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-a-analisar.png` });
 
-// Empilhado (tela estreita), a medicao que abre SOZINHA ao carregar nasce
-// abaixo da lista e mesmo assim nao leva a pagina para baixo.
-await p.setViewportSize({ width: 1100, height: 700 });
-await p.reload();
-await janela.getByText(/No período, saiu um volume/).waitFor({ timeout: 8000 });
-await p.waitForTimeout(600);
-{
-  const cj = await janela.boundingBox();
-  checar(cj.y > 700 * 0.6, `pre-condicao: empilhado, o detalhe nasce fora da vista (top ${Math.round(cj.y)} px)`);
-  checar(await p.evaluate(() => window.scrollY) === 0, 'empilhado: abrir sozinho ao carregar nao rola a pagina');
+  // Sair da tela pela lateral com nota digitada e nao salva: pergunta antes.
+  await abrirMedicao('Toucador Magic New');
+  await nota.fill('nota que ninguem salvou');
+  await voltarALista();
+  let pergunta = null;
+  p.once('dialog', (d) => { pergunta = d.message(); d.dismiss(); });
+  await p.getByRole('button', { name: 'Início' }).click();
+  await p.waitForTimeout(200);
+  checar(/Há 1 nota digitada e não salva/.test(pergunta || '')
+    && new URL(p.url()).pathname === '/analise/embalagem'
+    && /Nota digitada, ainda não salva/.test(await linhaDe('Toucador Magic New').innerText()),
+  `sair com nota nao salva pergunta antes; cancelar fica na tela com a nota (${(pergunta || '').split('\n')[0]})`);
+  checar(await p.evaluate(() => {
+    const ev = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  }), 'com nota nao salva, recarregar ou fechar a aba tambem pergunta');
+  p.once('dialog', (d) => d.accept());
+  await p.getByRole('button', { name: 'Início' }).click();
+  await p.waitForFunction(() => location.pathname === '/analise', { timeout: 4000 });
+  checar(true, 'confirmando, sai da tela');
 }
 
 checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${errosPc[0]}` : ''}`);
+
+/* ------- programa lido da planilha do PCP: a tela diz de onde e de quando */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  const erros = [];
+  s.on('pageerror', (e) => erros.push(e.message));
+  // A semana da planilha traz os DIAS programados: 4 (Finados, por
+  // exemplo). 2.200 volumes em 4 de 5 dias de 44 h -> 35,2 h -> 57,6 s.
+  await simularServidor(s, {
+    conferencias: [medicao], marcas, relogio: marcas.at(-1) - marcas[0],
+    demandas: [{ ...DEMANDAS[0], dias: 4 }],
+    planilha: {
+      estado: 'ok', ativa: true, grupoId: GRUPO.id, lidaEm: new Date(Date.now() - 300000).toISOString(),
+      semanas: 5, linhas: 312, ignoradas: { semData: 0, semQuantidade: 2, duplicadas: 0 }, mudaram: 0,
+      conflitos: [{ inicio: '2026-11-16', colada: { ano: 2026, numero: 47, inicio: '2026-09-07' } }],
+    },
+  });
+  const diaDaSegunda = `${String(segunda.getUTCDate()).padStart(2, '0')}/${String(segunda.getUTCMonth() + 1).padStart(2, '0')}`;
+  await s.goto(`${BASE}/analise/embalagem`);
+  const kpi = s.getByText('Takt desta semana · EMBALAGEM').locator('..');
+  await kpi.waitFor({ timeout: 8000 });
+  const textoKpi = (await kpi.innerText()).replace(/\n/g, ' | ');
+  checar(new RegExp(`57\\.6 s[\\s\\S]*por volume · semana de ${diaDaSegunda} · 4 de 5 dias programados · da planilha do PCP, lida hoje às \\d{2}:\\d{2}`).test(await kpi.innerText()),
+    `planilha lida: takt pelas horas dos 4 dias (57.6 s), semana pela data, de onde e quando (${textoKpi})`);
+  checar(await s.getByRole('alert').count() === 0, 'planilha lida: nenhum aviso de falha');
+
+  // O programa da semana do grupo: sem colar, sem digitar, sem apagar — e
+  // com a origem, a idade e o que ficou de fora.
+  await s.goto(`${BASE}/analise/conferencias`);
+  await s.getByRole('button', { name: 'Demanda semanal' }).click();
+  const demanda = s.locator('[aria-label="Demanda semanal"]');
+  const origem = demanda.locator('[aria-label="Origem do programa"]');
+  await origem.waitFor({ timeout: 8000 });
+  const textoOrigem = await origem.innerText();
+  checar(/Última leitura hoje às \d{2}:\d{2}: 312 linhas lidas, 5 semanas gravadas/.test(textoOrigem)
+    && /2 linhas ficaram de fora: 2 sem quantidade/.test(textoOrigem)
+    && /A semana de 16\/11 da planilha não entrou: o número dela já é o da semana colada 047-26, de 07\/09, que foi mantida\. Para a da planilha entrar, apague a colada/.test(textoOrigem.replace(/\s+/g, ' ')),
+  `Programa da semana: diz que vem da planilha, quando foi lida e o que ficou de fora (${textoOrigem.replace(/\n/g, ' | ')})`);
+  await demanda.locator('table').waitFor({ timeout: 8000 });
+  const linhaDaSemana = await demanda.locator('tbody tr').first().innerText();
+  checar(/4 de 5/.test(linhaDaSemana) && /57\.6s/.test(linhaDaSemana),
+    `Programa da semana: a linha diz 4 de 5 dias e o takt e' o mesmo da tela (${linhaDaSemana.replace(/\s+/g, ' ')})`);
+  checar(await demanda.locator('textarea').count() === 0
+    && await demanda.getByRole('button', { name: 'Apagar' }).count() === 0
+    && await demanda.getByRole('button', { name: 'Apagar o programa deste grupo' }).count() === 0,
+  'grupo da planilha: sem colagem, sem semana digitada, sem apagar');
+  checar(erros.length === 0, `planilha lida: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+{
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  await simularServidor(s, {
+    conferencias: [medicao], marcas, relogio: marcas.at(-1) - marcas[0],
+    planilha: {
+      estado: 'erro', ativa: true, grupoId: GRUPO.id, lidaEm: null, tentadaEm: new Date().toISOString(),
+      mensagem: 'A planilha não está compartilhada com a conta de serviço: compartilhe com ritmo@x.iam.gserviceaccount.com (leitor)',
+    },
+  });
+  await s.goto(`${BASE}/analise/embalagem`);
+  const alerta = s.getByRole('alert');
+  await alerta.waitFor({ timeout: 8000 });
+  const kpi = s.getByText('Takt desta semana · EMBALAGEM').locator('..');
+  checar(/Não deu para ler a planilha do PCP: A planilha não está compartilhada .*\(leitor\)\. Continua valendo o programa guardado, e a leitura tenta de novo em 1 minuto\. Semana que ainda não foi lida fica sem takt até a leitura voltar/
+    .test(await alerta.innerText()) && /72\.0 s/.test(await kpi.innerText()) && !/da planilha do PCP, lida/.test(await kpi.innerText()),
+  'planilha nao lida: o aviso diz o motivo e o que acontece, e o takt e\' o do programa guardado');
+  // Colar NAO volta com a leitura falhando: o codigo de semana do PCP cairia
+  // por cima de outra semana. Apagar fica so' na semana colada (sem dias).
+  await s.goto(`${BASE}/analise/conferencias`);
+  await s.getByRole('button', { name: 'Demanda semanal' }).click();
+  const demanda = s.locator('[aria-label="Demanda semanal"]');
+  await demanda.locator('[aria-label="Origem do programa"]').getByRole('alert').waitFor({ timeout: 8000 });
+  await demanda.locator('table').waitFor({ timeout: 8000 });
+  // Aqui o programa e' so' colado (nenhuma semana lida ainda): apagar tudo
+  // nao leva historia da planilha, e o servidor aceita.
+  checar(await demanda.locator('textarea').count() === 0
+    && await demanda.getByRole('button', { name: 'Apagar', exact: true }).count() === 1
+    && await demanda.getByRole('button', { name: 'Apagar o programa deste grupo' }).count() === 1,
+  'planilha nao lida: sem colagem; a semana colada tem Apagar');
+  await ctx.close();
+}
+
+/* ------- semana da planilha sem os dias de producao: o campo vem aberto */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  await simularServidor(s, {
+    conferencias: [medicao], marcas, relogio: marcas.at(-1) - marcas[0],
+    // A lida desta semana e uma colada antiga (semana inteira, sem dias).
+    demandas: [
+      { ...DEMANDAS[0], dias: 4 },
+      { ...DEMANDAS[0], numero: 2, inicio: new Date(segunda.getTime() - (14 * 86400000)).toISOString().slice(0, 10) },
+    ],
+    cadastro: { ...CADASTRO, grupos: [{ ...GRUPO, dias_semana: null }] },
+    planilha: {
+      estado: 'ok', ativa: true, grupoId: GRUPO.id, lidaEm: new Date().toISOString(),
+      semanas: 1, linhas: 10, ignoradas: { semData: 0, semQuantidade: 0, duplicadas: 0 }, mudaram: 0, conflitos: [],
+    },
+  });
+  await s.goto(`${BASE}/analise/conferencias`);
+  await s.getByRole('button', { name: 'Demanda semanal' }).click();
+  const demanda = s.locator('[aria-label="Demanda semanal"]');
+  await demanda.locator('table').waitFor({ timeout: 8000 });
+  const resumo = (await demanda.getByText(/semanas? inteiras?/).first().innerText().catch(() => ''));
+  checar(await demanda.getByText('Dias de produção').count() > 0,
+    'sem os dias de producao: o Tempo disponivel vem aberto, com o campo a vista');
+  checar(/Nas semanas lidas da planilha, o takt também precisa dos dias de produção/.test(await demanda.innerText()),
+    'sem os dias de producao: o programa gravado diz o que falta');
+  checar(/^1 semana inteira, a 002-26, com 2\.200 peças \(fora 1 da planilha, que sem os dias de produção do grupo não se sabe se é inteira\)/.test(resumo.replace(/\s+/g, ' '))
+    && !/só em parte/.test(resumo),
+  `sem os dias de producao: o resumo diz por que a semana da planilha ficou de fora (${resumo.replace(/\s+/g, ' ')})`);
+  await ctx.close();
+}
+
+/* ------- tablet com a semana da planilha: diz os dias, ou o que falta */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  const erros = [];
+  s.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(s, { demandas: [{ ...DEMANDAS[0], dias: 4 }] });
+  await s.goto(`${BASE}/coleta/embalagem`);
+  const cartao = s.locator('[aria-label="Takt da semana"]');
+  await cartao.getByText(/57\.6/).waitFor({ timeout: 8000 });
+  const texto = (await cartao.innerText()).replace(/\s+/g, ' ');
+  checar(/57\.6 s por volume — takt da semana de \d{2}\/\d{2} · 4 de 5 dias programados/.test(texto),
+    `tablet: o takt da semana da planilha diz de quantos dias ele e' (${texto})`);
+  await ctx.close();
+
+  // Sem os dias de producao no cadastro, a semana da planilha nao tem takt:
+  // nao se presume 5 dias, como nao se presumem 44 h.
+  const ctx2 = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const s2 = await ctx2.newPage();
+  await semearSessao(s2);
+  await simularServidor(s2, {
+    demandas: [{ ...DEMANDAS[0], dias: 4 }],
+    cadastro: { ...CADASTRO, grupos: [{ ...GRUPO, dias_semana: null }] },
+  });
+  await s2.goto(`${BASE}/coleta/embalagem`);
+  const cartao2 = s2.locator('[aria-label="Takt da semana"]');
+  await cartao2.getByText(/Faltam/).waitFor({ timeout: 8000 });
+  checar(/Takt: Faltam os dias de produção da semana do grupo EMBALAGEM no cadastro\./.test(await cartao2.innerText()),
+    'tablet: sem os dias de producao no cadastro, diz o que falta em vez de presumir 5');
+  checar(erros.length === 0, `tablet com planilha: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx2.close();
+}
 
 /* ---------------- sem programa colado: o tablet so' nao mostra o takt */
 {

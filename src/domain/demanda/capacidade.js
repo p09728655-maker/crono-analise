@@ -88,6 +88,33 @@ export function horasDeSetup({ setupsDia, dias, minutos } = {}) {
 }
 
 /**
+ * A FRACAO DA SEMANA que o programa cobre — so' no programa que traz os
+ * DIAS programados (o lido da planilha da embalagem; ver demanda_semanal.dias).
+ *
+ * Semana de Finados: lotes em quatro dias. Dividir esse volume pela jornada
+ * da semana inteira deixava o takt 25% frouxo, e a medicao "atendia" um
+ * programa que pedia mais. Com a fracao, as horas e o setup sao os dos dias
+ * programados: 44 h x 4/5 = 35,2 h. O mesmo vale para a semana que o PCP
+ * ainda esta' programando.
+ *
+ * A jornada em DIAS vem do cadastro do grupo (dias_semana, "Dias de
+ * producao"). Sem ela, `fator` e' null: nao se sabe que parte da semana os
+ * dias programados sao, e a leitura diz que falta (estado 'sem-dias') —
+ * a mesma regra das horas, que tambem nao se presumem. Dia programado alem
+ * da jornada (sabado de hora extra) nao aumenta as horas: hora extra nao
+ * esta' na jornada. Linha sem `dias` (programa colado) vale a semana
+ * inteira, com ou sem a jornada em dias.
+ */
+export function fracaoDaSemana(semana, diasDaJornada) {
+  const daJornada = Number(diasDaJornada) > 0 ? Math.floor(Number(diasDaJornada)) : null;
+  const dias = Number(semana?.dias);
+  if (!(dias > 0)) return { fator: 1, programados: null, daJornada };
+  if (!daJornada) return { fator: null, programados: Math.floor(dias), daJornada: null };
+  const programados = Math.min(Math.floor(dias), daJornada);
+  return { fator: programados / daJornada, programados, daJornada };
+}
+
+/**
  * Quantas maquinas o ritmo medido exige para dar conta da demanda.
  *
  * E' a leitura que fecha a conta no chao: "cada furadeira faz 800 pc/h, o

@@ -15,7 +15,7 @@
 import { useEffect, useState } from 'react';
 import { chaveSemana } from '../../../domain/demandaSemanal.js';
 import {
-  atualizarGrupoMaquina, gravarDemanda, limparDemanda, listarCadastroMaquinas, listarDemanda,
+  atualizarGrupoMaquina, gravarDemanda, lerDemanda, limparDemanda, listarCadastroMaquinas,
   removerSemanaDemanda,
 } from '../../../lib/api.js';
 
@@ -26,6 +26,9 @@ export function useDemanda(grupoInicial) {
   const [cadastro, setCadastro] = useState(null);      // { maquinas, grupos }
   const [grupoId, setGrupoId] = useState(grupoInicial);
   const [semanas, setSemanas] = useState(null);        // as gravadas, do banco
+  // O grupo alimentado pela planilha do PCP (a embalagem) traz o estado da
+  // leitura; os outros, null. Ver planilha.js.
+  const [planilha, setPlanilha] = useState(null);
   const [erro, setErro] = useState(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -41,8 +44,12 @@ export function useDemanda(grupoInicial) {
   useEffect(() => {
     if (!grupoId) return;
     setSemanas(null);
-    listarDemanda(grupoId)
-      .then((lista) => setSemanas(comChave(lista)))
+    setPlanilha(null);
+    lerDemanda(grupoId)
+      .then((r) => {
+        setSemanas(comChave(r.demandas));
+        setPlanilha(r.planilha);
+      })
       .catch((e) => setErro(e.message));
   }, [grupoId]);
 
@@ -79,6 +86,13 @@ export function useDemanda(grupoInicial) {
 
   const apagarSemana = (s) => aplicar(async () => {
     setSemanas(comChave(await removerSemanaDemanda(grupoId, s)));
+    // No grupo da planilha, a colada apagada pode ter travado uma semana
+    // dela: o servidor le de novo, e o quadro traz a semana e o aviso novos.
+    // Falha aqui nao desfaz o apagar, que ja' deu certo.
+    if (planilha) {
+      const r = await lerDemanda(grupoId).catch(() => null);
+      if (r) { setSemanas(comChave(r.demandas)); setPlanilha(r.planilha); }
+    }
   });
 
   const apagarTudo = () => aplicar(async () => {
@@ -88,7 +102,7 @@ export function useDemanda(grupoInicial) {
 
   return {
     cadastro, grupo, grupoId, escolherGrupo: setGrupoId, maquinasDoGrupo,
-    semanas, erro, ocupado,
+    semanas, planilha, erro, ocupado,
     gravarSemanas, salvarTempo, apagarSemana, apagarTudo,
   };
 }

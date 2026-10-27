@@ -24,6 +24,10 @@ export default handler(async (req, res) => {
     // LEGADO da transicao para o Supabase Auth. Ausente e' o estado DESEJADO:
     // quem entra e' pessoa ou tablet pareado, com token proprio.
     API_TOKEN: Boolean(process.env.API_TOKEN),
+    // A planilha do programa da embalagem (ver api/_lib/programaEmbalagem.js):
+    // as duas juntas ligam a leitura; so' uma e' configuracao pela metade.
+    GOOGLE_CONTA_SERVICO: Boolean(process.env.GOOGLE_CONTA_SERVICO),
+    PROGRAMA_EMBALAGEM_PLANILHA: Boolean(process.env.PROGRAMA_EMBALAGEM_PLANILHA),
   };
 
   let banco = 'nao testado';

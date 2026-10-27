@@ -1,9 +1,14 @@
+import { useEffect, useRef } from 'react';
+import { chaveSemana } from '../../domain/demandaSemanal.js';
 import ColarPlanilha from './demanda/ColarPlanilha.jsx';
 import ProgramaGravado from './demanda/ProgramaGravado.jsx';
 import SemanaManual from './demanda/SemanaManual.jsx';
 import TempoDisponivel from './demanda/TempoDisponivel.jsx';
 import { est } from './demanda/estilos.js';
 import { useDemanda } from './demanda/useDemanda.js';
+import {
+  linhasDeFora, porQueSemColagem, quandoLida, textoDaFalha,
+} from './demanda/planilha.js';
 import { useTempoDisponivel } from './demanda/useTempoDisponivel.js';
 
 /**
@@ -30,8 +35,24 @@ import { useTempoDisponivel } from './demanda/useTempoDisponivel.js';
 export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
   const demanda = useDemanda(grupoInicial);
   const {
-    cadastro, grupo, grupoId, escolherGrupo, maquinasDoGrupo, semanas, erro, ocupado,
+    cadastro, grupo, grupoId, escolherGrupo, maquinasDoGrupo, semanas, planilha, erro, ocupado,
   } = demanda;
+  // A planilha do PCP manda no programa deste grupo (lendo bem ou falhando),
+  // ou o grupo ja' tem semana lida dela: colar e digitar saem (o servidor
+  // recusa; o codigo de semana do PCP nao e' o numero que a planilha grava),
+  // e apagar fica so' na semana colada.
+  const lidas = (semanas || []).some((s) => s.dias != null);
+  const semColagem = Boolean(planilha?.ativa) || lidas;
+  const semColagemPorque = porQueSemColagem({ planilha, lidas });
+  // Apagar o programa inteiro: nao no grupo com a leitura configurada, onde
+  // levaria a historia que a planilha nao regrava (o servidor recusa).
+  const apagarTudo = !planilha || !lidas;
+  // O erro aparece no alto do quadro, e o clique pode ter sido no fim da
+  // tabela (o Apagar de uma semana): a tela vai ate' ele.
+  const refErro = useRef(null);
+  useEffect(() => {
+    if (erro) refErro.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [erro]);
   // O tempo disponivel e' de dois quadros: onde se digita e a tabela, que
   // calcula o exigido de cada semana com ele.
   const tempo = useTempoDisponivel(grupo, maquinasDoGrupo);
@@ -48,7 +69,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
           <strong> se isso atende</strong>.
         </p>
 
-        {erro && <div style={est.erro}>{erro}</div>}
+        {erro && <div ref={refErro} style={est.erro} role="alert">{erro}</div>}
         {!cadastro && !erro && <p style={est.texto}>Carregando cadastro...</p>}
 
         {semGrupo && (
@@ -84,13 +105,20 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
             <TempoDisponivel
               tempo={tempo} grupo={grupo} maquinasDoGrupo={maquinasDoGrupo} ocupado={ocupado}
               aoSalvar={() => demanda.salvarTempo(tempo.valores)}
+              precisaDias={lidas || Boolean(planilha?.ativa)}
             />
 
-            <SemanaManual
-              semanas={semanas} ocupado={ocupado} aoIncluir={demanda.gravarSemanas}
-            />
+            {planilha && <OrigemPlanilha planilha={planilha} />}
+            {semColagemPorque && <div style={est.aviso}>{semColagemPorque}</div>}
 
-            <ColarPlanilha ocupado={ocupado} aoGravar={demanda.gravarSemanas} />
+            {!semColagem && (
+              <>
+                <SemanaManual
+                  semanas={semanas} ocupado={ocupado} aoIncluir={demanda.gravarSemanas}
+                />
+                <ColarPlanilha ocupado={ocupado} aoGravar={demanda.gravarSemanas} />
+              </>
+            )}
 
             {semanas == null && !erro && <p style={est.texto}>Carregando programa...</p>}
 
@@ -110,6 +138,8 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                 semanas={semanas} horasNum={tempo.horasNum} maquinasDoGrupo={maquinasDoGrupo}
                 setupHoras={tempo.setupHoras} ocupado={ocupado}
                 aoApagarSemana={demanda.apagarSemana} aoApagarTudo={demanda.apagarTudo}
+                somenteLeitura={semColagem} apagarTudo={apagarTudo}
+                diasDaJornada={tempo.valores.diasSemana}
               />
             )}
           </>
@@ -122,3 +152,46 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
     </div>
   );
 }
+
+/**
+ * DE ONDE VEM o programa da embalagem: a planilha do PCP, lida sozinha. O
+ * quadro diz quando foi a ultima leitura, o que ficou de fora e, na falha,
+ * o motivo com o que fazer — a tela nao mostra programa sem idade.
+ */
+function OrigemPlanilha({ planilha }) {
+  const falha = textoDaFalha(planilha);
+  const deFora = linhasDeFora(planilha.ignoradas);
+  return (
+    <div style={est.bloco} aria-label="Origem do programa">
+      <div style={est.blocoTitulo}>Programa lido da planilha do PCP</div>
+      <p style={est.blocoTexto}>
+        O programa deste grupo vem sozinho das abas PROGRAMACAO e PROGRAMACAO_CONCLUIDA da
+        planilha da embalagem: os volumes de cada semana pela data programada, e os dias com
+        lote — o takt usa as horas só desses dias. A planilha é lida quando alguém abre o
+        programa (o tablet, a cada meia hora), no máximo a cada 10 minutos. Para mudar o
+        programa, altere a planilha.
+      </p>
+      {planilha.estado === 'ok' && (
+        <p style={est.blocoResumo}>
+          Última leitura {quandoLida(planilha.lidaEm)}: {planilha.linhas.toLocaleString('pt-BR')} linhas
+          lidas, {planilha.semanas} {planilha.semanas === 1 ? 'semana gravada' : 'semanas gravadas'} (da
+          4ª semana passada em diante).
+        </p>
+      )}
+      {deFora && <div style={est.aviso}>{deFora}</div>}
+      {planilha.conflitos?.length > 0 && (
+        <div style={est.aviso}>
+          {planilha.conflitos.map((c) => `A semana de ${diaMes(c.inicio)} da planilha não entrou: o número `
+            + `dela já é o da semana colada ${chaveSemana(c.colada)}`
+            + `${c.colada.inicio ? `, de ${diaMes(c.colada.inicio)}` : ''}, que foi mantida. `).join('')}
+          Para a da planilha entrar, apague a colada no programa gravado, abaixo: ela entra na
+          leitura seguinte.
+        </div>
+      )}
+      {falha && <div style={est.erro} role="alert">{falha}</div>}
+    </div>
+  );
+}
+
+/** "2026-10-26" -> "26/10". */
+const diaMes = (iso) => String(iso).split('-').reverse().slice(0, 2).join('/');

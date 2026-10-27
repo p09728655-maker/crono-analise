@@ -115,6 +115,12 @@ describe('conta de uma maquina na semana', () => {
   it('sem jornada nao ha conta', () => {
     expect(contaDaMaquina({ jornadaPorMaquina: null, setupPorMaquina: 1 })).toBeNull();
   });
+  it("semana da planilha em parte: a jornada diz de quantos dias e' (senao 35h12min parece erro)", () => {
+    expect(contaDaMaquina({ jornadaPorMaquina: 35.2, setupPorMaquina: 0, dias: { programados: 4, daJornada: 5 } }).texto)
+      .toBe('Por máquina: 35h12min de jornada (4 de 5 dias programados), sem setup planejado.');
+    expect(contaDaMaquina({ jornadaPorMaquina: 44, setupPorMaquina: 0, dias: { programados: 5, daJornada: 5 } }).texto)
+      .toBe('Por máquina: 44h00min de jornada, sem setup planejado.');
+  });
 });
 
 describe('aviso sem programa', () => {
@@ -151,6 +157,8 @@ describe('aviso sem programa', () => {
     })).toBe('0002 · FURADEIRA não tem máquina ativa no cadastro: digite a demanda.');
     expect(avisoSemPrograma({ recurso: 'FURADEIRA 04', grupo, estado: 'sem-horas', maquinasDoGrupo: 3 }))
       .toMatch(/Faltam as horas da semana/);
+    expect(avisoSemPrograma({ recurso: 'EMBALAGEM 01', grupo, estado: 'sem-dias', maquinasDoGrupo: 1 }))
+      .toBe('Faltam os dias de produção da semana de 0002 · FURADEIRA no cadastro: digite a demanda.');
   });
 });
 
@@ -161,11 +169,15 @@ describe('programaDoTakt', () => {
     expect(programaDoTakt({ grupo, maquinasDoGrupo: 3, takt: { ...takt, jornadaPorMaquina: 44, setupPorMaquina: 4 } }))
       .toEqual({
         taktMs: 42000, semana: '043-26', demanda: 6000, horasPorMaquina: 40, jornadaPorMaquina: 44,
-        setupPorMaquina: 4, casadoPorData: true, confirmado: true, semRede: false, maquinas: 3,
+        setupPorMaquina: 4, dias: null, casadoPorData: true, confirmado: true, semRede: false, maquinas: 3,
         grupo: '0002 · FURADEIRA', unidade: expect.objectContaining({ singular: 'peça' }),
       });
     expect(programaDoTakt({ grupo: { ...grupo, nome: 'EMBALAGEM' }, maquinasDoGrupo: 1, takt }).unidade.singular)
       .toBe('volume');
+  });
+  it('a semana da planilha leva os dias programados ao painel', () => {
+    expect(programaDoTakt({ grupo, maquinasDoGrupo: 1, takt: { ...takt, dias: { programados: 4, daJornada: 5 } } }).dias)
+      .toEqual({ programados: 4, daJornada: 5 });
   });
   it('sem grupo ou sem takt, nao ha programa', () => {
     expect(programaDoTakt({ grupo: null, maquinasDoGrupo: 0, takt })).toBeNull();

@@ -244,6 +244,12 @@ const ROTA_DEMANDA = '/maquinas?demanda=1';
 export const listarDemanda = (grupoId) =>
   requisitar(grupoId ? `${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}` : ROTA_DEMANDA)
     .then((r) => r.demandas || []);
+/* O programa E o estado da planilha do PCP, quando ela alimenta o grupo
+   (a embalagem): `planilha` = { estado: 'ok'|'erro', ativa, lidaEm,
+   mensagem, ... } ou null. Ver api/_lib/programaEmbalagem.js. */
+export const lerDemanda = (grupoId) =>
+  requisitar(`${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}`)
+    .then((r) => ({ demandas: r.demandas || [], planilha: r.planilha || null }));
 export const gravarDemanda = (grupoId, semanas) =>
   requisitar(`${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}`, { metodo: 'POST', corpo: { semanas } })
     .then((r) => r.demandas || []);

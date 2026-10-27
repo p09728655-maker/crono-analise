@@ -5,7 +5,7 @@ import {
 } from '../../domain/relatorioConferencias.js';
 import { leituraDaDemanda, lerCodigoSemana } from '../../domain/demandaSemanal.js';
 import { caminhos } from '../../lib/dispositivo.js';
-import { listarDemanda } from '../../lib/api.js';
+import { lerDemanda } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
@@ -141,6 +141,9 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
    * piscando, e falsa justamente sobre o que a tela existe para dizer.
    */
   const [demandas, setDemandas] = useState(null);
+  // O estado da planilha do PCP quando ela alimenta o grupo (a embalagem):
+  // o quadro nao manda colar num grupo em que colar e' recusado.
+  const [planilhaDoGrupo, setPlanilhaDoGrupo] = useState(null);
   /**
    * Bump ao FECHAR a tela de demanda.
    *
@@ -248,10 +251,11 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   useEffect(() => {
     setSemanaEscolhida(null);
     setDemandas(null);
+    setPlanilhaDoGrupo(null);
     if (!grupoDoQuadro) return;
     let vivo = true;
-    listarDemanda(grupoDoQuadro)
-      .then((lista) => { if (vivo) setDemandas(lista); })
+    lerDemanda(grupoDoQuadro)
+      .then((r) => { if (vivo) { setDemandas(r.demandas); setPlanilhaDoGrupo(r.planilha); } })
       // Falha de carga vira lista vazia: o quadro diz que nao ha' programa
       // e oferece o caminho, que e' melhor do que sumir sem explicacao.
       .catch(() => { if (vivo) setDemandas([]); });
@@ -474,6 +478,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
                   leitura={leituraDemanda}
                   grupoNome={grupoDoCadastro ? `${grupoDoCadastro.codigo} · ${grupoDoCadastro.nome}` : null}
                   aoConfigurar={() => setVerDemanda(true)}
+                  daPlanilha={Boolean(planilhaDoGrupo?.ativa)}
                   /* Vazio LIMPA a escolha e devolve o quadro ao automatico
                      (a semana que contem a medicao). Explicito de
                      proposito: lerCodigoSemana('') ja' devolve null, mas
