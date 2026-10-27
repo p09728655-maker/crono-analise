@@ -60,8 +60,10 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
       // grafico: os intervalos continuam valendo sem a linha do takt.
       grupo ? listarDemanda(grupo.id).catch(() => null) : Promise.resolve([]),
     ])
-      .then(([toques, demandas]) => { if (vivo) setCarga({ estado: 'pronto', ...toques, demandas }); })
-      .catch((e) => { if (vivo) setCarga({ estado: 'erro', erro: e.message }); });
+      // `de`: de qual medicao e' a leitura — no primeiro quadro depois da
+      // troca, a carga ainda e' a da anterior.
+      .then(([toques, demandas]) => { if (vivo) setCarga({ estado: 'pronto', ...toques, demandas, de: conferencia.id }); })
+      .catch((e) => { if (vivo) setCarga({ estado: 'erro', erro: e.message, de: conferencia.id }); });
     return () => { vivo = false; };
   }, [conferencia.id, grupo?.id]);
 
@@ -89,7 +91,9 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
       setupPlanejado: Boolean(takt.setupPlanejado),
     });
     const leitura = leituraPecaAPeca({ marcasMs: carga.marcas, taktMs: takt.taktMs, periodoPorPecaMs });
-    return { estado: leitura ? 'pronto' : 'sem-marcas', leitura, takt };
+    return {
+      estado: leitura ? 'pronto' : 'sem-marcas', leitura, takt, de: carga.de,
+    };
   }, [carga, grupo, maquinasDoGrupo, conferencia]);
 }
 
@@ -220,16 +224,33 @@ export default function VolumeAVolume({
      da vista — empilhada abaixo da lista, em tela estreita. Ao lado da
      lista o painel ja' esta' a vista, e rolar tiraria a lista de vista.
      `rolar` falso (a medicao que a tela reabre sozinha, no F5) nunca rola.
-     Confere de novo quando a leitura chega: "Carregando os toques…" e'
-     baixo, a pagina nao tinha altura para trazer o painel ao alto, e ele
-     parava no meio da tela, so' com o cabecalho a' vista. */
+
+     A medicao que pediu rolagem rola de novo quando a leitura chega:
+     com "Carregando os toques…" o painel e' baixo, a pagina nao tem altura
+     para traze-lo ao alto, e ele parava no meio da tela, so' com o
+     cabecalho a' vista. A segunda vez nao usa o limite de 60% (o painel ja'
+     parou acima dele): o painel tem de chegar ao alto. */
   const refPainel = useRef(null);
+  const pediuRolagem = useRef(null);
   useEffect(() => {
     const el = refPainel.current;
+    pediuRolagem.current = null;
     if (!rolar || !el?.scrollIntoView) return;
     const { top } = el.getBoundingClientRect();
-    if (top < 0 || top > window.innerHeight * 0.6) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [conferencia.id, pronto]);
+    if (top < 0 || top > window.innerHeight * 0.6) {
+      pediuRolagem.current = conferencia.id;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [conferencia.id]);
+  // A leitura carregada (ou sem marcas) e' DESTA medicao, nao da anterior.
+  const carregouEsta = r.estado !== 'carregando' && r.de === conferencia.id;
+  useEffect(() => {
+    const el = refPainel.current;
+    if (!carregouEsta || pediuRolagem.current !== conferencia.id || !el?.scrollIntoView) return;
+    pediuRolagem.current = null;
+    const { top } = el.getBoundingClientRect();
+    if (top < 0 || top > 64) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [carregouEsta, conferencia.id]);
 
   return (
     <>

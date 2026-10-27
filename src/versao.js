@@ -19,8 +19,9 @@ export const HISTORICO = [
     itens: [
       '"NÃO ANALISADAS" CONTA O MESMO QUE O CARTÃO A ANALISAR. As medições que não têm o que analisar — medidas por horários, com a contagem corrigida à mão ou com um toque só — saíram da fila e ficam em "Sem intervalos". Antes elas ficavam na fila para sempre, e a fila nunca esvaziava.',
       'A LISTA ACOMPANHA A MEDIÇÃO ABERTA: aberta pelo Avançar do navegador ou pelo F5, ou depois de "Reabrir análise", a lista vai para a aba onde ela está, com a linha marcada.',
-      'SÓ A MEDIÇÃO QUE ESTÁ SALVANDO FICA TRAVADA. Com a análise de uma indo para o servidor, outra medição abre e fecha normalmente, pela linha, pelo Fechar ou pelo Voltar do navegador.',
-      'EM TELA ESTREITA (painel abaixo da lista): abrir rola até o painel quando a leitura chega, sem parar no meio da tela com "Carregando"; fechar traz de volta à vista a linha da medição. Salvar a última da fila leva o foco para "Analisadas".',
+      'SÓ A MEDIÇÃO QUE ESTÁ SALVANDO FICA TRAVADA. Com a análise de uma indo para o servidor, outra medição abre e fecha normalmente, pela linha, pelo Fechar ou pelo Voltar do navegador. As abas da lista é que ficam travadas até a resposta, para uma recusa aparecer na linha da medição.',
+      'EM TELA ESTREITA (painel abaixo da lista): abrir leva o painel ao alto da tela quando a leitura chega, mesmo que ela demore — antes ele parava no meio, só com o cabeçalho à vista. Fechar traz de volta à vista a linha da medição.',
+      'CADA ABA DIZ NO ALTO O QUE GUARDA. Salvar a última da fila leva o foco para "Analisadas", e a fila vazia diz onde estão as outras medições.',
     ],
   },
   {

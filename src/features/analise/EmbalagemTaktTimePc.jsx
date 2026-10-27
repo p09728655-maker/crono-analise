@@ -41,7 +41,8 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  * vai para "Analisadas", a um clique, para reabrir ou imprimir. No lugar da
  * lista (v2.94.1) o detalhe tirava a fila de vista; com a analisada saindo,
  * a fila encurta sozinha (pedido do PCP em 27/10). O cartao A ANALISAR
- * conta as volume a volume que ainda nao tem analise salva.
+ * conta o mesmo que a fila: as que da' para analisar (ver analisavel) e
+ * ainda nao tem analise salva.
  *
  * A medicao aberta tem entrada propria no historico do navegador: o
  * Voltar do navegador (e o botao lateral do mouse) fecha o painel, como o
@@ -70,13 +71,15 @@ const vistaDe = (c) => {
   if (!analisavel(c)) return 'outras';
   return c.analisada_em ? 'analisadas' : 'fila';
 };
-/** O que recebe o foco quando o painel fecha: a linha, ou o botao de uma vista. */
+/** A linha de uma medicao na lista — o que recebe o foco quando o painel fecha. */
 const seletorDaLinha = (id) => `[data-medicao="${id}"]`;
+/** O botao da vista que esta' na tela: o foco cai nele quando a linha nao esta'. */
+const VISTA_NA_TELA = '[data-vista][aria-pressed="true"]';
 export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [aberta, setAberta] = useState(null);
-  // 'fila' (as nao analisadas) ou 'analisadas'.
+  // 'fila' (as nao analisadas), 'analisadas' ou 'outras' (sem intervalos).
   const [vista, setVista] = useState('fila');
   // Aberta por clique rola ate' o detalhe quando ele nasce fora da vista
   // (tela estreita); a que o F5 reabre, nunca.
@@ -87,8 +90,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   // continua dali.
   const focarAoFechar = useRef(null);
   // O Voltar do navegador chega por evento, fora do render: ele le daqui o
-  // que esta' aberto, as medicoes e se a analise da aberta esta' salvando. E sabe se quem
-  // voltou foi a propria tela (Fechar, Salvar), que nunca e' barrada.
+  // que esta' aberto, as medicoes e se a analise da aberta esta' salvando.
+  // E sabe se quem voltou foi a propria tela (Fechar, Salvar), que nunca e'
+  // barrada.
   const atual = useRef({
     aberta: null, carregada: false, medicoes: [], salvandoAberta: false,
   });
@@ -178,7 +182,10 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
       return;
     }
     if (focarAoFechar.current === null) return;
-    const el = document.querySelector(focarAoFechar.current);
+    // A linha pode nao estar na tela: trocou-se de vista com o painel aberto,
+    // ou a seguinte da fila esta' noutra vista. O foco cai no botao da vista
+    // que esta' na tela, nao no corpo da pagina.
+    const el = document.querySelector(focarAoFechar.current) || document.querySelector(VISTA_NA_TELA);
     focarAoFechar.current = null;
     if (!el) return;
     el.focus({ preventScroll: true });
@@ -535,6 +542,20 @@ function semTaktCurto(estado) {
  * enquanto uma analise salva: a recusa avisa na linha, e a linha tem de
  * estar a' vista.
  */
+/**
+ * O que a lista diz no alto, por vista. Volumes/hora valem nas tres: e' o
+ * que de fato saiu, com as paradas dentro.
+ */
+const DICA_DA_VISTA = {
+  fila: 'Clique numa medição para abrir o volume a volume (ao lado da lista; abaixo dela, em tela '
+    + 'estreita). Lida, salve a análise no alto dela: a medição sai desta lista e vai para Analisadas. '
+    + 'Volumes/hora do período inteiro, com as paradas dentro — o que de fato saiu.',
+  analisadas: 'As medições com a análise do PCP salva. Clique numa para ver, imprimir ou reabrir a '
+    + 'análise — reaberta, ela volta para Não analisadas.',
+  outras: 'Medidas por horários, com a contagem corrigida à mão ou com um toque só: não há intervalo '
+    + 'entre volumes para ler, e elas não têm análise do PCP. Os volumes/hora valem, com as paradas dentro.',
+};
+
 /** O aviso da linha para cada pendencia de analise (ver useAnalisesDoPcp). */
 const AVISO_PENDENCIA = {
   'salvar-recusado': { texto: 'Análise não salva — abra para ver o motivo', estilo: est.embPendenciaCritica },
@@ -567,12 +588,7 @@ function TabelaEmbalagem({
       <div style={est.painelTopo}>
         <div style={est.painelTopoTexto}>
           <h2 style={est.painelTitulo}>Medições da embalagem</h2>
-          <p style={est.painelDica}>
-            Clique numa medição para abrir o volume a volume (ao lado da lista; abaixo dela, em
-            tela estreita). Lida, salve a análise no alto dela: a medição sai desta lista e vai
-            para Analisadas. Volumes/hora do período inteiro, com as paradas dentro — o que de
-            fato saiu.
-          </p>
+          <p style={est.painelDica}>{DICA_DA_VISTA[vista]}</p>
           <div style={est.embVistas}>
             {botaoVista('fila', 'Não analisadas')}
             {botaoVista('analisadas', 'Analisadas')}
@@ -584,17 +600,14 @@ function TabelaEmbalagem({
           </div>
         </div>
       </div>
-      {vista === 'outras' && (
-        <p style={est.painelDica}>
-          Medidas por horários, com a contagem corrigida à mão ou com um toque só: não há
-          intervalo entre volumes para ler, e elas não entram na análise.
-        </p>
-      )}
       {medicoes.length === 0 && (
         <p style={est.painelDica} role="status">
-          {vista === 'analisadas'
-            ? `Nenhuma medição analisada nos últimos ${DIAS} dias.`
-            : `Nada para analisar nos últimos ${DIAS} dias. As lidas estão em Analisadas.`}
+          {vista === 'analisadas' && `Nenhuma medição analisada nos últimos ${DIAS} dias.`}
+          {vista === 'fila' && `Nada para analisar nos últimos ${DIAS} dias.${porVista.analisadas.length
+            ? ' As lidas estão em Analisadas.'
+            : ''}${porVista.outras.length
+            ? ' As medidas por horários ou com um toque só estão em Sem intervalos.'
+            : ''}`}
         </p>
       )}
       {medicoes.length > 0 && (
