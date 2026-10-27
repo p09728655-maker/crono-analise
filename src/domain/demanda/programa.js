@@ -55,6 +55,8 @@ export function resumoDaDemanda(semanas) {
  *   sem-demanda  o grupo nao tem programa cadastrado;
  *   sem-semana   ha' programa, mas nao o da semana das medicoes;
  *   sem-horas    ha' programa e falta a jornada do grupo;
+ *   sem-dias     a semana e' da planilha (traz os dias programados) e o
+ *                grupo nao diz quantos dias de producao tem a semana;
  *   setup-excede o setup cadastrado come a jornada inteira (cadastro errado);
  *   sem-ritmo    ha' tudo e nao ha' medicao aproveitavel no periodo;
  *   pronto       da' para comparar.
@@ -204,9 +206,10 @@ export function leituraDaDemanda({
   // A semana programada so' em parte (feriado, programa ainda sendo
   // montado) usa as horas e o setup dos DIAS programados — so' na linha que
   // os traz (a da planilha da embalagem). Ver fracaoDaSemana.
+  // Sem os dias da jornada, a semana da planilha nao tem horas (sem-dias).
   const fracao = fracaoDaSemana(registro, setup?.dias);
-  const horasDaSemana = Number(horas) > 0 ? Number(horas) * fracao.fator : horas;
-  const setupDaSemana = setupHoras == null ? null : setupHoras * fracao.fator;
+  const horasDaSemana = Number(horas) > 0 && fracao.fator != null ? Number(horas) * fracao.fator : null;
+  const setupDaSemana = setupHoras == null ? null : setupHoras * (fracao.fator ?? 1);
   /**
    * "Ha' setup planejado" e' setup MAIOR QUE ZERO nas horas. O cadastro
    * "este grupo nao faz setup" (zero) nao tira nada das horas — entao o
@@ -233,7 +236,7 @@ export function leituraDaDemanda({
     // quando a linha os traz; e quantos dias sao, para a tela dizer.
     horasDaSemana: Number(horasDaSemana) > 0 ? horasDaSemana : null,
     dias: fracao.programados
-      ? { programados: fracao.programados, daJornada: fracao.daJornada, jornadaInformada: fracao.jornadaInformada }
+      ? { programados: fracao.programados, daJornada: fracao.daJornada }
       : null,
     // O periodo da PLANILHA quando ele existe; o do calendario ISO quando
     // nao. A tela escreve "de 31/08 a 04/09" nos dois casos, e so' o
@@ -300,6 +303,7 @@ export function leituraDaDemanda({
   if (!(Number(horas) > 0) || !(Number(maquinas) > 0)) {
     return { ...base, estado: 'sem-horas', demanda: registro.pecas, veredito: null };
   }
+  if (fracao.fator == null) return { ...base, estado: 'sem-dias', demanda: registro.pecas, veredito: null };
   // Setup que come a jornada inteira e' cadastro errado (200 min no lugar
   // de 20), nao folga negativa. Estado PROPRIO: mandar "informar as horas"
   // aqui apontaria uma correcao que nao corrige — as horas estao la'.
@@ -360,8 +364,9 @@ export function taktDaMedicao({
     estado: leitura.estado,
     // O rotulo: "038-26" no programa colado, "de 26/10" no da planilha.
     semana: leitura.semana?.rotulo ?? null,
-    // Semana programada so' em parte: { programados, daJornada } — a tela
-    // escreve "4 de 5 dias", e o takt ja' usa as horas so' desses dias.
+    // Semana da planilha: { programados, daJornada } — a tela escreve "4 de
+    // 5 dias programados" (diasProgramados), e o takt ja' usa as horas so'
+    // desses dias.
     dias: leitura.dias ?? null,
     // De onde o takt saiu, para a tela escrever a conta em vez de so' o
     // resultado: a demanda da semana e as horas produtivas de CADA maquina

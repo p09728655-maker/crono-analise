@@ -26,6 +26,13 @@
  * Dentro da janela a planilha manda: semana do grupo que nao veio dela
  * (colada a mao, ou cujos lotes sairam da planilha) e' apagada.
  *
+ * COLAR NO GRUPO DA PLANILHA E' RECUSADO, com a leitura boa ou falhando. A
+ * colagem traz o codigo de semana do PCP, e a planilha grava pelo numero
+ * ISO: os dois numeram a mesma semana de jeitos diferentes, e a colagem
+ * caia por cima de OUTRA semana. Com a leitura falhando, vale o programa
+ * guardado, e a semana que ainda nao foi lida fica sem takt ate' a leitura
+ * voltar — falta dita na tela, nao numero de outra semana.
+ *
  * FALHA nao derruba nada: o GET responde com o programa guardado e o motivo
  * em `planilha`, para a tela dizer "nao deu para ler a planilha" em vez de
  * mostrar um takt de idade desconhecida.
@@ -75,8 +82,9 @@ function configuracao() {
  * `grupos` sao os grupos de embalagem da empresa (pelo nome, a mesma regra
  * que poe "volume" na tela): so' o programa DELES fala da planilha. O
  * programa da furadeira nao recebe o erro de configuracao da embalagem.
- * `grupoId` so' existe quando a planilha esta' de fato mandando; com
- * `erro`, ela esta' configurada mas parada, e a colagem continua aberta.
+ * `grupoId` so' existe quando a planilha manda no grupo (configurada, lendo
+ * bem ou nao); com `erro`, ela esta' configurada mas parada, e a colagem
+ * continua aberta.
  */
 export async function grupoDaPlanilha(empresaId) {
   const config = configuracao();
@@ -125,11 +133,17 @@ const CHAVE_LIDA_EM = 'programa_embalagem_lida_em';
  * Da segunda `desde` em diante o programa do grupo e' o da planilha: semana
  * guardada que nao veio dela sai, inclusive a futura colada a mao.
  *
- * A gravacao casa por (ano, numero), e a semana CONGELADA (antes da janela,
- * ou sem data) pode ter o mesmo numero de outra numeracao — colada pela
+ * Semana SEM DATA tambem sai (ou recebe a da planilha, se tiver o mesmo
+ * numero): colada com o codigo do PCP enquanto a leitura estava parada,
+ * ela nao tem lugar no tempo, e no grupo numerado pelo ISO so' casaria com
+ * a medicao pelo numero de outra semana.
+ *
+ * A gravacao casa por (ano, numero), e a semana CONGELADA (com data antes
+ * da janela) pode ter o mesmo numero de outra numeracao — colada pela
  * coluna S da planilha da fabrica, por exemplo. Sobrescreve-la trocaria o
  * programa de uma semana antiga pelo de outra. Essa semana da planilha nao
- * entra e volta em `conflitos`, para a tela dizer.
+ * entra e volta em `conflitos`, para a tela dizer; a colada pode ser
+ * apagada em Demanda semanal (o apagar so' alcanca semana colada).
  *
  * Devolve quantas linhas mudaram (gravadas ou apagadas; a regravada igual
  * nao conta) e as semanas que nao entraram.
@@ -138,12 +152,14 @@ async function gravar(empresaId, grupoId, semanas, desde) {
   const vindas = new Set(semanas.map((s) => `${s.ano}-${s.numero}`));
   return sql.begin(async (tx) => {
     let mudaram = 0;
+    // `na_janela` e' null na semana sem data: ela nao congela, sai.
     const doGrupo = await tx`
       SELECT id, ano, numero, inicio >= ${desde}::date AS na_janela FROM demanda_semanal
        WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}`;
-    const congeladas = new Set(doGrupo.filter((l) => !l.na_janela).map((l) => `${l.ano}-${l.numero}`));
+    const congelada = (l) => l.na_janela === false;
+    const congeladas = new Set(doGrupo.filter(congelada).map((l) => `${l.ano}-${l.numero}`));
     for (const linha of doGrupo) {
-      if (!linha.na_janela || vindas.has(`${linha.ano}-${linha.numero}`)) continue;
+      if (congelada(linha) || vindas.has(`${linha.ano}-${linha.numero}`)) continue;
       await tx`DELETE FROM demanda_semanal WHERE id = ${linha.id}`;
       mudaram += 1;
     }
@@ -241,8 +257,9 @@ async function sincronizar({
  * este pedido (desligada, outra empresa, ou o programa de outro grupo).
  *
  * `ativa` diz se a planilha MANDA no programa (le e grava; colar e'
- * recusado). Configurada mas parada (falta variavel, dois grupos de
- * embalagem), ela informa o motivo com `ativa: false` e a colagem segue.
+ * recusado, mesmo com a leitura falhando). Configurada mas parada (falta
+ * variavel, dois grupos de embalagem), ela informa o motivo com
+ * `ativa: false` e a colagem segue.
  */
 export async function programaDaPlanilha({
   empresaId, grupoId = null, agora = Date.now(), buscar,
@@ -268,12 +285,13 @@ export async function programaDaPlanilha({
 }
 
 /**
- * A planilha MANDA no programa deste grupo agora? So' com a ultima leitura
- * boa. Configurada mas falhando (planilha descompartilhada, Google fora),
- * o PCP pode colar a semana que falta — a proxima leitura boa a substitui.
- * Sem isto, a unica saida seria apagar a variavel na Vercel.
+ * A planilha MANDA no programa deste grupo? Sim enquanto estiver configurada
+ * para ele — lendo bem ou falhando (ver o comeco do arquivo: colar com o
+ * codigo do PCP caia por cima de outra semana). Nao vai ao Google: e' so'
+ * a configuracao e o cadastro.
  */
 export async function planilhaMandaNoGrupo(empresaId, grupoId) {
-  const planilha = await programaDaPlanilha({ empresaId, grupoId });
-  return Boolean(planilha?.ativa && planilha.estado === 'ok');
+  const alvo = await grupoDaPlanilha(empresaId);
+  // Minusculo: o Postgres aceita o uuid em maiusculas, e a recusa nao pode.
+  return Boolean(alvo?.grupoId && alvo.grupoId === String(grupoId).toLowerCase());
 }

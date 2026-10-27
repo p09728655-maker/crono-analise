@@ -13,32 +13,41 @@
  *
  * `somenteLeitura`: o programa que vem da planilha do PCP (a embalagem) nao
  * se apaga aqui — a proxima leitura o traria de volta, e o botao mentiria.
+ * So' a semana COLADA (sem `dias`) desse grupo tem Apagar: e' o caminho para
+ * a semana da planilha que ficou de fora por ter o mesmo numero.
  *
  * DIAS: a semana da planilha traz os dias programados, e o exigido e o takt
  * dela usam as horas so' desses dias (fracaoDaSemana) — os mesmos numeros
- * do takt da medicao. A coluna so' aparece quando alguma semana os traz.
+ * do takt da medicao. A coluna so' aparece quando alguma semana os traz. Os
+ * dias da jornada sao os DIGITADOS em Tempo disponivel, como as horas e o
+ * setup: a tabela mostra o efeito do numero antes de salvar.
  */
 import { useMemo, useState } from 'react';
 import {
-  chaveSemana, comoPeriodo, fracaoDaSemana, periodosDoPrograma, resumoDaDemanda, ritmoExigido,
-  rotuloDaSemana,
+  chaveSemana, comoPeriodo, faixaDeSemanas, fracaoDaSemana, nomeDaSemana, periodosDoPrograma,
+  resumoDaDemanda, ritmoExigido, rotuloDaSemana,
 } from '../../../domain/demandaSemanal.js';
 import { est } from './estilos.js';
-
-/** "038-26" na colada; "semana de 26/10" na lida da planilha (ver rotuloDaSemana). */
-const nomeDaSemana = (s) => (s?.dias != null ? `semana ${rotuloDaSemana(s)}` : rotuloDaSemana(s));
-const faixa = ({ primeira, ultima }) => (primeira?.dias != null
-  ? `da ${nomeDaSemana(primeira)} à ${rotuloDaSemana(ultima)}`
-  : `de ${rotuloDaSemana(primeira)} a ${rotuloDaSemana(ultima)}`);
 
 export default function ProgramaGravado({
   semanas, horasNum, maquinasDoGrupo, setupHoras, ocupado, aoApagarSemana, aoApagarTudo,
   somenteLeitura = false, diasDaJornada = null,
 }) {
   const comDias = (semanas || []).some((s) => s.dias != null);
+  const apagavel = (s) => !somenteLeitura || s.dias == null;
+  const comAcoes = (semanas || []).some(apagavel);
   const [confirmarLimpeza, setConfirmarLimpeza] = useState(false);
 
-  const resumo = useMemo(() => resumoDaDemanda(semanas || []), [semanas]);
+  /* A variacao compara semanas INTEIRAS: a de Finados (4 dias) e a que o
+     PCP ainda esta' programando (1 dia) nao sao semanas fracas, sao semanas
+     pela metade — e "da menor para a maior sao 11x" mediria isso. A semana
+     da planilha sem a jornada em dias nao se sabe se e' inteira: fica de fora. */
+  const inteiras = useMemo(
+    () => (semanas || []).filter((s) => fracaoDaSemana(s, diasDaJornada).fator === 1),
+    [semanas, diasDaJornada],
+  );
+  const emParte = (semanas || []).length - inteiras.length;
+  const resumo = useMemo(() => resumoDaDemanda(inteiras), [inteiras]);
   const periodos = useMemo(
     () => new Map(periodosDoPrograma(semanas || []).map((x) => [chaveSemana(x.semana), x])),
     [semanas],
@@ -54,7 +63,8 @@ export default function ProgramaGravado({
       <div style={est.blocoTitulo}>Programa gravado</div>
       {resumo && (
         <p style={est.blocoTexto}>
-          {resumo.n} semanas, {faixa(resumo)}.
+          {resumo.n} {emParte > 0 ? 'semanas inteiras' : 'semanas'}, {faixaDeSemanas(resumo.primeira, resumo.ultima)}
+          {emParte > 0 && ` (fora ${emParte} ${emParte === 1 ? 'programada' : 'programadas'} só em parte)`}.
           Média de <strong>{Math.round(resumo.media).toLocaleString('pt-BR')}</strong> peças,
           variação de <strong>{resumo.cvPct.toFixed(1)}%</strong> —
           da menor ({nomeDaSemana(resumo.menor)}, {resumo.menor.pecas.toLocaleString('pt-BR')})
@@ -81,13 +91,14 @@ export default function ProgramaGravado({
                 Exigido por máquina
               </th>
               <th style={est.thNum} title="Tempo que cada máquina tem para cada peça">Takt</th>
-              {!somenteLeitura && <th style={est.th} aria-label="Ações" />}
+              {comAcoes && <th style={est.th} aria-label="Ações" />}
             </tr>
           </thead>
           <tbody>
             {[...semanas].reverse().map((s) => {
               const fracao = fracaoDaSemana(s, diasDaJornada);
-              const r = ritmoExigido({
+              // Semana da planilha sem a jornada em dias: sem exigido nem takt.
+              const r = fracao.fator != null && ritmoExigido({
                 pecas: s.pecas, horas: horasNum * fracao.fator, maquinas: maquinasDoGrupo,
                 setupHoras: (setupHoras ?? 0) * fracao.fator,
               });
@@ -100,21 +111,25 @@ export default function ProgramaGravado({
                   <td style={est.tdNum}>{s.pecas.toLocaleString('pt-BR')}</td>
                   {comDias && (
                     <td style={est.tdNum}>
-                      {fracao.programados ? `${fracao.programados} de ${fracao.daJornada}` : '—'}
+                      {fracao.programados
+                        ? `${fracao.programados}${fracao.daJornada ? ` de ${fracao.daJornada}` : ''}`
+                        : '—'}
                     </td>
                   )}
                   <td style={est.tdNum}>
                     {r ? `${Math.round(r.pecasPorHoraMaquina).toLocaleString('pt-BR')} pç/h` : '—'}
                   </td>
                   <td style={est.tdNum}>{r ? `${(r.taktMs / 1000).toFixed(1)}s` : '—'}</td>
-                  {!somenteLeitura && (
+                  {comAcoes && (
                     <td style={est.tdAcoes}>
-                      <button
-                        type="button" style={est.botaoTexto} disabled={ocupado}
-                        onClick={() => aoApagarSemana(s)}
-                      >
-                        Apagar
-                      </button>
+                      {apagavel(s) && (
+                        <button
+                          type="button" style={est.botaoTexto} disabled={ocupado}
+                          onClick={() => aoApagarSemana(s)}
+                        >
+                          Apagar
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -127,6 +142,12 @@ export default function ProgramaGravado({
         <p style={est.blocoAviso}>
           O ritmo exigido e o takt aparecem quando o grupo tiver horas por semana e
           pelo menos uma máquina ativa.
+        </p>
+      )}
+      {comDias && !(Number(diasDaJornada) > 0) && (
+        <p style={est.blocoAviso}>
+          Nas semanas lidas da planilha, o takt também precisa dos dias de produção do
+          grupo: é com eles que se sabe que parte da semana são os dias programados.
         </p>
       )}
       {!somenteLeitura && (

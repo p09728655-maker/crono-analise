@@ -123,14 +123,18 @@ export async function demandaSemanal(req, res, auth) {
 
   exigirPapel(auth, ['admin', 'analista'], 'So quem faz analise mantem o programa de producao');
 
-  // O grupo cuja planilha foi LIDA nao recebe colagem nem exclusao: a
-  // proxima leitura sobrescreveria o colado sem aviso, e o apagado antes da
-  // janela a planilha nao regrava. Com a leitura falhando, as duas voltam —
-  // e' a saida do PCP enquanto a planilha nao e' lida.
-  if (req.query?.grupo && await planilhaMandaNoGrupo(empresaId, req.query.grupo)) {
-    throw new ErroHttp(409, 'O programa da embalagem vem da planilha do PCP (abas PROGRAMACAO e '
-      + 'PROGRAMACAO_CONCLUIDA) e é lido sozinho: altere a planilha, não o programa aqui');
-  }
+  /**
+   * O grupo que a planilha alimenta nao recebe colagem — nem com a leitura
+   * falhando: o codigo de semana do PCP nao e' o numero ISO que a planilha
+   * grava, e a colagem caia por cima de outra semana (programaEmbalagem.js).
+   * Apagar, so' a semana COLADA (sem `dias`; de antes da planilha, ou de
+   * quando ela estava parada): a lida, a proxima leitura traria de volta, e
+   * o "tudo" levaria junto a historia que a planilha nao regrava.
+   */
+  const daPlanilha = Boolean(req.query?.grupo) && await planilhaMandaNoGrupo(empresaId, req.query.grupo);
+  const recusa = () => new ErroHttp(409, 'O programa da embalagem vem da planilha do PCP (abas PROGRAMACAO e '
+    + 'PROGRAMACAO_CONCLUIDA) e é lido sozinho: altere a planilha, não o programa aqui');
+  if (daPlanilha && (req.method === 'POST' || req.query?.tudo === '1')) throw recusa();
   return auth.rls(async (db) => {
     const grupoId = await grupoDaEmpresa(db, empresaId, req.query?.grupo);
 
@@ -199,12 +203,26 @@ export async function demandaSemanal(req, res, auth) {
     if (ano === null || numero === null) {
       throw erroValidacao('Informe a semana a apagar (ano e numero) ou tudo=1');
     }
-    const [apagada] = await db`
-      DELETE FROM demanda_semanal
-       WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
-         AND ano = ${ano} AND numero = ${numero}
-       RETURNING id`;
-    if (!apagada) throw naoEncontrado('Semana nao encontrada neste grupo');
+    const [apagada] = daPlanilha
+      ? await db`
+        DELETE FROM demanda_semanal
+         WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
+           AND ano = ${ano} AND numero = ${numero} AND dias IS NULL
+         RETURNING id`
+      : await db`
+        DELETE FROM demanda_semanal
+         WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
+           AND ano = ${ano} AND numero = ${numero}
+         RETURNING id`;
+    if (!apagada) {
+      if (daPlanilha) {
+        const [lida] = await db`
+          SELECT 1 FROM demanda_semanal
+           WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId} AND ano = ${ano} AND numero = ${numero}`;
+        if (lida) throw recusa();
+      }
+      throw naoEncontrado('Semana nao encontrada neste grupo');
+    }
     return json(res, 200, { demandas: await listar(db, empresaId, grupoId) });
   });
 }

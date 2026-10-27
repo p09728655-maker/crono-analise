@@ -6,7 +6,7 @@ import {
   conferenciaRapida, faixaHoraria, formatarDuracao, formatarSegundos, nomeChave, somarParadas,
   unidadeDoPosto,
 } from '../../domain/cronoanalise.js';
-import { taktDaMedicao } from '../../domain/demandaSemanal.js';
+import { diasProgramados, taktDaMedicao } from '../../domain/demandaSemanal.js';
 import { filtrarPorPeriodo, formatarDataHora } from '../../domain/relatorioConferencias.js';
 import { lerDemanda, listarCadastroMaquinas, listarConferenciasServidor } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
@@ -362,8 +362,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                       {t.taktMs > 0 ? `por volume · semana ${t.semana}` : semTaktCurto(t.estado)}
                       {/* Semana com feriado ou ainda sendo programada: o takt usa
                           as horas so' dos dias com lote, e diz quantos. */}
-                      {t.taktMs > 0 && t.dias && t.dias.programados < t.dias.daJornada
-                        && ` · ${t.dias.programados} de ${t.dias.daJornada} dias programados`}
+                      {t.taktMs > 0 && diasProgramados(t.dias) && ` · ${diasProgramados(t.dias)}`}
                       {/* De quando e' o programa: takt sem idade e' o risco. */}
                       {t.planilha?.estado === 'ok' && ` · da planilha do PCP, lida ${quandoLida(t.planilha.lidaEm)}`}
                     </div>
@@ -436,6 +435,7 @@ function semTaktCurto(estado) {
     case 'sem-demanda': return 'sem programa da embalagem cadastrado';
     case 'sem-semana': return 'o programa não cobre esta semana';
     case 'sem-horas': return 'faltam as horas da semana do grupo';
+    case 'sem-dias': return 'faltam os dias de produção da semana do grupo';
     case 'setup-excede': return 'setup cadastrado passa da jornada';
     case 'erro-programa': return 'não deu para carregar o programa';
     default: return 'sem takt para esta semana';

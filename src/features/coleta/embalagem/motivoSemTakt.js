@@ -17,6 +17,7 @@ export function motivoSemTakt(estado, { semRede = false } = {}) {
     case 'sem-demanda': return null;
     case 'sem-semana': return 'O programa da embalagem não cobre esta semana.';
     case 'sem-horas': return 'Faltam as horas da semana do grupo EMBALAGEM no cadastro.';
+    case 'sem-dias': return 'Faltam os dias de produção da semana do grupo EMBALAGEM no cadastro.';
     case 'setup-excede': return 'O setup cadastrado da embalagem passa da jornada.';
     default: return 'Sem takt para esta semana.';
   }

@@ -189,7 +189,7 @@ rodar('Programa da embalagem lido da planilha — integracao', () => {
     expect(semanaDe(r, segunda(0))?.pecas).toBe(500);
   });
 
-  it('planilha falhando: a idade do programa vem do banco, e colar/apagar voltam como saida', async () => {
+  it("planilha falhando: a idade vem do banco; colar segue recusado, e so' a semana colada se apaga", async () => {
     const boa = await programa(grupoEmb);
     esquecer(); // outra instancia: sem memoria da leitura boa
     esquecerToken();
@@ -198,23 +198,49 @@ rodar('Programa da embalagem lido da planilha — integracao', () => {
     expect(r.corpo.planilha).toMatchObject({ estado: 'erro', ativa: true });
     expect(new Date(r.corpo.planilha.lidaEm).getTime())
       .toBeGreaterThanOrEqual(new Date(boa.corpo.planilha.lidaEm).getTime() - 5000);
+    const chamadas = chamadasGoogle.length;
 
-    // Colar a semana que falta: aceito, e o colado e' a semana inteira (dias nulo).
-    const { ano, numero } = semanaIso(new Date(`${iso(segunda(0))}T12:00:00Z`));
+    // A colagem traz o codigo do PCP ("043-26" e' a semana de 26/10, que no
+    // ISO e' a 44): gravada, ela cairia por cima da semana ISO 43. Recusada,
+    // com a leitura falhando tambem — e a recusa nao vai ao Google.
+    const { ano, numero } = semanaIso(new Date(`${iso(segunda(-1))}T12:00:00Z`));
     const colar = res();
     await maquinasApi(req({
       metodo: 'POST', query: { demanda: '1', grupo: grupoEmb },
-      corpo: { semanas: [{ ano, numero, pecas: 640, inicio: iso(segunda(0)) }] },
+      corpo: { semanas: [{ ano, numero, pecas: 9999, inicio: iso(segunda(0)) }] },
     }), colar);
-    expect(colar.statusCode).toBe(201);
-    const colada = colar.corpo.demandas.find((d) => d.inicio === iso(segunda(0)));
-    expect(colada).toMatchObject({ pecas: 640, dias: null });
+    expect(colar.statusCode).toBe(409);
+    expect(semanaDe(await programa(grupoEmb), segunda(-1))?.pecas, 'a semana ISO de mesmo numero intacta').toBe(1000);
+    expect(chamadasGoogle).toHaveLength(chamadas);
 
-    const apagar = res();
+    // Apagar: a semana lida da planilha, nao (409); a colada (sem dias), sim.
+    const apagarLida = res();
     await maquinasApi(req({
       metodo: 'DELETE', query: { demanda: '1', grupo: grupoEmb, ano: String(ano), numero: String(numero) },
-    }), apagar);
-    expect(apagar.statusCode).toBe(200);
+    }), apagarLida);
+    expect(apagarLida.statusCode).toBe(409);
+    await sql`
+      INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas, inicio)
+      VALUES (${EMPRESA}, ${grupoEmb}, 2000, 5, 4242, ${iso(segunda(-10))})`;
+    const apagarColada = res();
+    await maquinasApi(req({
+      metodo: 'DELETE', query: { demanda: '1', grupo: grupoEmb, ano: '2000', numero: '5' },
+    }), apagarColada);
+    expect(apagarColada.statusCode).toBe(200);
+    expect(semanaDe(apagarColada, segunda(-10))).toBeUndefined();
+  });
+
+  it("semana colada SEM data no grupo da planilha: a de mesmo numero recebe a da planilha; a outra sai", async () => {
+    const { ano, numero } = semanaIso(new Date(`${iso(segunda(0))}T12:00:00Z`));
+    await sql`
+      INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas) VALUES
+        (${EMPRESA}, ${grupoEmb}, ${ano}, ${numero}, 4242),
+        (${EMPRESA}, ${grupoEmb}, 2000, 9, 31)`;
+    const r = await programa(grupoEmb);
+    expect(semanaDe(r, segunda(0)), 'mesmo numero: vira a semana da planilha, com data e dias')
+      .toMatchObject({ pecas: 500, dias: 1 });
+    expect(r.corpo.demandas.filter((d) => !d.inicio), 'sem data nao fica no grupo da planilha').toHaveLength(0);
+    expect(r.corpo.planilha).toMatchObject({ estado: 'ok', conflitos: [] });
   });
 
   it("com a planilha lida, apagar o programa do grupo tambem e' recusado", async () => {

@@ -33,10 +33,10 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
   const {
     cadastro, grupo, grupoId, escolherGrupo, maquinasDoGrupo, semanas, planilha, erro, ocupado,
   } = demanda;
-  // A planilha do PCP foi LIDA e manda no programa deste grupo: colar,
-  // digitar e apagar saem (o servidor recusaria, e a proxima leitura
-  // desfaria). Com a leitura falhando, eles voltam: e' a saida do PCP.
-  const daPlanilha = Boolean(planilha?.ativa && planilha.estado === 'ok');
+  // A planilha do PCP manda no programa deste grupo — lendo bem ou falhando:
+  // colar e digitar saem (o servidor recusa; o codigo de semana do PCP nao e'
+  // o numero que a planilha grava), e apagar fica so' na semana colada.
+  const daPlanilha = Boolean(planilha?.ativa);
   // O tempo disponivel e' de dois quadros: onde se digita e a tabela, que
   // calcula o exigido de cada semana com ele.
   const tempo = useTempoDisponivel(grupo, maquinasDoGrupo);
@@ -120,7 +120,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                 semanas={semanas} horasNum={tempo.horasNum} maquinasDoGrupo={maquinasDoGrupo}
                 setupHoras={tempo.setupHoras} ocupado={ocupado}
                 aoApagarSemana={demanda.apagarSemana} aoApagarTudo={demanda.apagarTudo}
-                somenteLeitura={daPlanilha} diasDaJornada={grupo?.dias_semana}
+                somenteLeitura={daPlanilha} diasDaJornada={tempo.valores.diasSemana}
               />
             )}
           </>
@@ -165,8 +165,9 @@ function OrigemPlanilha({ planilha }) {
           {planilha.conflitos.length === 1 ? 'A semana' : 'As semanas'} de{' '}
           {planilha.conflitos.map((d) => d.split('-').reverse().slice(0, 2).join('/')).join(', ')} da planilha
           não {planilha.conflitos.length === 1 ? 'entrou' : 'entraram'}: o mesmo número de semana já existe no
-          programa, de antes da janela de leitura (colado com outra numeração). A semana antiga foi
-          mantida; para a da planilha entrar, ela precisa ser apagada do programa.
+          programa, numa semana antiga colada com outra numeração. A semana antiga foi mantida; para a
+          da planilha entrar, apague a colada no programa gravado, abaixo (só a colada tem Apagar), e
+          ela entra na próxima leitura.
         </div>
       )}
       {falha && <div style={est.erro} role="alert">{falha}</div>}

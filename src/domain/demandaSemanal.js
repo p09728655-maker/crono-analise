@@ -37,6 +37,6 @@ export {
   fracaoDaSemana, horasDeSetup, maquinasNecessarias, ritmoExigido, vereditoDaSemana,
 } from './demanda/capacidade.js';
 export {
-  comoDia, comoHoras, comoPeriodo, contaDasHoras, rotuloDaSemana,
+  comoDia, comoHoras, comoPeriodo, contaDasHoras, diasProgramados, faixaDeSemanas, nomeDaSemana, rotuloDaSemana,
 } from './demanda/formato.js';
 export { leituraDaDemanda, resumoDaDemanda, taktDaMedicao } from './demanda/programa.js';

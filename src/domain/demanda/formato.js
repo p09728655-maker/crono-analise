@@ -91,3 +91,31 @@ export function rotuloDaSemana(semana) {
   }
   return semana ? chaveSemana(semana) : '';
 }
+
+/** "semana de 26/10" na lida da planilha; "038-26" na colada. */
+export const nomeDaSemana = (semana) => (semana?.dias != null
+  ? `semana ${rotuloDaSemana(semana)}`
+  : rotuloDaSemana(semana));
+
+/**
+ * "da semana de 26/10 à semana de 02/11", "de 038-26 a 040-26" — cada ponta
+ * pelo proprio tipo, porque um programa pode ter as duas (semana colada
+ * antes de a planilha ser ligada). `rotular` troca o rotulo da colada (o
+ * relatorio escreve "S38").
+ */
+export function faixaDeSemanas(primeira, ultima, rotular = rotuloDaSemana) {
+  const ponta = (s, solta, contraida) => (s?.dias != null
+    ? `${contraida} ${nomeDaSemana(s)}`
+    : `${solta} ${rotular(s)}`);
+  return `${ponta(primeira, 'de', 'da')} ${ponta(ultima, 'a', 'à')}`;
+}
+
+/**
+ * "4 de 5 dias programados" — so' na semana da planilha programada em
+ * parte (feriado, programa ainda sendo montado), onde o takt usa as horas
+ * so' desses dias. Null na semana inteira e na colada. `dias` e' o
+ * { programados, daJornada } da leitura do programa.
+ */
+export const diasProgramados = (dias) => (dias?.programados && dias.daJornada && dias.programados < dias.daJornada
+  ? `${dias.programados} de ${dias.daJornada} dias programados`
+  : null);

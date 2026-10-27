@@ -173,8 +173,10 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   - com os **dias programados** de cada semana (datas com lote). O takt usa as
     horas só desses dias (`fracaoDaSemana`): na semana de Finados, 4 de 5 dias,
     44 h × 4/5 = 35,2 h. Com a jornada inteira ele saía 25% frouxo. A jornada
-    em dias vem do grupo (`dias_semana`; sem ela, 5, e a tela diz). Programa
-    colado não tem dias e vale a semana inteira, como sempre;
+    em dias vem do grupo (`dias_semana`, "Dias de produção"). Sem ela a semana
+    da planilha fica **sem takt** (estado `sem-dias`, e a tela diz o que falta):
+    não se presumem 5 dias, como não se presumem 44 h. Programa colado não tem
+    dias e vale a semana inteira, como sempre;
   - a semana aparece **pela data** ("semana de 26/10"): o número ISO não é o
     código do PCP para os mesmos dias.
 
@@ -187,12 +189,17 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   congelada com o mesmo número não é sobrescrita (a da planilha fica de fora,
   e a tela diz). Dentro da janela a planilha manda: semana que não veio dela
   sai. Aba `PROGRAMACAO` vazia (lida no meio de uma edição) não é gravada.
-  Com a última leitura boa, colar ou apagar programa no grupo da embalagem é
-  recusado (409); com a leitura falhando, os dois voltam — é a saída do PCP, e
-  a próxima leitura boa substitui o colado. Falha de leitura não derruba nada:
-  vale o programa guardado, a hora da última leitura boa fica no banco
-  (`configuracoes`), e a tela diz o motivo e a saída. Sem as variáveis, nada
-  muda: cola-se o programa como em qualquer grupo.
+  Colar no grupo da embalagem é recusado (409), **com a leitura boa ou
+  falhando**: a colagem traz o código de semana do PCP ("043-26" = 26/10), e a
+  planilha grava pelo número ISO (26/10 é a 44); a colagem cairia por cima de
+  outra semana. Apagar só alcança semana colada (sem `dias`), que é a saída
+  para a semana da planilha que ficou de fora por número repetido; o
+  programa inteiro não se apaga. Semana sem data no grupo sai na leitura (ou
+  recebe a da planilha, se tiver o mesmo número). Falha de leitura não
+  derruba nada: vale o programa guardado, a hora da última leitura boa fica
+  no banco (`configuracoes`), a tela diz o motivo, e semana ainda não lida
+  fica sem takt até a leitura voltar. Sem as variáveis, nada muda: cola-se o
+  programa como em qualquer grupo.
 - **O que se compara com o takt é o tempo por volume no relógio, com as
   paradas dentro**: o relógio entre o primeiro e o último toque ÷ (volumes − 1).
   - É a mesma régua do veredito do programa da semana: o volume que não saiu
@@ -1189,8 +1196,8 @@ de produção num endereço público.
    novo (variável nova só vale depois dele). `/api/status` mostra se as duas
    chegaram.
 6. Confira o grupo **EMBALAGEM** em Ferramentas → Máquinas / Demanda semanal:
-   sem **horas por semana** (e dias da semana) o takt não sai, com ou sem
-   planilha.
+   sem **horas por semana** e **dias de produção** o takt da semana da
+   planilha não sai.
 7. Abra *Embalagem Takt Time* no PC: o takt diz "da planilha do PCP, lida hoje
    às…", ou o motivo da falha.
 

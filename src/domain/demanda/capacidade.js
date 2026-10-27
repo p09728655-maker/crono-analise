@@ -97,21 +97,21 @@ export function horasDeSetup({ setupsDia, dias, minutos } = {}) {
  * programados: 44 h x 4/5 = 35,2 h. O mesmo vale para a semana que o PCP
  * ainda esta' programando.
  *
- * A jornada em DIAS vem do cadastro do grupo (dias_semana); sem ela, 5 — a
- * semana da fabrica, segunda a sexta — e `jornadaInformada` avisa a tela,
- * que escreve "4 de 5 dias" com a premissa a vista. Dia programado alem da
- * jornada (sabado de hora extra) nao aumenta as horas: hora extra nao esta'
- * na jornada. Linha sem `dias` (programa colado) vale a semana inteira.
+ * A jornada em DIAS vem do cadastro do grupo (dias_semana, "Dias de
+ * producao"). Sem ela, `fator` e' null: nao se sabe que parte da semana os
+ * dias programados sao, e a leitura diz que falta (estado 'sem-dias') —
+ * a mesma regra das horas, que tambem nao se presumem. Dia programado alem
+ * da jornada (sabado de hora extra) nao aumenta as horas: hora extra nao
+ * esta' na jornada. Linha sem `dias` (programa colado) vale a semana
+ * inteira, com ou sem a jornada em dias.
  */
 export function fracaoDaSemana(semana, diasDaJornada) {
-  const jornadaInformada = Number(diasDaJornada) > 0;
-  const daJornada = jornadaInformada ? Math.floor(Number(diasDaJornada)) : 5;
+  const daJornada = Number(diasDaJornada) > 0 ? Math.floor(Number(diasDaJornada)) : null;
   const dias = Number(semana?.dias);
-  if (!(dias > 0)) return { fator: 1, programados: null, daJornada, jornadaInformada };
+  if (!(dias > 0)) return { fator: 1, programados: null, daJornada };
+  if (!daJornada) return { fator: null, programados: Math.floor(dias), daJornada: null };
   const programados = Math.min(Math.floor(dias), daJornada);
-  return {
-    fator: programados / daJornada, programados, daJornada, jornadaInformada,
-  };
+  return { fator: programados / daJornada, programados, daJornada };
 }
 
 /**

@@ -39,8 +39,10 @@ export function linhasDeFora(ignoradas) {
 
 /**
  * A frase da falha. Planilha que MANDA no programa e nao foi lida: vale o
- * guardado. Planilha configurada mas PARADA (falta variavel, dois grupos):
- * vale o colado — e a colagem segue aberta.
+ * guardado, e a semana ainda nao lida fica sem takt — colar nao e' saida (o
+ * codigo de semana do PCP cairia por cima de outra semana; ver
+ * api/_lib/programaEmbalagem.js). Planilha configurada mas PARADA (falta
+ * variavel, dois grupos): vale o colado — e a colagem segue aberta.
  */
 export function textoDaFalha(planilha, agora = new Date()) {
   if (planilha?.estado !== 'erro') return null;
@@ -51,6 +53,6 @@ export function textoDaFalha(planilha, agora = new Date()) {
   const quando = quandoLida(planilha.lidaEm, agora);
   return `Não deu para ler a planilha do PCP: ${planilha.mensagem}. `
     + `Continua valendo o programa guardado${quando ? ` (lido ${quando})` : ''}, e a leitura tenta de novo `
-    + 'em 1 minuto. Enquanto não for lida, dá para colar a semana que falta em Demanda semanal; '
-    + 'a próxima leitura boa a substitui.';
+    + 'em 1 minuto. Semana que ainda não foi lida fica sem takt até a leitura voltar: corrija o que '
+    + 'o motivo aponta.';
 }

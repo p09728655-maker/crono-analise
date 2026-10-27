@@ -45,13 +45,13 @@ let atrasoLista = 0;
 
 async function simularServidor(pagina, {
   conferencias = [], marcas = null, relogio = null, aoSincronizar, demandas = DEMANDAS, aoAlterar,
-  planilha = null,
+  planilha = null, cadastro = CADASTRO,
 } = {}) {
   // `planilha`: o estado da leitura da planilha do PCP que o servidor manda
   // junto do programa da embalagem (ver api/_lib/programaEmbalagem.js).
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas, ...(planilha ? { planilha } : {}) } })
-    : rota.fulfill({ json: CADASTRO })));
+    : rota.fulfill({ json: cadastro })));
   await pagina.route('**/api/conferencias**', async (rota) => {
     const url = new URL(rota.request().url());
     // PATCH de UMA medicao (a analise do PCP): quem testa decide a resposta
@@ -730,17 +730,55 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
   const alerta = s.getByRole('alert');
   await alerta.waitFor({ timeout: 8000 });
   const kpi = s.getByText('Takt desta semana · EMBALAGEM').locator('..');
-  checar(/Não deu para ler a planilha do PCP: A planilha não está compartilhada .*\(leitor\)\. Continua valendo o programa guardado, e a leitura tenta de novo em 1 minuto\. Enquanto não for lida, dá para colar a semana que falta em Demanda semanal/
+  checar(/Não deu para ler a planilha do PCP: A planilha não está compartilhada .*\(leitor\)\. Continua valendo o programa guardado, e a leitura tenta de novo em 1 minuto\. Semana que ainda não foi lida fica sem takt até a leitura voltar/
     .test(await alerta.innerText()) && /72\.0 s/.test(await kpi.innerText()) && !/da planilha do PCP, lida/.test(await kpi.innerText()),
-  'planilha nao lida: o aviso diz o motivo e a saida, e o takt e\' o do programa guardado');
-  // A saida existe de verdade: com a leitura falhando, a colagem volta.
+  'planilha nao lida: o aviso diz o motivo e o que acontece, e o takt e\' o do programa guardado');
+  // Colar NAO volta com a leitura falhando: o codigo de semana do PCP cairia
+  // por cima de outra semana. Apagar fica so' na semana colada (sem dias).
   await s.goto(`${BASE}/analise/conferencias`);
   await s.getByRole('button', { name: 'Demanda semanal' }).click();
   const demanda = s.locator('[aria-label="Demanda semanal"]');
   await demanda.locator('[aria-label="Origem do programa"]').getByRole('alert').waitFor({ timeout: 8000 });
-  checar(await demanda.locator('textarea').count() === 1,
-    'planilha nao lida: a colagem volta em Demanda semanal, com o motivo da falha a vista');
+  await demanda.locator('table').waitFor({ timeout: 8000 });
+  checar(await demanda.locator('textarea').count() === 0
+    && await demanda.getByRole('button', { name: 'Apagar', exact: true }).count() === 1
+    && await demanda.getByRole('button', { name: 'Apagar o programa deste grupo' }).count() === 0,
+  'planilha nao lida: sem colagem; so\' a semana colada tem Apagar, e o programa inteiro nao se apaga');
   await ctx.close();
+}
+
+/* ------- tablet com a semana da planilha: diz os dias, ou o que falta */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  const erros = [];
+  s.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(s, { demandas: [{ ...DEMANDAS[0], dias: 4 }] });
+  await s.goto(`${BASE}/coleta/embalagem`);
+  const cartao = s.locator('[aria-label="Takt da semana"]');
+  await cartao.getByText(/57\.6/).waitFor({ timeout: 8000 });
+  const texto = (await cartao.innerText()).replace(/\s+/g, ' ');
+  checar(/57\.6 s por volume — takt da semana de \d{2}\/\d{2} · 4 de 5 dias programados/.test(texto),
+    `tablet: o takt da semana da planilha diz de quantos dias ele e' (${texto})`);
+  await ctx.close();
+
+  // Sem os dias de producao no cadastro, a semana da planilha nao tem takt:
+  // nao se presume 5 dias, como nao se presumem 44 h.
+  const ctx2 = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const s2 = await ctx2.newPage();
+  await semearSessao(s2);
+  await simularServidor(s2, {
+    demandas: [{ ...DEMANDAS[0], dias: 4 }],
+    cadastro: { ...CADASTRO, grupos: [{ ...GRUPO, dias_semana: null }] },
+  });
+  await s2.goto(`${BASE}/coleta/embalagem`);
+  const cartao2 = s2.locator('[aria-label="Takt da semana"]');
+  await cartao2.getByText(/Faltam/).waitFor({ timeout: 8000 });
+  checar(/Takt: Faltam os dias de produção da semana do grupo EMBALAGEM no cadastro\./.test(await cartao2.innerText()),
+    'tablet: sem os dias de producao no cadastro, diz o que falta em vez de presumir 5');
+  checar(erros.length === 0, `tablet com planilha: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx2.close();
 }
 
 /* ---------------- sem programa colado: o tablet so' nao mostra o takt */

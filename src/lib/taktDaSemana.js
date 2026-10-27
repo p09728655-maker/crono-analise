@@ -172,6 +172,9 @@ export function programaDoTakt({ grupo, maquinasDoGrupo, takt } = {}) {
     horasPorMaquina: takt.horasPorMaquina ?? null,
     jornadaPorMaquina: takt.jornadaPorMaquina ?? null,
     setupPorMaquina: takt.setupPorMaquina ?? null,
+    // Semana da planilha programada so' em parte: a jornada acima ja' e' so'
+    // a desses dias, e o painel diz quantos (senao 35h12min parece erro).
+    dias: takt.dias ?? null,
     // Semana casada pelo NUMERO (programa sem data de inicio): o quadro do
     // programa faz a ressalva, e o painel do estudo faz a mesma.
     casadoPorData: takt.casadoPorData ?? true,

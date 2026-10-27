@@ -1,6 +1,7 @@
 import { espaco, numeros, raio, rotulo, tipo } from '../theme/escala.js';
 import { ALVO_MINIMO } from '../theme/tokens.js';
 import { formatarSegundos, taktTime } from '../domain/cronoanalise.js';
+import { diasProgramados } from '../domain/demandaSemanal.js';
 
 /**
  * Painel Ritmo / Demanda — o MESMO no cadastro manual e na importacao.
@@ -217,20 +218,24 @@ export function demandaPorMaquina({ demanda, maquinas } = {}) {
  * contaDasHoras): arredondar os tres a partir do exato faria "44h00min −
  * 8h20min = 35h41min" — e ninguem confere de cabeca uma subtracao que nao
  * bate. Sem setup cadastrado, diz que falta, como o quadro do programa.
+ * Na semana da planilha programada so' em parte, a jornada ja' e' so' a dos
+ * dias com lote — e o texto diz quantos (`dias`, da leitura do programa).
  */
-export function contaDaMaquina({ jornadaPorMaquina, setupPorMaquina } = {}) {
+export function contaDaMaquina({ jornadaPorMaquina, setupPorMaquina, dias = null } = {}) {
   if (!(Number(jornadaPorMaquina) > 0)) return null;
   const jornadaMin = Math.round(Number(jornadaPorMaquina) * 60);
   const setupMin = setupPorMaquina == null ? 0 : Math.round(Math.max(0, Number(setupPorMaquina) || 0) * 60);
   const produtivoMin = jornadaMin - setupMin;
   const hm = (min) => formatarHorasMin(min / 60);
+  const parte = diasProgramados(dias);
+  const jornada = `${hm(jornadaMin)} de jornada${parte ? ` (${parte})` : ''}`;
   let texto;
   if (setupPorMaquina == null) {
-    texto = `Por máquina: ${hm(jornadaMin)} de jornada. O setup planejado do grupo não está cadastrado.`;
+    texto = `Por máquina: ${jornada}. O setup planejado do grupo não está cadastrado.`;
   } else if (setupMin === 0) {
-    texto = `Por máquina: ${hm(jornadaMin)} de jornada, sem setup planejado.`;
+    texto = `Por máquina: ${jornada}, sem setup planejado.`;
   } else {
-    texto = `Por máquina: ${hm(jornadaMin)} de jornada − ${hm(setupMin)} de setup planejado = ${hm(produtivoMin)}.`;
+    texto = `Por máquina: ${jornada} − ${hm(setupMin)} de setup planejado = ${hm(produtivoMin)}.`;
   }
   return { jornadaMin, setupMin, produtivoMin, texto };
 }
@@ -296,6 +301,7 @@ export function avisoSemPrograma({
       return maquinasDoGrupo === 0 && Number(grupo.horas_semana) > 0
         ? `${nome} não tem máquina ativa no cadastro: digite a demanda.`
         : `Faltam as horas da semana de ${nome} no cadastro: digite a demanda.`;
+    case 'sem-dias': return `Faltam os dias de produção da semana de ${nome} no cadastro: digite a demanda.`;
     case 'setup-excede': return `O setup cadastrado de ${nome} passa da jornada: digite a demanda.`;
     default: return null;
   }

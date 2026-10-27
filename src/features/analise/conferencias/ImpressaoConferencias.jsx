@@ -3,7 +3,7 @@ import {
   comparativoDeParadas, conferenciaRapida, faixaHoraria, formatarDuracao, ritmoPorHoraDoDia,
   somarParadas,
 } from '../../../domain/cronoanalise.js';
-import { comoPeriodo } from '../../../domain/demandaSemanal.js';
+import { comoPeriodo, diasProgramados } from '../../../domain/demandaSemanal.js';
 import { constanciaTexto, lerGrupo } from '../../../domain/comparativoMaquinas.js';
 import { lerClasse } from '../../../domain/ritmoPorCiclo.js';
 import { aproveitamentoDoNominal, formatarDataHora, formatarNominal } from '../../../domain/relatorioConferencias.js';
@@ -172,9 +172,7 @@ export default function ImpressaoConferencias({
             {' '}na semana
             {/* Semana programada so' em parte: as horas ja' sao so' as dos
                 dias com lote, e o papel diz quantos — como a tela. */}
-            {demanda.dias && demanda.dias.programados < demanda.dias.daJornada
-              ? ` (${demanda.dias.programados} de ${demanda.dias.daJornada} dias programados: as horas são só as desses dias)`
-              : ''}. O veredito usa o ritmo de RELÓGIO (paradas dentro
+            {diasProgramados(demanda.dias) ? ` (${diasProgramados(demanda.dias)}: as horas são só as desses dias)` : ''}. O veredito usa o ritmo de RELÓGIO (paradas dentro
             {demanda.setup?.medidoMs > 0
               ? `, exceto ${demanda.setup.medidoMs >= 60000 ? `${Math.round(demanda.setup.medidoMs / 60000)} min` : 'menos de 1 min'} de troca/setup marcados nas medições — já contados no setup planejado, saíram do relógio para não contar duas vezes`
               : ''}
