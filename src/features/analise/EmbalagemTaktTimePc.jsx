@@ -61,6 +61,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   // voltou foi a propria tela (Voltar à lista, Salvar), que nunca e' barrada.
   const atual = useRef({ aberta: null, medicoes: [], ocupado: false });
   const voltandoPelaTela = useRef(false);
+  const abrirAoCarregar = useRef(null);
   // Os dois cadastros que a embalagem pede no tablet: o que se embala e por
   // que a linha para. Aqui a um clique, sem caçar no menu de outra tela.
   const [cadastroAberto, setCadastroAberto] = useState(null); // 'produtos' | 'motivos' | null
@@ -155,8 +156,11 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   };
   // Desfaz a entrada que abrir criou: depois de voltar, o historico fica
   // como se a medicao nao tivesse sido aberta. Quem fecha e' o popstate.
+  // So' se a entrada for DESTA medicao: um salvamento que responde depois
+  // de a tela ter sido deixada nao pode fechar a medicao aberta agora.
   const voltarALista = () => {
-    if (window.history.state?.[CHAVE_HISTORICO]) {
+    const id = window.history.state?.[CHAVE_HISTORICO];
+    if (id && id === atual.current.aberta?.id) {
       voltandoPelaTela.current = true;
       window.history.back();
     } else {
@@ -169,10 +173,17 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
      medicao volta ao historico, porque a recusa precisa de onde aparecer
      (o botao Voltar à lista fica travado pelo mesmo motivo). */
   useEffect(() => {
-    // Recarregada com uma medicao aberta, a tela volta na lista: a entrada
-    // que dizia "aberta" vira entrada da lista, senao o Voltar a reabriria.
-    if (window.history.state?.[CHAVE_HISTORICO]) window.history.replaceState({}, '');
+    const caminho = window.location.pathname;
+    // Recarregada (F5) ou de volta de outra tela com a medicao aberta, ela
+    // reabre quando a lista chegar — a entrada do historico e' dela.
+    abrirAoCarregar.current = window.history.state?.[CHAVE_HISTORICO] ?? null;
+    // A tela cuida da propria rolagem (lista no mesmo ponto, medicao no
+    // topo). A do navegador pulava a pagina no Voltar barrado ao salvar.
+    const restauracao = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
     const aoNavegar = () => {
+      // O Voltar que ja' saiu da tela e' do App, nao daqui.
+      if (window.location.pathname !== caminho) return;
       const id = window.history.state?.[CHAVE_HISTORICO] ?? null;
       const { aberta: daTela, medicoes, ocupado } = atual.current;
       const pelaTela = voltandoPelaTela.current;
@@ -190,8 +201,21 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
       if (c) mostrar(c);
     };
     window.addEventListener('popstate', aoNavegar);
-    return () => window.removeEventListener('popstate', aoNavegar);
+    return () => {
+      window.removeEventListener('popstate', aoNavegar);
+      window.history.scrollRestoration = restauracao;
+    };
   }, []);
+
+  useEffect(() => {
+    const id = abrirAoCarregar.current;
+    if (!leitura || !id) return;
+    abrirAoCarregar.current = null;
+    const c = leitura.medicoes.find((m) => m.id === id && m.com_marcas);
+    // Sumiu da lista (arquivada, fora dos 30 dias): a entrada vira da lista.
+    if (c) mostrar(c);
+    else window.history.replaceState({}, '');
+  }, [leitura]);
 
   /* A analise salva no painel muda a linha e o cartao na hora, sem buscar
      a lista de novo. Salvar volta para a lista (so' se a aberta ainda for
@@ -209,17 +233,29 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   });
 
   /* Sair da tela descarta a nota digitada e nao salva, e uma analise ainda
-     salvando perde onde mostrar a recusa: a lateral pergunta antes. */
+     indo para o servidor perde onde mostrar a recusa: a lateral pergunta
+     antes, e recarregar ou fechar a aba tambem (beforeunload, como a
+     coleta no App). O Voltar do navegador a partir da lista, nao. */
+  const naoSalvas = leitura ? leitura.medicoes.filter(analises.notaNaoSalva).length : 0;
+  const pendente = analises.ocupado || naoSalvas > 0;
+  useEffect(() => {
+    if (!pendente) return undefined;
+    const aoSair = (ev) => { ev.preventDefault(); ev.returnValue = ''; };
+    window.addEventListener('beforeunload', aoSair);
+    return () => window.removeEventListener('beforeunload', aoSair);
+  }, [pendente]);
   const sairDaTela = (ir) => {
-    const naoSalvas = leitura ? leitura.medicoes.filter(analises.notaNaoSalva).length : 0;
-    if (!analises.ocupado && naoSalvas === 0) {
+    if (!pendente) {
       ir();
       return;
     }
-    const motivo = analises.ocupado
-      ? 'A análise ainda está sendo salva. Saindo agora, você não fica sabendo se o servidor recusar.'
-      : `${naoSalvas === 1 ? 'Há 1 comentário digitado e não salvo' : `Há ${naoSalvas} comentários digitados e não salvos`}. Sair da tela ${naoSalvas === 1 ? 'descarta esse comentário' : 'descarta esses comentários'}.`;
-    if (window.confirm(`${motivo}\n\nSair mesmo assim?`)) ir();
+    const motivos = [
+      analises.ocupado && 'Uma análise ainda está indo para o servidor: saindo agora, você não fica sabendo se ele recusar.',
+      naoSalvas > 0 && (naoSalvas === 1
+        ? 'Há 1 nota digitada e não salva (Análise do PCP). Sair da tela descarta essa nota.'
+        : `Há ${naoSalvas} notas digitadas e não salvas (Análise do PCP). Sair da tela descarta essas notas.`),
+    ].filter(Boolean);
+    if (window.confirm(`${motivos.join('\n')}\n\nSair mesmo assim?`)) ir();
   };
 
   const grupoAberto = aberta && leitura ? leitura.grupoDe(aberta.maquina) : null;

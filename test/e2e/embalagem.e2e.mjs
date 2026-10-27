@@ -424,7 +424,21 @@ await voltarALista();
   await p.goForward();
   await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
   checar(await lista.count() === 0, 'Avancar do navegador reabre a medicao');
-  await voltarALista();
+  // Recarregada (F5) com a medicao aberta, ela reabre — a entrada do
+  // historico e' dela, e o Voltar seguinte fecha, sem entrada morta.
+  await p.reload();
+  await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 8000 });
+  checar(await lista.count() === 0, 'F5 com a medicao aberta: ela reabre');
+  await p.goBack();
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+  checar(new URL(p.url()).pathname === '/analise/embalagem' && await lista.isVisible(),
+    'depois do F5, o Voltar do navegador fecha a medicao e fica na lista');
+  // Sem nota digitada nem analise salvando, recarregar nao pergunta nada.
+  checar(!(await p.evaluate(() => {
+    const ev = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  })), 'sem nada pendente, recarregar ou fechar a aba nao pergunta');
 }
 
 /* DUPLO CLIQUE: o detalhe nasce no lugar da lista, debaixo do cursor. O
@@ -452,6 +466,11 @@ await voltarALista();
     .dispatchEvent('click', { detail: 2 });
   await p.waitForTimeout(300);
   checar(await janela.count() === 0, 'na lista, o 2o clique de um duplo clique nao abre a linha');
+  // Os cadastros ficam no canto do Voltar à lista: o 2o clique nao os abre.
+  await p.getByRole('button', { name: 'Motivos de parada' }).dispatchEvent('click', { detail: 2 });
+  await p.getByRole('button', { name: 'Produtos da embalagem' }).dispatchEvent('click', { detail: 2 });
+  await p.waitForTimeout(300);
+  checar(await p.getByRole('dialog').count() === 0, 'o 2o clique de um duplo clique nao abre os cadastros');
 }
 
 /* ANALISE DO PCP: lida a medicao, salvar grava e volta para a lista; a
@@ -602,10 +621,15 @@ await voltarALista();
   p.once('dialog', (d) => { pergunta = d.message(); d.dismiss(); });
   await p.getByRole('button', { name: 'Início' }).click();
   await p.waitForTimeout(200);
-  checar(/Há 1 comentário digitado e não salvo/.test(pergunta || '')
+  checar(/Há 1 nota digitada e não salva/.test(pergunta || '')
     && new URL(p.url()).pathname === '/analise/embalagem'
     && /Nota digitada, ainda não salva/.test(await linhaDe('Toucador Magic New').innerText()),
   `sair com nota nao salva pergunta antes; cancelar fica na tela com a nota (${(pergunta || '').split('\n')[0]})`);
+  checar(await p.evaluate(() => {
+    const ev = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  }), 'com nota nao salva, recarregar ou fechar a aba tambem pergunta');
   p.once('dialog', (d) => d.accept());
   await p.getByRole('button', { name: 'Início' }).click();
   await p.waitForFunction(() => location.pathname === '/analise', { timeout: 4000 });
