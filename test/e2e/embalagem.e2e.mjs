@@ -722,7 +722,7 @@ checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detal
   {
     const foco = await p.evaluate(() => document.activeElement?.textContent);
     checar(foco === 'Analisadas (2)'
-      && /Nada para analisar nos últimos 30 dias\. As lidas estão em Analisadas\. As medidas por horários ou com um toque só estão em Sem intervalos\./
+      && /Nada para analisar nos últimos 30 dias\. As lidas estão em Analisadas\. As medidas por horários, com a contagem corrigida à mão ou com um toque só estão em Sem intervalos\./
         .test(await lista.innerText()),
     `salva a ultima da fila: o foco vai a "Analisadas" e a fila vazia diz onde estao as outras (${foco})`);
   }
@@ -734,7 +734,8 @@ checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detal
     'em "Sem intervalos", a dica diz que elas nao tem analise do PCP');
   await lista.getByRole('button', { name: 'Painel Sirius 1.4' }).click();
   await janela.getByRole('heading', { name: 'Painel Sirius 1.4' }).waitFor({ timeout: 4000 });
-  await p.waitForTimeout(400);
+  // A carga terminou (com "Carregando" tambem nao ha' botao: nao provaria nada).
+  await janela.getByText(/não tem toques suficientes/).waitFor({ timeout: 4000 });
   checar(await janela.getByRole('button', { name: /Salvar análise|Reabrir análise/ }).count() === 0
     && await botaoFechar.count() === 1,
   'a de um toque abre sem botao de analise, so\' com Fechar');
@@ -815,6 +816,32 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
   });
   checar(linha?.texto === 'Produto 01' && linha.top >= 0 && linha.bottom <= 800,
     `estreita, lista longa: fechar traz a' vista a linha que recebe o foco (${JSON.stringify(linha)})`);
+
+  // TROCA com o painel aberto e meio a' vista (topo a ~620 px): no primeiro
+  // quadro a carga ainda era a da anterior, a pagina era medida alta, e o
+  // painel parava no meio com "Carregando". Tem de chegar ao alto tambem.
+  await listaE.getByRole('button', { name: 'Produto 01' }).click();
+  await janelaE.getByText(/No período, saiu um volume/).waitFor({ timeout: 8000 });
+  await s.waitForTimeout(1200);
+  await s.evaluate(() => {
+    const painel = document.querySelector('[aria-label$="da medição"]');
+    window.scrollBy(0, painel.getBoundingClientRect().top - 620);
+  });
+  await s.waitForTimeout(200);
+  const outra = await s.evaluate(() => [...document.querySelectorAll('[data-medicao]')]
+    .filter((b) => b.textContent !== 'Produto 01')
+    .filter((b) => { const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight; })
+    .map((b) => b.textContent)
+    .at(-1));
+  await listaE.getByRole('button', { name: outra }).click();
+  await janelaE.getByRole('heading', { name: outra }).waitFor({ timeout: 4000 });
+  await janelaE.getByText(/No período, saiu um volume/).waitFor({ timeout: 8000 });
+  await s.waitForTimeout(1200);
+  {
+    const bj = await janelaE.boundingBox();
+    checar(Boolean(outra) && bj.y >= -1 && bj.y < 80,
+      `estreita, trocando de medicao com o painel meio a' vista: o painel novo chega ao alto (${outra}, topo em ${Math.round(bj.y)} px)`);
+  }
   atrasoMarcas = 0;
   checar(erros.length === 0, `tela estreita sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
   await ctx.close();

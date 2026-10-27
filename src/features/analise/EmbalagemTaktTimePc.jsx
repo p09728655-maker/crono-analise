@@ -525,6 +525,28 @@ function semTaktCurto(estado) {
 }
 
 /**
+ * O que a lista diz no alto, por vista. Volumes/hora valem nas tres: e' o
+ * que de fato saiu, com as paradas dentro.
+ */
+const DICA_DA_VISTA = {
+  fila: 'Clique numa medição para abrir o volume a volume (ao lado da lista; abaixo dela, em tela '
+    + 'estreita). Lida, salve a análise no alto dela: a medição sai desta lista e vai para Analisadas. '
+    + 'Volumes/hora do período inteiro, com as paradas dentro — o que de fato saiu.',
+  analisadas: 'As medições com a análise do PCP salva. Clique numa para ver, imprimir ou reabrir a '
+    + 'análise — reaberta, ela volta para Não analisadas. Volumes/hora do período inteiro, com as '
+    + 'paradas dentro.',
+  outras: 'Medidas por horários, com a contagem corrigida à mão ou com um toque só: não há intervalo '
+    + 'entre volumes para ler, e elas não têm análise do PCP. Os volumes/hora valem, com as paradas dentro.',
+};
+
+/** O aviso da linha para cada pendencia de analise (ver useAnalisesDoPcp). */
+const AVISO_PENDENCIA = {
+  'salvar-recusado': { texto: 'Análise não salva — abra para ver o motivo', estilo: est.embPendenciaCritica },
+  'reabrir-recusado': { texto: 'Não reabriu — abra para ver o motivo', estilo: est.embPendenciaCritica },
+  'nota-nao-salva': { texto: 'Nota digitada, ainda não salva', estilo: est.embPendenciaAtencao },
+};
+
+/**
  * As medicoes da embalagem, uma por linha — COMPACTA: cada celula tem o
  * principal em cima e o complemento embaixo (data e horarios; periodo e
  * parado; volumes/hora e volumes). A maquina so' aparece quando ha' mais
@@ -542,27 +564,6 @@ function semTaktCurto(estado) {
  * enquanto uma analise salva: a recusa avisa na linha, e a linha tem de
  * estar a' vista.
  */
-/**
- * O que a lista diz no alto, por vista. Volumes/hora valem nas tres: e' o
- * que de fato saiu, com as paradas dentro.
- */
-const DICA_DA_VISTA = {
-  fila: 'Clique numa medição para abrir o volume a volume (ao lado da lista; abaixo dela, em tela '
-    + 'estreita). Lida, salve a análise no alto dela: a medição sai desta lista e vai para Analisadas. '
-    + 'Volumes/hora do período inteiro, com as paradas dentro — o que de fato saiu.',
-  analisadas: 'As medições com a análise do PCP salva. Clique numa para ver, imprimir ou reabrir a '
-    + 'análise — reaberta, ela volta para Não analisadas.',
-  outras: 'Medidas por horários, com a contagem corrigida à mão ou com um toque só: não há intervalo '
-    + 'entre volumes para ler, e elas não têm análise do PCP. Os volumes/hora valem, com as paradas dentro.',
-};
-
-/** O aviso da linha para cada pendencia de analise (ver useAnalisesDoPcp). */
-const AVISO_PENDENCIA = {
-  'salvar-recusado': { texto: 'Análise não salva — abra para ver o motivo', estilo: est.embPendenciaCritica },
-  'reabrir-recusado': { texto: 'Não reabriu — abra para ver o motivo', estilo: est.embPendenciaCritica },
-  'nota-nao-salva': { texto: 'Nota digitada, ainda não salva', estilo: est.embPendenciaAtencao },
-};
-
 function TabelaEmbalagem({
   medicoes: todas, vista, aoTrocarVista, abertaId, aoAbrir, pendenciaDe, ocupado = false,
 }) {
@@ -606,7 +607,7 @@ function TabelaEmbalagem({
           {vista === 'fila' && `Nada para analisar nos últimos ${DIAS} dias.${porVista.analisadas.length
             ? ' As lidas estão em Analisadas.'
             : ''}${porVista.outras.length
-            ? ' As medidas por horários ou com um toque só estão em Sem intervalos.'
+            ? ' As medidas por horários, com a contagem corrigida à mão ou com um toque só estão em Sem intervalos.'
             : ''}`}
         </p>
       )}

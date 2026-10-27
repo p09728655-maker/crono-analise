@@ -68,6 +68,10 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
   }, [conferencia.id, grupo?.id]);
 
   return useMemo(() => {
+    // A carga ainda e' da medicao anterior (o primeiro quadro depois da
+    // troca): ela nao se mostra sob o titulo da nova, nem se mede para
+    // rolar a pagina — para quem olha, a nova esta' carregando.
+    if (carga.de !== undefined && carga.de !== conferencia.id) return { estado: 'carregando' };
     if (carga.estado !== 'pronto') return carga;
     const takt = !grupo
       ? { taktMs: null, estado: 'sem-grupo', semana: null }
