@@ -60,12 +60,18 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
       // grafico: os intervalos continuam valendo sem a linha do takt.
       grupo ? listarDemanda(grupo.id).catch(() => null) : Promise.resolve([]),
     ])
-      .then(([toques, demandas]) => { if (vivo) setCarga({ estado: 'pronto', ...toques, demandas }); })
-      .catch((e) => { if (vivo) setCarga({ estado: 'erro', erro: e.message }); });
+      // `de`: de qual medicao e' a leitura — no primeiro quadro depois da
+      // troca, a carga ainda e' a da anterior.
+      .then(([toques, demandas]) => { if (vivo) setCarga({ estado: 'pronto', ...toques, demandas, de: conferencia.id }); })
+      .catch((e) => { if (vivo) setCarga({ estado: 'erro', erro: e.message, de: conferencia.id }); });
     return () => { vivo = false; };
   }, [conferencia.id, grupo?.id]);
 
   return useMemo(() => {
+    // A carga ainda e' da medicao anterior (o primeiro quadro depois da
+    // troca): ela nao se mostra sob o titulo da nova, nem se mede para
+    // rolar a pagina — para quem olha, a nova esta' carregando.
+    if (carga.de !== undefined && carga.de !== conferencia.id) return { estado: 'carregando' };
     if (carga.estado !== 'pronto') return carga;
     const takt = !grupo
       ? { taktMs: null, estado: 'sem-grupo', semana: null }
@@ -89,7 +95,9 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
       setupPlanejado: Boolean(takt.setupPlanejado),
     });
     const leitura = leituraPecaAPeca({ marcasMs: carga.marcas, taktMs: takt.taktMs, periodoPorPecaMs });
-    return { estado: leitura ? 'pronto' : 'sem-marcas', leitura, takt };
+    return {
+      estado: leitura ? 'pronto' : 'sem-marcas', leitura, takt, de: carga.de,
+    };
   }, [carga, grupo, maquinasDoGrupo, conferencia]);
 }
 
@@ -149,6 +157,8 @@ export function useAnalisesDoPcp(aplicar) {
   return {
     /** Ha' alguma analise indo para o servidor (a tela nao deve sair). */
     ocupado: Object.keys(salvando).length > 0,
+    /** A analise DESTA medicao esta' indo para o servidor (o painel dela nao fecha). */
+    salvandoA: (id) => Boolean(salvando[id]),
     notaNaoSalva,
     /**
      * O que a LINHA precisa avisar de uma medicao fechada: a recusa (de
@@ -217,14 +227,34 @@ export default function VolumeAVolume({
   /* Selecionou outra medicao: a pagina rola ate' ela SO' se ela nasceu fora
      da vista — empilhada abaixo da lista, em tela estreita. Ao lado da
      lista o painel ja' esta' a vista, e rolar tiraria a lista de vista.
-     `rolar` falso (a medicao que a tela reabre sozinha, no F5) nunca rola. */
+     `rolar` falso (a medicao que a tela reabre sozinha, no F5) nunca rola.
+
+     A medicao que pediu rolagem rola de novo quando a leitura chega:
+     com "Carregando os toques…" o painel e' baixo, a pagina nao tem altura
+     para traze-lo ao alto, e ele parava no meio da tela, so' com o
+     cabecalho a' vista. A segunda vez nao usa o limite de 60% (o painel ja'
+     parou acima dele): o painel tem de chegar ao alto. */
   const refPainel = useRef(null);
+  const pediuRolagem = useRef(null);
   useEffect(() => {
     const el = refPainel.current;
+    pediuRolagem.current = null;
     if (!rolar || !el?.scrollIntoView) return;
     const { top } = el.getBoundingClientRect();
-    if (top < 0 || top > window.innerHeight * 0.6) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (top < 0 || top > window.innerHeight * 0.6) {
+      pediuRolagem.current = conferencia.id;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }, [conferencia.id]);
+  // A leitura carregada (ou sem marcas) e' DESTA medicao, nao da anterior.
+  const carregouEsta = r.estado !== 'carregando' && r.de === conferencia.id;
+  useEffect(() => {
+    const el = refPainel.current;
+    if (!carregouEsta || pediuRolagem.current !== conferencia.id || !el?.scrollIntoView) return;
+    pediuRolagem.current = null;
+    const { top } = el.getBoundingClientRect();
+    if (top < 0 || top > 64) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [carregouEsta, conferencia.id]);
 
   return (
     <>

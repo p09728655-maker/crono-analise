@@ -563,7 +563,8 @@ export const est = {
   },
   // A medicao aberta no painel, na lista: fundo azul-claro e o botao
   // marcado — da' para ver qual linha esta' sendo lida no detalhe.
-  linhaSelecionada: { background: '#EEF4FC' },
+  // Clicar nela fecha o painel: o ponteiro diz que ela e' clicavel.
+  linhaSelecionada: { background: '#EEF4FC', cursor: 'pointer' },
   // "Nao analisadas / Analisadas": a analisada sai da fila e fica a um
   // clique, para reabrir ou imprimir.
   embVistas: { display: 'flex', gap: espaco.xs, flexWrap: 'wrap', marginTop: espaco.sm },
