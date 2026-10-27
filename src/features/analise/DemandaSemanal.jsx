@@ -4,6 +4,7 @@ import SemanaManual from './demanda/SemanaManual.jsx';
 import TempoDisponivel from './demanda/TempoDisponivel.jsx';
 import { est } from './demanda/estilos.js';
 import { useDemanda } from './demanda/useDemanda.js';
+import { linhasDeFora, quandoLida, textoDaFalha } from './demanda/planilha.js';
 import { useTempoDisponivel } from './demanda/useTempoDisponivel.js';
 
 /**
@@ -30,8 +31,11 @@ import { useTempoDisponivel } from './demanda/useTempoDisponivel.js';
 export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
   const demanda = useDemanda(grupoInicial);
   const {
-    cadastro, grupo, grupoId, escolherGrupo, maquinasDoGrupo, semanas, erro, ocupado,
+    cadastro, grupo, grupoId, escolherGrupo, maquinasDoGrupo, semanas, planilha, erro, ocupado,
   } = demanda;
+  // A planilha do PCP manda no programa deste grupo: colar e digitar saem
+  // (o servidor recusaria, e a proxima leitura apagaria).
+  const daPlanilha = Boolean(planilha?.ativa);
   // O tempo disponivel e' de dois quadros: onde se digita e a tabela, que
   // calcula o exigido de cada semana com ele.
   const tempo = useTempoDisponivel(grupo, maquinasDoGrupo);
@@ -86,11 +90,16 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
               aoSalvar={() => demanda.salvarTempo(tempo.valores)}
             />
 
-            <SemanaManual
-              semanas={semanas} ocupado={ocupado} aoIncluir={demanda.gravarSemanas}
-            />
+            {planilha && <OrigemPlanilha planilha={planilha} />}
 
-            <ColarPlanilha ocupado={ocupado} aoGravar={demanda.gravarSemanas} />
+            {!daPlanilha && (
+              <>
+                <SemanaManual
+                  semanas={semanas} ocupado={ocupado} aoIncluir={demanda.gravarSemanas}
+                />
+                <ColarPlanilha ocupado={ocupado} aoGravar={demanda.gravarSemanas} />
+              </>
+            )}
 
             {semanas == null && !erro && <p style={est.texto}>Carregando programa...</p>}
 
@@ -110,6 +119,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                 semanas={semanas} horasNum={tempo.horasNum} maquinasDoGrupo={maquinasDoGrupo}
                 setupHoras={tempo.setupHoras} ocupado={ocupado}
                 aoApagarSemana={demanda.apagarSemana} aoApagarTudo={demanda.apagarTudo}
+                somenteLeitura={daPlanilha}
               />
             )}
           </>
@@ -119,6 +129,36 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
           <button type="button" style={est.botaoSecundario} onClick={aoFechar}>Fechar</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * DE ONDE VEM o programa da embalagem: a planilha do PCP, lida sozinha. O
+ * quadro diz quando foi a ultima leitura, o que ficou de fora e, na falha,
+ * o motivo com o que fazer — a tela nao mostra programa sem idade.
+ */
+function OrigemPlanilha({ planilha }) {
+  const falha = textoDaFalha(planilha);
+  const deFora = linhasDeFora(planilha.ignoradas);
+  return (
+    <div style={est.bloco} aria-label="Origem do programa">
+      <div style={est.blocoTitulo}>Programa lido da planilha do PCP</div>
+      <p style={est.blocoTexto}>
+        Este grupo não recebe colagem: o programa vem sozinho das abas PROGRAMACAO e
+        PROGRAMACAO_CONCLUIDA da planilha da embalagem, somando os volumes de cada semana
+        pela data programada. A leitura se repete a cada 10 minutos; para mudar o programa,
+        altere a planilha.
+      </p>
+      {planilha.estado === 'ok' && (
+        <p style={est.blocoResumo}>
+          Última leitura {quandoLida(planilha.lidaEm)}: {planilha.linhas.toLocaleString('pt-BR')} linhas
+          lidas, {planilha.semanas} {planilha.semanas === 1 ? 'semana gravada' : 'semanas gravadas'} (da
+          4ª semana passada em diante).
+        </p>
+      )}
+      {deFora && <div style={est.aviso}>{deFora}</div>}
+      {falha && <div style={est.erro} role="alert">{falha}</div>}
     </div>
   );
 }

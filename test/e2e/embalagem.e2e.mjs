@@ -45,9 +45,12 @@ let atrasoLista = 0;
 
 async function simularServidor(pagina, {
   conferencias = [], marcas = null, relogio = null, aoSincronizar, demandas = DEMANDAS, aoAlterar,
+  planilha = null,
 } = {}) {
+  // `planilha`: o estado da leitura da planilha do PCP que o servidor manda
+  // junto do programa da embalagem (ver api/_lib/programaEmbalagem.js).
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
-    ? rota.fulfill({ json: { demandas } })
+    ? rota.fulfill({ json: { demandas, ...(planilha ? { planilha } : {}) } })
     : rota.fulfill({ json: CADASTRO })));
   await pagina.route('**/api/conferencias**', async (rota) => {
     const url = new URL(rota.request().url());
@@ -663,6 +666,67 @@ await voltarALista();
 }
 
 checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${errosPc[0]}` : ''}`);
+
+/* ------- programa lido da planilha do PCP: a tela diz de onde e de quando */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  const erros = [];
+  s.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(s, {
+    conferencias: [medicao], marcas, relogio: marcas.at(-1) - marcas[0],
+    planilha: {
+      estado: 'ok', ativa: true, grupoId: GRUPO.id, lidaEm: new Date(Date.now() - 300000).toISOString(),
+      semanas: 5, linhas: 312, ignoradas: { semData: 0, semQuantidade: 2, duplicadas: 0 }, mudaram: 0,
+    },
+  });
+  await s.goto(`${BASE}/analise/embalagem`);
+  const kpi = s.getByText('Takt desta semana · EMBALAGEM').locator('..');
+  await kpi.waitFor({ timeout: 8000 });
+  checar(/72\.0 s[\s\S]*por volume · semana .+ · da planilha do PCP, lida hoje às \d{2}:\d{2}/.test(await kpi.innerText()),
+    `planilha lida: o takt diz que veio da planilha do PCP e quando (${(await kpi.innerText()).replace(/\n/g, ' | ')})`);
+  checar(await s.getByRole('alert').count() === 0, 'planilha lida: nenhum aviso de falha');
+
+  // O programa da semana do grupo: sem colar, sem digitar, sem apagar — e
+  // com a origem, a idade e o que ficou de fora.
+  await s.goto(`${BASE}/analise/conferencias`);
+  await s.getByRole('button', { name: 'Demanda semanal' }).click();
+  const demanda = s.locator('[aria-label="Demanda semanal"]');
+  const origem = demanda.locator('[aria-label="Origem do programa"]');
+  await origem.waitFor({ timeout: 8000 });
+  const textoOrigem = await origem.innerText();
+  checar(/Última leitura hoje às \d{2}:\d{2}: 312 linhas lidas, 5 semanas gravadas/.test(textoOrigem)
+    && /2 linhas ficaram de fora: 2 sem quantidade/.test(textoOrigem),
+  `Programa da semana: diz que vem da planilha, quando foi lida e o que ficou de fora (${textoOrigem.replace(/\n/g, ' | ')})`);
+  await demanda.locator('table').waitFor({ timeout: 8000 });
+  checar(await demanda.locator('textarea').count() === 0
+    && await demanda.getByRole('button', { name: 'Apagar' }).count() === 0
+    && await demanda.getByRole('button', { name: 'Apagar o programa deste grupo' }).count() === 0,
+  'grupo da planilha: sem colagem, sem semana digitada, sem apagar');
+  checar(erros.length === 0, `planilha lida: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+{
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  await simularServidor(s, {
+    conferencias: [medicao], marcas, relogio: marcas.at(-1) - marcas[0],
+    planilha: {
+      estado: 'erro', ativa: true, grupoId: GRUPO.id, lidaEm: null, tentadaEm: new Date().toISOString(),
+      mensagem: 'A planilha não está compartilhada com a conta de serviço: compartilhe com ritmo@x.iam.gserviceaccount.com (leitor)',
+    },
+  });
+  await s.goto(`${BASE}/analise/embalagem`);
+  const alerta = s.getByRole('alert');
+  await alerta.waitFor({ timeout: 8000 });
+  const kpi = s.getByText('Takt desta semana · EMBALAGEM').locator('..');
+  checar(/Não deu para ler a planilha do PCP: A planilha não está compartilhada .*\(leitor\)\. Continua valendo o programa guardado; a leitura tenta de novo em 1 minuto/
+    .test(await alerta.innerText()) && /72\.0 s/.test(await kpi.innerText()) && !/da planilha do PCP, lida/.test(await kpi.innerText()),
+  'planilha nao lida: o aviso diz o motivo e o que fazer, e o takt e\' o do programa guardado');
+  await ctx.close();
+}
 
 /* ---------------- sem programa colado: o tablet so' nao mostra o takt */
 {

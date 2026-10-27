@@ -158,7 +158,7 @@ rodar('Programa da embalagem lido da planilha — integracao', () => {
     expect(semanaDe(r, segunda(0))?.pecas).toBe(500);
     expect(semanaDe(r, segunda(-1))?.pecas).toBe(1000);
     expect(r.corpo.planilha).toMatchObject({
-      estado: 'ok', grupoId: grupoEmb, semanas: 2, linhas: 3, mudaram: 2,
+      estado: 'ok', ativa: true, grupoId: grupoEmb, semanas: 2, linhas: 3, mudaram: 2,
       ignoradas: { semData: 0, semQuantidade: 0, duplicadas: 0 },
     });
     expect(chamadasGoogle).toHaveLength(2); // token + planilha
@@ -210,6 +210,27 @@ rodar('Programa da embalagem lido da planilha — integracao', () => {
     expect(r.corpo.planilha.estado).toBe('erro');
     expect(r.corpo.planilha.mensagem).toMatch(/não tem lote programado desde/);
     expect(semanaDe(r, segunda(0))?.pecas).toBe(500);
+  });
+
+  it('configuracao quebrada: a embalagem ouve o motivo (sem travar a colagem); a furadeira, nada', async () => {
+    const guardada = process.env.GOOGLE_CONTA_SERVICO;
+    process.env.GOOGLE_CONTA_SERVICO = '{nao e json';
+    try {
+      const emb = await programa(grupoEmb);
+      expect(emb.corpo.planilha).toMatchObject({ estado: 'erro', ativa: false, grupoId: grupoEmb });
+      expect(emb.corpo.planilha.mensagem).toMatch(/não é um JSON válido/);
+      const fur = await programa(grupoFur);
+      expect(fur.corpo.planilha).toBeUndefined();
+      const colar = res();
+      await maquinasApi(req({
+        metodo: 'POST', query: { demanda: '1', grupo: grupoEmb },
+        corpo: { semanas: [{ ano: 2026, numero: 40, pecas: 100 }] },
+      }), colar);
+      expect(colar.statusCode, 'parada, a planilha nao manda: a colagem segue aberta').toBe(201);
+      expect(chamadasGoogle).toHaveLength(0);
+    } finally {
+      process.env.GOOGLE_CONTA_SERVICO = guardada;
+    }
   });
 
   it('o programa de outro grupo nao le a planilha nem fala dela', async () => {

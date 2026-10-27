@@ -8,7 +8,7 @@ import {
 } from '../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../domain/demandaSemanal.js';
 import { filtrarPorPeriodo, formatarDataHora } from '../../domain/relatorioConferencias.js';
-import { listarCadastroMaquinas, listarConferenciasServidor, listarDemanda } from '../../lib/api.js';
+import { lerDemanda, listarCadastroMaquinas, listarConferenciasServidor } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
@@ -16,6 +16,7 @@ import VolumeAVolume, { cliqueSimples, useAnalisesDoPcp } from './conferencias/V
 import Produtos from './Produtos.jsx';
 import MotivosParada from './MotivosParada.jsx';
 import { est } from './conferencias/estilos.js';
+import { quandoLida, textoDaFalha } from './demanda/planilha.js';
 
 /** Janela padrao, a mesma do relatorio de ritmo: o que esta' acontecendo agora. */
 const DIAS = 30;
@@ -82,14 +83,16 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     ])
       .then(async ([cadastro, lista, arquivadas]) => {
         const grupos = (cadastro.grupos || []).filter(ehEmbalagem);
-        // O programa de cada grupo da embalagem (hoje, um so'). Falha do
-        // programa nao derruba a tela: o takt aparece como indisponivel.
-        const programas = await Promise.all(grupos.map((g) => listarDemanda(g.id).catch(() => null)));
+        // O programa de cada grupo da embalagem (hoje, um so'), com o estado
+        // da leitura da planilha do PCP. Falha do programa nao derruba a
+        // tela: o takt aparece como indisponivel.
+        const programas = await Promise.all(grupos.map((g) => lerDemanda(g.id).catch(() => null)));
         if (vivo) {
           setCarga({
             estado: 'pronto', cadastro, grupos, conferencias: lista.conferencias || [],
             arquivadas: arquivadas.conferencias || [],
-            demandas: new Map(grupos.map((g, i) => [g.id, programas[i]])),
+            demandas: new Map(grupos.map((g, i) => [g.id, programas[i]?.demandas ?? null])),
+            planilhas: new Map(grupos.map((g, i) => [g.id, programas[i]?.planilha ?? null])),
           });
         }
       })
@@ -109,6 +112,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     );
     const taktHoje = carga.grupos.map((g) => ({
       grupo: g,
+      planilha: carga.planilhas.get(g.id),
       ...(carga.demandas.get(g.id) === null
         ? { taktMs: null, estado: 'erro-programa', semana: null }
         : taktDaMedicao({
@@ -331,6 +335,13 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                   Motivos de parada
                 </button>
               </div>
+              {/* A planilha do PCP que nao foi lida: o takt abaixo e' do
+                  programa guardado, e a tela diz isso antes do numero. */}
+              {leitura.taktHoje.filter((t) => t.planilha?.estado === 'erro').map((t) => (
+                <div key={`planilha-${t.grupo.id}`} style={est.faixaErro} role="alert">
+                  {textoDaFalha(t.planilha)}
+                </div>
+              ))}
               <div style={est.kpis}>
                 {leitura.taktHoje.length === 0 && (
                   <div style={est.kpi}>
@@ -349,6 +360,8 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     </div>
                     <div style={est.kpiSub}>
                       {t.taktMs > 0 ? `por volume · semana ${t.semana}` : semTaktCurto(t.estado)}
+                      {/* De quando e' o programa: takt sem idade e' o risco. */}
+                      {t.planilha?.estado === 'ok' && ` · da planilha do PCP, lida ${quandoLida(t.planilha.lidaEm)}`}
                     </div>
                   </div>
                 ))}

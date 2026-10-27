@@ -67,27 +67,38 @@ function configuracao() {
 }
 
 /**
- * O grupo que a planilha alimenta, nesta empresa — ou { erro } — ou null,
- * quando a planilha nao se aplica (desligada, ou empresa de outra fabrica).
+ * O grupo que a planilha alimenta nesta empresa, ou null quando a planilha
+ * nao se aplica (desligada, ou empresa de outra fabrica).
+ *
+ * `grupos` sao os grupos de embalagem da empresa (pelo nome, a mesma regra
+ * que poe "volume" na tela): so' o programa DELES fala da planilha. O
+ * programa da furadeira nao recebe o erro de configuracao da embalagem.
+ * `grupoId` so' existe quando a planilha esta' de fato mandando; com
+ * `erro`, ela esta' configurada mas parada, e a colagem continua aberta.
  */
 export async function grupoDaPlanilha(empresaId) {
   const config = configuracao();
   if (!config) return null;
+  const grupos = (await sql`SELECT id, nome FROM grupos_maquina WHERE empresa_id = ${empresaId}`)
+    .filter((g) => unidadeDoPosto(g.nome).singular === 'volume');
+  const ids = grupos.map((g) => g.id);
   let daInstalacao;
   try {
     daInstalacao = await empresaDaInstalacao();
   } catch (e) {
-    return { config, erro: e.message };
+    return { config, grupos: ids, erro: e.message };
   }
   if (daInstalacao !== empresaId) return null;
-  if (config.erro) return { config, erro: config.erro };
-  const grupos = (await sql`SELECT id, nome FROM grupos_maquina WHERE empresa_id = ${empresaId}`)
-    .filter((g) => unidadeDoPosto(g.nome).singular === 'volume');
-  if (grupos.length === 0) return { config, erro: 'Nenhum grupo EMBALAGEM no cadastro (Ferramentas → Máquinas)' };
-  if (grupos.length > 1) {
-    return { config, erro: `Mais de um grupo de embalagem no cadastro (${grupos.map((g) => g.nome).join(', ')}): a planilha alimenta um só` };
+  if (config.erro) return { config, grupos: ids, erro: config.erro };
+  if (ids.length === 0) return { config, grupos: ids, erro: 'Nenhum grupo EMBALAGEM no cadastro (Ferramentas → Máquinas)' };
+  if (ids.length > 1) {
+    return {
+      config,
+      grupos: ids,
+      erro: `Mais de um grupo de embalagem no cadastro (${grupos.map((g) => g.nome).join(', ')}): a planilha alimenta um só`,
+    };
   }
-  return { config, grupoId: grupos[0].id };
+  return { config, grupos: ids, grupoId: ids[0] };
 }
 
 /**
@@ -153,6 +164,7 @@ async function sincronizar({
     const mudaram = await gravar(empresaId, grupoId, semanas, desde);
     resultado = {
       estado: 'ok',
+      ativa: true,
       grupoId,
       lidaEm: new Date(agora).toISOString(),
       semanas: semanas.length,
@@ -164,6 +176,7 @@ async function sincronizar({
     console.error('[ritmopatrimar] programa da embalagem — planilha nao lida:', e.message);
     resultado = {
       estado: 'erro',
+      ativa: true,
       grupoId,
       mensagem: e.message,
       tentadaEm: new Date(agora).toISOString(),
@@ -180,14 +193,22 @@ async function sincronizar({
  * Chamada no GET do programa. Le a planilha se esta' na hora, grava, e
  * devolve o estado para a tela — ou null quando a planilha nao se aplica a
  * este pedido (desligada, outra empresa, ou o programa de outro grupo).
+ *
+ * `ativa` diz se a planilha MANDA no programa (le e grava; colar e'
+ * recusado). Configurada mas parada (falta variavel, dois grupos de
+ * embalagem), ela informa o motivo com `ativa: false` e a colagem segue.
  */
 export async function programaDaPlanilha({
   empresaId, grupoId = null, agora = Date.now(), buscar,
 } = {}) {
   const alvo = await grupoDaPlanilha(empresaId);
   if (!alvo) return null;
-  if (alvo.erro) return { estado: 'erro', grupoId: null, mensagem: alvo.erro, lidaEm: null };
-  if (grupoId && grupoId !== alvo.grupoId) return null;
+  if (grupoId && !alvo.grupos.includes(grupoId)) return null;
+  if (alvo.erro) {
+    return {
+      estado: 'erro', ativa: false, grupoId, mensagem: alvo.erro, lidaEm: null,
+    };
+  }
 
   const espera = ultima?.resultado?.estado === 'ok' ? INTERVALO_MS : INTERVALO_DEPOIS_DE_FALHA_MS;
   if (ultima && ultima.grupoId === alvo.grupoId && agora - ultima.quando < espera) return ultima.resultado;

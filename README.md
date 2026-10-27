@@ -153,9 +153,34 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   Salvar é de analista ou administrador (o tablet, coletor, recebe 403).
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
-  **O PCP cola o programa da embalagem em VOLUMES**: um rack que sai em dois
-  volumes conta dois. Colado em produtos, o takt sai multiplicado pelo número
-  de volumes e a linha parece folgada sem estar.
+  **O programa da embalagem é em VOLUMES**: um rack que sai em dois volumes
+  conta dois. Em produtos, o takt sai multiplicado pelo número de volumes e a
+  linha parece folgada sem estar.
+- **O programa vem sozinho da planilha do PCP** (v2.95), quando a leitura está
+  configurada (ver [Deploy](#planilha-do-programa-da-embalagem)). A planilha
+  `MODELO_HORA_A_HORA` é a fonte oficial: lote a lote, dia a dia, em caixas
+  (`VOL 1/3 HOME RIPADO…`). O servidor soma por semana:
+  - **as duas abas**, `PROGRAMACAO` (em aberto) e `PROGRAMACAO_CONCLUIDA`. A
+    linha muda de aba quando termina; lendo só a primeira, a semana encolheria
+    a cada lote pronto e o takt ficaria mais folgado dia após dia;
+  - **pela data programada**: o lote de 23/10 ainda em aberto é da semana de
+    23/10, não da de hoje;
+  - **por semana ISO** (segunda a domingo; o casamento com a medição é pela
+    data, o número só rotula);
+  - linha nas duas abas (mesmo lote e código, no instante da mudança) conta uma
+    vez; linha sem data ou sem quantidade fica de fora **contada**, e a tela diz
+    quantas.
+
+  A leitura acontece no GET do programa, no máximo a cada 10 minutos (1 minuto
+  depois de uma falha). O tablet já busca o programa a cada meia hora, então a
+  semana nova chega sem ninguém abrir o PC. O servidor grava **da 4ª semana
+  passada em diante** (os 30 dias da tela); semana mais antiga fica congelada,
+  para uma limpeza de linhas velhas na planilha não reescrever a história.
+  Dentro dessa janela a planilha manda: semana que não veio dela sai, e colar
+  programa no grupo da embalagem é recusado (409). Falha de leitura não derruba
+  nada: vale o programa guardado, e a tela da embalagem e o "Programa da
+  semana" dizem o motivo e o que fazer. Sem as variáveis, nada muda: cola-se o
+  programa como em qualquer grupo.
 - **O que se compara com o takt é o tempo por volume no relógio, com as
   paradas dentro**: o relógio entre o primeiro e o último toque ÷ (volumes − 1).
   - É a mesma régua do veredito do programa da semana: o volume que não saiu
@@ -1121,12 +1146,49 @@ Em **Settings → Environment Variables**:
 | `ANTHROPIC_API_KEY` | servidor | **Nunca** prefixar com `VITE_`. Tem precedência sobre a chave salva pelo app — e só se remove aqui, não pela tela |
 | `API_TOKEN` | servidor | **Transição** — apagar depois que a v2.34 estiver no ar e os tablets recarregarem |
 | `VITE_API_TOKEN` | navegador | **Transição** — apagar junto com `API_TOKEN`; bundle novo não o lê |
+| `GOOGLE_CONTA_SERVICO` | servidor | O arquivo `.json` da chave da conta de serviço do Google, **inteiro**. Ver abaixo |
+| `PROGRAMA_EMBALAGEM_PLANILHA` | servidor | O endereço (ou só o ID) da planilha do programa da embalagem |
 
 > A URL do projeto Supabase e a chave publicável ficam no código
 > (`src/lib/supabase.js`, `api/_lib/supabase.js`): são identificadores
 > públicos por desenho. O que protege os dados é a senha de cada usuário e
 > a RLS — `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` no ambiente só são
 > necessárias para apontar outro projeto (teste).
+
+### Planilha do programa da embalagem
+
+O servidor lê a planilha com uma **conta de serviço** do Google: um
+usuário-robô com quem a planilha é compartilhada como **leitor**. O escopo
+pedido é só leitura. "Publicar na web" não serve, porque deixaria o programa
+de produção num endereço público.
+
+1. No [Google Cloud Console](https://console.cloud.google.com/), crie (ou
+   escolha) um projeto e ative a **Google Sheets API** (APIs e serviços →
+   Biblioteca).
+2. Em **IAM e administrador → Contas de serviço**, crie uma conta (ex.:
+   `ritmopatrimar-leitura`). Ela não precisa de papel nenhum no projeto.
+3. Na conta criada, **Chaves → Adicionar chave → JSON**. O navegador baixa um
+   arquivo `.json`: é a senha da conta, guarde como senha.
+4. Na planilha `MODELO_HORA_A_HORA`, **Compartilhar** com o e-mail da conta
+   (`…@….iam.gserviceaccount.com`, está no `.json`, campo `client_email`)
+   como **Leitor**, sem notificar.
+5. Na Vercel: `GOOGLE_CONTA_SERVICO` = o conteúdo inteiro do `.json`;
+   `PROGRAMA_EMBALAGEM_PLANILHA` = o endereço da planilha. Publique um deploy
+   novo (variável nova só vale depois dele). `/api/status` mostra se as duas
+   chegaram.
+6. Abra *Embalagem Takt Time* no PC: o takt diz "da planilha do PCP, lida hoje
+   às…", ou o motivo da falha.
+
+> Se o passo 3 for recusado com "a criação de chaves de conta de serviço está
+> desativada", é a política `iam.disableServiceAccountKeyCreation` da
+> organização Google, ligada por padrão em organizações novas. Quem
+> administra o Google Workspace/Cloud da empresa libera para este projeto.
+
+Regras: a planilha só grava na empresa desta instalação (a mesma de
+`EMPRESA_ID`) e só no grupo de embalagem (precisa existir **um**, com
+"EMBALAGEM" no nome). A leitura procura as colunas pelo **cabeçalho**
+(`Data`, `Qtd_cx`, `Lote`, `Codigo`); aba sem `Data` ou `Qtd_cx` para a
+leitura com o motivo na tela, e nada é gravado.
 
 ### Tempo da análise com IA
 

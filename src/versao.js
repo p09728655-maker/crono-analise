@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.95.0',
+    data: '2026-10-27',
+    titulo: 'Embalagem: o programa vem sozinho da planilha do PCP',
+    itens: [
+      'O PROGRAMA DA EMBALAGEM VEM DA PLANILHA DO PCP, SOZINHO. Com a leitura configurada (passo a passo no README, em Deploy), o servidor lê as abas PROGRAMACAO e PROGRAMACAO_CONCLUIDA a cada 10 minutos e grava o programa da semana do grupo EMBALAGEM. Ninguém precisa colar nada: o takt do tablet e do PC acompanha a planilha.',
+      'A SEMANA SOMA AS DUAS ABAS, pela data programada de cada lote, em volumes (caixas). Lendo só a PROGRAMACAO, o programa encolheria a cada lote concluído e o takt ficaria mais folgado dia após dia. O lote atrasado conta na semana em que foi programado, não na de hoje. Exemplo da planilha real: a semana de 26/10 tem 8.750 volumes em aberto e 200 já concluídos, 8.950 no total.',
+      'O TAKT DIZ DE ONDE VEIO: na Embalagem Takt Time aparece "da planilha do PCP, lida hoje às 10:32". Se a planilha não puder ser lida (não compartilhada, Google fora do ar, aba renomeada), um aviso vermelho diz o motivo e o que fazer, e o takt continua com o último programa guardado.',
+      'NO "PROGRAMA DA SEMANA" DO GRUPO EMBALAGEM, a colagem e a semana digitada saem. O quadro diz que o programa vem da planilha, quando foi lido e quantas linhas ficaram de fora (sem data, sem quantidade, repetidas entre as abas). Para mudar o programa, altere a planilha.',
+      'O servidor grava da 4ª semana passada em diante. Semana mais antiga fica como estava: se linhas velhas forem apagadas da aba de concluídos, a história não muda. Os outros grupos continuam com o programa colado, como antes, e sem a leitura configurada a embalagem também.',
+    ],
+  },
+  {
     versao: '2.94.1',
     data: '2026-10-27',
     titulo: 'Embalagem Takt Time: a medição abre na tela inteira',

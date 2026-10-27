@@ -10,6 +10,9 @@
  * INICIO vir da celula errada na planilha: o PCP tem a planilha aberta ao
  * lado e ve' na hora se a 034-26 aqui diz 31/08 a 04/09 ou outra coisa.
  * Numero de semana ninguem confere de cabeca; data, sim.
+ *
+ * `somenteLeitura`: o programa que vem da planilha do PCP (a embalagem) nao
+ * se apaga aqui — a proxima leitura o traria de volta, e o botao mentiria.
  */
 import { useMemo, useState } from 'react';
 import {
@@ -19,6 +22,7 @@ import { est } from './estilos.js';
 
 export default function ProgramaGravado({
   semanas, horasNum, maquinasDoGrupo, setupHoras, ocupado, aoApagarSemana, aoApagarTudo,
+  somenteLeitura = false,
 }) {
   const [confirmarLimpeza, setConfirmarLimpeza] = useState(false);
 
@@ -60,7 +64,7 @@ export default function ProgramaGravado({
                 Exigido por máquina
               </th>
               <th style={est.thNum} title="Tempo que cada máquina tem para cada peça">Takt</th>
-              <th style={est.th} aria-label="Ações" />
+              {!somenteLeitura && <th style={est.th} aria-label="Ações" />}
             </tr>
           </thead>
           <tbody>
@@ -80,14 +84,16 @@ export default function ProgramaGravado({
                     {r ? `${Math.round(r.pecasPorHoraMaquina).toLocaleString('pt-BR')} pç/h` : '—'}
                   </td>
                   <td style={est.tdNum}>{r ? `${(r.taktMs / 1000).toFixed(1)}s` : '—'}</td>
-                  <td style={est.tdAcoes}>
-                    <button
-                      type="button" style={est.botaoTexto} disabled={ocupado}
-                      onClick={() => aoApagarSemana(s)}
-                    >
-                      Apagar
-                    </button>
-                  </td>
+                  {!somenteLeitura && (
+                    <td style={est.tdAcoes}>
+                      <button
+                        type="button" style={est.botaoTexto} disabled={ocupado}
+                        onClick={() => aoApagarSemana(s)}
+                      >
+                        Apagar
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -100,23 +106,25 @@ export default function ProgramaGravado({
           pelo menos uma máquina ativa.
         </p>
       )}
-      <div style={est.acoes}>
-        {confirmarLimpeza ? (
-          <>
-            <span style={est.blocoTexto}>Apagar o programa inteiro deste grupo?</span>
-            <button type="button" style={est.botaoPerigo} onClick={apagarTudo} disabled={ocupado}>
-              Apagar tudo
+      {!somenteLeitura && (
+        <div style={est.acoes}>
+          {confirmarLimpeza ? (
+            <>
+              <span style={est.blocoTexto}>Apagar o programa inteiro deste grupo?</span>
+              <button type="button" style={est.botaoPerigo} onClick={apagarTudo} disabled={ocupado}>
+                Apagar tudo
+              </button>
+              <button type="button" style={est.botaoTexto} onClick={() => setConfirmarLimpeza(false)}>
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <button type="button" style={est.botaoTexto} onClick={() => setConfirmarLimpeza(true)}>
+              Apagar o programa deste grupo
             </button>
-            <button type="button" style={est.botaoTexto} onClick={() => setConfirmarLimpeza(false)}>
-              Cancelar
-            </button>
-          </>
-        ) : (
-          <button type="button" style={est.botaoTexto} onClick={() => setConfirmarLimpeza(true)}>
-            Apagar o programa deste grupo
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
