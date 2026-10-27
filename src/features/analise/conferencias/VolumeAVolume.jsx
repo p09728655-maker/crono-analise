@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
@@ -23,11 +23,12 @@ const MAX_LACUNAS_PAPEL = 15;
  * takt da semana em que ela foi feita.
  *
  * Abre pela linha da medicao (so' as que tem marcas: cronometro ao vivo,
- * contagem por toque), NA PROPRIA PAGINA, no lugar da lista e com a
- * largura toda — nao numa janela por cima. "Voltar a' lista" (aoFechar)
- * devolve a lista; quem troca a lista por este painel e' a tela. O ritmo
- * da medicao ja' estava no relatorio; o que este painel acrescenta e' COMO
- * ele saiu — regular, lento ou aos trancos.
+ * contagem por toque), NA PROPRIA PAGINA, ao lado da lista — nao numa
+ * janela por cima, nem no lugar dela: a lista e' a fila do que falta ler,
+ * e fica a vista. Em tela estreita a pagina empilha, e ai' o painel vem
+ * abaixo da lista (quem monta a grade e' a tela). O ritmo da medicao ja'
+ * estava no relatorio; o que este painel acrescenta e' COMO ele saiu —
+ * regular, lento ou aos trancos.
  *
  * O TAKT vem de taktDaMedicao: o mesmo programa, a mesma jornada e o mesmo
  * setup planejado do quadro "Programa da semana", na semana DESTA medicao.
@@ -41,8 +42,8 @@ const MAX_LACUNAS_PAPEL = 15;
  * domain/volumeAVolume.js, os mesmos na tela e na folha.
  *
  * A ANALISE DO PCP: lida a medicao, o PCP salva (com a conclusao, se
- * quiser) e volta para a lista. E' o que tira a medicao de "a analisar".
- * O botao mora no TOPO, ao lado de Imprimir e Voltar a' lista: o topo gruda
+ * quiser) e o painel fecha. E' o que tira a medicao da lista (ela passa a
+ * Analisadas). O botao mora no TOPO, ao lado de Imprimir e Fechar: o topo gruda
  * e esta' sempre a' vista. O fundo do painel nao — com a pagina no alto,
  * ele fica abaixo da dobra, e um botao ali seria um botao escondido.
  */
@@ -98,13 +99,13 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
  *
  * Por medicao, porque o PCP compara: escreve em uma, abre outra, escreve,
  * volta — e cada nota tem de estar onde foi deixada. Na tela, porque o
- * painel some ao voltar a' lista: guardado nele, voltar apagava a nota
- * digitada. Aqui a nota nao salva sobrevive a voltar e reabrir, e a recusa
+ * painel some ao fechar: guardado nele, fechar apagava a nota digitada.
+ * Aqui a nota nao salva sobrevive a fechar e reabrir, e a recusa
  * fica com a medicao (a linha da lista avisa) ate' a proxima tentativa. O rascunho
  * vive enquanto a TELA esta' aberta: saiu dela, ele se vai — por isso a
  * linha avisa quando ha' nota digitada e nao salva.
  *
- * `aplicar(atualizada, { fechar })` e' quem muda a lista e volta para ela.
+ * `aplicar(atualizada, { fechar })` e' quem muda a lista e fecha o painel.
  * Sem rascunho, o campo comeca na nota salva — a que ficou ao reabrir.
  */
 export function useAnalisesDoPcp(aplicar) {
@@ -136,7 +137,7 @@ export function useAnalisesDoPcp(aplicar) {
       });
       // Salvo, o rascunho cumpriu o papel: o campo volta a ler o banco.
       setRascunhos((m) => sem(m, id));
-      // Volta a' lista so' ao salvar; reabrir deixa o painel aberto, com a nota.
+      // Fecha so' ao salvar; reabrir deixa o painel aberto, com a nota.
       aplicar(atualizada, { fechar: analisar });
     } catch (e) {
       setFalhas((m) => ({ ...m, [id]: { mensagem: e.message, reabrir: !analisar } }));
@@ -170,12 +171,12 @@ export function useAnalisesDoPcp(aplicar) {
 }
 
 /**
- * O clique que e' o SEGUNDO de um duplo clique nao vale. O painel abre no
- * lugar da lista, debaixo do cursor: quem abria a linha com duplo clique
- * acertava "Salvar análise e voltar" com o segundo, e a medicao ficava
- * analisada sem ninguem ler. O mesmo vale ao contrario — o Voltar devolve
- * a lista, e o segundo clique abria outra linha. Teclado (detail 0) e
- * clique simples passam.
+ * O clique que e' o SEGUNDO de um duplo clique nao vale. Com o painel no
+ * lugar da lista (v2.94.1), quem abria a linha com duplo clique acertava o
+ * Salvar com o segundo, e a medicao ficava analisada sem ninguem ler; ao
+ * lado da lista, o segundo clique na linha a fecharia de novo, e o salvo
+ * que tira a linha da lista poria outra debaixo do cursor. Teclado
+ * (detail 0) e clique simples passam.
  */
 export const cliqueSimples = (fazer) => (ev) => {
   if (ev.detail > 1) return;
@@ -193,7 +194,7 @@ const TOM = {
 const COR_DO_TOM = { atende: claro.ok, falha: claro.critico, atencao: claro.atencao };
 
 export default function VolumeAVolume({
-  conferencia, grupo, maquinasDoGrupo, aoFechar, analise,
+  conferencia, grupo, maquinasDoGrupo, aoFechar, analise, rolar = true,
 }) {
   const unidade = unidadeDoPosto(grupo?.nome);
   const r = useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo });
@@ -213,9 +214,21 @@ export default function VolumeAVolume({
     `${formatarDuracao(Number(conferencia.duracao_ms))} de medição`,
   ].filter(Boolean);
 
+  /* Selecionou outra medicao: a pagina rola ate' ela SO' se ela nasceu fora
+     da vista — empilhada abaixo da lista, em tela estreita. Ao lado da
+     lista o painel ja' esta' a vista, e rolar tiraria a lista de vista.
+     `rolar` falso (a medicao que a tela reabre sozinha, no F5) nunca rola. */
+  const refPainel = useRef(null);
+  useEffect(() => {
+    const el = refPainel.current;
+    if (!rolar || !el?.scrollIntoView) return;
+    const { top } = el.getBoundingClientRect();
+    if (top < 0 || top > window.innerHeight * 0.6) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [conferencia.id]);
+
   return (
     <>
-      <section style={est.vavPainel} aria-label={`${titulo} da medição`}>
+      <section ref={refPainel} style={est.vavPainel} aria-label={`${titulo} da medição`}>
         {/* 1. IDENTIFICACAO — o produto e' o titulo: e' por ele que o PCP
             procura a medicao (e o que da' nome ao PDF). */}
         <header style={est.vavTopo}>
@@ -239,7 +252,7 @@ export default function VolumeAVolume({
             )}
           </div>
           <div style={est.vavAcoes}>
-            {/* Salvar volta para a lista; reabrir deixa o painel aberto, com a nota no
+            {/* Salvar fecha o painel e tira a medicao da lista; reabrir o deixa aberto, com a nota no
                 campo para corrigir (e desfaz o clique errado). */}
             {podeAnalisar && (analisada ? (
               <button
@@ -253,7 +266,7 @@ export default function VolumeAVolume({
                 type="button" style={est.botaoSalvarAnalise}
                 onClick={cliqueSimples(() => analise.salvar(true))} disabled={salvando}
               >
-                {salvando ? 'Salvando…' : 'Salvar análise e voltar'}
+                {salvando ? 'Salvando…' : 'Salvar análise e fechar'}
               </button>
             ))}
             {pronto && (
@@ -272,14 +285,14 @@ export default function VolumeAVolume({
                 Imprimir
               </button>
             )}
-            {/* Travado enquanto salva: de volta a' lista no meio, o painel nao
-                estaria aqui para dizer se o servidor recusou. */}
+            {/* Travado enquanto salva: fechado no meio, o painel nao estaria
+                aqui para dizer se o servidor recusou. */}
             <button type="button" style={est.botaoSecundario} onClick={cliqueSimples(aoFechar)} disabled={salvando}>
-              Voltar à lista
+              Fechar
             </button>
           </div>
-          {/* A recusa aparece colada ao botao, e o painel NAO volta para a
-              lista: voltar seria dizer que salvou. */}
+          {/* A recusa aparece colada ao botao, e o painel NAO fecha: fechar
+              seria dizer que salvou. */}
           {analise?.erro && (
             <div style={est.vavAnaliseErro} role="alert">
               {analisada ? 'Não deu para reabrir' : 'Não deu para salvar'}: {analise.erro}
@@ -346,7 +359,7 @@ export default function VolumeAVolume({
                   ) : (
                     <>
                       <p style={est.vavSecaoDica}>
-                        Opcional. Vai junto quando você clica em Salvar análise e voltar, no alto da página.
+                        Opcional. Vai junto quando você clica em Salvar análise e fechar, no alto do painel.
                       </p>
                       <textarea
                         aria-label="Análise do PCP"

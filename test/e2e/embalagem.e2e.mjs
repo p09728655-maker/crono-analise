@@ -330,27 +330,36 @@ checar(await p.getByText('72.0 s').count() > 0, 'takt desta semana em segundos: 
 checar(await p.getByText('Faltou caixa às 9h10').count() > 0, 'a observacao do analista aparece na tabela');
 
 // A tela chega na LISTA: nada abre sozinho. Clicar no produto abre o
-// volume a volume NO LUGAR da lista, com a largura toda — nem janela por
-// cima, nem espremido ao lado dela.
+// volume a volume AO LADO da lista, que continua a vista — nem janela por
+// cima, nem no lugar dela.
 const lista = p.getByRole('region', { name: 'Medições da embalagem' });
 const janela = p.getByRole('region', { name: /Volume a volume/ });
-const botaoVoltar = janela.getByRole('button', { name: 'Voltar à lista' });
+const botaoFechar = janela.getByRole('button', { name: 'Fechar', exact: true });
 // O rotulo sai em caixa alta (CSS): o cartao e' o pai dele.
 const cartao = p.getByText('A analisar', { exact: true }).locator('..');
+const verVista = async (nome) => {
+  await lista.getByRole('button', { name: new RegExp(`^${nome} \\(`) }).click();
+};
 await lista.waitFor({ timeout: 8000 });
 checar(await janela.count() === 0, 'a tela chega na lista: nenhuma medicao abre sozinha');
 checar(/A analisar\s*2\s*de 2 medições volume a volume em 30 dias/i.test(await cartao.innerText()),
   `cartao "A analisar": 2 de 2 em 30 dias — a de um toque so' nao conta (${(await cartao.innerText()).replace(/\n/g, ' | ')})`);
+checar(await lista.getByRole('button', { name: 'Não analisadas (3)' }).count() === 1
+  && await lista.getByRole('button', { name: 'Analisadas (0)' }).count() === 1,
+'a lista mostra as nao analisadas (3) e oferece as analisadas (0)');
 
 await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
 // Relogio entre o 1o e o ultimo toque: 920 s / 13 = 70,8 s por volume,
 // paradas dentro; takt 72 s. Sem a lacuna: 60 s.
 await janela.getByText(/No período, saiu um volume a cada 70.8 s, paradas dentro/).waitFor({ timeout: 8000 });
-checar(await lista.count() === 0 && await cartao.count() === 0, 'aberta a medicao, a lista e os cartoes saem da tela');
 checar(await p.getByRole('dialog').count() === 0, 'o detalhe abre na propria pagina, sem janela por cima');
 {
-  const cj = await janela.boundingBox();
-  checar(cj.width > 1000, `o detalhe ocupa a largura toda da area de conteudo (${Math.round(cj.width)} px)`);
+  const bl = await lista.boundingBox();
+  const bj = await janela.boundingBox();
+  checar(await lista.isVisible() && await cartao.isVisible() && bj.x >= bl.x + bl.width - 1 && Math.abs(bj.y - bl.y) < 60,
+    `aberta a medicao, a lista e os cartoes continuam a vista, e o detalhe fica ao lado (lista x ${Math.round(bl.x)}+${Math.round(bl.width)}, detalhe x ${Math.round(bj.x)})`);
+  checar(/Rack Sirius 1\.6/.test(await lista.locator('table').getByRole('button', { pressed: true }).innerText()),
+    'na lista, a linha aberta fica marcada');
 }
 const textoJanela = await janela.innerText();
 checar(/dentro do takt de 72.0 s, com 2% de folga/.test(textoJanela), 'veredito pelo relogio entre toques: 70.8 s dentro do takt de 72.0 s');
@@ -385,57 +394,57 @@ checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some 
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
 
-const voltarALista = async () => {
-  await botaoVoltar.click();
+const fechar = async () => {
+  await botaoFechar.click();
   await janela.waitFor({ state: 'detached', timeout: 4000 });
 };
-await voltarALista();
-checar(await lista.isVisible() && await cartao.isVisible(), 'Voltar à lista devolve a lista e os cartoes');
-// A linha inteira abre, nao so' o nome do produto.
-await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().getByRole('cell').first().click();
-await janela.waitFor({ timeout: 4000 });
-checar(await lista.count() === 0, 'clicar na linha, fora do nome, tambem abre a medicao');
-await voltarALista();
-
-// Lista rolada: abrir leva ao topo do detalhe, e voltar devolve a lista no
-// mesmo ponto, com o foco no produto de onde se saiu.
+await fechar();
+checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detalhe e a lista volta a largura toda');
+// A linha inteira abre, nao so' o nome do produto; clicar de novo fecha.
 {
-  await p.setViewportSize({ width: 1440, height: 400 });
-  const botao = lista.getByRole('button', { name: 'Toucador Magic New' });
-  await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  await botao.scrollIntoViewIfNeeded();
-  const yLista = await p.evaluate(() => window.scrollY);
-  await botao.click();
-  await janela.getByRole('heading', { name: 'Toucador Magic New' }).waitFor({ timeout: 4000 });
-  const yDetalhe = await p.evaluate(() => window.scrollY);
-  await voltarALista();
-  const yVolta = await p.evaluate(() => window.scrollY);
-  const foco = await p.evaluate(() => document.activeElement?.textContent);
-  checar(yLista > 0, `pre-condicao: a lista estava rolada (${yLista} px)`);
-  checar(yDetalhe === 0, `abrir com a lista rolada leva ao topo do detalhe (scrollY ${yDetalhe})`);
-  checar(yVolta === yLista, `voltar devolve a lista na mesma rolagem (${yLista} -> ${yVolta})`);
-  checar(foco === 'Toucador Magic New', `o foco volta ao produto de onde saiu (${foco})`);
-  await p.setViewportSize({ width: 1440, height: 1000 });
+  const celula = lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().getByRole('cell').first();
+  await celula.click();
+  await janela.waitFor({ timeout: 4000 });
+  checar(await lista.isVisible(), 'clicar na linha, fora do nome, tambem abre a medicao ao lado');
+  await celula.click();
+  await janela.waitFor({ state: 'detached', timeout: 4000 });
+  checar(await janela.count() === 0, 'clicar de novo na linha aberta fecha o detalhe');
 }
 
-// O Voltar do navegador (e o botao lateral do mouse) volta a' lista, como
-// o botao da tela — nao sai da tela levando as notas. Avancar reabre.
+// Abrir nao mexe na pagina (o detalhe rola por dentro), e fechar devolve o
+// foco ao produto de onde se saiu.
 {
+  const y0 = await p.evaluate(() => window.scrollY);
+  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
+  await janela.getByRole('heading', { name: 'Toucador Magic New' }).waitFor({ timeout: 4000 });
+  const y1 = await p.evaluate(() => window.scrollY);
+  await fechar();
+  const foco = await p.evaluate(() => document.activeElement?.textContent);
+  checar(y0 === y1, `abrir ao lado nao rola a pagina (${y0} -> ${y1})`);
+  checar(foco === 'Toucador Magic New', `fechar devolve o foco ao produto de onde saiu (${foco})`);
+}
+
+// O Voltar do navegador (e o botao lateral do mouse) fecha o painel, como
+// o botao da tela — nao sai da tela levando as notas. Avancar reabre.
+// Trocar de medicao com o painel aberto nao empilha: o Voltar fecha.
+{
+  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
+  await janela.getByRole('heading', { name: 'Toucador Magic New' }).waitFor({ timeout: 4000 });
   await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
   await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
   await p.goBack();
   await janela.waitFor({ state: 'detached', timeout: 4000 });
   const caminho = new URL(p.url()).pathname;
   checar(caminho === '/analise/embalagem' && await lista.isVisible(),
-    `Voltar do navegador fecha a medicao e fica na lista (${caminho})`);
+    `trocada a medicao, o Voltar do navegador fecha o painel e fica na lista (${caminho})`);
   await p.goForward();
   await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 4000 });
-  checar(await lista.count() === 0, 'Avancar do navegador reabre a medicao');
+  checar(await janela.count() === 1, 'Avancar do navegador reabre a medicao');
   // Recarregada (F5) com a medicao aberta, ela reabre — a entrada do
   // historico e' dela, e o Voltar seguinte fecha, sem entrada morta.
   await p.reload();
   await janela.getByRole('heading', { name: 'Rack Sirius 1.6' }).waitFor({ timeout: 8000 });
-  checar(await lista.count() === 0, 'F5 com a medicao aberta: ela reabre');
+  checar(await lista.isVisible(), 'F5 com a medicao aberta: ela reabre ao lado da lista');
   await p.goBack();
   await janela.waitFor({ state: 'detached', timeout: 4000 });
   checar(new URL(p.url()).pathname === '/analise/embalagem' && await lista.isVisible(),
@@ -460,72 +469,67 @@ await voltarALista();
   })), 'sem nada pendente, recarregar ou fechar a aba nao pergunta');
 }
 
-/* DUPLO CLIQUE: o detalhe nasce no lugar da lista, debaixo do cursor. O
-   segundo clique de quem abria a linha com duplo clique caia em "Salvar
-   análise e voltar" e marcava como analisada uma medicao nao lida. */
+/* DUPLO CLIQUE: o segundo clique nao vale. Em Salvar ele nao pode
+   analisar de novo; na linha, o segundo fecharia o que o primeiro abriu. */
 {
-  const salvarTopo = janela.getByRole('button', { name: 'Salvar análise e voltar' });
+  const salvarTopo = janela.getByRole('button', { name: 'Salvar análise e fechar' });
   const nPedidos = pedidosAnalise.length;
   await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
   await salvarTopo.waitFor({ timeout: 8000 });
   await salvarTopo.dispatchEvent('click', { detail: 2 });
-  await botaoVoltar.dispatchEvent('click', { detail: 2 });
+  await botaoFechar.dispatchEvent('click', { detail: 2 });
   await p.waitForTimeout(300);
   checar(pedidosAnalise.length === nPedidos && await janela.count() === 1,
-    'o 2o clique de um duplo clique em Salvar ou Voltar nao vale: nada salvo, a medicao segue aberta');
-  // Com o mouse de verdade: o 1o clique volta, o 2o nao abre nada no lugar
-  // (o botao "Motivos de parada" da lista fica bem ali).
-  const bv = await botaoVoltar.boundingBox();
+    'o 2o clique de um duplo clique em Salvar ou Fechar nao vale: nada salvo, a medicao segue aberta');
+  const bv = await botaoFechar.boundingBox();
   await p.mouse.dblclick(bv.x + bv.width / 2, bv.y + bv.height / 2);
   await janela.waitFor({ state: 'detached', timeout: 4000 });
   await p.waitForTimeout(300);
   checar(await lista.isVisible() && await janela.count() === 0 && await p.getByRole('dialog').count() === 0,
-    'duplo clique em Voltar à lista: volta, e o 2o clique nao reabre medicao nem abre cadastro');
+    'duplo clique em Fechar: fecha, e o 2o clique nao reabre medicao nem abre cadastro');
   await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().getByRole('cell').first()
     .dispatchEvent('click', { detail: 2 });
   await p.waitForTimeout(300);
   checar(await janela.count() === 0, 'na lista, o 2o clique de um duplo clique nao abre a linha');
-  // Os cadastros ficam no canto do Voltar à lista: o 2o clique nao os abre.
   await p.getByRole('button', { name: 'Motivos de parada' }).dispatchEvent('click', { detail: 2 });
   await p.getByRole('button', { name: 'Produtos da embalagem' }).dispatchEvent('click', { detail: 2 });
   await p.waitForTimeout(300);
   checar(await p.getByRole('dialog').count() === 0, 'o 2o clique de um duplo clique nao abre os cadastros');
 }
 
-/* ANALISE DO PCP: lida a medicao, salvar grava e volta para a lista; a
-   linha ganha o selo e o cartao "A analisar" desce. */
+/* ANALISE DO PCP: lida a medicao, salvar grava, fecha o painel e a
+   medicao SAI da lista — vai para Analisadas, com o selo. */
 {
-  const salvar = janela.getByRole('button', { name: 'Salvar análise e voltar' });
+  const salvar = janela.getByRole('button', { name: 'Salvar análise e fechar' });
   const nota = janela.getByRole('textbox', { name: 'Análise do PCP' });
   const linhaDe = (nome) => lista.getByRole('row').filter({ hasText: nome }).first();
-  // Como o PCP faz: com uma aberta, volta a' lista e abre a outra.
+  // Como o PCP faz: com uma aberta, clica na outra (troca ao lado).
   const abrirMedicao = async (nome, { esperar = nota } = {}) => {
-    if (await janela.count()) await voltarALista();
-    await lista.getByRole('button', { name: nome }).click();
+    if (!(await janela.getByRole('heading', { name: nome }).count())) {
+      await lista.getByRole('button', { name: nome }).click();
+    }
     await janela.getByRole('heading', { name: nome }).waitFor({ timeout: 4000 });
     await esperar.waitFor({ timeout: 8000 });
   };
 
   await abrirMedicao('Toucador Magic New');
-  // No topo, ao lado de Imprimir e Voltar: a' vista com a pagina no alto,
-  // sem rolar nada. O fundo do painel fica abaixo da dobra.
+  // No topo, ao lado de Imprimir e Fechar: a' vista sem rolar nada.
   {
     const bs = await salvar.boundingBox();
-    const bv = await botaoVoltar.boundingBox();
+    const bv = await botaoFechar.boundingBox();
     checar(bs && bs.y >= 0 && bs.y + bs.height <= 1000 && Math.abs(bs.y - bv.y) < 4,
-      `"Salvar análise e voltar" no topo, junto de Voltar à lista, a' vista (y ${Math.round(bs?.y)} px)`);
+      `"Salvar análise e fechar" no topo, junto de Fechar, a' vista (y ${Math.round(bs?.y)} px)`);
   }
   // Rolado ate' o campo da nota, o topo gruda: os botoes seguem a' vista.
   await nota.scrollIntoViewIfNeeded();
   {
-    const y = await p.evaluate(() => window.scrollY);
     const bs = await salvar.boundingBox();
     checar(bs && bs.y >= -1 && bs.y + bs.height <= 1000,
-      `rolado ate a nota (scrollY ${y}), Salvar continua a vista no topo (y ${Math.round(bs?.y)} px)`);
+      `rolado ate a nota, Salvar continua a vista no topo (y ${Math.round(bs?.y)} px)`);
   }
   await nota.fill('  Lacunas por falta de caixa  ');
 
-  // Recusado: o aviso aparece no topo, junto do botao, e a tela NAO volta.
+  // Recusado: o aviso aparece no topo, junto do botao, e o painel NAO fecha.
   recusarAnalise = true;
   await salvar.click();
   const aviso = janela.getByRole('alert');
@@ -537,18 +541,19 @@ await voltarALista();
     const bs = await salvar.boundingBox();
     checar(ba.y > bs.y && ba.y - (bs.y + bs.height) < 60, 'a recusa aparece logo abaixo do botao clicado');
   }
-  checar(await janela.count() === 1, 'recusado, o painel continua aberto — voltar seria dizer que salvou');
+  checar(await janela.count() === 1 && await linhaDe('Toucador Magic New').count() === 1,
+    'recusado, o painel continua aberto e a medicao continua na lista');
   checar(await nota.inputValue() === '  Lacunas por falta de caixa  ', 'recusado, a nota digitada continua no campo');
 
-  // A nota e' DA MEDICAO: outra abre com o campo vazio, e voltar a' lista
-  // nao apaga o que foi digitado.
+  // A nota e' DA MEDICAO: outra abre com o campo vazio, e fechar nao apaga
+  // o que foi digitado.
   await abrirMedicao('Rack Sirius 1.6');
   checar(await nota.inputValue() === '' && await janela.getByRole('alert').count() === 0,
     'outra medicao abre com o campo vazio e sem a recusa da anterior');
   await nota.fill('nota do rack');
-  await voltarALista();
+  await fechar();
   checar(/Nota digitada, ainda não salva/.test(await linhaDe('Rack Sirius 1.6').innerText()),
-    'de volta a lista, a linha avisa que tem nota digitada e nao salva');
+    'fechado o painel, a linha avisa que tem nota digitada e nao salva');
   checar(/Análise não salva — abra para ver o motivo/.test(await linhaDe('Toucador Magic New').innerText()),
     'e a recusada avisa que a analise nao foi salva');
   await abrirMedicao('Toucador Magic New');
@@ -559,14 +564,18 @@ await voltarALista();
   checar(await nota.inputValue() === 'nota do rack', 'e a da outra tambem');
   await abrirMedicao('Toucador Magic New');
 
-  // Enquanto salva, Voltar e o campo ficam travados: de volta a' lista no
-  // meio, ninguem veria uma recusa.
+  // Enquanto salva, Fechar e o campo ficam travados: fechado no meio,
+  // ninguem veria uma recusa.
   recusarAnalise = false;
   atrasoAnalise = 1500;
   await salvar.click();
   await janela.getByRole('button', { name: 'Salvando…' }).waitFor({ timeout: 2000 });
-  checar(await botaoVoltar.isDisabled() && await nota.isDisabled(),
-    'salvando: Voltar à lista e o campo da nota travados');
+  checar(await botaoFechar.isDisabled() && await nota.isDisabled(),
+    'salvando: Fechar e o campo da nota travados');
+  // Clicar na linha aberta enquanto salva nao fecha: mesma razao.
+  await lista.getByRole('button', { name: 'Toucador Magic New' }).click();
+  await p.waitForTimeout(100);
+  checar(await janela.count() === 1, 'salvando: clicar na linha aberta nao fecha o painel');
   // Sair agora pergunta pelo envio, e nao chama de "nao salva" a nota que
   // esta' indo junto com ele: so' a do Rack (digitada e deixada) conta.
   {
@@ -588,18 +597,25 @@ await voltarALista();
   checar(pedido?.id === medicao2.id && pedido.corpo.analisada === true
     && pedido.corpo.analiseNota === 'Lacunas por falta de caixa',
   `salvar manda analisada + a nota aparada, da medicao aberta (${JSON.stringify(pedido?.corpo)})`);
-  checar(await lista.isVisible(), 'salvo, a tela volta para a lista');
+  checar(await linhaDe('Toucador Magic New').count() === 0 && await linhaDe('Rack Sirius 1.6').count() === 1,
+    'salvo, o painel fecha e a medicao analisada SAI da lista; a outra fica');
   {
     const foco = await p.evaluate(() => document.activeElement?.textContent);
-    checar(foco === 'Toucador Magic New', `salvo, o foco volta ao produto da medicao salva (${foco})`);
+    checar(foco === 'Painel Sirius 1.4', `salvo, o foco vai a' linha seguinte da lista (${foco})`);
   }
-  checar(/✓ Analisada · Mauricio PCP/.test(await linhaDe('Toucador Magic New').innerText()),
-    'a linha ganha o selo "✓ Analisada" com quem salvou');
-  checar(!/Analisada/.test(await linhaDe('Rack Sirius 1.6').innerText()), 'a outra medicao continua sem selo');
-  checar(/A analisar\s*1/i.test(await cartao.innerText()), 'o cartao "A analisar" desce para 1 sem recarregar');
+  checar(/A analisar\s*1/i.test(await cartao.innerText())
+    && await lista.getByRole('button', { name: 'Não analisadas (2)' }).count() === 1
+    && await lista.getByRole('button', { name: 'Analisadas (1)' }).count() === 1,
+  'o cartao "A analisar" desce para 1 e as contagens das vistas mudam, sem recarregar');
   if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-analisada-lista.png` });
 
-  // Aberta de novo: quem, quando e a nota; Reabrir volta a "a analisar",
+  // Em Analisadas: o selo com quem salvou; a nao analisada nao aparece.
+  await verVista('Analisadas');
+  checar(/✓ Analisada · Mauricio PCP/.test(await linhaDe('Toucador Magic New').innerText())
+    && await linhaDe('Rack Sirius 1.6').count() === 0,
+  'em Analisadas, a medicao salva aparece com o selo e quem salvou; a nao analisada, nao');
+
+  // Aberta de novo: quem, quando e a nota; Reabrir volta para a fila,
   // deixa o painel aberto e devolve a nota ao campo.
   await abrirMedicao('Toucador Magic New', { esperar: janela.getByText(/No período, saiu um volume/) });
   const textoAberta = await janela.innerText();
@@ -614,18 +630,22 @@ await voltarALista();
   await janela.getByRole('button', { name: 'Reabrir análise' }).click();
   await salvar.waitFor({ timeout: 4000 });
   checar(pedidosAnalise.at(-1)?.corpo.analisada === false, 'reabrir manda analisada: false');
-  checar(await janela.count() === 1, 'reabrir deixa o painel aberto');
+  checar(await janela.count() === 1 && await linhaDe('Toucador Magic New').count() === 0,
+    'reabrir deixa o painel aberto, e a medicao sai de Analisadas');
   checar(await nota.inputValue() === 'Lacunas por falta de caixa', 'reaberta, a nota volta ao campo para corrigir');
   checar(!/Análise do PCP \(/.test(await p.locator('body > .somente-impressao').innerText()),
     'reaberta, a folha A4 deixa de dizer que foi analisada');
-  await voltarALista();
-  checar(/A analisar\s*2/i.test(await cartao.innerText()), 'reaberta, volta a contar no "A analisar"');
+  await fechar();
+  await verVista('Não analisadas');
+  checar(/A analisar\s*2/i.test(await cartao.innerText()) && await linhaDe('Toucador Magic New').count() === 1,
+    'reaberta, volta para a lista e a contar no "A analisar"');
 
-  // Reabrir recusado: a analise continua salva, e a linha nao pode dizer
-  // "nao salva" ao lado do selo.
+  // Reabrir recusado: a analise continua salva, e a linha (em Analisadas)
+  // nao pode dizer "nao salva" ao lado do selo.
   await abrirMedicao('Rack Sirius 1.6');
   await salvar.click();
   await janela.waitFor({ state: 'detached', timeout: 4000 });
+  await verVista('Analisadas');
   // Analisada nao tem campo de nota: espera o botao, nao o campo.
   const reabrir = janela.getByRole('button', { name: 'Reabrir análise' });
   await abrirMedicao('Rack Sirius 1.6', { esperar: reabrir });
@@ -634,18 +654,19 @@ await voltarALista();
   await janela.getByRole('alert').waitFor({ timeout: 4000 });
   checar(/Não deu para reabrir: Seu papel nao permite/.test(await janela.getByRole('alert').innerText()),
     'reabrir recusado: o motivo aparece no painel');
-  await voltarALista();
+  await fechar();
   const textoRack = await linhaDe('Rack Sirius 1.6').innerText();
   checar(/✓ Analisada/.test(textoRack) && /Não reabriu — abra para ver o motivo/.test(textoRack)
     && !/Análise não salva/.test(textoRack),
-  'reabrir recusado: a linha segue analisada e diz que nao reabriu, nao que a analise nao foi salva');
+  'reabrir recusado: a linha segue em Analisadas e diz que nao reabriu, nao que a analise nao foi salva');
   recusarAnalise = false;
+  await verVista('Não analisadas');
   if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-a-analisar.png` });
 
   // Sair da tela pela lateral com nota digitada e nao salva: pergunta antes.
   await abrirMedicao('Toucador Magic New');
   await nota.fill('nota que ninguem salvou');
-  await voltarALista();
+  await fechar();
   let pergunta = null;
   p.once('dialog', (d) => { pergunta = d.message(); d.dismiss(); });
   await p.getByRole('button', { name: 'Início' }).click();
