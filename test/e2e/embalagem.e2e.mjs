@@ -378,6 +378,16 @@ checar(/dentro do takt de 72.0 s, com 2% de folga/.test(textoJanela), 'veredito 
 checar(/POR VOLUME COM A LINHA RODANDO\s*70\.8 s/i.test(textoJanela) && /SEM AS LACUNAS\s*60\.0 s/i.test(textoJanela),
   'as camadas: rodando 70.8 s, sem as lacunas 60.0 s');
 checar(/1 lacuna — intervalo maior que o dobro do normal \(60.0 s\)/.test(textoJanela), 'aponta a lacuna contra o normal de 60.0 s');
+// Volumes/hora: 14 volumes / 1.000 s de medicao = 50,4 -> 50, o mesmo da
+// coluna da lista; e o cartao vem depois de Lacunas.
+{
+  // Cartao a cartao, na ordem da tela: Lacunas (1, 2min20s alem do normal)
+  // e logo depois Volumes/hora.
+  const linhaLista = await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().innerText();
+  checar(/LACUNAS\s*1\s*2min20s além do normal\s*VOLUMES\/HORA\s*50\s*na medição inteira, com as paradas/i.test(textoJanela),
+    'o cartao Volumes/hora (50) vem logo depois de Lacunas');
+  checar(/\b50\s*14 volumes/.test(linhaLista), `a lista diz os mesmos 50 volumes/hora (${linhaLista.replace(/\n/g, ' | ')})`);
+}
 checar(/Faltou caixa às 9h10/.test(textoJanela), 'a observacao aparece junto da lacuna');
 checar(await janela.locator('svg[role="img"]').count() === 1, 'grafico volume a volume desenhado');
 checar(/Onde a linha parou sem parada marcada/.test(textoJanela) && textoJanela.includes('200.0 s'),
@@ -401,6 +411,11 @@ await p.emulateMedia({ media: 'print' });
 const folha = p.locator('body > .somente-impressao');
 checar(await folha.isVisible(), 'impressao: a folha A4 da medicao aparece');
 checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some do papel');
+{
+  const textoFolha = await folha.innerText();
+  checar(/LACUNAS\s*1\s*2min20s além do normal\s*VOLUMES\/HORA\s*50(?!\d)/i.test(textoFolha),
+    'impressao: volumes/hora (50) na folha, depois de Lacunas');
+}
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
 
