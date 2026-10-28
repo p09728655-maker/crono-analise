@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { unidadeDoPosto } from '../src/domain/cronoanalise.js';
 import {
-  frasesDaJuncao, juntarMedicoes, motivoParaNaoJuntar,
+  frasesDaJuncao, juntarMedicoes, motivoParaNaoJuntar, taktDaJuncao,
 } from '../src/domain/juncaoMedicoes.js';
 import { porHoraDaMedicao, roubadosPelasParadas } from '../src/domain/volumeAVolume.js';
 
@@ -164,7 +164,7 @@ describe('o passo entre as medicoes', () => {
     ]);
     const f = frasesDaJuncao({ juncao: j, unidade: VOLUME, hora });
     expect(j.lacunas.map((l) => [l.conferencia.id, l.volume])).toEqual([['08:00', 12]]);
-    expect(f.linhas.find((l) => l.startsWith('O passo'))).toBe('O passo é o mesmo nas 2 (de 14.0 a 14.0 s sem as lacunas).');
+    expect(f.linhas.find((l) => l.startsWith('O passo'))).toBe('O passo é o mesmo nas 2 (14.0 s sem as lacunas).');
   });
 
   it('10% de diferenca dentro do ruido das medias nao e "passo muda"', () => {
@@ -187,6 +187,17 @@ describe('o passo entre as medicoes', () => {
     const fp = frasesDaJuncao({ juncao: poucos, unidade: VOLUME, hora });
     expect(fp.manchete).toBe('Poucos volumes para ler o intervalo');
     expect(fp.linhas.some((l) => l.startsWith('O passo'))).toBe(false);
+  });
+
+  it('o minimo de 10 intervalos conta SEM as lacunas — sao eles que fazem o passo', () => {
+    // 10 intervalos, 4 deles lacuna: o passo sairia de 6. Nao entra.
+    const j = juntarMedicoes([
+      de('07:00', Array(20).fill(14), '2026-10-28T10:00:00Z'),
+      de('08:00', [...Array(6).fill(16), ...Array(4).fill(40)], '2026-10-28T11:00:00Z'),
+    ]);
+    expect(j.medicoes[1].nSemLacunas).toBe(6);
+    const f = frasesDaJuncao({ juncao: j, unidade: VOLUME, hora });
+    expect(f.linhas.some((l) => l.startsWith('O passo'))).toBe(false);
   });
 
   it('veredito acima do takt: a causa vem colada a ele, no plural', () => {
@@ -252,5 +263,44 @@ describe('a junção como medicao, no historico e na nota', () => {
     const { notaDaJuncao } = await import('../src/domain/juncaoMedicoes.js');
     expect(notaDaJuncao(lista, '  Classificar as paradas ')).toMatch(/^Junção de 3 medições \(\d{2}:\d{2}–\d{2}:\d{2}\): Classificar as paradas$/);
     expect(notaDaJuncao(lista, '')).toMatch(/^Junção de 3 medições \(\d{2}:\d{2}–\d{2}:\d{2}\)\.$/);
+  });
+});
+
+describe('o takt da junção', () => {
+  const t = (taktMs, semana, setupPlanejado = true) => ({ taktMs, estado: 'ok', semana, setupPlanejado });
+
+  it('o mesmo takt em todas: e o takt da junção', () => {
+    expect(taktDaJuncao([t(20900, 'de 21/10'), t(20900, 'de 21/10')])).toEqual(t(20900, 'de 21/10'));
+  });
+
+  it('semanas do programa diferentes: sem veredito, e o setup planejado continua valendo', () => {
+    // Revisao da v2.96.0: programa com semanas que viram na quarta — a
+    // segunda 26/10 cai na semana de 21/10 (20,9 s), a quarta 28/10 na de
+    // 28/10 (16,3 s). Perder o setup planejado com o takt punha o setup
+    // marcado entre os toques DENTRO do periodo.
+    const j = taktDaJuncao([t(20900, 'de 21/10'), t(16300, 'de 28/10')]);
+    expect(j).toEqual({ taktMs: null, estado: 'takts-diferentes', semana: null, setupPlanejado: true });
+  });
+
+  it('com o setup planejado, o setup marcado entre os toques sai do periodo da junção', () => {
+    // 2 medicoes de 12 x 14 s; a primeira com 5 min de setup ao vivo no
+    // trecho. Sem o setup: (168 + 168) / 24 = 14,0 s. Com ele dentro: 26,5 s.
+    const m = (id, inicio, setup) => {
+      const marcas = [0];
+      for (let i = 0; i < 12; i++) marcas.push(marcas[marcas.length - 1] + 14000);
+      return {
+        conferencia: {
+          id, rotulo: id, peca: 'X', maquina: 'E1', pecas: 13, duracao_ms: 168000 + setup + 1000,
+          iniciado_em: inicio, paradas: setup ? [{ motivo: 'setup', duracaoMs: setup }] : [],
+        },
+        marcas,
+        relogio: 168000 + setup,
+        setup,
+      };
+    };
+    const itens = [m('a', '2026-10-26T10:00:00Z', 300000), m('b', '2026-10-28T10:00:00Z', 0)];
+    const { setupPlanejado } = taktDaJuncao([t(20900, 'de 21/10'), t(16300, 'de 28/10')]);
+    expect(juntarMedicoes(itens, { setupPlanejado }).leitura.periodoMs).toBe(14000);
+    expect(juntarMedicoes(itens, { setupPlanejado: false }).leitura.periodoMs).toBe(26500);
   });
 });

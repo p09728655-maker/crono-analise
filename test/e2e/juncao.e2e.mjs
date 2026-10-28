@@ -168,7 +168,10 @@ checar(/POR VOLUME COM A LINHA RODANDO\s*14\.4 s/i.test(texto), 'rodando: 14.4 s
 checar(/LACUNAS\s*2\s/i.test(texto), 'lacunas: 2, contra o normal da junção');
 checar(/VOLUMES\/HORA\s*197\s*nas 3 medições inteiras, com as paradas/i.test(texto), 'volumes/hora: 197, ponderado pelo tempo');
 // A tabela das medicoes, com a junção na ultima linha.
-checar(/Junção\s*138\s*42 min\s*9 min\s*36\s*17\.9 s\s*14\.4 s\s*197/.test(texto), 'tabela: a linha da junção soma tudo');
+checar(/Junção\s*138\s*42 min\s*9 min\s*36\s*17\.9 s\s*14\.4 s\s*14\.2 s\s*197/.test(texto), 'tabela: a linha da junção soma tudo');
+// O passo que a leitura compara aparece na tabela: 13.8, 14.3 e 14.9 s sem as lacunas.
+checar(/14\.1 s\s*13\.8 s\s*236/.test(texto) && /14\.6 s\s*14\.3 s\s*181/.test(texto) && /14\.9 s\s*14\.9 s\s*159/.test(texto),
+  'tabela: o passo sem as lacunas de cada medicao, o mesmo da frase');
 checar(/236[\s\S]*181[\s\S]*159/.test(texto), 'tabela: cada medicao com o proprio volumes/hora (236, 181, 159)');
 // A leitura.
 checar(/Nas 3 medições, as paradas roubaram 36 volumes: saíram 138, e no passo da linha rodando teriam saído 174\./.test(texto),

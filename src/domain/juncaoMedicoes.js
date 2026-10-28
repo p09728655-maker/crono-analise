@@ -5,8 +5,8 @@
  * Nasceu de tres medicoes seguidas de uma penteadeira (07:11, 07:27 e
  * 07:52): 236, 181 e 159 volumes/hora na lista, tres numeros que nao
  * diziam nada juntos. Juntas, elas mostram o que interessa ao PCP: o passo
- * da linha era o mesmo nas tres (14,1 a 14,9 s rodando), e as paradas
- * roubaram 36 volumes em 42 minutos.
+ * da linha, sem as lacunas, era o mesmo nas tres (13,8 a 14,9 s), e as
+ * paradas roubaram 36 volumes em 42 minutos.
  *
  * AS REGRAS, todas pelo mesmo motivo — nao inventar tempo nem misturar
  * coisas diferentes:
@@ -46,7 +46,8 @@ import { frasesVolumeAVolume, roubadosPelasParadas } from './volumeAVolume.js';
  * intervalos / raiz da quantidade). Nas medicoes reais o desvio e' de 3 a
  * 4 s em 14 s: com 10 intervalos o erro da media ja' e' 6 a 9%, e 10% sozinho
  * seria ruido. So' entram na comparacao as medicoes com a leitura minima
- * (10 intervalos), a mesma de uma medicao sozinha.
+ * (10 intervalos SEM as lacunas — sao eles que fazem o passo), a mesma de
+ * uma medicao sozinha.
  */
 export const CRITERIOS_JUNCAO = { minMedicoes: 2, passoIgualPct: 10 };
 
@@ -70,6 +71,31 @@ export function motivoParaNaoJuntar(conferencias) {
   const semanas = lista.map(semanaDa);
   if (semanas.some((s) => !s) || new Set(semanas).size > 1) return `${regra}: estas são de semanas diferentes.`;
   return null;
+}
+
+/**
+ * O TAKT DA JUNCAO, a partir do takt de cada medicao (taktDaMedicao).
+ *
+ * A trava da lista e' pela semana do calendario; o takt casa pela semana do
+ * PROGRAMA, por data — e um programa cujas semanas viram na quarta poe a
+ * segunda e a quarta da mesma semana ISO em takts diferentes. Ai' nao ha'
+ * um takt so', e a junção fica sem veredito, dizendo por que.
+ *
+ * O SETUP PLANEJADO segue valendo mesmo sem takt: ele e' do cadastro do
+ * grupo, o mesmo para todas, e decide se o setup marcado entre os toques
+ * sai do periodo (periodoPorPeca). Perde-lo junto com o takt fazia o
+ * periodo da junção sair com o setup dentro (revisao da v2.96.0).
+ */
+export function taktDaJuncao(takts) {
+  const primeiro = takts[0] || { taktMs: null, estado: 'sem-data', semana: null };
+  const umSo = takts.every((t) => t.taktMs === primeiro.taktMs && t.semana === primeiro.semana);
+  if (umSo) return primeiro;
+  return {
+    taktMs: null,
+    estado: 'takts-diferentes',
+    semana: null,
+    setupPlanejado: takts.some((t) => t.setupPlanejado),
+  };
 }
 
 /** As medicoes na ordem em que aconteceram. */
@@ -217,6 +243,7 @@ export function juntarMedicoes(itens, { taktMs = null, setupPlanejado = false } 
   const ehLacuna = new Set((leitura?.lacunas || []).map((l) => l.indice));
   for (const m of medicoes) {
     const semLacunas = todos.slice(m.inicio, m.inicio + m.n).filter((_, k) => !ehLacuna.has(m.inicio + k));
+    m.nSemLacunas = semLacunas.length;
     m.normalMs = semLacunas.length ? media(semLacunas) : null;
     m.erroMs = erroDaMedia(semLacunas);
   }
@@ -256,7 +283,7 @@ export function juntarMedicoes(itens, { taktMs = null, setupPlanejado = false } 
  */
 export function passoDasMedicoes(medicoes) {
   const comLeitura = medicoes
-    .filter((m) => m.n >= CRITERIOS_INTERVALOS.minIntervalos && m.normalMs > 0 && m.erroMs !== null);
+    .filter((m) => m.nSemLacunas >= CRITERIOS_INTERVALOS.minIntervalos && m.normalMs > 0 && m.erroMs !== null);
   if (comLeitura.length < 2) return null;
   const ordem = [...comLeitura].sort((a, b) => a.normalMs - b.normalMs);
   const rapida = ordem[0];
@@ -314,8 +341,12 @@ export function frasesDaJuncao({
   // passo e' o mesmo" na mesma tela seria a tela se contradizendo.
   const passo = leitura.suficiente ? passoDasMedicoes(medicoes) : null;
   if (passo) {
-    const quais = passo.comparadas === n ? `nas ${n}` : `nas ${passo.comparadas} com leitura (${CRITERIOS_INTERVALOS.minIntervalos} intervalos ou mais)`;
-    const faixa = `de ${formatarSegundos(passo.menor)} a ${formatarSegundos(passo.maior)} s sem as lacunas`;
+    // "nas 2 com leitura": as de menos de 10 intervalos ficam de fora (o
+    // "como ler" diz o criterio). Passo igual ao decimo: um numero so'.
+    const quais = passo.comparadas === n ? `nas ${n}` : `nas ${passo.comparadas} com leitura`;
+    const menor = formatarSegundos(passo.menor);
+    const maior = formatarSegundos(passo.maior);
+    const faixa = `${menor === maior ? menor : `de ${menor} a ${maior}`} s sem as lacunas`;
     if (passo.igual) {
       const comParada = medicoes.some((m) => (m.roubo?.paradaMs || 0) > 0);
       const maiorRoubo = [...medicoes].filter((m) => m.roubo?.roubados > 0)

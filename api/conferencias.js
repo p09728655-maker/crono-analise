@@ -377,7 +377,9 @@ async function analisarLote({ auth, res, corpo, ids }) {
       }
       throw nadaMudou();
     }
-    // Parte gravada so' com a RLS barrando alguma: o erro desfaz a transacao.
+    // Parte gravada: com a RLS barrando alguma, o erro desfaz a transacao.
+    // No modo de servico (sem transacao) so' sobra a janela de um DELETE
+    // entre a contagem e a trava da linha — microssegundos, aceita.
     if (alteradas.length !== ids.length) throw nadaMudou();
     return json(res, 200, { atualizadas: alteradas.length, conferencias: alteradas });
   });
