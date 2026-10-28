@@ -4,7 +4,7 @@ import {
   faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
-import { frasesVolumeAVolume, numerosDaLeitura } from '../../../domain/volumeAVolume.js';
+import { frasesVolumeAVolume, numerosDaLeitura, porHoraDaMedicao } from '../../../domain/volumeAVolume.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
 import { listarDemanda, marcasDaConferencia, salvarAnaliseConferencia } from '../../../lib/api.js';
 import { dataDoArquivo, imprimirComo, nomeDoArquivo } from '../../../lib/impressao.js';
@@ -12,7 +12,7 @@ import { claro } from '../../../theme/tokensAnalise.js';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
 import { VERSAO } from '../../../versao.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
-import { est, imp } from './estilos.js';
+import { colunasDosKpis, est, imp } from './estilos.js';
 import { emSegundos } from './formato.js';
 
 /** Lacunas listadas na folha A4: as maiores. A tela mostra todas. */
@@ -425,12 +425,13 @@ export default function VolumeAVolume({
 }
 
 /**
- * OS NUMEROS DA MEDICAO. Em destaque, os cinco que o lider le primeiro:
+ * OS NUMEROS DA MEDICAO. Em destaque, os seis que o lider le primeiro:
  * quantos volumes, os dois tempos por volume (periodo e linha rodando, lado
  * a lado — a diferenca entre eles e' o peso das paradas), quanto se parou
- * marcando e quantas lacunas. Na faixa de apoio, os que completam a
- * leitura. Todos saem de numerosDaLeitura e de somarParadas — os mesmos
- * da folha A4; nenhum numero novo nasce aqui.
+ * marcando, quantas lacunas e, por ultimo, os volumes/hora da lista. Na
+ * faixa de apoio, os que completam a leitura. Todos saem de
+ * numerosDaLeitura, porHoraDaMedicao e somarParadas — os mesmos da folha
+ * A4; nenhum numero novo nasce aqui.
  */
 function Indicadores({
   conferencia, leitura, takt, unidade, tom,
@@ -457,15 +458,19 @@ function Indicadores({
       ? `${par.n} ${par.n === 1 ? 'parada' : 'paradas'} na medição inteira, também fora dos toques`
       : 'nenhuma parada marcada',
   };
+  // Volumes/hora depois de Lacunas: vale com qualquer leitura, porque sai
+  // da medicao inteira, nao dos intervalos.
+  const doPapel = porHoraDaMedicao(conferencia, unidade);
+  const porHora = { ...doPapel, sub: `${doPapel.sub} — o mesmo da lista` };
   const principais = leitura.suficiente
-    ? [volumes, doDominio.periodo, doDominio.rodando, paradas, doDominio.lacunas]
-    : [volumes, ...numeros, paradas];
+    ? [volumes, doDominio.periodo, doDominio.rodando, paradas, doDominio.lacunas, porHora]
+    : [volumes, ...numeros, paradas, porHora];
   const apoio = leitura.suficiente ? [doDominio.normal, doDominio.takt] : [];
   const corVeredito = COR_DO_TOM[tom];
 
   return (
     <>
-      <div style={est.vavKpis}>
+      <div style={{ ...est.vavKpis, gridTemplateColumns: colunasDosKpis(principais.length) }}>
         {principais.map((k) => (
           <div
             key={k.chave}
@@ -520,6 +525,7 @@ function definicoes(leitura, unidade) {
     [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, e só quando o grupo tem setup planejado (ele já saiu das horas do takt). É o que vai contra o takt — a mesma régua do programa da semana.'],
     [`Por ${unidade.singular} com a linha rodando`, 'soma dos intervalos dividida pela quantidade de intervalos.'],
     ['Lacuna', `intervalo maior que ${fatorLacuna}× o normal — a média dos intervalos que não são lacuna (o "sem as lacunas"). Parada marcada e passo lento não viram lacuna.`],
+    [`${capital(unidade.plural)}/hora`, `${unidade.plural} da medição ÷ o tempo da medição inteira, com as paradas dentro — o mesmo número da lista e do tablet. Por isso 3.600 ÷ o por ${unidade.singular} no período não dá este número: a medição inteira inclui o tempo antes do primeiro toque e depois do último e, quando o grupo tem setup planejado, o setup marcado entre os toques, que o por ${unidade.singular} no período tira.`],
     ['Leitura', `a partir de ${minIntervalos} intervalos.${unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é em volumes, e o takt usa as horas dos dias programados.' : ''}`],
   ];
 }
@@ -548,6 +554,10 @@ function notaDoCriterio(leitura, unidade) {
     + '(sem o setup marcado entre os toques, quando o grupo tem setup planejado) — a mesma régua do programa da semana. '
     + 'Com a linha rodando = soma dos intervalos ÷ quantidade. '
     + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal — a média dos intervalos que não são lacuna. `
+    // Sem "o mesmo da lista": no papel nao ha' lista.
+    + `${capital(unidade.plural)}/hora = ${unidade.plural} ÷ tempo da medição inteira, com as paradas dentro: `
+    + 'inclui o tempo antes do primeiro toque e depois do último e, com setup planejado, o setup entre os toques, '
+    + `que o por ${unidade.singular} no período tira. `
     + `Leitura a partir de ${leitura.criterios.minIntervalos} intervalos.`
     + (unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é em volumes, e o takt usa as horas dos dias programados.' : '');
 }
@@ -650,8 +660,9 @@ function FolhaVolumeAVolume({
         {frases.linhas.map((l) => <p key={l} style={{ margin: '4px 0 0' }}>{l}</p>)}
       </section>
 
-      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(5, 1fr)' }}>
-        {numerosDaLeitura(leitura, takt, unidade).map((k) => (
+      {/* Volumes/hora depois de Lacunas, como na tela. */}
+      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
+        {[...numerosDaLeitura(leitura, takt, unidade), porHoraDaMedicao(conferencia, unidade)].map((k) => (
           <div key={k.rotulo} style={imp.campo}>
             <span style={imp.campoRotulo}>{k.rotulo}</span>
             <span style={imp.campoValor}>{k.valor}</span>

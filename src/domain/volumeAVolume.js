@@ -9,6 +9,7 @@
  * Foi assim que a regua errada do takt passou uma vez: o teste olhava o
  * numero certo e a tela escrevia outro.
  */
+import { conferenciaRapida } from './crono/conferencia.js';
 import { formatarSegundos } from './crono/formato.js';
 import { diasProgramados } from './demanda/formato.js';
 
@@ -53,10 +54,13 @@ export function frasesVolumeAVolume({
 }) {
   const { singular, plural } = unidade;
   if (!leitura.suficiente) {
+    // "Intervalo", nao "ritmo": os volumes/hora ao lado valem com qualquer
+    // numero de toques (saem da medicao inteira) — dizer que nao da' para
+    // ler o ritmo, com ele no cartao, seria a tela se contradizendo.
     return {
       tom: 'neutro',
-      manchete: `Poucos ${plural} para ler o ritmo`,
-      linhas: [`${leitura.motivo}. O gráfico mostra o que foi tocado.`],
+      manchete: `Poucos ${plural} para ler o intervalo`,
+      linhas: [`${leitura.motivo}. O gráfico mostra o que foi tocado; os ${plural}/hora valem, porque saem da medição inteira.`],
     };
   }
 
@@ -164,5 +168,32 @@ export function numerosDaLeitura(leitura, takt = {}, unidade) {
         : `nenhum intervalo passou de ${leitura.criterios.fatorLacuna}× o normal`,
     },
   ];
+}
+
+/**
+ * VOLUMES/HORA DA MEDICAO — o MESMO numero da coluna da lista e do
+ * resultado no tablet: volumes / medicao inteira, paradas dentro
+ * (pecasPorHoraBruto, pela mesma conferenciaRapida). Quem clica no 341 da
+ * lista tem de achar 341 aqui, e nao um terceiro numero.
+ *
+ * Nao e' 3.600 / "por volume no periodo": a medicao inteira traz tambem o
+ * tempo antes do primeiro toque e depois do ultimo e, com setup PLANEJADO,
+ * o setup marcado entre os toques — que o periodo tira (ver
+ * periodoPorPeca). O subtitulo diz de que tempo sai, e o "como ler"
+ * explica a diferenca. Sem tempo para dividir, '—', como na lista — nunca 0.
+ *
+ * O subtitulo e' o do PAPEL: na folha nao ha' lista, e "o mesmo da lista"
+ * la' nao diria nada. A tela acrescenta isso.
+ */
+export function porHoraDaMedicao(conferencia, unidade) {
+  const calc = conferenciaRapida({
+    duracaoMs: Number(conferencia.duracao_ms), pecas: conferencia.pecas, paradas: conferencia.paradas,
+  });
+  return {
+    chave: 'porHora',
+    rotulo: `${unidade.plural.charAt(0).toUpperCase()}${unidade.plural.slice(1)}/hora`,
+    valor: calc ? String(Math.round(calc.pecasPorHoraBruto)) : '—',
+    sub: 'na medição inteira, com as paradas',
+  };
 }
 

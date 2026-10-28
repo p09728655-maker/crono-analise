@@ -9,7 +9,7 @@ import {
   CRITERIOS_INTERVALOS, intervalosEntreMarcas, leituraPecaAPeca, periodoPorPeca, unidadeDoPosto,
 } from '../src/domain/cronoanalise.js';
 import { taktDaMedicao } from '../src/domain/demandaSemanal.js';
-import { frasesVolumeAVolume, numerosDaLeitura } from '../src/domain/volumeAVolume.js';
+import { frasesVolumeAVolume, numerosDaLeitura, porHoraDaMedicao } from '../src/domain/volumeAVolume.js';
 
 /** Marcas a partir dos intervalos: [60, 60, 200] -> [0, 60, 120, 320] (em s). */
 const marcasDe = (intervalosS, inicioS = 0) => {
@@ -205,6 +205,33 @@ describe('contra o takt vai o relogio entre o primeiro e o ultimo toque', () => 
     // Sem lacuna, diz o que o criterio viu — nao que nao houve perda.
     expect(k[4].valor).toBe('0');
     expect(k[4].sub).toBe('nenhum intervalo passou de 2× o normal');
+  });
+
+  it('volumes/hora: o mesmo numero da lista — volumes / medicao inteira, paradas dentro', () => {
+    // 40 volumes em 7 min = 40 x 60 / 7 = 342,86 -> 343. A parada de 1 min
+    // fica DENTRO (e' o que de fato saiu): continua 343, nao 40 x 60 / 6.
+    const c = { duracao_ms: 420000, pecas: 40, paradas: [] };
+    const k = porHoraDaMedicao(c, VOLUME);
+    expect(k).toMatchObject({ chave: 'porHora', rotulo: 'Volumes/hora', valor: '343' });
+    expect(k.sub).toMatch(/medição inteira, com as paradas/);
+    expect(porHoraDaMedicao({ ...c, paradas: [{ motivo: 'falta_material', duracaoMs: 60000 }] }, VOLUME).valor).toBe('343');
+    expect(porHoraDaMedicao(c, unidadeDoPosto('FURADEIRA')).rotulo).toBe('Peças/hora');
+    // O subtitulo e' o do papel: na folha nao ha' lista para "o mesmo da lista".
+    expect(k.sub).not.toMatch(/lista/);
+    // Sem tempo para dividir: vazio, nunca 0 nem Infinity — como na lista.
+    expect(porHoraDaMedicao({ ...c, duracao_ms: 0 }, VOLUME).valor).toBe('—');
+    expect(porHoraDaMedicao({ ...c, duracao_ms: null }, VOLUME).valor).toBe('—');
+  });
+
+  it('com poucos intervalos, a manchete fala do INTERVALO — o volumes/hora ao lado vale', () => {
+    // 5 volumes, 4 intervalos: abaixo do minimo da leitura. Dizer "poucos
+    // para ler o ritmo" com o cartao Volumes/hora mostrando um ritmo era a
+    // tela se contradizendo (revisao da v2.95.3).
+    const leitura = leituraPecaAPeca({ marcasMs: marcasDe(Array(4).fill(60)) });
+    expect(leitura.suficiente).toBe(false);
+    const f = frasesVolumeAVolume({ leitura, unidade: VOLUME });
+    expect(f.manchete).toBe('Poucos volumes para ler o intervalo');
+    expect(f.linhas[0]).toMatch(/os volumes\/hora valem, porque saem da medição inteira/);
   });
 
   it('o takt da medicao diz se ha setup planejado — zero nao conta como planejado', () => {

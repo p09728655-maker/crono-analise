@@ -14,6 +14,33 @@ import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../../theme/es
 
 const t = claro;
 
+/** Menor largura de um cartao de numero do volume a volume ("70.8 s" inteiro). */
+const KPI_MIN = 118;
+
+/**
+ * As colunas dos cartoes do volume a volume, sem cartao sozinho na ultima
+ * linha. Com N cartoes (N par): os N numa linha so' quando cabem todos a
+ * KPI_MIN; senao N/2 por linha (6 -> 3 + 3, 4 -> 2 + 2); abaixo disso, o
+ * que couber a KPI_MIN (2 + 2 + 2). O auto-fit sozinho partia os seis em
+ * 5 + 1, e o sexto parecia de outro grupo.
+ *
+ * O degrau sai do clamp: (largura que cabe tudo - 100%) x 100000 e' enorme
+ * enquanto nao cabe (o clamp fica no teto, N/2 colunas) e negativo quando
+ * cabe (fica no piso, N colunas). O -1px de cada divisao segura o
+ * arredondamento: a conta exata as vezes nao cabia por uma fracao de pixel
+ * e derrubava uma coluna. N impar fica com o auto-fit simples.
+ */
+export function colunasDosKpis(n) {
+  const gap = espaco.md;
+  const simples = `repeat(auto-fit, minmax(${KPI_MIN}px, 1fr))`;
+  if (n < 4 || n % 2) return simples;
+  const metade = n / 2;
+  const cabeTudo = n * KPI_MIN + (n - 1) * gap;
+  const umaLinha = `(100% - ${(n - 1) * gap + 1}px) / ${n}`;
+  const duasLinhas = `(100% - ${(metade - 1) * gap + 1}px) / ${metade}`;
+  return `repeat(auto-fit, minmax(max(${KPI_MIN}px, clamp(${umaLinha}, (${cabeTudo}px - 100%) * 100000, ${duasLinhas})), 1fr))`;
+}
+
 export const est = {
   tela: { minHeight: '100dvh', background: t.fundo, color: t.texto },
   telaComLateral: { minHeight: '100dvh', display: 'flex', alignItems: 'flex-start' },
@@ -469,10 +496,9 @@ export const est = {
     whiteSpace: 'pre-line', overflowWrap: 'anywhere',
   },
   vavObsRotulo: { ...rotulo(t.textoMedio), marginRight: espaco.sm },
-  // Os cinco numa linha so' a partir de ~650px de painel (PC com a lateral
-  // aberta em 1024): partidos em 3 + 2, o quinto parecia de outro grupo.
+  // As colunas dependem de quantos cartoes ha': ver colunasDosKpis.
   vavKpis: {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))', gap: espaco.md,
+    display: 'grid', gridTemplateColumns: colunasDosKpis(0), gap: espaco.md,
   },
   // Subgrid: rotulo, valor e descricao de todos os cartoes da mesma linha
   // dividem as mesmas tres faixas. O rotulo que quebra em duas linhas
@@ -492,7 +518,7 @@ export const est = {
   vavKpiUnidade: { fontSize: 15, fontWeight: 600, letterSpacing: 0, color: t.textoMedio },
   vavKpiSub: { ...tipo('legenda'), color: t.textoMedio, lineHeight: 1.4, alignSelf: 'start' },
   // Os numeros de apoio: existem e continuam visiveis, mas nao disputam o
-  // olho com os cinco de cima.
+  // olho com os seis de cima.
   vavApoio: {
     display: 'flex', flexWrap: 'wrap', columnGap: espaco.xl, rowGap: espaco.xs,
     margin: `-${espaco.xs}px 0 0`, padding: `${espaco.sm}px ${espaco.md}px`,

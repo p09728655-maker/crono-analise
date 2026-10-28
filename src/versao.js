@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.95.3',
+    data: '2026-10-28',
+    titulo: 'Embalagem Takt Time: volumes/hora no volume a volume e na folha impressa',
+    itens: [
+      'VOLUMES/HORA NO VOLUME A VOLUME. O número da coluna "Volumes/hora" da lista agora aparece também ao abrir a medição, num cartão logo depois de Lacunas, e na folha impressa, também depois de Lacunas. É o mesmo número da lista e do tablet: volumes ÷ o tempo da medição inteira, com as paradas dentro.',
+      'POR QUE NÃO BATE COM 3.600 ÷ O TEMPO POR VOLUME: o tempo por volume no período vai do primeiro ao último toque e, quando o grupo tem setup planejado, tira o setup marcado entre os toques; os volumes/hora usam a medição inteira, com tudo dentro. O "Como ler estes números" e a nota da folha explicam isso.',
+      'COM POUCOS TOQUES, a manchete passa a dizer "Poucos volumes para ler o intervalo" (antes: "o ritmo"): os volumes/hora valem mesmo assim, porque saem da medição inteira.',
+      'OS SEIS CARTÕES NÃO DEIXAM MAIS UM SOZINHO: em tela larga ficam numa linha só; quando não cabem, partem em 3 + 3 (ou 2 + 2 + 2), nunca 5 + 1.',
+    ],
+  },
+  {
     versao: '2.95.2',
     data: '2026-10-27',
     titulo: 'Embalagem Takt Time: a fila conta só o que dá para analisar',
