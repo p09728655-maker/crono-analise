@@ -55,9 +55,15 @@ const COR_TEXTO_LACUNA = claro.critico;
  *
  * `larguraFixa` e' o caminho da folha A4: o papel nao tem container que se
  * mede, e tooltip nao imprime.
+ *
+ * `segmentos` e' a JUNCAO de medicoes ([{ inicio, rotulo }]: o indice do
+ * primeiro intervalo de cada medicao e a hora dela): uma linha vertical
+ * separa uma medicao da seguinte, com a hora em cima, e o volume no eixo e'
+ * o numero DENTRO da medicao — o mesmo da tabela de lacunas. O tempo entre
+ * medicoes nao e' intervalo, e o grafico nao finge que e'.
  */
 export function GraficoIntervalos({
-  leitura, unidade, altura = 260, larguraFixa = null,
+  leitura, unidade, altura = 260, larguraFixa = null, segmentos = null,
 }) {
   const id = useId().replace(/:/g, '');
   const [refContainer, larguraContainer] = useLarguraContainer(360);
@@ -66,6 +72,10 @@ export function GraficoIntervalos({
   if (!intervalos.length) return <VazioGrafico texto="Sem intervalos para desenhar." />;
 
   const n = intervalos.length;
+  const segs = segmentos?.length > 1 ? segmentos : null;
+  const segmentoDe = (i) => segs && segs.reduce((achado, x) => (i >= x.inicio ? x : achado), segs[0]);
+  // O volume que fecha o intervalo i: o primeiro intervalo termina no 2o.
+  const volumeDe = (i) => (segs ? i - segmentoDe(i).inicio + 2 : i + 2);
   const takt = leitura.taktMs || 0;
   const mediaMs = leitura.suficiente ? leitura.mediaMs : 0;
   const normal = leitura.suficiente ? leitura.normalMs : 0;
@@ -87,7 +97,8 @@ export function GraficoIntervalos({
   const margem = {
     esq: EIXO.esq,
     dir: linhasDeReferencia.length ? CALHA_ROTULOS : EIXO.dir,
-    topo: 22,
+    // Com medicoes separadas, a hora de cada uma mora acima das barras.
+    topo: segs ? 36 : 22,
     base: EIXO.base,
   };
 
@@ -127,16 +138,16 @@ export function GraficoIntervalos({
   // depois os redondos a cada passo que caiba, por ultimo o primeiro
   // volume — o que encostaria num ja' escrito sai.
   const passoX = PASSOS_X.find((p) => p * banda >= ESPACO_ROTULO_X) || PASSOS_X[PASSOS_X.length - 1];
-  const candidatoX = (i) => ({ chave: i, x: xCentro(i), largura: larguraDoTexto(i + 2) });
+  const candidatoX = (i) => ({ chave: i, x: xCentro(i), largura: larguraDoTexto(volumeDe(i)) });
   const comRotuloX = rotulosSemColisao([
     ...destaques.filter((x) => lacunas.has(x.i)).map((x) => candidatoX(x.i)),
-    ...intervalos.map((_, i) => i).filter((i) => (i + 2) % passoX === 0).map(candidatoX),
-    candidatoX(0),
+    ...intervalos.map((_, i) => i).filter((i) => volumeDe(i) % passoX === 0).map(candidatoX),
+    ...(segs ? segs.map((x) => candidatoX(x.inicio)) : [candidatoX(0)]),
   ]);
   const rotulosX = [...comRotuloX];
 
   const descricao = (ms, i) => {
-    const partes = [`${capital(unidade.singular)} ${i + 2}: ${emSegundos(ms)}`];
+    const partes = [`${segs ? `${segmentoDe(i).rotulo} · ` : ''}${capital(unidade.singular)} ${volumeDe(i)}: ${emSegundos(ms)}`];
     if (lacunas.has(i)) partes.push('lacuna');
     return partes.join(' — ');
   };
@@ -154,6 +165,7 @@ export function GraficoIntervalos({
         <span style={est.subtitulo}>
           Tempo de cada {unidade.singular} até {unidade.comArtigo.startsWith('uma') ? 'a seguinte' : 'o seguinte'},
           {' '}com a linha rodando — as paradas marcadas no cronômetro ficam fora
+          {segs && '. As medições lado a lado, separadas por uma linha: o intervalo não passa de uma para a outra'}
         </span>
       </figcaption>
 
@@ -170,6 +182,7 @@ export function GraficoIntervalos({
             cor: r.cor,
             linha: r.chave === 'media' ? 'dotted' : 'dashed',
           })),
+          ...(segs ? [{ rotulo: 'Início de outra medição', cor: claro.texto, linha: 'solid' }] : []),
         ]}
       />
 
@@ -183,7 +196,8 @@ export function GraficoIntervalos({
           aria-label={`Intervalo entre ${unidade.plural}: ${n} intervalos`
             + `${mediaMs ? `, média de ${emSegundos(mediaMs)}` : ''}`
             + `${takt ? `, takt de ${emSegundos(takt)}` : ''}`
-            + `, ${lacunas.size} lacuna(s)`}
+            + `, ${lacunas.size} lacuna(s)`
+            + `${segs ? `, em ${segs.length} medições` : ''}`}
         >
           {/* Realce da coluna sob o mouse — so' na tela (o papel nao tem
               os alvos de hover). */}
@@ -253,6 +267,25 @@ export function GraficoIntervalos({
             );
           })}
 
+          {/* A divisa entre medicoes: depois das barras (nao some atras
+              delas) e antes das linhas de referencia, que atravessam tudo. */}
+          {segs && segs.map((x, k) => {
+            const xDivisa = margem.esq + banda * x.inicio;
+            return (
+              <g key={`seg-${x.inicio}`} pointerEvents="none">
+                {k > 0 && (
+                  <line x1={xDivisa} x2={xDivisa} y1={margem.topo - 14} y2={base} stroke={claro.texto} strokeWidth="1.5" />
+                )}
+                <text
+                  x={xDivisa + 4} y={margem.topo - 18} fontSize="11" fontWeight="700" fill={claro.texto}
+                  stroke={claro.papel} strokeWidth="3" paintOrder="stroke"
+                >
+                  {x.rotulo}
+                </text>
+              </g>
+            );
+          })}
+
           {/* Contorno branco por baixo das linhas, TODOS antes de qualquer
               linha: a linha atravessa as barras azuis sem sumir dentro
               delas, e o contorno de uma nao apaga a outra quando as duas
@@ -299,14 +332,14 @@ export function GraficoIntervalos({
               fontWeight={lacunas.has(i) ? 700 : 400}
               fill={lacunas.has(i) ? COR_TEXTO_LACUNA : claro.textoMedio}
             >
-              {i + 2}
+              {volumeDe(i)}
             </text>
           ))}
           <text
             x={margem.esq + (largura - margem.esq - margem.dir) / 2} y={altura - 6}
             textAnchor="middle" fontSize="11" fill={claro.textoMedio}
           >
-            {capital(unidade.singular)} nº
+            {capital(unidade.singular)} nº{segs ? ', medição a medição' : ''}
           </text>
         </svg>
       </div>

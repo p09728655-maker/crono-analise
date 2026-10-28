@@ -9,7 +9,7 @@
  * diferentes em outras telas. O verificador (test/checar-estilos.mjs)
  * segue o `import { est }` e confere as chaves usadas contra este arquivo.
  */
-import { claro } from '../../../theme/tokensAnalise.js';
+import { claro, serie } from '../../../theme/tokensAnalise.js';
 import { elevacao, espaco, numeros, raio, rotulo, tipo } from '../../../theme/escala.js';
 
 const t = claro;
@@ -453,6 +453,36 @@ export const est = {
   embSub: { display: 'block', ...tipo('legenda'), color: t.textoFraco },
   // A medicao com analise salva: o selo diz por escrito, a cor so' reforca.
   embAnalisada: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.ok },
+  // A JUNCAO na lista: a caixa de marcar (alvo de 40px, o clique nela nao
+  // abre a linha) e a barra que junta as marcadas.
+  embThCaixa: {
+    width: 40, padding: `${espaco.sm}px 0 ${espaco.sm}px ${espaco.md}px`,
+    background: '#F8F9FB', borderBottom: `1px solid ${t.borda}`,
+  },
+  embTdCaixa: { width: 40, padding: `${espaco.xs}px 0 0 ${espaco.xs}px`, verticalAlign: 'top' },
+  embCaixa: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, cursor: 'pointer',
+  },
+  embCaixaInput: { width: 18, height: 18, margin: 0, cursor: 'pointer', accentColor: t.texto },
+  embBarraJuntar: {
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: espaco.md,
+    margin: `${espaco.md}px 0 0`, padding: `${espaco.sm}px ${espaco.md}px`,
+    background: '#EAF2FC', borderRadius: raio.md, borderWidth: 1, borderStyle: 'solid', borderColor: '#BBD3F0',
+  },
+  embBarraTexto: { flex: '1 1 240px', minWidth: 0, display: 'flex', flexDirection: 'column' },
+  embBarraTitulo: { ...tipo('corpoF'), color: t.texto },
+  embBarraSub: { ...tipo('legenda'), ...numeros, color: t.textoMedio },
+  embBarraMotivo: { ...tipo('legenda'), fontWeight: 700, color: t.atencao },
+  embBotaoJuntar: {
+    minHeight: 40, padding: `0 ${espaco.lg}px`,
+    background: t.vermelho, border: 'none', borderRadius: raio.md, color: '#fff',
+    ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa, whiteSpace: 'nowrap',
+  },
+  embBotaoJuntarTravado: {
+    minHeight: 40, padding: `0 ${espaco.lg}px`,
+    background: t.bordaForte, border: 'none', borderRadius: raio.md, color: '#fff',
+    ...tipo('corpoF'), cursor: 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap',
+  },
   embPendenciaCritica: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.critico },
   embPendenciaAtencao: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.atencao },
 
@@ -571,6 +601,73 @@ export const est = {
     ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa,
     whiteSpace: 'nowrap',
   },
+  // Junção com medicao ja' analisada: salvar substitui a analise dela.
+  vavAvisoSubstitui: {
+    ...tipo('legenda'), fontWeight: 700, color: t.atencao, margin: `${espaco.sm}px 0 0`, flexBasis: '100%',
+  },
+  // Abaixo da meta, na junção: o tempo entre as medicoes fica fora da conta.
+  vavMetaNota: { ...tipo('legenda'), color: t.textoFraco, margin: `${espaco.xs}px 0 0` },
+
+  // O QUE AS PARADAS ROUBARAM. A faixa da esquerda e' a cor de estado
+  // critico do sistema — nunca o vermelho da marca — e o numero vem escrito
+  // por extenso ao lado da barra: a leitura nao depende da cor.
+  vavRoubo: {
+    display: 'flex', flexDirection: 'column', gap: espaco.md,
+    padding: `${espaco.md}px ${espaco.lg}px`, background: t.papel, borderRadius: raio.md,
+    borderStyle: 'solid', borderWidth: '1px 1px 1px 5px',
+    borderColor: `${t.borda} ${t.borda} ${t.borda} ${t.critico}`,
+  },
+  vavRouboCab: { display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: espaco.lg, rowGap: espaco.xs },
+  vavRouboNumero: {
+    fontSize: 40, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.03em', ...numeros,
+    color: t.critico, whiteSpace: 'nowrap',
+  },
+  vavRouboUnidade: { fontSize: 17, fontWeight: 700, letterSpacing: 0, marginLeft: 6 },
+  vavRouboTexto: { flex: '1 1 280px', minWidth: 0, display: 'flex', flexDirection: 'column' },
+  vavRouboTitulo: { ...tipo('corpoF'), color: t.texto },
+  vavRouboSub: { ...tipo('corpo'), color: t.textoMedio },
+  vavRouboBarras: {
+    display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+    columnGap: espaco.md, rowGap: espaco.sm, alignItems: 'center',
+  },
+  vavRouboRotulo: {
+    ...tipo('corpoF'), ...numeros, lineHeight: 1.3, color: t.texto, whiteSpace: 'nowrap',
+    display: 'flex', flexDirection: 'column',
+  },
+  vavRouboRotuloSub: { ...tipo('legenda'), lineHeight: 1.3, color: t.textoFraco },
+  vavRouboTrilho: { display: 'flex', height: 22, minWidth: 0 },
+  vavRouboSaiu: {
+    background: serie.tn, color: '#fff', fontSize: 11, fontWeight: 700, ...numeros,
+    display: 'flex', alignItems: 'center', paddingLeft: 6, borderRadius: '4px 0 0 4px',
+    overflow: 'hidden', whiteSpace: 'nowrap', minWidth: 0,
+  },
+  vavRouboRoubou: {
+    backgroundImage: `repeating-linear-gradient(45deg, ${t.critico} 0 3px, #FBE3D6 3px 6px)`,
+    borderStyle: 'solid', borderWidth: '1px 1px 1px 0', borderColor: t.critico,
+    borderRadius: '0 4px 4px 0', minWidth: 2,
+  },
+  vavRouboValor: { ...tipo('corpo'), ...numeros, color: t.textoMedio, whiteSpace: 'nowrap' },
+  vavRouboValorForte: { fontWeight: 700, color: t.critico },
+  vavRouboPe: { ...tipo('legenda'), color: t.textoMedio, margin: 0 },
+
+  // A tabela das medicoes da junção: a primeira coluna e' texto (a hora).
+  vavThTexto: {
+    padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'left', ...rotulo(t.textoFraco),
+    background: '#F8F9FB', borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  vavTdTexto: {
+    padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'left', ...tipo('corpo'), ...numeros,
+    color: t.texto, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  vavTdRoubado: {
+    padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'right', ...tipo('corpoF'), ...numeros,
+    color: t.critico, borderBottom: `1px solid ${t.borda}`, whiteSpace: 'nowrap',
+  },
+  // A linha da junção: a soma, destacada pelo fundo e pelo peso — nao so'
+  // pela cor.
+  vavTrTotal: { background: '#F1F3F6', fontWeight: 700 },
+  vavTabelaRolagem: { overflowX: 'auto' },
+
   vavAnaliseNota: {
     ...tipo('corpo'), color: t.texto, margin: 0,
     padding: `${espaco.sm}px ${espaco.md}px`, background: t.fundo, borderRadius: raio.sm,

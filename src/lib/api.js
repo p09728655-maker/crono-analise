@@ -179,6 +179,16 @@ export const salvarAnaliseConferencia = (id, { analisada, nota }) =>
     metodo: 'PATCH',
     corpo: analisada ? { analisada: true, analiseNota: nota || null } : { analisada: false },
   }).then((r) => r.conferencia);
+/**
+ * A ANALISE DE UMA JUNCAO: a mesma nota em todas as medicoes lidas juntas,
+ * numa ida so' — tudo ou nada (ver analisarLote em api/conferencias.js).
+ * Devolve as medicoes com os campos novos.
+ */
+export const salvarAnaliseConferencias = (ids, nota) =>
+  requisitar('/conferencias', {
+    metodo: 'PATCH',
+    corpo: { ids, analisada: true, analiseNota: nota || null },
+  }).then((r) => r.conferencias || []);
 export const excluirConferencia = (id) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 export const analisarConferenciasComIa = (dados) =>
