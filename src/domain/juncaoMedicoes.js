@@ -30,14 +30,23 @@
  */
 import { nomeChave } from './crono/conferencia.js';
 import { formatarSegundos } from './crono/formato.js';
-import { intervalosEntreMarcas, leituraPecaAPeca, periodoPorPeca } from './crono/intervalos.js';
+import {
+  CRITERIOS_INTERVALOS, intervalosEntreMarcas, leituraPecaAPeca, periodoPorPeca,
+} from './crono/intervalos.js';
 import { semanaIso } from './demanda/calendario.js';
 import { frasesVolumeAVolume, roubadosPelasParadas } from './volumeAVolume.js';
 
 /**
- * Passo "o mesmo" nas medicoes: a mais lenta com a linha rodando ate' 10%
- * acima da mais rapida. Acima disso, a junção diz que o passo mudou — a
- * medicao que destoa tem outra historia (operador, lote, abastecimento).
+ * O PASSO de cada medicao e' a media dos intervalos dela SEM as lacunas da
+ * junção (o "sem as lacunas"): com elas dentro, uma parada que ninguem
+ * marcou faria a medicao parecer de outro passo — e e' parada, nao passo.
+ *
+ * O passo MUDOU so' quando a mais lenta passa da mais rapida em mais de 10%
+ * E a diferenca passa do dobro do erro das duas medias (erro = desvio dos
+ * intervalos / raiz da quantidade). Nas medicoes reais o desvio e' de 3 a
+ * 4 s em 14 s: com 10 intervalos o erro da media ja' e' 6 a 9%, e 10% sozinho
+ * seria ruido. So' entram na comparacao as medicoes com a leitura minima
+ * (10 intervalos), a mesma de uma medicao sozinha.
  */
 export const CRITERIOS_JUNCAO = { minMedicoes: 2, passoIgualPct: 10 };
 
@@ -142,6 +151,13 @@ export function medicaoDaJuncao(conferencias) {
 }
 
 const media = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
+/** Erro da media: desvio-padrao amostral / raiz de n. */
+const erroDaMedia = (xs) => {
+  if (xs.length < 2) return null;
+  const m = media(xs);
+  const variancia = xs.reduce((s, x) => s + ((x - m) ** 2), 0) / (xs.length - 1);
+  return Math.sqrt(variancia / xs.length);
+};
 
 /**
  * A LEITURA DA JUNCAO.
@@ -197,6 +213,14 @@ export function juntarMedicoes(itens, { taktMs = null, setupPlanejado = false } 
   const periodoPorPecaMs = !semRelogio && todos.length ? relogioUtil / todos.length : null;
   const leitura = leituraPecaAPeca({ marcasMs: marcasJuntas, taktMs, periodoPorPecaMs });
 
+  // O passo de cada medicao, sem as lacunas da junção (ver CRITERIOS_JUNCAO).
+  const ehLacuna = new Set((leitura?.lacunas || []).map((l) => l.indice));
+  for (const m of medicoes) {
+    const semLacunas = todos.slice(m.inicio, m.inicio + m.n).filter((_, k) => !ehLacuna.has(m.inicio + k));
+    m.normalMs = semLacunas.length ? media(semLacunas) : null;
+    m.erroMs = erroDaMedia(semLacunas);
+  }
+
   const segmentoDe = (indice) => medicoes.find((m) => indice >= m.inicio && indice < m.inicio + m.n);
   const lacunas = (leitura?.lacunas || []).map((l) => {
     const m = segmentoDe(l.indice);
@@ -225,15 +249,27 @@ export function juntarMedicoes(itens, { taktMs = null, setupPlanejado = false } 
   };
 }
 
-/** "de 14.1 a 14.9 s" — o passo das medicoes, com a linha rodando. */
-function passoDasMedicoes(medicoes) {
-  const passos = medicoes.map((m) => m.rodandoMs).filter((x) => x > 0);
-  if (passos.length < 2) return null;
-  const menor = Math.min(...passos);
-  const maior = Math.max(...passos);
+/**
+ * O passo das medicoes que tem leitura (ver CRITERIOS_JUNCAO): o menor, o
+ * maior e se mudou. Null com menos de duas medicoes comparaveis — ai' a
+ * junção nao diz nada do passo.
+ */
+export function passoDasMedicoes(medicoes) {
+  const comLeitura = medicoes
+    .filter((m) => m.n >= CRITERIOS_INTERVALOS.minIntervalos && m.normalMs > 0 && m.erroMs !== null);
+  if (comLeitura.length < 2) return null;
+  const ordem = [...comLeitura].sort((a, b) => a.normalMs - b.normalMs);
+  const rapida = ordem[0];
+  const lenta = ordem[ordem.length - 1];
+  const diferenca = lenta.normalMs - rapida.normalMs;
+  const pct = (diferenca / rapida.normalMs) * 100;
+  const ruido = 2 * Math.sqrt((rapida.erroMs ** 2) + (lenta.erroMs ** 2));
   return {
-    menor, maior, igual: ((maior / menor) - 1) * 100 <= CRITERIOS_JUNCAO.passoIgualPct,
-    maisLenta: medicoes.find((m) => m.rodandoMs === maior),
+    menor: rapida.normalMs,
+    maior: lenta.normalMs,
+    igual: !(pct > CRITERIOS_JUNCAO.passoIgualPct && diferenca > ruido),
+    maisLenta: lenta,
+    comparadas: comLeitura.length,
   };
 }
 
@@ -252,9 +288,12 @@ export function frasesDaJuncao({
   juncao, takt = {}, unidade, nomeGrupo, hora,
 }) {
   const { leitura, medicoes, roubo } = juncao;
-  const base = frasesVolumeAVolume({ leitura, takt, unidade, nomeGrupo });
+  const base = frasesVolumeAVolume({
+    leitura, takt, unidade, nomeGrupo, juncao: true,
+  });
   const n = medicoes.length;
   const { plural } = unidade;
+  const temVeredito = Boolean(leitura.suficiente && leitura.periodoMs && leitura.taktMs);
 
   const extras = [];
   let manchete = base.manchete;
@@ -263,7 +302,6 @@ export function frasesDaJuncao({
   if (roubo && roubo.roubados > 0) {
     const frase = `Nas ${n} medições, as paradas roubaram ${roubo.roubados} ${roubo.roubados === 1 ? unidade.singular : plural}: `
       + `saíram ${roubo.saiu}, e no passo da linha rodando teriam saído ${roubo.potencial}.`;
-    const temVeredito = leitura.suficiente && leitura.periodoMs && leitura.taktMs;
     if (temVeredito) {
       extras.push(frase);
     } else {
@@ -272,16 +310,18 @@ export function frasesDaJuncao({
     }
   }
 
-  const passo = passoDasMedicoes(medicoes);
+  // O passo so' com a leitura da junção completa: "poucos volumes" e "o
+  // passo e' o mesmo" na mesma tela seria a tela se contradizendo.
+  const passo = leitura.suficiente ? passoDasMedicoes(medicoes) : null;
   if (passo) {
-    const faixa = `de ${formatarSegundos(passo.menor)} a ${formatarSegundos(passo.maior)} s com a linha rodando`;
+    const quais = passo.comparadas === n ? `nas ${n}` : `nas ${passo.comparadas} com leitura (${CRITERIOS_INTERVALOS.minIntervalos} intervalos ou mais)`;
+    const faixa = `de ${formatarSegundos(passo.menor)} a ${formatarSegundos(passo.maior)} s sem as lacunas`;
     if (passo.igual) {
-      const paradas = medicoes.map((m) => m.roubo?.paradaMs || 0);
-      const comParada = paradas.some((x) => x > 0);
+      const comParada = medicoes.some((m) => (m.roubo?.paradaMs || 0) > 0);
       const maiorRoubo = [...medicoes].filter((m) => m.roubo?.roubados > 0)
         .sort((a, b) => b.roubo.roubados - a.roubo.roubados)[0];
       extras.push(
-        `O passo é o mesmo nas ${n} (${faixa})`
+        `O passo é o mesmo ${quais} (${faixa})`
         + `${comParada ? ': o que muda de uma para outra são as paradas.' : '.'}`
         + `${maiorRoubo && n > 2 ? ` A das ${hora(maiorRoubo.conferencia)} sozinha perdeu ${maiorRoubo.roubo.roubados}.` : ''}`,
       );
@@ -293,7 +333,12 @@ export function frasesDaJuncao({
     }
   }
 
-  // Sem veredito, a frase do periodo vira a primeira linha, logo depois do
-  // passo (que explica a diferenca entre as medicoes).
+  // Com veredito ACIMA do takt, a causa ("o que tira a linha do takt…")
+  // fica colada a ele, antes dos roubados e do passo.
+  if (temVeredito && base.tom === 'falha') {
+    return { tom: base.tom, manchete, linhas: [linhasBase[0], ...extras, ...linhasBase.slice(1)] };
+  }
+  // Sem veredito, a frase do periodo vem logo depois do passo (que explica
+  // a diferenca entre as medicoes).
   return { tom: base.tom, manchete, linhas: [...extras, ...linhasBase] };
 }

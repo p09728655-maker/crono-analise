@@ -228,6 +228,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   // ou Reabrir, a linha marcada tem de estar ao lado do painel.
   const mostrar = (c, { clique = true } = {}) => {
     focarAoFechar.current = seletorDaLinha(c.juncao ? c.medicoes[0].id : c.id);
+    // A junção reaberta pelo F5 ou pelo Avancar volta com as medicoes dela
+    // marcadas: fechada, ela se junta de novo pela barra.
+    if (c.juncao) setMarcadas(c.medicoes.map((m) => m.id));
     setVista(vistaDaAberta(c));
     setPorClique(clique);
     setAberta(c);
@@ -370,7 +373,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
      antes, e recarregar ou fechar a aba tambem (beforeunload, como a
      coleta no App). O Voltar do navegador a partir da lista, nao. */
   const naoSalvas = (leitura ? leitura.medicoes.filter(analises.notaNaoSalva).length : 0)
-    + analises.juncoesNaoSalvas;
+    + analises.juncoesNaoSalvas(leitura?.medicoes || []);
   const pendente = analises.ocupado || naoSalvas > 0;
   useEffect(() => {
     if (!pendente) return undefined;
@@ -603,6 +606,10 @@ const AVISO_PENDENCIA = {
   'salvar-recusado': { texto: 'Análise não salva — abra para ver o motivo', estilo: est.embPendenciaCritica },
   'reabrir-recusado': { texto: 'Não reabriu — abra para ver o motivo', estilo: est.embPendenciaCritica },
   'nota-nao-salva': { texto: 'Nota digitada, ainda não salva', estilo: est.embPendenciaAtencao },
+  'nota-juncao-nao-salva': {
+    texto: 'Nota de junção digitada, ainda não salva — marque as medições e junte de novo',
+    estilo: est.embPendenciaAtencao,
+  },
 };
 
 /**

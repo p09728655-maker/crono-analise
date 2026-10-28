@@ -173,7 +173,13 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   mesma nota em todas numa ida só — tudo ou nada, no servidor (`PATCH
   /api/conferencias` com `ids`) —, com "Junção de N medições (07:11–07:58)"
   no começo, e as N saem da fila. A junção não fica guardada no banco: para
-  reimprimir, marque as medições de novo (também em *Analisadas*).
+  reimprimir, marque as medições de novo (também em *Analisadas*). Medição
+  já analisada na junção: o painel avisa que salvar substitui a análise dela
+  e mostra a nota antiga. O passo de cada medição é comparado **sem as
+  lacunas** e só entre as que têm leitura (10 intervalos); "mudou" exige
+  mais de 10% **e** mais que o dobro do erro das médias. Se as medições caem
+  em semanas diferentes do programa (takts diferentes), a junção fica sem
+  veredito e diz por quê.
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O programa da embalagem é em VOLUMES**: um rack que sai em dois volumes

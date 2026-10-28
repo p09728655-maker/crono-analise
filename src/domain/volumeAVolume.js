@@ -35,6 +35,9 @@ export function semTakt(estado, nomeGrupo) {
     case 'sem-dias': return `faltam os dias de produção da semana ${g} no cadastro: sem eles não se sabe que parte da semana são os dias programados.`;
     case 'setup-excede': return `o setup cadastrado ${g} passa da jornada — confira o cadastro.`;
     case 'erro-programa': return 'não deu para carregar o programa agora.';
+    // Junção: a trava e' pela semana do calendario, o takt pela semana do
+    // programa (por data). Se elas nao casam, nao ha' um takt so'.
+    case 'takts-diferentes': return 'as medições caem em semanas diferentes do programa, com takts diferentes — não há um takt só para comparar a junção.';
     default: return 'a medição não tem data para achar a semana.';
   }
 }
@@ -50,7 +53,7 @@ export function semTakt(estado, nomeGrupo) {
  * deixou de usar.
  */
 export function frasesVolumeAVolume({
-  leitura, takt = {}, unidade, nomeGrupo,
+  leitura, takt = {}, unidade, nomeGrupo, juncao = false,
 }) {
   const { singular, plural } = unidade;
   if (!leitura.suficiente) {
@@ -87,7 +90,7 @@ export function frasesVolumeAVolume({
       manchete = `${abertura} — ${pct}% acima do takt de ${seg(alvo)}.`;
       tom = 'falha';
       if (leitura.mediaMs <= alvo) {
-        linhas.push(`Com a linha rodando seriam ${rodandoTxt} por ${singular}, dentro do takt: o que tira a linha do takt são as paradas marcadas nesta medição.`);
+        linhas.push(`Com a linha rodando seriam ${rodandoTxt} por ${singular}, dentro do takt: o que tira a linha do takt são as paradas marcadas ${juncao ? 'nestas medições' : 'nesta medição'}.`);
       } else if (leitura.normalMs <= alvo) {
         linhas.push(`Com a linha rodando, ${rodandoTxt}; sem as lacunas, ${normalTxt}, dentro do takt: o que tira a linha do takt são as paradas que ninguém marcou.`);
       } else {
@@ -152,7 +155,7 @@ export function numerosDaLeitura(leitura, takt = {}, unidade, { juncao = false }
       // dias com lote, e o papel diz quantos — senao 35,2 h parece erro.
       sub: leitura.taktMs
         ? `semana ${takt.semana} · por ${unidade.singular}${diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}`
-        : 'sem programa para comparar',
+        : (takt.estado === 'takts-diferentes' ? 'medições em semanas diferentes do programa' : 'sem programa para comparar'),
     },
     {
       chave: 'rodando',

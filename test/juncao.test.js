@@ -108,7 +108,9 @@ describe('a junção das tres medicoes', () => {
       juncao: j, takt: { estado: 'sem-demanda' }, unidade: VOLUME, nomeGrupo: 'EMBALAGEM', hora,
     });
     expect(f.manchete).toBe('Nas 3 medições, as paradas roubaram 36 volumes: saíram 138, e no passo da linha rodando teriam saído 174.');
-    expect(f.linhas[0]).toBe('O passo é o mesmo nas 3 (de 14.1 a 14.9 s com a linha rodando): o que muda de uma para outra são as paradas. A das 07:27 sozinha perdeu 22.');
+    // Passo SEM as lacunas da junção: 07:11 = (829.906 - 29.493) / 58 = 13,8 s;
+    // 07:27 = (863.046 - 33.014) / 58 = 14,3 s; 07:52 = 253.431 / 17 = 14,9 s.
+    expect(f.linhas[0]).toBe('O passo é o mesmo nas 3 (de 13.8 a 14.9 s sem as lacunas): o que muda de uma para outra são as paradas. A das 07:27 sozinha perdeu 22.');
     expect(f.linhas[1]).toBe('No período, saiu um volume a cada 17.9 s, paradas dentro; com a linha rodando, 14.4 s.');
     expect(f.linhas[2]).toMatch(/^Sem takt para comparar/);
     expect(f.linhas[3]).toMatch(/^2 lacunas/);
@@ -147,10 +149,63 @@ describe('o passo entre as medicoes', () => {
     expect(j.roubo).toBeNull();
   });
 
-  it('passo mais de 10% diferente: a junção diz qual foi a mais lenta', () => {
-    const j = juntarMedicoes([de('07:00', Array(6).fill(10), '2026-10-28T10:00:00Z'), de('08:00', Array(6).fill(12), '2026-10-28T11:00:00Z')]);
+  it('passo mais de 10% diferente, alem do ruido: a junção diz qual foi a mais lenta', () => {
+    const j = juntarMedicoes([de('07:00', Array(12).fill(10), '2026-10-28T10:00:00Z'), de('08:00', Array(12).fill(12), '2026-10-28T11:00:00Z')]);
     const f = frasesDaJuncao({ juncao: j, unidade: VOLUME, hora });
-    expect(f.linhas[0]).toMatch(/^O passo muda entre as medições \(de 10.0 a 12.0 s com a linha rodando\); a das 08:00 foi a mais lenta/);
+    expect(f.linhas[0]).toMatch(/^O passo muda entre as medições \(de 10.0 a 12.0 s sem as lacunas\); a das 08:00 foi a mais lenta/);
+  });
+
+  it('parada que ninguem marcou e lacuna, nao passo: nao faz a medicao parecer de outro passo', () => {
+    // Revisao da v2.96.0: com a media COM lacunas, o intervalo de 180 s da
+    // segunda virava "o passo muda (14.0 a 22.3 s)".
+    const j = juntarMedicoes([
+      de('07:00', Array(20).fill(14), '2026-10-28T10:00:00Z'),
+      de('08:00', [...Array(10).fill(14), 180, ...Array(9).fill(14)], '2026-10-28T11:00:00Z'),
+    ]);
+    const f = frasesDaJuncao({ juncao: j, unidade: VOLUME, hora });
+    expect(j.lacunas.map((l) => [l.conferencia.id, l.volume])).toEqual([['08:00', 12]]);
+    expect(f.linhas.find((l) => l.startsWith('O passo'))).toBe('O passo é o mesmo nas 2 (de 14.0 a 14.0 s sem as lacunas).');
+  });
+
+  it('10% de diferenca dentro do ruido das medias nao e "passo muda"', () => {
+    // Medias 14,0 e 15,5 s (10,7%), mas o desvio dos intervalos e' de 4 s:
+    // o erro de cada media (~1,2 s) deixa 1,5 s de diferenca dentro do ruido.
+    const a = Array.from({ length: 12 }, (_, i) => (i % 2 ? 18 : 10));
+    const b = Array.from({ length: 12 }, (_, i) => (i % 2 ? 19.5 : 11.5));
+    const j = juntarMedicoes([de('07:00', a, '2026-10-28T10:00:00Z'), de('08:00', b, '2026-10-28T11:00:00Z')]);
+    const f = frasesDaJuncao({ juncao: j, unidade: VOLUME, hora });
+    expect(f.linhas.find((l) => l.startsWith('O passo'))).toMatch(/^O passo é o mesmo nas 2/);
+  });
+
+  it('medicao sem leitura (menos de 10 intervalos) nao entra na comparacao do passo', () => {
+    const j = juntarMedicoes([de('07:00', Array(40).fill(14), '2026-10-28T10:00:00Z'), de('08:00', [20, 22], '2026-10-28T11:00:00Z')]);
+    const f = frasesDaJuncao({ juncao: j, unidade: VOLUME, hora });
+    expect(f.linhas.some((l) => l.startsWith('O passo'))).toBe(false);
+    // E a junção com poucos intervalos no total nao diz "o passo e' o mesmo"
+    // ao lado de "poucos volumes para ler o intervalo".
+    const poucos = juntarMedicoes([de('07:00', [14, 14, 14], '2026-10-28T10:00:00Z'), de('08:00', [14, 14, 14], '2026-10-28T11:00:00Z')]);
+    const fp = frasesDaJuncao({ juncao: poucos, unidade: VOLUME, hora });
+    expect(fp.manchete).toBe('Poucos volumes para ler o intervalo');
+    expect(fp.linhas.some((l) => l.startsWith('O passo'))).toBe(false);
+  });
+
+  it('veredito acima do takt: a causa vem colada a ele, no plural', () => {
+    // 2 medicoes de 12 x 14 s, com 48 s de parada marcada ao vivo em cada:
+    // periodo = (168 + 48) / 12 = 18 s > takt 16 s; rodando 14 s <= 16 s.
+    const comParada = (id, inicio) => {
+      const m = de(id, Array(12).fill(14), inicio);
+      return {
+        ...m,
+        relogio: m.relogio + 48000,
+        conferencia: { ...m.conferencia, duracao_ms: m.relogio + 58000, paradas: [{ motivo: 'outro', duracaoMs: 48000 }] },
+      };
+    };
+    const j = juntarMedicoes([comParada('07:00', '2026-10-28T10:00:00Z'), comParada('08:00', '2026-10-28T11:00:00Z')], { taktMs: 16000 });
+    const f = frasesDaJuncao({ juncao: j, takt: { semana: 'de 26/10' }, unidade: VOLUME, hora });
+    expect(f.tom).toBe('falha');
+    expect(f.manchete).toMatch(/^No período, saiu um volume a cada 18.0 s, paradas dentro — 13% acima do takt de 16.0 s\.$/);
+    expect(f.linhas[0]).toMatch(/são as paradas marcadas nestas medições\.$/);
+    expect(f.linhas[1]).toMatch(/^Nas 2 medições, as paradas roubaram/);
   });
 });
 

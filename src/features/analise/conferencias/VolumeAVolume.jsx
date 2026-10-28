@@ -8,7 +8,7 @@ import {
   frasesVolumeAVolume, numerosDaLeitura, porHoraDaMedicao, roubadosPelasParadas,
 } from '../../../domain/volumeAVolume.js';
 import {
-  faixaDaJuncao, frasesDaJuncao, horaDaMedicao, juntarMedicoes, notaDaJuncao,
+  PREFIXO_JUNCAO, faixaDaJuncao, frasesDaJuncao, horaDaMedicao, idsDaJuncao, juntarMedicoes, notaDaJuncao,
 } from '../../../domain/juncaoMedicoes.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
 import {
@@ -97,7 +97,7 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
     // rolar a pagina — para quem olha, a nova esta' carregando.
     if (carga.de !== undefined && carga.de !== conferencia.id) return { estado: 'carregando' };
     if (carga.estado !== 'pronto') return carga;
-    const takt = !grupo
+    const taktDe = (c) => (!grupo
       ? { taktMs: null, estado: 'sem-grupo', semana: null }
       : carga.demandas === null
         ? { taktMs: null, estado: 'erro-programa', semana: null }
@@ -106,13 +106,19 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
           horas: grupo.horas_semana,
           maquinas: maquinasDoGrupo,
           setup: { setupsDia: grupo.setups_dia, dias: grupo.dias_semana, minutos: grupo.setup_min },
-          data: conferencia.iniciado_em || conferencia.salvo_em,
-          pecas: conferencia.pecas,
-          duracaoMs: Number(conferencia.duracao_ms),
-        });
+          data: c.iniciado_em || c.salvo_em,
+          pecas: c.pecas,
+          duracaoMs: Number(c.duracao_ms),
+        }));
     if (conferencia.juncao) {
-      // As medicoes sao da mesma semana (motivoParaNaoJuntar): o takt da
-      // primeira e' o de todas.
+      /* O takt de CADA medicao. A trava da lista e' pela semana do
+         calendario; o takt casa pela semana do programa, por data — e um
+         programa que vira na terca poe a segunda e a terca da mesma semana
+         ISO em takts diferentes. Ai' nao ha' um takt so', e a junção fica
+         sem veredito, dizendo por que (revisao da v2.96.0). */
+      const takts = conferencia.medicoes.map(taktDe);
+      const umSo = takts.every((t) => t.taktMs === takts[0].taktMs && t.semana === takts[0].semana);
+      const takt = umSo ? takts[0] : { taktMs: null, estado: 'takts-diferentes', semana: null };
       const juncao = juntarMedicoes(
         conferencia.medicoes.map((c, k) => ({ conferencia: c, ...carga.toques[k] })),
         { taktMs: takt.taktMs, setupPlanejado: Boolean(takt.setupPlanejado) },
@@ -126,6 +132,7 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
         de: carga.de,
       };
     }
+    const takt = taktDe(conferencia);
     // O veredito e' do PERIODO, paradas dentro, entre o primeiro e o ultimo
     // toque (ver periodoPorPeca).
     const periodoPorPecaMs = periodoPorPeca({
@@ -179,6 +186,9 @@ export function useAnalisesDoPcp(aplicar) {
     return resto;
   };
   const notaDe = (c) => (c.id in rascunhos ? rascunhos[c.id] : (c.analise_nota || ''));
+  const juncoesComNota = () => Object.entries(rascunhos)
+    .filter(([id, texto]) => id.startsWith(PREFIXO_JUNCAO) && !salvando[id] && texto.trim())
+    .map(([id]) => id);
   // Digitada e diferente da salva, numa medicao ainda nao analisada: e' o
   // que se perde ao sair da tela. A que esta' indo para o servidor nao
   // conta — ela ja' saiu; se for recusada, volta a contar.
@@ -218,11 +228,13 @@ export function useAnalisesDoPcp(aplicar) {
     salvandoA: (id) => Boolean(salvando[id]),
     notaNaoSalva,
     /**
-     * Notas de junção digitadas e nao salvas. A junção nao e' linha da
-     * lista: sem esta conta, sair da tela descartaria a nota sem perguntar.
+     * Notas de junção digitadas e nao salvas — so' as de junção que ainda
+     * tem medicao por analisar (analisadas uma a uma depois, a nota da
+     * junção ja' nao tem onde cair). A junção nao e' linha da lista: sem
+     * esta conta, sair da tela descartaria a nota sem perguntar.
      */
-    juncoesNaoSalvas: Object.entries(rascunhos)
-      .filter(([id, texto]) => id.startsWith('juncao:') && !salvando[id] && texto.trim()).length,
+    juncoesNaoSalvas: (medicoes) => juncoesComNota()
+      .filter((id) => idsDaJuncao(id).some((x) => medicoes.some((m) => m.id === x && !m.analisada_em))).length,
     /**
      * O que a LINHA precisa avisar de uma medicao fechada: a recusa (de
      * salvar ou de reabrir — reabrir recusado deixa a analise salva, e o
@@ -230,7 +242,11 @@ export function useAnalisesDoPcp(aplicar) {
      */
     pendencia: (c) => {
       if (falhas[c.id]) return falhas[c.id].reabrir ? 'reabrir-recusado' : 'salvar-recusado';
-      return notaNaoSalva(c) ? 'nota-nao-salva' : null;
+      if (notaNaoSalva(c)) return 'nota-nao-salva';
+      // A nota da junção fechada sem salvar: a linha de cada medicao dela
+      // avisa, senao ninguem saberia onde ela esta'.
+      if (!c.analisada_em && juncoesComNota().some((id) => idsDaJuncao(id).includes(c.id))) return 'nota-juncao-nao-salva';
+      return null;
     },
     /** O que o painel da medicao `c` precisa. */
     da: (c) => ({
@@ -288,6 +304,10 @@ export default function VolumeAVolume({
   // Na junção, "analisada" e' TODAS analisadas (ver medicaoDaJuncao).
   const analisada = Boolean(conferencia.analisada_em);
   const salvando = Boolean(analise?.salvando);
+  // Junção com medicao ja' analisada: salvar SUBSTITUI a analise dela. O
+  // aviso fica colado ao botao, e a nota antiga aparece em Analise do PCP
+  // (revisao da v2.96.0: ela sumia sem nunca aparecer).
+  const jaAnalisadas = ehJuncao && !analisada ? medicoes.filter((c) => c.analisada_em) : [];
   const quando = conferencia.iniciado_em || conferencia.salvo_em;
   const meta = ehJuncao
     ? [
@@ -409,6 +429,14 @@ export default function VolumeAVolume({
               Fechar
             </button>
           </div>
+          {podeAnalisar && jaAnalisadas.length > 0 && (
+            <p style={est.vavAvisoSubstitui} role="note">
+              {jaAnalisadas.length === 1
+                ? `A das ${horaDaMedicao(jaAnalisadas[0])} já foi analisada: salvar a junção substitui a análise dela`
+                : `${jaAnalisadas.length} já foram analisadas (${jaAnalisadas.map(horaDaMedicao).join(', ')}): salvar a junção substitui as análises delas`}
+              {' '}— veja em Análise do PCP, abaixo.
+            </p>
+          )}
           {/* A recusa aparece colada ao botao, e o painel NAO fecha: fechar
               seria dizer que salvou. */}
           {analise?.erro && (
@@ -447,7 +475,7 @@ export default function VolumeAVolume({
             <>
               {/* 2. O QUE AS PARADAS ROUBARAM — primeiro, porque e' o que
                   move a acao. So' com parada marcada. */}
-              {r.roubo && <BlocoRoubados r={r} conferencia={conferencia} unidade={unidade} />}
+              {r.roubo?.roubados > 0 && <BlocoRoubados r={r} conferencia={conferencia} unidade={unidade} />}
 
               {/* 3. INDICADORES */}
               <Indicadores
@@ -489,6 +517,19 @@ export default function VolumeAVolume({
                     <NotasSalvas conferencia={conferencia} medicoes={medicoes} />
                   ) : (
                     <>
+                      {jaAnalisadas.length > 0 && (
+                        <>
+                          <p style={est.vavSecaoDica}>
+                            {jaAnalisadas.length === 1 ? 'Já analisada' : 'Já analisadas'} — salvar a junção substitui:
+                          </p>
+                          {jaAnalisadas.map((c) => (
+                            <p key={c.id} style={est.vavAnaliseNota}>
+                              {[horaDaMedicao(c), c.analisada_por, formatarDataHora(c.analisada_em)].filter(Boolean).join(' · ')}
+                              {': '}{c.analise_nota || 'salva sem comentário'}
+                            </p>
+                          ))}
+                        </>
+                      )}
                       <p style={est.vavSecaoDica}>
                         {ehJuncao
                           ? `Opcional. Vai para as ${n} medições quando você clica em Salvar análise das ${n} e fechar, no alto do painel, com "Junção de ${n} medições (${faixaDaJuncao(medicoes)})" no começo — quem abrir uma delas depois sabe que foi lida junto com as outras. As ${n} saem da lista e vão para Analisadas.`
@@ -514,7 +555,7 @@ export default function VolumeAVolume({
 
               {/* Os termos definidos so' aparecem com a leitura completa. */}
               {r.leitura.suficiente && (
-                <ComoLer leitura={r.leitura} unidade={unidade} juncao={ehJuncao} roubo={Boolean(r.roubo)} />
+                <ComoLer leitura={r.leitura} unidade={unidade} juncao={ehJuncao} roubo={r.roubo?.roubados > 0} />
               )}
             </>
           )}
@@ -862,9 +903,6 @@ function BlocoRoubados({ r, conferencia, unidade }) {
   const escala = Math.max(...itens.map((x) => x.saiu + x.roubados), 1);
   const pct = saiu > 0 ? Math.round((roubados / saiu) * 100) : null;
   const plural = (q) => (q === 1 ? unidade.singular : unidade.plural);
-  const { leitura } = r;
-  const lacunasPerdidas = leitura.suficiente ? Math.round(leitura.pecasNoExcesso) : 0;
-  const nLacunas = leitura.suficiente ? leitura.lacunas.length : 0;
 
   return (
     <section style={est.vavRoubo} aria-label={`${capital(unidade.plural)} roubados pelas paradas`}>
@@ -910,10 +948,12 @@ function BlocoRoubados({ r, conferencia, unidade }) {
           );
         })}
       </div>
+      {/* Sem somar as lacunas aqui: a parada anotada depois (no tablet ou
+          no PC) fica dentro dos intervalos e entraria nas duas contas. As
+          lacunas tem a frase propria na leitura. */}
       <p style={est.vavRouboPe}>
         A conta não projeta nada: é o passo que a linha fez rodando{ehJuncao ? ' em cada medição' : ''}, aplicado
         ao tempo em que ela ficou parada (paradas marcadas, setup incluído).
-        {lacunasPerdidas >= 1 && ` Fora isso, ${nLacunas === 1 ? 'a lacuna' : `as ${nLacunas} lacunas`} — parada que ninguém marcou — ${nLacunas === 1 ? 'levou' : 'levaram'} mais cerca de ${lacunasPerdidas} ${plural(lacunasPerdidas)}.`}
       </p>
     </section>
   );
@@ -1005,13 +1045,17 @@ function FolhaVolumeAVolume({
       ))}
       {/* A analise salva vai junto: a folha que chega a' reuniao diz se o
           PCP ja' leu a medicao, e o que concluiu. */}
-      {conferencia.analisada_em && (
-        <p style={{ margin: '0 0 10px', whiteSpace: 'pre-line' }}>
-          <strong>Análise do PCP</strong>
-          {' '}({[conferencia.analisada_por, formatarDataHora(conferencia.analisada_em)].filter(Boolean).join(', ')})
-          {conferencia.analise_nota ? `: ${conferencia.analise_nota}` : ''}
-        </p>
-      )}
+      {/* Na junção com notas diferentes (juntada de novo para reimprimir),
+          a de cada medicao, com a hora dela. */}
+      {(juncao && !conferencia.analise_nota ? medicoes.filter((c) => c.analisada_em) : [conferencia])
+        .filter((c) => c.analisada_em)
+        .map((c) => (
+          <p key={c.id} style={{ margin: '0 0 10px', whiteSpace: 'pre-line' }}>
+            <strong>Análise do PCP{c === conferencia ? '' : ` — ${horaDaMedicao(c)}`}</strong>
+            {' '}({[c.analisada_por, formatarDataHora(c.analisada_em)].filter(Boolean).join(', ')})
+            {c.analise_nota ? `: ${c.analise_nota}` : ''}
+          </p>
+        ))}
 
       {/* O destaque no papel e' a borda grossa, nao a cor: a impressora da
           fabrica e' P&B. */}

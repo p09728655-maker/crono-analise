@@ -46,6 +46,8 @@ const M1 = {
   ...base, id: '00000000-0000-0000-0000-0000000000b1', pecas: 60, duracao_ms: 916596,
   iniciado_em: em(0), finalizado_em: em(916596), salvo_em: em(916596),
   paradas: [parada(23400), parada(48000)], observacao: 'Troca de operador no meio',
+  // Ja' analisada sozinha: a junção avisa que salvar substitui esta nota.
+  analisada_em: em(3600000), analisada_por: 'Ana PCP', analise_nota: 'Faltou caixa 9h10 — falar c/ João',
 };
 const M2 = {
   ...base, id: '00000000-0000-0000-0000-0000000000b2', pecas: 60, duracao_ms: 1193938,
@@ -123,11 +125,11 @@ const barra = p.getByRole('region', { name: 'Medições marcadas para juntar' })
 const caixa = (c) => lista.getByRole('row').filter({ has: p.locator(`[data-medicao="${c.id}"]`) }).getByRole('checkbox');
 const juntar = barra.getByRole('button', { name: /^Juntar/ });
 
-checar(await lista.getByRole('checkbox').count() === 4, 'cada medicao da fila tem a caixa de juntar');
+checar(await lista.getByRole('checkbox').count() === 3, 'cada medicao da fila tem a caixa de juntar');
 checar(await barra.count() === 0, 'sem nada marcado, nao ha barra');
 
 // Uma so': a barra aparece, mas o Juntar trava e diz por que.
-await caixa(M1).check();
+await caixa(M3).check();
 checar(/1 medição marcada/.test(await barra.innerText()) && /Marque duas medições ou mais para juntar\./.test(await barra.innerText()),
   'uma marcada: a barra diz que falta mais uma');
 checar(await juntar.isDisabled(), 'uma marcada: Juntar travado');
@@ -138,8 +140,10 @@ checar(/produtos diferentes\./.test(await barra.innerText()) && await juntar.isD
   'produto diferente: Juntar travado, com o motivo escrito');
 await caixa(BUFFET).uncheck();
 
-await caixa(M3).check();
 await caixa(M2).check();
+// A marca vale entre as vistas: a 07:11, ja' analisada, entra pela outra aba.
+await lista.getByRole('button', { name: 'Analisadas (1)' }).click();
+await caixa(M1).check();
 const textoBarra = await barra.innerText();
 checar(/3 medições marcadas · Penteadeira Princesa · EMBALAGEM 01/.test(textoBarra),
   `tres do mesmo produto: a barra diz quais (${textoBarra.replace(/\n/g, ' | ')})`);
@@ -169,7 +173,11 @@ checar(/236[\s\S]*181[\s\S]*159/.test(texto), 'tabela: cada medicao com o propri
 // A leitura.
 checar(/Nas 3 medições, as paradas roubaram 36 volumes: saíram 138, e no passo da linha rodando teriam saído 174\./.test(texto),
   'manchete: o que as paradas roubaram (sem takt, nao ha veredito)');
-checar(/O passo é o mesmo nas 3 \(de 14\.1 a 14\.9 s com a linha rodando\)/.test(texto), 'o passo e o mesmo nas 3');
+checar(/O passo é o mesmo nas 3 \(de 13\.8 a 14\.9 s sem as lacunas\)/.test(texto), 'o passo e o mesmo nas 3, sem as lacunas');
+// A 07:11 ja' tinha analise: o aviso fica colado ao botao, e a nota antiga aparece.
+checar(new RegExp(`A das ${hm(M1.iniciado_em)} já foi analisada: salvar a junção substitui a análise dela`).test(texto),
+  'junção com medicao ja analisada: avisa que salvar substitui a analise dela');
+checar(/Faltou caixa 9h10 — falar c\/ João/.test(texto) && /Ana PCP/.test(texto), 'a nota antiga aparece, com quem analisou');
 checar(/Troca de operador no meio/.test(texto), 'a observacao da medicao aparece, com a hora dela');
 // As lacunas dizem a medicao e o volume dentro dela.
 checar(new RegExp(`${hm(M1.iniciado_em)}–${hm(M1.finalizado_em)}\\s*9\\s*29\\.5 s`).test(texto)
@@ -181,7 +189,8 @@ checar(/em 3 medições/.test(await grafico.getAttribute('aria-label')), 'o graf
 checar((await grafico.locator('text').allTextContents())
   .filter((t) => [hm(M1.iniciado_em), hm(M2.iniciado_em), hm(M3.iniciado_em)].includes(t)).length === 3,
 'o grafico escreve a hora de cada medicao em cima dela');
-checar(await lista.locator('[data-medicao][aria-pressed="true"]').count() === 3, 'na lista, as 3 da junção ficam marcadas como abertas');
+// A lista foi para a fila (onde estao as que faltam): as 2 dali ficam marcadas como abertas.
+checar(await lista.locator('[data-medicao][aria-pressed="true"]').count() === 2, 'na lista, as da junção ficam marcadas como abertas');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/juncao-painel.png`, fullPage: true });
 
 // HISTORICO: Voltar fecha, Avancar reabre, F5 reabre.
@@ -194,6 +203,7 @@ checar(true, 'Avançar reabre a junção');
 await p.reload();
 await janela.getByText(/as paradas roubaram 36 volumes/).first().waitFor({ timeout: 8000 });
 checar(true, 'F5 reabre a mesma junção');
+checar(/3 medições marcadas/.test(await barra.innerText()), 'reaberta pelo F5, a junção volta com as 3 marcadas');
 
 // IMPRESSAO.
 await p.evaluate(() => {
@@ -222,6 +232,16 @@ await p.getByRole('button', { name: 'Voltar para a lista de estudos' }).click();
 await p.waitForTimeout(300);
 checar(/1 nota digitada e não salva/.test(aviso), `sair com a nota da junção digitada pergunta antes (${aviso.split('\n')[0]})`);
 
+// Fechada sem salvar, a nota da junção fica avisada nas linhas dela, e
+// juntar de novo devolve o que foi digitado.
+await janela.getByRole('button', { name: 'Fechar', exact: true }).click();
+await janela.waitFor({ state: 'detached', timeout: 4000 });
+checar(await lista.getByText(/Nota de junção digitada, ainda não salva/).count() === 2,
+  'fechada sem salvar: as linhas da junção avisam a nota nao salva');
+await juntar.click();
+await janela.getByText(/as paradas roubaram 36 volumes/).first().waitFor({ timeout: 4000 });
+checar(await nota.inputValue() === 'Passo estável; perda nas paradas. Classificar o motivo.', 'juntar de novo devolve a nota digitada');
+
 // RECUSA: aparece no painel, e nada sai da lista.
 recusar = true;
 const salvar = janela.getByRole('button', { name: 'Salvar análise das 3 e fechar' });
@@ -229,7 +249,7 @@ await salvar.click();
 await janela.getByRole('alert').waitFor({ timeout: 4000 });
 checar(/Não deu para salvar: Seu papel nao permite/.test(await janela.getByRole('alert').innerText()),
   'recusado: o motivo aparece colado ao botao, e o painel continua aberto');
-checar(await lista.getByRole('button', { name: 'Não analisadas (4)' }).count() === 1, 'recusado: as 4 continuam na fila');
+checar(await lista.getByRole('button', { name: 'Não analisadas (3)' }).count() === 1, 'recusado: nada sai da fila');
 
 // SALVA: um pedido so', com os 3 ids e a nota com a junção no comeco.
 recusar = false;
@@ -248,8 +268,21 @@ checar(await lista.getByRole('button', { name: 'Não analisadas (1)' }).count() 
 'salvo: as 3 saem da fila de uma vez e vao para Analisadas');
 checar(await barra.count() === 0, 'salvo: as marcas se vao');
 
-// UMA MEDICAO SO' tambem mostra o que as paradas roubaram.
+// JUNTAR DE NOVO PARA REIMPRIMIR: as 3 em Analisadas, ja' com a nota da junção.
 await lista.getByRole('button', { name: 'Analisadas (3)' }).click();
+for (const c of [M1, M2, M3]) await caixa(c).check();
+await juntar.click();
+await janela.getByText(/As 3 analisadas/).waitFor({ timeout: 4000 });
+checar(await janela.getByRole('button', { name: /Salvar análise/ }).count() === 0, 'junção ja analisada: sem botao de salvar');
+checar(/Junção de 3 medições \(/.test(await janela.innerText()), 'junção ja analisada: a nota da junção aparece');
+await p.emulateMedia({ media: 'print' });
+checar(/Análise do PCP \(Mauricio PCP, [^)]*\): Junção de 3 medições/.test(await p.locator('body > .somente-impressao').innerText()),
+  'a folha da junção reimpressa leva a analise salva');
+await p.emulateMedia({ media: 'screen' });
+await janela.getByRole('button', { name: 'Fechar', exact: true }).click();
+await barra.getByRole('button', { name: 'Desmarcar' }).click();
+
+// UMA MEDICAO SO' tambem mostra o que as paradas roubaram.
 await lista.locator(`[data-medicao="${M2.id}"]`).click();
 const uma = p.getByRole('region', { name: /Volume a volume da medição/ });
 await uma.getByText(/roubados pelas paradas nesta medição/).waitFor({ timeout: 4000 });

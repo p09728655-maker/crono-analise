@@ -358,12 +358,26 @@ async function analisarLote({ auth, res, corpo, ids }) {
     if (existentes.length !== ids.length) {
       throw naoEncontrado('Alguma das medições não existe mais (excluída?) — recarregue a tela e junte de novo');
     }
+    // A contagem vai DENTRO do UPDATE: no modo de servico nao ha' transacao
+    // entre o SELECT acima e esta escrita, e uma medicao excluida nesse
+    // meio faria gravar as outras. Assim, ou estao todas, ou nenhuma muda.
     const alteradas = await db`
       UPDATE conferencias
          SET analisada_em = now(), analisada_por = ${auth.usuario?.nome || null},
              analise_nota = ${analiseNota}
        WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
+         AND (SELECT count(*) FROM conferencias
+               WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}) = ${ids.length}
       RETURNING id, analisada_em, analisada_por, analise_nota`;
+    if (!alteradas.length) {
+      const [{ n }] = await db`
+        SELECT count(*)::int AS n FROM conferencias WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}`;
+      if (n !== ids.length) {
+        throw naoEncontrado('Alguma das medições não existe mais (excluída?) — recarregue a tela e junte de novo');
+      }
+      throw nadaMudou();
+    }
+    // Parte gravada so' com a RLS barrando alguma: o erro desfaz a transacao.
     if (alteradas.length !== ids.length) throw nadaMudou();
     return json(res, 200, { atualizadas: alteradas.length, conferencias: alteradas });
   });

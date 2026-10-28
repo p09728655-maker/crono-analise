@@ -601,6 +601,10 @@ export const est = {
     ...tipo('corpoF'), cursor: 'pointer', fontFamily: 'inherit', boxShadow: elevacao.baixa,
     whiteSpace: 'nowrap',
   },
+  // Junção com medicao ja' analisada: salvar substitui a analise dela.
+  vavAvisoSubstitui: {
+    ...tipo('legenda'), fontWeight: 700, color: t.atencao, margin: `${espaco.sm}px 0 0`, flexBasis: '100%',
+  },
   // Abaixo da meta, na junção: o tempo entre as medicoes fica fora da conta.
   vavMetaNota: { ...tipo('legenda'), color: t.textoFraco, margin: `${espaco.xs}px 0 0` },
 
