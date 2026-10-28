@@ -673,7 +673,7 @@ function definicoes(leitura, unidade, { juncao = false, roubo = false } = {}) {
   const toque = unidade.singular === 'volume' ? 'volume' : 'toque';
   const { fatorLacuna, minIntervalos } = leitura.criterios;
   return [
-    ...(juncao ? [['Junção', `medições do mesmo produto, na mesma máquina e na mesma semana, lidas como uma só. Tudo somado pelo tempo, nunca a média das taxas. O tempo entre uma medição e a seguinte não foi medido: não vira intervalo, lacuna nem parada. A lacuna é contra o normal da junção, e por isso a contagem pode diferir da de cada medição sozinha. O passo de cada medição é a média sem as lacunas, comparada só entre as que têm ${minIntervalos} intervalos ou mais; "o passo muda" só quando a diferença passa de ${CRITERIOS_JUNCAO.passoIgualPct}% e do dobro do erro das médias.`]] : []),
+    ...(juncao ? [['Junção', `medições do mesmo produto, na mesma máquina e na mesma semana, lidas como uma só. Tudo somado pelo tempo, nunca a média das taxas. O tempo entre uma medição e a seguinte não foi medido: não vira intervalo, lacuna nem parada. A lacuna é contra o normal da junção, e por isso a contagem pode diferir da de cada medição sozinha. O passo de cada medição (a coluna "Sem as lacunas" da tabela) é a média sem as lacunas, comparada só entre as que têm ${minIntervalos} intervalos ou mais fora das lacunas — abaixo disso, "—"; "o passo muda" só quando a diferença passa de ${CRITERIOS_JUNCAO.passoIgualPct}% e do dobro do erro das médias.`]] : []),
     ...(roubo ? [[`${capital(unidade.plural)} roubados pelas paradas`, `o que teria saído no mesmo tempo, no passo que a linha fez rodando${juncao ? ' em cada medição' : ''}, menos o que saiu. As paradas são as marcadas, setup incluído. Não projeta meta nem capacidade: é o que a própria linha já fez.${juncao ? ' Na junção, soma os de cada medição.' : ''}`]] : []),
     ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo: o intervalo vai de um toque ao seguinte, e o tempo antes do primeiro toque não entra.`],
     [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, e só quando o grupo tem setup planejado (ele já saiu das horas do takt). É o que vai contra o takt — a mesma régua do programa da semana.'],
@@ -706,6 +706,8 @@ function notaDoCriterio(leitura, unidade, { juncao = false, roubo = false } = {}
   return (juncao
     ? 'Junção = medições do mesmo produto, na mesma máquina e na mesma semana, somadas pelo tempo (nunca a média das taxas); '
       + 'o tempo entre uma medição e a seguinte não foi medido e não entra. '
+      + `Sem as lacunas, na tabela das medições = o passo de cada uma, comparado só entre as que têm ${leitura.criterios.minIntervalos} intervalos ou mais fora das lacunas ("—" abaixo disso); `
+      + `"o passo muda" só com mais de ${CRITERIOS_JUNCAO.passoIgualPct}% de diferença e mais que o dobro do erro das médias. `
     : '')
     + (roubo
       ? `${capital(unidade.plural)} roubados pelas paradas = o que teria saído no mesmo tempo, no passo da linha rodando${juncao ? ' de cada medição' : ''}, menos o que saiu (paradas marcadas, setup incluído). `
@@ -1029,7 +1031,9 @@ function FolhaVolumeAVolume({
           ...identificacao,
           [capital(unidade.plural), String(conferencia.pecas)],
           ['Parado (marcado)', par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'],
-          ['Roubados pelas paradas', roubo?.roubados > 0 ? `${roubo.roubados} · teriam saído ${roubo.potencial}` : '—'],
+          // Com parada que nao chegou a custar um volume, "0" — como na
+          // tabela da mesma folha; sem parada marcada, "—".
+          ['Roubados pelas paradas', !roubo ? '—' : (roubo.roubados > 0 ? `${roubo.roubados} · teriam saído ${roubo.potencial}` : '0')],
         ].map(([k, v]) => (
           <div key={k} style={imp.campo}>
             <span style={imp.campoRotulo}>{k}</span>
