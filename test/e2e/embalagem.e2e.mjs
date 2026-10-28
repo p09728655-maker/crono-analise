@@ -415,6 +415,7 @@ checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some 
   const textoFolha = await folha.innerText();
   checar(/LACUNAS\s*1\s*2min20s além do normal\s*VOLUMES\/HORA\s*50(?!\d)/i.test(textoFolha),
     'impressao: volumes/hora (50) na folha, depois de Lacunas');
+  checar(!/mesmo da lista/.test(textoFolha), 'impressao: o papel nao fala de uma lista que ele nao tem');
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
