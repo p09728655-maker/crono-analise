@@ -154,11 +154,12 @@ export default handler(async (req, res) => {
   if (req.method === 'PATCH' && !id) {
     const corpo = await lerCorpo(req);
     const temNoLote = (chave) => Object.prototype.hasOwnProperty.call(corpo, chave);
-    if (!temNoLote('arquivada') && !temNoLote('peca')) {
-      throw erroValidacao('Nada a atualizar no lote: informe "arquivada" ou "peca"');
+    if (!temNoLote('arquivada') && !temNoLote('peca') && !temNoLote('analisada')) {
+      throw erroValidacao('Nada a atualizar no lote: informe "arquivada", "peca" ou "analisada"');
     }
     const ids = lista(corpo.ids, 'ids', { max: MAX_LOTE }).map((x, i) => uuid(x, `ids[${i}]`));
     if (!ids.length) throw erroValidacao('Informe ao menos uma medicao em "ids"');
+    if (temNoLote('analisada')) return analisarLote({ auth, res, corpo, ids });
     /**
      * Mesmo teto do que sobe do aparelho: o nome corrigido no PC nao pode
      * ser maior do que o que a coleta aceita.
@@ -321,3 +322,49 @@ export default handler(async (req, res) => {
     return json(res, 200, { acao: 'excluida' });
   });
 });
+
+/**
+ * A ANALISE DE UMA JUNCAO — a mesma nota, de uma vez, em todas as medicoes
+ * que o PCP leu juntas na Embalagem Takt Time.
+ *
+ * TUDO OU NADA. Um PATCH por medicao, da tela, deixaria a junção meio
+ * analisada quando o segundo falhasse: duas fora da fila, uma dentro, e a
+ * nota so' em parte delas. Aqui:
+ *  - so' SALVA (`analisada: true`): reabrir e' de uma medicao por vez, no
+ *    volume a volume dela — reabrir a junção inteira nao tem pedido;
+ *  - a lista e' conferida ANTES de escrever (no modo de servico a
+ *    requisicao nao e' transacao): medicao que nao existe nesta empresa, ou
+ *    id repetido, recusa sem gravar nada;
+ *  - um UPDATE so', com RETURNING: se a politica do banco barrar alguma, o
+ *    erro desfaz a transacao (auth.rls) em vez de responder 200.
+ *
+ * Devolve as medicoes com os campos novos, para a lista mudar sem buscar
+ * tudo de novo — como o PATCH de uma.
+ */
+async function analisarLote({ auth, res, corpo, ids }) {
+  const { empresaId } = auth;
+  if (corpo.analisada !== true) {
+    throw erroValidacao('No lote, "analisada" só pode ser true: reabrir vai uma medição por vez');
+  }
+  if (Object.keys(corpo).some((k) => !['ids', 'analisada', 'analiseNota'].includes(k))) {
+    throw erroValidacao('A análise vai sozinha no lote: só "ids", "analisada" e "analiseNota"');
+  }
+  if (new Set(ids).size !== ids.length) throw erroValidacao('Medição repetida em "ids"');
+  const analiseNota = texto(corpo.analiseNota, 'analiseNota', { max: 2000 });
+
+  return auth.rls(async (db) => {
+    const existentes = await db`
+      SELECT id FROM conferencias WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}`;
+    if (existentes.length !== ids.length) {
+      throw naoEncontrado('Alguma das medições não existe mais (excluída?) — recarregue a tela e junte de novo');
+    }
+    const alteradas = await db`
+      UPDATE conferencias
+         SET analisada_em = now(), analisada_por = ${auth.usuario?.nome || null},
+             analise_nota = ${analiseNota}
+       WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
+      RETURNING id, analisada_em, analisada_por, analise_nota`;
+    if (alteradas.length !== ids.length) throw nadaMudou();
+    return json(res, 200, { atualizadas: alteradas.length, conferencias: alteradas });
+  });
+}

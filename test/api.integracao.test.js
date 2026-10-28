@@ -633,6 +633,48 @@ rodar('API — integracao com Postgres', () => {
   });
 
   /**
+   * A ANALISE DE UMA JUNCAO: a mesma nota nas medicoes lidas juntas, numa
+   * ida — tudo ou nada. Uma lista com medicao que nao existe (excluida
+   * entre abrir e salvar, ou de outra empresa) e' recusada sem gravar
+   * nenhuma: meia junção analisada tiraria parte dela da fila.
+   */
+  it('salva a analise da juncao em todas de uma vez, e recusa sem gravar nada', async () => {
+    const a = await medicaoDaEmbalagem();
+    const b = await medicaoDaEmbalagem();
+    const analista = await criarAnalista({
+      nome: 'Juncao PCP', email: 'juncao.pcp@patrimar.com', senha: 'senhaboa123',
+    });
+    const token = tokenDe(analista.corpo.usuario.id);
+    const lote = async (corpo, tk = token) => {
+      const res = fingirRes();
+      await conferenciasApi(fingirReq({ metodo: 'PATCH', token: tk, corpo }), res);
+      return res;
+    };
+    const intactas = async () => {
+      const linhas = await sql`SELECT analisada_em FROM conferencias WHERE id = ANY(${[a, b]})`;
+      return linhas.every((l) => l.analisada_em === null);
+    };
+
+    // Recusadas ANTES de escrever.
+    expect((await lote({ ids: [a, b, crypto.randomUUID()], analisada: true })).statusCode).toBe(404);
+    expect((await lote({ ids: [a, b], analisada: false })).statusCode).toBe(400);
+    expect((await lote({ ids: [a, a], analisada: true })).statusCode).toBe(400);
+    expect((await lote({ ids: [a, b], analisada: true, arquivada: true })).statusCode).toBe(400);
+    expect(await intactas()).toBe(true);
+
+    const salva = await lote({ ids: [a, b], analisada: true, analiseNota: '  Junção de 2 medições (07:11–07:47): ok  ' });
+    expect(salva.statusCode).toBe(200);
+    expect(salva.corpo.atualizadas).toBe(2);
+    expect(salva.corpo.conferencias.map((c) => c.id).sort()).toEqual([a, b].sort());
+    const gravadas = await sql`
+      SELECT analisada_por, analise_nota, analisada_em FROM conferencias WHERE id = ANY(${[a, b]})`;
+    expect(gravadas.every((g) => g.analisada_por === 'Juncao PCP'
+      && g.analise_nota === 'Junção de 2 medições (07:11–07:47): ok' && g.analisada_em)).toBe(true);
+
+    await sql`DELETE FROM conferencias WHERE id = ANY(${[a, b]})`;
+  });
+
+  /**
    * RENOMEAR A PECA.
    *
    * O nome nao vem de cadastro: e' digitado no aparelho, medicao a medicao.

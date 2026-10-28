@@ -9,7 +9,7 @@
  * Foi assim que a regua errada do takt passou uma vez: o teste olhava o
  * numero certo e a tela escrevia outro.
  */
-import { conferenciaRapida } from './crono/conferencia.js';
+import { conferenciaRapida, potencialSemParada } from './crono/conferencia.js';
 import { formatarSegundos } from './crono/formato.js';
 import { diasProgramados } from './demanda/formato.js';
 
@@ -128,7 +128,7 @@ export function frasesVolumeAVolume({
  * passou do limite. Nao diz que nao houve perda — parada marcada e passo
  * lento nao sao lacuna.
  */
-export function numerosDaLeitura(leitura, takt = {}, unidade) {
+export function numerosDaLeitura(leitura, takt = {}, unidade, { juncao = false } = {}) {
   if (!leitura.suficiente) {
     return [{
       chave: 'tocados', rotulo: 'Intervalos tocados', valor: String(leitura.n),
@@ -140,7 +140,9 @@ export function numerosDaLeitura(leitura, takt = {}, unidade) {
       chave: 'periodo',
       rotulo: `Por ${unidade.singular} no período`,
       valor: seg(leitura.periodoMs),
-      sub: 'com as paradas, do 1º ao último toque',
+      // Na junção, cada medicao tem o seu primeiro e ultimo toque: o tempo
+      // entre elas nao entra (ver juncaoMedicoes.js).
+      sub: `com as paradas, do 1º ao último toque${juncao ? ' de cada medição' : ''}`,
     },
     {
       chave: 'takt',
@@ -197,3 +199,32 @@ export function porHoraDaMedicao(conferencia, unidade) {
   };
 }
 
+
+/**
+ * OS VOLUMES QUE AS PARADAS ROUBARAM — o que saiu x o que teria saido no
+ * MESMO tempo, no passo que a linha provou rodando. E' potencialSemParada,
+ * a conta que a conferencia de ritmo ja' faz, com o nome da pergunta do
+ * PCP: minuto parado e' abstrato, caixa que nao saiu nao e'.
+ *
+ * As paradas sao as marcadas na medicao inteira (as mesmas do "Parado" da
+ * lista), setup incluido — `setupMs` vai junto para a tela dizer quanto
+ * dele ha' no total. Sem parada marcada (ou sem tempo rodando), null: nao
+ * ha' o que mostrar, e a tela nao escreve "0 roubados" sobre uma medicao
+ * que nao parou.
+ */
+export function roubadosPelasParadas(conferencia) {
+  const calc = conferenciaRapida({
+    duracaoMs: Number(conferencia.duracao_ms), pecas: conferencia.pecas, paradas: conferencia.paradas,
+  });
+  if (!calc) return null;
+  const p = potencialSemParada({ pecas: calc.pecas, duracaoMs: calc.duracaoMs, produtivoMs: calc.produtivoMs });
+  if (!p) return null;
+  return {
+    saiu: p.pecas,
+    potencial: p.potencial,
+    roubados: p.perdidas,
+    paradaMs: p.paradaMs,
+    setupMs: calc.setupMs,
+    porHoraRodando: p.ritmoPotencial,
+  };
+}

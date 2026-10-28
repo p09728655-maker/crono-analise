@@ -8,6 +8,9 @@ import {
 } from '../../domain/cronoanalise.js';
 import { diasProgramados, taktDaMedicao } from '../../domain/demandaSemanal.js';
 import { filtrarPorPeriodo, formatarDataHora } from '../../domain/relatorioConferencias.js';
+import {
+  emOrdem, faixaDaJuncao, idsDaJuncao, medicaoDaJuncao, motivoParaNaoJuntar,
+} from '../../domain/juncaoMedicoes.js';
 import { lerDemanda, listarCadastroMaquinas, listarConferenciasServidor } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
@@ -49,6 +52,12 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  * botao da tela — sem ela, saia da tela e levava as notas digitadas.
  * Trocar de medicao com o painel aberto troca a entrada, nao empilha: o
  * Voltar nao passeia pelas medicoes ja' vistas.
+ *
+ * A JUNCAO: marcadas duas ou mais medicoes do mesmo produto, maquina e
+ * semana (as caixas da lista), "Juntar" abre as tres no mesmo painel, como
+ * uma medicao so' (ver domain/juncaoMedicoes.js). A junção tem entrada no
+ * historico como uma medicao — o Voltar fecha, o F5 reabre — e a analise
+ * salva nela vale para todas: as N saem da fila de uma vez.
  */
 const ESTILO_GRADE = `
   @media (max-width: 1279px) {
@@ -71,6 +80,22 @@ const vistaDe = (c) => {
   if (!analisavel(c)) return 'outras';
   return c.analisada_em ? 'analisadas' : 'fila';
 };
+/** Na junção, a fila manda se alguma ainda nao foi lida. */
+const vistaDaAberta = (c) => (c.juncao
+  ? (c.medicoes.some((m) => !m.analisada_em) ? 'fila' : 'analisadas')
+  : vistaDe(c));
+/**
+ * O que reabrir pelo id da entrada do historico: uma medicao ou a junção
+ * (ver idDaJuncao). Junção que ja' nao se forma — alguma medicao sumiu da
+ * lista, ou deixou de casar com as outras — nao reabre.
+ */
+function acharAberta(id, medicoes) {
+  const ids = idsDaJuncao(id);
+  if (!ids) return medicoes.find((m) => m.id === id && m.com_marcas) || null;
+  const lista = ids.map((x) => medicoes.find((m) => m.id === x && analisavel(m)));
+  if (lista.some((m) => !m) || motivoParaNaoJuntar(lista)) return null;
+  return medicaoDaJuncao(lista);
+}
 /** A linha de uma medicao na lista — o que recebe o foco quando o painel fecha. */
 const seletorDaLinha = (id) => `[data-medicao="${id}"]`;
 /** O botao da vista que esta' na tela: o foco cai nele quando a linha nao esta'. */
@@ -104,6 +129,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   // Os dois cadastros que a embalagem pede no tablet: o que se embala e por
   // que a linha para. Aqui a um clique, sem caçar no menu de outra tela.
   const [cadastroAberto, setCadastroAberto] = useState(null); // 'produtos' | 'motivos' | null
+  // As medicoes marcadas para juntar (ids, na ordem em que foram marcadas).
+  // Valem entre as vistas: a junção pode ter uma lida e duas na fila.
+  const [marcadas, setMarcadas] = useState([]);
 
   useEffect(() => {
     let vivo = true;
@@ -199,8 +227,8 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   // A lista vai para a vista em que a medicao mora: aberta pelo Avancar, F5
   // ou Reabrir, a linha marcada tem de estar ao lado do painel.
   const mostrar = (c, { clique = true } = {}) => {
-    focarAoFechar.current = seletorDaLinha(c.id);
-    setVista(vistaDe(c));
+    focarAoFechar.current = seletorDaLinha(c.juncao ? c.medicoes[0].id : c.id);
+    setVista(vistaDaAberta(c));
     setPorClique(clique);
     setAberta(c);
   };
@@ -276,7 +304,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
         setAberta(null);
         return;
       }
-      const c = medicoes.find((m) => m.id === id && m.com_marcas);
+      const c = acharAberta(id, medicoes);
       if (c) mostrar(c);
     };
     window.addEventListener('popstate', aoNavegar);
@@ -291,7 +319,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
     const id = abrirAoCarregar.current;
     if (!leitura || !id) return;
     abrirAoCarregar.current = null;
-    const c = leitura.medicoes.find((m) => m.id === id && m.com_marcas);
+    const c = acharAberta(id, leitura.medicoes);
     // Sumiu da lista (arquivada, fora dos 30 dias): a entrada vira da lista,
     // senao o Voltar seguinte nao mudaria nada. Lista que nao veio (erro)
     // nao mexe na entrada: o proximo F5, com a lista boa, ainda reabre.
@@ -303,21 +331,28 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
      a lista de novo. Salvar fecha o painel (so' se a aberta ainda for a
      salva) e a medicao sai da fila; o foco vai a' linha seguinte da fila
      (sem seguinte, ao botao Analisadas). Reabrir deixa o detalhe aberto,
-     com a nota no campo, e a lista volta para a fila, onde ela esta'. */
-  const analises = useAnalisesDoPcp((atualizada, { fechar }) => {
+     com a nota no campo, e a lista volta para a fila, onde ela esta'.
+     A junção salva todas de uma vez: chegam varias, saem todas da fila, e
+     as marcas se vao (a junção cumpriu o papel). */
+  const analises = useAnalisesDoPcp((atualizadas, { fechar }) => {
     if (!montada.current) return;
-    const juntar = (c) => (c.id === atualizada.id ? { ...c, ...atualizada } : c);
+    const porId = new Map((Array.isArray(atualizadas) ? atualizadas : [atualizadas]).map((a) => [a.id, a]));
+    const juntar = (c) => (porId.has(c.id) ? { ...c, ...porId.get(c.id) } : c);
     setCarga((carregada) => ({ ...carregada, conferencias: carregada.conferencias.map(juntar) }));
-    if (atual.current.aberta?.id !== atualizada.id) return;
+    const daTela = atual.current.aberta;
+    const ehDaTela = daTela && (daTela.juncao ? daTela.medicoes.some((m) => porId.has(m.id)) : porId.has(daTela.id));
+    if (!ehDaTela) return;
     if (fechar) {
       const fila = atual.current.medicoes.filter((m) => vistaDe(m) === 'fila');
-      const i = fila.findIndex((m) => m.id === atualizada.id);
-      const seguinte = fila[i + 1] || fila[i - 1];
+      const ultima = Math.max(...fila.map((m, k) => (porId.has(m.id) ? k : -1)));
+      const ficou = (m) => !porId.has(m.id);
+      const seguinte = fila.slice(ultima + 1).find(ficou) || fila.slice(0, Math.max(ultima, 0)).reverse().find(ficou);
+      if (daTela.juncao) setMarcadas([]);
       fecharPainel();
       focarAoFechar.current = seguinte ? seletorDaLinha(seguinte.id) : '[data-vista="analisadas"]';
     } else {
       setAberta((a) => (a ? juntar(a) : a));
-      setVista(vistaDe(juntar(atual.current.aberta)));
+      setVista(vistaDe(juntar(daTela)));
     }
   });
 
@@ -334,7 +369,8 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
      indo para o servidor perde onde mostrar a recusa: a lateral pergunta
      antes, e recarregar ou fechar a aba tambem (beforeunload, como a
      coleta no App). O Voltar do navegador a partir da lista, nao. */
-  const naoSalvas = leitura ? leitura.medicoes.filter(analises.notaNaoSalva).length : 0;
+  const naoSalvas = (leitura ? leitura.medicoes.filter(analises.notaNaoSalva).length : 0)
+    + analises.juncoesNaoSalvas;
   const pendente = analises.ocupado || naoSalvas > 0;
   useEffect(() => {
     if (!pendente) return undefined;
@@ -357,6 +393,27 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   };
 
   const grupoAberto = aberta && leitura ? leitura.grupoDe(aberta.maquina) : null;
+
+  /* AS MARCADAS PARA JUNTAR. O motivo da trava vai escrito na barra: botao
+     travado sem o porque parece quebrado. */
+  const doMarcadas = leitura
+    ? marcadas.map((id) => leitura.medicoes.find((m) => m.id === id)).filter(Boolean)
+    : [];
+  const selecao = {
+    ids: new Set(doMarcadas.map((c) => c.id)),
+    medicoes: doMarcadas,
+    motivo: motivoParaNaoJuntar(doMarcadas),
+    alternar: (c) => setMarcadas((ids) => (ids.includes(c.id) ? ids.filter((x) => x !== c.id) : [...ids, c.id])),
+    limpar: () => setMarcadas([]),
+    // A mesma junção ja' aberta fica como esta': juntar de novo nao a fecha.
+    juntar: () => {
+      if (motivoParaNaoJuntar(doMarcadas)) return;
+      const juncao = medicaoDaJuncao(doMarcadas);
+      if (atual.current.aberta?.id === juncao.id) return;
+      abrir(juncao);
+    },
+  };
+  const abertasIds = new Set(aberta ? (aberta.juncao ? aberta.medicoes.map((m) => m.id) : [aberta.id]) : []);
 
   return (
     <div style={est.tela}>
@@ -463,7 +520,8 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     medicoes={leitura.medicoes}
                     vista={vista}
                     aoTrocarVista={setVista}
-                    abertaId={aberta?.id ?? null}
+                    abertasIds={abertasIds}
+                    selecao={selecao}
                     aoAbrir={abrir}
                     pendenciaDe={analises.pendencia}
                     ocupado={analises.ocupado}
@@ -531,10 +589,11 @@ function semTaktCurto(estado) {
 const DICA_DA_VISTA = {
   fila: 'Clique numa medição para abrir o volume a volume (ao lado da lista; abaixo dela, em tela '
     + 'estreita). Lida, salve a análise no alto dela: a medição sai desta lista e vai para Analisadas. '
-    + 'Volumes/hora do período inteiro, com as paradas dentro — o que de fato saiu.',
+    + 'Volumes/hora do período inteiro, com as paradas dentro — o que de fato saiu. Para ler várias '
+    + 'medições do mesmo produto como uma só, marque as caixas e clique em Juntar.',
   analisadas: 'As medições com a análise do PCP salva. Clique numa para ver, imprimir ou reabrir a '
     + 'análise — reaberta, ela volta para Não analisadas. Volumes/hora do período inteiro, com as '
-    + 'paradas dentro.',
+    + 'paradas dentro. Marque as caixas para juntar de novo e reimprimir.',
   outras: 'Medidas por horários, com a contagem corrigida à mão ou com um toque só: não há intervalo '
     + 'entre volumes para ler, e elas não têm análise do PCP. Os volumes/hora valem, com as paradas dentro.',
 };
@@ -563,14 +622,23 @@ const AVISO_PENDENCIA = {
  * fila, ela nunca sairia, e a fila nunca esvaziaria. As vistas travam
  * enquanto uma analise salva: a recusa avisa na linha, e a linha tem de
  * estar a' vista.
+ *
+ * A CAIXA da linha marca a medicao para juntar (so' as que se analisam: as
+ * "Sem intervalos" nao tem o que juntar). O clique nela nao abre a linha.
+ * Com alguma marcada, a barra diz quantas, o que somam e — se nao der
+ * para juntar — por que.
  */
 function TabelaEmbalagem({
-  medicoes: todas, vista, aoTrocarVista, abertaId, aoAbrir, pendenciaDe, ocupado = false,
+  medicoes: todas, vista, aoTrocarVista, abertasIds, selecao, aoAbrir, pendenciaDe, ocupado = false,
 }) {
   const variasMaquinas = new Set(todas.map((c) => nomeChave(c.maquina))).size > 1;
   const porVista = { fila: [], analisadas: [], outras: [] };
   todas.forEach((c) => porVista[vistaDe(c)].push(c));
   const medicoes = porVista[vista];
+  const comCaixa = vista !== 'outras';
+  const colunas = comCaixa ? 5 : 4;
+  const marcadas = selecao.medicoes;
+  const nMarcadas = marcadas.length;
   const botaoVista = (qual, rotulo, titulo) => (
     <button
       type="button"
@@ -599,6 +667,36 @@ function TabelaEmbalagem({
               'Medidas por horários, com a contagem corrigida à mão ou com um toque só: não há intervalo entre volumes para ler',
             )}
           </div>
+          {nMarcadas > 0 && (
+            <div style={est.embBarraJuntar} role="region" aria-label="Medições marcadas para juntar">
+              <div style={est.embBarraTexto}>
+                <span style={est.embBarraTitulo}>
+                  {nMarcadas} {nMarcadas === 1 ? 'medição marcada' : 'medições marcadas'}
+                  {!selecao.motivo && ` · ${marcadas[0].peca} · ${marcadas[0].maquina}`}
+                </span>
+                {selecao.motivo
+                  ? <span style={est.embBarraMotivo} role="status">{selecao.motivo}</span>
+                  : (
+                    <span style={est.embBarraSub}>
+                      {marcadas.reduce((soma, c) => soma + (Number(c.pecas) || 0), 0)} volumes em{' '}
+                      {formatarDuracao(marcadas.reduce((soma, c) => soma + (Number(c.duracao_ms) || 0), 0))} medidos
+                      {' · '}{faixaDaJuncao(emOrdem(marcadas))}
+                    </span>
+                  )}
+              </div>
+              <button type="button" style={est.botaoSecundario} onClick={cliqueSimples(selecao.limpar)} disabled={ocupado}>
+                Desmarcar
+              </button>
+              <button
+                type="button"
+                style={selecao.motivo ? est.embBotaoJuntarTravado : est.embBotaoJuntar}
+                onClick={cliqueSimples(selecao.juntar)}
+                disabled={Boolean(selecao.motivo) || ocupado}
+              >
+                {nMarcadas >= 2 ? `Juntar as ${nMarcadas}` : 'Juntar'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {medicoes.length === 0 && (
@@ -615,6 +713,7 @@ function TabelaEmbalagem({
         <table style={est.tabela}>
           <thead>
             <tr>
+              {comCaixa && <th style={est.embThCaixa} aria-label="Marcar para juntar" />}
               <th style={est.embTh}>Quando</th>
               <th style={est.embTh}>Produto</th>
               <th style={est.embThNum}>Período</th>
@@ -626,7 +725,7 @@ function TabelaEmbalagem({
               const calc = conferenciaRapida({ duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas });
               const par = somarParadas(c.paradas);
               const abre = Boolean(c.com_marcas);
-              const selecionada = c.id === abertaId;
+              const selecionada = abertasIds.has(c.id);
               // O dia em que se MEDIU, o mesmo do detalhe e do corte dos 30 dias
               // (salvo_em e' o dia em que sincronizou: offline, pode ser outro).
               const [dia, hora] = formatarDataHora(c.iniciado_em || c.salvo_em).split(' ');
@@ -638,6 +737,23 @@ function TabelaEmbalagem({
               return (
                 <Fragment key={c.id}>
                 <tr style={estiloLinha} className={classeLinha} onClick={aoClicarLinha}>
+                  {comCaixa && (
+                    /* O clique na caixa marca, nao abre a linha. */
+                    <td style={est.embTdCaixa} onClick={(ev) => ev.stopPropagation()}>
+                      {analisavel(c) && (
+                        <label style={est.embCaixa} title="Marcar para juntar">
+                          <input
+                            type="checkbox"
+                            style={est.embCaixaInput}
+                            checked={selecao.ids.has(c.id)}
+                            onChange={() => selecao.alternar(c)}
+                            disabled={ocupado}
+                            aria-label={`Marcar para juntar: ${c.peca || 'produto não informado'}, ${dia} ${faixaHoraria(c) || hora || ''}`.trim()}
+                          />
+                        </label>
+                      )}
+                    </td>
+                  )}
                   <td style={est.embTdQuando}>
                     <span style={est.embForte}>{dia}</span>
                     <span style={est.embSub}>{faixaHoraria(c) || hora || '—'}</span>
@@ -692,7 +808,7 @@ function TabelaEmbalagem({
                     de ritmo. E' muitas vezes a explicacao da lacuna. */}
                 {c.observacao && (
                   <tr style={estiloLinha} className={classeLinha} onClick={aoClicarLinha}>
-                    <td style={est.tdObservacao} colSpan={4}>
+                    <td style={est.tdObservacao} colSpan={colunas}>
                       <span style={est.rotuloObservacao}>Obs.</span>
                       {c.observacao}
                     </td>

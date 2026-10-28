@@ -13,6 +13,20 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.96.0',
+    data: '2026-10-28',
+    titulo: 'Embalagem Takt Time: juntar medições e ver os volumes que as paradas roubaram',
+    itens: [
+      'OS VOLUMES QUE AS PARADAS ROUBARAM abrem o volume a volume de toda medição com parada marcada: "22 volumes roubados pelas paradas nesta medição — saíram 60; no passo da linha rodando, teriam saído 82". A conta não projeta nada: é o passo que a própria linha fez rodando, aplicado ao tempo em que ela ficou parada (paradas marcadas, setup incluído). Vai também na folha impressa.',
+      'JUNTAR MEDIÇÕES. Cada linha da lista ganhou uma caixa. Marque duas ou mais do mesmo produto, na mesma máquina e na mesma semana e clique em "Juntar": elas abrem no mesmo painel, como uma amostra só. Exemplo real: as 3 medições de Penteadeira Princesa de 28/10 (07:11, 07:27 e 07:52) juntas dão 138 volumes em 42 min, 197 volumes/hora, e mostram que as paradas roubaram 36 volumes — o passo da linha rodando foi o mesmo nas três (14,1 a 14,9 s).',
+      'AS CONTAS DA JUNÇÃO: tudo somado pelo tempo, nunca a média das taxas (a média de 236, 181 e 159 daria 192; o certo é 197). O tempo entre uma medição e a seguinte não foi medido e fica fora: não vira intervalo, lacuna nem parada. A lacuna é contra o normal da junção, então a contagem pode diferir da de cada medição sozinha.',
+      'O PAINEL DA JUNÇÃO tem os mesmos cartões, gráfico e leitura de uma medição, mais a tabela das medições (cada uma com os próprios números e a junção na última linha), a linha que separa as medições no gráfico e a medição de cada lacuna. A leitura diz se o passo foi o mesmo em todas ou qual foi a mais lenta.',
+      'PRODUTO, MÁQUINA OU SEMANA DIFERENTES TRAVAM o botão "Juntar", com o motivo escrito na barra: linhas diferentes têm ritmos diferentes, e semanas diferentes, takts diferentes.',
+      '"SALVAR ANÁLISE DAS N E FECHAR" grava a mesma nota em todas as medições de uma vez, com "Junção de 3 medições (07:11–07:58)" no começo, e todas saem da fila juntas. Se o servidor recusar, nenhuma é gravada e o motivo aparece no painel. A junção não fica guardada: para reimprimir, marque as medições de novo (também em Analisadas). O Voltar do navegador fecha a junção e o F5 a reabre.',
+      'A FOLHA IMPRESSA DA JUNÇÃO sai com "junção de 3 medições" no título e no nome do PDF, a tabela das medições, os volumes roubados e a regra da junção na nota.',
+    ],
+  },
+  {
     versao: '2.95.3',
     data: '2026-10-28',
     titulo: 'Embalagem Takt Time: volumes/hora no volume a volume e na folha impressa',

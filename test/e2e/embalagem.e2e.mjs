@@ -428,7 +428,15 @@ await fechar();
 checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detalhe e a lista volta a largura toda');
 // A linha inteira abre, nao so' o nome do produto; clicar de novo fecha.
 {
-  const celula = lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().getByRole('cell').first();
+  // A primeira celula e' a da caixa de juntar: o clique nela marca, nao abre.
+  const linhaRack = lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first();
+  await linhaRack.getByRole('cell').first().click();
+  await p.waitForTimeout(300);
+  checar(await janela.count() === 0, 'clicar na celula da caixa de juntar nao abre a medicao');
+  const marcou = linhaRack.getByRole('checkbox');
+  checar(await marcou.isChecked(), 'o clique na celula da caixa marca a medicao');
+  await marcou.uncheck();
+  const celula = linhaRack.getByRole('cell').nth(1);
   await celula.click();
   await janela.waitFor({ timeout: 4000 });
   checar(await lista.isVisible(), 'clicar na linha, fora do nome, tambem abre a medicao ao lado');

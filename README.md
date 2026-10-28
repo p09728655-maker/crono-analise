@@ -155,6 +155,25 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   *Reabrir análise* devolve a medição para a fila com o comentário no campo.
   Não muda número nenhum: é controle do que falta ler.
   Salvar é de analista ou administrador (o tablet, coletor, recebe 403).
+- **Volumes roubados pelas paradas** (v2.96) abrem o painel de toda medição
+  com parada marcada: o que teria saído no mesmo tempo, no passo que a linha
+  fez rodando, menos o que saiu — a mesma conta do comparativo da
+  conferência de ritmo (`potencialSemParada`). Minuto parado é abstrato;
+  caixa que não saiu, não.
+- **Juntar medições** (v2.96). Cada linha da lista tem uma caixa; marcadas
+  duas ou mais **do mesmo produto, na mesma máquina e na mesma semana**,
+  *Juntar* abre todas no mesmo painel, como uma amostra só. Produto, máquina
+  ou semana diferentes travam o botão, com o motivo escrito. Na junção:
+  tudo somado **pelo tempo** (nunca a média das taxas); o intervalo **não
+  atravessa medições** (o tempo entre uma e a seguinte não foi medido e fica
+  fora); a lacuna é contra o normal da junção; os roubados somam os de cada
+  medição. O painel ganha a tabela das medições (cada uma com os próprios
+  números, a junção na última linha), a divisa entre elas no gráfico e as
+  lacunas com a medição de cada uma. *Salvar análise das N e fechar* grava a
+  mesma nota em todas numa ida só — tudo ou nada, no servidor (`PATCH
+  /api/conferencias` com `ids`) —, com "Junção de N medições (07:11–07:58)"
+  no começo, e as N saem da fila. A junção não fica guardada no banco: para
+  reimprimir, marque as medições de novo (também em *Analisadas*).
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O programa da embalagem é em VOLUMES**: um rack que sai em dois volumes
@@ -1325,6 +1344,9 @@ reenviar o mesmo lote não duplica nada.
 | Com a linha rodando | Σ intervalos ÷ n — paradas marcadas fora, lacunas dentro |
 | Ritmo normal | média dos intervalos que não são lacuna (repetida até estabilizar) |
 | Lacuna | intervalo > 2 × ritmo normal; excesso = Σ (lacuna − normal); volumes perdidos ≈ excesso ÷ normal |
+| Roubados pelas paradas | arredondar(volumes × duração ÷ (duração − paradas marcadas)) − volumes; na junção, Σ dos de cada medição |
+| Junção — por volume no período | Σ (relógio entre o 1º e o último toque de cada medição, já sem o setup no trecho) ÷ Σ intervalos |
+| Junção — volumes/hora | Σ volumes ÷ Σ duração das medições inteiras (nunca a média das taxas) |
 | Tendência (estudo) | regressão linear sobre a ordem dos ciclos; % (critério) = inclinação × (n−1) ÷ média; direção só com \|%\| ≥ 5 e R² ≥ t²₉₅/(t²₉₅+n−2). No quadro, a % exibida é fim ÷ início da reta |
 | Tendência (período) | regressão do ritmo (pç/h) sobre a DATA, em dias; direção só com \|%\| ≥ 8 e R² ≥ t²₉₅/(t²₉₅+df) na regressão do ritmo dividido pela média da própria peça, com df = n − k − 1 (k = peças medidas: cada média estimada custa um grau de liberdade) |
 | Nº operadores | Σ TP ÷ Takt |
