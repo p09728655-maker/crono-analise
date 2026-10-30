@@ -101,8 +101,9 @@ const tabletNovo = async (opcoes) => {
   await texto.fill('  Penteadeira   Princesa ');
   const botao = t.getByRole('button', { name: /Cadastrar «Penteadeira Princesa» no grupo EMBALAGEM/ });
   checar(await botao.count() === 1, 'nome digitado: o botao diz o nome e o grupo para onde ele vai');
-  checar(/entra na lista para as próximas medições/.test(await t.locator('body').innerText()),
-    'a dica diz o que cadastrar muda (e que sem cadastrar o nome vai so nesta)');
+  checar(/entra na lista do grupo em todos os tablets, e só o PCP corrige ou desativa/.test(await t.locator('body').innerText())
+    && /Sem cadastrar, o nome vai só nesta medição/.test(await t.locator('body').innerText()),
+  'a dica diz o que cadastrar muda, que so o PCP desfaz, e que sem cadastrar o nome vai so nesta');
   if (FOTOS) await t.screenshot({ path: `${FOTOS}/tablet-cadastrar-produto.png` });
   await botao.tap();
   const lista = t.locator('select[aria-label="Produto embalado"]');
@@ -165,13 +166,20 @@ const tabletNovo = async (opcoes) => {
   await lista.selectOption('__outro');
   const texto = t.locator('input[aria-label="Produto embalado"]');
 
-  // Ja' na lista, com outra grafia: escolhe o do cadastro, sem POST.
+  // O comeco da digitacao nao oferece cadastro: um toque sem querer em
+  // "+ Cadastrar «Ra»" ficaria na lista de todos os tablets.
+  await texto.fill('Ra');
+  checar(await t.getByRole('button', { name: /Cadastrar/ }).count() === 0, 'com 2 letras, sem botao de cadastrar');
+
+  // Ja' na lista, com outra grafia: o botao NAO promete cadastro, oferece o da lista.
   await texto.fill('rack  sirius 1.6');
-  await t.getByRole('button', { name: /Cadastrar «rack sirius 1.6»/ }).tap();
+  checar(await t.getByRole('button', { name: /Cadastrar/ }).count() === 0
+    && await t.getByText(/entra na lista do grupo/).count() === 0,
+  'nome que ja esta na lista com outra grafia: nada de "+ Cadastrar", nem a dica de cadastro');
+  await t.getByRole('button', { name: 'Usar «Rack Sirius 1.6» da lista' }).tap();
   await lista.waitFor({ timeout: 4000 });
   checar(await lista.inputValue() === 'Rack Sirius 1.6' && criados.length === 0,
-    'nome que ja esta no cadastro: escolhe o produto da lista, com a grafia dele, sem ir ao servidor');
-  checar(await t.getByText(/já estava no cadastro — escolhido da lista/).count() === 1, 'e diz que ja estava');
+    '"Usar da lista": escolhe o produto com a grafia do cadastro, sem ir ao servidor');
 
   // Desativado pelo PCP: nao volta pelo tablet; a medicao segue com o nome.
   await lista.selectOption('__outro');
@@ -181,6 +189,8 @@ const tabletNovo = async (opcoes) => {
   await aviso.waitFor({ timeout: 4000 });
   checar(await texto.inputValue() === 'Rack Antigo' && criados.length === 0,
     'desativado: o nome fica com a grafia do cadastro, como texto, e nada vai ao servidor');
+  checar(await t.getByRole('button', { name: /Cadastrar/ }).count() === 0,
+    'desativado: o botao some — tocar de novo so repetiria a recusa');
 
   // Sem rede: o aviso aparece colado ao campo e o nome digitado fica.
   await texto.fill('Rack Lua');
@@ -266,12 +276,17 @@ const tabletNovo = async (opcoes) => {
   checar(sugestoes.includes('Penteadeira Princesa') && !sugestoes.includes('Lateral Mesa'),
     `os nomes sugeridos trazem o cadastro da embalagem, nao o da furadeira (${sugestoes.join(' | ')})`);
   const campo = janela.locator('input[aria-label="Nome do produto"]');
+  // Correcao so' de caixa: e' o MESMO produto do cadastro — nada de mandar
+  // desativar o certo.
+  await campo.fill('PENTEADEIRA PRINCEZA');
+  checar(/As 2 medições/.test(await janela.innerText()) && !/cadastro de produtos/.test(await janela.innerText()),
+    'correcao so de caixa: renomeia as 2, sem aviso de cadastro');
   await campo.fill('Penteadeira Princesa');
   const textoJanela = (await janela.innerText()).replace(/\s+/g, ' ');
   checar(/As 2 medições que hoje se chamam «Penteadeira Princeza» passam a se chamar «Penteadeira Princesa»/.test(textoJanela),
     `o lote e so o da embalagem: 2 medicoes, nao a da furadeira (${textoJanela.slice(0, 160)})`);
-  checar(/estão os dois no cadastro de produtos/.test(textoJanela) && /Produtos da embalagem/.test(textoJanela),
-    'os dois nomes no cadastro: a janela diz para desativar o errado, e onde');
+  checar(/estão os dois no cadastro de produtos\. Se forem o mesmo produto, desative «Penteadeira Princeza» em Produtos da embalagem/.test(textoJanela),
+    'troca de produto com os dois nomes no cadastro: a janela diz, condicional, para desativar o errado, e onde');
   if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-editar-produto.png` });
   await janela.getByRole('button', { name: 'Renomear as 2 medições' }).click();
   await janela.waitFor({ state: 'detached', timeout: 4000 });

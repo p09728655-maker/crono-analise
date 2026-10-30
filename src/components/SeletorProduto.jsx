@@ -1,4 +1,9 @@
 import { useState } from 'react';
+import { nomeChave } from '../domain/cronoanalise.js';
+
+/** Abaixo disto nao ha' produto: e' o comeco da digitacao, e um toque
+ *  sem querer em "+ Cadastrar «Ra»" ficaria na lista de todos os tablets. */
+const MIN_CADASTRO = 3;
 
 /**
  * Campo do PRODUTO — escolha quando o posto tem produtos cadastrados, texto
@@ -28,7 +33,10 @@ import { useState } from 'react';
  * Sem cadastrar, o nome vai so' na medicao, como sempre; o botao e' a
  * saida para o produto que nao estava na lista deixar de ser texto livre.
  * Recebe o nome e devolve o resultado de lib/maquinas.cadastrarProduto.
- * `grupoNome` diz no botao para qual lista o produto vai.
+ * `grupoNome` diz no botao para qual lista o produto vai. Nome que ja' esta'
+ * na lista com outra grafia ("rack sirius 1.6") nao oferece cadastro: o
+ * botao vira "Usar «Rack Sirius 1.6» da lista" — prometer um cadastro que
+ * nao vai acontecer deixava a medicao sair com a grafia errada.
  */
 export default function SeletorProduto({
   valor, aoTrocar, opcoes, estilos,
@@ -62,7 +70,20 @@ export default function SeletorProduto({
   const livre = lista.length === 0 || (modo === null ? automatico : modo);
   const resposta = cadastro && cadastro.de === valor ? cadastro : null;
   const nomeDigitado = String(valor || '').trim();
-  const podeCadastrar = Boolean(aoCadastrar) && Boolean(nomeDigitado) && !naLista;
+  const chaveDigitada = nomeChave(valor);
+  // O da lista com outra grafia: escolher, nao cadastrar.
+  const daLista = aoCadastrar && !naLista && chaveDigitada
+    ? lista.find((p) => nomeChave(p.nome) === chaveDigitada) || null
+    : null;
+  // Depois de "desativado pelo PCP", tocar de novo so' repetiria a recusa.
+  const podeCadastrar = Boolean(aoCadastrar) && !naLista && !daLista
+    && chaveDigitada.length >= MIN_CADASTRO && !resposta?.desativado;
+
+  const usarDaLista = () => {
+    setModo(null);
+    aoTrocar(daLista.nome);
+    aoEscolher?.(daLista.nome);
+  };
 
   const cadastrar = async () => {
     if (enviando || !podeCadastrar) return;
@@ -91,6 +112,7 @@ export default function SeletorProduto({
       setCadastro({
         de: r.produto.nome,
         estado: 'aviso',
+        desativado: true,
         texto: `«${r.produto.nome}» está no cadastro, mas desativado pelo PCP. A medição pode seguir com `
           + 'este nome; para ele voltar à lista, peça ao PCP para reativar no PC, em Produtos.',
       });
@@ -122,6 +144,11 @@ export default function SeletorProduto({
             {sugestoes.map((nome) => <option key={nome} value={nome} />)}
           </datalist>
         )}
+        {daLista && (
+          <button type="button" style={estilos.cadastrar} onClick={usarDaLista}>
+            {`Usar «${daLista.nome}» da lista`}
+          </button>
+        )}
         {podeCadastrar && (
           <button
             type="button"
@@ -134,7 +161,8 @@ export default function SeletorProduto({
         )}
         {podeCadastrar && !resposta && (
           <span style={estilos.cadastroDica}>
-            Cadastrado, ele entra na lista para as próximas medições. Sem cadastrar, o nome vai só nesta.
+            Cadastrado, ele entra na lista do grupo em todos os tablets, e só o PCP corrige ou desativa
+            depois, no PC. Sem cadastrar, o nome vai só nesta medição.
           </span>
         )}
         {respostaNaTela}

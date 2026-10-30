@@ -1692,10 +1692,13 @@ rodar('API — integracao com Postgres', () => {
     expect(novo.statusCode).toBe(201);
     expect(novo.corpo.produto).toMatchObject({ nome: 'Penteadeira Princesa', codigo: null, ativo: true, grupo_id: grupoId });
 
-    // Repetido sem caixa: 409, como no PC — e nenhuma linha a mais.
-    const repetido = await pedir({ metodo: 'POST', corpo: { nome: 'penteadeira princesa', grupoId } });
-    expect(repetido.statusCode).toBe(409);
-    expect(repetido.corpo.erro).toMatch(/Penteadeira Princesa/);
+    // Repetido sem caixa — e SEM ACENTO: o tablet com o cadastro velho em
+    // cache nao cria "Penteadeira Princésa" ao lado. 409, nenhuma linha a mais.
+    for (const nome of ['penteadeira princesa', 'Penteadeira  Princésa']) {
+      const repetido = await pedir({ metodo: 'POST', corpo: { nome, grupoId } });
+      expect(repetido.statusCode, nome).toBe(409);
+      expect(repetido.corpo.erro).toMatch(/Penteadeira Princesa/);
+    }
 
     // O codigo do ERP e' do PCP: recusado com o porque, e nada gravado.
     const comCodigo = await pedir({ metodo: 'POST', corpo: { nome: 'Rack Lua', codigo: '777', grupoId } });
@@ -1725,6 +1728,17 @@ rodar('API — integracao com Postgres', () => {
     await expect(comoColetor((tx) => tx`
       INSERT INTO produtos (empresa_id, grupo_id, nome, codigo) VALUES (${EMPRESA}, ${grupoId}, 'Com codigo', '1')`))
       .rejects.toThrow(/row-level security/);
+    // Nem ja' desativado, nem mexer no que existe: UPDATE e DELETE nao
+    // alcancam linha nenhuma pela politica.
+    await expect(comoColetor((tx) => tx`
+      INSERT INTO produtos (empresa_id, grupo_id, nome, ativo) VALUES (${EMPRESA}, ${grupoId}, 'Ja desativado', false)`))
+      .rejects.toThrow(/row-level security/);
+    const renomeadas = await comoColetor((tx) => tx`
+      UPDATE produtos SET nome = 'Trocado no banco' WHERE id = ${id} RETURNING id`);
+    const apagadas = await comoColetor((tx) => tx`DELETE FROM produtos WHERE id = ${id} RETURNING id`);
+    expect([renomeadas.length, apagadas.length]).toEqual([0, 0]);
+    const [intacto] = await sql`SELECT nome, ativo FROM produtos WHERE id = ${id}`;
+    expect(intacto).toEqual({ nome: 'Penteadeira Princesa', ativo: true });
 
     await maquinasApi(fingirReq({ metodo: 'DELETE', query: { grupo: grupoId } }), fingirRes());
   });

@@ -205,6 +205,14 @@ export async function cadastrarProduto({ nome, grupoId }) {
   };
   const jaTem = conhecido(catalogo);
   if (jaTem) return jaTem;
+  /* O cadastro de AGORA antes de criar: o guardado no aparelho pode ser de
+     horas atras, e outro tablet pode ter cadastrado o mesmo produto. Tambem
+     espera a busca que ja' estiver no ar — a resposta dela, chegando depois
+     do POST, publicaria a lista sem o produto recem-criado. Sem rede, a
+     busca falha calada e o POST abaixo da' o aviso. */
+  const atual = await carregarMaquinas();
+  const doServidor = atual && conhecido(atual);
+  if (doServidor) return doServidor;
   try {
     const produto = await criarProduto({ nome: limpo, grupoId });
     // Na lista deste aparelho ja': escolher o recem-cadastrado nao pode
@@ -215,11 +223,11 @@ export async function cadastrarProduto({ nome, grupoId }) {
     return { estado: 'ok', produto, novo: true };
   } catch (e) {
     if (!(e instanceof ErroApi)) return { estado: 'erro', mensagem: SEM_REDE };
-    // 409: outro tablet (ou o PC) cadastrou o mesmo nome depois da ultima
-    // busca. Buscado o cadastro, ele e' o que se escolhe.
+    // 409: outro tablet (ou o PC) cadastrou o mesmo nome entre a busca e o
+    // POST. Buscado o cadastro, ele e' o que se escolhe.
     if (e.status === 409) {
-      const atual = await carregarMaquinas();
-      const achado = atual && conhecido(atual);
+      const depois = await carregarMaquinas();
+      const achado = depois && conhecido(depois);
       if (achado) return achado;
     }
     return { estado: 'erro', mensagem: e.message };

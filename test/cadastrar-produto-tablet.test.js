@@ -15,7 +15,11 @@ vi.mock('../src/lib/api.js', async (original) => {
   return {
     ...real,
     criarProduto: (dados) => servidor.criar(dados),
-    listarCadastroMaquinas: async () => servidor.cadastro,
+    // Sem cadastro no servidor simulado = sem rede, como o fetch de verdade.
+    listarCadastroMaquinas: async () => {
+      if (!servidor.cadastro) throw new TypeError('Failed to fetch');
+      return servidor.cadastro;
+    },
   };
 });
 
@@ -83,15 +87,29 @@ describe('cadastrar pelo tablet', () => {
     expect(servidor.criar).not.toHaveBeenCalled();
   });
 
+  it('cache velho: busca o cadastro antes do POST e escolhe o que outro tablet ja cadastrou (com acento)', async () => {
+    servidor.cadastro = { ...base(), produtos: [...base().produtos, { id: 'p8', nome: 'Rack Lúa', grupo_id: EMB, ativo: true }] };
+    const r = await cadastrarProduto({ nome: 'rack lua', grupoId: EMB });
+    expect(r).toMatchObject({ estado: 'ok', novo: false, produto: { id: 'p8', nome: 'Rack Lúa' } });
+    expect(servidor.criar).not.toHaveBeenCalled();
+    expect(produtosDoGrupo(catalogo(), EMB).map((p) => p.nome)).toEqual(['Rack Sirius 1.6', 'Rack Lúa']);
+  });
+
   it('409 de outro tablet: busca o cadastro e escolhe o que ele cadastrou', async () => {
-    servidor.criar = vi.fn(async () => { throw new ErroApi(409, 'Ja existe este produto no grupo: "Rack Lua"'); });
-    servidor.cadastro = { ...base(), produtos: [...base().produtos, { id: 'p9', nome: 'Rack Lua', grupo_id: EMB, ativo: true }] };
+    // Cadastrado entre a busca de antes do POST e o POST: a 1a busca nao o
+    // traz, a de depois do 409 traz.
+    const depois = { ...base(), produtos: [...base().produtos, { id: 'p9', nome: 'Rack Lua', grupo_id: EMB, ativo: true }] };
+    servidor.criar = vi.fn(async () => {
+      servidor.cadastro = depois;
+      throw new ErroApi(409, 'Ja existe este produto no grupo: "Rack Lua"');
+    });
     const r = await cadastrarProduto({ nome: 'rack lua', grupoId: EMB });
     expect(r).toMatchObject({ estado: 'ok', novo: false, produto: { id: 'p9', nome: 'Rack Lua' } });
     expect(produtosDoGrupo(catalogo(), EMB).map((p) => p.nome)).toContain('Rack Lua');
   });
 
   it('sem rede: devolve o que dizer, a lista fica como estava', async () => {
+    servidor.cadastro = null; // a busca de antes do POST tambem nao responde
     servidor.criar = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
     const r = await cadastrarProduto({ nome: 'Rack Lua', grupoId: EMB });
     expect(r.estado).toBe('erro');

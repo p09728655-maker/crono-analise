@@ -23,6 +23,7 @@
 import { exigirPapel } from './auth.js';
 import { ErroHttp, erroValidacao, json, lerCorpo, naoEncontrado } from './http.js';
 import { texto, uuid } from './validar.js';
+import { nomeChave } from '../../src/domain/crono/conferencia.js';
 
 // Nome canonico: apara e recolhe espaco repetido. Caixa e acento ficam —
 // e' o nome EXIBIDO; a unicidade compara sem caixa (indice lower/btrim).
@@ -47,12 +48,21 @@ async function grupoValido(db, empresaId, valor) {
   return id;
 }
 
+/**
+ * Repetido pela chave do relatorio (nomeChave: sem caixa, sem ACENTO, sem
+ * espaco a mais) — nao so' pelo indice lower/btrim. Com o tablet
+ * cadastrando (v2.97.0), "Armario Encanto" digitado num aparelho com o
+ * cadastro antigo em cache passaria pelo indice ao lado do "Armário
+ * Encanto" de outro, e todos os tablets ofereceriam os dois. Os produtos de
+ * um grupo sao dezenas: comparar aqui custa nada.
+ */
 async function repetido(db, empresaId, grupoId, nome, outroQue = null) {
-  const [existe] = await db`
+  const chave = nomeChave(nome);
+  const doGrupo = await db`
     SELECT nome FROM produtos
      WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
-       AND lower(btrim(nome)) = lower(${nome})
        AND (${outroQue}::uuid IS NULL OR id <> ${outroQue}::uuid)`;
+  const existe = doGrupo.find((p) => nomeChave(p.nome) === chave);
   if (existe) throw new ErroHttp(409, `Ja existe este produto no grupo: "${existe.nome}"`);
 }
 

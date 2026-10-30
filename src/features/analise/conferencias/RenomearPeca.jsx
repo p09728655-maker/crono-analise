@@ -81,8 +81,12 @@ export default function RenomearPeca({
   const mudou = Boolean(limpo) && limpo !== nomeAtual;
   const emLote = tambemAsOutras && irmas.length > 1;
   const outras = irmas.length - 1;
-  // O nome velho e' o do CADASTRO: a correcao aqui nao chega ao tablet.
-  const antigoNoCadastro = mudou && termos.cadastro && noCadastro.has(nomeChave(nomeAtual));
+  /* O nome velho e' o do CADASTRO: a correcao aqui nao chega ao tablet.
+     So' quando a correcao TROCA de produto: "penteadeira princesa" ->
+     "Penteadeira Princesa" e' o mesmo produto do cadastro, e o aviso
+     mandaria desativar justamente o certo. */
+  const trocouDeProduto = mudou && nomeChave(nomeAtual) !== nomeChave(limpo);
+  const antigoNoCadastro = trocouDeProduto && termos.cadastro && noCadastro.has(nomeChave(nomeAtual));
   const novoNoCadastro = noCadastro.has(nomeChave(limpo));
 
   return (
@@ -128,11 +132,14 @@ export default function RenomearPeca({
         )}
         {antigoNoCadastro && (
           <p style={est.textoModal} role="note">
+            {/* Condicional de proposito: a medicao pode so' ter recebido o
+                produto errado da lista, e ai' o cadastro esta' certo. */}
             {novoNoCadastro
-              ? <>«{nomeAtual}» e «{limpo}» estão os dois no cadastro de produtos. Se são o mesmo produto,
-                desative «{nomeAtual}» em {termos.cadastro}: senão o tablet continua oferecendo os dois.</>
-              : <>«{nomeAtual}» também é o nome no cadastro de produtos. Corrija lá também, em{' '}
-                {termos.cadastro}: senão o tablet continua oferecendo o nome antigo.</>}
+              ? <>«{nomeAtual}» e «{limpo}» estão os dois no cadastro de produtos. Se forem o mesmo
+                produto, desative «{nomeAtual}» em {termos.cadastro}: senão o tablet continua
+                oferecendo os dois.</>
+              : <>«{nomeAtual}» também está no cadastro de produtos. Se o nome lá estiver errado,
+                corrija em {termos.cadastro}: renomear as medições não muda o que o tablet oferece.</>}
           </p>
         )}
 
