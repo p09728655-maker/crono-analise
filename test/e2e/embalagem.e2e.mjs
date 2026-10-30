@@ -11,6 +11,7 @@
  *
  * Uso: npm run dev (porta 5199) e depois node test/e2e/embalagem.e2e.mjs
  */
+import { writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { semearSessao } from './_sessao.mjs';
 
@@ -161,6 +162,16 @@ for (let i = 0; i < 12; i++) {
 const painelTempo = await t.locator('[aria-label="Tempo decorrido"]').innerText();
 checar(/ÚLTIMO/i.test(painelTempo) && /POR VOLUME/i.test(painelTempo) && /TAKT/i.test(painelTempo)
   && painelTempo.includes('72.0'), 'cronometro rodando mostra ULTIMO, POR VOLUME e TAKT 72.0');
+/* v2.98.0: volumes/hora ao vivo (volumes ÷ relogio desde a largada) e o
+   painel do mesmo tamanho do alvo — o alvo tomava dois tercos da tela. */
+{
+  const m = /VOL\/HORA\s*(\d+)/i.exec(painelTempo);
+  checar(Boolean(m) && Number(m[1]) > 0, `cronometro rodando mostra VOL/HORA ao vivo (${m?.[1]})`);
+  const painel = await t.locator('[aria-label="Tempo decorrido"]').boundingBox();
+  const caixaAlvo = await alvo.boundingBox();
+  checar(painel.height >= caixaAlvo.height * 0.9,
+    `o painel dos numeros tem ao menos a altura do alvo de toque (${Math.round(painel.height)} x ${Math.round(caixaAlvo.height)} px)`);
+}
 if (FOTOS) await t.screenshot({ path: `${FOTOS}/tablet-rodando.png` });
 
 await t.getByRole('button', { name: /Encerrar/ }).click();
@@ -420,12 +431,37 @@ checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some 
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
 
+/* DEITADA (v2.98.0): a folha do volume a volume sai em A4 paisagem, com o
+   grafico na largura dela. O tamanho vem do PDF que o Chromium gera, com o
+   @page da pagina — o mesmo do "Salvar como PDF". */
+const tamanhoDoPdf = async () => {
+  // Com a midia emulada em 'screen' (como o resto do teste deixa), o PDF
+  // ignoraria o @media print — e com ele o @page — e sairia em Carta.
+  await p.emulateMedia({ media: 'print' });
+  const pdf = await p.pdf({ preferCSSPageSize: true, printBackground: true });
+  await p.emulateMedia({ media: 'screen' });
+  const caixa = /\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/.exec(pdf.toString('latin1'));
+  return { pdf, largura: Math.round(Number(caixa?.[1])), altura: Math.round(Number(caixa?.[2])) };
+};
+{
+  const { pdf, largura, altura } = await tamanhoDoPdf();
+  checar(largura === 842 && altura === 595, `impressao: a folha da medicao sai em A4 deitado (${largura} x ${altura} pt)`);
+  checar(await folha.locator('svg[aria-label^="Intervalo entre"]').getAttribute('width') === '1000',
+    'impressao: o grafico ocupa a folha deitada (1000 px de largura, eram 700)');
+  if (FOTOS) writeFileSync(`${FOTOS}/pc-folha.pdf`, pdf);
+}
+
 const fechar = async () => {
   await botaoFechar.click();
   await janela.waitFor({ state: 'detached', timeout: 4000 });
 };
 await fechar();
 checar(await lista.isVisible() && await cartao.isVisible(), 'Fechar tira o detalhe e a lista volta a largura toda');
+{
+  // Fechado o volume a volume, o @page dele vai junto: o resto segue em pe'.
+  const { largura, altura } = await tamanhoDoPdf();
+  checar(largura === 595 && altura === 842, `impressao: sem a medicao aberta, a pagina volta ao A4 em pe (${largura} x ${altura} pt)`);
+}
 // A linha inteira abre, nao so' o nome do produto; clicar de novo fecha.
 {
   // A primeira celula e' a da caixa de juntar: o clique nela marca, nao abre.

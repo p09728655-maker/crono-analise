@@ -98,6 +98,14 @@ export default function EmbalagemTaktTime({ aoSair }) {
     [crono.duracaoFinal, crono.pecasFinais, paradas.emMs],
   );
   const excede = crono.duracaoFinal > 0 && paradas.total.totalMs >= crono.duracaoFinal;
+  /* AO VIVO, para o volumes/hora do painel: volumes ÷ o relogio desde a
+     largada, paradas dentro (pecasPorHoraBruto). Sem as paradas na conta
+     de proposito: o bruto nao depende delas, e com elas uma parada que
+     cobrisse o periodo inteiro zeraria o numero em vez de mostrar o que saiu. */
+  const aoVivo = useMemo(
+    () => conferenciaRapida({ duracaoMs: crono.decorrido, pecas: crono.pecas }),
+    [crono.decorrido, crono.pecas],
+  );
 
   // As marcas so' valem com a contagem que elas explicam (ver ConferenciaRapida).
   const marcasConferem = crono.marcasFinais.length > 0
@@ -215,7 +223,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
       {crono.rodando && (
         <CronometroAoVivo
           crono={crono}
-          parcial={null}
+          parcial={aoVivo}
           totalParadaMs={paradas.total.totalMs}
           motivos={motivos}
           unidade={VOLUME}

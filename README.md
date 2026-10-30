@@ -109,10 +109,15 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
 
 - **No tablet**, o atalho *Embalagem Takt Time* abre direto o cronômetro, com a
   máquina do grupo EMBALAGEM já escolhida. Antes de começar aparece o takt da
-  semana, em segundos. Durante a medição aparecem o intervalo do **último
-  volume**, o **tempo por volume** do período até ali (paradas dentro) e o
-  **takt**. Quando o tempo por volume passa do takt, o rótulo ganha "▲ takt". Um toque por volume; o horário de cada toque é gravado
-  sozinho, sem digitação. Sem programa da embalagem colado, o tablet só não
+  semana, em segundos. Durante a medição aparecem, grandes, o **tempo por
+  volume** do período até ali (paradas dentro) e o **takt**; embaixo, os
+  volumes, os **volumes/hora** do período (volumes ÷ relógio desde a largada,
+  a mesma conta do resultado) e o intervalo do **último volume**. Quando o
+  tempo por volume passa do takt, o rótulo ganha "▲ takt". Desde a v2.98 o
+  painel e o alvo de toque dividem a tela meio a meio, e o tamanho dos números
+  acompanha a largura da tela (`clamp` com `vw`). Antes, o alvo tomava dois
+  terços e os números eram letra de rodapé. Um toque por volume; o horário de
+  cada toque é gravado sozinho, sem digitação. Sem programa da embalagem colado, o tablet só não
   mostra o takt, sem aviso: quem resolve é o PCP, e o aviso fica no PC.
 - **O INICIAR só arma a medição; o relógio abre na largada.** A largada é o
   primeiro toque, dado quando um volume fecha, e **não conta volume**. Antes
@@ -139,8 +144,11 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   lado da lista (abaixo dela, em tela estreita), com identificação, cinco
   cartões (volumes, **tempo por volume no período**, **tempo por volume com a
   linha rodando**, paradas marcadas, **lacunas**), o gráfico do intervalo de
-  cada volume contra a linha do takt, a leitura em palavras e a folha A4. O
-  PDF sai nomeado "Takt Time - produto - máquina - data hora". Clicar de novo
+  cada volume contra a linha do takt, a leitura em palavras e a folha A4 —
+  **deitada** (v2.98), para o gráfico ter a largura do papel (1.000 px). O
+  `@page` paisagem vai na `<style>` do portal da folha e só vale enquanto ela
+  está montada; as outras folhas seguem em pé. Com lacunas, a tabela delas
+  vai para a 2ª página. O PDF sai nomeado "Takt Time - produto - máquina - data hora". Clicar de novo
   na linha, *Fechar* ou o Voltar do navegador fecham o painel — menos
   enquanto a análise daquela medição está sendo salva. O segundo clique de um
   duplo clique não vale.

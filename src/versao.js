@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.98.0',
+    data: '2026-10-30',
+    titulo: 'Embalagem Takt Time: números grandes no tablet e folha impressa deitada',
+    itens: [
+      'NO TABLET, OS NÚMEROS FICARAM GRANDES E O ALVO, MENOR. Medindo, a área de toque tomava dois terços da tela e os números ficavam em letra miúda. Agora números e alvo dividem a tela meio a meio. Em cima, maiores, o tempo por volume e o takt — a comparação que decide. Embaixo, volumes, volumes/hora e o último intervalo. O tamanho acompanha a tela: no tablet se lê de longe; no celular fica do tamanho que cabe.',
+      'VOLUMES/HORA AO VIVO, enquanto mede: volumes ÷ o tempo desde a largada, com as paradas dentro. É a mesma conta do resultado e da lista do PC, então o número que aparece ao tocar Encerrar é o último que se viu na tela. Entre um toque e outro ele desce devagar, porque o relógio anda e o volume ainda não fechou.',
+      'A FOLHA DA MEDIÇÃO SAI DEITADA (A4 paisagem), e o gráfico do intervalo de cada volume ficou 43% mais largo (1.000 px, eram 700) e um pouco mais alto. As outras folhas impressas (Ritmo por máquina, estudo) continuam em pé. Em paisagem cabe menos na altura: quando há lacunas, a tabela "Onde a linha parou sem parada marcada" e a nota do critério vão para uma segunda página.',
+    ],
+  },
+  {
     versao: '2.97.0',
     data: '2026-10-30',
     titulo: 'Produto cadastrado no tablet antes de medir, e corrigido no PC',

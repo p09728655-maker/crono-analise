@@ -977,10 +977,20 @@ function NotasSalvas({ conferencia, medicoes }) {
   ));
 }
 
+// O grafico na folha deitada: 297 - 2 x 12 mm = 273 mm uteis, ~1030 px.
+const LARGURA_GRAFICO_PAPEL = 1000;
+const ALTURA_GRAFICO_PAPEL = 300;
+
 /**
  * A FOLHA A4 — num portal, como a do cadastro de maquinas: enquanto a
  * janela esta' aberta, o resto do app some do papel; fechou, o relatorio
  * volta a ser o que imprime.
+ *
+ * DEITADA (v2.98.0, pedido do PCP): o grafico do intervalo de cada volume
+ * e' a peca principal da folha, e em pe' ele cabia em 700 px — com 100
+ * volumes, barra de 5 px. Deitada ele ganha ~45% de largura. O @page vai
+ * na <style> do portal, entao vale SO' para esta folha: as outras (Ritmo,
+ * estudo) seguem em pe', pelo @page do index.html.
  */
 function FolhaVolumeAVolume({
   conferencia, leitura, takt, frases, unidade, r,
@@ -1010,7 +1020,7 @@ function FolhaVolumeAVolume({
 
   return createPortal(
     <div className="somente-impressao" style={imp.folha}>
-      <style>{'@media print { #raiz { display: none !important } }'}</style>
+      <style>{'@media print { #raiz { display: none !important } @page { size: A4 landscape; margin: 12mm; } }'}</style>
 
       <header style={imp.cabecalho}>
         <div>
@@ -1117,7 +1127,8 @@ function FolhaVolumeAVolume({
       )}
 
       <GraficoIntervalos
-        leitura={leitura} unidade={unidade} larguraFixa={700} altura={240} segmentos={segmentosDaJuncao(juncao)}
+        leitura={leitura} unidade={unidade} larguraFixa={LARGURA_GRAFICO_PAPEL} altura={ALTURA_GRAFICO_PAPEL}
+        segmentos={segmentosDaJuncao(juncao)}
       />
 
       {lacunas.length > 0 && (
