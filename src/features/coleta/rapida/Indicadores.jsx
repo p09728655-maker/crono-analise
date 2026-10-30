@@ -1,14 +1,27 @@
 import { formatarDuracao, formatarSegundos, potencialSemParada } from '../../../domain/cronoanalise.js';
 import { est } from './estilos.js';
 
+/**
+ * Os tamanhos da TELA DA EMBALAGEM RODANDO (ver CronometroAoVivo): o
+ * numero que decide ('grande') e o de apoio ('media'). Sem escala, o
+ * tamanho de sempre — o resultado e o Ritmo da maquina nao mudam.
+ */
+const ESCALAS = {
+  grande: { rotulo: est.parcialRotuloTela, valor: est.parcialValorGrande, sufixo: est.parcialSufixoTela },
+  media: { rotulo: est.parcialRotuloTela, valor: est.parcialValorMedio, sufixo: est.parcialSufixoTela },
+};
+
 /** Um numero com rotulo, na linha de parciais. */
-export function Parcial({ rotulo, valor, sufixo, tom = null }) {
+export function Parcial({
+  rotulo, valor, sufixo, tom = null, escala = null,
+}) {
+  const e = ESCALAS[escala] || { rotulo: est.parcialRotulo, valor: est.parcialValor, sufixo: est.parcialSufixo };
   return (
     <div style={est.parcial}>
-      <span style={est.parcialRotulo}>{rotulo}</span>
-      <span style={{ ...est.parcialValor, ...(tom === 'atencao' ? est.parcialAtencao : {}) }}>
+      <span style={e.rotulo}>{rotulo}</span>
+      <span style={{ ...e.valor, ...(tom === 'atencao' ? est.parcialAtencao : {}) }}>
         {valor}
-        {sufixo && <span style={est.parcialSufixo}>{sufixo}</span>}
+        {sufixo && <span style={e.sufixo}>{sufixo}</span>}
       </span>
     </div>
   );

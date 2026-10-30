@@ -11,9 +11,9 @@ import { est } from './estilos.js';
  */
 export default function CronometroAoVivo({
   crono, parcial, totalParadaMs, motivos, unidade,
-  // Embalagem Takt Time: o ritmo por hora da lugar ao ULTIMO intervalo, ao
-  // tempo POR VOLUME do periodo ate' aqui (paradas dentro — a regua do
-  // takt, ver periodoPorPeca) e ao takt, em segundos.
+  // Embalagem Takt Time: o tempo POR VOLUME do periodo ate' aqui (paradas
+  // dentro — a regua do takt, ver periodoPorPeca) contra o takt, em
+  // segundos; e, de apoio, volumes, volumes/hora e o ULTIMO intervalo.
   modoTakt = false, taktMs = null, porVolumeMs = null,
 }) {
   const {
@@ -29,41 +29,58 @@ export default function CronometroAoVivo({
 
   return (
     <>
-      <section style={est.painelTempo} aria-label="Tempo decorrido">
-        <span style={est.rotuloTempo}>TEMPO</span>
-        <span style={est.tempoCorrido}>{formatarCronometro(decorrido)}</span>
-        <div style={est.linhaParcial}>
-          {/* Na embalagem o toque conta VOLUME — e a tela diz isso, porque
-              o programa da embalagem tambem vem em volumes. */}
-          <Parcial rotulo={maiuscula(unidade.plural)} valor={String(pecas)} />
-          {modoTakt ? (
-            <>
-              <Parcial
-                rotulo="Último"
-                valor={ultimoIntervaloMs ? formatarSegundos(ultimoIntervaloMs) : '—'}
-                sufixo="s"
-              />
-              {/* Acima do takt, ganha SETA no rotulo e fundo: a cor sozinha
-                  nao serve a quem olha de longe, de luva, com sol. */}
-              <Parcial
-                rotulo={acimaDoTakt ? 'Por vol ▲ takt' : 'Por volume'}
-                valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
-                sufixo="s"
-                tom={acimaDoTakt ? 'atencao' : null}
-              />
-              <Parcial rotulo="Takt" valor={taktMs > 0 ? formatarSegundos(taktMs) : '—'} sufixo="s" />
-            </>
-          ) : (
+      {modoTakt ? (
+        /* EMBALAGEM: os numeros grandes e o alvo menor (v2.98.0, ver
+           painelTempoTakt). Em cima o que decide — o tempo por volume
+           contra o takt —, embaixo o apoio. O parado sai daqui (a parada
+           em curso ocupa o alvo inteiro) e volta no resultado. */
+        <section style={est.painelTempoTakt} aria-label="Tempo decorrido">
+          <span style={est.rotuloTempoTela}>TEMPO</span>
+          <span style={est.tempoCorridoTela}>{formatarCronometro(decorrido)}</span>
+          <div style={est.gradeTaktPrincipal}>
+            {/* Acima do takt, ganha SETA no rotulo e fundo: a cor sozinha
+                nao serve a quem olha de longe, de luva, com sol. */}
+            <Parcial
+              escala="grande"
+              rotulo={acimaDoTakt ? 'Por vol ▲ takt' : 'Por volume'}
+              valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
+              sufixo="s"
+              tom={acimaDoTakt ? 'atencao' : null}
+            />
+            <Parcial escala="grande" rotulo="Takt" valor={taktMs > 0 ? formatarSegundos(taktMs) : '—'} sufixo="s" />
+          </div>
+          <div style={est.gradeTaktApoio}>
+            {/* Na embalagem o toque conta VOLUME — e a tela diz isso, porque
+                o programa da embalagem tambem vem em volumes. */}
+            <Parcial escala="media" rotulo={maiuscula(unidade.plural)} valor={String(pecas)} />
+            {/* Volumes/hora do periodo, paradas dentro: a mesma conta do
+                resultado e da lista do PC — o numero do Encerrar e' o
+                ultimo que se viu aqui. Entre um toque e outro ele desce
+                devagar: o relogio anda e o volume ainda nao fechou. */}
+            <Parcial
+              escala="media"
+              rotulo={`${unidade.abrev}/hora`}
+              valor={parcial && pecas > 0 ? String(Math.round(parcial.pecasPorHoraBruto)) : '—'}
+            />
+            <Parcial
+              escala="media"
+              rotulo="Último"
+              valor={ultimoIntervaloMs ? formatarSegundos(ultimoIntervaloMs) : '—'}
+              sufixo="s"
+            />
+          </div>
+        </section>
+      ) : (
+        <section style={est.painelTempo} aria-label="Tempo decorrido">
+          <span style={est.rotuloTempo}>TEMPO</span>
+          <span style={est.tempoCorrido}>{formatarCronometro(decorrido)}</span>
+          <div style={est.linhaParcial}>
+            <Parcial rotulo={maiuscula(unidade.plural)} valor={String(pecas)} />
             <Parcial rotulo="Ritmo" valor={parcial && pecas > 0 ? String(Math.round(parcial.pecasPorHora)) : '—'} sufixo={`${unidade.abrev}/h`} />
-          )}
-          {/* No modo takt sao quatro numeros e a tela e' de celular: o
-              parado sai daqui (a parada em curso ocupa a tela inteira) e
-              volta no resultado. */}
-          {!modoTakt && (
             <Parcial rotulo="Parado" valor={totalParadaMs > 0 ? formatarDuracao(totalParadaMs) : '—'} />
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
 
       {emParada ? (
         /* Maquina parada: o relogio do periodo segue correndo (a parada
@@ -72,7 +89,7 @@ export default function CronometroAoVivo({
         <button
           type="button"
           onPointerDown={encerrarParada}
-          style={{ ...est.botaoGrande, ...est.botaoVoltarProduzir }}
+          style={{ ...est.botaoGrande, ...(modoTakt ? est.botaoGrandeTakt : {}), ...est.botaoVoltarProduzir }}
           aria-label="Encerrar a parada e voltar a produzir"
         >
           <span style={est.rotuloParadaAtiva}>PARADA · {rotuloMotivo(emParada.motivo)}</span>
@@ -86,7 +103,7 @@ export default function CronometroAoVivo({
         <button
           type="button"
           onPointerDown={contarPeca}
-          style={{ ...est.botaoGrande, ...est.botaoIniciar }}
+          style={{ ...est.botaoGrande, ...(modoTakt ? est.botaoGrandeTakt : {}), ...est.botaoIniciar }}
           aria-label="Largada: abrir o relógio"
         >
           <span style={est.iconeIniciar}>▶</span>
@@ -97,7 +114,7 @@ export default function CronometroAoVivo({
         <button
           type="button"
           onPointerDown={contarPeca}
-          style={{ ...est.botaoGrande, ...est.botaoContar }}
+          style={{ ...est.botaoGrande, ...(modoTakt ? est.botaoGrandeTakt : {}), ...est.botaoContar }}
           aria-label={`Contar ${unidade.comArtigo}`}
         >
           <span key={pulso} style={est.contagem}>{pecas}</span>

@@ -264,6 +264,48 @@ export const est = {
   // de verdade e' o "▲ takt" escrito no rotulo — o fundo so' reforca.
   parcialAtencao: { background: cores.atencaoFundo, borderRadius: raio.sm, padding: '0 6px' },
 
+  /* ---- EMBALAGEM RODANDO (v2.98.0) ----
+     Pedido do chao de fabrica, com foto do tablet: o alvo de toque tomava
+     dois tercos da tela e os numeros, que sao o motivo de medir, ficavam
+     em letra de rodape. Agora o painel e o alvo dividem a altura que sobra
+     meio a meio (flex 1 1 0 nos dois; o painel nunca menor que o conteudo)
+     e o tamanho acompanha a LARGURA da tela (clamp com vw): no celular fica
+     como cabe, no tablet o numero se le de longe. Sem media query — estilo
+     inline nao tem, e o clamp resolve do celular ao tablet deitado. */
+  painelTempoTakt: {
+    flex: '1 1 0',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-evenly',
+    gap: espaco.sm,
+    background: cores.superficie, border: `1px solid ${cores.borda}`,
+    borderRadius: raio.lg, padding: espaco.md,
+  },
+  rotuloTempoTela: {
+    fontSize: 'clamp(11px, 1.8vw, 16px)', letterSpacing: 0.8, color: cores.textoFraco, textTransform: 'uppercase',
+  },
+  tempoCorridoTela: {
+    // Menor que o tempo por volume e o takt: o relogio situa, quem decide e' a comparacao.
+    fontSize: 'clamp(40px, 9vw, 72px)', fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.05,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  // Em cima, o que decide (tempo por volume contra o takt); embaixo, o apoio.
+  gradeTaktPrincipal: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.md, width: '100%' },
+  gradeTaktApoio: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: espaco.md, width: '100%' },
+  parcialRotuloTela: {
+    fontSize: 'clamp(10px, 1.9vw, 16px)', letterSpacing: 0.8, color: cores.textoFraco,
+    textTransform: 'uppercase', whiteSpace: 'nowrap',
+  },
+  parcialValorGrande: {
+    fontSize: 'clamp(36px, 10vw, 84px)', fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.05,
+    fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+  },
+  parcialValorMedio: {
+    fontSize: 'clamp(24px, 6vw, 52px)', fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.05,
+    fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+  },
+  parcialSufixoTela: { fontSize: 'clamp(11px, 2vw, 20px)', color: cores.textoFraco, marginLeft: 3, fontWeight: 400 },
+  // O alvo divide a altura com o painel, mas nunca abaixo dos 180 px do botaoGrande.
+  botaoGrandeTakt: { flex: '1 1 0' },
+
   botaoGrande: {
     flex: '1 1 auto', minHeight: 180,
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: espaco.sm,
