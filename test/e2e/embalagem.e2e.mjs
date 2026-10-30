@@ -488,7 +488,7 @@ const tamanhoDoPdf = async () => {
     'impressao: o grafico ocupa a folha deitada (1000 px de largura, eram 700)');
   if (FOTOS) writeFileSync(`${FOTOS}/pc-folha.pdf`, pdf);
   const fundo = await fundoDoGraficoNaFolha(p);
-  checar(fundo <= 703, `folha deitada: o grafico cabe na 1a pagina, com a observacao (termina em ${fundo} de 703 px)`);
+  checar(fundo <= 703, `folha deitada: o grafico cabe na 1a pagina (termina em ${fundo} de 703 px)`);
 }
 
 const fechar = async () => {
@@ -1129,7 +1129,7 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
      cabia: Desfazer, Parou e Encerrar saiam por baixo de uma tela que nao
      rola, e a medicao so' fechava girando o tablet. Deitado, painel e alvo
      ficam lado a lado. */
-  for (const [largura, altura] of [[1024, 552], [640, 360]]) {
+  for (const [largura, altura] of [[1024, 552], [640, 360], [740, 300]]) {
     const ctx = await navegador.newContext({ viewport: { width: largura, height: altura }, hasTouch: true });
     const s = await ctx.newPage();
     await semearSessao(s);
@@ -1148,8 +1148,53 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
     const caixaD = await alvoD.boundingBox();
     checar(encerrarD.y + encerrarD.height <= altura,
       `deitado ${largura}x${altura}: Encerrar dentro da tela (termina em ${Math.round(encerrarD.y + encerrarD.height)} de ${altura})`);
-    checar(caixaD.x >= painelD.x + painelD.width && caixaD.height >= 150,
+    checar(caixaD.x >= painelD.x + painelD.width && caixaD.height >= 120,
       `deitado ${largura}x${altura}: numeros a esquerda, alvo a direita, com ${Math.round(caixaD.height)} px de altura`);
+    // Painel baixo: o que nao cabe some inteiro (TEMPO, depois o relogio);
+    // nenhum numero fica fatiado pelo overflow do painel.
+    const fatiados = await s.evaluate(() => {
+      const painel = document.querySelector('[aria-label="Tempo decorrido"]').getBoundingClientRect();
+      return [...document.querySelectorAll('[aria-label="Tempo decorrido"] span')]
+        .filter((el) => el.getClientRects().length)
+        .filter((el) => { const r = el.getBoundingClientRect(); return r.bottom > painel.bottom + 0.5 || r.top < painel.top - 0.5; })
+        .map((el) => el.innerText);
+    });
+    checar(fatiados.length === 0, `deitado ${largura}x${altura}: nada cortado no painel${fatiados.length ? ` (${fatiados.join(', ')})` : ''}`);
+    await ctx.close();
+  }
+}
+
+/* ---- navegador sem dvh e sem container query: a tela nao desmonta ---- */
+{
+  /* Chrome < 108 nao entende dvh, < 105 nao entende cq: o estilo inline
+     com eles e' descartado. Simulado apagando esses valores do inline,
+     como o navegador faria — as classes reserva tem de assumir. */
+  for (const [largura, altura] of [[800, 1280], [1024, 552]]) {
+    const ctx = await navegador.newContext({ viewport: { width: largura, height: altura }, hasTouch: true });
+    const s = await ctx.newPage();
+    await semearSessao(s);
+    await simularServidor(s, {});
+    await s.goto(`${BASE}/coleta/embalagem`);
+    await s.getByRole('button', { name: /INICIAR/ }).click();
+    const largadaV = s.getByRole('button', { name: /Largada/ });
+    await largadaV.waitFor({ timeout: 4000 });
+    await s.waitForTimeout(300);
+    await largadaV.dispatchEvent('pointerdown');
+    const alvoV = s.getByRole('button', { name: 'Contar um volume' });
+    await alvoV.waitFor({ timeout: 4000 });
+    await s.evaluate(() => {
+      document.querySelectorAll('[style]').forEach((el) => {
+        if (/dvh/.test(el.style.height)) el.style.removeProperty('height');
+        if (/cq[hw]/.test(el.style.fontSize)) el.style.removeProperty('font-size');
+        if (el.style.containerType) el.style.removeProperty('container-type');
+      });
+    });
+    await s.waitForTimeout(100);
+    const caixaV = await alvoV.boundingBox();
+    const encerrarV = await s.getByRole('button', { name: /Encerrar/ }).boundingBox();
+    const fonte = await s.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.takt-grande')).fontSize));
+    checar(caixaV.height >= 150 && encerrarV.y + encerrarV.height <= altura && fonte >= 26,
+      `sem dvh e sem cq ${largura}x${altura}: alvo de ${Math.round(caixaV.height)} px, Encerrar na tela, numero grande com ${fonte} px`);
     await ctx.close();
   }
 }

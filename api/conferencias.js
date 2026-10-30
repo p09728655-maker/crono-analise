@@ -119,7 +119,7 @@ export default handler(async (req, res) => {
       // que elas deixaram de morar dentro da conferencia.
       const linhas = await db`
         SELECT c.id, c.maquina, c.peca, c.iniciado_em, c.finalizado_em, c.duracao_ms, c.pecas, c.ciclos_por_peca, c.furacao_passante, c.observacao, c.salvo_em, c.arquivada,
-               c.analisada_em, c.analisada_por, c.analise_nota,
+               c.analisada_em, c.analisada_por, c.analise_nota, c.origem,
                (c.marcas_ms IS NOT NULL) AS com_marcas,
                coalesce((
                  SELECT jsonb_agg(jsonb_build_object(

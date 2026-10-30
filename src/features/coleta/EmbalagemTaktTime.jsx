@@ -160,7 +160,8 @@ export default function EmbalagemTaktTime({ aoSair }) {
     .filter((c) => nomesEmbalagem.has(String(c.maquina || '').trim().toLowerCase()));
 
   return (
-    <div style={{ ...est.tela, ...(crono.rodando ? {} : est.telaRolavel) }}>
+    // tela-takt: a altura reserva para navegador sem dvh (ver CronometroAoVivo).
+    <div className="tela-takt" style={{ ...est.tela, ...(crono.rodando ? {} : est.telaRolavel) }}>
       <header style={est.cabecalho}>
         <button type="button" onClick={aoSair} style={est.botaoVoltar} aria-label="Voltar para a lista">
           ←

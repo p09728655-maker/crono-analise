@@ -312,11 +312,13 @@ export default function VolumeAVolume({
         && formatarDataHora(quando).split(' ')[0],
       faixaDaJuncao(medicoes),
       `${formatarDuracao(Number(conferencia.duracao_ms))} medidos`,
+      porVideo(medicoes),
     ].filter(Boolean)
     : [
       formatarDataHora(quando),
       faixaHoraria(conferencia),
       `${formatarDuracao(Number(conferencia.duracao_ms))} de medição`,
+      porVideo(medicoes),
     ].filter(Boolean);
 
   /* Selecionou outra medicao: a pagina rola ate' ela SO' se ela nasceu fora
@@ -983,7 +985,9 @@ function NotasSalvas({ conferencia, medicoes }) {
 // pagina (o e2e confere as duas).
 const LARGURA_GRAFICO_PAPEL = 1000;
 const ALTURA_GRAFICO_PAPEL = 260;
-const ALTURA_GRAFICO_PAPEL_JUNCAO = 220;
+// 200, e nao 220: com o titulo do produto em 2 linhas sobravam ~8 px (revisao
+// de 30/10); uma linha a mais na leitura mandava o grafico para a 2a pagina.
+const ALTURA_GRAFICO_PAPEL_JUNCAO = 200;
 
 /**
  * A FOLHA A4 — num portal, como a do cadastro de maquinas: enquanto a
@@ -1018,7 +1022,7 @@ function FolhaVolumeAVolume({
       ['Período', `${faixaDaJuncao(medicoes)} · ${formatarDuracao(Number(conferencia.duracao_ms))} medidos`],
     ]
     : [
-      ['Medição', formatarDataHora(quando)],
+      ['Medição', [formatarDataHora(quando), porVideo(medicoes)].filter(Boolean).join(' · ')],
       ['Período', faixaHoraria(conferencia) || formatarDuracao(Number(conferencia.duracao_ms))],
     ];
 
@@ -1184,3 +1188,10 @@ function FolhaVolumeAVolume({
 }
 
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** De onde vieram as marcas, quando nao foi o tablet (ver `origem` no schema). */
+function porVideo(medicoes) {
+  const deVideo = medicoes.filter((c) => c.origem === 'video').length;
+  if (!deVideo) return null;
+  return deVideo === medicoes.length ? 'por vídeo' : `${deVideo} de ${medicoes.length} por vídeo`;
+}

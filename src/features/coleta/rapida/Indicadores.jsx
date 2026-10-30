@@ -7,21 +7,32 @@ import { est } from './estilos.js';
  * tamanho de sempre — o resultado e o Ritmo da maquina nao mudam.
  */
 const ESCALAS = {
-  grande: { rotulo: est.parcialRotuloTela, valor: est.parcialValorGrande, sufixo: est.parcialSufixoTela },
-  media: { rotulo: est.parcialRotuloTela, valor: est.parcialValorMedio, sufixo: est.parcialSufixoTela },
+  grande: {
+    rotulo: est.parcialRotuloTela, valor: est.parcialValorGrande, sufixo: est.parcialSufixoTela,
+    classe: { rotulo: 'takt-rotulo', valor: 'takt-grande', sufixo: 'takt-sufixo' },
+  },
+  media: {
+    rotulo: est.parcialRotuloTela, valor: est.parcialValorMedio, sufixo: est.parcialSufixoTela,
+    classe: { rotulo: 'takt-rotulo', valor: 'takt-media', sufixo: 'takt-sufixo' },
+  },
 };
+const SEM_CLASSE = {};
 
 /** Um numero com rotulo, na linha de parciais. */
 export function Parcial({
   rotulo, valor, sufixo, tom = null, escala = null,
 }) {
   const e = ESCALAS[escala] || { rotulo: est.parcialRotulo, valor: est.parcialValor, sufixo: est.parcialSufixo };
+  // As classes sao o RESERVA da tela da embalagem (ver CronometroAoVivo):
+  // so' valem quando o navegador nao entende o tamanho em cq do estilo.
+  const classe = e.classe || SEM_CLASSE;
   return (
     <div style={est.parcial}>
-      <span style={e.rotulo}>{rotulo}</span>
-      <span style={{ ...e.valor, ...(tom === 'atencao' ? est.parcialAtencao : {}) }}>
+      <span className={classe.rotulo} style={e.rotulo}>{rotulo}</span>
+      <span className={classe.valor} style={{ ...e.valor, ...(tom === 'atencao' ? est.parcialAtencao : {}) }}>
         {valor}
-        {sufixo && <span style={e.sufixo}>{sufixo}</span>}
+        {/* Sem valor, sem unidade: "—s" parece um numero que falta. */}
+        {sufixo && valor !== '—' && <span className={classe.sufixo} style={e.sufixo}>{sufixo}</span>}
       </span>
     </div>
   );

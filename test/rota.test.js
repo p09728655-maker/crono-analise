@@ -26,6 +26,14 @@ describe('conferencia rapida na URL', () => {
     expect(caminhos.conferencias()).toBe('/analise/conferencias');
   });
 
+  it('/analise/embalagem/video abre o cronometrar por video, sem engolir a embalagem', () => {
+    expect(analisarCaminho('/analise/embalagem/video'))
+      .toEqual({ modo: 'analise', tela: 'embalagem-video', estudoId: null, operacaoId: null });
+    expect(analisarCaminho('/analise/embalagem/video/').tela).toBe('embalagem-video');
+    expect(analisarCaminho('/analise/embalagem').tela).toBe('embalagem-pc');
+    expect(caminhos.embalagemVideo()).toBe('/analise/embalagem/video');
+  });
+
   it('query string nao quebra a rota — o "?editar=1" da lista precisa chegar', () => {
     const id = 'b17e849c-da3f-4d8c-a262-81e8748c589b';
     const r = analisarCaminho(`/analise/estudo/${id}?editar=1`);

@@ -77,6 +77,8 @@ export function analisarCaminho(caminho) {
   if (/^\/coleta\/?$/i.test(p)) return { modo: 'coleta', tela: 'lista', estudoId: null, operacaoId: null };
   if (/^\/analise\/conferencias\/?$/i.test(p)) return { modo: 'analise', tela: 'conferencias', estudoId: null, operacaoId: null };
   if (/^\/analise\/embalagem\/?$/i.test(p)) return { modo: 'analise', tela: 'embalagem-pc', estudoId: null, operacaoId: null };
+  // Cronometrar por video (v2.99.0): trabalho de PC, como a analise.
+  if (/^\/analise\/embalagem\/video\/?$/i.test(p)) return { modo: 'analise', tela: 'embalagem-video', estudoId: null, operacaoId: null };
 
   /**
    * A CASA DA ANALISE. /analise abre o INICIO, e a lista de estudos ganhou
@@ -136,6 +138,7 @@ export const caminhos = {
   embalagem: () => '/coleta/embalagem',
   conferencias: () => '/analise/conferencias',
   embalagemPc: () => '/analise/embalagem',
+  embalagemVideo: () => '/analise/embalagem/video',
   // O painel aceita o CODIGO do grupo: e' o endereco que se deixa fixo no
   // navegador do monitor perto daquele conjunto de maquinas.
   painel: (grupo) => (grupo ? `/painel?grupo=${encodeURIComponent(grupo)}` : '/painel'),
