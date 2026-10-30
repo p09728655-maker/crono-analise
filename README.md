@@ -111,8 +111,9 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   máquina do grupo EMBALAGEM já escolhida. Antes de começar aparece o takt da
   semana, em segundos. Durante a medição aparecem, grandes, o **tempo por
   volume** do período até ali (paradas dentro) e o **takt**; embaixo, os
-  volumes, os **volumes/hora** do período (volumes ÷ relógio desde a largada,
-  a mesma conta do resultado) e o intervalo do **último volume**. Quando o
+  volumes, os **volumes/hora** (volumes ÷ relógio da largada até o **último
+  toque**, paradas dentro — só muda quando um volume fecha, v2.98.1; o do
+  resultado vai até o Encerrar) e o intervalo do **último volume**. Quando o
   tempo por volume passa do takt, o rótulo ganha "▲ takt". Desde a v2.98 o
   painel e o alvo de toque dividem a tela meio a meio, e o tamanho dos números
   acompanha a largura da tela (`clamp` com `vw`). Antes, o alvo tomava dois

@@ -26,6 +26,10 @@ export default function CronometroAoVivo({
      ultimo passaria do takt a cada dois volumes numa linha que atende. E
      com as paradas dentro: marcar "Parou" nao pode apagar o aviso. */
   const acimaDoTakt = modoTakt && taktMs > 0 && porVolumeMs > taktMs;
+  // Na embalagem a barra de baixo cresce junto com o painel (v2.98.1):
+  // com o resto grande, os 64 px de Desfazer, Parou e Encerrar ficaram miudos.
+  const barra = modoTakt ? { ...est.botaoBarra, ...est.botaoBarraTakt } : est.botaoBarra;
+  const icone = modoTakt ? est.iconeBarraTakt : est.iconeBarra;
 
   return (
     <>
@@ -53,10 +57,10 @@ export default function CronometroAoVivo({
             {/* Na embalagem o toque conta VOLUME — e a tela diz isso, porque
                 o programa da embalagem tambem vem em volumes. */}
             <Parcial escala="media" rotulo={maiuscula(unidade.plural)} valor={String(pecas)} />
-            {/* Volumes/hora do periodo, paradas dentro: a mesma conta do
-                resultado e da lista do PC — o numero do Encerrar e' o
-                ultimo que se viu aqui. Entre um toque e outro ele desce
-                devagar: o relogio anda e o volume ainda nao fechou. */}
+            {/* Volumes/hora do periodo ate' o ultimo toque, paradas dentro
+                (a conta do resultado e da lista do PC, ate' o ultimo volume
+                em vez de ate' o Encerrar). Parado entre um toque e outro:
+                nao e' velocimetro. */}
             <Parcial
               escala="media"
               rotulo={`${unidade.abrev}/hora`}
@@ -128,23 +132,23 @@ export default function CronometroAoVivo({
       )}
 
       <nav style={est.barraInferiorTres} aria-label="Ações da conferência">
-        <button type="button" style={est.botaoBarra} onClick={desfazer} disabled={!pecas || !!emParada}>
-          <span style={est.iconeBarra}>↩</span>
+        <button type="button" style={barra} onClick={desfazer} disabled={!pecas || !!emParada}>
+          <span style={icone}>↩</span>
           Desfazer
         </button>
         {/* Antes da largada nao ha' periodo para a parada caber dentro. */}
         <button
           type="button"
-          style={{ ...est.botaoBarra, ...est.botaoParou }}
+          style={{ ...barra, ...est.botaoParou }}
           onClick={() => (emParada ? encerrarParada() : setEscolhendoMotivo(true))}
           disabled={aguardandoLargada}
         >
-          <span style={est.iconeBarra}>{emParada ? '▶' : '⏸'}</span>
+          <span style={icone}>{emParada ? '▶' : '⏸'}</span>
           {emParada ? 'Voltou' : 'Parou'}
         </button>
         {/* Sem largada nada foi medido: o botao volta ao comeco, e diz isso. */}
-        <button type="button" style={{ ...est.botaoBarra, ...est.botaoEncerrar }} onClick={encerrar}>
-          <span style={est.iconeBarra}>{aguardandoLargada ? '✕' : '■'}</span>
+        <button type="button" style={{ ...barra, ...est.botaoEncerrar }} onClick={encerrar}>
+          <span style={icone}>{aguardandoLargada ? '✕' : '■'}</span>
           {aguardandoLargada ? 'Cancelar' : 'Encerrar'}
         </button>
       </nav>
