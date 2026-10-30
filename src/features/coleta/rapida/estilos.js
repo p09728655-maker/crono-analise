@@ -118,6 +118,22 @@ export const est = {
     borderRadius: raio.sm, color: cores.texto,
     fontSize: tamanho.corpo, fontWeight: 600, fontFamily: 'inherit', outline: 'none',
   },
+  // Cadastrar o produto digitado: botao de verdade, de dedo (48 px), logo
+  // abaixo do texto. O nome vai escrito nele — o que se cadastra e' o que
+  // se le, sem adivinhar o que o campo tem.
+  botaoCadastrarProduto: {
+    width: '100%', minHeight: 48, padding: `${espaco.xs}px ${espaco.md}px`,
+    background: cores.superficieAlta,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.ok, borderRadius: raio.sm,
+    color: cores.ok, fontSize: tamanho.pequeno, fontWeight: 700, textAlign: 'left',
+    overflowWrap: 'anywhere', cursor: 'pointer', fontFamily: 'inherit',
+  },
+  cadastroProdutoOk: { fontSize: tamanho.legenda, fontWeight: 700, color: cores.ok, lineHeight: 1.4 },
+  cadastroProdutoAviso: {
+    padding: `${espaco.xs}px ${espaco.sm}px`, fontSize: tamanho.legenda, color: cores.texto, lineHeight: 1.4,
+    background: cores.atencaoFundo, borderRadius: raio.sm,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.atencao,
+  },
   // Observacao: a mesma cara do campo de texto, com duas linhas de altura
   // e quebra de linha — e' nota, nao nome.
   inputObservacao: {

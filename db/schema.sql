@@ -1057,6 +1057,15 @@ DROP POLICY IF EXISTS produtos_escreve ON produtos;
 CREATE POLICY produtos_escreve ON produtos FOR ALL TO authenticated
   USING (empresa_id = public.empresa_atual() AND public.pode_escrever())
   WITH CHECK (empresa_id = public.empresa_atual() AND public.pode_escrever());
+-- O TABLET CADASTRA, mas nao mantem (v2.97.0): quem esta' diante do produto
+-- que nao esta' na lista cadastra antes de medir, em vez de digitar o nome
+-- em texto livre, que nao volta para a lista e cada medicao escreve de um
+-- jeito. So' INSERT, so' o nome: o codigo do ERP, renomear, desativar e
+-- excluir continuam com o PCP, no PC.
+DROP POLICY IF EXISTS produtos_coleta_cadastra ON produtos;
+CREATE POLICY produtos_coleta_cadastra ON produtos FOR INSERT TO authenticated
+  WITH CHECK (empresa_id = public.empresa_atual() AND public.papel_atual() = 'coletor'
+              AND codigo IS NULL AND ativo);
 
 -- motivos_parada: todo mundo le (a coleta precisa da lista), so' admin mexe
 -- — e' a lista que da' nome a toda parada ja' registrada.

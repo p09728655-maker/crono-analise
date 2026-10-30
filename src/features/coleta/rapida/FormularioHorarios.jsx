@@ -15,7 +15,7 @@ import { agoraHM } from './formato.js';
  * descrevem: quanto daquele intervalo a maquina NAO estava produzindo.
  */
 export default function FormularioHorarios({
-  maquina, aoTrocarMaquina, peca, aoTrocarPeca, produtos, ciclosPorPeca, aoTrocarCiclos,
+  maquina, aoTrocarMaquina, peca, aoTrocarPeca, produtos, grupoProduto, ciclosPorPeca, aoTrocarCiclos,
   furacaoPassante, aoTrocarPassante,
   horaInicial, aoTrocarHoraInicial, horaFinal, aoTrocarHoraFinal,
   pecasPeriodo, aoTrocarPecas, duracaoMs, motivos, paradas,
@@ -31,7 +31,7 @@ export default function FormularioHorarios({
         <label style={est.campoHora}>
           <span style={est.rotuloCampo}>PEÇA</span>
           <CampoProduto
-            valor={peca} aoTrocar={aoTrocarPeca} produtos={produtos}
+            valor={peca} aoTrocar={aoTrocarPeca} produtos={produtos} grupo={grupoProduto}
             aria="Nome da peça" placeholder="Ex: Lateral Mesa"
           />
         </label>

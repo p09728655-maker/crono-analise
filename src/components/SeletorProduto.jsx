@@ -1,4 +1,9 @@
 import { useState } from 'react';
+import { nomeChave } from '../domain/cronoanalise.js';
+
+/** Abaixo disto nao ha' produto: e' o comeco da digitacao, e um toque
+ *  sem querer em "+ Cadastrar «Ra»" ficaria na lista de todos os tablets. */
+const MIN_CADASTRO = 3;
 
 /**
  * Campo do PRODUTO — escolha quando o posto tem produtos cadastrados, texto
@@ -22,6 +27,16 @@ import { useState } from 'react';
  * apagava o que o analista estava digitando e tirava o foco.
  * `contexto` (opcional, o grupo do posto): quando muda, a escolha "Outro
  * produto…" feita no posto anterior deixa de valer.
+ *
+ * `aoCadastrar` (opcional, a coleta): o nome digitado pode ir para o
+ * CADASTRO do grupo antes de medir (v2.97.0) — um botao abaixo do texto.
+ * Sem cadastrar, o nome vai so' na medicao, como sempre; o botao e' a
+ * saida para o produto que nao estava na lista deixar de ser texto livre.
+ * Recebe o nome e devolve o resultado de lib/maquinas.cadastrarProduto.
+ * `grupoNome` diz no botao para qual lista o produto vai. Nome que ja' esta'
+ * na lista com outra grafia ("rack sirius 1.6") nao oferece cadastro: o
+ * botao vira "Usar «Rack Sirius 1.6» da lista" — prometer um cadastro que
+ * nao vai acontecer deixava a medicao sair com a grafia errada.
  */
 export default function SeletorProduto({
   valor, aoTrocar, opcoes, estilos,
@@ -31,6 +46,7 @@ export default function SeletorProduto({
   aoEscolher,
   sugestoes = null, listaId,
   contexto,
+  aoCadastrar, grupoNome,
 }) {
   const lista = opcoes || [];
   /* null = automatico (decide pelo valor e pela lista); true/false = o
@@ -39,13 +55,77 @@ export default function SeletorProduto({
      React para estado que depende de prop), sem remontar o campo. */
   const [modo, setModo] = useState(null);
   const [contextoVisto, setContextoVisto] = useState(contexto);
+  /* O que o cadastro respondeu, e PARA QUAL nome: { de, estado, texto }.
+     Mudou o nome no campo, a resposta deixa de valer e some — "sem rede"
+     dito para o nome anterior nao vale para o que se digita agora. */
+  const [cadastro, setCadastro] = useState(null);
+  const [enviando, setEnviando] = useState(false);
   if (contexto !== contextoVisto) {
     setContextoVisto(contexto);
     setModo(null);
+    setCadastro(null);
   }
   const naLista = lista.some((p) => p.nome === valor);
   const automatico = lista.length === 0 || (Boolean(valor) && !naLista);
   const livre = lista.length === 0 || (modo === null ? automatico : modo);
+  const resposta = cadastro && cadastro.de === valor ? cadastro : null;
+  const nomeDigitado = String(valor || '').trim();
+  const chaveDigitada = nomeChave(valor);
+  // O da lista com outra grafia: escolher, nao cadastrar.
+  const daLista = aoCadastrar && !naLista && chaveDigitada
+    ? lista.find((p) => nomeChave(p.nome) === chaveDigitada) || null
+    : null;
+  // Depois de "desativado pelo PCP", tocar de novo so' repetiria a recusa.
+  const podeCadastrar = Boolean(aoCadastrar) && !naLista && !daLista
+    && chaveDigitada.length >= MIN_CADASTRO && !resposta?.desativado;
+
+  const usarDaLista = () => {
+    setModo(null);
+    aoTrocar(daLista.nome);
+    aoEscolher?.(daLista.nome);
+  };
+
+  const cadastrar = async () => {
+    if (enviando || !podeCadastrar) return;
+    setEnviando(true);
+    const r = await aoCadastrar(nomeDigitado);
+    setEnviando(false);
+    if (r.estado === 'ok') {
+      // Escolhido da lista, com a grafia do cadastro: e' o que junta as
+      // medicoes deste produto numa linha so'.
+      setModo(null);
+      aoTrocar(r.produto.nome);
+      aoEscolher?.(r.produto.nome);
+      setCadastro({
+        de: r.produto.nome,
+        estado: 'ok',
+        texto: r.novo
+          ? `✓ «${r.produto.nome}» cadastrado${grupoNome ? ` na lista do grupo ${grupoNome}` : ''}.`
+          : `«${r.produto.nome}» já estava no cadastro — escolhido da lista.`,
+      });
+      return;
+    }
+    if (r.estado === 'desativado') {
+      // Fica como texto, com a grafia do cadastro: a medicao vale, e o PCP
+      // decide se o produto volta para a lista.
+      aoTrocar(r.produto.nome);
+      setCadastro({
+        de: r.produto.nome,
+        estado: 'aviso',
+        desativado: true,
+        texto: `«${r.produto.nome}» está no cadastro, mas desativado pelo PCP. A medição pode seguir com `
+          + 'este nome; para ele voltar à lista, peça ao PCP para reativar no PC, em Produtos.',
+      });
+      return;
+    }
+    setCadastro({ de: valor, estado: 'aviso', texto: r.mensagem });
+  };
+
+  const respostaNaTela = resposta && (
+    <span role={resposta.estado === 'ok' ? 'status' : 'alert'} style={resposta.estado === 'ok' ? estilos.cadastroOk : estilos.cadastroAviso}>
+      {resposta.texto}
+    </span>
+  );
 
   if (livre) {
     return (
@@ -64,6 +144,28 @@ export default function SeletorProduto({
             {sugestoes.map((nome) => <option key={nome} value={nome} />)}
           </datalist>
         )}
+        {daLista && (
+          <button type="button" style={estilos.cadastrar} onClick={usarDaLista}>
+            {`Usar «${daLista.nome}» da lista`}
+          </button>
+        )}
+        {podeCadastrar && (
+          <button
+            type="button"
+            style={estilos.cadastrar}
+            onClick={cadastrar}
+            disabled={enviando}
+          >
+            {enviando ? 'Cadastrando…' : `+ Cadastrar «${nomeDigitado}»${grupoNome ? ` no grupo ${grupoNome}` : ''}`}
+          </button>
+        )}
+        {podeCadastrar && !resposta && (
+          <span style={estilos.cadastroDica}>
+            Cadastrado, ele entra na lista do grupo em todos os tablets, e só o PCP corrige ou desativa
+            depois, no PC. Sem cadastrar, o nome vai só nesta medição.
+          </span>
+        )}
+        {respostaNaTela}
         {lista.length > 0 && (
           <button
             type="button"
@@ -78,22 +180,27 @@ export default function SeletorProduto({
   }
 
   return (
-    <select
-      value={valor}
-      onChange={(ev) => {
-        if (ev.target.value === '__outro') { setModo(true); aoTrocar(''); return; }
-        aoTrocar(ev.target.value);
-        if (ev.target.value) aoEscolher?.(ev.target.value);
-      }}
-      style={estilos.select}
-      aria-label={aria}
-    >
-      <option value="">{vazio}</option>
-      {/* O codigo do ERP ao lado: e' como o resto da fabrica chama o produto. */}
-      {lista.map((p) => (
-        <option key={p.id} value={p.nome}>{p.codigo ? `${p.nome} · ${p.codigo}` : p.nome}</option>
-      ))}
-      <option value="__outro">Outro produto…</option>
-    </select>
+    <>
+      <select
+        value={valor}
+        onChange={(ev) => {
+          if (ev.target.value === '__outro') { setModo(true); aoTrocar(''); return; }
+          aoTrocar(ev.target.value);
+          if (ev.target.value) aoEscolher?.(ev.target.value);
+        }}
+        style={estilos.select}
+        aria-label={aria}
+      >
+        <option value="">{vazio}</option>
+        {/* O codigo do ERP ao lado: e' como o resto da fabrica chama o produto. */}
+        {lista.map((p) => (
+          <option key={p.id} value={p.nome}>{p.codigo ? `${p.nome} · ${p.codigo}` : p.nome}</option>
+        ))}
+        {/* Com o cadastro ligado, a saida do produto que nao esta' na lista
+            diz que da' para cadastrar — e' o que se procura nesse momento. */}
+        <option value="__outro">{aoCadastrar ? 'Outro produto (digitar ou cadastrar)…' : 'Outro produto…'}</option>
+      </select>
+      {respostaNaTela}
+    </>
   );
 }

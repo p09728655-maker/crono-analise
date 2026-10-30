@@ -311,6 +311,13 @@ export const est = {
     cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
   },
   caixaPapel: { width: 16, height: 16, margin: 0, accentColor: t.vermelho, cursor: 'pointer' },
+  // A caixa de uma JANELA: a frase e' longa e quebra dentro da caixa (com
+  // o nowrap do rotulo do papel, ela vazava para fora da janela).
+  rotuloCaixaJanela: {
+    display: 'flex', alignItems: 'flex-start', gap: espaco.sm,
+    ...tipo('legenda'), color: t.textoMedio, cursor: 'pointer', userSelect: 'none',
+  },
+  caixaJanela: { width: 16, height: 16, margin: '1px 0 0', flexShrink: 0, accentColor: t.vermelho, cursor: 'pointer' },
   /* As DUAS decisoes sobre este quadro — sair no papel e ficar a' vista —
      dividem a mesma linha e a mesma escala. Uma delas em corpo de botao
      grande pesaria mais que a analise que ela comanda. */
@@ -450,6 +457,14 @@ export const est = {
   },
   embForte: { display: 'block', ...tipo('corpoF'), color: t.texto, whiteSpace: 'nowrap' },
   embProdutoTexto: { display: 'block', ...tipo('corpoF'), color: t.texto, overflowWrap: 'anywhere' },
+  // Corrigir o produto da medicao: discreto, como o nome clicavel do
+  // relatorio de Ritmo — e' conferencia, nao a acao principal da linha.
+  embEditarProduto: {
+    display: 'inline-block', marginTop: 2, padding: 0, background: 'transparent', border: 'none',
+    ...tipo('legenda'), fontWeight: 600, color: t.textoMedio, cursor: 'pointer', fontFamily: 'inherit',
+    textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3,
+    textDecorationColor: t.textoFraco,
+  },
   embSub: { display: 'block', ...tipo('legenda'), color: t.textoFraco },
   // A medicao com analise salva: o selo diz por escrito, a cor so' reforca.
   embAnalisada: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.ok },

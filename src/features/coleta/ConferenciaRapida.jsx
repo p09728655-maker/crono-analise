@@ -95,6 +95,12 @@ export default function ConferenciaRapida({ aoSair }) {
   const motivos = useMotivosDoGrupo(grupoDoPosto);
   const cadastroCompleto = useCadastroMaquinas();
   const produtos = useMemo(() => produtosDoGrupo(cadastroCompleto, grupoDoPosto), [cadastroCompleto, grupoDoPosto]);
+  // Para onde vai o produto cadastrado no tablet: o grupo da maquina, que
+  // e' de onde a lista acima sai (ver CampoProduto).
+  const grupoProduto = useMemo(
+    () => (grupoDoPosto ? { id: grupoDoPosto, nome: maquinaDoCadastro?.grupo_nome || '' } : null),
+    [grupoDoPosto, maquinaDoCadastro?.grupo_nome],
+  );
   /**
    * Esta tela conta PECA, em qualquer posto — a embalagem tem a dela
    * (Embalagem Takt Time), que conta volume do comeco ao fim. Trocar a
@@ -296,7 +302,7 @@ export default function ConferenciaRapida({ aoSair }) {
         <>
           <FormularioHorarios
             maquina={maquina} aoTrocarMaquina={setMaquina}
-            peca={peca} aoTrocarPeca={setPeca} produtos={produtos}
+            peca={peca} aoTrocarPeca={setPeca} produtos={produtos} grupoProduto={grupoProduto}
             ciclosPorPeca={ciclosPorPeca} aoTrocarCiclos={setCiclosPorPeca}
             furacaoPassante={furacaoPassante} aoTrocarPassante={setFuracaoPassante}
             horaInicial={horaInicial} aoTrocarHoraInicial={setHoraInicial}
@@ -358,7 +364,7 @@ export default function ConferenciaRapida({ aoSair }) {
           motivos={motivos}
           paradas={paradas}
           maquina={maquina} aoTrocarMaquina={setMaquina}
-          peca={peca} aoTrocarPeca={setPeca} produtos={produtos}
+          peca={peca} aoTrocarPeca={setPeca} produtos={produtos} grupoProduto={grupoProduto}
           ciclosPorPeca={ciclosPorPeca} aoTrocarCiclos={setCiclosPorPeca}
           furacaoPassante={furacaoPassante} aoTrocarPassante={setFuracaoPassante}
           {...camposDaObservacao}

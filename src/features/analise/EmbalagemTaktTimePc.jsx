@@ -11,13 +11,16 @@ import { filtrarPorPeriodo, formatarDataHora } from '../../domain/relatorioConfe
 import {
   emOrdem, faixaDaJuncao, idsDaJuncao, medicaoDaJuncao, motivoParaNaoJuntar,
 } from '../../domain/juncaoMedicoes.js';
-import { lerDemanda, listarCadastroMaquinas, listarConferenciasServidor } from '../../lib/api.js';
+import {
+  lerDemanda, listarCadastroMaquinas, listarConferenciasServidor, renomearPecaConferencia, renomearPecaConferencias,
+} from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import VolumeAVolume, { cliqueSimples, useAnalisesDoPcp } from './conferencias/VolumeAVolume.jsx';
 import Produtos from './Produtos.jsx';
 import MotivosParada from './MotivosParada.jsx';
+import RenomearPeca, { TERMOS_PRODUTO_EMBALAGEM } from './conferencias/RenomearPeca.jsx';
 import { est } from './conferencias/estilos.js';
 import { quandoLida, textoDaFalha } from './demanda/planilha.js';
 
@@ -58,6 +61,12 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  * uma medicao so' (ver domain/juncaoMedicoes.js). A junção tem entrada no
  * historico como uma medicao — o Voltar fecha, o F5 reabre — e a analise
  * salva nela vale para todas: as N saem da fila de uma vez.
+ *
+ * EDITAR O PRODUTO (v2.97.0): cada linha corrige o nome do produto da
+ * medicao — o tablet deixa medir sem produto ou com o nome digitado, e
+ * medicoes do mesmo produto com nomes diferentes nao se juntam. E' a
+ * correcao do relatorio de Ritmo (RenomearPeca), com os nomes do cadastro
+ * da embalagem primeiro e o lote limitado a' embalagem desta lista.
  */
 const ESTILO_GRADE = `
   @media (max-width: 1279px) {
@@ -129,6 +138,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
   // Os dois cadastros que a embalagem pede no tablet: o que se embala e por
   // que a linha para. Aqui a um clique, sem caçar no menu de outra tela.
   const [cadastroAberto, setCadastroAberto] = useState(null); // 'produtos' | 'motivos' | null
+  // A medicao com o produto sendo corrigido, e como esta' a gravacao.
+  const [renomeando, setRenomeando] = useState(null);
+  const [renomeio, setRenomeio] = useState({ ocupado: false, erro: null });
   // As medicoes marcadas para juntar (ids, na ordem em que foram marcadas).
   // Valem entre as vistas: a junção pode ter uma lida e duas na fila.
   const [marcadas, setMarcadas] = useState([]);
@@ -187,12 +199,17 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
         })),
     }));
     const arquivadas = carga.arquivadas.filter((c) => grupoDaMaquina.has(nomeChave(c.maquina))).length;
+    // Os nomes que o tablet oferece na embalagem: a correcao do produto
+    // sugere estes primeiro (ver RenomearPeca).
+    const produtosDoCadastro = (carga.cadastro.produtos || [])
+      .filter((p) => p && p.ativo !== false && idsGrupos.has(p.grupo_id))
+      .map((p) => p.nome);
     const tocadas = medicoes.filter((c) => c.com_marcas).length;
     // A analisar, so' as que o detalhe deixa analisar (ver analisavel).
     const analisaveis = medicoes.filter(analisavel);
     const aAnalisar = analisaveis.filter((c) => !c.analisada_em).length;
     return {
-      medicoes, taktHoje, ativasDoGrupo, arquivadas, tocadas, analisaveis: analisaveis.length, aAnalisar,
+      medicoes, taktHoje, ativasDoGrupo, arquivadas, tocadas, analisaveis: analisaveis.length, aAnalisar, produtosDoCadastro,
       grupoDe: (maquina) => carga.grupos.find((g) => g.id === grupoDaMaquina.get(nomeChave(maquina))) || null,
     };
   }, [carga]);
@@ -397,6 +414,52 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
 
   const grupoAberto = aberta && leitura ? leitura.grupoDe(aberta.maquina) : null;
 
+  /* GRAVAR O PRODUTO CORRIGIDO. A lista e o painel aberto mudam na hora,
+     sem buscar tudo de novo. A junção aberta com uma medicao renomeada se
+     refaz com o nome novo — ou fecha, se deixou de ser do mesmo produto
+     (uma so' renomeada, a caixa "as outras" desmarcada). A recusa aparece
+     na janela, onde se clicou. */
+  const gravarProduto = async ({ nome, tambemAsOutras, irmas }) => {
+    const ids = tambemAsOutras && irmas.length > 1 ? irmas : [renomeando.id];
+    setRenomeio({ ocupado: true, erro: null });
+    try {
+      if (ids.length > 1) await renomearPecaConferencias(ids, nome);
+      else await renomearPecaConferencia(ids[0], nome);
+    } catch (e) {
+      if (montada.current) setRenomeio({ ocupado: false, erro: e.message });
+      return;
+    }
+    if (!montada.current) return;
+    const mudou = new Set(ids);
+    const renomear = (m) => (mudou.has(m.id) ? { ...m, peca: nome } : m);
+    setCarga((carregada) => ({ ...carregada, conferencias: carregada.conferencias.map(renomear) }));
+    const daTela = atual.current.aberta;
+    if (daTela && !daTela.juncao && mudou.has(daTela.id)) setAberta(renomear(daTela));
+    if (daTela?.juncao && daTela.medicoes.some((m) => mudou.has(m.id))) {
+      const refeita = acharAberta(daTela.id, atual.current.medicoes.map(renomear));
+      if (refeita) setAberta(refeita);
+      else fecharPainel();
+    }
+    setRenomeio({ ocupado: false, erro: null });
+    setRenomeando(null);
+  };
+  const editarProduto = (c) => {
+    setRenomeio({ ocupado: false, erro: null });
+    setRenomeando(c);
+  };
+  // O produto cadastrado ou corrigido em "Produtos da embalagem" entra nos
+  // nomes sugeridos da correcao sem F5. Falhou a busca, fica o que havia.
+  const fecharCadastro = () => {
+    const eraProdutos = cadastroAberto === 'produtos';
+    setCadastroAberto(null);
+    if (!eraProdutos) return;
+    listarCadastroMaquinas()
+      .then((cadastro) => {
+        if (montada.current) setCarga((carregada) => (carregada.estado === 'pronto' ? { ...carregada, cadastro } : carregada));
+      })
+      .catch(() => {});
+  };
+
   /* AS MARCADAS PARA JUNTAR. O motivo da trava vai escrito na barra: botao
      travado sem o porque parece quebrado. */
   const doMarcadas = leitura
@@ -526,6 +589,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                     abertasIds={abertasIds}
                     selecao={selecao}
                     aoAbrir={abrir}
+                    aoEditarProduto={editarProduto}
                     pendenciaDe={analises.pendencia}
                     ocupado={analises.ocupado}
                   />
@@ -557,9 +621,23 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
 
       {verVersoes && <HistoricoVersoes modo="analise" aoFechar={() => setVerVersoes(false)} />}
       {cadastroAberto === 'produtos' && (
-        <Produtos grupoInicial={leitura?.taktHoje[0]?.grupo.id || null} aoFechar={() => setCadastroAberto(null)} />
+        <Produtos grupoInicial={leitura?.taktHoje[0]?.grupo.id || null} aoFechar={fecharCadastro} />
       )}
-      {cadastroAberto === 'motivos' && <MotivosParada aoFechar={() => setCadastroAberto(null)} />}
+      {cadastroAberto === 'motivos' && <MotivosParada aoFechar={fecharCadastro} />}
+      {renomeando && leitura && (
+        <RenomearPeca
+          conferencia={renomeando}
+          /* As medicoes da embalagem desta lista (as tres vistas): o lote
+             nunca alcanca a furadeira que tenha uma peca com o mesmo nome. */
+          linhas={leitura.medicoes}
+          nomesDoCadastro={leitura.produtosDoCadastro}
+          termos={TERMOS_PRODUTO_EMBALAGEM}
+          erro={renomeio.erro}
+          ocupado={renomeio.ocupado}
+          aoFechar={() => { if (!renomeio.ocupado) setRenomeando(null); }}
+          aoGravar={gravarProduto}
+        />
+      )}
     </div>
   );
 }
@@ -636,7 +714,7 @@ const AVISO_PENDENCIA = {
  * para juntar — por que.
  */
 function TabelaEmbalagem({
-  medicoes: todas, vista, aoTrocarVista, abertasIds, selecao, aoAbrir, pendenciaDe, ocupado = false,
+  medicoes: todas, vista, aoTrocarVista, abertasIds, selecao, aoAbrir, aoEditarProduto, pendenciaDe, ocupado = false,
 }) {
   const variasMaquinas = new Set(todas.map((c) => nomeChave(c.maquina))).size > 1;
   const porVista = { fila: [], analisadas: [], outras: [] };
@@ -798,6 +876,24 @@ function TabelaEmbalagem({
                         sem toques — não abre volume a volume
                       </span>
                     )}
+                    {/* Corrigir o produto nao abre a linha. Trava enquanto
+                        uma analise salva, como as vistas: a resposta dela
+                        traz o nome de antes e desfaria a correcao na tela. */}
+                    <button
+                      type="button"
+                      style={est.embEditarProduto}
+                      disabled={ocupado}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        aoEditarProduto(c);
+                      }}
+                      // Pela data e hora, nao pelo produto: o nome dele ja' e' o
+                      // botao que abre a linha, e dois botoes com o mesmo nome
+                      // nao se distinguem no leitor de tela.
+                      aria-label={`${c.peca ? 'Editar' : 'Informar'} o produto da medição de ${dia} ${faixaHoraria(c) || hora || ''}`.trim()}
+                    >
+                      {c.peca ? 'Editar produto' : 'Informar produto'}
+                    </button>
                   </td>
                   <td style={est.embTdNum}>
                     <span style={est.embForte}>{formatarDuracao(Number(c.duracao_ms))}</span>

@@ -13,7 +13,7 @@ import { est } from './estilos.js';
  */
 export default function ResultadoAoVivo({
   crono, resultado, excede, totalParadaMs, motivos, paradas,
-  maquina, aoTrocarMaquina, peca, aoTrocarPeca, produtos, ciclosPorPeca, aoTrocarCiclos,
+  maquina, aoTrocarMaquina, peca, aoTrocarPeca, produtos, grupoProduto, ciclosPorPeca, aoTrocarCiclos,
   furacaoPassante, aoTrocarPassante,
   observacao, aoTrocarObservacao, jaSalva,
   aoNovaConferencia, unidade, marcasDescartadas, salvo, aoSalvar, aoSair,
@@ -70,7 +70,7 @@ export default function ResultadoAoVivo({
           <label style={est.campoHora}>
             <span style={est.rotuloCampo}>{rotuloPeca}</span>
             <CampoProduto
-              valor={peca} aoTrocar={aoTrocarPeca} produtos={produtos}
+              valor={peca} aoTrocar={aoTrocarPeca} produtos={produtos} grupo={grupoProduto}
               aria={ariaPeca} placeholder={exemploPeca}
             />
           </label>

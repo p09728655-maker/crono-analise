@@ -1,6 +1,7 @@
 import SeletorMaquina from '../../../components/SeletorMaquina.jsx';
 import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import { vibrar } from '../../../lib/hooks.js';
+import { cadastrarProduto } from '../../../lib/maquinas.js';
 import { est } from './estilos.js';
 
 /**
@@ -26,8 +27,13 @@ export function CampoMaquina({ valor, aoTrocar }) {
  * lista ja' chega filtrada pelo grupo da maquina (produtosDoGrupo). Sem
  * produto cadastrado para o posto, e' o campo de texto de sempre, com o
  * mesmo rotulo de acessibilidade de antes.
+ *
+ * `grupo` ({ id, nome }) e' o grupo da maquina escolhida: com ele, o nome
+ * digitado pode ir para o cadastro antes de medir (lib/maquinas). Sem
+ * grupo (maquina digitada, fora do cadastro), nao ha' lista para onde ir,
+ * e o campo fica so' com o texto livre.
  */
-export function CampoProduto({ valor, aoTrocar, produtos, aria, placeholder }) {
+export function CampoProduto({ valor, aoTrocar, produtos, aria, placeholder, grupo }) {
   return (
     <SeletorProduto
       valor={valor}
@@ -35,8 +41,14 @@ export function CampoProduto({ valor, aoTrocar, produtos, aria, placeholder }) {
       opcoes={produtos}
       aria={aria}
       placeholder={placeholder}
-      estilos={{ input: est.inputTexto, select: est.selectMaquina, link: est.linkCadastro }}
+      estilos={{
+        input: est.inputTexto, select: est.selectMaquina, link: est.linkCadastro,
+        cadastrar: est.botaoCadastrarProduto, cadastroDica: est.dicaParada,
+        cadastroOk: est.cadastroProdutoOk, cadastroAviso: est.cadastroProdutoAviso,
+      }}
       aoEscolher={() => vibrar(30)}
+      aoCadastrar={grupo?.id ? (nome) => cadastrarProduto({ nome, grupoId: grupo.id }) : undefined}
+      grupoNome={grupo?.nome}
     />
   );
 }

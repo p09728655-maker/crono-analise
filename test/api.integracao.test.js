@@ -1664,6 +1664,84 @@ rodar('API — integracao com Postgres', () => {
     const [{ n }] = await sql`SELECT count(*)::int AS n FROM produtos WHERE grupo_id = ${grupoId}`;
     expect(n).toBe(0);
   });
+
+  /**
+   * O TABLET CADASTRA O PRODUTO ANTES DE MEDIR — e so' isso (v2.97.0).
+   *
+   * Pelo token do coletor, com a RLS avaliando: cadastra o nome no grupo
+   * da maquina, recusa repetido como o PC recusa, e nao mexe no que e' do
+   * PCP — codigo do ERP, renomear, desativar, excluir. A mesma regra, sem a
+   * API, no banco: a politica nao deixa o coletor gravar codigo.
+   */
+  it('o tablet cadastra produto (so o nome) e nao mantem o cadastro', async () => {
+    const g = fingirRes();
+    await maquinasApi(fingirReq({ metodo: 'POST', corpo: { grupo: { codigo: '0079', nome: 'EMBALAGEM TABLET' } } }), g);
+    const grupoId = g.corpo.grupo.id;
+    const gerado = fingirRes();
+    await dispositivosApi(fingirReq({ metodo: 'POST', corpo: { acao: 'codigo' } }), gerado);
+    const pareado = await parear({ codigo: gerado.corpo.codigo, nome: 'Tablet embalagem' });
+    const coletorId = pareado.corpo.dispositivo.id;
+    const jwt = tokenDe(coletorId);
+    const pedir = async (opcoes) => {
+      const res = fingirRes();
+      await maquinasApi(fingirReq({ token: jwt, ...opcoes, query: { produtos: '1', ...(opcoes.query || {}) } }), res);
+      return res;
+    };
+
+    const novo = await pedir({ metodo: 'POST', corpo: { nome: ' Penteadeira   Princesa ', grupoId } });
+    expect(novo.statusCode).toBe(201);
+    expect(novo.corpo.produto).toMatchObject({ nome: 'Penteadeira Princesa', codigo: null, ativo: true, grupo_id: grupoId });
+
+    // Repetido sem caixa — e SEM ACENTO: o tablet com o cadastro velho em
+    // cache nao cria "Penteadeira Princésa" ao lado. 409, nenhuma linha a mais.
+    for (const nome of ['penteadeira princesa', 'Penteadeira  Princésa']) {
+      const repetido = await pedir({ metodo: 'POST', corpo: { nome, grupoId } });
+      expect(repetido.statusCode, nome).toBe(409);
+      expect(repetido.corpo.erro).toMatch(/Penteadeira Princesa/);
+    }
+
+    // O codigo do ERP e' do PCP: recusado com o porque, e nada gravado.
+    const comCodigo = await pedir({ metodo: 'POST', corpo: { nome: 'Rack Lua', codigo: '777', grupoId } });
+    expect(comCodigo.statusCode).toBe(403);
+    expect(comCodigo.corpo.erro).toMatch(/PC/);
+
+    // Manter continua com o PCP: renomear, desativar e excluir sao 403.
+    const id = novo.corpo.produto.id;
+    expect((await pedir({ metodo: 'PATCH', query: { id }, corpo: { nome: 'Outro nome' } })).statusCode).toBe(403);
+    expect((await pedir({ metodo: 'PATCH', query: { id }, corpo: { ativo: false } })).statusCode).toBe(403);
+    expect((await pedir({ metodo: 'DELETE', query: { id } })).statusCode).toBe(403);
+    const [linhas] = await sql`
+      SELECT count(*)::int AS n, bool_and(ativo) AS ativos, max(nome) AS nome
+        FROM produtos WHERE grupo_id = ${grupoId}`;
+    expect(linhas).toEqual({ n: 1, ativos: true, nome: 'Penteadeira Princesa' });
+
+    // No BANCO, sem a API: a politica deixa o coletor inserir o nome, nao o codigo.
+    const comoColetor = (fn) => sql.begin(async (tx) => {
+      await tx`SELECT set_config('role', 'authenticated', true),
+                      set_config('request.jwt.claims', ${JSON.stringify({ sub: coletorId })}, true)`;
+      return fn(tx);
+    });
+    const [direto] = await comoColetor((tx) => tx`
+      INSERT INTO produtos (empresa_id, grupo_id, nome) VALUES (${EMPRESA}, ${grupoId}, 'Direto no banco')
+      RETURNING nome`);
+    expect(direto.nome).toBe('Direto no banco');
+    await expect(comoColetor((tx) => tx`
+      INSERT INTO produtos (empresa_id, grupo_id, nome, codigo) VALUES (${EMPRESA}, ${grupoId}, 'Com codigo', '1')`))
+      .rejects.toThrow(/row-level security/);
+    // Nem ja' desativado, nem mexer no que existe: UPDATE e DELETE nao
+    // alcancam linha nenhuma pela politica.
+    await expect(comoColetor((tx) => tx`
+      INSERT INTO produtos (empresa_id, grupo_id, nome, ativo) VALUES (${EMPRESA}, ${grupoId}, 'Ja desativado', false)`))
+      .rejects.toThrow(/row-level security/);
+    const renomeadas = await comoColetor((tx) => tx`
+      UPDATE produtos SET nome = 'Trocado no banco' WHERE id = ${id} RETURNING id`);
+    const apagadas = await comoColetor((tx) => tx`DELETE FROM produtos WHERE id = ${id} RETURNING id`);
+    expect([renomeadas.length, apagadas.length]).toEqual([0, 0]);
+    const [intacto] = await sql`SELECT nome, ativo FROM produtos WHERE id = ${id}`;
+    expect(intacto).toEqual({ nome: 'Penteadeira Princesa', ativo: true });
+
+    await maquinasApi(fingirReq({ metodo: 'DELETE', query: { grupo: grupoId } }), fingirRes());
+  });
   /* ------------------------------------- cadastro de analistas e sessao */
   /**
    * O que precisa ser provado aqui e' o que protege PESSOA e HISTORICO: a
