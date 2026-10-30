@@ -108,6 +108,26 @@ async function simularServidor(pagina) {
   });
 }
 
+/**
+ * O GRAFICO NA 1a PAGINA da folha deitada (v2.98.2). A tela vira a area
+ * util do A4 deitado (273 x 186 mm = 1032 x 703 px) com a midia de
+ * impressao, e mede onde o grafico termina a partir do topo da folha:
+ * passando de 703 px, ele iria inteiro para a 2a pagina.
+ */
+async function fundoDoGraficoNaFolha(pagina) {
+  const antes = pagina.viewportSize();
+  await pagina.setViewportSize({ width: 1032, height: 703 });
+  await pagina.emulateMedia({ media: 'print' });
+  const fundo = await pagina.evaluate(() => {
+    const folha = document.querySelector('body > .somente-impressao');
+    const figura = folha.querySelector('svg[aria-label^="Intervalo entre"]').closest('figure');
+    return Math.round(figura.getBoundingClientRect().bottom - folha.getBoundingClientRect().top);
+  });
+  await pagina.emulateMedia({ media: 'screen' });
+  await pagina.setViewportSize(antes);
+  return fundo;
+}
+
 const navegador = await chromium.launch({ executablePath: EXEC });
 const ctx = await navegador.newContext({ viewport: { width: 1600, height: 1000 }, timezoneId: FUSO });
 const p = await ctx.newPage();
@@ -282,6 +302,11 @@ await p.emulateMedia({ media: 'print' });
 checar(/Análise do PCP \(Mauricio PCP, [^)]*\): Junção de 3 medições/.test(await p.locator('body > .somente-impressao').innerText()),
   'a folha da junção reimpressa leva a analise salva');
 await p.emulateMedia({ media: 'screen' });
+{
+  // O pior caso: junção, com a analise salva e a observacao de uma delas.
+  const fundo = await fundoDoGraficoNaFolha(p);
+  checar(fundo <= 703, `folha deitada da junção: o grafico cabe na 1a pagina (termina em ${fundo} de 703 px)`);
+}
 await janela.getByRole('button', { name: 'Fechar', exact: true }).click();
 await barra.getByRole('button', { name: 'Desmarcar' }).click();
 

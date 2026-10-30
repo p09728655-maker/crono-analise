@@ -86,6 +86,26 @@ async function simularServidor(pagina, {
   });
 }
 
+/**
+ * O GRAFICO NA 1a PAGINA da folha deitada (v2.98.2). A tela vira a area
+ * util do A4 deitado (273 x 186 mm = 1032 x 703 px) com a midia de
+ * impressao, e mede onde o grafico termina a partir do topo da folha:
+ * passando de 703 px, ele iria inteiro para a 2a pagina.
+ */
+async function fundoDoGraficoNaFolha(pagina) {
+  const antes = pagina.viewportSize();
+  await pagina.setViewportSize({ width: 1032, height: 703 });
+  await pagina.emulateMedia({ media: 'print' });
+  const fundo = await pagina.evaluate(() => {
+    const folha = document.querySelector('body > .somente-impressao');
+    const figura = folha.querySelector('svg[aria-label^="Intervalo entre"]').closest('figure');
+    return Math.round(figura.getBoundingClientRect().bottom - folha.getBoundingClientRect().top);
+  });
+  await pagina.emulateMedia({ media: 'screen' });
+  await pagina.setViewportSize(antes);
+  return fundo;
+}
+
 const navegador = await chromium.launch({ executablePath: EXEC });
 
 /* ================================================================ TABLET */
@@ -164,13 +184,16 @@ checar(/ÚLTIMO/i.test(painelTempo) && /POR VOLUME/i.test(painelTempo) && /TAKT/
   && painelTempo.includes('72.0'), 'cronometro rodando mostra ULTIMO, POR VOLUME e TAKT 72.0');
 /* v2.98.0: volumes/hora ao vivo (volumes ÷ relogio desde a largada) e o
    painel do mesmo tamanho do alvo — o alvo tomava dois tercos da tela. */
+let volHoraAoVivo = null;
 {
-  const m = /VOL\/HORA\s*(\d+)/i.exec(painelTempo);
-  checar(Boolean(m) && Number(m[1]) > 0, `cronometro rodando mostra VOL/HORA ao vivo (${m?.[1]})`);
+  // O rotulo diz de que tempo sai: o PERIODO, paradas dentro (v2.98.2).
+  const m = /VOL\/H PERÍODO\s*(\d+)/i.exec(painelTempo);
+  volHoraAoVivo = m ? Number(m[1]) : null;
+  checar(volHoraAoVivo > 0, `cronometro rodando mostra VOL/H PERÍODO ao vivo (${m?.[1]})`);
   // v2.98.1: medido ate' o ULTIMO toque, nao ate' o relogio de agora — sem
   // toque, o numero nao se mexe (nao e' velocimetro).
   await t.waitForTimeout(900);
-  const parado = /VOL\/HORA\s*(\d+)/i.exec(await t.locator('[aria-label="Tempo decorrido"]').innerText());
+  const parado = /VOL\/H PERÍODO\s*(\d+)/i.exec(await t.locator('[aria-label="Tempo decorrido"]').innerText());
   checar(parado?.[1] === m?.[1], `sem toque, VOL/HORA fica parado (${m?.[1]} -> ${parado?.[1]})`);
   const barra = await t.getByRole('button', { name: /Desfazer/ }).boundingBox();
   checar(barra.height >= 84, `Desfazer, Parou e Encerrar maiores na embalagem (${Math.round(barra.height)} px)`);
@@ -208,6 +231,14 @@ checar(enviado?.marcasMs?.[0] >= 800 && enviado?.marcasMs?.[0] < 1800,
   `a 1a marca conta da largada, nao do INICIAR (${enviado?.marcasMs?.[0]} ms)`);
 checar(enviado?.marcasRelogioMs === enviado?.marcasMs?.at(-1) - enviado?.marcasMs?.[0],
   'sem parada, o relogio entre toques e o proprio trecho das marcas');
+{
+  // O VOL/H PERÍODO de antes do Encerrar e' a conta exata: 12 volumes x
+  // 3.600.000 ÷ o relogio da largada ao ultimo toque — que, sem parada, e'
+  // a ultima marca que subiu pelo sync.
+  const esperado = Math.round((12 * 3600000) / enviado?.marcasMs?.at(-1));
+  checar(volHoraAoVivo === esperado,
+    `VOL/H PERÍODO ao vivo = 12 volumes ÷ tempo ate o ultimo toque (${volHoraAoVivo}, esperado ${esperado})`);
+}
 /* ------------------- o RELOGIO das marcas: parada descontada e desfazer */
 await t.getByRole('button', { name: /Nova conferência/ }).click();
 await t.getByRole('button', { name: /INICIAR/ }).click();
@@ -456,6 +487,8 @@ const tamanhoDoPdf = async () => {
   checar(await folha.locator('svg[aria-label^="Intervalo entre"]').getAttribute('width') === '1000',
     'impressao: o grafico ocupa a folha deitada (1000 px de largura, eram 700)');
   if (FOTOS) writeFileSync(`${FOTOS}/pc-folha.pdf`, pdf);
+  const fundo = await fundoDoGraficoNaFolha(p);
+  checar(fundo <= 703, `folha deitada: o grafico cabe na 1a pagina, com a observacao (termina em ${fundo} de 703 px)`);
 }
 
 const fechar = async () => {
@@ -1088,6 +1121,37 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
   checar(!(await s.getByRole('button', { name: /INICIAR/ }).isDisabled()), 'sem programa: a medicao comeca normalmente');
   checar(erros.length === 0, `sem programa: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
   await ctx.close();
+}
+
+/* ---------- DEITADO: a barra de baixo sempre na tela (v2.98.2) ---------- */
+{
+  /* Na v2.98.0 o painel crescia pela largura da tela, e deitado ele nao
+     cabia: Desfazer, Parou e Encerrar saiam por baixo de uma tela que nao
+     rola, e a medicao so' fechava girando o tablet. Deitado, painel e alvo
+     ficam lado a lado. */
+  for (const [largura, altura] of [[1024, 552], [640, 360]]) {
+    const ctx = await navegador.newContext({ viewport: { width: largura, height: altura }, hasTouch: true });
+    const s = await ctx.newPage();
+    await semearSessao(s);
+    await simularServidor(s, {});
+    await s.goto(`${BASE}/coleta/embalagem`);
+    await s.getByRole('button', { name: /INICIAR/ }).click();
+    const largadaD = s.getByRole('button', { name: /Largada/ });
+    await largadaD.waitFor({ timeout: 4000 });
+    await s.waitForTimeout(300);
+    await largadaD.dispatchEvent('pointerdown');
+    const alvoD = s.getByRole('button', { name: 'Contar um volume' });
+    await alvoD.waitFor({ timeout: 4000 });
+    for (let i = 0; i < 3; i++) { await s.waitForTimeout(260); await alvoD.dispatchEvent('pointerdown'); }
+    const encerrarD = await s.getByRole('button', { name: /Encerrar/ }).boundingBox();
+    const painelD = await s.locator('[aria-label="Tempo decorrido"]').boundingBox();
+    const caixaD = await alvoD.boundingBox();
+    checar(encerrarD.y + encerrarD.height <= altura,
+      `deitado ${largura}x${altura}: Encerrar dentro da tela (termina em ${Math.round(encerrarD.y + encerrarD.height)} de ${altura})`);
+    checar(caixaD.x >= painelD.x + painelD.width && caixaD.height >= 150,
+      `deitado ${largura}x${altura}: numeros a esquerda, alvo a direita, com ${Math.round(caixaD.height)} px de altura`);
+    await ctx.close();
+  }
 }
 
 await navegador.close();

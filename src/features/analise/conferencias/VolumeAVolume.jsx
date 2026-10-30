@@ -977,9 +977,13 @@ function NotasSalvas({ conferencia, medicoes }) {
   ));
 }
 
-// O grafico na folha deitada: 297 - 2 x 12 mm = 273 mm uteis, ~1030 px.
+// O grafico na folha deitada: 297 - 2 x 12 mm = 273 mm uteis, ~1030 px de
+// largura; 210 - 24 = 186 mm, ~700 px de altura. Na junção a manchete tem
+// mais linhas e o grafico, uma legenda a mais: ele desce para caber na 1a
+// pagina (o e2e confere as duas).
 const LARGURA_GRAFICO_PAPEL = 1000;
-const ALTURA_GRAFICO_PAPEL = 300;
+const ALTURA_GRAFICO_PAPEL = 260;
+const ALTURA_GRAFICO_PAPEL_JUNCAO = 220;
 
 /**
  * A FOLHA A4 — num portal, como a do cadastro de maquinas: enquanto a
@@ -988,7 +992,7 @@ const ALTURA_GRAFICO_PAPEL = 300;
  *
  * DEITADA (v2.98.0, pedido do PCP): o grafico do intervalo de cada volume
  * e' a peca principal da folha, e em pe' ele cabia em 700 px — com 100
- * volumes, barra de 5 px. Deitada ele ganha ~45% de largura. O @page vai
+ * volumes, barra de 5 px. Deitada ele ganha 43% de largura. O @page vai
  * na <style> do portal, entao vale SO' para esta folha: as outras (Ritmo,
  * estudo) seguem em pe', pelo @page do index.html.
  */
@@ -1052,25 +1056,6 @@ function FolhaVolumeAVolume({
         ))}
       </section>
 
-      {medicoes.filter((c) => c.observacao).map((c) => (
-        <p key={c.id} style={{ margin: '0 0 10px' }}>
-          <strong>Obs. do analista{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {c.observacao}
-        </p>
-      ))}
-      {/* A analise salva vai junto: a folha que chega a' reuniao diz se o
-          PCP ja' leu a medicao, e o que concluiu. */}
-      {/* Na junção com notas diferentes (juntada de novo para reimprimir),
-          a de cada medicao, com a hora dela. */}
-      {(juncao && !conferencia.analise_nota ? medicoes.filter((c) => c.analisada_em) : [conferencia])
-        .filter((c) => c.analisada_em)
-        .map((c) => (
-          <p key={c.id} style={{ margin: '0 0 10px', whiteSpace: 'pre-line' }}>
-            <strong>Análise do PCP{c === conferencia ? '' : ` — ${horaDaMedicao(c)}`}</strong>
-            {' '}({[c.analisada_por, formatarDataHora(c.analisada_em)].filter(Boolean).join(', ')})
-            {c.analise_nota ? `: ${c.analise_nota}` : ''}
-          </p>
-        ))}
-
       {/* O destaque no papel e' a borda grossa, nao a cor: a impressora da
           fabrica e' P&B. */}
       <section style={{ border: '2px solid #000', padding: '6px 8px', marginBottom: 12, breakInside: 'avoid' }}>
@@ -1093,6 +1078,39 @@ function FolhaVolumeAVolume({
           </div>
         ))}
       </section>
+
+      <GraficoIntervalos
+        leitura={leitura} unidade={unidade} larguraFixa={LARGURA_GRAFICO_PAPEL}
+        altura={juncao ? ALTURA_GRAFICO_PAPEL_JUNCAO : ALTURA_GRAFICO_PAPEL}
+        segmentos={segmentosDaJuncao(juncao)}
+      />
+
+      {/* DEPOIS DO GRAFICO (v2.98.2): deitada, a folha tem 186 mm de
+          altura util, e observacao + analise do PCP (ou a tabela da
+          junção) antes do grafico o empurravam inteiro para a 2a pagina,
+          deixando a 1a meio em branco. O grafico e' a peca da folha: fica
+          sempre na 1a, logo abaixo dos numeros; o que se escreve sobre
+          ele vem em seguida. */}
+      <div style={{ marginTop: 10 }}>
+        {medicoes.filter((c) => c.observacao).map((c) => (
+          <p key={c.id} style={{ margin: '0 0 10px' }}>
+            <strong>Obs. do analista{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {c.observacao}
+          </p>
+        ))}
+        {/* A analise salva vai junto: a folha que chega a' reuniao diz se o
+            PCP ja' leu a medicao, e o que concluiu. */}
+        {/* Na junção com notas diferentes (juntada de novo para reimprimir),
+            a de cada medicao, com a hora dela. */}
+        {(juncao && !conferencia.analise_nota ? medicoes.filter((c) => c.analisada_em) : [conferencia])
+          .filter((c) => c.analisada_em)
+          .map((c) => (
+            <p key={c.id} style={{ margin: '0 0 10px', whiteSpace: 'pre-line' }}>
+              <strong>Análise do PCP{c === conferencia ? '' : ` — ${horaDaMedicao(c)}`}</strong>
+              {' '}({[c.analisada_por, formatarDataHora(c.analisada_em)].filter(Boolean).join(', ')})
+              {c.analise_nota ? `: ${c.analise_nota}` : ''}
+            </p>
+          ))}
+      </div>
 
       {juncao && (
         <section style={{ marginBottom: 10, breakInside: 'avoid' }}>
@@ -1125,11 +1143,6 @@ function FolhaVolumeAVolume({
           </table>
         </section>
       )}
-
-      <GraficoIntervalos
-        leitura={leitura} unidade={unidade} larguraFixa={LARGURA_GRAFICO_PAPEL} altura={ALTURA_GRAFICO_PAPEL}
-        segmentos={segmentosDaJuncao(juncao)}
-      />
 
       {lacunas.length > 0 && (
         <section style={{ marginTop: 10 }}>

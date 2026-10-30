@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.98.2',
+    data: '2026-10-30',
+    titulo: 'Embalagem Takt Time: tablet deitado volta a encerrar, e o gráfico fica na 1ª página',
+    itens: [
+      'TABLET DEITADO: DESFAZER, PAROU E ENCERRAR VOLTARAM À TELA. Na v2.98.0, com o tablet deitado, os números grandes empurravam a barra de baixo para fora da tela, e a medição só fechava girando o tablet. Agora, deitado, os números ficam à esquerda e a área de toque à direita, e a barra fica sempre à vista. O tamanho dos números passou a seguir o espaço do próprio quadro, e não só a largura da tela: no celular, em pé ou deitado, tudo cabe.',
+      'VOL/H PERÍODO: o rótulo agora diz de que tempo o número sai — o período, com as paradas dentro, e não só o tempo com a linha rodando. Ele aparece a partir do 2º volume, como o "por volume". Com 1 volume, o número não quer dizer nada.',
+      'A FOLHA DEITADA MANTÉM O GRÁFICO NA 1ª PÁGINA. Na v2.98.0, a observação e a análise do PCP vinham antes do gráfico. Numa medição analisada, ou numa junção, o gráfico ia inteiro para a 2ª página e a 1ª ficava meio em branco. Agora a ordem é: identificação, leitura, números e gráfico. Depois vêm a observação, a análise do PCP, a tabela da junção, as lacunas e a nota. Na junção, o gráfico é um pouco mais baixo para caber.',
+    ],
+  },
+  {
     versao: '2.98.1',
     data: '2026-10-30',
     titulo: 'Embalagem Takt Time: volumes/hora parado entre os toques e botões de baixo maiores',

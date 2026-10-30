@@ -113,11 +113,13 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   volume** do período até ali (paradas dentro) e o **takt**; embaixo, os
   volumes, os **volumes/hora** (volumes ÷ relógio da largada até o **último
   toque**, paradas dentro — só muda quando um volume fecha, v2.98.1; o do
-  resultado vai até o Encerrar) e o intervalo do **último volume**. Quando o
-  tempo por volume passa do takt, o rótulo ganha "▲ takt". Desde a v2.98 o
-  painel e o alvo de toque dividem a tela meio a meio, e o tamanho dos números
-  acompanha a largura da tela (`clamp` com `vw`). Antes, o alvo tomava dois
-  terços e os números eram letra de rodapé. Um toque por volume; o horário de
+  resultado vai até o Encerrar; a partir do 2º volume) e o intervalo do
+  **último volume**. Quando o tempo por volume passa do takt, o rótulo ganha
+  "▲ takt". Desde a v2.98 o painel e o alvo de toque dividem a tela: um em
+  cima do outro em pé, **lado a lado deitado** (v2.98.2). O tamanho dos
+  números sai do próprio painel (`containerType: 'size'`, letras em
+  `cqw`/`cqh`). Na v2.98.0 ele seguia só a largura da tela, e com o tablet
+  deitado a barra Desfazer/Parou/Encerrar saía de uma tela que não rola. Um toque por volume; o horário de
   cada toque é gravado sozinho, sem digitação. Sem programa da embalagem colado, o tablet só não
   mostra o takt, sem aviso: quem resolve é o PCP, e o aviso fica no PC.
 - **O INICIAR só arma a medição; o relógio abre na largada.** A largada é o
@@ -148,8 +150,10 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   cada volume contra a linha do takt, a leitura em palavras e a folha A4 —
   **deitada** (v2.98), para o gráfico ter a largura do papel (1.000 px). O
   `@page` paisagem vai na `<style>` do portal da folha e só vale enquanto ela
-  está montada; as outras folhas seguem em pé. Com lacunas, a tabela delas
-  vai para a 2ª página. O PDF sai nomeado "Takt Time - produto - máquina - data hora". Clicar de novo
+  está montada; as outras folhas seguem em pé. O gráfico fica sempre na 1ª
+  página, logo depois dos números; observação, análise do PCP, tabela da
+  junção, lacunas e nota vêm depois dele (em geral, na 2ª página). Os e2e
+  medem onde o gráfico termina na área útil da folha deitada. O PDF sai nomeado "Takt Time - produto - máquina - data hora". Clicar de novo
   na linha, *Fechar* ou o Voltar do navegador fecham o painel — menos
   enquanto a análise daquela medição está sendo salva. O segundo clique de um
   duplo clique não vale.
