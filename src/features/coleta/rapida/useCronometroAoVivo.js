@@ -57,6 +57,9 @@ export function useCronometroAoVivo({ paradas, comLargada = false }) {
   const [ultimoIntervaloMs, setUltimoIntervaloMs] = useState(null);
   const [relogioEntreMarcasMs, setRelogioEntreMarcasMs] = useState(null);
   const [setupEntreMarcasMs, setSetupEntreMarcasMs] = useState(null);
+  // O relogio (paradas dentro) da largada ao ULTIMO toque: o volumes/hora da
+  // Embalagem Takt Time se mede ate' aqui, e so' muda quando um volume fecha.
+  const [relogioAteUltimoMs, setRelogioAteUltimoMs] = useState(null);
   // Armado, esperando o toque da largada: a tela do cronometro ja' esta'
   // aberta, mas o relogio ainda nao corre. Ref ao lado do estado: o toque
   // precisa saber na hora, sem esperar render.
@@ -89,6 +92,7 @@ export function useCronometroAoVivo({ paradas, comLargada = false }) {
     setUltimoIntervaloMs(null);
     setRelogioEntreMarcasMs(null);
     setSetupEntreMarcasMs(null);
+    setRelogioAteUltimoMs(null);
     // O cronometro ao vivo mede o periodo inteiro; um setup que estivesse
     // correndo no formulario pertencia ao periodo anterior.
     paradas.limpar();
@@ -136,6 +140,7 @@ export function useCronometroAoVivo({ paradas, comLargada = false }) {
     setUltimoIntervaloMs(ultimoIntervalo(marcasRef.current));
     setRelogioEntreMarcasMs(entrePrimeiraEUltima(brutasRef.current));
     setSetupEntreMarcasMs(entrePrimeiraEUltima(setupNoToqueRef.current));
+    setRelogioAteUltimoMs(toque.bruta);
     vibrar(45);
     setPulso((p) => p + 1);
     setPecas((n) => n + 1);
@@ -148,6 +153,7 @@ export function useCronometroAoVivo({ paradas, comLargada = false }) {
     setUltimoIntervaloMs(ultimoIntervalo(marcasRef.current));
     setRelogioEntreMarcasMs(entrePrimeiraEUltima(brutasRef.current));
     setSetupEntreMarcasMs(entrePrimeiraEUltima(setupNoToqueRef.current));
+    setRelogioAteUltimoMs(brutasRef.current.length ? brutasRef.current[brutasRef.current.length - 1] : null);
     setPecas((n) => Math.max(0, n - 1));
     vibrar([25, 40, 25]);
   }, []);
@@ -239,7 +245,7 @@ export function useCronometroAoVivo({ paradas, comLargada = false }) {
     // o cronometro guarda ate' a proxima largada.
     fase, rodando, decorrido: aguardandoLargada ? 0 : decorrido, aguardandoLargada,
     pecas, pulso, duracaoFinal, pecasFinais, setPecasFinais, marcasFinais,
-    ultimoIntervaloMs, relogioEntreMarcasMs, setupEntreMarcasMs,
+    ultimoIntervaloMs, relogioEntreMarcasMs, setupEntreMarcasMs, relogioAteUltimoMs,
     emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
     comecar, contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, novaConferencia,
   };

@@ -98,13 +98,17 @@ export default function EmbalagemTaktTime({ aoSair }) {
     [crono.duracaoFinal, crono.pecasFinais, paradas.emMs],
   );
   const excede = crono.duracaoFinal > 0 && paradas.total.totalMs >= crono.duracaoFinal;
-  /* AO VIVO, para o volumes/hora do painel: volumes ÷ o relogio desde a
-     largada, paradas dentro (pecasPorHoraBruto). Sem as paradas na conta
-     de proposito: o bruto nao depende delas, e com elas uma parada que
-     cobrisse o periodo inteiro zeraria o numero em vez de mostrar o que saiu. */
+  /* AO VIVO, para o volumes/hora do painel: volumes ÷ o relogio da largada
+     ao ULTIMO toque, paradas dentro (pecasPorHoraBruto). So' muda quando
+     um volume fecha (ou com o Desfazer): medido ate' o relogio de agora,
+     ele descia a cada decimo de segundo entre um volume e outro, e o chao
+     de fabrica leu um velocimetro (v2.98.1). O do resultado vai ate' o
+     Encerrar, entao sai um pouco menor se houve espera depois do ultimo
+     volume. Sem as paradas na conta de proposito: o bruto nao depende
+     delas, e com elas uma parada do periodo inteiro zeraria o numero. */
   const aoVivo = useMemo(
-    () => conferenciaRapida({ duracaoMs: crono.decorrido, pecas: crono.pecas }),
-    [crono.decorrido, crono.pecas],
+    () => conferenciaRapida({ duracaoMs: crono.relogioAteUltimoMs, pecas: crono.pecas }),
+    [crono.relogioAteUltimoMs, crono.pecas],
   );
 
   // As marcas so' valem com a contagem que elas explicam (ver ConferenciaRapida).

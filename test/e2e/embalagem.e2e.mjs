@@ -167,6 +167,13 @@ checar(/ÚLTIMO/i.test(painelTempo) && /POR VOLUME/i.test(painelTempo) && /TAKT/
 {
   const m = /VOL\/HORA\s*(\d+)/i.exec(painelTempo);
   checar(Boolean(m) && Number(m[1]) > 0, `cronometro rodando mostra VOL/HORA ao vivo (${m?.[1]})`);
+  // v2.98.1: medido ate' o ULTIMO toque, nao ate' o relogio de agora — sem
+  // toque, o numero nao se mexe (nao e' velocimetro).
+  await t.waitForTimeout(900);
+  const parado = /VOL\/HORA\s*(\d+)/i.exec(await t.locator('[aria-label="Tempo decorrido"]').innerText());
+  checar(parado?.[1] === m?.[1], `sem toque, VOL/HORA fica parado (${m?.[1]} -> ${parado?.[1]})`);
+  const barra = await t.getByRole('button', { name: /Desfazer/ }).boundingBox();
+  checar(barra.height >= 84, `Desfazer, Parou e Encerrar maiores na embalagem (${Math.round(barra.height)} px)`);
   const painel = await t.locator('[aria-label="Tempo decorrido"]').boundingBox();
   const caixaAlvo = await alvo.boundingBox();
   checar(painel.height >= caixaAlvo.height * 0.9,

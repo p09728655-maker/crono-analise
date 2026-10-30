@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.98.1',
+    data: '2026-10-30',
+    titulo: 'Embalagem Takt Time: volumes/hora parado entre os toques e botões de baixo maiores',
+    itens: [
+      'VOLUMES/HORA NÃO É MAIS VELOCÍMETRO. Ele mudava a cada décimo de segundo, descendo entre um volume e outro. Agora conta até o último toque (volumes ÷ o tempo da largada até o último volume, com as paradas dentro) e só muda quando um volume fecha ou com o Desfazer. O do resultado vai até o Encerrar: se houve espera depois do último volume, ele sai um pouco menor.',
+      'DESFAZER, PAROU E ENCERRAR MAIORES na tela da embalagem: botões mais altos (84 px, eram 64) e texto e ícone maiores, acompanhando o tamanho da tela como os números de cima. No Ritmo da máquina, nada muda.',
+    ],
+  },
+  {
     versao: '2.98.0',
     data: '2026-10-30',
     titulo: 'Embalagem Takt Time: números grandes no tablet e folha impressa deitada',

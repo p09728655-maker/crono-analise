@@ -305,6 +305,10 @@ export const est = {
   parcialSufixoTela: { fontSize: 'clamp(11px, 2vw, 20px)', color: cores.textoFraco, marginLeft: 3, fontWeight: 400 },
   // O alvo divide a altura com o painel, mas nunca abaixo dos 180 px do botaoGrande.
   botaoGrandeTakt: { flex: '1 1 0' },
+  // Desfazer, Parou e Encerrar um pouco maiores (v2.98.1): 64 -> 84 px e o
+  // texto acompanha a largura da tela, como os numeros do painel.
+  botaoBarraTakt: { minHeight: 84, fontSize: 'clamp(13px, 2.2vw, 18px)', gap: 6 },
+  iconeBarraTakt: { fontSize: 'clamp(20px, 3.4vw, 28px)', lineHeight: 1 },
 
   botaoGrande: {
     flex: '1 1 auto', minHeight: 180,
