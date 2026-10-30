@@ -1049,6 +1049,87 @@ rodar('API — integracao com Postgres', () => {
     expect(linhas.map((l) => l.marcas_ms)).toEqual([null, null]);
   });
 
+  /**
+   * MEDICAO POR VIDEO (v2.99.0): a mesma medicao do tablet, marcada no PC
+   * assistindo a uma filmagem. O que se prova: a origem vai e volta, o
+   * periodo e' o da filmagem (de outro dia, pelo salvoEm que o PC manda),
+   * o aparelho que nao manda origem continua 'tablet', e video sem marcas
+   * e origem desconhecida sao recusados — pela API e pelo banco.
+   */
+  it('medicao por video: origem gravada, periodo da filmagem, sem marcas recusa', async () => {
+    const doVideo = crypto.randomUUID();
+    const doTablet = crypto.randomUUID();
+    // Filmada anteontem, 9h00 a 9h05; marcada hoje no PC.
+    const fimDaFilmagem = new Date(Date.now() - 2 * 86400000);
+    const res = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          {
+            clientId: doVideo, maquina: 'EMBALAGEM 01', peca: 'Rack Lua', duracaoMs: 300000, pecas: 4,
+            marcasMs: [60000, 120000, 180000, 240000], marcasRelogioMs: 180000, marcasSetupMs: 0,
+            salvoEm: fimDaFilmagem.toISOString(), origem: 'video',
+          },
+          {
+            clientId: doTablet, maquina: 'EMBALAGEM 01', duracaoMs: 300000, pecas: 2,
+            marcasMs: [1000, 2000], salvoEm: new Date().toISOString(),
+          },
+        ],
+      },
+    }), res);
+    expect(res.statusCode).toBe(200);
+    const [video] = await sql`
+      SELECT origem, iniciado_em, finalizado_em FROM conferencias WHERE client_id = ${doVideo}`;
+    expect(video.origem).toBe('video');
+    expect(new Date(video.finalizado_em).getTime()).toBe(fimDaFilmagem.getTime());
+    expect(new Date(video.iniciado_em).getTime()).toBe(fimDaFilmagem.getTime() - 300000);
+    const [tablet] = await sql`SELECT origem FROM conferencias WHERE client_id = ${doTablet}`;
+    expect(tablet.origem).toBe('tablet');
+
+    // A lista do PC traz a origem: e' dela que sai o selo "por video".
+    const lista = fingirRes();
+    await conferenciasApi(fingirReq({}), lista);
+    const daLista = lista.corpo.conferencias.find((c) => c.peca === 'Rack Lua');
+    expect(daLista?.origem).toBe('video');
+
+    // Video sem marcas: recusado, e o lote inteiro fica de fora.
+    const semMarcas = crypto.randomUUID();
+    const junto = crypto.randomUUID();
+    const recusa = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: {
+        conferencias: [
+          { clientId: junto, maquina: 'EMBALAGEM 01', duracaoMs: 60000, pecas: 1, origem: 'tablet' },
+          { clientId: semMarcas, maquina: 'EMBALAGEM 01', duracaoMs: 60000, pecas: 2, origem: 'video' },
+        ],
+      },
+    }), recusa);
+    expect(recusa.statusCode).toBe(400);
+    expect(recusa.corpo.erro).toMatch(/vídeo precisa das marcas/);
+    const [{ n }] = await sql`
+      SELECT count(*)::int AS n FROM conferencias WHERE client_id IN (${semMarcas}, ${junto})`;
+    expect(n).toBe(0);
+
+    // Origem que nao existe: 400, com o que vale.
+    const estranha = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST',
+      corpo: { conferencias: [{ clientId: crypto.randomUUID(), duracaoMs: 60000, pecas: 1, origem: 'drone' }] },
+    }), estranha);
+    expect(estranha.statusCode).toBe(400);
+    expect(estranha.corpo.erro).toMatch(/"tablet" ou "video"/);
+
+    // O banco tem a mesma regra, fora da API.
+    await expect(sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,
+                                iniciado_em, finalizado_em, salvo_em, origem)
+      VALUES (${crypto.randomUUID()}, ${EMPRESA}, 'X', 60000, 2,
+              now() - interval '1 minute', now(), now(), 'video')`)
+      .rejects.toThrow(/conferencias_origem_chk/);
+  });
+
   it('o banco recusa marca que nao bate com a contagem, mesmo fora da API', async () => {
     await expect(sql`
       INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,

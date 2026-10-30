@@ -119,7 +119,12 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   cima do outro em pé, **lado a lado deitado** (v2.98.2). O tamanho dos
   números sai do próprio painel (`containerType: 'size'`, letras em
   `cqw`/`cqh`). Na v2.98.0 ele seguia só a largura da tela, e com o tablet
-  deitado a barra Desfazer/Parou/Encerrar saía de uma tela que não rola. Um toque por volume; o horário de
+  deitado a barra Desfazer/Parou/Encerrar saía de uma tela que não rola.
+  Painel baixo (celular deitado com a barra do navegador): `@container` some
+  com o rótulo TEMPO e depois com o relógio, em vez de cortar números. Em
+  navegador sem `dvh`/`cq`, classes reserva com `vh`/`vw` assumem (elas perdem
+  para o estilo inline quando ele vale). Os e2e simulam esse navegador
+  apagando os valores com `dvh`/`cq`. Um toque por volume; o horário de
   cada toque é gravado sozinho, sem digitação. Sem programa da embalagem colado, o tablet só não
   mostra o takt, sem aviso: quem resolve é o PCP, e o aviso fica no PC.
 - **O INICIAR só arma a medição; o relógio abre na largada.** A largada é o
@@ -199,6 +204,23 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   cada linha tem "Editar produto"** ("Informar produto" na que veio sem): a
   correção vale para a medição e, por padrão, para as outras da embalagem com
   o mesmo nome nesta lista — produto com dois nomes não se junta.
+- **Cronometrar por vídeo** (`/analise/embalagem/video`, v2.99.0) é a outra
+  forma de medir, no PC: a linha é filmada com a câmera do celular, e o
+  analista assiste e marca pelo teclado (Enter volume — o 1º é a largada —,
+  ⌫ desfaz o último marcado, P Parou/Voltou, F encerra; espaço, ← →, `,` `.`
+  e 1 2 3 controlam o vídeo). A marca é o **tempo do vídeo**, então pausar,
+  voltar ou acelerar não muda nada. As contas estão em
+  `src/domain/medicaoPorVideo.js`, que devolve exatamente o que o tablet manda
+  pelo sync: marcas no relógio da linha rodando (a parada sai da marca
+  seguinte), relógio e setup entre o 1º e o último volume, paradas e
+  `salvoEm` = início da filmagem + Encerrar (o servidor calcula o início). As
+  regras de cada tecla são funções puras no mesmo arquivo. O vídeo **não sobe**:
+  abre como `blob:` no navegador. A marcação em andamento fica no
+  `localStorage` pelo arquivo (nome, tamanho e data), para sobreviver ao F5. A
+  medição vai direto ao `/sync`, sem a fila offline, para a recusa aparecer na
+  tela, com `origem: 'video'` (coluna `conferencias.origem`, `'tablet'` por
+  padrão; vídeo sem marcas é recusado pela API e pelo banco). Lista, volume a
+  volume e folha mostram "por vídeo".
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O programa da embalagem é em VOLUMES**: um rack que sai em dois volumes

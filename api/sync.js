@@ -12,7 +12,7 @@
  *      quais reenviar.
  */
 import { autenticar, exigirPapel } from './_lib/auth.js';
-import { ErroHttp, handler, json, lerCorpo, permitir } from './_lib/http.js';
+import { ErroHttp, erroValidacao, handler, json, lerCorpo, permitir } from './_lib/http.js';
 import {
   booleano, dataIso, hora, inteiro, lista, marcasDaConferencia, paradasDaConferencia, relogioDasMarcas,
   setupDasMarcas, texto, uuid,
@@ -29,6 +29,14 @@ const MAX_ITENS = 500;
  * conforme onde a funcao serverless subiu.
  */
 const FUSO = 'America/Sao_Paulo';
+
+/** As origens que o banco aceita (ver `origem` no schema). */
+const ORIGENS = ['tablet', 'video'];
+function origemDaConferencia(valor, campo) {
+  if (valor == null || valor === '') return 'tablet';
+  if (!ORIGENS.includes(valor)) throw erroValidacao(`Campo "${campo}" deve ser ${ORIGENS.map((o) => `"${o}"`).join(' ou ')}`);
+  return valor;
+}
 
 export default handler(async (req, res) => {
   permitir(req, ['POST']);
@@ -108,12 +116,20 @@ export default handler(async (req, res) => {
     // no mesmo INSERT: o dado nasceu junto e nao pode chegar pela metade.
     paradas: paradasDaConferencia(c.paradas, `conferencias[${i}]`),
     salvoEm: dataIso(c.salvoEm, `conferencias[${i}].salvoEm`, { padrao: new Date().toISOString() }),
+    // De onde vieram os instantes (ver `origem` no schema). Aparelho nao
+    // manda: e' 'tablet'. Valor desconhecido e' erro, nao "tablet" calado.
+    origem: origemDaConferencia(c.origem, `conferencias[${i}].origem`),
   })).map((c, i) => {
     // O instante de cada toque do cronometro ao vivo (ver marcasDaConferencia)
     // e o relogio entre o primeiro e o ultimo: depois do resto validado,
     // porque so' valem contra a contagem e a duracao.
     const marcasMs = marcasDaConferencia(conferencias[i].marcasMs, { pecas: c.pecas, duracaoMs: c.duracaoMs });
     const marcasRelogioMs = relogioDasMarcas(conferencias[i].marcasRelogioMs, { marcas: marcasMs, duracaoMs: c.duracaoMs });
+    // Por video, as marcas sao o motivo de medir: sem elas, recusa antes de
+    // gravar qualquer coisa do lote (o banco tem a mesma regra).
+    if (c.origem === 'video' && !marcasMs) {
+      throw erroValidacao(`Campo "conferencias[${i}].marcasMs": medição por vídeo precisa das marcas de cada volume`);
+    }
     return {
       ...c,
       marcasMs,
@@ -207,13 +223,13 @@ export default handler(async (req, res) => {
         INSERT INTO conferencias
           (client_id, empresa_id, maquina, peca,
            iniciado_em, finalizado_em, duracao_ms, pecas, ciclos_por_peca, furacao_passante, observacao, salvo_em,
-           marcas_ms, marcas_relogio_ms, marcas_setup_ms)
+           marcas_ms, marcas_relogio_ms, marcas_setup_ms, origem)
         SELECT ${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca},
                p.ini,
                -- Periodo que atravessa a meia-noite: o fim caiu no dia seguinte.
                CASE WHEN p.fim < p.ini THEN p.fim + interval '1 day' ELSE p.fim END,
                ${c.duracaoMs}, ${c.pecas}, ${c.ciclosPorPeca}, ${c.furacaoPassante}, ${c.observacao}, ${c.salvoEm},
-               ${c.marcasMs}::integer[], ${c.marcasRelogioMs}::integer, ${c.marcasSetupMs}::integer
+               ${c.marcasMs}::integer[], ${c.marcasRelogioMs}::integer, ${c.marcasSetupMs}::integer, ${c.origem}
           FROM periodo p
         ON CONFLICT (client_id) DO NOTHING
         RETURNING id`;

@@ -13,6 +13,24 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.99.0',
+    data: '2026-10-30',
+    titulo: 'Embalagem Takt Time: cronometrar por vídeo, no PC',
+    itens: [
+      'NOVA FORMA DE MEDIR A EMBALAGEM: POR VÍDEO. Filme a linha com o celular num tripé (com a câmera do próprio aparelho), enquadrando o ponto onde o volume fecha. No PC, em Embalagem Takt Time → "Cronometrar por vídeo", escolha o arquivo, assista e marque cada volume pelo teclado. O tablet continua igual: o vídeo é uma opção a mais.',
+      'O VÍDEO FICA NO PC: ele abre no navegador e não é enviado para lugar nenhum. Só a medição (os horários de cada volume) vai para o sistema.',
+      'AS TECLAS: Enter marca o volume (o 1º Enter é a largada e não conta volume, como no tablet); ⌫ desfaz o último marcado; P abre a parada (pergunta o motivo) e P de novo é o Voltou; F encerra. Espaço pausa, ← → anda 5 s, vírgula e ponto andam um quadro, 1 2 3 trocam a velocidade (1×, 1,5×, 2×). Os mesmos comandos têm botão na tela.',
+      'A MARCA SAI DO TEMPO DO VÍDEO: pausar, voltar ou ver em 2× não muda os números, e dá para marcar um volume que passou voltando o vídeo — ele entra na ordem certa. Clicar numa marca leva o vídeo àquele ponto, e o × remove a marca.',
+      'AS MESMAS REGRAS DO TABLET: volume com a linha parada não conta, a parada sai do intervalo do volume seguinte, e o que o tablet não deixaria fazer (volume dentro de uma parada, encerrar com parada aberta) é recusado com o motivo escrito.',
+      'A DATA DA FILMAGEM DECIDE A SEMANA E O TAKT. O app sugere o início a partir do arquivo (o celular grava o arquivo no fim da filmagem) e mostra qual takt vale antes de começar. Confira: arquivo copiado de outro computador perde a data original.',
+      'ANTES DE SALVAR, A PRÉVIA: os números e o gráfico do volume a volume, com campo de observação. Salva, a medição entra na lista da Embalagem Takt Time como qualquer outra, com o selo "por vídeo" — também no volume a volume e na folha impressa — e vale para tudo: takt, lacunas, junção, análise do PCP.',
+      'A MARCAÇÃO NÃO SE PERDE: fica guardada neste PC enquanto não é salva. Fechou a aba ou deu F5? Escolha o mesmo vídeo e toque em "Continuar de onde parou".',
+      'VÍDEO QUE NÃO ABRE (geralmente gravado em HEVC/H.265): a tela diz por quê e como regravar — no iPhone, Ajustes → Câmera → Formatos → "Mais compatível"; no Samsung, desligue "Vídeos HEVC" na câmera.',
+      'TABLET DA EMBALAGEM: no celular deitado com a barra do navegador à vista, o painel não corta mais os números — some primeiro o rótulo TEMPO e depois o relógio. Em navegador antigo (Chrome de 2022 ou anterior), a tela não desmonta mais: a área de toque ficava com 2 px. O relógio da parada cabe na área de toque com o tablet deitado, e campo sem valor não mostra mais a unidade ("—s").',
+      'FOLHA DA JUNÇÃO: o gráfico ficou um pouco mais baixo, para não ir para a 2ª página quando o nome do produto ocupa duas linhas.',
+    ],
+  },
+  {
     versao: '2.98.2',
     data: '2026-10-30',
     titulo: 'Embalagem Takt Time: tablet deitado volta a encerrar, e o gráfico fica na 1ª página',

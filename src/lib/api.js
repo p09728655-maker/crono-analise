@@ -257,6 +257,20 @@ export const listarDemanda = (grupoId) =>
 /* O programa E o estado da planilha do PCP, quando ela alimenta o grupo
    (a embalagem): `planilha` = { estado: 'ok'|'erro', ativa, lidaEm,
    mensagem, ... } ou null. Ver api/_lib/programaEmbalagem.js. */
+/**
+ * A MEDICAO POR VIDEO vai direto ao /sync, sem a fila offline: e' feita no
+ * PC, com o analista diante da tela, e a recusa tem de aparecer ali — na
+ * fila ela ficaria calada ate' a proxima sincronizacao. O client_id gerado
+ * no comeco da marcacao torna o reenvio inofensivo (ON CONFLICT no banco).
+ */
+export const enviarMedicaoPorVideo = (conferencia) =>
+  requisitar('/sync', { metodo: 'POST', corpo: { conferencias: [{ ...conferencia, origem: 'video' }] } })
+    .then((r) => {
+      if (!(r.clientIds || []).includes(conferencia.clientId)) {
+        throw new ErroApi(500, 'O servidor não confirmou a medição. Tente salvar de novo.');
+      }
+      return r;
+    });
 export const lerDemanda = (grupoId) =>
   requisitar(`${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}`)
     .then((r) => ({ demandas: r.demandas || [], planilha: r.planilha || null }));

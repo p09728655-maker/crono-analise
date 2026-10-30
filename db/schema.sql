@@ -434,6 +434,19 @@ ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_analise_chk;
 ALTER TABLE conferencias ADD CONSTRAINT conferencias_analise_chk
   CHECK (analisada_por IS NULL OR analisada_em IS NOT NULL);
 
+-- ORIGEM (v2.99.0): de onde vieram os instantes da medicao.
+--  - 'tablet': o de sempre — cronometro ao vivo ou horarios, no aparelho
+--    (celular incluido). Toda medicao anterior a esta coluna e' 'tablet'.
+--  - 'video': marcada no PC assistindo a uma filmagem da linha. As marcas
+--    saem do TEMPO DO VIDEO (exato, repetivel) e o periodo e' o da
+--    filmagem, que pode ser de outro dia. O video fica no PC: nao sobe.
+-- Serve para a lista dizer "por video" e para separar no relatorio e no BI.
+-- Video sem marcas nao existe: as marcas sao o motivo de medir assim.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS origem text NOT NULL DEFAULT 'tablet';
+ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_origem_chk;
+ALTER TABLE conferencias ADD CONSTRAINT conferencias_origem_chk
+  CHECK (origem IN ('tablet', 'video') AND (origem <> 'video' OR marcas_ms IS NOT NULL));
+
 -- ------------------------------------------------------- motivos_parada
 -- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o
 -- relatorio interpreta.

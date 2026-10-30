@@ -37,8 +37,8 @@ export default function CronometroAoVivo({
        contra o takt —, embaixo o apoio. O parado sai daqui (a parada
        em curso ocupa o alvo inteiro) e volta no resultado. */
     <section style={est.painelTempoTakt} aria-label="Tempo decorrido">
-      <span style={est.rotuloTempoTela}>TEMPO</span>
-      <span style={est.tempoCorridoTela}>{formatarCronometro(decorrido)}</span>
+      <span className="takt-rotulo-tempo" style={est.rotuloTempoTela}>TEMPO</span>
+      <span className="takt-tempo" style={est.tempoCorridoTela}>{formatarCronometro(decorrido)}</span>
       <div style={est.gradeTaktPrincipal}>
         {/* Acima do takt, ganha SETA no rotulo e fundo: a cor sozinha
             nao serve a quem olha de longe, de luva, com sol. */}
@@ -97,7 +97,9 @@ export default function CronometroAoVivo({
       aria-label="Encerrar a parada e voltar a produzir"
     >
       <span style={est.rotuloParadaAtiva}>PARADA · {rotuloMotivo(emParada.motivo)}</span>
-      <span style={est.contagem}>{formatarCronometro(Math.max(0, tempoParadaAtual))}</span>
+      <span className={modoTakt ? 'contagem-takt' : undefined} style={est.contagem}>
+        {formatarCronometro(Math.max(0, tempoParadaAtual))}
+      </span>
       <span style={est.rotuloBotao}>▶ VOLTOU A PRODUZIR</span>
     </button>
   ) : aguardandoLargada ? (
@@ -121,7 +123,7 @@ export default function CronometroAoVivo({
       style={{ ...est.botaoGrande, ...(modoTakt ? est.botaoGrandeTakt : {}), ...est.botaoContar }}
       aria-label={`Contar ${unidade.comArtigo}`}
     >
-      <span key={pulso} style={est.contagem}>{pecas}</span>
+      <span key={pulso} className={modoTakt ? 'contagem-takt' : undefined} style={est.contagem}>{pecas}</span>
       <span style={est.rotuloBotao}>TOQUE A CADA {unidade.singular.toUpperCase()}</span>
       {/* Na embalagem, digitar o total no fim perde o intervalo de cada
           volume — que e' o motivo da tela. A dica nao convida a isso. */}
@@ -138,7 +140,7 @@ export default function CronometroAoVivo({
            do outro em pe', lado a lado deitado (v2.98.2). Deitado, um em
            cima do outro nao cabia: a barra de baixo saia da tela. */
         <div className="corpo-takt" style={est.corpoTakt}>
-          <style>{DEITADO}</style>
+          <style>{ESTILO_TAKT}</style>
           {painel}
           {alvo}
         </div>
@@ -199,5 +201,35 @@ export default function CronometroAoVivo({
 
 const maiuscula = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Deitado, o painel a' esquerda e o alvo a' direita (ver corpoTakt). */
-const DEITADO = '@media (orientation: landscape) { .corpo-takt { flex-direction: row !important; } }';
+/**
+ * O QUE O ESTILO INLINE NAO ALCANCA na tela da embalagem (ver corpoTakt):
+ *
+ *  - DEITADO: painel a' esquerda, alvo a' direita; o relogio do alvo (72 px
+ *    fixos) encolhe para caber na meia largura — com 100 min de parada
+ *    "101:00.0" saia pela borda.
+ *  - PAINEL BAIXO (celular deitado com a barra do navegador a' vista):
+ *    some primeiro o rotulo TEMPO, depois o relogio — o que decide (por
+ *    volume, takt) e a linha de apoio ficam inteiros, nunca fatiados.
+ *  - RESERVA para navegador sem dvh (Chrome < 108) e sem container query
+ *    (Chrome < 105, Safari < 16): o estilo inline com dvh/cq e' invalido
+ *    nele e e' descartado; estas classes, que perdem para o inline quando
+ *    ele vale, assumem. Sem a altura reserva a tela perdia a altura e o
+ *    alvo ficava com 2 px (revisao de 30/10).
+ */
+const ESTILO_TAKT = `
+  .tela-takt { height: 100vh; }
+  .takt-tempo { font-size: clamp(40px, 9vw, 72px); }
+  .takt-grande { font-size: clamp(36px, 10vw, 84px); }
+  .takt-media { font-size: clamp(24px, 6vw, 52px); }
+  .takt-rotulo, .takt-rotulo-tempo { font-size: clamp(10px, 1.9vw, 16px); }
+  .takt-sufixo { font-size: clamp(11px, 2vw, 20px); }
+  @media (orientation: landscape) {
+    .corpo-takt { flex-direction: row !important; }
+    .corpo-takt .contagem-takt { font-size: clamp(40px, 6vw, 72px) !important; }
+    .takt-tempo { font-size: clamp(24px, min(4.5vw, 9vh), 72px); }
+    .takt-grande { font-size: clamp(26px, min(5vw, 12vh), 84px); }
+    .takt-media { font-size: clamp(20px, min(3.2vw, 8vh), 52px); }
+  }
+  @container (max-height: 175px) { .takt-rotulo-tempo { display: none; } }
+  @container (max-height: 140px) { .takt-tempo { display: none; } }
+`;

@@ -109,7 +109,7 @@ function acharAberta(id, medicoes) {
 const seletorDaLinha = (id) => `[data-medicao="${id}"]`;
 /** O botao da vista que esta' na tela: o foco cai nele quando a linha nao esta'. */
 const VISTA_NA_TELA = '[data-vista][aria-pressed="true"]';
-export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
+export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometrarVideo }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [aberta, setAberta] = useState(null);
@@ -516,6 +516,13 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio }) {
                 <button type="button" style={est.botaoLinha} onClick={cliqueSimples(() => setCadastroAberto('motivos'))}>
                   Motivos de parada
                 </button>
+                {/* Outra forma de medir, ao lado do tablet (v2.99.0): marcar
+                    os volumes assistindo a uma filmagem da linha. */}
+                {aoCronometrarVideo && (
+                  <button type="button" style={est.botaoLinha} onClick={cliqueSimples(() => sairDaTela(aoCronometrarVideo))}>
+                    Cronometrar por vídeo
+                  </button>
+                )}
               </div>
               {/* A planilha do PCP que nao foi lida: o takt abaixo e' do
                   programa guardado, e a tela diz isso antes do numero. */}
@@ -862,6 +869,8 @@ function TabelaEmbalagem({
                       <span style={est.embProdutoTexto}>{c.peca || '—'}</span>
                     )}
                     {variasMaquinas && <span style={est.embSub}>{c.maquina || '—'}</span>}
+                    {/* Marcada no PC assistindo a filmagem (v2.99.0). */}
+                    {c.origem === 'video' && <span style={est.embSub}>por vídeo</span>}
                     {abre && c.analisada_em && (
                       <span style={est.embAnalisada} title={c.analise_nota || undefined}>
                         ✓ Analisada{c.analisada_por ? ` · ${c.analisada_por}` : ''}

@@ -5,6 +5,7 @@ import ColetaFuradeira from './features/coleta/ColetaFuradeira.jsx';
 import ConferenciaRapida from './features/coleta/ConferenciaRapida.jsx';
 import EmbalagemTaktTime from './features/coleta/EmbalagemTaktTime.jsx';
 import EmbalagemTaktTimePc from './features/analise/EmbalagemTaktTimePc.jsx';
+import EmbalagemPorVideo from './features/analise/video/EmbalagemPorVideo.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import RelatorioConferencias from './features/analise/RelatorioConferencias.jsx';
 import PainelFabrica from './features/painel/PainelFabrica.jsx';
@@ -239,8 +240,16 @@ export default function App() {
           botao nesta tela so' existiria para ser apertado por engano. */}
       {tela === 'painel' && <PainelFabrica />}
 
+      {tela === 'embalagem-video' && (
+        <EmbalagemPorVideo
+          aoVoltar={() => navegar(caminhos.embalagemPc())}
+          aoVerInicio={irParaInicio}
+        />
+      )}
+
       {tela === 'embalagem-pc' && (
         <EmbalagemTaktTimePc
+          aoCronometrarVideo={() => navegar(caminhos.embalagemVideo())}
           aoVoltar={() => navegar(caminhos.lista('analise'))}
           aoVerInicio={irParaInicio}
         />
