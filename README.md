@@ -180,6 +180,12 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   mais de 10% **e** mais que o dobro do erro das médias. Se as medições caem
   em semanas diferentes do programa (takts diferentes), a junção fica sem
   veredito e diz por quê.
+- **O produto se escolhe — ou se cadastra — antes de medir** (v2.97.0): o que
+  não está na lista entra no cadastro do grupo pelo próprio tablet (ver
+  [Cadastro de produtos](#cadastro-de-produtos-ferramentas-no-pc)). **No PC,
+  cada linha tem "Editar produto"** ("Informar produto" na que veio sem): a
+  correção vale para a medição e, por padrão, para as outras da embalagem com
+  o mesmo nome nesta lista — produto com dois nomes não se junta.
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O programa da embalagem é em VOLUMES**: um rack que sai em dois volumes
@@ -1025,8 +1031,24 @@ muda a fila offline.
   está no teto de 12 funções da Vercel. A lista vem junto do cadastro de
   máquinas (`GET /api/maquinas`), que é o que o tablet guarda em cache.
 - Quem faz análise mantém (admin ou analista — `pode_escrever()` na RLS).
+- **O tablet também cadastra (v2.97.0), só o nome**: o produto que não está
+  na lista entra antes de medir, no grupo da máquina escolhida, pelo botão
+  "+ Cadastrar «nome» no grupo …" abaixo do texto livre
+  (`SeletorProduto` + `cadastrarProduto` em `src/lib/maquinas.js`). Ele vai
+  para o cache do aparelho na hora. Nome que já está no cadastro (comparado
+  sem caixa, acento e espaço a mais) é escolhido em vez de criado; o
+  desativado não volta pelo tablet; sem rede, o aviso aparece e o nome segue
+  como texto na medição. O servidor aceita o `POST` do `coletor` e recusa
+  código do ERP, `PATCH` e `DELETE` dele; no banco, a política
+  `produtos_coleta_cadastra` só deixa o coletor inserir sem código.
 - Produto com medição registrada se desativa, não se exclui. Grupo apagado
   leva os produtos dele.
+- **Renomear no cadastro vale para as próximas medições.** As já gravadas se
+  corrigem na lista da Embalagem Takt Time ("Editar produto", v2.97.0) ou no
+  nome da peça do relatório Ritmo por máquina — a mesma janela
+  (`RenomearPeca`), que na embalagem fala em produto, sugere primeiro os
+  nomes do cadastro e só alcança as medições da embalagem da lista. Quando o
+  nome antigo também é o do cadastro, a janela avisa para corrigir lá.
 
 O cadastro começa vazio, e a tela oferece trazer os nove de uma vez em vez
 de pedir que sejam redigitados.

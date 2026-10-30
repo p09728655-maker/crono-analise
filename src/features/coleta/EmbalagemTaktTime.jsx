@@ -180,7 +180,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
             <label style={est.campoHora}>
               <span style={est.rotuloCampo}>PRODUTO</span>
               <CampoProduto
-                valor={produto} aoTrocar={setProduto} produtos={produtos}
+                valor={produto} aoTrocar={setProduto} produtos={produtos} grupo={grupo}
                 aria="Produto embalado" placeholder="Ex: Rack Sirius 1.6"
               />
             </label>
@@ -234,7 +234,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           motivos={motivos}
           paradas={paradas}
           maquina={maquina?.nome || ''} aoTrocarMaquina={nada} maquinaFixa={maquina?.nome || '—'}
-          peca={produto} aoTrocarPeca={setProduto} produtos={produtos}
+          peca={produto} aoTrocarPeca={setProduto} produtos={produtos} grupoProduto={grupo}
           ciclosPorPeca={1} aoTrocarCiclos={nada}
           furacaoPassante={false} aoTrocarPassante={nada}
           observacao={observacao} aoTrocarObservacao={setObservacao} jaSalva={historico.salvo === 'ok'}

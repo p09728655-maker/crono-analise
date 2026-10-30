@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { nomeChave } from '../domain/cronoanalise.js';
-import { listarCadastroMaquinas } from './api.js';
+import { ErroApi, criarProduto, listarCadastroMaquinas } from './api.js';
 
 /**
  * O cadastro de maquinas, do lado do navegador.
@@ -162,6 +162,68 @@ export function grupoIdDaMaquina(cadastro, nome) {
 export function produtosDoGrupo(cadastro, grupoId) {
   if (!grupoId) return [];
   return (cadastro?.produtos || []).filter((p) => p && p.ativo !== false && p.grupo_id === grupoId);
+}
+
+/**
+ * O produto que JA' esta' no cadastro do grupo com este nome — ativo ou
+ * desativado —, pela comparacao do relatorio (nomeChave: sem caixa, sem
+ * acento, sem espaco a mais). "rack sirius 1.6" digitado no tablet acha o
+ * "Rack Sirius 1.6" da lista em vez de nascer um segundo.
+ */
+export function produtoDoCadastro(cadastro, grupoId, nome) {
+  const chave = nomeChave(nome);
+  if (!grupoId || !chave) return null;
+  return (cadastro?.produtos || [])
+    .find((p) => p && p.grupo_id === grupoId && nomeChave(p.nome) === chave) || null;
+}
+
+const SEM_REDE = 'Sem rede: o produto não foi cadastrado. O nome segue nesta medição como texto; '
+  + 'cadastre quando houver rede.';
+
+/**
+ * CADASTRA O PRODUTO PELO TABLET, antes de medir (v2.97.0).
+ *
+ * O produto que nao estava na lista virava texto livre: ia so' naquela
+ * medicao, nao voltava para a lista e a proxima pessoa escrevia de outro
+ * jeito. Cadastrado aqui, ele entra no cadastro do GRUPO da maquina (o
+ * mesmo do PC) e na lista deste aparelho na hora, sem esperar outra busca.
+ *
+ * Nome que ja' esta' no cadastro nao vai ao servidor: e' escolhido. O
+ * desativado pelo PCP tambem nao — reativar e' decisao do PC. Nunca lanca;
+ * devolve o que a tela precisa dizer:
+ *   { estado: 'ok', produto, novo }   cadastrado agora (novo) ou ja' ativo
+ *   { estado: 'desativado', produto } esta' no cadastro, desativado
+ *   { estado: 'erro', mensagem }      sem rede, sem permissao, recusado
+ */
+export async function cadastrarProduto({ nome, grupoId }) {
+  const limpo = String(nome || '').trim().replace(/\s+/g, ' ');
+  if (!limpo || !grupoId) return { estado: 'erro', mensagem: 'Digite o nome do produto.' };
+  const conhecido = (cadastro) => {
+    const p = produtoDoCadastro(cadastro, grupoId, limpo);
+    if (!p) return null;
+    return p.ativo === false ? { estado: 'desativado', produto: p } : { estado: 'ok', produto: p, novo: false };
+  };
+  const jaTem = conhecido(catalogo);
+  if (jaTem) return jaTem;
+  try {
+    const produto = await criarProduto({ nome: limpo, grupoId });
+    // Na lista deste aparelho ja': escolher o recem-cadastrado nao pode
+    // depender de outra ida ao servidor (nem de rede, nas proximas).
+    const cadastro = { ...catalogo, produtos: [...(catalogo.produtos || []), produto] };
+    gravarCache(cadastro);
+    publicar(cadastro);
+    return { estado: 'ok', produto, novo: true };
+  } catch (e) {
+    if (!(e instanceof ErroApi)) return { estado: 'erro', mensagem: SEM_REDE };
+    // 409: outro tablet (ou o PC) cadastrou o mesmo nome depois da ultima
+    // busca. Buscado o cadastro, ele e' o que se escolhe.
+    if (e.status === 409) {
+      const atual = await carregarMaquinas();
+      const achado = atual && conhecido(atual);
+      if (achado) return achado;
+    }
+    return { estado: 'erro', mensagem: e.message };
+  }
 }
 
 /** Adota um cadastro recem-salvo sem uma segunda ida ao servidor. */

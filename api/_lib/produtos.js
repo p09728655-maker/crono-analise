@@ -15,6 +15,10 @@
  *  - Quem faz analise mantem (admin ou analista): escolher o que vai para
  *    cronoanalise e' trabalho de PCP, como o programa da semana — a mesma
  *    regra de pode_escrever() que a RLS aplica no banco.
+ *  - O TABLET (coletor) so' CADASTRA, e so' o nome (v2.97.0): o produto
+ *    que nao esta' na lista entra antes de medir, em vez de virar texto
+ *    livre. Codigo do ERP, renomear, desativar e excluir ficam com o PCP —
+ *    a politica produtos_coleta_cadastra diz o mesmo no banco.
  */
 import { exigirPapel } from './auth.js';
 import { ErroHttp, erroValidacao, json, lerCorpo, naoEncontrado } from './http.js';
@@ -69,14 +73,24 @@ export async function produtos(req, res, auth) {
     return auth.rls(async (db) => json(res, 200, { produtos: await listarProdutos(db, empresaId) }));
   }
 
-  exigirPapel(auth, ['admin', 'analista'], 'So quem faz analise altera o cadastro de produtos');
+  const cadastrando = req.method === 'POST';
+  exigirPapel(
+    auth,
+    cadastrando ? ['admin', 'analista', 'coletor'] : ['admin', 'analista'],
+    cadastrando ? 'Seu acesso não cadastra produto' : 'So quem faz analise altera o cadastro de produtos',
+  );
   return auth.rls(async (db) => {
-    if (req.method === 'POST') {
+    if (cadastrando) {
       const corpo = await lerCorpo(req);
       const nome = nomeLimpo(texto(corpo.nome, 'nome', { obrigatorio: true, max: 120 }));
       if (!nome) throw erroValidacao('Informe o nome do produto');
       const grupoId = await grupoValido(db, empresaId, corpo.grupoId);
       const codigo = codigoLimpo(corpo.codigo);
+      // Recusado com o porque, nao ignorado: codigo que some sem aviso
+      // parece gravado. O tablet nunca manda; quem manda e' outro cliente.
+      if (codigo && auth.papel === 'coletor') {
+        throw new ErroHttp(403, 'O código do ERP é cadastrado no PC, pelo PCP');
+      }
       await repetido(db, empresaId, grupoId, nome);
 
       const [produto] = await db`

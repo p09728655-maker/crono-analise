@@ -16,6 +16,11 @@ import { useCadastroMaquinas } from './maquinas/useCadastroMaquinas.js';
  * maquinas (mesmas cores, mesma moldura): grupos a esquerda, produtos do
  * grupo a direita, o cadastro no topo da lista.
  *
+ * O TABLET TAMBEM CADASTRA (v2.97.0), so' o nome, no grupo da maquina:
+ * o produto que nao estava na lista entra antes de medir. Codigo do ERP,
+ * renomear, desativar e excluir continuam aqui — a tela diz ao PCP para
+ * conferir o que chegou de la'.
+ *
  * Decisoes que a tela expoe:
  *  - Produto com medicao registrada nao se exclui, se DESATIVA (o servidor
  *    recusa e explica): some do tablet, o historico fica com o nome certo.
@@ -59,7 +64,8 @@ export default function Produtos({ aoFechar, grupoInicial = null }) {
             <p style={est.texto}>
               Os produtos que vão para cronoanálise, por grupo de máquina. O tablet oferece
               a lista do grupo da máquina escolhida: sem digitar, e com o mesmo nome em toda
-              medição.
+              medição. O produto que não estava na lista pode ser cadastrado no tablet, só com
+              o nome: confira o nome e complete o código do ERP aqui.
             </p>
           </div>
         </header>
@@ -247,7 +253,8 @@ function FormularioEdicao({
       </div>
       <p style={est.dica}>
         Renomear vale para as próximas medições. As já registradas continuam com o nome com
-        que foram gravadas.
+        que foram gravadas: para corrigir essas, use Editar produto na lista da Embalagem Takt
+        Time, ou clique no nome da peça no relatório Ritmo por máquina.
       </p>
       <div style={est.formAcoes}>
         <button type="button" style={est.botaoTexto} onClick={() => setEdicao(null)}>Cancelar</button>

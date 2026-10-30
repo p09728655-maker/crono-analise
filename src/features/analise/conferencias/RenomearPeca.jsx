@@ -18,8 +18,36 @@ import { est } from './estilos.js';
  *
  * A correcao alcanca a lista que esta' carregada — ativas ou arquivadas,
  * conforme a face aberta. E' o que a janela diz, com o numero na frente.
+ *
+ * A MESMA JANELA corrige o PRODUTO na Embalagem Takt Time (v2.97.0): o que
+ * muda e' a palavra (`termos`) e a lista de nomes, que traz primeiro os do
+ * CADASTRO de produtos do grupo (`nomesDoCadastro`, so' os ativos) — e'
+ * escolhendo o nome do cadastro que a medicao volta a casar com a lista do
+ * tablet. Quando a grafia velha tambem e' a do cadastro, a janela avisa:
+ * renomear as medicoes nao muda o que o tablet oferece.
  */
-export default function RenomearPeca({ conferencia, linhas, erro, ocupado, aoFechar, aoGravar }) {
+const TERMOS_PECA = {
+  titulo: 'Nome da peça',
+  campo: 'Peça',
+  aria: 'Nome da peça',
+  exemplo: 'Ex.: Sleep base 380x330x15',
+  unidade: ['pç', 'pç'],
+  juntaOnde: 'é o que junta a peça numa linha só no Ritmo por peça',
+  cadastro: null,
+};
+export const TERMOS_PRODUTO_EMBALAGEM = {
+  titulo: 'Produto da medição',
+  campo: 'Produto',
+  aria: 'Nome do produto',
+  exemplo: 'Ex.: Rack Sirius 1.6',
+  unidade: ['volume', 'volumes'],
+  juntaOnde: 'é o que deixa juntar as medições do mesmo produto',
+  cadastro: 'Produtos da embalagem',
+};
+
+export default function RenomearPeca({
+  conferencia, linhas, erro, ocupado, aoFechar, aoGravar, termos = TERMOS_PECA, nomesDoCadastro = [],
+}) {
   const nomeAtual = String(conferencia.peca || '').trim();
   const [nome, setNome] = useState(nomeAtual);
   const [tambemAsOutras, setTambemAsOutras] = useState(true);
@@ -34,15 +62,17 @@ export default function RenomearPeca({ conferencia, linhas, erro, ocupado, aoFec
   [linhas, nomeAtual, conferencia.id]);
 
   /* Os nomes que JA' existem no relatorio, para escolher em vez de
-     redigitar: e' redigitando que nasce a terceira grafia. */
+     redigitar: e' redigitando que nasce a terceira grafia. Os do cadastro
+     vem primeiro e ganham a grafia: sao os que o tablet oferece. */
   const nomesConhecidos = useMemo(() => {
     const vistos = new Map();
-    for (const c of linhas) {
-      const n = String(c.peca || '').trim();
-      if (n && !vistos.has(nomeChave(n))) vistos.set(nomeChave(n), n);
+    for (const n of [...nomesDoCadastro, ...linhas.map((c) => c.peca)]) {
+      const limpo = String(n || '').trim();
+      if (limpo && !vistos.has(nomeChave(limpo))) vistos.set(nomeChave(limpo), limpo);
     }
     return [...vistos.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [linhas]);
+  }, [linhas, nomesDoCadastro]);
+  const noCadastro = useMemo(() => new Set(nomesDoCadastro.map(nomeChave)), [nomesDoCadastro]);
 
   const limpo = nome.trim();
   // Nome VAZIO nao renomeia: apagar nao e' corrigir. Sem esta trava, limpar
@@ -51,17 +81,20 @@ export default function RenomearPeca({ conferencia, linhas, erro, ocupado, aoFec
   const mudou = Boolean(limpo) && limpo !== nomeAtual;
   const emLote = tambemAsOutras && irmas.length > 1;
   const outras = irmas.length - 1;
+  // O nome velho e' o do CADASTRO: a correcao aqui nao chega ao tablet.
+  const antigoNoCadastro = mudou && termos.cadastro && noCadastro.has(nomeChave(nomeAtual));
+  const novoNoCadastro = noCadastro.has(nomeChave(limpo));
 
   return (
-    <div style={est.modal} role="dialog" aria-label="Nome da peça">
+    <div style={est.modal} role="dialog" aria-label={termos.titulo}>
       <div style={est.caixaModal}>
-        <h2 style={est.tituloModal}>Nome da peça</h2>
+        <h2 style={est.tituloModal}>{termos.titulo}</h2>
         <p style={est.textoModal}>
           {[conferencia.maquina, faixaHoraria(conferencia)].filter(Boolean).join(' · ') || 'Medição'}
-          {' · '}{conferencia.pecas} pç
+          {' · '}{conferencia.pecas} {termos.unidade[Number(conferencia.pecas) === 1 ? 0 : 1]}
         </p>
 
-        <label style={est.rotuloCampo} htmlFor="nome-da-peca">Peça</label>
+        <label style={est.rotuloCampo} htmlFor="nome-da-peca">{termos.campo}</label>
         <input
           id="nome-da-peca"
           style={est.inputNome}
@@ -70,8 +103,8 @@ export default function RenomearPeca({ conferencia, linhas, erro, ocupado, aoFec
           maxLength={120}
           autoFocus
           list="pecas-ja-medidas"
-          placeholder="Ex.: Sleep base 380x330x15"
-          aria-label="Nome da peça"
+          placeholder={termos.exemplo}
+          aria-label={termos.aria}
         />
         {/* A lista das pecas ja' medidas: escolher a grafia que existe e'
             o que junta as medicoes. Redigitar e' de onde vem a divergencia
@@ -93,12 +126,21 @@ export default function RenomearPeca({ conferencia, linhas, erro, ocupado, aoFec
             {' '}Não há como desfazer.
           </p>
         )}
+        {antigoNoCadastro && (
+          <p style={est.textoModal} role="note">
+            {novoNoCadastro
+              ? <>«{nomeAtual}» e «{limpo}» estão os dois no cadastro de produtos. Se são o mesmo produto,
+                desative «{nomeAtual}» em {termos.cadastro}: senão o tablet continua oferecendo os dois.</>
+              : <>«{nomeAtual}» também é o nome no cadastro de produtos. Corrija lá também, em{' '}
+                {termos.cadastro}: senão o tablet continua oferecendo o nome antigo.</>}
+          </p>
+        )}
 
         {irmas.length > 1 && (
-          <label style={est.rotuloPapel}>
+          <label style={est.rotuloCaixaJanela}>
             <input
               type="checkbox"
-              style={est.caixaPapel}
+              style={est.caixaJanela}
               checked={tambemAsOutras}
               onChange={() => setTambemAsOutras((v) => !v)}
               aria-label="Corrigir também as outras medições com este nome"
@@ -107,7 +149,7 @@ export default function RenomearPeca({ conferencia, linhas, erro, ocupado, aoFec
               {outras === 1
                 ? 'Corrigir também a outra medição com este mesmo nome'
                 : `Corrigir também as outras ${outras} medições com este mesmo nome`}
-              {' '}— é o que junta a peça numa linha só no Ritmo por peça.
+              {' '}— {termos.juntaOnde}.
             </span>
           </label>
         )}

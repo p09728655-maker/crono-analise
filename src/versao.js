@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.97.0',
+    data: '2026-10-30',
+    titulo: 'Produto cadastrado no tablet antes de medir, e corrigido no PC',
+    itens: [
+      'CADASTRAR O PRODUTO NO TABLET, ANTES DE COMEÇAR. Na Embalagem Takt Time e no Ritmo da máquina, o produto que não está na lista é digitado em "Outro produto (digitar ou cadastrar)…" e aparece o botão "+ Cadastrar «nome» no grupo EMBALAGEM". Um toque e ele entra no cadastro do grupo da máquina, volta para a lista já escolhido e fica guardado no tablet, inclusive para medir sem rede depois. Antes, o nome digitado ia só naquela medição e cada pessoa escrevia de um jeito.',
+      'SEM CADASTRAR, NADA MUDA: o nome digitado vai na medição como sempre. Se o nome já está na lista com outra grafia ("rack sirius 1.6"), o tablet escolhe o da lista em vez de criar um segundo. Se o produto foi desativado pelo PCP, o tablet avisa e não o reativa. Sem rede, o aviso aparece abaixo do campo e a medição segue com o nome digitado.',
+      'O TABLET SÓ CADASTRA O NOME, no grupo da máquina escolhida (no Ritmo da máquina, só depois de escolher a máquina da lista). Código do ERP, renomear, desativar e excluir continuam com o PCP, no PC — o cadastro de produtos agora pede para conferir o nome e completar o código do ERP do que chegou do tablet.',
+      'EDITAR O PRODUTO NO PC. Na lista da Embalagem Takt Time, cada medição tem "Editar produto" (ou "Informar produto", quando ela veio sem). Corrige a medição e, por padrão, as outras da embalagem com o mesmo nome, nesta lista — é o que deixa juntar as medições do mesmo produto. Os nomes do cadastro aparecem primeiro na lista de sugestões. A lista e o volume a volume aberto mudam na hora, sem recarregar.',
+      'QUANDO O NOME ERRADO TAMBÉM ESTÁ NO CADASTRO, a janela avisa: corrigir as medições não muda o que o tablet oferece — corrija (ou desative o repetido) em Produtos da embalagem.',
+      'A caixa "Corrigir também as outras medições" da janela de renomear (também a do relatório Ritmo por máquina) não vaza mais para fora da janela: a frase quebra dentro dela.',
+    ],
+  },
+  {
     versao: '2.96.0',
     data: '2026-10-28',
     titulo: 'Embalagem Takt Time: juntar medições e ver os volumes que as paradas roubaram',
