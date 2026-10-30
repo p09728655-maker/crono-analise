@@ -264,50 +264,68 @@ export const est = {
   // de verdade e' o "▲ takt" escrito no rotulo — o fundo so' reforca.
   parcialAtencao: { background: cores.atencaoFundo, borderRadius: raio.sm, padding: '0 6px' },
 
-  /* ---- EMBALAGEM RODANDO (v2.98.0) ----
+  /* ---- EMBALAGEM RODANDO (v2.98.0; v2.98.2) ----
      Pedido do chao de fabrica, com foto do tablet: o alvo de toque tomava
      dois tercos da tela e os numeros, que sao o motivo de medir, ficavam
-     em letra de rodape. Agora o painel e o alvo dividem a altura que sobra
-     meio a meio (flex 1 1 0 nos dois; o painel nunca menor que o conteudo)
-     e o tamanho acompanha a LARGURA da tela (clamp com vw): no celular fica
-     como cabe, no tablet o numero se le de longe. Sem media query — estilo
-     inline nao tem, e o clamp resolve do celular ao tablet deitado. */
+     em letra de rodape. O painel e o alvo DIVIDEM o corpo da tela (flex
+     1 1 0 nos dois): um em cima do outro em pe', LADO A LADO deitado (a
+     <style> do CronometroAoVivo troca a direcao).
+
+     O TAMANHO SAI DO PROPRIO PAINEL, nao da tela (v2.98.2): ele e' um
+     container (containerType 'size') e as letras usam cqw/cqh — o menor de
+     largura e altura dele. Na v2.98.0 elas seguiam so' a largura da tela,
+     e no tablet deitado o painel nao cabia: a barra de Desfazer, Parou e
+     Encerrar saia por baixo de uma tela que nao rola, e a medicao so'
+     fechava girando o tablet. Agora o painel nunca empurra nada (minHeight
+     0, overflow hidden) e as letras cabem no espaco que ele tem.
+     Navegador sem container query (Chrome antes de 105) le' o tamanho como
+     invalido e herda o da tela: menor, mas nada some. */
+  corpoTakt: {
+    flex: '1 1 0', minHeight: 0, minWidth: 0,
+    display: 'flex', flexDirection: 'column', gap: espaco.md,
+  },
   painelTempoTakt: {
-    flex: '1 1 0',
+    flex: '1 1 0', minHeight: 0, minWidth: 0, overflow: 'hidden', containerType: 'size',
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-evenly',
     gap: espaco.sm,
     background: cores.superficie, border: `1px solid ${cores.borda}`,
     borderRadius: raio.lg, padding: espaco.md,
   },
   rotuloTempoTela: {
-    fontSize: 'clamp(11px, 1.8vw, 16px)', letterSpacing: 0.8, color: cores.textoFraco, textTransform: 'uppercase',
+    fontSize: 'clamp(10px, min(3cqh, 2.4cqw), 16px)', letterSpacing: 0.8, color: cores.textoFraco,
+    textTransform: 'uppercase',
   },
   tempoCorridoTela: {
     // Menor que o tempo por volume e o takt: o relogio situa, quem decide e' a comparacao.
-    fontSize: 'clamp(40px, 9vw, 72px)', fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.05,
+    fontSize: 'clamp(24px, min(11cqh, 9cqw), 72px)', fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.05,
     fontVariantNumeric: 'tabular-nums',
   },
   // Em cima, o que decide (tempo por volume contra o takt); embaixo, o apoio.
   gradeTaktPrincipal: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.md, width: '100%' },
   gradeTaktApoio: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: espaco.md, width: '100%' },
   parcialRotuloTela: {
-    fontSize: 'clamp(10px, 1.9vw, 16px)', letterSpacing: 0.8, color: cores.textoFraco,
+    fontSize: 'clamp(10px, min(3cqh, 2.4cqw), 16px)', letterSpacing: 0.8, color: cores.textoFraco,
     textTransform: 'uppercase', whiteSpace: 'nowrap',
   },
+  // "185.3s" com a seta no rotulo cabe na metade do painel ate' 10cqw.
   parcialValorGrande: {
-    fontSize: 'clamp(36px, 10vw, 84px)', fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.05,
+    fontSize: 'clamp(26px, min(15cqh, 10cqw), 84px)', fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.05,
     fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
   },
   parcialValorMedio: {
-    fontSize: 'clamp(24px, 6vw, 52px)', fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.05,
+    fontSize: 'clamp(20px, min(10cqh, 6.5cqw), 52px)', fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.05,
     fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
   },
-  parcialSufixoTela: { fontSize: 'clamp(11px, 2vw, 20px)', color: cores.textoFraco, marginLeft: 3, fontWeight: 400 },
-  // O alvo divide a altura com o painel, mas nunca abaixo dos 180 px do botaoGrande.
-  botaoGrandeTakt: { flex: '1 1 0' },
-  // Desfazer, Parou e Encerrar um pouco maiores (v2.98.1): 64 -> 84 px e o
-  // texto acompanha a largura da tela, como os numeros do painel.
-  botaoBarraTakt: { minHeight: 84, fontSize: 'clamp(13px, 2.2vw, 18px)', gap: 6 },
+  parcialSufixoTela: {
+    fontSize: 'clamp(11px, min(3.5cqh, 2.6cqw), 20px)', color: cores.textoFraco, marginLeft: 3, fontWeight: 400,
+  },
+  // O alvo divide o corpo com o painel; sem o piso de 180 px do botaoGrande,
+  // que deitado empurrava a barra para fora da tela.
+  botaoGrandeTakt: { flex: '1 1 0', minHeight: 0, minWidth: 0 },
+  // Desfazer, Parou e Encerrar maiores (v2.98.1): ate' 84 px, mas nunca
+  // mais que 11% da altura nem menos que os 64 px de sempre — deitado, a
+  // altura e' curta e cada pixel da barra sai do alvo.
+  botaoBarraTakt: { minHeight: 'clamp(64px, 11vh, 84px)', fontSize: 'clamp(13px, 2.2vw, 18px)', gap: 6 },
   iconeBarraTakt: { fontSize: 'clamp(20px, 3.4vw, 28px)', lineHeight: 1 },
 
   botaoGrande: {

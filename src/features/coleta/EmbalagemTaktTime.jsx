@@ -105,7 +105,8 @@ export default function EmbalagemTaktTime({ aoSair }) {
      de fabrica leu um velocimetro (v2.98.1). O do resultado vai ate' o
      Encerrar, entao sai um pouco menor se houve espera depois do ultimo
      volume. Sem as paradas na conta de proposito: o bruto nao depende
-     delas, e com elas uma parada do periodo inteiro zeraria o numero. */
+     delas, e com elas uma parada do periodo inteiro deixaria o numero
+     vazio (conferenciaRapida devolve null) em vez de mostrar o que saiu. */
   const aoVivo = useMemo(
     () => conferenciaRapida({ duracaoMs: crono.relogioAteUltimoMs, pecas: crono.pecas }),
     [crono.relogioAteUltimoMs, crono.pecas],
