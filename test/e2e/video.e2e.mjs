@@ -20,6 +20,8 @@ const BASE = process.env.E2E_BASE || 'http://localhost:5199';
 const EXEC = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const FOTOS = process.env.E2E_FOTOS || null;
 const VIDEO = fileURLToPath(new URL('../fixtures/embalagem-120s.webm', import.meta.url));
+// WebM sem a duracao no cabecalho (gravado com -live 1), como sai de gravador de tela.
+const SEM_DURACAO = fileURLToPath(new URL('../fixtures/sem-duracao-30s.webm', import.meta.url));
 const FUSO = 'America/Sao_Paulo';
 
 let falhas = 0;
@@ -51,18 +53,35 @@ const dois = (n) => String(n).padStart(2, '0');
 // Sem segundos: e' o formato que o campo aceita digitado (com 00 s o navegador omite).
 const HOJE_8H = `${anoSp}-${dois(mesSp)}-${dois(diaSp)}T08:00`;
 
-async function simularServidor(pagina, { enviados, conferencias = [], recusarSync = false }) {
+/**
+ * O /sync simulado faz o que o de verdade faz: o client_id ja' visto e'
+ * IGNORADO (ON CONFLICT) e a resposta diz quantos eram novos. `falha`:
+ * 'recusa' (400, nada grava) ou 'perdida' (grava, mas a resposta e' 504).
+ */
+async function simularServidor(pagina, {
+  enviados, conferencias = [], recusarSync = false, cadastro = CADASTRO, falha = null,
+}) {
+  const vistos = new Set();
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas: DEMANDAS } })
-    : rota.fulfill({ json: CADASTRO })));
+    : rota.fulfill({ json: cadastro })));
   await pagina.route('**/api/motivos-parada**', (rota) => rota.fulfill({ json: { motivos: MOTIVOS } }));
   await pagina.route('**/api/conferencias**', (rota) => rota.fulfill({ json: { conferencias, outras: 0 } }));
   await pagina.route('**/api/sync**', (rota) => {
     const corpo = rota.request().postDataJSON();
     enviados.push(...(corpo.conferencias || []));
-    if (recusarSync) return rota.fulfill({ status: 400, json: { erro: 'Campo "conferencias[0].peca" invalido' } });
+    if (recusarSync || falha?.proxima === 'recusa') {
+      if (falha) falha.proxima = null;
+      return rota.fulfill({ status: 400, json: { erro: 'Campo "conferencias[0].peca" invalido' } });
+    }
     const clientIds = (corpo.conferencias || []).map((c) => c.clientId);
-    return rota.fulfill({ json: { recebidos: clientIds.length, novos: clientIds.length, clientIds } });
+    const novos = clientIds.filter((id) => !vistos.has(id)).length;
+    clientIds.forEach((id) => vistos.add(id));
+    if (falha?.proxima === 'perdida') {
+      falha.proxima = null;
+      return rota.fulfill({ status: 504, body: 'An error occurred with your deployment FUNCTION_INVOCATION_TIMEOUT' });
+    }
+    return rota.fulfill({ json: { recebidos: clientIds.length, novos, clientIds } });
   });
 }
 
@@ -145,14 +164,25 @@ await teclaEm(p, 60, 'p'); // Voltou
 for (const s of [70, 80, 90, 100, 110]) await teclaEm(p, s, 'Enter');
 // Voltando o video: volume marcado fora de ordem entra no lugar dele...
 await teclaEm(p, 35, 'Enter');
-checar(/Volume 4\s*0:35.0|0:35.0\s*Volume 4/.test((await marcas.innerText()).replace(/\n/g, ' ')) || (await marcas.innerText()).includes('0:35.0'),
-  'volume marcado voltando o video entra na ordem do video');
+{
+  const lista = await marcas.innerText();
+  const ordem = ['0:30.0', '0:35.0', '0:40.0'].map((t) => lista.indexOf(t));
+  checar(ordem.every((i) => i >= 0) && ordem[0] < ordem[1] && ordem[1] < ordem[2] && /0:35.0\s*Volume 3/.test(lista),
+    'volume marcado voltando o video entra na ordem do video (vira o volume 3)');
+}
 // ... e o Desfazer tira o ULTIMO MARCADO, nao o ultimo no video.
 await p.keyboard.press('Backspace');
 checar(!(await marcas.innerText()).includes('0:35.0') && (await marcas.innerText()).includes('1:50.0'),
   'Desfazer tira o ultimo marcado (o de 0:35), nao o ultimo no video');
 await teclaEm(p, 52, 'Enter');
 checar(/dentro de uma parada \(0:45.0 a 1:00.0\)/.test(await aviso.innerText()), 'volume dentro de parada ja fechada: recusado');
+// ⌫ e Enter SEGURADOS (repeticao do teclado) nao fazem nada a mais.
+await p.evaluate(() => {
+  for (const key of ['Backspace', 'Backspace', 'Enter']) {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key, repeat: true, bubbles: true }));
+  }
+});
+checar(/VOLUMES 8/i.test((await marcas.innerText()).replace(/\s+/g, ' ')), 'tecla segurada: a repeticao nao apaga nem marca volume');
 const numeros = (await marcas.innerText()).replace(/\s+/g, ' ');
 checar(/VOLUMES 8/i.test(numeros) && /POR VOLUME 12.9 s/i.test(numeros) && /PARADO 15 s/i.test(numeros),
   `os numeros enquanto marca: 8 volumes, 12.9 s por volume (90 s / 7), 15 s parado (${numeros.slice(0, 160)})`);
@@ -199,6 +229,17 @@ await p.getByRole('button', { name: 'Marcar outro vídeo' }).click();
 await p.locator('input[type="file"]').setInputFiles(VIDEO);
 await preparar.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
 checar(await p.getByRole('button', { name: 'Continuar de onde parou' }).count() === 0, 'salva a medicao, o rascunho some');
+checar(/Este vídeo já foi salvo neste PC em .* \(8 volumes\)\. Salvar de novo cria outra medição/.test(await preparar.innerText()),
+  'o mesmo video de novo: avisa que ja foi salvo e que salvar duplica');
+// Outro arquivo: o inicio sugerido e' o DELE, nao o do anterior.
+const inicioAntes = await inicio.inputValue();
+const { readFileSync } = await import('node:fs');
+await p.locator('input[type="file"]').setInputFiles({ name: 'outro.webm', mimeType: 'video/webm', buffer: readFileSync(VIDEO) });
+await p.waitForFunction((antes) => {
+  const v = document.querySelector('input[aria-label="Data e hora em que a filmagem começou"]').value;
+  return v && v !== antes;
+}, inicioAntes, { timeout: 8000 });
+checar((await inicio.inputValue()) !== inicioAntes, `trocar o arquivo troca o inicio sugerido (${inicioAntes} -> ${await inicio.inputValue()})`);
 await ctx.close();
 
 /* ------------------------------------------- recusa do servidor e video ruim */
@@ -216,6 +257,12 @@ await ctx.close();
     'video que nao abre: diz por que (HEVC) e como regravar, e nao deixa comecar');
   await q.locator('input[type="file"]').setInputFiles(VIDEO);
   await q.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  // Filmagem antiga: avisa antes que nao vai aparecer na lista de 30 dias.
+  const antiga = new Date(Date.now() - 40 * 86400000);
+  await q.locator('input[aria-label="Data e hora em que a filmagem começou"]')
+    .fill(`${antiga.getFullYear()}-${dois(antiga.getMonth() + 1)}-${dois(antiga.getDate())}T08:00`);
+  checar(/Filmagem de mais de 30 dias atrás: salva, ela não aparece na lista/.test(await q.locator('[aria-label="Preparar a medição por vídeo"]').innerText()),
+    'filmagem de mais de 30 dias: avisa que nao vai aparecer na lista da Embalagem');
   await q.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
   await q.getByRole('button', { name: 'Começar a marcar' }).click();
   await q.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
@@ -223,27 +270,162 @@ await ctx.close();
   for (const s of [2, 4, 6]) await teclaEm(q, s, 'Enter');
   await teclaEm(q, 7, 'p');
   await q.getByRole('dialog', { name: 'Por que a linha parou' }).getByRole('button', { name: 'Setup / Troca' }).click();
+  // Encerrar com a parada aberta: fecha a parada ali, como o tablet.
   await teclaEm(q, 8, 'f');
-  checar(/Ainda não dá para encerrar: há uma parada sem o "Voltou"/.test(await q.getByRole('alert').innerText()),
-    'Encerrar com a parada aberta: recusa e diz por que');
-  await teclaEm(q, 9, 'p');
-  await teclaEm(q, 10, 'f');
   const rev = q.locator('[aria-label="Revisar a medição"]');
   await rev.waitFor({ timeout: 4000 });
+  checar(/PARADO \(MARCADO\)\s*1 s/i.test(await rev.innerText()), 'Encerrar com a parada aberta: fecha a parada no Encerrar, como o tablet (1 s)');
+  checar(/da largada ao Encerrar, paradas dentro/.test(await rev.innerText()), 'revisar: o volumes/hora diz de que tempo sai');
   // Voltar a marcar continua de onde parou: o video nao recomeca do zero.
   await rev.getByRole('button', { name: 'Voltar a marcar' }).click();
   await q.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
-  checar(/^0:10\.0/.test(await q.locator('[aria-label="Tempo do vídeo"]').innerText()),
+  checar(/^0:08\.0/.test(await q.locator('[aria-label="Tempo do vídeo"]').innerText()),
     `voltar a marcar: o video continua no ponto do Encerrar (${await q.locator('[aria-label="Tempo do vídeo"]').innerText()})`);
   await q.evaluate(() => document.activeElement?.blur());
-  await q.keyboard.press('f');
+  await teclaEm(q, 10, 'f');
   await rev.waitFor({ timeout: 4000 });
   await rev.getByRole('button', { name: 'Salvar medição' }).click();
   await rev.getByRole('alert').waitFor({ timeout: 4000 });
-  checar(/Não salvou: Campo "conferencias\[0\]\.peca" invalido/.test(await rev.getByRole('alert').innerText())
+  checar(/Não salvou: Campo "conferencias\[0\]\.peca" invalido$/.test(await rev.getByRole('alert').innerText())
     && await rev.getByRole('button', { name: 'Salvar medição' }).isEnabled(),
   'servidor recusou: o motivo aparece na revisao, e da para tentar de novo');
   await c2.close();
+}
+
+/* ---- a resposta se perdeu: o reenvio corrigido nao finge que gravou ---- */
+{
+  const c3 = await navegador.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: FUSO });
+  const r = await c3.newPage();
+  await semearSessao(r);
+  r.on('pageerror', (e) => erros.push(e.message));
+  const env3 = [];
+  const falha = { proxima: 'perdida' };
+  await simularServidor(r, { enviados: env3, falha });
+  await r.goto(`${BASE}/analise/embalagem/video`);
+  await r.locator('input[type="file"]').setInputFiles(VIDEO);
+  await r.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  await r.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+  await r.getByRole('button', { name: 'Começar a marcar' }).click();
+  await r.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  await r.evaluate(() => document.activeElement?.blur());
+  for (const s of [2, 4, 6, 8]) await teclaEm(r, s, 'Enter');
+  await teclaEm(r, 9, 'f');
+  const rev = r.locator('[aria-label="Revisar a medição"]');
+  await rev.waitFor({ timeout: 4000 });
+  await rev.getByRole('button', { name: 'Salvar medição' }).click();
+  await rev.getByRole('alert').waitFor({ timeout: 4000 });
+  checar(/pode ter chegado ao servidor: tente salvar de novo antes de mudar/.test(await rev.getByRole('alert').innerText()),
+    'resposta perdida (504): avisa que pode ter gravado e pede para salvar de novo antes de mudar');
+  // O analista corrige mesmo assim: tira um volume e salva.
+  await rev.getByRole('button', { name: 'Voltar a marcar' }).click();
+  await r.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  await r.evaluate(() => document.activeElement?.blur());
+  await r.keyboard.press('Backspace');
+  await teclaEm(r, 9, 'f');
+  await rev.waitFor({ timeout: 4000 });
+  await rev.getByRole('button', { name: 'Salvar medição' }).click();
+  const tela = r.locator('[aria-label="Medição salva"]');
+  await tela.waitFor({ timeout: 4000 });
+  checar(/já estava no servidor/.test(await tela.innerText()) && /não entrou/.test(await tela.innerText()) && !/✓ Medição salva/.test(await tela.innerText()),
+    'reenvio corrigido com o mesmo client_id: diz que a versao anterior e que esta no servidor, nao "salva"');
+  await tela.getByRole('button', { name: 'Salvar esta versão como medição nova' }).click();
+  // Largada em 2 s e volumes em 4, 6 e 8: 3 volumes; o Desfazer deixou 2.
+  await tela.getByText(/✓ Medição salva: 2 volumes/).waitFor({ timeout: 4000 });
+  checar(env3[0].pecas === 3 && env3.at(-1).clientId !== env3[0].clientId && env3.at(-1).pecas === 2,
+    'salvar como nova: outro client_id, com a versao corrigida (2 volumes, era 3)');
+  await c3.close();
+}
+
+/* ------- rascunho de maquina que saiu do cadastro; video sem duracao ------- */
+{
+  const c4 = await navegador.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: FUSO });
+  const u = await c4.newPage();
+  await semearSessao(u);
+  u.on('pageerror', (e) => erros.push(e.message));
+  const env4 = [];
+  await simularServidor(u, { enviados: env4 });
+  await u.goto(`${BASE}/analise/embalagem/video`);
+  await u.locator('input[type="file"]').setInputFiles(VIDEO);
+  await u.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  await u.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+  await u.getByRole('button', { name: 'Começar a marcar' }).click();
+  await u.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  await u.evaluate(() => document.activeElement?.blur());
+  for (const s of [2, 4, 6]) await teclaEm(u, s, 'Enter');
+  // A EMBALAGEM 01 sai do cadastro; entra a 02. F5 e continuar.
+  await u.unrouteAll({ behavior: 'ignoreErrors' });
+  await simularServidor(u, {
+    enviados: env4,
+    cadastro: { ...CADASTRO, maquinas: [{ ...MAQUINA, ativa: false }, { ...MAQUINA, id: '00000000-0000-0000-0000-0000000000a2', nome: 'EMBALAGEM 02' }] },
+  });
+  await u.reload();
+  await u.locator('input[type="file"]').setInputFiles(VIDEO);
+  const continuar = u.getByRole('button', { name: 'Continuar de onde parou' });
+  await continuar.waitFor({ timeout: 8000 });
+  checar(/Continuar usa o que foi guardado com ela: EMBALAGEM 01/.test(await u.locator('[aria-label="Preparar a medição por vídeo"]').innerText()),
+    'o aviso do rascunho diz com que maquina, produto e inicio ele continua');
+  await u.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.innerText.includes('Continuar de onde') && !b.disabled), { timeout: 8000 });
+  await continuar.click();
+  const alerta = u.getByRole('alert').filter({ hasText: /não está mais ativa/ });
+  await alerta.waitFor({ timeout: 4000 });
+  checar(/EMBALAGEM 01/.test(await alerta.innerText()) && await u.getByRole('button', { name: 'Continuar a marcação' }).isDisabled(),
+    'maquina do rascunho fora do cadastro: diz qual e pede outra, sem trocar calado');
+  await u.locator('select[aria-label="Máquina da embalagem"]').selectOption({ label: 'EMBALAGEM 02' });
+  await u.getByRole('button', { name: 'Continuar a marcação' }).click();
+  await u.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  // Largada em 2 s, volumes em 4 e 6.
+  checar(/VOLUMES 2/i.test((await u.locator('[aria-label="Marcas da medição"]').innerText()).replace(/\s+/g, ' ')),
+    'escolhida a maquina, as marcas guardadas continuam (largada e 2 volumes)');
+  await u.evaluate(() => document.activeElement?.blur());
+  await teclaEm(u, 8, 'f');
+  await u.locator('[aria-label="Revisar a medição"]').getByRole('button', { name: 'Salvar medição' }).click();
+  await u.getByText(/✓ Medição salva: 2 volumes/).waitFor({ timeout: 4000 });
+  checar(env4.at(-1).maquina === 'EMBALAGEM 02', 'salva com a maquina escolhida');
+
+  // Video sem duracao (WebM de gravador de tela): marca-se igual.
+  await u.getByRole('button', { name: 'Marcar outro vídeo' }).click();
+  await u.locator('input[type="file"]').setInputFiles(SEM_DURACAO);
+  await u.getByText(/não informa a duração/).waitFor({ timeout: 8000 });
+  const inicioU = u.locator('input[aria-label="Data e hora em que a filmagem começou"]');
+  checar(await inicioU.inputValue() === '', 'sem duracao: sem sugestao de inicio (o campo pede)');
+  await inicioU.fill(HOJE_8H);
+  checar(await u.getByRole('button', { name: 'Começar a marcar' }).isEnabled(), 'sem duracao: da para comecar');
+  await u.getByRole('button', { name: 'Começar a marcar' }).click();
+  await u.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  checar(await u.locator('input[aria-label="Posição no vídeo"]').count() === 0, 'sem duracao: sem a barra de posicao');
+  await c4.close();
+}
+
+/* ---- setup: a previa usa o MESMO criterio da lista (o do takt), nao so' o cadastro ---- */
+{
+  /* Grupo com setup no cadastro (1 por dia, 30 min) mas sem os dias de
+     producao: o takt nao sai e o setup NAO e' planejado — a lista e o volume
+     a volume nao descontam o setup do trecho. A previa descontava (60 s,
+     "dentro do takt") e a lista mostrava 120 s (revisao de 30/10). */
+  const c5 = await navegador.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: FUSO });
+  const w = await c5.newPage();
+  await semearSessao(w);
+  w.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(w, {
+    enviados: [],
+    cadastro: { ...CADASTRO, grupos: [{ ...GRUPO, setups_dia: 1, setup_min: '30', dias_semana: null }] },
+  });
+  await w.goto(`${BASE}/analise/embalagem/video`);
+  await w.locator('input[type="file"]').setInputFiles(VIDEO);
+  await w.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  await w.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+  await w.getByRole('button', { name: 'Começar a marcar' }).click();
+  await w.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  await w.evaluate(() => document.activeElement?.blur());
+  for (const sg of [1, 20, 40]) await teclaEm(w, sg, 'Enter');
+  await teclaEm(w, 50, 'p');
+  await w.getByRole('dialog', { name: 'Por que a linha parou' }).getByRole('button', { name: 'Setup / Troca' }).click();
+  await teclaEm(w, 90, 'p');
+  await teclaEm(w, 100, 'Enter');
+  const painel = (await w.locator('[aria-label="Marcas da medição"]').innerText()).replace(/\s+/g, ' ');
+  // (100 - 20) / 2 = 40.0 s com o setup dentro; descontando os 40 s de setup daria 20.0 s.
+  checar(/POR VOLUME 40\.0 s/i.test(painel), `setup sem planejamento no takt: a previa nao desconta o setup (${painel.slice(0, 60)})`);
+  await c5.close();
 }
 
 checar(erros.length === 0, `sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);

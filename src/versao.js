@@ -13,6 +13,24 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.99.1',
+    data: '2026-10-30',
+    titulo: 'Cronometrar por vídeo: correções da revisão',
+    itens: [
+      'O TEMPO POR VOLUME DA PRÉVIA AGORA BATE COM O DA LISTA. Quando o grupo tem setup no cadastro, mas a semana não tem o setup planejado no takt (sem os dias de produção, por exemplo), a prévia descontava o setup e mostrava a linha dentro do takt — e a lista, depois de salvar, mostrava acima. Agora as duas usam a mesma regra.',
+      'TROCAR O ARQUIVO TROCA O INÍCIO DA FILMAGEM. Escolher o vídeo errado e depois o certo mantinha a data do primeiro, e a medição ia para a semana e o takt de outro dia. Agora o início é sempre o do arquivo escolhido.',
+      'SALVAR NÃO FINGE MAIS QUE GRAVOU. Se a resposta do servidor se perde (rede, tempo esgotado), a tela avisa que a medição pode ter chegado e pede para salvar de novo antes de mudar qualquer coisa. Se mesmo assim algo for mudado e salvo, a tela diz que a versão anterior é a que está no servidor e oferece salvar a corrigida como medição nova. Antes ela dizia "salva", e as mudanças não entravam.',
+      'MARCAÇÃO GUARDADA COM MÁQUINA QUE SAIU DO CADASTRO: ao continuar, a tela diz qual máquina era e pede outra, sem perder as marcas. Antes o Salvar não fazia nada e não dizia nada.',
+      'TECLA SEGURADA NÃO APAGA MAIS A LISTA: segurar o ⌫ apagava todos os volumes, e o Enter segurado marcava dois. Agora só as setas e o quadro a quadro repetem. O ⌫ desfaz o último VOLUME; a parada sai pelo × da lista.',
+      'ENCERRAR COM A PARADA ABERTA FECHA A PARADA ALI, como no tablet (antes recusava).',
+      'VÍDEO SEM DURAÇÃO (gravador de tela, alguns apps): abre e marca normalmente, só sem a barra de posição e sem a sugestão de início. Antes ficava em "Abrindo o vídeo…" para sempre.',
+      'MARCAÇÕES DE VÁRIOS VÍDEOS ficam guardadas ao mesmo tempo (as 10 mais recentes), e a tela lista quais estão em andamento. Começar outro vídeo apagava a marcação guardada do anterior. O aviso de continuar diz com que máquina, produto e início ela segue.',
+      'O MESMO VÍDEO DE NOVO: a tela avisa que ele já foi salvo e que salvar duplica a medição.',
+      'TEXTOS: "1 volume" no singular; filmagem de mais de 30 dias avisa que não aparece na lista da Embalagem (que mostra os últimos 30 dias); os volumes/hora dizem de que tempo saem (enquanto marca, até o último volume; na prévia, da largada ao Encerrar). Mais de 50 paradas numa medição é recusado na hora, com o motivo, e não só no Salvar.',
+      'FOLHA DA JUNÇÃO: a linha "Medições" também diz quantas são por vídeo.',
+    ],
+  },
+  {
     versao: '2.99.0',
     data: '2026-10-30',
     titulo: 'Embalagem Takt Time: cronometrar por vídeo, no PC',

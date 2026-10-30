@@ -84,6 +84,7 @@ export const ev = {
   numero: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 },
   numeroValor: { ...tipo('destaque'), ...numeros },
   numeroAtencao: { background: t.atencaoFundo, borderRadius: raio.sm, padding: '0 4px', alignSelf: 'flex-start' },
+  numeroSub: { ...tipo('legenda'), color: t.textoFraco },
 
   // A lista das marcas: rola sozinha; clicar leva o video ao ponto.
   lista: {
