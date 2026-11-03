@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.99.5',
+    data: '2026-11-03',
+    titulo: 'Embalagem Takt Time: volumes roubados pelas lacunas e o passo da linha em destaque',
+    itens: [
+      'VOLUMES ROUBADOS PELAS LACUNAS. A lacuna é parada que ninguém marcou, e também é caixa que não saiu — a perda que não aparece no Pareto. Agora ela vira número: o tempo das lacunas além do normal, dividido pelo passo da linha sem as lacunas. Aparece no cartão Lacunas ("2min45s além do normal · ≈12 volumes roubados"), no bloco de roubados, logo abaixo dos roubados pelas paradas, na tabela da junção e na folha impressa.',
+      'OS DOIS NÚMEROS NÃO SE SOMAM, de propósito. A parada anotada depois (no resultado do tablet ou no PC) continua dentro dos intervalos e pode virar lacuna: somando, ela contaria duas vezes. E cada um pede uma ação: parada marcada, ir na causa; lacuna, descobrir o que aconteceu e cobrar o apontamento da parada.',
+      'O "SEM AS LACUNAS" VIROU CARTÃO, com o nome das outras camadas: "Por volume sem as lacunas". Ele ficava numa faixa cinza abaixo dos cartões e passava despercebido — e é o passo da linha. Os cartões agora são oito, em duas linhas: em cima, o tempo por volume no período, o takt, com a linha rodando e sem as lacunas (a diferença entre um e outro diz de onde vem a perda); embaixo, volumes, paradas marcadas, lacunas e volumes/hora.',
+      'Nenhuma conta mudou: os números já existiam. O roubado pelas lacunas estava só na frase da leitura ("cerca de N volumes que deixaram de sair").',
+    ],
+  },
+  {
     versao: '2.99.4',
     data: '2026-11-03',
     titulo: 'Busca no campo de produto',

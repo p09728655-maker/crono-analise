@@ -17,7 +17,7 @@ import { diasProgramados } from './demanda/formato.js';
 const seg = (ms) => (Number.isFinite(ms) && ms > 0 ? `${formatarSegundos(ms)} s` : '—');
 
 /** Tempo somado (lacunas): ate' um minuto em segundos, dai' em min e s. */
-function tempoSomado(ms) {
+export function tempoSomado(ms) {
   if (!Number.isFinite(ms) || ms <= 0) return '—';
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   const s = Math.round(ms / 1000);
@@ -163,13 +163,20 @@ export function numerosDaLeitura(leitura, takt = {}, unidade, { juncao = false }
       valor: seg(leitura.mediaMs),
       sub: 'sem as paradas marcadas',
     },
-    { chave: 'normal', rotulo: 'Sem as lacunas', valor: seg(leitura.normalMs), sub: 'sem parada nenhuma' },
+    // A terceira camada, com o nome das outras duas (v2.99.5): na faixa de
+    // apoio, "Sem as lacunas" passava despercebido — e e' o passo da linha.
+    {
+      chave: 'normal',
+      rotulo: `Por ${unidade.singular} sem as lacunas`,
+      valor: seg(leitura.normalMs),
+      sub: 'o passo da linha: sem parada marcada nem lacuna',
+    },
     {
       chave: 'lacunas',
       rotulo: 'Lacunas',
       valor: String(leitura.lacunas.length),
       sub: leitura.lacunas.length
-        ? `${tempoSomado(leitura.excessoMs)} além do normal`
+        ? `${tempoSomado(leitura.excessoMs)} além do normal${rotuloRoubadosLacunas(leitura, unidade)}`
         : `nenhum intervalo passou de ${leitura.criterios.fatorLacuna}× o normal`,
     },
   ];
@@ -202,6 +209,41 @@ export function porHoraDaMedicao(conferencia, unidade) {
   };
 }
 
+
+/**
+ * OS VOLUMES QUE AS LACUNAS ROUBARAM (v2.99.5) — a parada que ninguem
+ * marcou tambem e' caixa que nao saiu, e e' a perda mais perigosa: nao
+ * aparece no Pareto. A conta ja' existia (leituraPecaAPeca: o tempo ALEM do
+ * normal ÷ o normal); o que muda e' que ela sai da frase e vira numero.
+ *
+ * NAO SOMA com os roubados pelas paradas, e a tela diz por que:
+ *  - a parada anotada DEPOIS (no resultado do tablet ou no PC) continua
+ *    dentro dos intervalos e pode virar lacuna — somando, contaria duas
+ *    vezes;
+ *  - as reguas sao outras: as paradas usam o passo da linha rodando (com
+ *    as lacunas dentro), as lacunas usam o passo sem elas.
+ * Cada numero pede uma acao diferente: parada marcada, ir na causa;
+ * lacuna, descobrir o que aconteceu e cobrar o apontamento.
+ *
+ * Null sem leitura (menos intervalos que o minimo) ou sem lacuna: a tela
+ * nao escreve "0 roubados pelas lacunas" sobre uma medicao sem lacuna.
+ */
+export function roubadosPelasLacunas(leitura) {
+  if (!leitura?.suficiente || !leitura.lacunas?.length || !(leitura.normalMs > 0)) return null;
+  return {
+    roubados: Math.round(leitura.pecasNoExcesso),
+    excessoMs: leitura.excessoMs,
+    passoMs: leitura.normalMs,
+    n: leitura.lacunas.length,
+  };
+}
+
+/** " · ≈12 volumes roubados" — so' quando a lacuna custou ao menos um. */
+function rotuloRoubadosLacunas(leitura, unidade) {
+  const k = roubadosPelasLacunas(leitura)?.roubados || 0;
+  if (k < 1) return '';
+  return ` · ≈${k} ${k === 1 ? `${unidade.singular} roubado` : `${unidade.plural} roubados`}`;
+}
 
 /**
  * OS VOLUMES QUE AS PARADAS ROUBARAM — o que saiu x o que teria saido no

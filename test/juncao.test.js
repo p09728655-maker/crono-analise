@@ -9,7 +9,7 @@ import { unidadeDoPosto } from '../src/domain/cronoanalise.js';
 import {
   frasesDaJuncao, juntarMedicoes, motivoParaNaoJuntar, taktDaJuncao,
 } from '../src/domain/juncaoMedicoes.js';
-import { porHoraDaMedicao, roubadosPelasParadas } from '../src/domain/volumeAVolume.js';
+import { porHoraDaMedicao, roubadosPelasLacunas, roubadosPelasParadas } from '../src/domain/volumeAVolume.js';
 
 const VOLUME = unidadeDoPosto('EMBALAGEM');
 const parada = (ms) => ({ motivo: 'outro', duracaoMs: ms });
@@ -96,6 +96,16 @@ describe('a junção das tres medicoes', () => {
     // O 27,7 s da 07:11 era lacuna sozinha (normal 13,6 s, limite 27,2 s);
     // na junção o normal e' 14,2 s, o limite 28,3 s, e ele nao passa.
     expect(j.leitura.limiteLacunaMs).toBeGreaterThan(27701);
+  });
+
+  it('os volumes que as lacunas roubaram, por medicao, contra o normal da junção (v2.99.5)', () => {
+    const normal = j.leitura.normalMs;
+    expect(j.medicoes.map((m) => m.lacunasRoubados)).toEqual([
+      Math.round((29493 - normal) / normal),
+      Math.round((33014 - normal) / normal),
+      null, // a das 07:52 nao teve lacuna
+    ]);
+    expect(roubadosPelasLacunas(j.leitura).roubados).toBe(Math.round((29493 + 33014 - 2 * normal) / normal));
   });
 
   it('roubados somam os de cada medicao: 5 + 22 + 9 = 36, teriam saido 174', () => {

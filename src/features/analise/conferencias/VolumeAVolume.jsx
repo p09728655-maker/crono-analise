@@ -5,7 +5,7 @@ import {
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
-  frasesVolumeAVolume, numerosDaLeitura, porHoraDaMedicao, roubadosPelasParadas,
+  frasesVolumeAVolume, numerosDaLeitura, porHoraDaMedicao, roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
 } from '../../../domain/volumeAVolume.js';
 import {
   CRITERIOS_JUNCAO, PREFIXO_JUNCAO, faixaDaJuncao, frasesDaJuncao, horaDaMedicao, idsDaJuncao, juntarMedicoes,
@@ -473,7 +473,8 @@ export default function VolumeAVolume({
             <>
               {/* 2. O QUE AS PARADAS ROUBARAM — primeiro, porque e' o que
                   move a acao. So' com parada marcada. */}
-              {r.roubo?.roubados > 0 && <BlocoRoubados r={r} conferencia={conferencia} unidade={unidade} />}
+              {(r.roubo?.roubados > 0 || roubadosPelasLacunas(r.leitura)?.roubados > 0)
+                && <BlocoRoubados r={r} conferencia={conferencia} unidade={unidade} />}
 
               {/* 3. INDICADORES */}
               <Indicadores
@@ -553,7 +554,10 @@ export default function VolumeAVolume({
 
               {/* Os termos definidos so' aparecem com a leitura completa. */}
               {r.leitura.suficiente && (
-                <ComoLer leitura={r.leitura} unidade={unidade} juncao={ehJuncao} roubo={r.roubo?.roubados > 0} />
+                <ComoLer
+                  leitura={r.leitura} unidade={unidade} juncao={ehJuncao} roubo={r.roubo?.roubados > 0}
+                  lacunas={roubadosPelasLacunas(r.leitura)?.roubados > 0}
+                />
               )}
             </>
           )}
@@ -571,11 +575,16 @@ export default function VolumeAVolume({
 }
 
 /**
- * OS NUMEROS DA MEDICAO. Em destaque, os seis que o lider le primeiro:
- * quantos volumes, os dois tempos por volume (periodo e linha rodando, lado
- * a lado — a diferenca entre eles e' o peso das paradas), quanto se parou
- * marcando, quantas lacunas e, por ultimo, os volumes/hora da lista. Na
- * faixa de apoio, os que completam a leitura. Todos saem de
+ * OS NUMEROS DA MEDICAO — oito cartoes, duas linhas de quatro (v2.99.5).
+ * Em cima, o TEMPO POR VOLUME nas tres camadas, ao lado do takt: no
+ * periodo (o veredito, contra o takt), com a linha rodando (a diferenca sao
+ * as paradas marcadas) e sem as lacunas (a diferenca sao as paradas que
+ * ninguem marcou; o que sobra e' o passo da linha). Embaixo, o que saiu e
+ * o que se perdeu: volumes, paradas marcadas, lacunas (com os volumes que
+ * roubaram) e volumes/hora da lista.
+ *
+ * Antes, "sem as lacunas" e o takt iam numa faixa de apoio cinza, e o PCP
+ * nao achava o passo da linha na tela (03/11). Todos saem de
  * numerosDaLeitura, porHoraDaMedicao e somarParadas — os mesmos da folha
  * A4; nenhum numero novo nasce aqui.
  */
@@ -617,9 +626,9 @@ function Indicadores({
     sub: ehJuncao ? `nas ${nMedicoes} medições inteiras, com as paradas` : `${doPapel.sub} — o mesmo da lista`,
   };
   const principais = leitura.suficiente
-    ? [volumes, doDominio.periodo, doDominio.rodando, paradas, doDominio.lacunas, porHora]
+    ? [doDominio.periodo, doDominio.takt, doDominio.rodando, doDominio.normal,
+      volumes, paradas, doDominio.lacunas, porHora]
     : [volumes, ...numeros, paradas, porHora];
-  const apoio = leitura.suficiente ? [doDominio.normal, doDominio.takt] : [];
   const corVeredito = COR_DO_TOM[tom];
 
   return (
@@ -638,18 +647,6 @@ function Indicadores({
           </div>
         ))}
       </div>
-      {apoio.length > 0 && (
-        <div style={est.vavApoio}>
-          {apoio.map((k) => (
-            <span key={k.chave}>
-              <span style={est.vavApoioRotulo}>{k.rotulo}</span>
-              {/* Sem valor, so' o porque ("sem programa para comparar"). */}
-              {k.valor !== '—' && <span style={est.vavApoioValor}>{k.valor}</span>}
-              {k.sub ? `${k.valor !== '—' ? ' · ' : ''}${k.sub}` : ''}
-            </span>
-          ))}
-        </div>
-      )}
     </>
   );
 }
@@ -671,29 +668,31 @@ function ValorComUnidade({ valor }) {
  * pelos INTERVALOS (volumes - 1), menos o setup marcado no trecho quando ha'
  * setup planejado — exatamente periodoPorPeca.
  */
-function definicoes(leitura, unidade, { juncao = false, roubo = false } = {}) {
+function definicoes(leitura, unidade, { juncao = false, roubo = false, lacunas = false } = {}) {
   const toque = unidade.singular === 'volume' ? 'volume' : 'toque';
   const { fatorLacuna, minIntervalos } = leitura.criterios;
   return [
     ...(juncao ? [['Junção', `medições do mesmo produto, na mesma máquina e na mesma semana, lidas como uma só. Tudo somado pelo tempo, nunca a média das taxas. O tempo entre uma medição e a seguinte não foi medido: não vira intervalo, lacuna nem parada. A lacuna é contra o normal da junção, e por isso a contagem pode diferir da de cada medição sozinha. O passo de cada medição (a coluna "Sem as lacunas" da tabela) é a média sem as lacunas, comparada só entre as que têm ${minIntervalos} intervalos ou mais fora das lacunas — abaixo disso, "—"; "o passo muda" só quando a diferença passa de ${CRITERIOS_JUNCAO.passoIgualPct}% e do dobro do erro das médias.`]] : []),
     ...(roubo ? [[`${capital(unidade.plural)} roubados pelas paradas`, `o que teria saído no mesmo tempo, no passo que a linha fez rodando${juncao ? ' em cada medição' : ''}, menos o que saiu. As paradas são as marcadas, setup incluído. Não projeta meta nem capacidade: é o que a própria linha já fez.${juncao ? ' Na junção, soma os de cada medição.' : ''}`]] : []),
+    ...(lacunas ? [[`${capital(unidade.plural)} roubados pelas lacunas`, `o tempo das lacunas além do normal, dividido pelo passo sem as lacunas: o que daria para ter saído nesse tempo, no passo da própria linha.${juncao ? ' Na junção, contra o normal da junção.' : ''} Não soma com os roubados pelas paradas: a parada anotada depois (no tablet ou aqui no PC) continua dentro dos intervalos e pode virar lacuna — somando, contaria duas vezes.`]] : []),
     ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo: o intervalo vai de um toque ao seguinte, e o tempo antes do primeiro toque não entra.`],
     [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, e só quando o grupo tem setup planejado (ele já saiu das horas do takt). É o que vai contra o takt — a mesma régua do programa da semana.'],
     [`Por ${unidade.singular} com a linha rodando`, 'soma dos intervalos dividida pela quantidade de intervalos.'],
-    ['Lacuna', `intervalo maior que ${fatorLacuna}× o normal — a média dos intervalos que não são lacuna (o "sem as lacunas"). Parada marcada e passo lento não viram lacuna.`],
+    [`Por ${unidade.singular} sem as lacunas`, `a média dos intervalos que não são lacuna: o passo da linha, sem parada marcada nem lacuna. A diferença para o "com a linha rodando" são as paradas que ninguém marcou.`],
+    ['Lacuna', `intervalo maior que ${fatorLacuna}× o normal — o "por ${unidade.singular} sem as lacunas". Parada marcada e passo lento não viram lacuna.`],
     [`${capital(unidade.plural)}/hora`, `${unidade.plural} da medição ÷ o tempo da medição inteira, com as paradas dentro — o mesmo número da lista e do tablet. Por isso 3.600 ÷ o por ${unidade.singular} no período não dá este número: a medição inteira inclui o tempo antes do primeiro toque e depois do último e, quando o grupo tem setup planejado, o setup marcado entre os toques, que o por ${unidade.singular} no período tira.`],
     ['Leitura', `a partir de ${minIntervalos} intervalos.${unidade.singular === 'volume' ? ' Na embalagem, o programa da semana é em volumes, e o takt usa as horas dos dias programados.' : ''}`],
   ];
 }
 
 function ComoLer({
-  leitura, unidade, juncao, roubo,
+  leitura, unidade, juncao, roubo, lacunas,
 }) {
   return (
     <section aria-label="Como ler estes números">
       <h3 style={est.vavSecaoTitulo}>Como ler estes números</h3>
       <dl style={est.vavComoLer}>
-        {definicoes(leitura, unidade, { juncao, roubo }).map(([termo, texto]) => (
+        {definicoes(leitura, unidade, { juncao, roubo, lacunas }).map(([termo, texto]) => (
           <div key={termo} style={est.vavComoLerItem}>
             <dt style={{ display: 'inline', ...est.vavComoLerTermo }}>{termo}: </dt>
             <dd style={{ display: 'inline', margin: 0 }}>{texto}</dd>
@@ -704,7 +703,7 @@ function ComoLer({
   );
 }
 
-function notaDoCriterio(leitura, unidade, { juncao = false, roubo = false } = {}) {
+function notaDoCriterio(leitura, unidade, { juncao = false, roubo = false, lacunas = false } = {}) {
   return (juncao
     ? 'Junção = medições do mesmo produto, na mesma máquina e na mesma semana, somadas pelo tempo (nunca a média das taxas); '
       + 'o tempo entre uma medição e a seguinte não foi medido e não entra. '
@@ -714,13 +713,17 @@ function notaDoCriterio(leitura, unidade, { juncao = false, roubo = false } = {}
     + (roubo
       ? `${capital(unidade.plural)} roubados pelas paradas = o que teria saído no mesmo tempo, no passo da linha rodando${juncao ? ' de cada medição' : ''}, menos o que saiu (paradas marcadas, setup incluído). `
       : '')
+    + (lacunas
+      ? `${capital(unidade.plural)} roubados pelas lacunas = o tempo das lacunas além do normal ÷ o passo sem as lacunas; não soma com os das paradas (a parada anotada depois pode virar lacuna). `
+      : '')
     + `Intervalo = tempo de um ${unidade.singular === 'volume' ? 'volume' : 'toque'} até o seguinte, com a linha rodando: `
     + 'as paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) '
     + 'continuam dentro dos intervalos. O primeiro toque não tem intervalo: o intervalo vai de um toque ao '
     + 'seguinte, e o tempo antes do primeiro toque não entra. Contra o takt vai o relógio do primeiro ao último toque ÷ intervalos, com as paradas dentro '
     + '(sem o setup marcado entre os toques, quando o grupo tem setup planejado) — a mesma régua do programa da semana. '
     + 'Com a linha rodando = soma dos intervalos ÷ quantidade. '
-    + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal — a média dos intervalos que não são lacuna. `
+    + `Sem as lacunas = a média dos intervalos que não são lacuna: o passo da linha. `
+    + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal (o sem as lacunas). `
     // Sem "o mesmo da lista": no papel nao ha' lista.
     + `${capital(unidade.plural)}/hora = ${unidade.plural} ÷ tempo da medição inteira, com as paradas dentro: `
     + 'inclui o tempo antes do primeiro toque e depois do último e, com setup planejado, o setup entre os toques, '
@@ -810,6 +813,7 @@ function linhasDasMedicoes(r, unidade) {
     medida: formatarDuracao(Number(m.conferencia.duracao_ms)),
     parado: parado(m.conferencia.paradas),
     roubados: m.roubo ? String(m.roubo.roubados) : '—',
+    lacunas: m.lacunasRoubados != null ? String(m.lacunasRoubados) : '—',
     periodo: m.periodoMs ? emSegundos(m.periodoMs) : '—',
     rodando: m.rodandoMs ? emSegundos(m.rodandoMs) : '—',
     // O passo que a leitura compara: so' com a leitura minima da medicao.
@@ -824,6 +828,7 @@ function linhasDasMedicoes(r, unidade) {
     medida: formatarDuracao(juncao.total.duracao_ms),
     parado: parado(juncao.total.paradas),
     roubados: juncao.roubo ? String(juncao.roubo.roubados) : '—',
+    lacunas: roubadosPelasLacunas(leitura) ? String(roubadosPelasLacunas(leitura).roubados) : '—',
     periodo: leitura.periodoMs ? emSegundos(leitura.periodoMs) : '—',
     rodando: leitura.suficiente ? emSegundos(leitura.mediaMs) : '—',
     normal: leitura.suficiente ? emSegundos(leitura.normalMs) : '—',
@@ -836,6 +841,7 @@ const COLUNAS_MEDICOES = (unidade) => [
   ['medida', 'Medida'],
   ['parado', 'Parado'],
   ['roubados', 'Roubados pelas paradas'],
+  ['lacunas', 'Roubados pelas lacunas'],
   ['periodo', `Por ${unidade.singular} no período`],
   ['rodando', 'Com a linha rodando'],
   ['normal', 'Sem as lacunas'],
@@ -866,7 +872,7 @@ function TabelaMedicoes({ r, unidade }) {
                 {COLUNAS_MEDICOES(unidade).map(([chave]) => (
                   <td
                     key={chave}
-                    style={chave === 'roubados' && l.roubados !== '—' ? est.vavTdRoubado : (l.total ? est.vavTdForte : est.vavTd)}
+                    style={(chave === 'roubados' || chave === 'lacunas') && l[chave] !== '—' ? est.vavTdRoubado : (l.total ? est.vavTdForte : est.vavTd)}
                   >
                     {l[chave]}
                   </td>
@@ -881,12 +887,65 @@ function TabelaMedicoes({ r, unidade }) {
 }
 
 /**
- * OS VOLUMES QUE AS PARADAS ROUBARAM — o numero grande e, por medicao, uma
- * barra: o que saiu e, hachurado, o que as paradas levaram. Todas na mesma
- * escala (a medicao que mais teria produzido enche a barra), para a maior
- * perda saltar a' vista.
+ * OS VOLUMES ROUBADOS — pelas paradas marcadas e, a parte, pelas lacunas
+ * (v2.99.5). Das paradas: o numero grande e, por medicao, uma barra — o que
+ * saiu e, hachurado, o que as paradas levaram, todas na mesma escala (a
+ * medicao que mais teria produzido enche a barra), para a maior perda
+ * saltar a' vista. Das lacunas: o numero e de onde ele sai.
+ *
+ * NAO SOMA os dois (ver roubadosPelasLacunas): a parada anotada depois pode
+ * estar nos dois, e as reguas sao outras. E cada um pede uma acao: parada
+ * marcada, a causa; lacuna, descobrir o que houve e cobrar o apontamento.
  */
 function BlocoRoubados({ r, conferencia, unidade }) {
+  const ehJuncao = Boolean(r.juncao);
+  const lac = roubadosPelasLacunas(r.leitura);
+  const temParadas = r.roubo?.roubados > 0;
+  const temLacunas = lac?.roubados > 0;
+  const plural = (q) => (q === 1 ? unidade.singular : unidade.plural);
+  const onde = ehJuncao ? ` nos ${formatarDuracao(Number(conferencia.duracao_ms))} medidos` : ' nesta medição';
+  const rotulo = [temParadas && 'pelas paradas', temLacunas && 'pelas lacunas'].filter(Boolean).join(' e ');
+
+  return (
+    <section style={est.vavRoubo} aria-label={`${capital(unidade.plural)} roubados ${rotulo}`}>
+      {temParadas && <RoubadosPelasParadas r={r} conferencia={conferencia} unidade={unidade} onde={onde} plural={plural} />}
+      {temLacunas && (
+        <div style={{ ...est.vavRouboCab, ...(temParadas ? est.vavRouboSeparado : {}) }}>
+          <div style={est.vavRouboNumero}>
+            ≈{lac.roubados}
+            <span style={est.vavRouboUnidade}>{plural(lac.roubados)}</span>
+          </div>
+          <div style={est.vavRouboTexto}>
+            <span style={est.vavRouboTitulo}>
+              {lac.roubados === 1 ? 'roubado' : 'roubados'} pelas lacunas{onde} — paradas que ninguém marcou
+            </span>
+            <span style={est.vavRouboSub}>
+              {lac.n} {lac.n === 1 ? 'lacuna somou' : 'lacunas somaram'} {tempoSomado(lac.excessoMs)} além do normal;
+              {' '}no passo da linha sem as lacunas ({emSegundos(lac.passoMs)} por {unidade.singular}), dariam {lac.roubados} {plural(lac.roubados)}.
+            </span>
+          </div>
+        </div>
+      )}
+      <p style={est.vavRouboPe}>
+        {temParadas && (
+          <>
+            A conta não projeta nada: é o passo que a linha fez rodando{ehJuncao ? ' em cada medição' : ''}, aplicado
+            ao tempo em que ela ficou parada (paradas marcadas, setup incluído).
+          </>
+        )}
+        {temParadas && temLacunas && ' '}
+        {temLacunas && (temParadas
+          ? 'Os das lacunas ficam à parte, sem somar: a parada anotada depois (no tablet ou aqui no PC) continua dentro dos intervalos e pode virar lacuna, e contaria duas vezes.'
+          : 'As lacunas são intervalos maiores que o dobro do normal sem parada marcada: a perda que não aparece no Pareto de paradas.')}
+      </p>
+    </section>
+  );
+}
+
+/** O numero das paradas e as barras por medicao (o bloco de antes da v2.99.5). */
+function RoubadosPelasParadas({
+  r, conferencia, unidade, onde, plural,
+}) {
   const ehJuncao = Boolean(r.juncao);
   const { saiu, roubados, potencial } = r.roubo;
   const itens = ehJuncao
@@ -906,10 +965,9 @@ function BlocoRoubados({ r, conferencia, unidade }) {
     }];
   const escala = Math.max(...itens.map((x) => x.saiu + x.roubados), 1);
   const pct = saiu > 0 ? Math.round((roubados / saiu) * 100) : null;
-  const plural = (q) => (q === 1 ? unidade.singular : unidade.plural);
 
   return (
-    <section style={est.vavRoubo} aria-label={`${capital(unidade.plural)} roubados pelas paradas`}>
+    <>
       <div style={est.vavRouboCab}>
         <div style={est.vavRouboNumero}>
           {roubados}
@@ -917,8 +975,7 @@ function BlocoRoubados({ r, conferencia, unidade }) {
         </div>
         <div style={est.vavRouboTexto}>
           <span style={est.vavRouboTitulo}>
-            {roubados === 1 ? 'roubado' : 'roubados'} pelas paradas
-            {ehJuncao ? ` nos ${formatarDuracao(Number(conferencia.duracao_ms))} medidos` : ' nesta medição'}
+            {roubados === 1 ? 'roubado' : 'roubados'} pelas paradas{onde}
           </span>
           <span style={est.vavRouboSub}>
             Saíram {saiu}. No passo da linha rodando, teriam saído {potencial} no mesmo tempo
@@ -952,14 +1009,7 @@ function BlocoRoubados({ r, conferencia, unidade }) {
           );
         })}
       </div>
-      {/* Sem somar as lacunas aqui: a parada anotada depois (no tablet ou
-          no PC) fica dentro dos intervalos e entraria nas duas contas. As
-          lacunas tem a frase propria na leitura. */}
-      <p style={est.vavRouboPe}>
-        A conta não projeta nada: é o passo que a linha fez rodando{ehJuncao ? ' em cada medição' : ''}, aplicado
-        ao tempo em que ela ficou parada (paradas marcadas, setup incluído).
-      </p>
-    </section>
+    </>
   );
 }
 
@@ -1006,6 +1056,7 @@ function FolhaVolumeAVolume({
   const hoje = new Date().toLocaleDateString('pt-BR');
   const par = somarParadas(conferencia.paradas);
   const { juncao, roubo } = r;
+  const lacunasRoubo = roubadosPelasLacunas(r.leitura);
   const medicoes = juncao ? juncao.medicoes.map((m) => m.conferencia) : [conferencia];
   const n = medicoes.length;
   // Na junção, as lacunas dizem a medicao e o volume dentro dela.
@@ -1043,8 +1094,10 @@ function FolhaVolumeAVolume({
         <div style={imp.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
       </header>
 
-      {/* Os roubados vao na identificacao, ao lado do parado que os causou. */}
-      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(5, 1fr)' }}>
+      {/* Os roubados vao na identificacao, ao lado do parado que os causou.
+          Seis colunas: os das lacunas cabem na mesma linha, e o grafico
+          nao desce para a 2a pagina. */}
+      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
         {[
           ...identificacao,
           [capital(unidade.plural), String(conferencia.pecas)],
@@ -1052,6 +1105,8 @@ function FolhaVolumeAVolume({
           // Com parada que nao chegou a custar um volume, "0" — como na
           // tabela da mesma folha; sem parada marcada, "—".
           ['Roubados pelas paradas', !roubo ? '—' : (roubo.roubados > 0 ? `${roubo.roubados} · teriam saído ${roubo.potencial}` : '0')],
+          // A parte, sem somar (ver roubadosPelasLacunas); sem lacuna, "—".
+          ['Roubados pelas lacunas', lacunasRoubo ? `≈${lacunasRoubo.roubados}` : '—'],
         ].map(([k, v]) => (
           <div key={k} style={imp.campo}>
             <span style={imp.campoRotulo}>{k}</span>
@@ -1134,7 +1189,7 @@ function FolhaVolumeAVolume({
                   {COLUNAS_MEDICOES(unidade).map(([chave]) => (
                     <td
                       key={chave}
-                      style={l.total || chave === 'roubados'
+                      style={l.total || chave === 'roubados' || chave === 'lacunas'
                         ? { ...imp.tdNum, fontWeight: 700, ...(l.total ? { borderTop: '1.5px solid #000' } : {}) }
                         : imp.tdNum}
                     >
@@ -1181,7 +1236,11 @@ function FolhaVolumeAVolume({
         </section>
       )}
 
-      <p style={imp.nota}>{notaDoCriterio(leitura, unidade, { juncao: Boolean(juncao), roubo: roubo?.roubados > 0 })}</p>
+      <p style={imp.nota}>
+        {notaDoCriterio(leitura, unidade, {
+          juncao: Boolean(juncao), roubo: roubo?.roubados > 0, lacunas: lacunasRoubo?.roubados > 0,
+        })}
+      </p>
     </div>,
     document.body,
   );

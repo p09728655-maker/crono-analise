@@ -564,13 +564,6 @@ export const est = {
   vavKpiSub: { ...tipo('legenda'), color: t.textoMedio, lineHeight: 1.4, alignSelf: 'start' },
   // Os numeros de apoio: existem e continuam visiveis, mas nao disputam o
   // olho com os seis de cima.
-  vavApoio: {
-    display: 'flex', flexWrap: 'wrap', columnGap: espaco.xl, rowGap: espaco.xs,
-    margin: `-${espaco.xs}px 0 0`, padding: `${espaco.sm}px ${espaco.md}px`,
-    background: t.fundo, borderRadius: raio.sm, ...tipo('legenda'), color: t.textoMedio,
-  },
-  vavApoioRotulo: { ...rotulo(t.textoFraco), marginRight: espaco.sm },
-  vavApoioValor: { ...numeros, fontWeight: 700, color: t.texto },
   vavSecaoTitulo: { ...tipo('corpoF'), margin: `0 0 ${espaco.sm}px`, color: t.texto },
   vavSecaoDica: { ...tipo('legenda'), color: t.textoFraco, margin: `-${espaco.xs}px 0 ${espaco.sm}px` },
   vavLeituraGrade: {
@@ -664,6 +657,9 @@ export const est = {
   vavRouboValor: { ...tipo('corpo'), ...numeros, color: t.textoMedio, whiteSpace: 'nowrap' },
   vavRouboValorForte: { fontWeight: 700, color: t.critico },
   vavRouboPe: { ...tipo('legenda'), color: t.textoMedio, margin: 0 },
+  // Os roubados pelas lacunas, abaixo dos das paradas: a linha separa as
+  // duas contas, que nao se somam.
+  vavRouboSeparado: { borderTop: `1px dashed ${t.borda}`, paddingTop: espaco.md },
 
   // A tabela das medicoes da junção: a primeira coluna e' texto (a hora).
   vavThTexto: {
