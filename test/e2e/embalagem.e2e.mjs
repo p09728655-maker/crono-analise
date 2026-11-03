@@ -144,6 +144,9 @@ const painelArmado = await t.locator('[aria-label="Tempo decorrido"]').innerText
 checar(painelArmado.includes('00:00.0'), `armado: o relogio NAO corre antes da largada (${painelArmado.split('\n')[1]})`);
 checar(await t.getByRole('button', { name: 'Parou' }).isDisabled(), 'armado: Parou desabilitado — ainda nao ha periodo');
 checar(await t.getByRole('button', { name: /Cancelar/ }).count() === 1, 'armado: Encerrar vira Cancelar');
+// O produto da medicao no topo do painel, ja' armado: quem passa pela
+// linha ve' o que esta' sendo medido.
+checar(painelArmado.split('\n')[0].trim() === 'Rack Sirius 1.6', `armado: o produto no topo do painel (${painelArmado.split('\n')[0]})`);
 
 // Cancelar antes da largada volta ao comeco, sem resultado de zero volumes.
 await t.getByRole('button', { name: /Cancelar/ }).click();
@@ -182,6 +185,7 @@ for (let i = 0; i < 12; i++) {
 const painelTempo = await t.locator('[aria-label="Tempo decorrido"]').innerText();
 checar(/ÚLTIMO/i.test(painelTempo) && /POR VOLUME/i.test(painelTempo) && /TAKT/i.test(painelTempo)
   && painelTempo.includes('72.0'), 'cronometro rodando mostra ULTIMO, POR VOLUME e TAKT 72.0');
+checar(painelTempo.split('\n')[0].trim() === 'Rack Sirius 1.6', `cronometro rodando mostra o produto no topo (${painelTempo.split('\n')[0]})`);
 /* v2.98.0: volumes/hora ao vivo (volumes ÷ relogio desde a largada) e o
    painel do mesmo tamanho do alvo — o alvo tomava dois tercos da tela. */
 let volHoraAoVivo = null;
@@ -1160,6 +1164,9 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
         .map((el) => el.innerText);
     });
     checar(fatiados.length === 0, `deitado ${largura}x${altura}: nada cortado no painel${fatiados.length ? ` (${fatiados.join(', ')})` : ''}`);
+    // Sem produto escolhido, o painel diz isso — nao fica um vazio mudo.
+    checar(await s.locator('[aria-label="Tempo decorrido"]').getByText('Produto não informado').isVisible(),
+      `deitado ${largura}x${altura}: sem produto, o painel diz "Produto não informado"`);
     await ctx.close();
   }
 }

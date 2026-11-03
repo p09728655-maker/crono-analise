@@ -15,6 +15,8 @@ export default function CronometroAoVivo({
   // dentro — a regua do takt, ver periodoPorPeca) contra o takt, em
   // segundos; e, de apoio, volumes, volumes/hora e o ULTIMO intervalo.
   modoTakt = false, taktMs = null, porVolumeMs = null,
+  // O produto escolhido antes do INICIAR, no topo do painel da embalagem.
+  produto = '',
 }) {
   const {
     decorrido, pecas, pulso, emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
@@ -26,6 +28,7 @@ export default function CronometroAoVivo({
      ultimo passaria do takt a cada dois volumes numa linha que atende. E
      com as paradas dentro: marcar "Parou" nao pode apagar o aviso. */
   const acimaDoTakt = modoTakt && taktMs > 0 && porVolumeMs > taktMs;
+  const nomeProduto = String(produto || '').trim();
   // Na embalagem a barra de baixo cresce junto com o painel (v2.98.1):
   // com o resto grande, os 64 px de Desfazer, Parou e Encerrar ficaram miudos.
   const barra = modoTakt ? { ...est.botaoBarra, ...est.botaoBarraTakt } : est.botaoBarra;
@@ -37,6 +40,18 @@ export default function CronometroAoVivo({
        contra o takt —, embaixo o apoio. O parado sai daqui (a parada
        em curso ocupa o alvo inteiro) e volta no resultado. */
     <section style={est.painelTempoTakt} aria-label="Tempo decorrido">
+      {/* O QUE ESTA' SENDO MEDIDO, no topo: quem passa pela linha (ou o
+          tablet preso nela) ve' de longe se o produto na esteira ainda e'
+          o da medicao — trocou o produto, e' hora de encerrar, senao a
+          medicao mistura dois takts. Sem produto, diz isso: ele ainda pode
+          ser informado no resultado, antes de salvar. */}
+      <span
+        className="takt-produto"
+        style={{ ...est.produtoTela, ...(nomeProduto ? {} : est.produtoTelaVazio) }}
+        title={nomeProduto || undefined}
+      >
+        {nomeProduto || 'Produto não informado'}
+      </span>
       <span className="takt-rotulo-tempo" style={est.rotuloTempoTela}>TEMPO</span>
       <span className="takt-tempo" style={est.tempoCorridoTela}>{formatarCronometro(decorrido)}</span>
       <div style={est.gradeTaktPrincipal}>
@@ -222,6 +237,7 @@ const ESTILO_TAKT = `
   .takt-grande { font-size: clamp(36px, 10vw, 84px); }
   .takt-media { font-size: clamp(24px, 6vw, 52px); }
   .takt-rotulo, .takt-rotulo-tempo { font-size: clamp(10px, 1.9vw, 16px); }
+  .takt-produto { font-size: clamp(14px, 4.4vw, 34px); }
   .takt-sufixo { font-size: clamp(11px, 2vw, 20px); }
   @media (orientation: landscape) {
     .corpo-takt { flex-direction: row !important; }
@@ -229,6 +245,7 @@ const ESTILO_TAKT = `
     .takt-tempo { font-size: clamp(24px, min(4.5vw, 9vh), 72px); }
     .takt-grande { font-size: clamp(26px, min(5vw, 12vh), 84px); }
     .takt-media { font-size: clamp(20px, min(3.2vw, 8vh), 52px); }
+    .takt-produto { font-size: clamp(14px, min(2.6vw, 6vh), 34px); }
   }
   @container (max-height: 175px) { .takt-rotulo-tempo { display: none; } }
   @container (max-height: 140px) { .takt-tempo { display: none; } }
