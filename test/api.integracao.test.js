@@ -1198,6 +1198,84 @@ rodar('API — integracao com Postgres', () => {
     expect(doColetor.statusCode).toBe(403);
   });
 
+  it('medicao por video pelo token do ANALISTA (RLS): substitui so\' enquanto ninguem mexeu no PC', async () => {
+    // O caminho de producao: JWT de analista, dentro da RLS e da transacao
+    // (o token de servico do teste acima nao passa por ela).
+    const criado = fingirRes();
+    await usuariosApi(fingirReq({
+      metodo: 'POST',
+      corpo: { nome: 'Analista Video', email: `video.${crypto.randomUUID().slice(0, 8)}@patrimar.com`, senha: 'senhaboa123' },
+    }), criado);
+    expect(criado.statusCode).toBe(201);
+    const token = tokenDe(criado.corpo.usuario.id);
+    const id = crypto.randomUUID();
+    const base = {
+      clientId: id, maquina: 'EMBALAGEM 01', peca: 'Rack Lua', duracaoMs: 300000, origem: 'video',
+      salvoEm: new Date().toISOString(),
+    };
+    const enviar = async (extra) => {
+      const res = fingirRes();
+      await sync(fingirReq({ metodo: 'POST', token, corpo: { conferencias: [{ ...base, ...extra }] } }), res);
+      return res;
+    };
+    const primeira = await enviar({
+      pecas: 3, marcasMs: [60000, 120000, 180000], marcasRelogioMs: 120000, marcasSetupMs: 0,
+      paradas: [{ motivo: 'falta_de_caixa', duracaoMs: 20000 }],
+    });
+    expect([primeira.statusCode, primeira.corpo.novos]).toEqual([200, 1]);
+    const segunda = await enviar({
+      pecas: 2, marcasMs: [60000, 120000], marcasRelogioMs: 60000, marcasSetupMs: 0,
+      paradas: [{ motivo: 'setup', duracaoMs: 15000 }],
+    });
+    expect([segunda.statusCode, segunda.corpo.novos, segunda.corpo.atualizados]).toEqual([200, 0, 1]);
+    const [linha] = await sql`SELECT id, pecas, editada_em FROM conferencias WHERE client_id = ${id}`;
+    expect([linha.pecas, linha.editada_em]).toEqual([2, null]);
+    const paradas = await sql`SELECT motivo FROM paradas WHERE conferencia_id = ${linha.id}`;
+    expect(paradas.map((p) => p.motivo)).toEqual(['setup']);
+
+    // O PCP corrige o produto no PC (o "Editar produto" da lista, em lote).
+    const renomeia = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', token, corpo: { ids: [linha.id], peca: 'Rack Sol' },
+    }), renomeia);
+    expect(renomeia.statusCode).toBe(200);
+
+    // Salvar de novo a marcacao NAO passa por cima: 409, e a correcao fica.
+    const terceira = await enviar({
+      pecas: 1, marcasMs: [60000], marcasRelogioMs: null, marcasSetupMs: null, paradas: [],
+    });
+    expect(terceira.statusCode).toBe(409);
+    expect(terceira.corpo.erro).toMatch(/mexida no PC depois/);
+    const [intacta] = await sql`SELECT pecas, peca, editada_em FROM conferencias WHERE client_id = ${id}`;
+    expect([intacta.pecas, intacta.peca, intacta.editada_em !== null]).toEqual([2, 'Rack Sol', true]);
+    expect((await sql`SELECT motivo FROM paradas WHERE conferencia_id = ${linha.id}`).map((p) => p.motivo))
+      .toEqual(['setup']);
+
+    // Cada edicao do PC marca: paradas e analise (uma por vez) e arquivar.
+    for (const corpo of [
+      { paradas: [{ motivo: 'setup', duracaoMs: 30000 }] }, { analisada: true, analiseNota: 'lida' }, { arquivada: true },
+    ]) {
+      const outra = crypto.randomUUID();
+      const r = fingirRes();
+      await sync(fingirReq({
+        metodo: 'POST', token,
+        corpo: { conferencias: [{ ...base, clientId: outra, pecas: 1, marcasMs: [60000], paradas: [] }] },
+      }), r);
+      const [{ id: confId }] = await sql`SELECT id FROM conferencias WHERE client_id = ${outra}`;
+      const edita = fingirRes();
+      await conferenciasApi(fingirReq({ metodo: 'PATCH', token, query: { id: confId }, corpo }), edita);
+      expect(edita.statusCode).toBe(200);
+      const reenvio = fingirRes();
+      await sync(fingirReq({
+        metodo: 'POST', token,
+        corpo: { conferencias: [{ ...base, clientId: outra, pecas: 2, marcasMs: [60000, 120000], paradas: [] }] },
+      }), reenvio);
+      expect([Object.keys(corpo)[0], reenvio.statusCode]).toEqual([Object.keys(corpo)[0], 409]);
+      const [{ pecas }] = await sql`SELECT pecas FROM conferencias WHERE client_id = ${outra}`;
+      expect(pecas).toBe(1);
+    }
+  });
+
   it('o banco recusa marca que nao bate com a contagem, mesmo fora da API', async () => {
     await expect(sql`
       INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,

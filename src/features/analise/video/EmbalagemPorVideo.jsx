@@ -53,6 +53,14 @@ const volumes = (n) => `${n} ${n === 1 ? 'volume' : 'volumes'}`;
 const chaveDoArquivo = (f) => (f ? `${f.name}|${f.size}|${f.lastModified}` : null);
 /** A lista da Embalagem Takt Time mostra os ultimos 30 dias (DIAS em EmbalagemTaktTimePc). */
 const DIAS_DA_LISTA = 30;
+const foraDaListaDesde = (inicio) => {
+  const t = inicio ? new Date(inicio).getTime() : NaN;
+  return Number.isFinite(t) && Date.now() - t > DIAS_DA_LISTA * 86400000;
+};
+/** Onde a medicao aparece: a lista so' tem 30 dias; a mais antiga, so' o relatorio. */
+const ondeConferir = (inicio) => (foraDaListaDesde(inicio)
+  ? 'no relatório Ritmo por máquina, escolhendo um período maior (a filmagem é de mais de 30 dias atrás e não aparece na lista da Embalagem Takt Time)'
+  : 'na lista da Embalagem Takt Time');
 function lerMapa(chave) {
   try { return JSON.parse(localStorage.getItem(chave)) || {}; } catch { return {}; }
 }
@@ -85,7 +93,13 @@ function anotarSalvo(arquivoChave, info) {
 function migrarRascunhoAntigo() {
   let antigo = null;
   try { antigo = JSON.parse(localStorage.getItem(CHAVE_RASCUNHO_ANTIGA)); } catch { /* ilegivel: so' apaga */ }
-  if (antigo?.arquivo && antigo.marcacao && antigo.campos && !lerRascunho(antigo.arquivo)) gravarRascunho(antigo);
+  // Nem a de um video que ja' foi salvo DEPOIS dela (marcado de novo na
+  // v2.99.1): continuar e salvar criaria uma segunda medicao.
+  const salvo = antigo?.arquivo ? lerSalvo(antigo.arquivo) : null;
+  const salvoDepois = salvo && String(salvo.em) > String(antigo.atualizadoEm || '');
+  if (antigo?.arquivo && antigo.marcacao && antigo.campos && !lerRascunho(antigo.arquivo) && !salvoDepois) {
+    gravarRascunho(antigo);
+  }
   try { localStorage.removeItem(CHAVE_RASCUNHO_ANTIGA); } catch { /* nada a apagar */ }
 }
 /** Envio cujo resultado nao se sabe (rede, tempo esgotado, erro do servidor): pode ter gravado. */
@@ -96,7 +110,9 @@ const envioIncerto = (e) => !(e instanceof ErroApi) || e.status >= 500;
  * entao a ultima versao enviada e' a que fica — e nunca duas.
  */
 function mensagemIncerta(e) {
-  let causa = `o servidor respondeu com erro (${e?.status})`;
+  // A mensagem do servidor vai junto (com o codigo, quando ha'): sem ela,
+  // quem esta' diante da tela nao tem como dizer o que houve.
+  let causa = `o servidor respondeu com erro (${e?.status}: ${e?.message})`;
   if (!(e instanceof ErroApi)) causa = 'o servidor não respondeu (a rede caiu ou o PC está sem internet)';
   else if (e.status === 504) causa = 'o servidor demorou demais para responder';
   return `Não deu para confirmar se salvou: ${causa}. Salve de novo — se a tentativa anterior chegou, `
@@ -282,7 +298,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     // calada.
     if (rascunho.envioTentado || rascunho.incerto) {
       anotarSalvo(rascunho.arquivo, {
-        em: rascunho.atualizadoEm, volumes: rascunho.marcacao.toques.length, incerto: true,
+        em: new Date().toISOString(), volumes: rascunho.marcacao.toques.length, incerto: true,
+        // A filmagem decide onde conferir: a lista mostra so' 30 dias.
+        inicio: rascunho.campos.inicio || null,
       });
       setJaSalvo(lerSalvo(rascunho.arquivo));
     }
@@ -495,6 +513,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     };
     // Antes de enviar: se a resposta nao voltar e o PC fechar, o rascunho ja'
     // sabe que esta marcacao pode estar no servidor.
+    const tentadoAntes = refEnvioTentado.current;
     refEnvioTentado.current = true;
     gravarRascunho(rascunhoAtual());
     setSalvar({ estado: 'enviando', erro: null });
@@ -506,6 +525,13 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       setSalvar({ estado: 'parado', erro: null });
       setEtapa('salvo');
     } catch (e) {
+      // Recusa CERTA (o servidor respondeu que nao gravou): esta tentativa
+      // nao chegou, e o rascunho nao pode dizer que talvez sim. O 409 fica de
+      // fora — ele diz que uma tentativa ANTERIOR chegou.
+      if (!envioIncerto(e) && e.status !== 409) {
+        refEnvioTentado.current = tentadoAntes;
+        gravarRascunho(rascunhoAtual());
+      }
       setSalvar({ estado: 'parado', erro: envioIncerto(e) ? mensagemIncerta(e) : `Não salvou: ${e.message}` });
     }
   };
@@ -530,7 +556,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   /* ------------------------------------------------------------ tela */
   const podeComecar = Boolean(url && !meta.erro && meta.pronto && maquina && inicioValido);
   // Filmagem antiga nao aparece na lista da Embalagem (ultimos 30 dias).
-  const foraDaLista = inicioValido && Date.now() - inicioData.getTime() > DIAS_DA_LISTA * 86400000;
+  const foraDaLista = inicioValido && foraDaListaDesde(campos.inicio);
   const duracaoVideoMs = meta.duracaoS != null ? meta.duracaoS * 1000 : null;
 
   return (
@@ -589,7 +615,10 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                     aoTrocar={(c) => setCampos((x) => ({ ...x, ...c }))}
                     maquinas={carga.maquinas} produtos={produtos} takt={takt} inicioValido={inicioValido}
                     rascunho={rascunho} aoContinuar={continuarRascunho} aoDescartar={descartarRascunho}
-                    podeComecar={podeComecar} aoComecar={comecar}
+                    // Com marcacao guardada deste video na tela, comecar do zero
+                    // a apagaria — e, se ela tinha chegado ao servidor, o mesmo
+                    // trecho entraria duas vezes. Primeiro continuar ou descartar.
+                    podeComecar={podeComecar && !rascunho} aoComecar={comecar}
                     retomando={retomando} aviso={avisoPreparar} jaSalvo={jaSalvo} foraDaLista={foraDaLista}
                   />
                 )}
@@ -732,10 +761,9 @@ function Preparar({
       {jaSalvo && (
         <div style={ev.aviso} role="status">
           {jaSalvo.incerto
-            ? `Uma marcação deste vídeo (${volumes(jaSalvo.volumes)}) foi descartada neste PC em ${quando(jaSalvo.em)} depois de uma tentativa de salvar sem resposta: ela pode estar na lista da Embalagem Takt Time — confira lá. `
-            : `Este vídeo já foi salvo neste PC em ${quando(jaSalvo.em)} (${volumes(jaSalvo.volumes)}). `}
-          Salvar de novo o mesmo trecho cria outra medição: o takt e a junção contariam os mesmos volumes duas
-          vezes. Outro trecho do vídeo pode ser salvo sem problema.
+            ? `Uma marcação deste vídeo (${volumes(jaSalvo.volumes)}) foi descartada neste PC em ${quando(jaSalvo.em)} depois de uma tentativa de salvar sem resposta: ela pode ter chegado. Confira ${ondeConferir(jaSalvo.inicio)} antes de marcar o mesmo trecho — se ela estiver lá, salvar de novo cria outra medição, e o takt e a junção contariam os mesmos volumes duas vezes. `
+            : `Este vídeo já foi salvo neste PC em ${quando(jaSalvo.em)} (${volumes(jaSalvo.volumes)}). Salvar de novo o mesmo trecho cria outra medição: o takt e a junção contariam os mesmos volumes duas vezes. `}
+          Outro trecho do vídeo pode ser salvo sem problema.
         </div>
       )}
 
@@ -813,6 +841,7 @@ function Preparar({
           {retomando ? 'Continuar a marcação' : 'Começar a marcar'}
         </button>
         {!podeComecar && arquivo && !meta.erro && !meta.pronto && <span style={ev.dica}>Abrindo o vídeo…</span>}
+        {rascunho && <span style={ev.dica}>Continue ou descarte a marcação guardada deste vídeo antes de começar outra.</span>}
       </div>
     </section>
   );

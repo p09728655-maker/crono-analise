@@ -202,6 +202,9 @@ await p.locator('input[type="file"]').setInputFiles(VIDEO);
 const continuar = p.getByRole('button', { name: 'Continuar de onde parou' });
 await continuar.waitFor({ timeout: 8000 });
 checar(/marcação em andamento deste vídeo \(8 volumes/.test(await preparar.innerText()), 'F5: o PC guardou a marcacao (8 volumes)');
+checar(await p.getByRole('button', { name: 'Começar a marcar' }).isDisabled()
+  && /Continue ou descarte a marcação guardada deste vídeo antes de começar outra/.test(await preparar.innerText()),
+'com marcacao guardada na tela, "Começar a marcar" fica travado: continuar ou descartar antes');
 await p.waitForFunction(() => !document.querySelector('button[disabled]')?.innerText.includes('Continuar'), { timeout: 8000 });
 await continuar.click();
 await marcas.waitFor({ timeout: 4000 });
@@ -303,6 +306,12 @@ await ctx.close();
   checar(/Não salvou: Campo "conferencias\[0\]\.peca" invalido$/.test(await rev.getByRole('alert').innerText())
     && await rev.getByRole('button', { name: 'Salvar medição' }).isEnabled(),
   'servidor recusou: o motivo aparece na revisao, e da para tentar de novo');
+  // Recusa CERTA (400): nada gravou, e o rascunho nao diz que talvez sim.
+  await q.reload();
+  await q.locator('input[type="file"]').setInputFiles(VIDEO);
+  await q.getByRole('button', { name: 'Continuar de onde parou' }).waitFor({ timeout: 8000 });
+  checar(!/pode já estar no servidor/.test(await q.locator('[aria-label="Preparar a medição por vídeo"]').innerText()),
+    'depois de uma recusa certa (400), o rascunho nao avisa que a medicao pode estar no servidor');
   await c2.close();
 }
 
@@ -377,7 +386,10 @@ await ctx.close();
   await tela.getByRole('button', { name: 'Marcar outro vídeo' }).click();
   await r.locator('input[type="file"]').setInputFiles(VIDEO);
   await r.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
-  await r.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+  // Filmagem de 40 dias atras: a lista nao a mostra, e o aviso tem de saber.
+  const antiga3 = new Date(Date.now() - 40 * 86400000);
+  await r.locator('input[aria-label="Data e hora em que a filmagem começou"]')
+    .fill(`${antiga3.getFullYear()}-${dois(antiga3.getMonth() + 1)}-${dois(antiga3.getDate())}T08:00`);
   await r.getByRole('button', { name: 'Começar a marcar' }).click();
   await r.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
   await r.evaluate(() => document.activeElement?.blur());
@@ -390,9 +402,9 @@ await ctx.close();
   await r.reload();
   await r.locator('input[type="file"]').setInputFiles(VIDEO);
   await r.getByRole('button', { name: 'Descartar e começar de novo' }).click();
-  checar(/Uma marcação deste vídeo \(2 volumes\) foi descartada neste PC .* depois de uma tentativa de salvar sem resposta: ela pode estar na lista da Embalagem Takt Time/
+  checar(/Uma marcação deste vídeo \(2 volumes\) foi descartada neste PC .* depois de uma tentativa de salvar sem resposta: ela pode ter chegado\. Confira no relatório Ritmo por máquina/
     .test(await r.locator('[aria-label="Preparar a medição por vídeo"]').innerText()),
-  'descartar depois de um envio sem resposta: avisa que ela pode estar na lista, antes de marcar o mesmo trecho de novo');
+  'descartar depois de um envio sem resposta: avisa que ela pode ter chegado e onde conferir (filmagem antiga: no relatorio, nao na lista)');
   await c3.close();
 }
 

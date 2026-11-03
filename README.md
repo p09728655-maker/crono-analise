@@ -226,9 +226,13 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   id (`ON CONFLICT ... DO UPDATE ... WHERE origem = 'video'` da mesma empresa,
   e as paradas são trocadas, não somadas). Resposta perdida deixou de ser
   problema: salvar de novo grava a última versão, uma só. A resposta traz
-  `atualizados`. O id que não pode ser substituído (do tablet, de outra
-  empresa) volta 409, e coletor mandando vídeo volta 403 — substituir é
-  UPDATE, que a RLS só deixa para quem faz análise. O reenvio do tablet
+  `atualizados`. Só substitui a que **ninguém mexeu no PC**:
+  `conferencias.editada_em` é marcada por todo PATCH de `api/conferencias.js`
+  (produto, paradas, análise, arquivo) e, com ela, o reenvio volta 409 e a
+  medição fica como está — senão a correção do PCP sumiria e a análise
+  ficaria valendo sobre números novos. O id que não pode ser substituído (do
+  tablet, de outra empresa) também volta 409, e coletor mandando vídeo volta
+  403 — substituir é UPDATE, que a RLS só deixa para quem faz análise. O reenvio do tablet
   continua ignorado (`DO NOTHING`). O rascunho guarda `envioTentado`: o F5 e o
   Descartar avisam que a medição pode já estar no servidor. O "por volume" da
   prévia usa o `setupPlanejado` do takt da semana, como a lista e o tablet.

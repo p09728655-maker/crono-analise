@@ -179,13 +179,13 @@ export default handler(async (req, res) => {
       let alteradas = null;
       if (temNoLote('arquivada')) {
         alteradas = await db`
-          UPDATE conferencias SET arquivada = ${Boolean(corpo.arquivada)}
+          UPDATE conferencias SET arquivada = ${Boolean(corpo.arquivada)}, editada_em = now()
            WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
           RETURNING id`;
       }
       if (temNoLote('peca')) {
         alteradas = await db`
-          UPDATE conferencias SET peca = ${peca}
+          UPDATE conferencias SET peca = ${peca}, editada_em = now()
            WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
           RETURNING id`;
       }
@@ -303,6 +303,10 @@ export default handler(async (req, res) => {
         if (!alteradas.length) throw nadaMudou();
       }
 
+      // Mexida no PC: a medicao por video nao pode mais ser substituida pelo
+      // reenvio (ver editada_em no schema). Uma marca so', para todo PATCH.
+      await db`UPDATE conferencias SET editada_em = now() WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}`;
+
       const [linha] = await db`
         SELECT c.id, c.arquivada, c.peca, c.analisada_em, c.analisada_por, c.analise_nota,
                coalesce((
@@ -364,7 +368,7 @@ async function analisarLote({ auth, res, corpo, ids }) {
     const alteradas = await db`
       UPDATE conferencias
          SET analisada_em = now(), analisada_por = ${auth.usuario?.nome || null},
-             analise_nota = ${analiseNota}
+             analise_nota = ${analiseNota}, editada_em = now()
        WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
          AND (SELECT count(*) FROM conferencias
                WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}) = ${ids.length}

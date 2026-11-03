@@ -447,6 +447,16 @@ ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_origem_chk;
 ALTER TABLE conferencias ADD CONSTRAINT conferencias_origem_chk
   CHECK (origem IN ('tablet', 'video') AND (origem <> 'video' OR marcas_ms IS NOT NULL));
 
+-- EDITADA NO PC (v2.99.2): a ultima vez que alguem mexeu na medicao pelo
+-- PC — produto, paradas, analise ou arquivo (api/conferencias.js). NULA =
+-- esta' como chegou do tablet ou do video.
+-- Para que serve: a medicao por video salva de novo SUBSTITUI a que chegou
+-- (api/sync.js), e so' enquanto ninguem mexeu nela. Sem esta marca, salvar
+-- de novo uma marcacao cuja resposta se perdeu apagava, calado, o produto
+-- corrigido e as paradas lancadas no PC, e deixava a analise do PCP
+-- valendo sobre numeros que mudaram. No BI: medicao corrigida depois.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS editada_em timestamptz;
+
 -- ------------------------------------------------------- motivos_parada
 -- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o
 -- relatorio interpreta.

@@ -243,8 +243,10 @@ export default handler(async (req, res) => {
         -- sem fila, e o analista corrige e salva de novo quando a resposta
         -- se perde: com DO NOTHING o banco ficava com a versao de antes, e
         -- nenhuma regra do lado da tela acertava qual tentativa tinha
-        -- chegado. So' a medicao por video, da MESMA empresa: o reenvio do
-        -- tablet continua ignorado, como sempre.
+        -- chegado. So' a medicao por video, da MESMA empresa, e so'
+        -- enquanto ninguem mexeu nela no PC (editada_em): substituir a que
+        -- o PCP ja' corrigiu, analisou ou arquivou apagaria esse trabalho.
+        -- O reenvio do tablet continua ignorado, como sempre.
         ON CONFLICT (client_id) DO UPDATE SET
           maquina = EXCLUDED.maquina, peca = EXCLUDED.peca,
           iniciado_em = EXCLUDED.iniciado_em, finalizado_em = EXCLUDED.finalizado_em,
@@ -253,7 +255,10 @@ export default handler(async (req, res) => {
           observacao = EXCLUDED.observacao, salvo_em = EXCLUDED.salvo_em,
           marcas_ms = EXCLUDED.marcas_ms, marcas_relogio_ms = EXCLUDED.marcas_relogio_ms,
           marcas_setup_ms = EXCLUDED.marcas_setup_ms
-          WHERE conferencias.origem = 'video' AND conferencias.empresa_id = EXCLUDED.empresa_id` : tx`
+          WHERE conferencias.origem = 'video' AND conferencias.empresa_id = EXCLUDED.empresa_id
+            AND conferencias.editada_em IS NULL
+            -- As de antes da coluna: analisada ou arquivada ja' e' mexida.
+            AND conferencias.analisada_em IS NULL AND NOT conferencias.arquivada` : tx`
         ON CONFLICT (client_id) DO NOTHING`}
         RETURNING id, (xmax = 0) AS inserida`;
 
@@ -261,10 +266,16 @@ export default handler(async (req, res) => {
       // paradas dela ja' entraram junto na primeira vez: inserir de novo
       // duplicaria o tempo parado do posto.
       if (!linha) {
-        // Por video, nao substituir e' erro: o id e' de uma medicao do
-        // tablet ou de outra empresa, e "salva" seria mentira.
+        // Por video, nao substituir e' erro: "salva" seria mentira.
         if (c.origem === 'video') {
-          throw new ErroHttp(409, 'Já existe outra medição com este identificador: comece a marcação de novo para salvar');
+          // A RLS so' deixa ver as desta empresa: achou, e' a nossa, ja'
+          // mexida no PC. Nao achou, o id e' do tablet ou de outra empresa.
+          const [nossa] = await tx`
+            SELECT 1 FROM conferencias
+             WHERE client_id = ${c.clientId} AND empresa_id = ${empresaId} AND origem = 'video'`;
+          throw new ErroHttp(409, nossa
+            ? 'Esta medição já chegou ao sistema numa tentativa anterior e foi mexida no PC depois (produto, paradas, análise ou arquivo), então ela fica como está. Confira a medição na Embalagem Takt Time (filmagem de mais de 30 dias: no relatório Ritmo por máquina); se ainda precisar corrigir, corrija lá e descarte esta marcação'
+            : 'Já existe outra medição com este identificador: descarte esta marcação e marque de novo para salvar');
         }
         continue;
       }
