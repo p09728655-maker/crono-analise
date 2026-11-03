@@ -189,4 +189,19 @@ describe('as teclas da marcacao', () => {
     ({ marcacao: m } = removerParada(m, 70000));
     expect(m.aberta).toBeNull();
   });
+
+  it('a 51a parada e\' recusada ao abrir, nao so\' no Encerrar (que recusaria a marcacao inteira)', async () => {
+    const {
+      marcacaoVazia, marcarToque, iniciarParadaNoVideo, encerrarParadaNoVideo, MAX_PARADAS,
+    } = await marcar();
+    let { marcacao: m } = marcarToque(marcacaoVazia(), 1000);
+    for (let i = 0; i < MAX_PARADAS; i++) {
+      ({ marcacao: m } = iniciarParadaNoVideo(m, 'outro', 10000 + i * 2000));
+      ({ marcacao: m } = encerrarParadaNoVideo(m, 11000 + i * 2000));
+    }
+    expect(m.paradas).toHaveLength(MAX_PARADAS);
+    const r = iniciarParadaNoVideo(m, 'outro', 500000);
+    expect(r.aviso).toMatch(/Já são 50 paradas, o máximo numa medição/);
+    expect(r.marcacao.aberta).toBeNull();
+  });
 });

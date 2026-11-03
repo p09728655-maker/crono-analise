@@ -44,6 +44,8 @@ const ESTILO_GRADE = '@media (max-width: 1099px) { .video-grade { grid-template-
  */
 const CHAVE_RASCUNHOS = 'ritmopatrimar.video.rascunhos';
 const CHAVE_SALVOS = 'ritmopatrimar.video.salvos';
+/** A vaga unica da v2.99.0: o que estiver nela entra no mapa uma vez (migrarRascunhoAntigo). */
+const CHAVE_RASCUNHO_ANTIGA = 'ritmopatrimar.video.rascunho';
 const MAX_GUARDADOS = 10;
 /** Duracao de parada: no video se marca no segundo, e "< 1 min" esconderia isso. */
 const duracaoCurta = (ms) => (ms < 60000 ? `${Math.round(ms / 1000)} s` : formatarDuracao(ms));
@@ -75,8 +77,31 @@ const lerSalvo = (arquivoChave) => lerMapa(CHAVE_SALVOS)[arquivoChave] || null;
 function anotarSalvo(arquivoChave, info) {
   gravarMapa(CHAVE_SALVOS, { ...lerMapa(CHAVE_SALVOS), [arquivoChave]: info });
 }
+/**
+ * A marcacao guardada pela v2.99.0, na vaga unica: passa para o mapa (sem
+ * passar por cima de uma mais nova do mesmo video) e a vaga e' apagada. Sem
+ * isto, quem atualizou com uma marcacao em andamento a perdia calado.
+ */
+function migrarRascunhoAntigo() {
+  let antigo = null;
+  try { antigo = JSON.parse(localStorage.getItem(CHAVE_RASCUNHO_ANTIGA)); } catch { /* ilegivel: so' apaga */ }
+  if (antigo?.arquivo && antigo.marcacao && antigo.campos && !lerRascunho(antigo.arquivo)) gravarRascunho(antigo);
+  try { localStorage.removeItem(CHAVE_RASCUNHO_ANTIGA); } catch { /* nada a apagar */ }
+}
 /** Envio cujo resultado nao se sabe (rede, tempo esgotado, erro do servidor): pode ter gravado. */
 const envioIncerto = (e) => !(e instanceof ErroApi) || e.status >= 500;
+/**
+ * O que dizer quando nao se sabe se gravou. Salvar de novo e' seguro: o
+ * servidor SUBSTITUI a medicao por video com o mesmo identificador (v2.99.2),
+ * entao a ultima versao enviada e' a que fica — e nunca duas.
+ */
+function mensagemIncerta(e) {
+  let causa = `o servidor respondeu com erro (${e?.status})`;
+  if (!(e instanceof ErroApi)) causa = 'o servidor não respondeu (a rede caiu ou o PC está sem internet)';
+  else if (e.status === 504) causa = 'o servidor demorou demais para responder';
+  return `Não deu para confirmar se salvou: ${causa}. Salve de novo — se a tentativa anterior chegou, `
+    + 'esta a substitui, sem duplicar.';
+}
 
 /** Date -> "AAAA-MM-DDTHH:MM:SS" no fuso do PC (o que o datetime-local entende). */
 function paraCampoLocal(d) {
@@ -125,10 +150,13 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const [retomando, setRetomando] = useState(false);
   const [avisoPreparar, setAvisoPreparar] = useState(null);
   const [jaSalvo, setJaSalvo] = useState(null);
-  // O ultimo envio de resultado incerto (JSON): se o servidor disser depois
-  // que ja' tinha a medicao, so' este conteudo e' que pode estar la'.
-  const [incerto, setIncerto] = useState(null);
-  const [duplicada, setDuplicada] = useState(false);
+  // Ja' se tentou salvar esta marcacao (e pode ter chegado): vai no
+  // rascunho, para o F5 e o Descartar saberem. Ref, e nao estado, porque e'
+  // gravado na hora do envio — nao num efeito que podia rodar depois do
+  // sucesso e recriar o rascunho ja' apagado.
+  const refEnvioTentado = useRef(false);
+  // A medicao salva substituiu a que uma tentativa anterior tinha gravado.
+  const [substituiu, setSubstituiu] = useState(false);
   const [motivoPedido, setMotivoPedido] = useState(null); // ms do video em que se apertou P
   const [salvar, setSalvar] = useState({ estado: 'parado', erro: null });
   const refVideo = useRef(null);
@@ -139,6 +167,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   /* ---------------------------------------------- cadastro e programa */
   useEffect(() => {
     let vivo = true;
+    // Antes do Preparar aparecer (ele so' vem com o cadastro carregado).
+    migrarRascunhoAntigo();
     carregarMotivos();
     listarCadastroMaquinas()
       .then(async (cadastro) => {
@@ -228,7 +258,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setMarcacao(r.marcacao);
     setObservacao(r.observacao || '');
     setClientId(r.clientId);
-    setIncerto(r.incerto || null);
+    // `incerto` era o nome na v2.99.1. Com o mesmo clientId, salvar de novo
+    // substitui o que tiver chegado.
+    refEnvioTentado.current = Boolean(r.envioTentado || r.incerto);
     setFimMs(null);
     setRascunho(null);
     // A maquina guardada tem de estar ativa no cadastro: sem ela, o Salvar
@@ -244,7 +276,19 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setCampos(r.campos);
     setEtapa('marcar');
   };
-  const descartarRascunho = () => { apagarRascunho(rascunho.arquivo); setRascunho(null); };
+  const descartarRascunho = () => {
+    // Descartar uma marcacao que talvez tenha chegado ao servidor: o aviso
+    // de "ja' salvo" fica, para a marcacao nova do mesmo trecho nao duplicar
+    // calada.
+    if (rascunho.envioTentado || rascunho.incerto) {
+      anotarSalvo(rascunho.arquivo, {
+        em: rascunho.atualizadoEm, volumes: rascunho.marcacao.toques.length, incerto: true,
+      });
+      setJaSalvo(lerSalvo(rascunho.arquivo));
+    }
+    apagarRascunho(rascunho.arquivo);
+    setRascunho(null);
+  };
 
   const comecar = () => {
     setAvisoPreparar(null);
@@ -256,20 +300,21 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     refMarcacao.current = marcacaoVazia();
     setMarcacao(refMarcacao.current);
     setClientId(crypto.randomUUID());
-    setIncerto(null);
+    refEnvioTentado.current = false;
     setFimMs(null);
     setAviso(null);
     setEtapa('marcar');
   };
 
   // O rascunho acompanha cada marca; salva a medicao, ele some.
+  const rascunhoAtual = () => ({
+    arquivo: chaveDoArquivo(arquivo), nome: arquivo.name, clientId, campos, marcacao, observacao,
+    envioTentado: refEnvioTentado.current, maquinaNome: maquina?.nome || null, atualizadoEm: new Date().toISOString(),
+  });
   useEffect(() => {
     if (!arquivo || !clientId || (etapa !== 'marcar' && etapa !== 'revisar')) return;
-    gravarRascunho({
-      arquivo: chaveDoArquivo(arquivo), nome: arquivo.name, clientId, campos, marcacao, observacao, incerto,
-      maquinaNome: maquina?.nome || null, atualizadoEm: new Date().toISOString(),
-    });
-  }, [arquivo, clientId, campos, marcacao, observacao, incerto, etapa]);
+    gravarRascunho(rascunhoAtual());
+  }, [arquivo, clientId, campos, marcacao, observacao, etapa]);
 
   /* ---------------------------------------------------------- player */
   useEffect(() => {
@@ -322,7 +367,11 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const parou = () => {
     const m = refMarcacao.current;
     if (m.aberta) { aplicar((x) => encerrarParadaNoVideo(x, tempoDoVideo())); return; }
-    if (m.largadaMs == null) { setAviso('Dê a largada antes: a parada fica dentro do período.'); return; }
+    // As mesmas travas de abrir a parada, ANTES de perguntar o motivo (sem
+    // largada, dentro de outra parada, o teto de paradas): o motivo aqui so'
+    // ocupa o lugar — o resultado e' descartado.
+    const teste = iniciarParadaNoVideo(m, 'outro', tempoDoVideo());
+    if (teste.aviso) { setAviso(teste.aviso); return; }
     refVideo.current?.pause();
     setMotivoPedido(tempoDoVideo());
   };
@@ -334,19 +383,21 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const encerrar = () => {
     let m = refMarcacao.current;
     const fim = tempoDoVideo();
-    // Parada aberta: o Encerrar fecha ela ali, como no tablet.
+    // Parada aberta: o Encerrar fecha ela ali, como no tablet — mas so' se a
+    // medicao fechar. Recusado o Encerrar, a parada continua ABERTA: fechada
+    // calada, ela terminava num ponto que ninguem escolheu.
     if (m.aberta) {
       const r1 = encerrarParadaNoVideo(m, fim);
       if (r1.aviso) { setAviso(`Ainda não dá para encerrar: ${r1.aviso}`); return; }
       m = r1.marcacao;
-      refMarcacao.current = m;
-      setMarcacao(m);
     }
     const r = medicaoDoVideo({
       largadaMs: m.largadaMs, toquesMs: m.toques.map((t) => t.ms), paradas: m.paradas,
       fimMs: fim, inicioFilmagem: campos.inicio,
     });
     if (r.motivo) { setAviso(`Ainda não dá para encerrar: ${r.motivo}.`); return; }
+    refMarcacao.current = m;
+    setMarcacao(m);
     refVideo.current?.pause();
     setFimMs(fim);
     setAviso(null);
@@ -424,46 +475,38 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
 
   /* ---------------------------------------------------------- salvar */
   /**
-   * SALVAR. O client_id torna o reenvio inofensivo — e por isso mesmo o
-   * servidor IGNORA o segundo envio com o mesmo id (ON CONFLICT), ainda que
-   * o conteudo tenha mudado. Se a resposta do primeiro se perdeu (rede,
-   * tempo esgotado), o analista ve' "Nao salvou", corrige, salva — e o banco
-   * fica com a versao de antes. A resposta diz quantas eram NOVAS: zero
-   * quer dizer que ja' estava la'. Igual ao envio incerto, e' a mesma; diferente,
-   * a tela diz que as mudancas nao entraram (revisao de 30/10).
+   * SALVAR. Sempre com o MESMO client_id da marcacao — e, por video, o
+   * servidor SUBSTITUI a medicao que ja' tiver esse id (v2.99.2). Resposta
+   * perdida (rede, tempo esgotado) deixou de ser problema: o analista corrige
+   * o que quiser e salva de novo, e o banco fica com a ultima versao, uma so'.
+   * Antes o servidor ignorava o reenvio e a tela tentava adivinhar qual
+   * tentativa tinha chegado — e errava (revisao de 31/10).
    */
-  const salvarMedicao = async ({ comoNova = false } = {}) => {
+  const salvarMedicao = async () => {
     const med = final?.medicao;
-    if (!med) { setSalvar({ estado: 'parado', erro: 'A medição não está completa: volte a marcar e encerre de novo.' }); return; }
-    if (!maquina) { setSalvar({ estado: 'parado', erro: 'Falta a máquina da embalagem: volte a marcar e escolha a máquina.' }); return; }
-    const id = comoNova ? crypto.randomUUID() : clientId;
+    if (!med) { setSalvar({ estado: 'parado', erro: 'Não salvou: a medição não está completa — volte a marcar e encerre de novo.' }); return; }
+    if (!maquina) { setSalvar({ estado: 'parado', erro: 'Não salvou: falta a máquina da embalagem — volte a marcar e escolha a máquina.' }); return; }
     const dados = {
-      clientId: id, maquina: maquina.nome, peca: campos.produto.trim() || null,
+      clientId, maquina: maquina.nome, peca: campos.produto.trim() || null,
       duracaoMs: med.duracaoMs, pecas: med.pecas, ciclosPorPeca: 1, furacaoPassante: false,
       observacao: observacao.trim() || null, paradas: med.paradas,
       marcasMs: med.marcasMs, marcasRelogioMs: med.marcasRelogioMs, marcasSetupMs: med.marcasSetupMs,
       salvoEm: med.salvoEm,
     };
-    const conteudo = JSON.stringify({ ...dados, clientId: null });
+    // Antes de enviar: se a resposta nao voltar e o PC fechar, o rascunho ja'
+    // sabe que esta marcacao pode estar no servidor.
+    refEnvioTentado.current = true;
+    gravarRascunho(rascunhoAtual());
     setSalvar({ estado: 'enviando', erro: null });
     try {
       const r = await enviarMedicaoPorVideo(dados);
-      const jaEstava = Number(r.novos) === 0;
-      if (comoNova) setClientId(id);
       apagarRascunho(chaveDoArquivo(arquivo));
       anotarSalvo(chaveDoArquivo(arquivo), { em: new Date().toISOString(), volumes: med.pecas });
-      setDuplicada(jaEstava && incerto !== conteudo);
-      setIncerto(null);
+      setSubstituiu(Number(r.atualizados) > 0);
       setSalvar({ estado: 'parado', erro: null });
       setEtapa('salvo');
     } catch (e) {
-      if (envioIncerto(e)) setIncerto(conteudo);
-      setSalvar({
-        estado: 'parado',
-        erro: envioIncerto(e)
-          ? `${e.message} A medição pode ter chegado ao servidor: tente salvar de novo antes de mudar qualquer coisa.`
-          : e.message,
-      });
+      setSalvar({ estado: 'parado', erro: envioIncerto(e) ? mensagemIncerta(e) : `Não salvou: ${e.message}` });
     }
   };
 
@@ -471,8 +514,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setArquivo(null);
     setUrl(null);
     setMeta({ duracaoS: null, erro: null, pronto: false });
-    setDuplicada(false);
-    setIncerto(null);
+    setSubstituiu(false);
+    refEnvioTentado.current = false;
     setJaSalvo(null);
     setCampos((c) => ({ ...c, produto: '', inicio: '' }));
     refMarcacao.current = marcacaoVazia();
@@ -521,33 +564,15 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
 
           {carga.estado === 'pronto' && carga.maquinas.length > 0 && etapa === 'salvo' && (
             <section style={ev.cartao} aria-label="Medição salva">
-              {duplicada ? (
-                /* O servidor ja' tinha esta medicao (o client_id): uma tentativa
-                   anterior gravou e a resposta se perdeu. O que mudou depois
-                   NAO entrou — dizer "salva" aqui seria mentir. */
-                <div style={ev.aviso} role="alert">
-                  Esta medição já estava no servidor: uma tentativa anterior chegou, mas a resposta não voltou.
-                  O que você mudou depois disso <strong>não entrou</strong>. Confira a medição na lista da Embalagem
-                  Takt Time. Se a diferença importa, salve esta versão como uma medição nova e exclua a anterior no
-                  relatório Ritmo por máquina.
-                  <div style={{ ...ev.linhaBotoes, marginTop: 8 }}>
-                    <button
-                      type="button" style={est.botaoSecundario} disabled={salvar.estado === 'enviando'}
-                      onClick={() => salvarMedicao({ comoNova: true })}
-                    >
-                      {salvar.estado === 'enviando' ? 'Salvando…' : 'Salvar esta versão como medição nova'}
-                    </button>
-                  </div>
-                  {salvar.erro && <div style={est.faixaErro} role="alert">Não salvou: {salvar.erro}</div>}
-                </div>
-              ) : (
-                <p style={ev.ok} role="status">
-                  ✓ Medição salva: {volumes(final?.medicao?.pecas || 0)} de {campos.produto || 'produto não informado'}.
-                  {foraDaLista
-                    ? ` A filmagem é de mais de ${DIAS_DA_LISTA} dias atrás: a lista da Embalagem Takt Time mostra só os últimos ${DIAS_DA_LISTA} dias, então ela não aparece lá — está no relatório Ritmo por máquina, escolhendo um período maior.`
-                    : ' Ela já está na lista da Embalagem Takt Time, com o selo “por vídeo”.'}
-                </p>
-              )}
+              <p style={ev.ok} role="status">
+                ✓ Medição salva: {volumes(final?.medicao?.pecas || 0)} de {campos.produto || 'produto não informado'}.
+                {/* Uma tentativa anterior tinha chegado sem resposta: esta
+                    versao entrou no lugar dela — uma medicao so'. */}
+                {substituiu && ' Ela substituiu a versão que uma tentativa anterior tinha gravado — não ficou duplicada.'}
+                {foraDaLista
+                  ? ` A filmagem é de mais de ${DIAS_DA_LISTA} dias atrás: a lista da Embalagem Takt Time mostra só os últimos ${DIAS_DA_LISTA} dias, então ela não aparece lá — está no relatório Ritmo por máquina, escolhendo um período maior.`
+                  : ' Ela já está na lista da Embalagem Takt Time, com o selo “por vídeo”.'}
+              </p>
               <div style={ev.linhaBotoes}>
                 <button type="button" style={est.botaoImprimir} onClick={aoVoltar}>Ver na Embalagem Takt Time</button>
                 <button type="button" style={est.botaoSecundario} onClick={recomecar}>Marcar outro vídeo</button>
@@ -706,8 +731,11 @@ function Preparar({
 
       {jaSalvo && (
         <div style={ev.aviso} role="status">
-          Este vídeo já foi salvo neste PC em {quando(jaSalvo.em)} ({volumes(jaSalvo.volumes)}). Salvar de novo cria
-          outra medição: o takt e a junção contariam os mesmos volumes duas vezes.
+          {jaSalvo.incerto
+            ? `Uma marcação deste vídeo (${volumes(jaSalvo.volumes)}) foi descartada neste PC em ${quando(jaSalvo.em)} depois de uma tentativa de salvar sem resposta: ela pode estar na lista da Embalagem Takt Time — confira lá. `
+            : `Este vídeo já foi salvo neste PC em ${quando(jaSalvo.em)} (${volumes(jaSalvo.volumes)}). `}
+          Salvar de novo o mesmo trecho cria outra medição: o takt e a junção contariam os mesmos volumes duas
+          vezes. Outro trecho do vídeo pode ser salvo sem problema.
         </div>
       )}
 
@@ -718,6 +746,13 @@ function Preparar({
           {[rascunho.maquinaNome, rascunho.campos.produto || 'sem produto',
             rascunho.campos.inicio ? `início ${new Date(rascunho.campos.inicio).toLocaleString('pt-BR')}` : null]
             .filter(Boolean).join(' · ')}.{' '}
+          {/* Tentou salvar e a resposta nao voltou: pode estar no servidor. */}
+          {(rascunho.envioTentado || rascunho.incerto) && (
+            <>
+              <strong>Ela pode já estar no servidor</strong>: uma tentativa de salvar ficou sem resposta.
+              Continue e salve — a versão nova substitui a que tiver chegado, sem duplicar.{' '}
+            </>
+          )}
           <span style={ev.linhaBotoes}>
             <button type="button" style={est.botaoSecundario} onClick={aoContinuar} disabled={!!meta.erro || !meta.pronto}>
               Continuar de onde parou
@@ -999,12 +1034,13 @@ function Revisar({
         <span style={ev.rotulo}>Observação (opcional)</span>
         <textarea
           style={ev.observacao} value={observacao} maxLength={2000}
-          onChange={(e) => aoObservacao(e.target.value)}
+          onChange={(e) => aoObservacao(e.target.value)} disabled={salvar.estado === 'enviando'}
           aria-label="Observação da medição"
           placeholder="O que o vídeo mostra e o número não diz: troca de operador, falta de caixa…"
         />
       </label>
-      {salvar.erro && <div style={est.faixaErro} role="alert">Não salvou: {salvar.erro}</div>}
+      {/* A mensagem ja' diz se nao salvou ou se nao se sabe (mensagemIncerta). */}
+      {salvar.erro && <div style={est.faixaErro} role="alert">{salvar.erro}</div>}
       <div style={ev.linhaBotoes}>
         <button type="button" style={est.botaoImprimir} onClick={aoSalvar} disabled={salvar.estado === 'enviando'}>
           {salvar.estado === 'enviando' ? 'Salvando…' : 'Salvar medição'}
