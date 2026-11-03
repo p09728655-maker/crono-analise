@@ -5,7 +5,8 @@ import {
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
-  frasesVolumeAVolume, numerosDaLeitura, porHoraDaMedicao, roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
+  deixaramDe, deixouDeEmbalar, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, porHoraDaMedicao,
+  roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
 } from '../../../domain/volumeAVolume.js';
 import {
   CRITERIOS_JUNCAO, PREFIXO_JUNCAO, faixaDaJuncao, frasesDaJuncao, horaDaMedicao, idsDaJuncao, juntarMedicoes,
@@ -125,6 +126,7 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
         takt,
         juncao,
         roubo: juncao?.roubo || null,
+        deixou: juncao?.deixou || null,
         de: carga.de,
       };
     }
@@ -144,6 +146,8 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
       leitura,
       takt,
       juncao: null,
+      // O total num passo so' (v2.99.6); null sem leitura ou sem relogio.
+      deixou: deixouDeEmbalar([{ conferencia, marcas: carga.marcas, relogio: carga.relogio }], leitura),
       // So' com parada marcada (ver roubadosPelasParadas).
       roubo: roubo ? { saiu: roubo.saiu, roubados: roubo.roubados, potencial: roubo.potencial } : null,
       de: carga.de,
@@ -473,7 +477,7 @@ export default function VolumeAVolume({
             <>
               {/* 2. O QUE AS PARADAS ROUBARAM — primeiro, porque e' o que
                   move a acao. So' com parada marcada. */}
-              {(r.roubo?.roubados > 0 || roubadosPelasLacunas(r.leitura)?.roubados > 0)
+              {(r.deixou?.total > 0 || r.roubo?.roubados > 0 || roubadosPelasLacunas(r.leitura)?.roubados > 0)
                 && <BlocoRoubados r={r} conferencia={conferencia} unidade={unidade} />}
 
               {/* 3. INDICADORES */}
@@ -556,7 +560,7 @@ export default function VolumeAVolume({
               {r.leitura.suficiente && (
                 <ComoLer
                   leitura={r.leitura} unidade={unidade} juncao={ehJuncao} roubo={r.roubo?.roubados > 0}
-                  lacunas={roubadosPelasLacunas(r.leitura)?.roubados > 0}
+                  lacunas={roubadosPelasLacunas(r.leitura)?.roubados > 0} deixou={r.deixou?.total > 0}
                 />
               )}
             </>
@@ -668,11 +672,17 @@ function ValorComUnidade({ valor }) {
  * pelos INTERVALOS (volumes - 1), menos o setup marcado no trecho quando ha'
  * setup planejado — exatamente periodoPorPeca.
  */
-function definicoes(leitura, unidade, { juncao = false, roubo = false, lacunas = false } = {}) {
+function definicoes(leitura, unidade, {
+  juncao = false, roubo: roubo0 = false, lacunas: lacunas0 = false, deixou = false,
+} = {}) {
+  // Com o total num passo so', ele substitui as duas contas separadas.
+  const roubo = roubo0 && !deixou;
+  const lacunas = lacunas0 && !deixou;
   const toque = unidade.singular === 'volume' ? 'volume' : 'toque';
   const { fatorLacuna, minIntervalos } = leitura.criterios;
   return [
     ...(juncao ? [['Junção', `medições do mesmo produto, na mesma máquina e na mesma semana, lidas como uma só. Tudo somado pelo tempo, nunca a média das taxas. O tempo entre uma medição e a seguinte não foi medido: não vira intervalo, lacuna nem parada. A lacuna é contra o normal da junção, e por isso a contagem pode diferir da de cada medição sozinha. O passo de cada medição (a coluna "Sem as lacunas" da tabela) é a média sem as lacunas, comparada só entre as que têm ${minIntervalos} intervalos ou mais fora das lacunas — abaixo disso, "—"; "o passo muda" só quando a diferença passa de ${CRITERIOS_JUNCAO.passoIgualPct}% e do dobro do erro das médias.`]] : []),
+    ...(deixou ? [[`${capital(unidade.plural)} que ${deixaramDe(unidade)}`, `a medição inteira no passo da linha sem parada nem lacuna, menos o que saiu. Abre em três partes, no mesmo passo, que fecham com o total: as paradas marcadas no cronômetro entre o 1º e o último ${unidade.singular}; as lacunas (o tempo além do normal); e o tempo antes do 1º e depois do último ${unidade.singular}, menos o ${unidade.singular} da largada. A parada anotada depois (no resultado do tablet ou aqui no PC) fica dentro dos intervalos: entra na lacuna, se virou uma, e não conta duas vezes.${juncao ? ' Na junção, o passo é o da junção.' : ''} Não projeta meta nem capacidade: é o passo que a própria linha fez.`]] : []),
     ...(roubo ? [[`${capital(unidade.plural)} roubados pelas paradas`, `o que teria saído no mesmo tempo, no passo que a linha fez rodando${juncao ? ' em cada medição' : ''}, menos o que saiu. As paradas são as marcadas, setup incluído. Não projeta meta nem capacidade: é o que a própria linha já fez.${juncao ? ' Na junção, soma os de cada medição.' : ''}`]] : []),
     ...(lacunas ? [[`${capital(unidade.plural)} roubados pelas lacunas`, `o tempo das lacunas além do normal, dividido pelo passo sem as lacunas: o que daria para ter saído nesse tempo, no passo da própria linha.${juncao ? ' Na junção, contra o normal da junção.' : ''} Não soma com os roubados pelas paradas: a parada anotada depois (no tablet ou aqui no PC) continua dentro dos intervalos e pode virar lacuna — somando, contaria duas vezes.`]] : []),
     ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo: o intervalo vai de um toque ao seguinte, e o tempo antes do primeiro toque não entra.`],
@@ -686,13 +696,15 @@ function definicoes(leitura, unidade, { juncao = false, roubo = false, lacunas =
 }
 
 function ComoLer({
-  leitura, unidade, juncao, roubo, lacunas,
+  leitura, unidade, juncao, roubo, lacunas, deixou,
 }) {
   return (
     <section aria-label="Como ler estes números">
       <h3 style={est.vavSecaoTitulo}>Como ler estes números</h3>
       <dl style={est.vavComoLer}>
-        {definicoes(leitura, unidade, { juncao, roubo, lacunas }).map(([termo, texto]) => (
+        {definicoes(leitura, unidade, {
+          juncao, roubo, lacunas, deixou,
+        }).map(([termo, texto]) => (
           <div key={termo} style={est.vavComoLerItem}>
             <dt style={{ display: 'inline', ...est.vavComoLerTermo }}>{termo}: </dt>
             <dd style={{ display: 'inline', margin: 0 }}>{texto}</dd>
@@ -703,7 +715,11 @@ function ComoLer({
   );
 }
 
-function notaDoCriterio(leitura, unidade, { juncao = false, roubo = false, lacunas = false } = {}) {
+function notaDoCriterio(leitura, unidade, {
+  juncao = false, roubo: roubo0 = false, lacunas: lacunas0 = false, deixou = false,
+} = {}) {
+  const roubo = roubo0 && !deixou;
+  const lacunas = lacunas0 && !deixou;
   return (juncao
     ? 'Junção = medições do mesmo produto, na mesma máquina e na mesma semana, somadas pelo tempo (nunca a média das taxas); '
       + 'o tempo entre uma medição e a seguinte não foi medido e não entra. '
@@ -712,6 +728,10 @@ function notaDoCriterio(leitura, unidade, { juncao = false, roubo = false, lacun
     : '')
     + (roubo
       ? `${capital(unidade.plural)} roubados pelas paradas = o que teria saído no mesmo tempo, no passo da linha rodando${juncao ? ' de cada medição' : ''}, menos o que saiu (paradas marcadas, setup incluído). `
+      : '')
+    + (deixou
+      ? `${capital(unidade.plural)} que ${deixaramDe(unidade)} = a medição inteira no passo sem parada nem lacuna, menos o que saiu; `
+        + `abre em paradas marcadas no cronômetro entre os toques, lacunas e o tempo antes do 1º e depois do último ${unidade.singular} (menos o da largada), no mesmo passo. `
       : '')
     + (lacunas
       ? `${capital(unidade.plural)} roubados pelas lacunas = o tempo das lacunas além do normal ÷ o passo sem as lacunas; não soma com os das paradas (a parada anotada depois pode virar lacuna). `
@@ -814,6 +834,7 @@ function linhasDasMedicoes(r, unidade) {
     parado: parado(m.conferencia.paradas),
     roubados: m.roubo ? String(m.roubo.roubados) : '—',
     lacunas: m.lacunasRoubados != null ? String(m.lacunasRoubados) : '—',
+    deixou: m.deixou != null ? String(m.deixou) : '—',
     periodo: m.periodoMs ? emSegundos(m.periodoMs) : '—',
     rodando: m.rodandoMs ? emSegundos(m.rodandoMs) : '—',
     // O passo que a leitura compara: so' com a leitura minima da medicao.
@@ -829,6 +850,7 @@ function linhasDasMedicoes(r, unidade) {
     parado: parado(juncao.total.paradas),
     roubados: juncao.roubo ? String(juncao.roubo.roubados) : '—',
     lacunas: roubadosPelasLacunas(leitura) ? String(roubadosPelasLacunas(leitura).roubados) : '—',
+    deixou: juncao.deixou ? String(juncao.deixou.total) : '—',
     periodo: leitura.periodoMs ? emSegundos(leitura.periodoMs) : '—',
     rodando: leitura.suficiente ? emSegundos(leitura.mediaMs) : '—',
     normal: leitura.suficiente ? emSegundos(leitura.normalMs) : '—',
@@ -836,12 +858,15 @@ function linhasDasMedicoes(r, unidade) {
   }];
 }
 
-const COLUNAS_MEDICOES = (unidade) => [
+/* Com o total num passo so' (deixouDeEmbalar), uma coluna: ele ja' traz
+   paradas e lacunas. Sem ele (medicao sem relogio entre toques), as duas. */
+const COLUNAS_MEDICOES = (unidade, comDeixou) => [
   ['volumes', capital(unidade.plural)],
   ['medida', 'Medida'],
   ['parado', 'Parado'],
-  ['roubados', 'Roubados pelas paradas'],
-  ['lacunas', 'Roubados pelas lacunas'],
+  ...(comDeixou
+    ? [['deixou', `${capital(deixaramDe(unidade))}`]]
+    : [['roubados', 'Roubados pelas paradas'], ['lacunas', 'Roubados pelas lacunas']]),
   ['periodo', `Por ${unidade.singular} no período`],
   ['rodando', 'Com a linha rodando'],
   ['normal', 'Sem as lacunas'],
@@ -862,17 +887,17 @@ function TabelaMedicoes({ r, unidade }) {
           <thead>
             <tr>
               <th style={est.vavThTexto}>Medição</th>
-              {COLUNAS_MEDICOES(unidade).map(([chave, rotulo]) => <th key={chave} style={est.vavTh}>{rotulo}</th>)}
+              {COLUNAS_MEDICOES(unidade, Boolean(r.juncao.deixou)).map(([chave, rotulo]) => <th key={chave} style={est.vavTh}>{rotulo}</th>)}
             </tr>
           </thead>
           <tbody>
             {linhasDasMedicoes(r, unidade).map((l) => (
               <tr key={l.chave} style={l.total ? est.vavTrTotal : undefined}>
                 <td style={est.vavTdTexto}>{l.rotulo}</td>
-                {COLUNAS_MEDICOES(unidade).map(([chave]) => (
+                {COLUNAS_MEDICOES(unidade, Boolean(r.juncao.deixou)).map(([chave]) => (
                   <td
                     key={chave}
-                    style={(chave === 'roubados' || chave === 'lacunas') && l[chave] !== '—' ? est.vavTdRoubado : (l.total ? est.vavTdForte : est.vavTd)}
+                    style={(chave === 'roubados' || chave === 'lacunas' || chave === 'deixou') && l[chave] !== '—' ? est.vavTdRoubado : (l.total ? est.vavTdForte : est.vavTd)}
                   >
                     {l[chave]}
                   </td>
@@ -898,6 +923,7 @@ function TabelaMedicoes({ r, unidade }) {
  * marcada, a causa; lacuna, descobrir o que houve e cobrar o apontamento.
  */
 function BlocoRoubados({ r, conferencia, unidade }) {
+  if (r.deixou?.total > 0) return <BlocoDeixou r={r} conferencia={conferencia} unidade={unidade} />;
   const ehJuncao = Boolean(r.juncao);
   const lac = roubadosPelasLacunas(r.leitura);
   const temParadas = r.roubo?.roubados > 0;
@@ -917,7 +943,7 @@ function BlocoRoubados({ r, conferencia, unidade }) {
           </div>
           <div style={est.vavRouboTexto}>
             <span style={est.vavRouboTitulo}>
-              {lac.roubados === 1 ? 'roubado' : 'roubados'} pelas lacunas{onde} — paradas que ninguém marcou
+              {deixaramDe(unidade, lac.roubados)} por causa das lacunas{onde} — paradas que ninguém marcou
             </span>
             <span style={est.vavRouboSub}>
               {lac.n} {lac.n === 1 ? 'lacuna somou' : 'lacunas somaram'} {tempoSomado(lac.excessoMs)} além do normal;
@@ -937,6 +963,106 @@ function BlocoRoubados({ r, conferencia, unidade }) {
         {temLacunas && (temParadas
           ? 'Os das lacunas ficam à parte, sem somar: a parada anotada depois (no tablet ou aqui no PC) continua dentro dos intervalos e pode virar lacuna, e contaria duas vezes.'
           : 'As lacunas são intervalos maiores que o dobro do normal sem parada marcada: a perda que não aparece no Pareto de paradas.')}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * O QUE DEIXOU DE SER EMBALADO (v2.99.6) — o total num passo so', as barras
+ * por medicao (o que saiu e, hachurado, o que deixou de sair) e DE ONDE
+ * VEIO: paradas marcadas, lacunas e antes/depois, que fecham com o total
+ * (ver deixouDeEmbalar). Pedido do PCP: "roubados" virou "deixaram de ser
+ * embalados" — e' a pergunta da fabrica, e um numero so' para responder.
+ */
+function BlocoDeixou({ r, conferencia, unidade }) {
+  const ehJuncao = Boolean(r.juncao);
+  const d = r.deixou;
+  const qtd = (q) => (q === 1 ? unidade.singular : unidade.plural);
+  const pct = d.saiu > 0 ? Math.round((d.total / d.saiu) * 100) : null;
+  const itens = ehJuncao
+    ? r.juncao.medicoes.map((m) => ({
+      chave: m.conferencia.id,
+      rotulo: faixaHoraria(m.conferencia) || horaDaMedicao(m.conferencia),
+      paradas: m.conferencia.paradas,
+      saiu: Number(m.conferencia.pecas) || 0,
+      perdeu: m.deixou || 0,
+    }))
+    : [{
+      chave: conferencia.id,
+      rotulo: faixaHoraria(conferencia) || 'Esta medição',
+      paradas: conferencia.paradas,
+      saiu: d.saiu,
+      perdeu: d.total,
+    }];
+  const escala = Math.max(...itens.map((x) => x.saiu + x.perdeu), 1);
+  const causas = [
+    ['Paradas marcadas', `${formatarDuracao(d.partes.paradasMs)} no cronômetro, entre o 1º e o último ${unidade.singular}`, d.partes.paradas],
+    ['Lacunas', `paradas que ninguém marcou: ${tempoSomado(d.partes.lacunasMs)} além do normal`, d.partes.lacunas],
+    [`Antes do 1º e depois do último ${unidade.singular}`, `${tempoSomado(d.partes.foraMs)} fora dos toques, além do ${unidade.singular} da largada`, d.partes.fora],
+  ].filter(([, , n]) => n > 0);
+
+  return (
+    <section style={est.vavRoubo} aria-label={`${capital(unidade.plural)} que ${deixaramDe(unidade)}`}>
+      <div style={est.vavRouboCab}>
+        <div style={est.vavRouboNumero}>
+          {d.total}
+          <span style={est.vavRouboUnidade}>{qtd(d.total)}</span>
+        </div>
+        <div style={est.vavRouboTexto}>
+          <span style={est.vavRouboTitulo}>
+            {deixaramDe(unidade, d.total)}
+            {ehJuncao ? ` nos ${formatarDuracao(d.duracaoMs)} medidos` : ' nesta medição'}
+          </span>
+          <span style={est.vavRouboSub}>
+            Saíram {d.saiu}. No passo da linha sem parada nem lacuna ({emSegundos(d.passoMs)} por {unidade.singular}),
+            {' '}teriam saído {d.potencial} no mesmo tempo{pct > 0 ? `: ${pct}% a mais.` : '.'}
+          </span>
+        </div>
+      </div>
+      <div
+        style={est.vavRouboBarras}
+        role="img"
+        aria-label={itens.map((x) => `${x.rotulo}: ${x.saiu} saíram, ${x.perdeu} ${naoSaiu(unidade, x.perdeu)}`).join('; ')}
+      >
+        {itens.map((x) => {
+          const parado = somarParadas(x.paradas).totalMs;
+          return (
+            <Fragment key={x.chave}>
+              <div style={est.vavRouboRotulo}>
+                {x.rotulo}
+                <span style={est.vavRouboRotuloSub}>{parado > 0 ? `parado ${formatarDuracao(parado)}` : 'sem parada marcada'}</span>
+              </div>
+              <div style={est.vavRouboTrilho}>
+                <div style={{ ...est.vavRouboSaiu, width: `${(x.saiu / escala) * 100}%` }}>
+                  {x.saiu / escala > 0.18 ? `${x.saiu} saíram` : x.saiu}
+                </div>
+                {x.perdeu > 0 && <div style={{ ...est.vavRouboRoubou, width: `${(x.perdeu / escala) * 100}%` }} />}
+              </div>
+              <div style={est.vavRouboValor}>
+                <span style={est.vavRouboValorForte}>{x.perdeu}</span> {naoSaiu(unidade, x.perdeu)}
+              </div>
+            </Fragment>
+          );
+        })}
+      </div>
+      {/* De onde veio: no mesmo passo, e a soma e' o total. */}
+      <div style={est.vavCausas} aria-label="De onde veio">
+        <span style={est.vavCausasTitulo}>De onde veio</span>
+        {causas.map(([rotulo, sub, n]) => (
+          <div key={rotulo} style={est.vavCausa}>
+            <span style={est.vavCausaTexto}>
+              <span style={est.vavCausaRotulo}>{rotulo}</span>
+              <span style={est.vavCausaSub}>{sub}</span>
+            </span>
+            <span style={est.vavCausaValor}>≈{n}</span>
+          </div>
+        ))}
+      </div>
+      <p style={est.vavRouboPe}>
+        A conta não projeta nada: é o passo da própria linha, sem parada nem lacuna, aplicado ao tempo inteiro
+        {ehJuncao ? ' de cada medição' : ' da medição'}. As partes fecham com o total. A parada anotada depois (no
+        resultado do tablet ou aqui no PC) fica dentro dos intervalos: entra na lacuna, se virou uma, e não conta duas vezes.
       </p>
     </section>
   );
@@ -975,7 +1101,7 @@ function RoubadosPelasParadas({
         </div>
         <div style={est.vavRouboTexto}>
           <span style={est.vavRouboTitulo}>
-            {roubados === 1 ? 'roubado' : 'roubados'} pelas paradas{onde}
+            {deixaramDe(unidade, roubados)} por causa das paradas{onde}
           </span>
           <span style={est.vavRouboSub}>
             Saíram {saiu}. No passo da linha rodando, teriam saído {potencial} no mesmo tempo
@@ -1003,7 +1129,7 @@ function RoubadosPelasParadas({
                 {x.roubados > 0 && <div style={{ ...est.vavRouboRoubou, width: `${(x.roubados / escala) * 100}%` }} />}
               </div>
               <div style={est.vavRouboValor}>
-                <span style={est.vavRouboValorForte}>{x.roubados}</span> {x.roubados === 1 ? 'roubado' : 'roubados'}
+                <span style={est.vavRouboValorForte}>{x.roubados}</span> {naoSaiu(unidade, x.roubados)}
               </div>
             </Fragment>
           );
@@ -1057,6 +1183,7 @@ function FolhaVolumeAVolume({
   const par = somarParadas(conferencia.paradas);
   const { juncao, roubo } = r;
   const lacunasRoubo = roubadosPelasLacunas(r.leitura);
+  const { deixou } = r;
   const medicoes = juncao ? juncao.medicoes.map((m) => m.conferencia) : [conferencia];
   const n = medicoes.length;
   // Na junção, as lacunas dizem a medicao e o volume dentro dela.
@@ -1104,9 +1231,18 @@ function FolhaVolumeAVolume({
           ['Parado (marcado)', par.totalMs > 0 ? formatarDuracao(par.totalMs) : '—'],
           // Com parada que nao chegou a custar um volume, "0" — como na
           // tabela da mesma folha; sem parada marcada, "—".
-          ['Roubados pelas paradas', !roubo ? '—' : (roubo.roubados > 0 ? `${roubo.roubados} · teriam saído ${roubo.potencial}` : '0')],
-          // A parte, sem somar (ver roubadosPelasLacunas); sem lacuna, "—".
-          ['Roubados pelas lacunas', lacunasRoubo ? `≈${lacunasRoubo.roubados}` : '—'],
+          // O total num passo so' e de onde veio (ver deixouDeEmbalar); sem
+          // ele, as duas contas separadas, como antes.
+          ...(deixou ? [
+            [capital(deixaramDe(unidade)), `${deixou.total} · teriam saído ${deixou.potencial}`],
+            ['De onde veio', [
+              `paradas ${deixou.partes.paradas}`, `lacunas ${deixou.partes.lacunas}`,
+              deixou.partes.fora > 0 && `antes/depois ${deixou.partes.fora}`,
+            ].filter(Boolean).join(' · ')],
+          ] : [
+            ['Roubados pelas paradas', !roubo ? '—' : (roubo.roubados > 0 ? `${roubo.roubados} · teriam saído ${roubo.potencial}` : '0')],
+            ['Roubados pelas lacunas', lacunasRoubo ? `≈${lacunasRoubo.roubados}` : '—'],
+          ]),
         ].map(([k, v]) => (
           <div key={k} style={imp.campo}>
             <span style={imp.campoRotulo}>{k}</span>
@@ -1178,7 +1314,7 @@ function FolhaVolumeAVolume({
             <thead>
               <tr>
                 <th style={imp.th}>Medição</th>
-                {COLUNAS_MEDICOES(unidade).map(([chave, rotulo]) => <th key={chave} style={imp.thNum}>{rotulo}</th>)}
+                {COLUNAS_MEDICOES(unidade, Boolean(r.juncao.deixou)).map(([chave, rotulo]) => <th key={chave} style={imp.thNum}>{rotulo}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -1186,10 +1322,10 @@ function FolhaVolumeAVolume({
                 <tr key={l.chave}>
                   {/* A linha da junção: borda em cima e negrito — nao cor. */}
                   <td style={l.total ? { ...imp.td, fontWeight: 700, borderTop: '1.5px solid #000' } : imp.td}>{l.rotulo}</td>
-                  {COLUNAS_MEDICOES(unidade).map(([chave]) => (
+                  {COLUNAS_MEDICOES(unidade, Boolean(r.juncao.deixou)).map(([chave]) => (
                     <td
                       key={chave}
-                      style={l.total || chave === 'roubados' || chave === 'lacunas'
+                      style={l.total || chave === 'roubados' || chave === 'lacunas' || chave === 'deixou'
                         ? { ...imp.tdNum, fontWeight: 700, ...(l.total ? { borderTop: '1.5px solid #000' } : {}) }
                         : imp.tdNum}
                     >
@@ -1238,7 +1374,7 @@ function FolhaVolumeAVolume({
 
       <p style={imp.nota}>
         {notaDoCriterio(leitura, unidade, {
-          juncao: Boolean(juncao), roubo: roubo?.roubados > 0, lacunas: lacunasRoubo?.roubados > 0,
+          juncao: Boolean(juncao), roubo: roubo?.roubados > 0, lacunas: lacunasRoubo?.roubados > 0, deixou: deixou?.total > 0,
         })}
       </p>
     </div>,

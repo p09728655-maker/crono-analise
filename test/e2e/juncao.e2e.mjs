@@ -6,7 +6,8 @@
  * EMBALAGEM 01): marcas, relogio, duracao e paradas como estao no banco,
  * deslocadas para hoje (a lista mostra 30 dias, e a junção pede a mesma
  * semana). Os numeros esperados foram feitos a mao em test/juncao.test.js:
- * 138 volumes, 42 min, 36 roubados (5 + 22 + 9), 197 volumes/hora,
+ * 138 volumes, 42 min, 39 deixaram de ser embalados (6 + 23 + 10, no passo
+ * da junção: paradas 33 + lacunas 2 + antes/depois 4), 197 volumes/hora,
  * 17.9 s no periodo, 14.4 s rodando, lacunas no volume 9 da primeira e no
  * 41 da segunda.
  *
@@ -172,14 +173,16 @@ checar(!(await juntar.isDisabled()) && /Juntar as 3/.test(await juntar.innerText
 
 await juntar.click();
 const janela = p.getByRole('region', { name: /Volume a volume — junção de 3 medições/ });
-await janela.getByText(/as paradas roubaram 36 volumes/).first().waitFor({ timeout: 8000 });
+await janela.getByText(/39 volumes deixaram de ser embalados/).first().waitFor({ timeout: 8000 });
 const texto = await janela.innerText();
 
 // O QUE AS PARADAS ROUBARAM, primeiro.
-checar(/36\s*volumes\s*roubados pelas paradas nos 42 min medidos/.test(texto), 'o bloco abre com os 36 volumes roubados nos 42 min');
-checar(/Saíram 138\. No passo da linha rodando, teriam saído 174 no mesmo tempo: 26% a mais\./.test(texto),
-  'saíram 138, teriam saído 174: 26% a mais');
-checar(/5 roubados[\s\S]*22 roubados[\s\S]*9 roubados/.test(texto), 'por medicao, na ordem: 5, 22 e 9 roubados');
+checar(/39\s*volumes\s*deixaram de ser embalados nos 42 min medidos/.test(texto), 'o bloco abre com os 39 volumes que deixaram de ser embalados nos 42 min');
+checar(/Saíram 138\. No passo da linha sem parada nem lacuna \(14\.2 s por volume\), teriam saído 177 no mesmo tempo: 28% a mais\./.test(texto),
+  'saíram 138, teriam saído 177 no passo sem parada nem lacuna: 28% a mais');
+checar(/6 não embalados[\s\S]*23 não embalados[\s\S]*10 não embalados/.test(texto), 'por medicao, na ordem: 6, 23 e 10 nao embalados');
+checar(/DE ONDE VEIO[\s\S]*Paradas marcadas[\s\S]*≈33[\s\S]*Lacunas[\s\S]*≈2[\s\S]*Antes do 1º e depois do último volume[\s\S]*≈4/i.test(texto),
+  'de onde veio: paradas 33 + lacunas 2 + antes/depois 4 = 39');
 // Os cartoes da junção.
 checar(/VOLUMES\s*138\s*135 intervalos medidos, nas 3 medições/i.test(texto), 'volumes: 138, em 135 intervalos nas 3 medições');
 checar(/POR VOLUME NO PERÍODO\s*17\.9 s\s*com as paradas, do 1º ao último toque de cada medição/i.test(texto),
@@ -188,17 +191,16 @@ checar(/POR VOLUME COM A LINHA RODANDO\s*14\.4 s/i.test(texto), 'rodando: 14.4 s
 checar(/LACUNAS\s*2\s/i.test(texto), 'lacunas: 2, contra o normal da junção');
 checar(/VOLUMES\/HORA\s*197\s*nas 3 medições inteiras, com as paradas/i.test(texto), 'volumes/hora: 197, ponderado pelo tempo');
 // A tabela das medicoes, com a junção na ultima linha.
-// v2.99.5: a coluna dos roubados pelas lacunas, depois da das paradas — 2
-// lacunas (29,5 s e 33,0 s) contra o normal de 14,2 s: 2,4 -> 2.
-checar(/Junção\s*138\s*42 min\s*9 min\s*36\s*2\s*17\.9 s\s*14\.4 s\s*14\.2 s\s*197/.test(texto), 'tabela: a linha da junção soma tudo');
-checar(/≈2\s*volumes\s*roubados pelas lacunas nos 42 min medidos/.test(texto), 'o bloco mostra os 2 roubados pelas lacunas, a parte');
+// v2.99.6: uma coluna so', o que deixou de ser embalado (39), no lugar das
+// duas (paradas e lacunas).
+checar(/Junção\s*138\s*42 min\s*9 min\s*39\s*17\.9 s\s*14\.4 s\s*14\.2 s\s*197/.test(texto), 'tabela: a linha da junção soma tudo');
 // O passo que a leitura compara aparece na tabela: 13.8, 14.3 e 14.9 s sem as lacunas.
 checar(/14\.1 s\s*13\.8 s\s*236/.test(texto) && /14\.6 s\s*14\.3 s\s*181/.test(texto) && /14\.9 s\s*14\.9 s\s*159/.test(texto),
   'tabela: o passo sem as lacunas de cada medicao, o mesmo da frase');
 checar(/236[\s\S]*181[\s\S]*159/.test(texto), 'tabela: cada medicao com o proprio volumes/hora (236, 181, 159)');
 // A leitura.
-checar(/Nas 3 medições, as paradas roubaram 36 volumes: saíram 138, e no passo da linha rodando teriam saído 174\./.test(texto),
-  'manchete: o que as paradas roubaram (sem takt, nao ha veredito)');
+checar(/Nas 3 medições, 39 volumes deixaram de ser embalados: saíram 138, e no passo da linha sem parada nem lacuna teriam saído 177\./.test(texto),
+  'manchete: o que deixou de ser embalado (sem takt, nao ha veredito)');
 checar(/O passo é o mesmo nas 3 \(de 13\.8 a 14\.9 s sem as lacunas\)/.test(texto), 'o passo e o mesmo nas 3, sem as lacunas');
 // A 07:11 ja' tinha analise: o aviso fica colado ao botao, e a nota antiga aparece.
 checar(new RegExp(`A das ${hm(M1.iniciado_em)} já foi analisada: salvar a junção substitui a análise dela`).test(texto),
@@ -224,10 +226,10 @@ await p.goBack();
 await janela.waitFor({ state: 'detached', timeout: 4000 });
 checar(true, 'Voltar do navegador fecha a junção');
 await p.goForward();
-await janela.getByText(/as paradas roubaram 36 volumes/).first().waitFor({ timeout: 4000 });
+await janela.getByText(/39 volumes deixaram de ser embalados/).first().waitFor({ timeout: 4000 });
 checar(true, 'Avançar reabre a junção');
 await p.reload();
-await janela.getByText(/as paradas roubaram 36 volumes/).first().waitFor({ timeout: 8000 });
+await janela.getByText(/39 volumes deixaram de ser embalados/).first().waitFor({ timeout: 8000 });
 checar(true, 'F5 reabre a mesma junção');
 checar(/3 medições marcadas/.test(await barra.innerText()), 'reaberta pelo F5, a junção volta com as 3 marcadas');
 
@@ -242,9 +244,10 @@ checar(/^Takt Time - Penteadeira Princesa - EMBALAGEM 01 - \d{2}-\d{2}-\d{4} \d{
 await p.emulateMedia({ media: 'print' });
 const folha = await p.locator('body > .somente-impressao').innerText();
 checar(/Takt Time — Penteadeira Princesa · EMBALAGEM 01 · junção de 3 medições/.test(folha), 'folha: titulo da junção');
-checar(/ROUBADOS PELAS PARADAS\s*36 · teriam saído 174/i.test(folha), 'folha: os roubados na identificacao');
-checar(/AS 3 MEDIÇÕES/i.test(folha) && /Junção\s*138\s*42 min\s*9 min\s*36/.test(folha), 'folha: a tabela das 3 medicoes');
-checar(/Nas 3 medições, as paradas roubaram 36 volumes/.test(folha), 'folha: a mesma manchete da tela');
+checar(/DEIXARAM DE SER EMBALADOS\s*39 · teriam saído 177/i.test(folha) && /DE ONDE VEIO\s*paradas 33 · lacunas 2 · antes\/depois 4/i.test(folha),
+  'folha: o total e de onde veio na identificacao');
+checar(/AS 3 MEDIÇÕES/i.test(folha) && /Junção\s*138\s*42 min\s*9 min\s*39/.test(folha), 'folha: a tabela das 3 medicoes');
+checar(/Nas 3 medições, 39 volumes deixaram de ser embalados/.test(folha), 'folha: a mesma manchete da tela');
 checar(/Junção = medições do mesmo produto/.test(folha), 'folha: a regra da junção na nota');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/juncao-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
@@ -265,7 +268,7 @@ await janela.waitFor({ state: 'detached', timeout: 4000 });
 checar(await lista.getByText(/Nota de junção digitada, ainda não salva/).count() === 2,
   'fechada sem salvar: as linhas da junção avisam a nota nao salva');
 await juntar.click();
-await janela.getByText(/as paradas roubaram 36 volumes/).first().waitFor({ timeout: 4000 });
+await janela.getByText(/39 volumes deixaram de ser embalados/).first().waitFor({ timeout: 4000 });
 checar(await nota.inputValue() === 'Passo estável; perda nas paradas. Classificar o motivo.', 'juntar de novo devolve a nota digitada');
 
 // RECUSA: aparece no painel, e nada sai da lista.
@@ -313,19 +316,29 @@ await p.emulateMedia({ media: 'screen' });
 await janela.getByRole('button', { name: 'Fechar', exact: true }).click();
 await barra.getByRole('button', { name: 'Desmarcar' }).click();
 
-// UMA MEDICAO SO' tambem mostra o que as paradas roubaram.
+// UMA MEDICAO SO' tambem mostra o que deixou de ser embalado — no passo
+// DELA (14,31 s, nao o da junção): paradas 316,9 s -> 22, lacuna 18,7 s -> 1,
+// antes/depois ~0 = 23; 60 + 23 = 83, 38% a mais.
 await lista.locator(`[data-medicao="${M2.id}"]`).click();
 const uma = p.getByRole('region', { name: /Volume a volume da medição/ });
-await uma.getByText(/roubados pelas paradas nesta medição/).waitFor({ timeout: 4000 });
+await uma.getByText(/deixaram de ser embalados nesta medição/).waitFor({ timeout: 4000 });
 const textoUma = await uma.innerText();
-checar(/22\s*volumes\s*roubados pelas paradas nesta medição/.test(textoUma), 'uma medicao: 22 volumes roubados (07:27)');
-checar(/Saíram 60\. No passo da linha rodando, teriam saído 82 no mesmo tempo: 37% a mais\./.test(textoUma), 'uma medicao: teriam saído 82');
+checar(/23\s*volumes\s*deixaram de ser embalados nesta medição/.test(textoUma), 'uma medicao: 23 volumes deixaram de ser embalados (07:27)');
+checar(/Saíram 60\. No passo da linha sem parada nem lacuna \(14\.3 s por volume\), teriam saído 83 no mesmo tempo: 38% a mais\./.test(textoUma), 'uma medicao: teriam saído 83');
+checar(/DE ONDE VEIO[\s\S]*Paradas marcadas[\s\S]*≈22[\s\S]*Lacunas[\s\S]*≈1/i.test(textoUma), 'uma medicao: paradas 22 + lacunas 1');
 checar(/Junção de 3 medições/.test(textoUma), 'a nota salva diz que ela foi analisada junto com as outras');
 await uma.getByRole('button', { name: 'Fechar', exact: true }).click();
 await lista.getByRole('button', { name: 'Não analisadas (1)' }).click();
 await lista.locator(`[data-medicao="${BUFFET.id}"]`).click();
 await uma.getByText(/Leitura da medição/).waitFor({ timeout: 4000 });
-checar(!/roubados pelas paradas/.test(await uma.innerText()), 'sem parada marcada, nao ha bloco de roubados');
+{
+  // So' o trecho "De onde veio" do bloco: o cartao "Paradas marcadas" vem
+  // logo abaixo e sempre aparece.
+  const texto = await uma.innerText();
+  const deOnde = (texto.split(/DE ONDE VEIO/i)[1] || '').split('A conta não projeta')[0];
+  checar(!/Paradas marcadas/.test(deOnde) && !/por causa das paradas/.test(texto),
+    `sem parada marcada, as paradas nao aparecem no que deixou de ser embalado (${deOnde.replace(/\n/g, ' | ').slice(0, 120)})`);
+}
 
 checar(erros.length === 0, `sem erro de pagina (${erros.join(' | ')})`);
 await navegador.close();

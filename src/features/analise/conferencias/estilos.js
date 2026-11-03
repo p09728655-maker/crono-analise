@@ -660,6 +660,18 @@ export const est = {
   // Os roubados pelas lacunas, abaixo dos das paradas: a linha separa as
   // duas contas, que nao se somam.
   vavRouboSeparado: { borderTop: `1px dashed ${t.borda}`, paddingTop: espaco.md },
+  // De onde veio o que deixou de ser embalado: causa a' esquerda, volumes a'
+  // direita — a soma e' o numero grande.
+  vavCausas: {
+    display: 'flex', flexDirection: 'column', gap: espaco.xs,
+    borderTop: `1px dashed ${t.borda}`, paddingTop: espaco.md,
+  },
+  vavCausasTitulo: { ...rotulo(t.textoFraco) },
+  vavCausa: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: espaco.md },
+  vavCausaTexto: { display: 'flex', flexWrap: 'wrap', columnGap: espaco.sm, minWidth: 0 },
+  vavCausaRotulo: { ...tipo('corpoF'), color: t.texto },
+  vavCausaSub: { ...tipo('corpo'), color: t.textoMedio },
+  vavCausaValor: { ...tipo('corpoF'), ...numeros, color: t.critico, whiteSpace: 'nowrap' },
 
   // A tabela das medicoes da junção: a primeira coluna e' texto (a hora).
   vavThTexto: {

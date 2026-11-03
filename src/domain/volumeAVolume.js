@@ -238,11 +238,102 @@ export function roubadosPelasLacunas(leitura) {
   };
 }
 
-/** " · ≈12 volumes roubados" — so' quando a lacuna custou ao menos um. */
+/** " · ≈12 volumes não embalados" — so' quando a lacuna custou ao menos um. */
 function rotuloRoubadosLacunas(leitura, unidade) {
   const k = roubadosPelasLacunas(leitura)?.roubados || 0;
   if (k < 1) return '';
-  return ` · ≈${k} ${k === 1 ? `${unidade.singular} roubado` : `${unidade.plural} roubados`}`;
+  return ` · ≈${k} ${k === 1 ? unidade.singular : unidade.plural} ${naoSaiu(unidade, k)}`;
+}
+
+/** "deixaram de ser embalados" na embalagem; "deixaram de sair" no resto. */
+export function deixaramDe(unidade, n = 2) {
+  if (unidade?.singular === 'volume') return n === 1 ? 'deixou de ser embalado' : 'deixaram de ser embalados';
+  return n === 1 ? 'deixou de sair' : 'deixaram de sair';
+}
+
+/** "não embalados" na embalagem; "que não saíram" no resto. */
+export function naoSaiu(unidade, n = 2) {
+  if (unidade?.singular === 'volume') return n === 1 ? 'não embalado' : 'não embalados';
+  return n === 1 ? 'que não saiu' : 'que não saíram';
+}
+
+/**
+ * O QUE DEIXOU DE SER EMBALADO (v2.99.6) — o TOTAL, num passo so', e de
+ * onde ele veio. Pedido do PCP: um numero so' para "quanto perdemos".
+ *
+ * O passo e' o da linha sem parada nem lacuna (leitura.normalMs, v). O
+ * potencial e' a medicao inteira nesse passo; o que deixou de ser embalado
+ * e' o potencial menos o que saiu. E ele se abre EXATO, porque a soma dos
+ * intervalos e' (volumes - 1) x v + o excesso das lacunas:
+ *
+ *   duracao / v - saiu =  paradas marcadas no cronometro entre os toques / v
+ *                       + excesso das lacunas / v
+ *                       + (antes do 1o e depois do ultimo toque - v) / v
+ *
+ * (o "- v" e' o volume da largada ao 1o toque, que e' trabalho, nao perda).
+ *
+ * SEM CONTAGEM DUPLA: a parada anotada DEPOIS (no resultado do tablet ou no
+ * PC) esta' dentro dos intervalos — entra na lacuna, se virou uma, e so'
+ * nela. As paradas desta conta sao as que o cronometro tirou das marcas:
+ * o relogio entre o 1o e o ultimo toque menos o tempo das marcas.
+ *
+ * Cada parte e' arredondada e o total e' a SOMA delas: a tela nao mostra
+ * partes que nao fecham com o total, e a das lacunas e' o mesmo numero do
+ * cartao Lacunas. O "antes/depois" nunca fica negativo (largada e Encerrar
+ * mais rapidos que um volume nao sao ganho).
+ *
+ * `itens`: [{ conferencia, marcas, relogio }] — uma medicao ou as da
+ * junção, com a leitura dela (a da junção tem o normal da junção). Null sem
+ * leitura, sem relogio entre toques (medicao antiga) ou com marcas que nao
+ * explicam a contagem: ai' a tela fica com os roubados pelas paradas.
+ */
+export function deixouDeEmbalar(itens, leitura) {
+  if (!leitura?.suficiente || !(leitura.normalMs > 0) || !itens?.length) return null;
+  const v = leitura.normalMs;
+  const medicoes = [];
+  for (const { conferencia: c, marcas, relogio } of itens) {
+    const lista = Array.isArray(marcas) ? marcas.map(Number) : [];
+    const duracaoMs = Number(c?.duracao_ms) || 0;
+    const saiu = Math.floor(Number(c?.pecas) || 0);
+    const rel = Number(relogio);
+    if (lista.length < 2 || lista.length !== saiu || !(rel > 0) || duracaoMs < rel) return null;
+    const entreToques = lista[lista.length - 1] - lista[0];
+    medicoes.push({
+      conferencia: c,
+      saiu,
+      duracaoMs,
+      // As paradas que o cronometro tirou das marcas, entre os toques.
+      paradasMs: Math.max(0, rel - entreToques),
+      // Fora dos toques, menos o volume da largada (ver o cabecalho).
+      foraMs: duracaoMs - rel - v,
+    });
+  }
+  const soma = (f) => medicoes.reduce((t, m) => t + f(m), 0);
+  const partes = {
+    paradasMs: soma((m) => m.paradasMs),
+    paradas: Math.round(soma((m) => m.paradasMs) / v),
+    lacunasMs: leitura.excessoMs,
+    lacunas: Math.round(leitura.excessoMs / v),
+    foraMs: Math.max(0, soma((m) => m.foraMs)),
+    fora: Math.max(0, Math.round(soma((m) => m.foraMs) / v)),
+  };
+  const total = partes.paradas + partes.lacunas + partes.fora;
+  const saiu = soma((m) => m.saiu);
+  return {
+    passoMs: v,
+    duracaoMs: soma((m) => m.duracaoMs),
+    saiu,
+    potencial: saiu + total,
+    total,
+    partes,
+    // Por medicao (a junção): paradas e "antes/depois" de cada uma no passo
+    // da junção; as lacunas de cada uma vem de juntarMedicoes.
+    porMedicao: medicoes.map((m) => ({
+      id: m.conferencia.id,
+      paradas: Math.round(m.paradasMs / v),
+      fora: Math.max(0, Math.round(m.foraMs / v)),
+    })),
+  };
 }
 
 /**
