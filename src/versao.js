@@ -17,7 +17,7 @@ export const HISTORICO = [
     data: '2026-11-03',
     titulo: 'Embalagem Takt Time: o produto na tela enquanto mede',
     itens: [
-      'O NOME DO PRODUTO FICA NO TOPO DO PAINEL, do INICIAR ao Encerrar, acima do TEMPO. Quem passa pela linha vê de longe o que está sendo medido e se o produto na esteira ainda é o mesmo: trocou o produto, encerre a medição e comece outra, senão ela mistura dois takts. Nome comprido quebra em até duas linhas, para não esconder o fim ("1.6", "1.8"), que costuma ser o que separa um produto do outro.',
+      'O NOME DO PRODUTO FICA NO TOPO DO PAINEL, do INICIAR ao Encerrar, acima do TEMPO. Quem passa pela linha vê de longe o que está sendo medido e se o produto na esteira ainda é o mesmo: trocou o produto, encerre a medição e comece outra. Senão, o tempo por volume sai misturado de dois produtos, com o nome de um só. Nome comprido quebra em até duas linhas, para não esconder o fim ("1.6", "1.8"), que costuma ser o que separa um produto do outro. No celular deitado, o nome fica em uma linha e, com a tela muito baixa, sai: os números que decidem vêm primeiro.',
       'SEM PRODUTO ESCOLHIDO, o painel diz "Produto não informado". Ele ainda pode ser informado no resultado, antes de salvar.',
     ],
   },

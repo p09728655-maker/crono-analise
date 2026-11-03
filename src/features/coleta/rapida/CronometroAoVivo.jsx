@@ -42,9 +42,10 @@ export default function CronometroAoVivo({
     <section style={est.painelTempoTakt} aria-label="Tempo decorrido">
       {/* O QUE ESTA' SENDO MEDIDO, no topo: quem passa pela linha (ou o
           tablet preso nela) ve' de longe se o produto na esteira ainda e'
-          o da medicao — trocou o produto, e' hora de encerrar, senao a
-          medicao mistura dois takts. Sem produto, diz isso: ele ainda pode
-          ser informado no resultado, antes de salvar. */}
+          o da medicao — trocou o produto, e' hora de encerrar, senao o
+          tempo por volume sai misturado de dois produtos sob o nome de um.
+          Sem produto, diz isso: ele ainda pode ser informado no resultado,
+          antes de salvar. Painel baixo: uma linha, depois some (ESTILO_TAKT). */}
       <span
         className="takt-produto"
         style={{ ...est.produtoTela, ...(nomeProduto ? {} : est.produtoTelaVazio) }}
@@ -223,13 +224,20 @@ const maiuscula = (s) => s.charAt(0).toUpperCase() + s.slice(1);
  *    fixos) encolhe para caber na meia largura — com 100 min de parada
  *    "101:00.0" saia pela borda.
  *  - PAINEL BAIXO (celular deitado com a barra do navegador a' vista):
- *    some primeiro o rotulo TEMPO, depois o relogio — o que decide (por
- *    volume, takt) e a linha de apoio ficam inteiros, nunca fatiados.
+ *    o produto cai para uma linha, some o rotulo TEMPO, depois o relogio
+ *    e, por ultimo, o produto — o que decide (por volume, takt) e a linha
+ *    de apoio ficam inteiros, nunca fatiados. Os limites sairam de uma
+ *    varredura de 640 a 1024 px de largura por 250 a 620 de altura, com
+ *    nome vazio, curto e de 2 linhas: cada um com folga sobre o ultimo
+ *    painel que ainda cortava.
  *  - RESERVA para navegador sem dvh (Chrome < 108) e sem container query
  *    (Chrome < 105, Safari < 16): o estilo inline com dvh/cq e' invalido
  *    nele e e' descartado; estas classes, que perdem para o inline quando
  *    ele vale, assumem. Sem a altura reserva a tela perdia a altura e o
- *    alvo ficava com 2 px (revisao de 30/10).
+ *    alvo ficava com 2 px (revisao de 30/10). Sem container query nada
+ *    some por altura do painel: o produto fica em uma linha e, em tela
+ *    baixa ou em pe' quase quadrada, sai (@supports) — ele identifica,
+ *    nao decide, e nao pode empurrar os numeros para fora.
  */
 const ESTILO_TAKT = `
   .tela-takt { height: 100vh; }
@@ -237,7 +245,10 @@ const ESTILO_TAKT = `
   .takt-grande { font-size: clamp(36px, 10vw, 84px); }
   .takt-media { font-size: clamp(24px, 6vw, 52px); }
   .takt-rotulo, .takt-rotulo-tempo { font-size: clamp(10px, 1.9vw, 16px); }
-  .takt-produto { font-size: clamp(14px, 4.4vw, 34px); }
+  .takt-produto {
+    font-size: clamp(14px, 4.4vw, 34px);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  }
   .takt-sufixo { font-size: clamp(11px, 2vw, 20px); }
   @media (orientation: landscape) {
     .corpo-takt { flex-direction: row !important; }
@@ -247,6 +258,16 @@ const ESTILO_TAKT = `
     .takt-media { font-size: clamp(20px, min(3.2vw, 8vh), 52px); }
     .takt-produto { font-size: clamp(14px, min(2.6vw, 6vh), 34px); }
   }
+  @container (max-height: 185px) { .takt-produto { -webkit-line-clamp: 1; } }
   @container (max-height: 175px) { .takt-rotulo-tempo { display: none; } }
   @container (max-height: 140px) { .takt-tempo { display: none; } }
+  @container (max-height: 100px) { .takt-produto { display: none; } }
+  @supports not (container-type: size) {
+    .takt-produto { -webkit-line-clamp: 1; }
+    /* Tela baixa, ou em pe' quase quadrada (as letras seguem a largura e
+       o painel fica baixo): sem o produto, como era antes dele. */
+    @media (max-height: 600px), (orientation: portrait) and (min-aspect-ratio: 4/5) {
+      .takt-produto { display: none; }
+    }
+  }
 `;

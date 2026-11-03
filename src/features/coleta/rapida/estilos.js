@@ -295,11 +295,13 @@ export const est = {
      em diante: o que separa um produto do outro costuma estar no FIM do
      nome ("Rack Sirius 1.6" x "1.8"), e cortar numa linha so' escondia
      justamente isso. Maior que os rotulos, menor que os numeros:
-     identifica a medicao, nao decide nada. */
+     identifica a medicao, nao decide nada. As linhas (2, 1 ou nenhuma,
+     pela altura do painel) ficam na classe .takt-produto, no ESTILO_TAKT
+     do CronometroAoVivo: display aqui no inline venceria o display:none
+     da container query. */
   produtoTela: {
     maxWidth: '100%', flexShrink: 0,
     fontSize: 'clamp(14px, min(6cqh, 5cqw), 34px)', fontWeight: 700, lineHeight: 1.2, color: cores.texto,
-    display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
     overflow: 'hidden', overflowWrap: 'anywhere', textAlign: 'center',
   },
   produtoTelaVazio: { fontWeight: 400, fontStyle: 'italic', color: cores.textoFraco },

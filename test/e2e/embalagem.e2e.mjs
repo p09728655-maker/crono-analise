@@ -1128,46 +1128,72 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
 }
 
 /* ---------- DEITADO: a barra de baixo sempre na tela (v2.98.2) ---------- */
+// Os spans do painel que saem pela borda dele: numero fatiado pelo overflow.
+const fatiadosNoPainel = (pagina) => pagina.evaluate(() => {
+  const painel = document.querySelector('[aria-label="Tempo decorrido"]').getBoundingClientRect();
+  return [...document.querySelectorAll('[aria-label="Tempo decorrido"] span')]
+    .filter((el) => el.getClientRects().length)
+    .filter((el) => { const r = el.getBoundingClientRect(); return r.bottom > painel.bottom + 0.5 || r.top < painel.top - 0.5; })
+    .map((el) => el.innerText);
+});
+// Linhas que o produto ocupa no painel (0 = escondido) e se o nome saiu inteiro.
+const linhasDoProduto = (pagina) => pagina.evaluate(() => {
+  const el = document.querySelector('.takt-produto');
+  if (!el.getClientRects().length) return { linhas: 0, inteiro: false };
+  return {
+    linhas: Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
+    inteiro: el.scrollHeight <= el.clientHeight + 1,
+  };
+});
+// Nome real de 2 linhas: o que mais empurra o painel baixo (revisao de 03/11).
+const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
 {
   /* Na v2.98.0 o painel crescia pela largura da tela, e deitado ele nao
      cabia: Desfazer, Parou e Encerrar saiam por baixo de uma tela que nao
      rola, e a medicao so' fechava girando o tablet. Deitado, painel e alvo
-     ficam lado a lado. */
-  for (const [largura, altura] of [[1024, 552], [640, 360], [740, 300]]) {
-    const ctx = await navegador.newContext({ viewport: { width: largura, height: altura }, hasTouch: true });
-    const s = await ctx.newPage();
-    await semearSessao(s);
-    await simularServidor(s, {});
-    await s.goto(`${BASE}/coleta/embalagem`);
-    await s.getByRole('button', { name: /INICIAR/ }).click();
-    const largadaD = s.getByRole('button', { name: /Largada/ });
-    await largadaD.waitFor({ timeout: 4000 });
-    await s.waitForTimeout(300);
-    await largadaD.dispatchEvent('pointerdown');
-    const alvoD = s.getByRole('button', { name: 'Contar um volume' });
-    await alvoD.waitFor({ timeout: 4000 });
-    for (let i = 0; i < 3; i++) { await s.waitForTimeout(260); await alvoD.dispatchEvent('pointerdown'); }
-    const encerrarD = await s.getByRole('button', { name: /Encerrar/ }).boundingBox();
-    const painelD = await s.locator('[aria-label="Tempo decorrido"]').boundingBox();
-    const caixaD = await alvoD.boundingBox();
-    checar(encerrarD.y + encerrarD.height <= altura,
-      `deitado ${largura}x${altura}: Encerrar dentro da tela (termina em ${Math.round(encerrarD.y + encerrarD.height)} de ${altura})`);
-    checar(caixaD.x >= painelD.x + painelD.width && caixaD.height >= 120,
-      `deitado ${largura}x${altura}: numeros a esquerda, alvo a direita, com ${Math.round(caixaD.height)} px de altura`);
-    // Painel baixo: o que nao cabe some inteiro (TEMPO, depois o relogio);
-    // nenhum numero fica fatiado pelo overflow do painel.
-    const fatiados = await s.evaluate(() => {
-      const painel = document.querySelector('[aria-label="Tempo decorrido"]').getBoundingClientRect();
-      return [...document.querySelectorAll('[aria-label="Tempo decorrido"] span')]
-        .filter((el) => el.getClientRects().length)
-        .filter((el) => { const r = el.getBoundingClientRect(); return r.bottom > painel.bottom + 0.5 || r.top < painel.top - 0.5; })
-        .map((el) => el.innerText);
-    });
-    checar(fatiados.length === 0, `deitado ${largura}x${altura}: nada cortado no painel${fatiados.length ? ` (${fatiados.join(', ')})` : ''}`);
-    // Sem produto escolhido, o painel diz isso — nao fica um vazio mudo.
-    checar(await s.locator('[aria-label="Tempo decorrido"]').getByText('Produto não informado').isVisible(),
-      `deitado ${largura}x${altura}: sem produto, o painel diz "Produto não informado"`);
-    await ctx.close();
+     ficam lado a lado. Com o produto no topo (v2.99.3), o painel baixo o
+     poe numa linha so' — 740x290 e 667x325 cortavam os numeros de baixo
+     com o nome em duas. */
+  for (const nome of ['', NOME_LONGO]) {
+    for (const [largura, altura] of [[1024, 552], [640, 360], [740, 300], [740, 290], [667, 325]]) {
+      const tela = `deitado ${largura}x${altura}${nome ? ', nome longo' : ''}`;
+      const ctx = await navegador.newContext({ viewport: { width: largura, height: altura }, hasTouch: true });
+      const s = await ctx.newPage();
+      await semearSessao(s);
+      await simularServidor(s, {});
+      await s.goto(`${BASE}/coleta/embalagem`);
+      if (nome) await s.locator('input[aria-label="Produto embalado"]').fill(nome);
+      await s.getByRole('button', { name: /INICIAR/ }).click();
+      const largadaD = s.getByRole('button', { name: /Largada/ });
+      await largadaD.waitFor({ timeout: 4000 });
+      await s.waitForTimeout(300);
+      await largadaD.dispatchEvent('pointerdown');
+      const alvoD = s.getByRole('button', { name: 'Contar um volume' });
+      await alvoD.waitFor({ timeout: 4000 });
+      for (let i = 0; i < 3; i++) { await s.waitForTimeout(260); await alvoD.dispatchEvent('pointerdown'); }
+      const encerrarD = await s.getByRole('button', { name: /Encerrar/ }).boundingBox();
+      const painelD = await s.locator('[aria-label="Tempo decorrido"]').boundingBox();
+      const caixaD = await alvoD.boundingBox();
+      checar(encerrarD.y + encerrarD.height <= altura,
+        `${tela}: Encerrar dentro da tela (termina em ${Math.round(encerrarD.y + encerrarD.height)} de ${altura})`);
+      checar(caixaD.x >= painelD.x + painelD.width && caixaD.height >= 120,
+        `${tela}: numeros a esquerda, alvo a direita, com ${Math.round(caixaD.height)} px de altura`);
+      // Painel baixo: o que nao cabe some inteiro (TEMPO, depois o relogio);
+      // nenhum numero fica fatiado pelo overflow do painel.
+      const fatiados = await fatiadosNoPainel(s);
+      checar(fatiados.length === 0, `${tela}: nada cortado no painel${fatiados.length ? ` (${fatiados.join(', ')})` : ''}`);
+      const produtoD = await linhasDoProduto(s);
+      if (!nome) {
+        // Sem produto escolhido, o painel diz isso — nao fica um vazio mudo.
+        checar(await s.locator('[aria-label="Tempo decorrido"]').getByText('Produto não informado').isVisible(),
+          `${tela}: sem produto, o painel diz "Produto não informado"`);
+      } else if (altura >= 552) {
+        checar(produtoD.linhas === 2 && produtoD.inteiro, `${tela}: o nome inteiro, em duas linhas (${produtoD.linhas})`);
+      } else {
+        checar(produtoD.linhas === 1, `${tela}: painel baixo, o nome numa linha so' (${produtoD.linhas})`);
+      }
+      await ctx.close();
+    }
   }
 }
 
@@ -1175,13 +1201,17 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
 {
   /* Chrome < 108 nao entende dvh, < 105 nao entende cq: o estilo inline
      com eles e' descartado. Simulado apagando esses valores do inline,
-     como o navegador faria — as classes reserva tem de assumir. */
-  for (const [largura, altura] of [[800, 1280], [1024, 552]]) {
+     como o navegador faria — as classes reserva tem de assumir. As regras
+     @container nao valem sem container, e o @supports not (container-type)
+     passa a valer: simulado reescrevendo-o como @media all. Nessas telas,
+     sem o produto, nada cortava; com ele, tem de continuar assim. */
+  for (const [largura, altura] of [[800, 1280], [1024, 552], [844, 390], [915, 412]]) {
     const ctx = await navegador.newContext({ viewport: { width: largura, height: altura }, hasTouch: true });
     const s = await ctx.newPage();
     await semearSessao(s);
     await simularServidor(s, {});
     await s.goto(`${BASE}/coleta/embalagem`);
+    await s.locator('input[aria-label="Produto embalado"]').fill(NOME_LONGO);
     await s.getByRole('button', { name: /INICIAR/ }).click();
     const largadaV = s.getByRole('button', { name: /Largada/ });
     await largadaV.waitFor({ timeout: 4000 });
@@ -1189,11 +1219,17 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
     await largadaV.dispatchEvent('pointerdown');
     const alvoV = s.getByRole('button', { name: 'Contar um volume' });
     await alvoV.waitFor({ timeout: 4000 });
+    for (let i = 0; i < 3; i++) { await s.waitForTimeout(260); await alvoV.dispatchEvent('pointerdown'); }
     await s.evaluate(() => {
       document.querySelectorAll('[style]').forEach((el) => {
         if (/dvh/.test(el.style.height)) el.style.removeProperty('height');
         if (/cq[hw]/.test(el.style.fontSize)) el.style.removeProperty('font-size');
         if (el.style.containerType) el.style.removeProperty('container-type');
+      });
+      document.querySelectorAll('style').forEach((st) => {
+        if (/@supports not \(container-type: size\)/.test(st.textContent)) {
+          st.textContent = st.textContent.replace(/@supports not \(container-type: size\)/g, '@media all');
+        }
       });
     });
     await s.waitForTimeout(100);
@@ -1202,6 +1238,13 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
     const fonte = await s.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.takt-grande')).fontSize));
     checar(caixaV.height >= 150 && encerrarV.y + encerrarV.height <= altura && fonte >= 26,
       `sem dvh e sem cq ${largura}x${altura}: alvo de ${Math.round(caixaV.height)} px, Encerrar na tela, numero grande com ${fonte} px`);
+    const fatiadosV = await fatiadosNoPainel(s);
+    checar(fatiadosV.length === 0,
+      `sem dvh e sem cq ${largura}x${altura}: nada cortado no painel com o nome longo${fatiadosV.length ? ` (${fatiadosV.join(', ')})` : ''}`);
+    // Em pe' e alto, o produto aparece (uma linha); na tela baixa, sai.
+    const produtoV = await linhasDoProduto(s);
+    const esperado = altura > 600 && altura >= largura * 1.25 ? 1 : 0;
+    checar(produtoV.linhas === esperado, `sem dvh e sem cq ${largura}x${altura}: produto em ${esperado} linha(s) (${produtoV.linhas})`);
     await ctx.close();
   }
 }
