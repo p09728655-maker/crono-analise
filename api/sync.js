@@ -271,11 +271,15 @@ export default handler(async (req, res) => {
           // A RLS so' deixa ver as desta empresa: achou, e' a nossa, ja'
           // mexida no PC. Nao achou, o id e' do tablet ou de outra empresa.
           const [nossa] = await tx`
-            SELECT 1 FROM conferencias
+            SELECT id FROM conferencias
              WHERE client_id = ${c.clientId} AND empresa_id = ${empresaId} AND origem = 'video'`;
-          throw new ErroHttp(409, nossa
-            ? 'Esta medição já chegou ao sistema numa tentativa anterior e foi mexida no PC depois (produto, paradas, análise ou arquivo), então ela fica como está. Confira a medição na Embalagem Takt Time (filmagem de mais de 30 dias: no relatório Ritmo por máquina); se ainda precisar corrigir, corrija lá e descarte esta marcação'
-            : 'Já existe outra medição com este identificador: descarte esta marcação e marque de novo para salvar');
+          // A tela usa o id para oferecer "arquivar a que chegou e salvar esta
+          // como nova": volume e marca nao se corrigem no PC.
+          throw nossa
+            ? new ErroHttp(409, 'Esta medição já chegou ao sistema numa tentativa anterior e foi mexida no PC depois '
+              + '(produto, paradas, análise ou arquivo), então salvar de novo não a substitui',
+            { motivo: 'mexida-no-pc', conferenciaId: nossa.id })
+            : new ErroHttp(409, 'Já existe outra medição com este identificador: descarte esta marcação e marque de novo para salvar');
         }
         continue;
       }

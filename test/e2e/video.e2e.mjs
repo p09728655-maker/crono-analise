@@ -57,20 +57,39 @@ const HOJE_8H = `${anoSp}-${dois(mesSp)}-${dois(diaSp)}T08:00`;
  * O /sync simulado faz o que o de verdade faz: a medicao POR VIDEO com um
  * client_id ja' visto SUBSTITUI a anterior (v2.99.2) e a resposta diz
  * quantas eram novas e quantas foram substituidas. `banco` guarda o que
- * ficou, por client_id. `falha`: 'recusa' (400, nada grava) ou 'perdida'
- * (grava, mas a resposta e' 504).
+ * ficou, por client_id. `falha`: 'recusa' (400, nada grava), 'perdida'
+ * (grava, mas a resposta e' 504) ou 'mexida' (409: a que chegou antes foi
+ * mexida no PC). `arquivadas` recebe o id de cada PATCH de arquivar.
  */
+const MEXIDA_ID = '00000000-0000-0000-0000-00000000c0b9';
 async function simularServidor(pagina, {
-  enviados, conferencias = [], recusarSync = false, cadastro = CADASTRO, falha = null, banco = new Map(),
+  enviados, conferencias = [], recusarSync = false, cadastro = CADASTRO, falha = null, banco = new Map(), arquivadas = [],
 }) {
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas: DEMANDAS } })
     : rota.fulfill({ json: cadastro })));
   await pagina.route('**/api/motivos-parada**', (rota) => rota.fulfill({ json: { motivos: MOTIVOS } }));
-  await pagina.route('**/api/conferencias**', (rota) => rota.fulfill({ json: { conferencias, outras: 0 } }));
+  await pagina.route('**/api/conferencias**', (rota) => {
+    if (rota.request().method() === 'PATCH') {
+      const id = new URL(rota.request().url()).searchParams.get('id');
+      if (rota.request().postDataJSON()?.arquivada === true) arquivadas.push(id);
+      return rota.fulfill({ json: { conferencia: { id, arquivada: true } } });
+    }
+    return rota.fulfill({ json: { conferencias, outras: 0 } });
+  });
   await pagina.route('**/api/sync**', (rota) => {
     const corpo = rota.request().postDataJSON();
     enviados.push(...(corpo.conferencias || []));
+    if (falha?.proxima === 'mexida') {
+      falha.proxima = null;
+      return rota.fulfill({
+        status: 409,
+        json: {
+          erro: 'Esta medição já chegou ao sistema numa tentativa anterior e foi mexida no PC depois (produto, paradas, análise ou arquivo), então salvar de novo não a substitui',
+          detalhes: { motivo: 'mexida-no-pc', conferenciaId: MEXIDA_ID },
+        },
+      });
+    }
     if (recusarSync || falha?.proxima === 'recusa') {
       if (falha) falha.proxima = null;
       return rota.fulfill({ status: 400, json: { erro: 'Campo "conferencias[0].peca" invalido' } });
@@ -202,6 +221,9 @@ await p.locator('input[type="file"]').setInputFiles(VIDEO);
 const continuar = p.getByRole('button', { name: 'Continuar de onde parou' });
 await continuar.waitFor({ timeout: 8000 });
 checar(/marcação em andamento deste vídeo \(8 volumes/.test(await preparar.innerText()), 'F5: o PC guardou a marcacao (8 volumes)');
+// Com o video ja' aberto: antes disso o botao fica travado por outro motivo.
+await preparar.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+await p.waitForFunction(() => !document.querySelector('button[disabled]')?.innerText.includes('Continuar'), { timeout: 8000 });
 checar(await p.getByRole('button', { name: 'Começar a marcar' }).isDisabled()
   && /Continue ou descarte a marcação guardada deste vídeo antes de começar outra/.test(await preparar.innerText()),
 'com marcacao guardada na tela, "Começar a marcar" fica travado: continuar ou descartar antes');
@@ -406,6 +428,70 @@ await ctx.close();
     .test(await r.locator('[aria-label="Preparar a medição por vídeo"]').innerText()),
   'descartar depois de um envio sem resposta: avisa que ela pode ter chegado e onde conferir (filmagem antiga: no relatorio, nao na lista)');
   await c3.close();
+}
+
+/* ---- a que chegou foi mexida no PC: arquivar ela e salvar esta, ou descartar ---- */
+{
+  const c7 = await navegador.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: FUSO });
+  const m = await c7.newPage();
+  await semearSessao(m);
+  m.on('pageerror', (e) => erros.push(e.message));
+  const env7 = [];
+  const arquivadas = [];
+  const falha = { proxima: 'mexida' };
+  await simularServidor(m, { enviados: env7, falha, arquivadas });
+  const marcarTres = async () => {
+    await m.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+    await m.getByRole('button', { name: 'Começar a marcar' }).click();
+    await m.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+    await m.evaluate(() => document.activeElement?.blur());
+    for (const sg of [2, 4, 6]) await teclaEm(m, sg, 'Enter');
+    await teclaEm(m, 7, 'f');
+  };
+  await m.goto(`${BASE}/analise/embalagem/video`);
+  await m.locator('input[type="file"]').setInputFiles(VIDEO);
+  await m.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  await marcarTres();
+  const rev = m.locator('[aria-label="Revisar a medição"]');
+  await rev.getByRole('button', { name: 'Salvar medição' }).click();
+  const caixa = rev.getByRole('alert').filter({ hasText: /foi mexida no PC depois/ });
+  await caixa.waitFor({ timeout: 4000 });
+  checar(/volume e marca não se corrigem no PC/.test(await caixa.innerText())
+    && await rev.getByRole('button', { name: 'Salvar medição' }).count() === 0
+    && await caixa.getByRole('button', { name: 'Arquivar a que chegou e salvar esta' }).count() === 1,
+  '409 de mexida no PC: diz por que, tira o "Salvar" (daria o mesmo 409) e oferece arquivar a que chegou e salvar esta');
+  // F5: o rascunho lembra, e nao promete mais que salvar substitui.
+  await m.reload();
+  await m.locator('input[type="file"]').setInputFiles(VIDEO);
+  await m.getByRole('button', { name: 'Continuar de onde parou' }).waitFor({ timeout: 8000 });
+  const prep = await m.locator('[aria-label="Preparar a medição por vídeo"]').innerText();
+  checar(/Uma versão dela já está no sistema e foi mexida no PC depois: salvar de novo não a substitui/.test(prep)
+    && !/a versão nova substitui/.test(prep),
+  'F5 depois do 409 de mexida: o rascunho diz que salvar nao substitui (e nao promete o contrario)');
+  await m.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.innerText.includes('Continuar de onde') && !b.disabled), { timeout: 8000 });
+  await m.getByRole('button', { name: 'Continuar de onde parou' }).click();
+  await m.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  await m.evaluate(() => document.activeElement?.blur());
+  await teclaEm(m, 7, 'f');
+  await rev.getByRole('button', { name: 'Arquivar a que chegou e salvar esta' }).click();
+  await m.getByText(/✓ Medição salva: 2 volumes/).waitFor({ timeout: 4000 });
+  checar(JSON.stringify(arquivadas) === JSON.stringify([MEXIDA_ID]) && env7.length === 2 && env7[1].clientId !== env7[0].clientId,
+    'arquivar e salvar: arquiva a que chegou (pelo id do 409) e salva esta com outro client_id');
+
+  // A que chegou serve: descartar esta, e o video fica avisando.
+  await m.getByRole('button', { name: 'Marcar outro vídeo' }).click();
+  await m.locator('input[type="file"]').setInputFiles(VIDEO);
+  await m.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  await marcarTres();
+  falha.proxima = 'mexida';
+  await rev.getByRole('button', { name: 'Salvar medição' }).click();
+  await rev.getByRole('button', { name: 'Descartar esta marcação' }).click();
+  await m.locator('[aria-label="Preparar a medição por vídeo"]').waitFor({ timeout: 4000 });
+  checar(/Uma marcação deste vídeo foi descartada neste PC em .*, e uma versão dela já está no sistema: confira na lista da Embalagem Takt Time/
+    .test(await m.locator('[aria-label="Preparar a medição por vídeo"]').innerText())
+    && await m.getByRole('button', { name: 'Continuar de onde parou' }).count() === 0,
+  'descartar depois do 409 de mexida: a marcacao sai e o video avisa que uma versao ja esta no sistema');
+  await c7.close();
 }
 
 /* ---- a marcacao da v2.99.0 (vaga unica) entra na lista de rascunhos ---- */

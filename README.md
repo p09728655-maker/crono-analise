@@ -228,9 +228,14 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   problema: salvar de novo grava a última versão, uma só. A resposta traz
   `atualizados`. Só substitui a que **ninguém mexeu no PC**:
   `conferencias.editada_em` é marcada por todo PATCH de `api/conferencias.js`
-  (produto, paradas, análise, arquivo) e, com ela, o reenvio volta 409 e a
-  medição fica como está — senão a correção do PCP sumiria e a análise
-  ficaria valendo sobre números novos. O id que não pode ser substituído (do
+  (produto, paradas, análise, arquivo — no PATCH individual, como PRIMEIRA
+  escrita, para travar a linha contra um reenvio simultâneo) e, com ela, o
+  reenvio volta 409 com `detalhes: { motivo: 'mexida-no-pc', conferenciaId }`
+  e a medição fica como está — senão a correção do PCP sumiria e a análise
+  ficaria valendo sobre números novos. A tela então oferece arquivar a que
+  chegou e salvar esta com um `client_id` novo (gerado uma vez, guardado no
+  rascunho) ou descartar. Na criação da coluna, as medições por vídeo que já
+  existiam ficam marcadas (não dá para saber o que a v2.99.1 mexeu). O id que não pode ser substituído (do
   tablet, de outra empresa) também volta 409, e coletor mandando vídeo volta
   403 — substituir é UPDATE, que a RLS só deixa para quem faz análise. O reenvio do tablet
   continua ignorado (`DO NOTHING`). O rascunho guarda `envioTentado`: o F5 e o

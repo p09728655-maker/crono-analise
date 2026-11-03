@@ -234,6 +234,19 @@ export default handler(async (req, res) => {
         ? texto(corpo.analiseNota, 'analiseNota', { max: 2000 })
         : null;
 
+      /**
+       * Mexida no PC: a medicao por video nao pode mais ser substituida pelo
+       * reenvio (ver editada_em no schema). E' a PRIMEIRA escrita, depois de
+       * toda validacao: ela trava a linha, e um reenvio do video ao mesmo
+       * tempo espera e volta 409 — marcada no fim, o reenvio passava no
+       * meio e as paradas do PC e as do video ficavam somadas.
+       */
+      const marcada = await db`
+        UPDATE conferencias SET editada_em = now()
+         WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}
+        RETURNING id`;
+      if (!marcada.length) throw nadaMudou();
+
       // Paradas cadastradas no PC: o analista marcou o setup depois, olhando
       // o apontamento. Mesmo formato do que sobe do aparelho.
       if (tem('paradas')) {
@@ -302,10 +315,6 @@ export default handler(async (req, res) => {
           RETURNING id`;
         if (!alteradas.length) throw nadaMudou();
       }
-
-      // Mexida no PC: a medicao por video nao pode mais ser substituida pelo
-      // reenvio (ver editada_em no schema). Uma marca so', para todo PATCH.
-      await db`UPDATE conferencias SET editada_em = now() WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}`;
 
       const [linha] = await db`
         SELECT c.id, c.arquivada, c.peca, c.analisada_em, c.analisada_por, c.analise_nota,
