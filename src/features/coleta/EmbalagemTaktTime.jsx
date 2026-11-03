@@ -236,6 +236,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           modoTakt
           taktMs={takt.taktMs}
           porVolumeMs={porVolumeAoVivo}
+          produto={produto}
         />
       )}
 
