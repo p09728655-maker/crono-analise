@@ -34,7 +34,9 @@ import {
   CRITERIOS_INTERVALOS, intervalosEntreMarcas, leituraPecaAPeca, periodoPorPeca,
 } from './crono/intervalos.js';
 import { semanaIso } from './demanda/calendario.js';
-import { frasesVolumeAVolume, roubadosPelasParadas } from './volumeAVolume.js';
+import {
+  deixaramDe, deixouDeEmbalar, frasesVolumeAVolume, roubadosPelasParadas,
+} from './volumeAVolume.js';
 
 /**
  * O PASSO de cada medicao e' a media dos intervalos dela SEM as lacunas da
@@ -260,6 +262,14 @@ export function juntarMedicoes(itens, { taktMs = null, setupPlanejado = false } 
       : null;
   }
 
+  /* O QUE DEIXOU DE SER EMBALADO, no passo da junção (ver deixouDeEmbalar):
+     o total e, por medicao, paradas + lacunas + antes/depois dela. */
+  const deixou = deixouDeEmbalar(ordenados, leitura);
+  for (const m of medicoes) {
+    const dela = deixou?.porMedicao.find((x) => x.id === m.conferencia.id);
+    m.deixou = dela ? dela.paradas + (m.lacunasRoubados || 0) + dela.fora : null;
+  }
+
   const segmentoDe = (indice) => medicoes.find((m) => indice >= m.inicio && indice < m.inicio + m.n);
   const lacunas = (leitura?.lacunas || []).map((l) => {
     const m = segmentoDe(l.indice);
@@ -285,6 +295,7 @@ export function juntarMedicoes(itens, { taktMs = null, setupPlanejado = false } 
     roubo: comRoubo.length
       ? { saiu: pecas, roubados, potencial: pecas + roubados }
       : null,
+    deixou,
   };
 }
 
@@ -326,7 +337,7 @@ export function passoDasMedicoes(medicoes) {
 export function frasesDaJuncao({
   juncao, takt = {}, unidade, nomeGrupo, hora,
 }) {
-  const { leitura, medicoes, roubo } = juncao;
+  const { leitura, medicoes, roubo, deixou } = juncao;
   const base = frasesVolumeAVolume({
     leitura, takt, unidade, nomeGrupo, juncao: true,
   });
@@ -338,9 +349,16 @@ export function frasesDaJuncao({
   let manchete = base.manchete;
   let linhasBase = base.linhas;
 
-  if (roubo && roubo.roubados > 0) {
-    const frase = `Nas ${n} medições, as paradas roubaram ${roubo.roubados} ${roubo.roubados === 1 ? unidade.singular : plural}: `
-      + `saíram ${roubo.saiu}, e no passo da linha rodando teriam saído ${roubo.potencial}.`;
+  // O total num passo so' (deixouDeEmbalar); sem ele, o das paradas.
+  const qtd = (q) => `${q} ${q === 1 ? unidade.singular : plural}`;
+  const frase = deixou?.total > 0
+    ? `Nas ${n} medições, ${qtd(deixou.total)} ${deixaramDe(unidade, deixou.total)}: `
+      + `saíram ${deixou.saiu}, e no passo da linha sem parada nem lacuna teriam saído ${deixou.potencial}.`
+    : roubo?.roubados > 0
+      ? `Nas ${n} medições, por causa das paradas, ${qtd(roubo.roubados)} ${deixaramDe(unidade, roubo.roubados)}: `
+        + `saíram ${roubo.saiu}, e no passo da linha rodando teriam saído ${roubo.potencial}.`
+      : null;
+  if (frase) {
     if (temVeredito) {
       extras.push(frase);
     } else {
@@ -361,12 +379,14 @@ export function frasesDaJuncao({
     const faixa = `${menor === maior ? menor : `de ${menor} a ${maior}`} s sem as lacunas`;
     if (passo.igual) {
       const comParada = medicoes.some((m) => (m.roubo?.paradaMs || 0) > 0);
-      const maiorRoubo = [...medicoes].filter((m) => m.roubo?.roubados > 0)
-        .sort((a, b) => b.roubo.roubados - a.roubo.roubados)[0];
+      // A perda de cada uma: o total dela (deixou), ou o das paradas.
+      const perda = (m) => (deixou ? (m.deixou || 0) : (m.roubo?.roubados || 0));
+      const maiorRoubo = [...medicoes].filter((m) => perda(m) > 0)
+        .sort((a, b) => perda(b) - perda(a))[0];
       extras.push(
         `O passo é o mesmo ${quais} (${faixa})`
         + `${comParada ? ': o que muda de uma para outra são as paradas.' : '.'}`
-        + `${maiorRoubo && n > 2 ? ` A das ${hora(maiorRoubo.conferencia)} sozinha perdeu ${maiorRoubo.roubo.roubados}.` : ''}`,
+        + `${maiorRoubo && n > 2 ? ` A das ${hora(maiorRoubo.conferencia)} sozinha perdeu ${perda(maiorRoubo)}.` : ''}`,
       );
     } else {
       extras.push(

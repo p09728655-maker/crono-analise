@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.99.6',
+    data: '2026-11-03',
+    titulo: 'Embalagem Takt Time: o total que deixou de ser embalado',
+    itens: [
+      'UM NÚMERO SÓ PARA "QUANTO PERDEMOS": "39 volumes deixaram de ser embalados nos 42 min medidos" (as 3 medições de Penteadeira Princesa de 03/11, juntas). É a medição inteira no passo da linha sem parada nem lacuna, menos o que saiu — "saíram 138; teriam saído 177". No lugar de "roubados", a palavra da fábrica.',
+      'DE ONDE VEIO, logo abaixo, no mesmo passo e fechando com o total: paradas marcadas no cronômetro, lacunas (paradas que ninguém marcou) e o tempo antes do 1º e depois do último volume. Sem contagem dupla: a parada anotada depois (no resultado do tablet ou no PC) fica dentro dos intervalos e entra só na lacuna, se virou uma.',
+      'O NÚMERO DAS PARADAS MUDA UM POUCO: era calculado no passo da linha rodando (com as lacunas dentro), agora no passo sem lacunas, o mesmo das outras partes, para tudo fechar com o total. No exemplo: paradas 33 + lacunas 2 + antes/depois 4 = 39 (antes, "36 roubados pelas paradas"). Na junção, tudo no passo da junção; a tabela das medições ganhou uma coluna só, "Deixaram de ser embalados".',
+      'Na folha impressa, o total e de onde veio vão na identificação. Medição antiga, sem o relógio entre os toques, continua com a conta de antes (por causa das paradas e das lacunas, separadas).',
+    ],
+  },
+  {
     versao: '2.99.5',
     data: '2026-11-03',
     titulo: 'Embalagem Takt Time: volumes roubados pelas lacunas e o passo da linha em destaque',

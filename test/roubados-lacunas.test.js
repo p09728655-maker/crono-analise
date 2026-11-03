@@ -36,7 +36,7 @@ describe('roubadosPelasLacunas', () => {
 
   it('o cartao Lacunas diz os volumes; o "sem as lacunas" tem o nome das outras camadas', () => {
     const k = Object.fromEntries(numerosDaLeitura(comLacuna, {}, VOLUME).map((x) => [x.chave, x]));
-    expect(k.lacunas.sub).toBe('2min20s além do normal · ≈2 volumes roubados');
+    expect(k.lacunas.sub).toBe('2min20s além do normal · ≈2 volumes não embalados');
     expect(k.normal.rotulo).toBe('Por volume sem as lacunas');
     expect(k.normal.valor).toBe('60.0 s');
   });

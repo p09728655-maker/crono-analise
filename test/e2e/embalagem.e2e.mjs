@@ -439,10 +439,15 @@ checar(/1 lacuna — intervalo maior que o dobro do normal \(60.0 s\)/.test(text
   const linhaLista = await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().innerText();
   // v2.99.5: o cartao Lacunas diz os volumes que ela roubou — 200 s numa
   // linha de 60 s: 140 s alem do normal / 60 s = 2,3 -> 2.
-  checar(/LACUNAS\s*1\s*2min20s além do normal · ≈2 volumes roubados\s*VOLUMES\/HORA\s*50\s*na medição inteira, com as paradas/i.test(textoJanela),
-    'o cartao Lacunas diz os 2 volumes roubados, e Volumes/hora (50) vem logo depois');
-  checar(/≈2\s*volumes\s*roubados pelas lacunas nesta medição/.test(textoJanela),
-    'o bloco de roubados mostra os das lacunas, sem parada marcada');
+  checar(/LACUNAS\s*1\s*2min20s além do normal · ≈2 volumes não embalados\s*VOLUMES\/HORA\s*50\s*na medição inteira, com as paradas/i.test(textoJanela),
+    'o cartao Lacunas diz os 2 volumes nao embalados, e Volumes/hora (50) vem logo depois');
+  // v2.99.6: o total num passo so' (60 s): 1.000 s / 60 = 16,7 -> lacunas 2
+  // (140 s / 60) + antes/depois 0 ((1.000 - 920 - 60) / 60 = 0,3) = 2; 14 + 2 = 16.
+  checar(/2\s*volumes\s*deixaram de ser embalados nesta medição/.test(textoJanela)
+    && /teriam saído 16 no mesmo tempo: 14% a mais/.test(textoJanela),
+    'o bloco: 2 volumes deixaram de ser embalados, teriam saido 16');
+  checar(/DE ONDE VEIO\s*Lacunas[^\n]*\n?[\s\S]*?≈2/i.test(textoJanela) && !/Paradas marcadas\s*\d+ s no cronômetro/.test(textoJanela),
+    'de onde veio: so as lacunas (sem parada marcada)');
   // As tres camadas do tempo por volume em sequencia, a terceira em cartao.
   checar(/POR VOLUME COM A LINHA RODANDO\s*70\.8 s[\s\S]*?POR VOLUME SEM AS LACUNAS\s*60\.0 s\s*o passo da linha/i.test(textoJanela),
     'o "sem as lacunas" e um cartao, logo depois do "com a linha rodando"');
@@ -473,9 +478,10 @@ checar(await folha.isVisible(), 'impressao: a folha A4 da medicao aparece');
 checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some do papel');
 {
   const textoFolha = await folha.innerText();
-  checar(/LACUNAS\s*1\s*2min20s além do normal · ≈2 volumes roubados\s*VOLUMES\/HORA\s*50(?!\d)/i.test(textoFolha),
-    'impressao: lacunas com os volumes roubados, e volumes/hora (50) depois');
-  checar(/ROUBADOS PELAS LACUNAS\s*≈2/i.test(textoFolha), 'impressao: os roubados pelas lacunas na identificacao');
+  checar(/LACUNAS\s*1\s*2min20s além do normal · ≈2 volumes não embalados\s*VOLUMES\/HORA\s*50(?!\d)/i.test(textoFolha),
+    'impressao: lacunas com os volumes nao embalados, e volumes/hora (50) depois');
+  checar(/DEIXARAM DE SER EMBALADOS\s*2 · teriam saído 16/i.test(textoFolha) && /DE ONDE VEIO\s*paradas 0 · lacunas 2/i.test(textoFolha),
+    'impressao: o total e de onde veio na identificacao');
   checar(!/mesmo da lista/.test(textoFolha), 'impressao: o papel nao fala de uma lista que ele nao tem');
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });

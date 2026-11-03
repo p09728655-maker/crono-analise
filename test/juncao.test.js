@@ -113,14 +113,33 @@ describe('a junção das tres medicoes', () => {
     expect(j.roubo).toEqual({ saiu: 138, roubados: 36, potencial: 174 });
   });
 
+  /**
+   * O QUE DEIXOU DE SER EMBALADO (v2.99.6), num passo so' — o normal da
+   * junção, v = 14,164 s. Por medicao: paradas tiradas das marcas (relogio
+   * entre toques - marcas), lacunas e o que ficou fora dos toques menos um
+   * volume (a largada):
+   *   07:11: (900,99 - 829,906) = 71,1 s / v = 5,0 -> 5; lacuna 1; fora 916,6 - 900,99 - v = 1,4 s -> 0 = 6
+   *   07:27: (1.179,98 - 863,046) = 316,9 s -> 22,4 -> 22; lacuna 1; fora ~0 = 23
+   *   07:52: (337,943 - 253,431) = 84,5 s -> 6,0 -> 6; sem lacuna; fora 406,5 - 337,943 - v = 54,4 s -> 3,8 -> 4 = 10
+   * Junção: paradas 472,5 s -> 33, lacunas 34,2 s -> 2, fora 55,6 s -> 4 = 39; 138 + 39 = 177.
+   */
+  it('o que deixou de ser embalado: num passo so, e as partes fecham com o total', () => {
+    expect(j.deixou).toMatchObject({ saiu: 138, potencial: 177, total: 39 });
+    expect(j.deixou.partes).toMatchObject({ paradas: 33, lacunas: 2, fora: 4 });
+    expect(j.deixou.passoMs).toBeCloseTo(j.leitura.normalMs, 9);
+    expect(j.medicoes.map((m) => m.deixou)).toEqual([6, 23, 10]);
+    // Exato, sem arredondar: duracao / v - saiu = 2.517,0 / 14,164 - 138 = 39,7.
+    expect(2517023 / j.deixou.passoMs - 138).toBeCloseTo(39.7, 1);
+  });
+
   it('a manchete e o que as paradas roubaram, quando nao ha takt para veredito', () => {
     const f = frasesDaJuncao({
       juncao: j, takt: { estado: 'sem-demanda' }, unidade: VOLUME, nomeGrupo: 'EMBALAGEM', hora,
     });
-    expect(f.manchete).toBe('Nas 3 medições, as paradas roubaram 36 volumes: saíram 138, e no passo da linha rodando teriam saído 174.');
+    expect(f.manchete).toBe('Nas 3 medições, 39 volumes deixaram de ser embalados: saíram 138, e no passo da linha sem parada nem lacuna teriam saído 177.');
     // Passo SEM as lacunas da junção: 07:11 = (829.906 - 29.493) / 58 = 13,8 s;
     // 07:27 = (863.046 - 33.014) / 58 = 14,3 s; 07:52 = 253.431 / 17 = 14,9 s.
-    expect(f.linhas[0]).toBe('O passo é o mesmo nas 3 (de 13.8 a 14.9 s sem as lacunas): o que muda de uma para outra são as paradas. A das 07:27 sozinha perdeu 22.');
+    expect(f.linhas[0]).toBe('O passo é o mesmo nas 3 (de 13.8 a 14.9 s sem as lacunas): o que muda de uma para outra são as paradas. A das 07:27 sozinha perdeu 23.');
     expect(f.linhas[1]).toBe('No período, saiu um volume a cada 17.9 s, paradas dentro; com a linha rodando, 14.4 s.');
     expect(f.linhas[2]).toMatch(/^Sem takt para comparar/);
     expect(f.linhas[3]).toMatch(/^2 lacunas/);
@@ -132,7 +151,7 @@ describe('a junção das tres medicoes', () => {
       juncao: comTakt, takt: { semana: 'de 26/10' }, unidade: VOLUME, nomeGrupo: 'EMBALAGEM', hora,
     });
     expect(f.manchete).toMatch(/^No período, saiu um volume a cada 17.9 s, paradas dentro — dentro do takt de 20.0 s/);
-    expect(f.linhas[0]).toMatch(/^Nas 3 medições, as paradas roubaram 36 volumes/);
+    expect(f.linhas[0]).toMatch(/^Nas 3 medições, 39 volumes deixaram de ser embalados/);
   });
 });
 
@@ -226,7 +245,7 @@ describe('o passo entre as medicoes', () => {
     expect(f.tom).toBe('falha');
     expect(f.manchete).toMatch(/^No período, saiu um volume a cada 18.0 s, paradas dentro — 13% acima do takt de 16.0 s\.$/);
     expect(f.linhas[0]).toMatch(/são as paradas marcadas nestas medições\.$/);
-    expect(f.linhas[1]).toMatch(/^Nas 2 medições, as paradas roubaram/);
+    expect(f.linhas[1]).toMatch(/^Nas 2 medições, 7 volumes deixaram de ser embalados/);
   });
 });
 
