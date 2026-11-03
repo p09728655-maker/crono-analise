@@ -248,6 +248,18 @@ export function juntarMedicoes(itens, { taktMs = null, setupPlanejado = false } 
     m.erroMs = erroDaMedia(semLacunas);
   }
 
+  /* Os volumes que as lacunas roubaram em CADA medicao: as lacunas da
+     junção que caem nela, contra o normal da junção (o mesmo criterio que
+     as achou). Somadas, dao o da junção (a menos do arredondamento). */
+  for (const m of medicoes) {
+    const excesso = (leitura?.lacunas || [])
+      .filter((l) => l.indice >= m.inicio && l.indice < m.inicio + m.n)
+      .reduce((soma, l) => soma + (l.ms - leitura.normalMs), 0);
+    m.lacunasRoubados = leitura?.suficiente && leitura.normalMs > 0 && excesso > 0
+      ? Math.round(excesso / leitura.normalMs)
+      : null;
+  }
+
   const segmentoDe = (indice) => medicoes.find((m) => indice >= m.inicio && indice < m.inicio + m.n);
   const lacunas = (leitura?.lacunas || []).map((l) => {
     const m = segmentoDe(l.indice);

@@ -437,8 +437,15 @@ checar(/1 lacuna — intervalo maior que o dobro do normal \(60.0 s\)/.test(text
   // Cartao a cartao, na ordem da tela: Lacunas (1, 2min20s alem do normal)
   // e logo depois Volumes/hora.
   const linhaLista = await lista.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' }).first().innerText();
-  checar(/LACUNAS\s*1\s*2min20s além do normal\s*VOLUMES\/HORA\s*50\s*na medição inteira, com as paradas/i.test(textoJanela),
-    'o cartao Volumes/hora (50) vem logo depois de Lacunas');
+  // v2.99.5: o cartao Lacunas diz os volumes que ela roubou — 200 s numa
+  // linha de 60 s: 140 s alem do normal / 60 s = 2,3 -> 2.
+  checar(/LACUNAS\s*1\s*2min20s além do normal · ≈2 volumes roubados\s*VOLUMES\/HORA\s*50\s*na medição inteira, com as paradas/i.test(textoJanela),
+    'o cartao Lacunas diz os 2 volumes roubados, e Volumes/hora (50) vem logo depois');
+  checar(/≈2\s*volumes\s*roubados pelas lacunas nesta medição/.test(textoJanela),
+    'o bloco de roubados mostra os das lacunas, sem parada marcada');
+  // As tres camadas do tempo por volume em sequencia, a terceira em cartao.
+  checar(/POR VOLUME COM A LINHA RODANDO\s*70\.8 s[\s\S]*?POR VOLUME SEM AS LACUNAS\s*60\.0 s\s*o passo da linha/i.test(textoJanela),
+    'o "sem as lacunas" e um cartao, logo depois do "com a linha rodando"');
   checar(/\b50\s*14 volumes/.test(linhaLista), `a lista diz os mesmos 50 volumes/hora (${linhaLista.replace(/\n/g, ' | ')})`);
 }
 checar(/Faltou caixa às 9h10/.test(textoJanela), 'a observacao aparece junto da lacuna');
@@ -466,8 +473,9 @@ checar(await folha.isVisible(), 'impressao: a folha A4 da medicao aparece');
 checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some do papel');
 {
   const textoFolha = await folha.innerText();
-  checar(/LACUNAS\s*1\s*2min20s além do normal\s*VOLUMES\/HORA\s*50(?!\d)/i.test(textoFolha),
-    'impressao: volumes/hora (50) na folha, depois de Lacunas');
+  checar(/LACUNAS\s*1\s*2min20s além do normal · ≈2 volumes roubados\s*VOLUMES\/HORA\s*50(?!\d)/i.test(textoFolha),
+    'impressao: lacunas com os volumes roubados, e volumes/hora (50) depois');
+  checar(/ROUBADOS PELAS LACUNAS\s*≈2/i.test(textoFolha), 'impressao: os roubados pelas lacunas na identificacao');
   checar(!/mesmo da lista/.test(textoFolha), 'impressao: o papel nao fala de uma lista que ele nao tem');
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
