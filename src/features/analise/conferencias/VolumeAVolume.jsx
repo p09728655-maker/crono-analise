@@ -1018,7 +1018,7 @@ function FolhaVolumeAVolume({
   const quando = conferencia.iniciado_em || conferencia.salvo_em;
   const identificacao = juncao
     ? [
-      ['Medições', `${n} · ${formatarDataHora(quando).split(' ')[0]}`],
+      ['Medições', [`${n} · ${formatarDataHora(quando).split(' ')[0]}`, porVideo(medicoes)].filter(Boolean).join(' · ')],
       ['Período', `${faixaDaJuncao(medicoes)} · ${formatarDuracao(Number(conferencia.duracao_ms))} medidos`],
     ]
     : [

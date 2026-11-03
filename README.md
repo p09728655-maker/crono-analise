@@ -216,11 +216,16 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   `salvoEm` = início da filmagem + Encerrar (o servidor calcula o início). As
   regras de cada tecla são funções puras no mesmo arquivo. O vídeo **não sobe**:
   abre como `blob:` no navegador. A marcação em andamento fica no
-  `localStorage` pelo arquivo (nome, tamanho e data), para sobreviver ao F5. A
-  medição vai direto ao `/sync`, sem a fila offline, para a recusa aparecer na
-  tela, com `origem: 'video'` (coluna `conferencias.origem`, `'tablet'` por
-  padrão; vídeo sem marcas é recusado pela API e pelo banco). Lista, volume a
-  volume e folha mostram "por vídeo".
+  `localStorage` pelo arquivo (nome, tamanho e data), uma por vídeo (as 10 mais
+  recentes), para sobreviver ao F5. A medição vai direto ao `/sync`, sem a fila
+  offline, para a recusa aparecer na tela, com `origem: 'video'` (coluna
+  `conferencias.origem`, `'tablet'` por padrão; vídeo sem marcas é recusado
+  pela API e pelo banco). Lista, volume a volume e folha mostram "por vídeo".
+  **Reenvio:** o servidor ignora o `client_id` já gravado (ON CONFLICT) mesmo
+  com conteúdo novo. Por isso a tela usa o `novos` da resposta: zero com
+  conteúdo diferente do envio incerto anterior quer dizer que as mudanças não
+  entraram, e a tela diz isso em vez de "salva". O "por volume" da prévia usa o
+  `setupPlanejado` do takt da semana, como a lista e o tablet.
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O programa da embalagem é em VOLUMES**: um rack que sai em dois volumes

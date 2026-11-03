@@ -10,7 +10,9 @@ import {
   desfazerUltimo, emRelogio, encerrarParadaNoVideo, iniciarParadaNoVideo, inicioSugerido, marcacaoVazia,
   marcarToque, medicaoDoVideo, removerParada, removerVolume,
 } from '../../../domain/medicaoPorVideo.js';
-import { enviarMedicaoPorVideo, lerDemanda, listarCadastroMaquinas } from '../../../lib/api.js';
+import {
+  ErroApi, enviarMedicaoPorVideo, lerDemanda, listarCadastroMaquinas,
+} from '../../../lib/api.js';
 import { produtosDoGrupo } from '../../../lib/maquinas.js';
 import { carregarMotivos, useMotivosDoGrupo } from '../../../lib/motivosParada.js';
 import { rotuloMotivo } from '../../../domain/crono/paradas.js';
@@ -34,20 +36,47 @@ const ESTILO_GRADE = '@media (max-width: 1099px) { .video-grade { grid-template-
  * tamanho e data): uma hora de video marcada nao pode se perder num F5 ou
  * numa aba fechada. O video nao fica — o navegador nao guarda arquivo —,
  * entao continuar e' escolher o mesmo arquivo de novo.
+ *
+ * UMA POR VIDEO (v2.99.1): com uma vaga so', comecar outro video apagava
+ * sem aviso a marcacao guardada do anterior. Guarda as 10 mais recentes.
+ * E os videos JA' SALVOS ficam anotados, para avisar antes de salvar o
+ * mesmo video de novo (o takt e a junção contariam os volumes duas vezes).
  */
-const CHAVE_RASCUNHO = 'ritmopatrimar.video.rascunho';
+const CHAVE_RASCUNHOS = 'ritmopatrimar.video.rascunhos';
+const CHAVE_SALVOS = 'ritmopatrimar.video.salvos';
+const MAX_GUARDADOS = 10;
 /** Duracao de parada: no video se marca no segundo, e "< 1 min" esconderia isso. */
 const duracaoCurta = (ms) => (ms < 60000 ? `${Math.round(ms / 1000)} s` : formatarDuracao(ms));
+const volumes = (n) => `${n} ${n === 1 ? 'volume' : 'volumes'}`;
 const chaveDoArquivo = (f) => (f ? `${f.name}|${f.size}|${f.lastModified}` : null);
-function lerRascunho() {
-  try { return JSON.parse(localStorage.getItem(CHAVE_RASCUNHO)) || null; } catch { return null; }
+/** A lista da Embalagem Takt Time mostra os ultimos 30 dias (DIAS em EmbalagemTaktTimePc). */
+const DIAS_DA_LISTA = 30;
+function lerMapa(chave) {
+  try { return JSON.parse(localStorage.getItem(chave)) || {}; } catch { return {}; }
 }
+function gravarMapa(chave, mapa) {
+  // So' os mais recentes: o localStorage e' pequeno e isto nao e' arquivo.
+  const recentes = Object.entries(mapa)
+    .sort((a, b) => String(b[1].atualizadoEm || b[1].em).localeCompare(String(a[1].atualizadoEm || a[1].em)))
+    .slice(0, MAX_GUARDADOS);
+  try { localStorage.setItem(chave, JSON.stringify(Object.fromEntries(recentes))); } catch { /* segue sem guardar */ }
+}
+const lerRascunho = (arquivoChave) => lerMapa(CHAVE_RASCUNHOS)[arquivoChave] || null;
+const rascunhosGuardados = () => Object.values(lerMapa(CHAVE_RASCUNHOS));
 function gravarRascunho(r) {
-  try { localStorage.setItem(CHAVE_RASCUNHO, JSON.stringify(r)); } catch { /* segue sem rascunho */ }
+  gravarMapa(CHAVE_RASCUNHOS, { ...lerMapa(CHAVE_RASCUNHOS), [r.arquivo]: r });
 }
-function apagarRascunho() {
-  try { localStorage.removeItem(CHAVE_RASCUNHO); } catch { /* nada a apagar */ }
+function apagarRascunho(arquivoChave) {
+  const mapa = lerMapa(CHAVE_RASCUNHOS);
+  delete mapa[arquivoChave];
+  gravarMapa(CHAVE_RASCUNHOS, mapa);
 }
+const lerSalvo = (arquivoChave) => lerMapa(CHAVE_SALVOS)[arquivoChave] || null;
+function anotarSalvo(arquivoChave, info) {
+  gravarMapa(CHAVE_SALVOS, { ...lerMapa(CHAVE_SALVOS), [arquivoChave]: info });
+}
+/** Envio cujo resultado nao se sabe (rede, tempo esgotado, erro do servidor): pode ter gravado. */
+const envioIncerto = (e) => !(e instanceof ErroApi) || e.status >= 500;
 
 /** Date -> "AAAA-MM-DDTHH:MM:SS" no fuso do PC (o que o datetime-local entende). */
 function paraCampoLocal(d) {
@@ -79,7 +108,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [arquivo, setArquivo] = useState(null);
   const [url, setUrl] = useState(null);
-  const [meta, setMeta] = useState({ duracaoS: null, erro: null });
+  // pronto: o navegador abriu o video. duracaoS pode ficar null mesmo pronto
+  // (WebM de gravador de tela nao informa duracao) — da' para marcar igual.
+  const [meta, setMeta] = useState({ duracaoS: null, erro: null, pronto: false });
   const [campos, setCampos] = useState({ maquinaId: '', produto: '', inicio: '' });
   const [etapa, setEtapa] = useState('preparar'); // preparar | marcar | revisar | salvo
   const [marcacao, setMarcacao] = useState(marcacaoVazia);
@@ -89,6 +120,15 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const [clientId, setClientId] = useState(null);
   const [aviso, setAviso] = useState(null);
   const [rascunho, setRascunho] = useState(null);
+  // A marcacao guardada voltou, mas falta escolher a maquina (a dela saiu
+  // do cadastro): o botao continua a marcacao em vez de zera-la.
+  const [retomando, setRetomando] = useState(false);
+  const [avisoPreparar, setAvisoPreparar] = useState(null);
+  const [jaSalvo, setJaSalvo] = useState(null);
+  // O ultimo envio de resultado incerto (JSON): se o servidor disser depois
+  // que ja' tinha a medicao, so' este conteudo e' que pode estar la'.
+  const [incerto, setIncerto] = useState(null);
+  const [duplicada, setDuplicada] = useState(false);
   const [motivoPedido, setMotivoPedido] = useState(null); // ms do video em que se apertou P
   const [salvar, setSalvar] = useState({ estado: 'parado', erro: null });
   const refVideo = useRef(null);
@@ -153,40 +193,70 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
 
   const escolherArquivo = (f) => {
     setAviso(null);
+    setAvisoPreparar(null);
+    setRetomando(false);
     if (!f) return;
     setArquivo(f);
-    setMeta({ duracaoS: null, erro: null });
+    setMeta({ duracaoS: null, erro: null, pronto: false });
     setUrl(URL.createObjectURL(f));
-    const r = lerRascunho();
-    setRascunho(r && r.arquivo === chaveDoArquivo(f) ? r : null);
+    // O inicio era do arquivo anterior: o deste vem dos metadados dele. Sem
+    // isto, trocar o arquivo errado pelo certo mantinha a data do errado — e
+    // a medicao ia para a semana e o takt de outro dia (revisao de 30/10).
+    setCampos((c) => ({ ...c, inicio: '' }));
+    setRascunho(lerRascunho(chaveDoArquivo(f)));
+    setJaSalvo(lerSalvo(chaveDoArquivo(f)));
   };
 
   const aoCarregarMetadados = () => {
     const v = refVideo.current;
     if (!v) return;
     const duracaoS = Number.isFinite(v.duration) ? v.duration : null;
-    setMeta({ duracaoS, erro: null });
+    setMeta({ duracaoS, erro: null, pronto: true });
     // Sugestao: o arquivo e' gravado no fim da filmagem (ver inicioSugerido).
+    // Sem duracao nao ha' como voltar do fim ao comeco: o campo fica vazio.
     setCampos((c) => (c.inicio || !arquivo ? c : { ...c, inicio: paraCampoLocal(inicioSugerido(arquivo.lastModified, duracaoS)) }));
+  };
+  // A duracao que chega depois (WebM sem duracao no cabecalho, as vezes).
+  const aoMudarDuracao = () => {
+    const v = refVideo.current;
+    if (v && Number.isFinite(v.duration)) setMeta((m) => ({ ...m, duracaoS: v.duration }));
   };
 
   const continuarRascunho = () => {
     const r = rascunho;
-    setCampos(r.campos);
     refMarcacao.current = r.marcacao;
     setMarcacao(r.marcacao);
     setObservacao(r.observacao || '');
     setClientId(r.clientId);
+    setIncerto(r.incerto || null);
     setFimMs(null);
     setRascunho(null);
+    // A maquina guardada tem de estar ativa no cadastro: sem ela, o Salvar
+    // nao teria o que gravar. Nao troca por outra calado — pede a escolha.
+    const maquinaAtiva = carga.estado === 'pronto' && carga.maquinas.some((m) => m.id === r.campos.maquinaId);
+    if (!maquinaAtiva) {
+      setCampos({ ...r.campos, maquinaId: '' });
+      setRetomando(true);
+      setAvisoPreparar(`A máquina desta marcação (${r.maquinaNome || 'sem nome'}) não está mais ativa no cadastro da `
+        + 'embalagem. Escolha a máquina e continue: as marcas estão guardadas.');
+      return;
+    }
+    setCampos(r.campos);
     setEtapa('marcar');
   };
-  const descartarRascunho = () => { apagarRascunho(); setRascunho(null); };
+  const descartarRascunho = () => { apagarRascunho(rascunho.arquivo); setRascunho(null); };
 
   const comecar = () => {
+    setAvisoPreparar(null);
+    if (retomando) {
+      setRetomando(false);
+      setEtapa('marcar');
+      return;
+    }
     refMarcacao.current = marcacaoVazia();
     setMarcacao(refMarcacao.current);
     setClientId(crypto.randomUUID());
+    setIncerto(null);
     setFimMs(null);
     setAviso(null);
     setEtapa('marcar');
@@ -196,10 +266,10 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   useEffect(() => {
     if (!arquivo || !clientId || (etapa !== 'marcar' && etapa !== 'revisar')) return;
     gravarRascunho({
-      arquivo: chaveDoArquivo(arquivo), nome: arquivo.name, clientId, campos, marcacao, observacao,
-      atualizadoEm: new Date().toISOString(),
+      arquivo: chaveDoArquivo(arquivo), nome: arquivo.name, clientId, campos, marcacao, observacao, incerto,
+      maquinaNome: maquina?.nome || null, atualizadoEm: new Date().toISOString(),
     });
-  }, [arquivo, clientId, campos, marcacao, observacao, etapa]);
+  }, [arquivo, clientId, campos, marcacao, observacao, incerto, etapa]);
 
   /* ---------------------------------------------------------- player */
   useEffect(() => {
@@ -262,11 +332,19 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     aplicar((m) => iniciarParadaNoVideo(m, codigo, ms));
   };
   const encerrar = () => {
-    const m = refMarcacao.current;
+    let m = refMarcacao.current;
     const fim = tempoDoVideo();
+    // Parada aberta: o Encerrar fecha ela ali, como no tablet.
+    if (m.aberta) {
+      const r1 = encerrarParadaNoVideo(m, fim);
+      if (r1.aviso) { setAviso(`Ainda não dá para encerrar: ${r1.aviso}`); return; }
+      m = r1.marcacao;
+      refMarcacao.current = m;
+      setMarcacao(m);
+    }
     const r = medicaoDoVideo({
-      largadaMs: m.largadaMs, toquesMs: m.toques.map((t) => t.ms),
-      paradas: m.aberta ? [...m.paradas, m.aberta] : m.paradas, fimMs: fim, inicioFilmagem: campos.inicio,
+      largadaMs: m.largadaMs, toquesMs: m.toques.map((t) => t.ms), paradas: m.paradas,
+      fimMs: fim, inicioFilmagem: campos.inicio,
     });
     if (r.motivo) { setAviso(`Ainda não dá para encerrar: ${r.motivo}.`); return; }
     refVideo.current?.pause();
@@ -285,6 +363,13 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       }
       if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      // Tecla SEGURADA so' anda o video (setas, quadro a quadro). Marcar,
+      // desfazer, parar e encerrar e' um aperto, uma acao: segurar o ⌫
+      // apagava a lista inteira e o Enter segurado marcava dois volumes.
+      if (e.repeat && !['ArrowLeft', 'ArrowRight', ',', '.'].includes(k)) {
+        if (['Enter', 'Backspace', ' ', 'p', 'f'].includes(k)) e.preventDefault();
+        return;
+      }
       const v = refVideo.current;
       const acoes = {
         ' ': alternarPlay,
@@ -322,7 +407,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     largadaMs: marcacao.largadaMs, toquesMs: marcacao.toques.map((t) => t.ms), paradas: marcacao.paradas,
     fimMs, inicioFilmagem: campos.inicio,
   })), [marcacao, fimMs, campos.inicio]);
-  const setupPlanejado = Number(grupo?.setups_dia) > 0 && Number(grupo?.setup_min) > 0;
+  // O MESMO criterio da lista, do volume a volume e do tablet: o do takt da
+  // semana (horas de setup x fracao da semana), nao so' o cadastro do grupo.
+  const setupPlanejado = Boolean(takt?.setupPlanejado);
   const numeros = (med) => {
     if (!med) return null;
     const porVolume = periodoPorPeca({
@@ -336,30 +423,57 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const vivo = numeros(parcial);
 
   /* ---------------------------------------------------------- salvar */
-  const salvarMedicao = async () => {
+  /**
+   * SALVAR. O client_id torna o reenvio inofensivo — e por isso mesmo o
+   * servidor IGNORA o segundo envio com o mesmo id (ON CONFLICT), ainda que
+   * o conteudo tenha mudado. Se a resposta do primeiro se perdeu (rede,
+   * tempo esgotado), o analista ve' "Nao salvou", corrige, salva — e o banco
+   * fica com a versao de antes. A resposta diz quantas eram NOVAS: zero
+   * quer dizer que ja' estava la'. Igual ao envio incerto, e' a mesma; diferente,
+   * a tela diz que as mudancas nao entraram (revisao de 30/10).
+   */
+  const salvarMedicao = async ({ comoNova = false } = {}) => {
     const med = final?.medicao;
-    if (!med || !maquina) return;
+    if (!med) { setSalvar({ estado: 'parado', erro: 'A medição não está completa: volte a marcar e encerre de novo.' }); return; }
+    if (!maquina) { setSalvar({ estado: 'parado', erro: 'Falta a máquina da embalagem: volte a marcar e escolha a máquina.' }); return; }
+    const id = comoNova ? crypto.randomUUID() : clientId;
+    const dados = {
+      clientId: id, maquina: maquina.nome, peca: campos.produto.trim() || null,
+      duracaoMs: med.duracaoMs, pecas: med.pecas, ciclosPorPeca: 1, furacaoPassante: false,
+      observacao: observacao.trim() || null, paradas: med.paradas,
+      marcasMs: med.marcasMs, marcasRelogioMs: med.marcasRelogioMs, marcasSetupMs: med.marcasSetupMs,
+      salvoEm: med.salvoEm,
+    };
+    const conteudo = JSON.stringify({ ...dados, clientId: null });
     setSalvar({ estado: 'enviando', erro: null });
     try {
-      await enviarMedicaoPorVideo({
-        clientId, maquina: maquina.nome, peca: campos.produto.trim() || null,
-        duracaoMs: med.duracaoMs, pecas: med.pecas, ciclosPorPeca: 1, furacaoPassante: false,
-        observacao: observacao.trim() || null, paradas: med.paradas,
-        marcasMs: med.marcasMs, marcasRelogioMs: med.marcasRelogioMs, marcasSetupMs: med.marcasSetupMs,
-        salvoEm: med.salvoEm,
-      });
-      apagarRascunho();
+      const r = await enviarMedicaoPorVideo(dados);
+      const jaEstava = Number(r.novos) === 0;
+      if (comoNova) setClientId(id);
+      apagarRascunho(chaveDoArquivo(arquivo));
+      anotarSalvo(chaveDoArquivo(arquivo), { em: new Date().toISOString(), volumes: med.pecas });
+      setDuplicada(jaEstava && incerto !== conteudo);
+      setIncerto(null);
       setSalvar({ estado: 'parado', erro: null });
       setEtapa('salvo');
     } catch (e) {
-      setSalvar({ estado: 'parado', erro: e.message });
+      if (envioIncerto(e)) setIncerto(conteudo);
+      setSalvar({
+        estado: 'parado',
+        erro: envioIncerto(e)
+          ? `${e.message} A medição pode ter chegado ao servidor: tente salvar de novo antes de mudar qualquer coisa.`
+          : e.message,
+      });
     }
   };
 
   const recomecar = () => {
     setArquivo(null);
     setUrl(null);
-    setMeta({ duracaoS: null, erro: null });
+    setMeta({ duracaoS: null, erro: null, pronto: false });
+    setDuplicada(false);
+    setIncerto(null);
+    setJaSalvo(null);
     setCampos((c) => ({ ...c, produto: '', inicio: '' }));
     refMarcacao.current = marcacaoVazia();
     setMarcacao(refMarcacao.current);
@@ -371,7 +485,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   };
 
   /* ------------------------------------------------------------ tela */
-  const podeComecar = Boolean(url && !meta.erro && meta.duracaoS != null && maquina && inicioValido);
+  const podeComecar = Boolean(url && !meta.erro && meta.pronto && maquina && inicioValido);
+  // Filmagem antiga nao aparece na lista da Embalagem (ultimos 30 dias).
+  const foraDaLista = inicioValido && Date.now() - inicioData.getTime() > DIAS_DA_LISTA * 86400000;
   const duracaoVideoMs = meta.duracaoS != null ? meta.duracaoS * 1000 : null;
 
   return (
@@ -405,10 +521,33 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
 
           {carga.estado === 'pronto' && carga.maquinas.length > 0 && etapa === 'salvo' && (
             <section style={ev.cartao} aria-label="Medição salva">
-              <p style={ev.ok} role="status">
-                ✓ Medição salva: {final?.medicao?.pecas} volumes de {campos.produto || 'produto não informado'}.
-                Ela já está na lista da Embalagem Takt Time, com o selo “por vídeo”.
-              </p>
+              {duplicada ? (
+                /* O servidor ja' tinha esta medicao (o client_id): uma tentativa
+                   anterior gravou e a resposta se perdeu. O que mudou depois
+                   NAO entrou — dizer "salva" aqui seria mentir. */
+                <div style={ev.aviso} role="alert">
+                  Esta medição já estava no servidor: uma tentativa anterior chegou, mas a resposta não voltou.
+                  O que você mudou depois disso <strong>não entrou</strong>. Confira a medição na lista da Embalagem
+                  Takt Time. Se a diferença importa, salve esta versão como uma medição nova e exclua a anterior no
+                  relatório Ritmo por máquina.
+                  <div style={{ ...ev.linhaBotoes, marginTop: 8 }}>
+                    <button
+                      type="button" style={est.botaoSecundario} disabled={salvar.estado === 'enviando'}
+                      onClick={() => salvarMedicao({ comoNova: true })}
+                    >
+                      {salvar.estado === 'enviando' ? 'Salvando…' : 'Salvar esta versão como medição nova'}
+                    </button>
+                  </div>
+                  {salvar.erro && <div style={est.faixaErro} role="alert">Não salvou: {salvar.erro}</div>}
+                </div>
+              ) : (
+                <p style={ev.ok} role="status">
+                  ✓ Medição salva: {volumes(final?.medicao?.pecas || 0)} de {campos.produto || 'produto não informado'}.
+                  {foraDaLista
+                    ? ` A filmagem é de mais de ${DIAS_DA_LISTA} dias atrás: a lista da Embalagem Takt Time mostra só os últimos ${DIAS_DA_LISTA} dias, então ela não aparece lá — está no relatório Ritmo por máquina, escolhendo um período maior.`
+                    : ' Ela já está na lista da Embalagem Takt Time, com o selo “por vídeo”.'}
+                </p>
+              )}
               <div style={ev.linhaBotoes}>
                 <button type="button" style={est.botaoImprimir} onClick={aoVoltar}>Ver na Embalagem Takt Time</button>
                 <button type="button" style={est.botaoSecundario} onClick={recomecar}>Marcar outro vídeo</button>
@@ -426,6 +565,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                     maquinas={carga.maquinas} produtos={produtos} takt={takt} inicioValido={inicioValido}
                     rascunho={rascunho} aoContinuar={continuarRascunho} aoDescartar={descartarRascunho}
                     podeComecar={podeComecar} aoComecar={comecar}
+                    retomando={retomando} aviso={avisoPreparar} jaSalvo={jaSalvo} foraDaLista={foraDaLista}
                   />
                 )}
                 {url && (
@@ -443,8 +583,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                       muted
                       tabIndex={-1}
                       onLoadedMetadata={aoCarregarMetadados}
+                      onDurationChange={aoMudarDuracao}
                       onError={() => setMeta({
-                        duracaoS: null,
+                        duracaoS: null, pronto: false,
                         erro: 'Este vídeo não abre no navegador — provavelmente está em HEVC (H.265). '
                           + 'Grave em H.264: no iPhone, Ajustes → Câmera → Formatos → “Mais compatível”; '
                           + 'no Samsung, desligue “Vídeos HEVC” nas configurações da câmera.',
@@ -519,9 +660,13 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
 /** PREPARAR: o arquivo, a maquina, o produto e quando a filmagem comecou. */
 function Preparar({
   arquivo, aoEscolher, meta, campos, aoTrocar, maquinas, produtos, takt, inicioValido,
-  rascunho, aoContinuar, aoDescartar, podeComecar, aoComecar,
+  rascunho, aoContinuar, aoDescartar, podeComecar, aoComecar, retomando, aviso, jaSalvo, foraDaLista,
 }) {
   const motivoTakt = takt && !(takt.taktMs > 0) ? (motivoSemTakt(takt.estado) || 'sem programa da embalagem para esta semana') : null;
+  // As marcacoes guardadas de OUTROS videos: continuam guardadas, e a tela
+  // diz quais — escolher o mesmo arquivo as traz de volta.
+  const outras = arquivo ? [] : rascunhosGuardados();
+  const quando = (iso) => new Date(iso).toLocaleString('pt-BR');
   return (
     <section style={ev.cartao} aria-label="Preparar a medição por vídeo">
       <h2 style={ev.titulo}>Cronometrar por vídeo</h2>
@@ -541,28 +686,58 @@ function Preparar({
             {meta.duracaoS != null && ` · ${formatarDuracao(meta.duracaoS * 1000)} de vídeo`}
           </span>
         )}
+        {/* Gravador de tela e alguns apps gravam WebM sem a duracao: marca-se
+            igual, so' sem a barra de posicao e sem a sugestao de inicio. */}
+        {arquivo && meta.pronto && meta.duracaoS == null && (
+          <span style={ev.dica}>
+            Este vídeo não informa a duração: dá para marcar normalmente, mas sem a barra de posição e sem a
+            sugestão do início — informe o início da filmagem abaixo.
+          </span>
+        )}
       </label>
+
+      {outras.length > 0 && (
+        <p style={ev.dica}>
+          Marcações em andamento neste PC:{' '}
+          {outras.map((r) => `${r.nome} (${volumes(r.marcacao.toques.length)}, ${quando(r.atualizadoEm)})`).join('; ')}.
+          Escolha o mesmo arquivo para continuar.
+        </p>
+      )}
+
+      {jaSalvo && (
+        <div style={ev.aviso} role="status">
+          Este vídeo já foi salvo neste PC em {quando(jaSalvo.em)} ({volumes(jaSalvo.volumes)}). Salvar de novo cria
+          outra medição: o takt e a junção contariam os mesmos volumes duas vezes.
+        </div>
+      )}
 
       {rascunho && (
         <div style={ev.aviso} role="status">
-          Há uma marcação em andamento deste vídeo ({rascunho.marcacao.toques.length} volumes, guardada neste PC
-          em {new Date(rascunho.atualizadoEm).toLocaleString('pt-BR')}).{' '}
+          Há uma marcação em andamento deste vídeo ({volumes(rascunho.marcacao.toques.length)}, guardada neste PC
+          em {quando(rascunho.atualizadoEm)}). Continuar usa o que foi guardado com ela:{' '}
+          {[rascunho.maquinaNome, rascunho.campos.produto || 'sem produto',
+            rascunho.campos.inicio ? `início ${new Date(rascunho.campos.inicio).toLocaleString('pt-BR')}` : null]
+            .filter(Boolean).join(' · ')}.{' '}
           <span style={ev.linhaBotoes}>
-            <button type="button" style={est.botaoSecundario} onClick={aoContinuar} disabled={!!meta.erro || meta.duracaoS == null}>
+            <button type="button" style={est.botaoSecundario} onClick={aoContinuar} disabled={!!meta.erro || !meta.pronto}>
               Continuar de onde parou
             </button>
             <button type="button" style={ev.link} onClick={aoDescartar}>Descartar e começar de novo</button>
           </span>
         </div>
       )}
+      {aviso && <div style={ev.aviso} role="alert">{aviso}</div>}
 
       <div style={ev.campos}>
         <label style={ev.campo}>
           <span style={ev.rotulo}>Máquina</span>
           <select
-            value={campos.maquinaId} onChange={(e) => aoTrocar({ maquinaId: e.target.value, produto: '' })}
+            value={campos.maquinaId}
+            // Retomando, o produto e' o da marcacao: trocar a maquina nao o apaga.
+            onChange={(e) => aoTrocar(retomando ? { maquinaId: e.target.value } : { maquinaId: e.target.value, produto: '' })}
             style={est.inputNome} aria-label="Máquina da embalagem"
           >
+            {!campos.maquinaId && <option value="">Escolha a máquina…</option>}
             {maquinas.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
           </select>
         </label>
@@ -594,14 +769,15 @@ function Preparar({
           </>
         )}
         {inicioValido && motivoTakt && `Sem takt para essa data: ${motivoTakt} `}
+        {foraDaLista && `Filmagem de mais de ${DIAS_DA_LISTA} dias atrás: salva, ela não aparece na lista da Embalagem Takt Time, que mostra os últimos ${DIAS_DA_LISTA} dias. `}
         A data sugerida vem do arquivo (o celular grava no fim da filmagem). Confira: arquivo copiado de outro
         computador perde a data original.
       </p>
       <div style={ev.linhaBotoes}>
         <button type="button" style={est.botaoImprimir} onClick={aoComecar} disabled={!podeComecar}>
-          Começar a marcar
+          {retomando ? 'Continuar a marcação' : 'Começar a marcar'}
         </button>
-        {!podeComecar && arquivo && !meta.erro && meta.duracaoS == null && <span style={ev.dica}>Abrindo o vídeo…</span>}
+        {!podeComecar && arquivo && !meta.erro && !meta.pronto && <span style={ev.dica}>Abrindo o vídeo…</span>}
       </div>
     </section>
   );
@@ -672,7 +848,7 @@ function Acoes({
           {largada ? 'Largada' : '+1 volume'} <span style={ev.tecla}>Enter</span>
         </button>
         <button type="button" onMouseDown={semFoco} onClick={aoDesfazer} style={ev.acao}>
-          Desfazer <span style={ev.tecla}>⌫</span>
+          Desfazer volume <span style={ev.tecla}>⌫</span>
         </button>
         <button type="button" onMouseDown={semFoco} onClick={aoParou} style={{ ...ev.acao, ...ev.acaoParou }}>
           {marcacao.aberta ? 'Voltou' : 'Parou'} <span style={ev.tecla}>P</span>
@@ -685,7 +861,7 @@ function Acoes({
       <p style={ev.teclas}>
         {largada
           ? 'Assista até um volume fechar e aperte Enter: é a largada — ela abre o período e não conta volume, como no tablet. '
-          : 'Enter a cada volume que fecha. '}
+          : 'Enter a cada volume que fecha; ⌫ desfaz o último volume marcado (parada sai pelo × da lista). '}
         Espaço pausa · ← → 5 s · , . um quadro · 1 2 3 velocidade 1×, 1,5×, 2× · clique numa marca para voltar a ela.
       </p>
     </>
@@ -724,7 +900,7 @@ function Marcas({
           atencao={acima}
         />
         <Numero rotulo="Takt" valor={takt?.taktMs > 0 ? `${formatarSegundos(takt.taktMs)} s` : '—'} />
-        <Numero rotulo="Vol/h período" valor={volHora != null ? String(volHora) : '—'} />
+        <Numero rotulo="Vol/h período" valor={volHora != null ? String(volHora) : '—'} sub="até o último volume" />
         <Numero rotulo="Lacunas" valor={lacunas != null ? String(lacunas) : '—'} />
         <Numero rotulo="Parado" valor={parado > 0 ? duracaoCurta(parado) : '—'} />
       </div>
@@ -771,11 +947,16 @@ function Marcas({
   );
 }
 
-function Numero({ rotulo, valor, atencao = false }) {
+function Numero({
+  rotulo, valor, atencao = false, sub = null,
+}) {
   return (
     <div style={ev.numero}>
       <span style={ev.rotulo}>{rotulo}</span>
       <span style={{ ...ev.numeroValor, ...(atencao ? ev.numeroAtencao : {}) }}>{valor}</span>
+      {/* De que tempo o numero sai: o mesmo nome com reguas diferentes
+          virou divergencia entre tablet e PC uma vez (10,3 contra 13,2). */}
+      {sub && <span style={ev.numeroSub}>{sub}</span>}
     </div>
   );
 }
@@ -803,7 +984,10 @@ function Revisar({
           atencao={acima}
         />
         <Numero rotulo="Takt" valor={takt?.taktMs > 0 ? `${formatarSegundos(takt.taktMs)} s` : '—'} />
-        <Numero rotulo="Volumes/hora" valor={calc ? String(Math.round(calc.pecasPorHoraBruto)) : '—'} />
+        <Numero
+          rotulo="Volumes/hora" valor={calc ? String(Math.round(calc.pecasPorHoraBruto)) : '—'}
+          sub="da largada ao Encerrar, paradas dentro"
+        />
         <Numero rotulo="Lacunas" valor={leitura?.suficiente ? String(leitura.lacunas.length) : '—'} />
         <Numero rotulo="Parado (marcado)" valor={calc?.paradaMs > 0 ? duracaoCurta(calc.paradaMs) : '—'} />
       </div>

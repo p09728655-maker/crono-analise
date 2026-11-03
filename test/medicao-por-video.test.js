@@ -92,6 +92,9 @@ describe('medicao a partir do video', () => {
     expect(recusa({ inicioFilmagem: '' })).toMatch(/filmagem começou/);
     expect(recusa({ inicioFilmagem: null })).toMatch(/filmagem começou/);
     expect(recusa({ largadaMs: null })).toMatch(/largada/);
+    // O teto do servidor (50 paradas) recusado aqui, antes do Salvar.
+    const muitas = Array.from({ length: 51 }, (_, i) => ({ motivo: 'outro', inicioMs: s(51 + i * 0.5), fimMs: s(51.2 + i * 0.5) }));
+    expect(recusa({ toquesMs: [s(30), s(80)], paradas: muitas, fimMs: s(100) })).toMatch(/mais de 50 paradas/);
   });
 
   it('passa pelas validacoes do servidor sem virar null — o sync aceita como a do tablet', () => {

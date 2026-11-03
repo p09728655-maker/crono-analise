@@ -32,6 +32,8 @@
 
 /** Dois toques a menos disto sao o mesmo volume: a tecla repetida, nao dois volumes. */
 export const TOQUE_REPETIDO_MS = 200;
+/** O teto do servidor por medicao (paradasDaConferencia): aqui, com o porque, antes do Salvar. */
+export const MAX_PARADAS = 50;
 
 const inteiro = (ms) => Math.round(Number(ms));
 // null e '' nao sao zero: Number(null) daria 0 e a largada "existiria".
@@ -51,6 +53,9 @@ function paradasDoVideo(paradas, largadaMs, fimMs) {
   if (lista.some((p) => !(p.fimMs > p.inicioMs))) return { motivo: 'há uma parada que termina antes de começar' };
   if (lista.some((p) => p.inicioMs < largadaMs || p.fimMs > fimMs)) {
     return { motivo: 'há uma parada fora do período (antes da largada ou depois do Encerrar)' };
+  }
+  if (lista.length > MAX_PARADAS) {
+    return { motivo: `mais de ${MAX_PARADAS} paradas numa medição — divida o vídeo em duas medições` };
   }
   lista.sort((a, b) => a.inicioMs - b.inicioMs);
   for (let i = 1; i < lista.length; i++) {
