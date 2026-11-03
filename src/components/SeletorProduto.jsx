@@ -1,9 +1,18 @@
 import { useState } from 'react';
 import { nomeChave } from '../domain/cronoanalise.js';
+import { buscarProdutos } from '../lib/maquinas.js';
 
 /** Abaixo disto nao ha' produto: e' o comeco da digitacao, e um toque
  *  sem querer em "+ Cadastrar «Ra»" ficaria na lista de todos os tablets. */
 const MIN_CADASTRO = 3;
+
+/** Acima disto a lista ganha o campo de busca (v2.99.4): 168 produtos na
+ *  embalagem nao se acham rolando. Lista curta escolhe direto, sem campo a mais. */
+const LISTA_COM_BUSCA = 12;
+
+/** O codigo do ERP ao lado do nome — menos quando o nome ja' comeca por ele
+ *  ("501141 · BUFFET 4 PT PRISM"): repetido, so' alonga a linha. */
+const rotuloDoProduto = (p) => (p.codigo && !String(p.nome).includes(p.codigo) ? `${p.nome} · ${p.codigo}` : p.nome);
 
 /**
  * Campo do PRODUTO — escolha quando o posto tem produtos cadastrados, texto
@@ -60,10 +69,13 @@ export default function SeletorProduto({
      dito para o nome anterior nao vale para o que se digita agora. */
   const [cadastro, setCadastro] = useState(null);
   const [enviando, setEnviando] = useState(false);
+  // O que se digitou para achar na lista: filtra as opcoes, nao e' o valor.
+  const [busca, setBusca] = useState('');
   if (contexto !== contextoVisto) {
     setContextoVisto(contexto);
     setModo(null);
     setCadastro(null);
+    setBusca('');
   }
   const naLista = lista.some((p) => p.nome === valor);
   const automatico = lista.length === 0 || (Boolean(valor) && !naLista);
@@ -179,22 +191,54 @@ export default function SeletorProduto({
     );
   }
 
+  /* A BUSCA, com lista grande: as opcoes sao as que batem com o que se
+     digitou. O escolhido fica sempre na lista — senao o select mostraria
+     vazio com um produto escolhido. Escolheu, a busca limpa. */
+  const comBusca = lista.length > LISTA_COM_BUSCA;
+  const termo = comBusca ? busca.trim() : '';
+  const achados = termo ? buscarProdutos(lista, termo) : lista;
+  const escolhido = termo && naLista && !achados.some((p) => p.nome === valor)
+    ? lista.find((p) => p.nome === valor)
+    : null;
+  const opcoesNaTela = escolhido ? [escolhido, ...achados] : achados;
+
   return (
     <>
+      {comBusca && (
+        <input
+          type="search"
+          placeholder="Buscar: nome ou código (ex: buffet 4, 501141)"
+          value={busca}
+          onChange={(ev) => setBusca(ev.target.value)}
+          style={estilos.busca || estilos.input}
+          aria-label="Buscar produto"
+          autoComplete="off"
+          enterKeyHint="search"
+        />
+      )}
+      {termo && achados.length === 0 && (
+        <span role="status" style={estilos.cadastroDica}>
+          {`Nenhum produto com «${termo}». Confira o nome ou o código, ou use “Outro produto…” na lista.`}
+        </span>
+      )}
       <select
         value={valor}
         onChange={(ev) => {
-          if (ev.target.value === '__outro') { setModo(true); aoTrocar(''); return; }
+          if (ev.target.value === '__outro') { setModo(true); setBusca(''); aoTrocar(''); return; }
           aoTrocar(ev.target.value);
-          if (ev.target.value) aoEscolher?.(ev.target.value);
+          if (ev.target.value) { setBusca(''); aoEscolher?.(ev.target.value); }
         }}
         style={estilos.select}
         aria-label={aria}
       >
-        <option value="">{vazio}</option>
+        <option value="">
+          {termo && achados.length > 0
+            ? `${achados.length} ${achados.length === 1 ? 'produto encontrado' : 'produtos encontrados'} — toque para escolher`
+            : vazio}
+        </option>
         {/* O codigo do ERP ao lado: e' como o resto da fabrica chama o produto. */}
-        {lista.map((p) => (
-          <option key={p.id} value={p.nome}>{p.codigo ? `${p.nome} · ${p.codigo}` : p.nome}</option>
+        {opcoesNaTela.map((p) => (
+          <option key={p.id} value={p.nome}>{rotuloDoProduto(p)}</option>
         ))}
         {/* Com o cadastro ligado, a saida do produto que nao esta' na lista
             diz que da' para cadastrar — e' o que se procura nesse momento. */}
