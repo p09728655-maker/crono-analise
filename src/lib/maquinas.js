@@ -164,6 +164,47 @@ export function produtosDoGrupo(cadastro, grupoId) {
   return (cadastro?.produtos || []).filter((p) => p && p.ativo !== false && p.grupo_id === grupoId);
 }
 
+const soDigitos = (s) => s.replace(/\D/g, '');
+
+/** `w` no COMECO de uma palavra de `alvo` ("4" acha "4 pt", nao o meio de
+ *  "501141"; "iris" acha "arco-iris"). */
+function comecaPalavra(alvo, w) {
+  for (let i = alvo.indexOf(w); i !== -1; i = alvo.indexOf(w, i + 1)) {
+    if (i === 0 || !/[a-z0-9]/.test(alvo[i - 1])) return true;
+  }
+  return false;
+}
+
+/**
+ * A BUSCA na lista de produtos (v2.99.4): com 168 produtos na embalagem,
+ * rolar a lista inteira a cada medicao virou o gargalo. Cada palavra
+ * digitada tem de COMECAR uma palavra do nome ou do codigo, em qualquer
+ * ordem, sem caixa e sem acento: "sirius 1.6" acha o rack e o painel,
+ * "501106" acha os tres racks Sirius, "arco vol" acha os volumes do berco
+ * Arco-Iris. No comeco, e nao em qualquer lugar: "buffet 4" achava o
+ * BUFFET 2 PT, porque o "4" esta' dentro do modelo 501141.
+ *
+ * O CODIGO DA ETIQUETA ("501.041.003", modelo + cor/volume) acha o MODELO:
+ * o cadastro guarda so' o modelo (501041), e e' o que vem escrito na caixa.
+ * So' palavra que e' codigo (6+ digitos, com ou sem pontos) vira modelo —
+ * "1.6" nao pode virar "16" e achar o modelo 501160.
+ */
+export function buscarProdutos(produtos, termo) {
+  const lista = produtos || [];
+  const palavras = nomeChave(termo).split(' ').filter(Boolean);
+  if (!palavras.length) return lista;
+  return lista.filter((p) => {
+    const alvo = nomeChave(`${p.nome} ${p.codigo || ''}`);
+    // Os numeros do nome e do codigo, cada um inteiro ("501106", "16").
+    const numeros = (alvo.match(/\d[\d.]*/g) || []).map(soDigitos);
+    return palavras.every((w) => {
+      if (comecaPalavra(alvo, w)) return true;
+      const modelo = /^[\d.]+$/.test(w) && soDigitos(w).length >= 6 ? soDigitos(w).slice(0, 6) : null;
+      return Boolean(modelo) && numeros.some((n) => n.startsWith(modelo));
+    });
+  });
+}
+
 /**
  * O produto que JA' esta' no cadastro do grupo com este nome — ativo ou
  * desativado —, pela comparacao do relatorio (nomeChave: sem caixa, sem

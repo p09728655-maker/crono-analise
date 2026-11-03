@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.99.4',
+    data: '2026-11-03',
+    titulo: 'Busca no campo de produto',
+    itens: [
+      'BUSCAR O PRODUTO EM VEZ DE ROLAR A LISTA. Com mais de 12 produtos no grupo, aparece "Buscar" acima da lista: digite parte do nome ou o código e a lista mostra só os que batem, com a contagem ("3 produtos encontrados"). As palavras valem em qualquer ordem, sem maiúscula nem acento: "buffet 4" acha o 501141 · BUFFET 4 PT PRISM; "sirius 1.6" acha o rack e o painel; "501041" acha o produto e os volumes. O código da etiqueta da caixa (501.041.003) acha o modelo. Escolheu, a busca limpa.',
+      'Por que precisava: com a lista nova da embalagem (168 produtos), os nomes começam pelo modelo e a lista fica em ordem de código — o BUFFET 4 PT PRISM está em 501141, não na letra B.',
+      'O código não aparece mais repetido na lista quando o nome já começa por ele ("501141 · BUFFET 4 PT PRISM · 501141").',
+    ],
+  },
+  {
     versao: '2.99.3',
     data: '2026-11-03',
     titulo: 'Embalagem Takt Time: o produto na tela enquanto mede',
