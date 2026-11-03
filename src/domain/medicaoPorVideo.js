@@ -216,6 +216,14 @@ export function iniciarParadaNoVideo(m, motivo, msBruto) {
   if (m.aberta) return { marcacao: m, aviso: 'Já há uma parada aberta: aperte P para o Voltou.' };
   if (ms <= m.largadaMs) return { marcacao: m, aviso: 'A parada tem de começar depois da largada.' };
   if (dentroDeParada(m.paradas, ms)) return { marcacao: m, aviso: 'Este ponto já está dentro de outra parada.' };
+  // O teto da medicao (ver paradasDoVideo) dito AQUI, na 51a parada: no
+  // Encerrar, uma hora de marcacao ja' feita seria recusada inteira.
+  if (m.paradas.length >= MAX_PARADAS) {
+    return {
+      marcacao: m,
+      aviso: `Já são ${MAX_PARADAS} paradas, o máximo numa medição: encerre aqui e marque o resto do vídeo como outra medição.`,
+    };
+  }
   return { marcacao: { ...m, aberta: { motivo, inicioMs: ms } } };
 }
 

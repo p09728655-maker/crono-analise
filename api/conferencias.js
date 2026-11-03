@@ -179,13 +179,13 @@ export default handler(async (req, res) => {
       let alteradas = null;
       if (temNoLote('arquivada')) {
         alteradas = await db`
-          UPDATE conferencias SET arquivada = ${Boolean(corpo.arquivada)}
+          UPDATE conferencias SET arquivada = ${Boolean(corpo.arquivada)}, editada_em = now()
            WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
           RETURNING id`;
       }
       if (temNoLote('peca')) {
         alteradas = await db`
-          UPDATE conferencias SET peca = ${peca}
+          UPDATE conferencias SET peca = ${peca}, editada_em = now()
            WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
           RETURNING id`;
       }
@@ -233,6 +233,19 @@ export default handler(async (req, res) => {
       const analiseNota = corpo.analisada === true
         ? texto(corpo.analiseNota, 'analiseNota', { max: 2000 })
         : null;
+
+      /**
+       * Mexida no PC: a medicao por video nao pode mais ser substituida pelo
+       * reenvio (ver editada_em no schema). E' a PRIMEIRA escrita, depois de
+       * toda validacao: ela trava a linha, e um reenvio do video ao mesmo
+       * tempo espera e volta 409 — marcada no fim, o reenvio passava no
+       * meio e as paradas do PC e as do video ficavam somadas.
+       */
+      const marcada = await db`
+        UPDATE conferencias SET editada_em = now()
+         WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}
+        RETURNING id`;
+      if (!marcada.length) throw nadaMudou();
 
       // Paradas cadastradas no PC: o analista marcou o setup depois, olhando
       // o apontamento. Mesmo formato do que sobe do aparelho.
@@ -364,7 +377,7 @@ async function analisarLote({ auth, res, corpo, ids }) {
     const alteradas = await db`
       UPDATE conferencias
          SET analisada_em = now(), analisada_por = ${auth.usuario?.nome || null},
-             analise_nota = ${analiseNota}
+             analise_nota = ${analiseNota}, editada_em = now()
        WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
          AND (SELECT count(*) FROM conferencias
                WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}) = ${ids.length}

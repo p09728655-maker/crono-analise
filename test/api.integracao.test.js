@@ -1130,6 +1130,178 @@ rodar('API — integracao com Postgres', () => {
       .rejects.toThrow(/conferencias_origem_chk/);
   });
 
+  /**
+   * REENVIO DA MEDICAO POR VIDEO SUBSTITUI (v2.99.2). O PC salva direto e
+   * o analista corrige e salva de novo quando a resposta se perde: o banco
+   * tem de ficar com a ULTIMA versao, com as paradas dela (nao a soma). O
+   * do tablet continua ignorado; o id de medicao do tablet ou de outra
+   * empresa nao e' sobrescrito (409); e o tablet nao manda medicao por video.
+   */
+  it('medicao por video: reenviar substitui a versao anterior, so ela e so da empresa', async () => {
+    const id = crypto.randomUUID();
+    const base = {
+      clientId: id, maquina: 'EMBALAGEM 01', peca: 'Rack Lua', duracaoMs: 300000, origem: 'video',
+      salvoEm: new Date().toISOString(),
+    };
+    const enviar = async (extra) => {
+      const res = fingirRes();
+      await sync(fingirReq({ metodo: 'POST', corpo: { conferencias: [{ ...base, ...extra }] } }), res);
+      return res;
+    };
+    const primeira = await enviar({
+      pecas: 3, marcasMs: [60000, 120000, 180000], marcasRelogioMs: 120000, marcasSetupMs: 0,
+      paradas: [{ motivo: 'falta_de_caixa', duracaoMs: 20000 }],
+    });
+    expect([primeira.statusCode, primeira.corpo.novos, primeira.corpo.atualizados]).toEqual([200, 1, 0]);
+
+    // A resposta "se perdeu"; o analista tirou um volume e trocou a parada.
+    const segunda = await enviar({
+      pecas: 2, marcasMs: [60000, 120000], marcasRelogioMs: 60000, marcasSetupMs: 0, observacao: 'corrigida',
+      paradas: [{ motivo: 'setup', duracaoMs: 15000 }, { motivo: 'outro', duracaoMs: 5000 }],
+    });
+    expect([segunda.statusCode, segunda.corpo.novos, segunda.corpo.atualizados]).toEqual([200, 0, 1]);
+    const linhas = await sql`
+      SELECT c.id, c.pecas, c.marcas_ms, c.observacao FROM conferencias c WHERE c.client_id = ${id}`;
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]).toMatchObject({ pecas: 2, marcas_ms: [60000, 120000], observacao: 'corrigida' });
+    const paradas = await sql`
+      SELECT motivo, duracao_ms FROM paradas WHERE conferencia_id = ${linhas[0].id} ORDER BY motivo`;
+    expect(paradas.map((p) => [p.motivo, Number(p.duracao_ms)])).toEqual([['outro', 5000], ['setup', 15000]]);
+
+    // O mesmo id vindo do TABLET (sem origem video) nao mexe em nada.
+    const doTablet = await enviar({ origem: undefined, pecas: 9, marcasMs: null });
+    expect([doTablet.statusCode, doTablet.corpo.novos, doTablet.corpo.atualizados]).toEqual([200, 0, 0]);
+    const [depois] = await sql`SELECT pecas FROM conferencias WHERE client_id = ${id}`;
+    expect(depois.pecas).toBe(2);
+
+    // Id de medicao de OUTRA empresa: nao sobrescreve, e diz.
+    const alheio = crypto.randomUUID();
+    await sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas, iniciado_em, finalizado_em,
+                                salvo_em, marcas_ms, origem)
+      VALUES (${alheio}, ${OUTRA_EMPRESA}, 'DELES', 60000, 1, now() - interval '1 minute', now(), now(),
+              ${[1000]}::integer[], 'video')`;
+    const invasor = await enviar({ clientId: alheio, pecas: 1, marcasMs: [1000] });
+    expect(invasor.statusCode).toBe(409);
+    const [intacta] = await sql`SELECT maquina, empresa_id FROM conferencias WHERE client_id = ${alheio}`;
+    expect(intacta).toEqual({ maquina: 'DELES', empresa_id: OUTRA_EMPRESA });
+
+    // O tablet nao manda medicao por video: ela atualiza linha, e isso e' de quem faz analise.
+    const gerado = fingirRes();
+    await dispositivosApi(fingirReq({ metodo: 'POST', corpo: { acao: 'codigo' } }), gerado);
+    const pareado = await parear({ codigo: gerado.corpo.codigo, nome: 'Tablet video' });
+    const doColetor = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST', token: tokenDe(pareado.corpo.dispositivo.id),
+      corpo: { conferencias: [{ ...base, clientId: crypto.randomUUID(), pecas: 1, marcasMs: [1000] }] },
+    }), doColetor);
+    expect(doColetor.statusCode).toBe(403);
+  });
+
+  it('medicao por video pelo token do ANALISTA (RLS): substitui so\' enquanto ninguem mexeu no PC', async () => {
+    // O caminho de producao: JWT de analista, dentro da RLS e da transacao
+    // (o token de servico do teste acima nao passa por ela).
+    const criado = fingirRes();
+    await usuariosApi(fingirReq({
+      metodo: 'POST',
+      corpo: { nome: 'Analista Video', email: `video.${crypto.randomUUID().slice(0, 8)}@patrimar.com`, senha: 'senhaboa123' },
+    }), criado);
+    expect(criado.statusCode).toBe(201);
+    const token = tokenDe(criado.corpo.usuario.id);
+    const id = crypto.randomUUID();
+    const base = {
+      clientId: id, maquina: 'EMBALAGEM 01', peca: 'Rack Lua', duracaoMs: 300000, origem: 'video',
+      salvoEm: new Date().toISOString(),
+    };
+    const enviar = async (extra) => {
+      const res = fingirRes();
+      await sync(fingirReq({ metodo: 'POST', token, corpo: { conferencias: [{ ...base, ...extra }] } }), res);
+      return res;
+    };
+    const primeira = await enviar({
+      pecas: 3, marcasMs: [60000, 120000, 180000], marcasRelogioMs: 120000, marcasSetupMs: 0,
+      paradas: [{ motivo: 'falta_de_caixa', duracaoMs: 20000 }],
+    });
+    expect([primeira.statusCode, primeira.corpo.novos]).toEqual([200, 1]);
+    const segunda = await enviar({
+      pecas: 2, marcasMs: [60000, 120000], marcasRelogioMs: 60000, marcasSetupMs: 0,
+      paradas: [{ motivo: 'setup', duracaoMs: 15000 }],
+    });
+    expect([segunda.statusCode, segunda.corpo.novos, segunda.corpo.atualizados]).toEqual([200, 0, 1]);
+    const [linha] = await sql`SELECT id, pecas, editada_em FROM conferencias WHERE client_id = ${id}`;
+    expect([linha.pecas, linha.editada_em]).toEqual([2, null]);
+    const paradas = await sql`SELECT motivo FROM paradas WHERE conferencia_id = ${linha.id}`;
+    expect(paradas.map((p) => p.motivo)).toEqual(['setup']);
+
+    // O PCP corrige o produto no PC (o "Editar produto" da lista, em lote).
+    const renomeia = fingirRes();
+    await conferenciasApi(fingirReq({
+      metodo: 'PATCH', token, corpo: { ids: [linha.id], peca: 'Rack Sol' },
+    }), renomeia);
+    expect(renomeia.statusCode).toBe(200);
+
+    // Salvar de novo a marcacao NAO passa por cima: 409, e a correcao fica.
+    const terceira = await enviar({
+      pecas: 1, marcasMs: [60000], marcasRelogioMs: null, marcasSetupMs: null, paradas: [],
+    });
+    expect(terceira.statusCode).toBe(409);
+    expect(terceira.corpo.erro).toMatch(/mexida no PC depois/);
+    // O id da que chegou vai junto: a tela oferece arquivar ela e salvar esta como nova.
+    expect(terceira.corpo.detalhes).toEqual({ motivo: 'mexida-no-pc', conferenciaId: linha.id });
+    const [intacta] = await sql`SELECT pecas, peca, editada_em FROM conferencias WHERE client_id = ${id}`;
+    expect([intacta.pecas, intacta.peca, intacta.editada_em !== null]).toEqual([2, 'Rack Sol', true]);
+    expect((await sql`SELECT motivo FROM paradas WHERE conferencia_id = ${linha.id}`).map((p) => p.motivo))
+      .toEqual(['setup']);
+
+    // Cada edicao do PC marca — inclusive o REABRIR (analisada: false), que
+    // so' a marca segura: analisada_em volta a nula e arquivada continua false.
+    for (const corpo of [
+      { paradas: [{ motivo: 'setup', duracaoMs: 30000 }] }, { analisada: true, analiseNota: 'lida' },
+      { analisada: false }, { arquivada: true },
+    ]) {
+      const outra = crypto.randomUUID();
+      const r = fingirRes();
+      await sync(fingirReq({
+        metodo: 'POST', token,
+        corpo: { conferencias: [{ ...base, clientId: outra, pecas: 1, marcasMs: [60000], paradas: [] }] },
+      }), r);
+      const [{ id: confId }] = await sql`SELECT id FROM conferencias WHERE client_id = ${outra}`;
+      const edita = fingirRes();
+      await conferenciasApi(fingirReq({ metodo: 'PATCH', token, query: { id: confId }, corpo }), edita);
+      expect(edita.statusCode).toBe(200);
+      const reenvio = fingirRes();
+      await sync(fingirReq({
+        metodo: 'POST', token,
+        corpo: { conferencias: [{ ...base, clientId: outra, pecas: 2, marcasMs: [60000, 120000], paradas: [] }] },
+      }), reenvio);
+      expect([Object.keys(corpo)[0], reenvio.statusCode]).toEqual([Object.keys(corpo)[0], 409]);
+      const [{ pecas, editada_em: editada }] = await sql`SELECT pecas, editada_em FROM conferencias WHERE client_id = ${outra}`;
+      expect([Object.keys(corpo)[0], pecas, editada !== null]).toEqual([Object.keys(corpo)[0], 1, true]);
+    }
+
+    // Sob a RLS, o id de OUTRA empresa e o de uma medicao do TABLET tambem
+    // nao sao substituidos — 409, sem erro de permissao e sem mexer na linha.
+    const alheio = crypto.randomUUID();
+    await sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas, iniciado_em, finalizado_em,
+                                salvo_em, marcas_ms, origem)
+      VALUES (${alheio}, ${OUTRA_EMPRESA}, 'DELES', 60000, 1, now() - interval '1 minute', now(), now(),
+              ${[1000]}::integer[], 'video')`;
+    const doTablet = crypto.randomUUID();
+    const tablet = fingirRes();
+    await sync(fingirReq({
+      metodo: 'POST', token, corpo: { conferencias: [{ ...base, origem: undefined, clientId: doTablet, pecas: 4, marcasMs: null }] },
+    }), tablet);
+    expect(tablet.statusCode).toBe(200);
+    for (const [quem, cid] of [['outra empresa', alheio], ['tablet', doTablet]]) {
+      const r = await enviar({ clientId: cid, pecas: 1, marcasMs: [1000] });
+      expect([quem, r.statusCode, r.corpo.detalhes ?? null]).toEqual([quem, 409, null]);
+    }
+    const [deles] = await sql`SELECT maquina FROM conferencias WHERE client_id = ${alheio}`;
+    const [doTab] = await sql`SELECT pecas, origem FROM conferencias WHERE client_id = ${doTablet}`;
+    expect([deles.maquina, doTab.pecas, doTab.origem]).toEqual(['DELES', 4, 'tablet']);
+  });
+
   it('o banco recusa marca que nao bate com a contagem, mesmo fora da API', async () => {
     await expect(sql`
       INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas,

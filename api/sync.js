@@ -138,10 +138,16 @@ export default handler(async (req, res) => {
     };
   });
 
+  // A medicao por video e' trabalho de PC: o reenvio dela ATUALIZA a linha,
+  // e atualizar conferencia e' de quem faz analise (a mesma regra da RLS).
+  if (confLimpas.some((c) => c.origem === 'video')) {
+    exigirPapel(auth, ['admin', 'analista'], 'A medição por vídeo é feita no PC, por quem faz análise');
+  }
+
   // Tudo numa transacao so' (o lote inteiro grava ou nada grava), DENTRO da
   // RLS: alem do filtro abaixo, o proprio banco recusa escrita fora da
   // empresa de quem chama.
-  const novos = await auth.rls(async (tx) => {
+  const { inseridos: novos, atualizados } = await auth.rls(async (tx) => {
     // Toda operacao referenciada precisa pertencer a esta empresa. Sem esta
     // checagem, um token valido conseguiria escrever no estudo de outro cliente.
     // (Conferencias ficam fora: pertencem direto a' empresa autenticada.)
@@ -157,6 +163,7 @@ export default handler(async (req, res) => {
     }
 
     let inseridos = 0;
+    let atualizados = 0;
 
     for (const o of obsLimpas) {
       const r = await tx`
@@ -231,14 +238,58 @@ export default handler(async (req, res) => {
                ${c.duracaoMs}, ${c.pecas}, ${c.ciclosPorPeca}, ${c.furacaoPassante}, ${c.observacao}, ${c.salvoEm},
                ${c.marcasMs}::integer[], ${c.marcasRelogioMs}::integer, ${c.marcasSetupMs}::integer, ${c.origem}
           FROM periodo p
-        ON CONFLICT (client_id) DO NOTHING
-        RETURNING id`;
+        ${c.origem === 'video' ? tx`
+        -- POR VIDEO, salvar de novo SUBSTITUI (v2.99.2). O PC salva direto,
+        -- sem fila, e o analista corrige e salva de novo quando a resposta
+        -- se perde: com DO NOTHING o banco ficava com a versao de antes, e
+        -- nenhuma regra do lado da tela acertava qual tentativa tinha
+        -- chegado. So' a medicao por video, da MESMA empresa, e so'
+        -- enquanto ninguem mexeu nela no PC (editada_em): substituir a que
+        -- o PCP ja' corrigiu, analisou ou arquivou apagaria esse trabalho.
+        -- O reenvio do tablet continua ignorado, como sempre.
+        ON CONFLICT (client_id) DO UPDATE SET
+          maquina = EXCLUDED.maquina, peca = EXCLUDED.peca,
+          iniciado_em = EXCLUDED.iniciado_em, finalizado_em = EXCLUDED.finalizado_em,
+          duracao_ms = EXCLUDED.duracao_ms, pecas = EXCLUDED.pecas,
+          ciclos_por_peca = EXCLUDED.ciclos_por_peca, furacao_passante = EXCLUDED.furacao_passante,
+          observacao = EXCLUDED.observacao, salvo_em = EXCLUDED.salvo_em,
+          marcas_ms = EXCLUDED.marcas_ms, marcas_relogio_ms = EXCLUDED.marcas_relogio_ms,
+          marcas_setup_ms = EXCLUDED.marcas_setup_ms
+          WHERE conferencias.origem = 'video' AND conferencias.empresa_id = EXCLUDED.empresa_id
+            AND conferencias.editada_em IS NULL
+            -- As de antes da coluna: analisada ou arquivada ja' e' mexida.
+            AND conferencias.analisada_em IS NULL AND NOT conferencias.arquivada` : tx`
+        ON CONFLICT (client_id) DO NOTHING`}
+        RETURNING id, (xmax = 0) AS inserida`;
 
       // Sem linha = a conferencia ja' estava la'. E' reenvio da fila, e as
       // paradas dela ja' entraram junto na primeira vez: inserir de novo
       // duplicaria o tempo parado do posto.
-      if (!linha) continue;
-      inseridos += 1;
+      if (!linha) {
+        // Por video, nao substituir e' erro: "salva" seria mentira.
+        if (c.origem === 'video') {
+          // A RLS so' deixa ver as desta empresa: achou, e' a nossa, ja'
+          // mexida no PC. Nao achou, o id e' do tablet ou de outra empresa.
+          const [nossa] = await tx`
+            SELECT id FROM conferencias
+             WHERE client_id = ${c.clientId} AND empresa_id = ${empresaId} AND origem = 'video'`;
+          // A tela usa o id para oferecer "arquivar a que chegou e salvar esta
+          // como nova": volume e marca nao se corrigem no PC.
+          throw nossa
+            ? new ErroHttp(409, 'Esta medição já chegou ao sistema numa tentativa anterior e foi mexida no PC depois '
+              + '(produto, paradas, análise ou arquivo), então salvar de novo não a substitui',
+            { motivo: 'mexida-no-pc', conferenciaId: nossa.id })
+            : new ErroHttp(409, 'Já existe outra medição com este identificador: descarte esta marcação e marque de novo para salvar');
+        }
+        continue;
+      }
+      if (linha.inserida) {
+        inseridos += 1;
+      } else {
+        // Substituida: as paradas sao as da versao nova, nao a soma das duas.
+        atualizados += 1;
+        await tx`DELETE FROM paradas WHERE conferencia_id = ${linha.id}`;
+      }
 
       for (const parada of c.paradas) {
         await tx`
@@ -248,7 +299,7 @@ export default handler(async (req, res) => {
       }
     }
 
-    return inseridos;
+    return { inseridos, atualizados };
   });
 
   // Devolvemos TODOS os clientIds recebidos, nao apenas os recem-inseridos.
@@ -261,7 +312,9 @@ export default handler(async (req, res) => {
   return json(res, 200, {
     recebidos: clientIds.length,
     novos,
-    duplicadosIgnorados: clientIds.length - anotLimpas.length - novos,
+    // Medicoes por video substituidas pelo reenvio (ver o ON CONFLICT acima).
+    atualizados,
+    duplicadosIgnorados: clientIds.length - anotLimpas.length - novos - atualizados,
     anotacoesGravadas: anotLimpas.length,
     clientIds,
   });

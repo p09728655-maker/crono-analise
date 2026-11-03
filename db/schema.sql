@@ -447,6 +447,28 @@ ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_origem_chk;
 ALTER TABLE conferencias ADD CONSTRAINT conferencias_origem_chk
   CHECK (origem IN ('tablet', 'video') AND (origem <> 'video' OR marcas_ms IS NOT NULL));
 
+-- EDITADA NO PC (v2.99.2): a ultima vez que alguem mexeu na medicao pelo
+-- PC — produto, paradas, analise ou arquivo (api/conferencias.js). NULA =
+-- esta' como chegou do tablet ou do video.
+-- Para que serve: a medicao por video salva de novo SUBSTITUI a que chegou
+-- (api/sync.js), e so' enquanto ninguem mexeu nela. Sem esta marca, salvar
+-- de novo uma marcacao cuja resposta se perdeu apagava, calado, o produto
+-- corrigido e as paradas lancadas no PC, e deixava a analise do PCP
+-- valendo sobre numeros que mudaram. No BI: medicao mexida no PC depois
+-- de chegar — inclui analise e arquivo, nao so' correcao de numero.
+-- Na criacao da coluna, as medicoes POR VIDEO que ja' existiam ficam
+-- marcadas: nao ha' como saber se o produto ou as paradas delas foram
+-- mexidos na v2.99.1, e o preco de errar para este lado e' um aviso na
+-- tela (409), nao uma correcao apagada calada.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'conferencias' AND column_name = 'editada_em') THEN
+    ALTER TABLE conferencias ADD COLUMN editada_em timestamptz;
+    UPDATE conferencias SET editada_em = now() WHERE origem = 'video';
+  END IF;
+END $$;
+
 -- ------------------------------------------------------- motivos_parada
 -- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o
 -- relatorio interpreta.

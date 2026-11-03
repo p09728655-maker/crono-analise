@@ -13,6 +13,21 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.99.2',
+    data: '2026-11-03',
+    titulo: 'Cronometrar por vídeo: salvar de novo substitui, nunca duplica',
+    itens: [
+      'SALVAR DE NOVO SUBSTITUI A MEDIÇÃO. Se a resposta do servidor se perde (rede, tempo esgotado), a tela diz que não deu para confirmar e pede para salvar de novo. Agora pode corrigir o que quiser antes: a versão nova entra no lugar da que tiver chegado, e fica uma medição só, a última. Antes o servidor ficava com a primeira versão que chegou e as correções se perdiam. Por isso sai o botão "Salvar esta versão como medição nova", que podia criar medições repetidas. Quando substitui, a tela avisa.',
+      'O QUE O PC JÁ MEXEU NÃO É APAGADO. Se a medição que chegou já foi mexida no PC (produto corrigido, paradas lançadas, análise salva ou arquivada), salvar de novo não passa por cima: a tela explica e oferece as duas saídas — "Arquivar a que chegou e salvar esta" (a arquivada guarda a análise e as correções, e dá para desarquivar) ou "Descartar esta marcação". As medições por vídeo salvas antes desta versão contam como mexidas, por segurança.',
+      'F5 OU ABA FECHADA DEPOIS DE UMA TENTATIVA SEM RESPOSTA: ao continuar a marcação, a tela avisa que ela pode já estar no servidor e que salvar substitui. Ao descartar, o aviso fica no vídeo e diz onde conferir: na lista da Embalagem Takt Time ou, para filmagem de mais de 30 dias, no relatório Ritmo por máquina. Recusa com resposta certa (sem permissão, campo inválido) não deixa esse aviso: ali se sabe que nada gravou.',
+      'COM MARCAÇÃO GUARDADA NA TELA, "COMEÇAR A MARCAR" FICA TRAVADO: primeiro continuar ou descartar. Antes, começar do zero apagava a marcação guardada sem perguntar e, se ela tinha chegado ao servidor, o mesmo trecho entrava duas vezes.',
+      'O MESMO VÍDEO DE NOVO: o aviso agora diz que é salvar o MESMO TRECHO que duplica. Outro trecho do mesmo vídeo pode ser salvo sem problema.',
+      'ENCERRAR RECUSADO NÃO FECHA MAIS A PARADA ABERTA. Se o Encerrar não dava (um volume marcado depois dele, por exemplo), a parada ficava fechada naquele ponto mesmo assim. Agora ela continua aberta até o Voltou ou um Encerrar que feche a medição.',
+      'A 51ª PARADA É RECUSADA NO P, antes de perguntar o motivo, com o que fazer: encerrar ali e marcar o resto como outra medição. Antes, só o Encerrar recusava, e a marcação inteira não fechava.',
+      'MARCAÇÃO EM ANDAMENTO DA v2.99.0: quem tinha uma ao atualizar não perde mais. Ela entra na lista nova de marcações guardadas.',
+    ],
+  },
+  {
     versao: '2.99.1',
     data: '2026-10-30',
     titulo: 'Cronometrar por vídeo: correções da revisão',
