@@ -96,23 +96,30 @@ export function useTaktDaSemana({ grupo, maquinasDoGrupo }) {
     // ele e' o guardado no aparelho (sem rede, ou a busca ainda em curso),
     // e a tela precisa dizer, porque o PCP pode ter colado outro.
     const base = { semRede, confirmado: doServidor };
-    if (!grupo) return { taktMs: null, estado: 'sem-grupo', semana: null, ...base };
-    // Sem programa nenhum ainda (primeira abertura sem rede): nao ha' o que
-    // calcular, e a tela diz que falta rede, nao que falta programa.
-    if (demandas === null) return { taktMs: null, estado: semRede ? 'sem-rede' : 'carregando', semana: null, ...base };
-    const t = taktDaMedicao({
-      demandas,
-      horas: grupo.horas_semana,
-      maquinas: maquinasDoGrupo,
-      setup: { setupsDia: grupo.setups_dia, dias: grupo.dias_semana, minutos: grupo.setup_min },
-      // Meio-dia do dia civil: o dia e' o que importa, e o meio-dia nao
-      // escorrega para o dia vizinho em fuso nenhum.
-      data: hoje ? `${hoje}T15:00:00Z` : new Date().toISOString(),
-      // O takt nao depende do ritmo; a leitura so' precisa de algum.
-      pecas: 1,
-      duracaoMs: 3600000,
-    });
-    return { ...t, ...base };
+    /* O takt de OUTRO dia, pelo mesmo programa guardado — o da medicao
+       salva neste aparelho, que pode ser de outra semana (v2.100.0). E' a
+       mesma conta do PC (useVolumeAVolume: o programa da semana DA
+       medicao), nao uma segunda. */
+    const naData = (data) => {
+      if (!grupo) return { taktMs: null, estado: 'sem-grupo', semana: null, ...base };
+      // Sem programa nenhum ainda (primeira abertura sem rede): nao ha' o que
+      // calcular, e a tela diz que falta rede, nao que falta programa.
+      if (demandas === null) return { taktMs: null, estado: semRede ? 'sem-rede' : 'carregando', semana: null, ...base };
+      const t = taktDaMedicao({
+        demandas,
+        horas: grupo.horas_semana,
+        maquinas: maquinasDoGrupo,
+        setup: { setupsDia: grupo.setups_dia, dias: grupo.dias_semana, minutos: grupo.setup_min },
+        data,
+        // O takt nao depende do ritmo; a leitura so' precisa de algum.
+        pecas: 1,
+        duracaoMs: 3600000,
+      });
+      return { ...t, ...base };
+    };
+    // Meio-dia do dia civil: o dia e' o que importa, e o meio-dia nao
+    // escorrega para o dia vizinho em fuso nenhum.
+    return { ...naData(hoje ? `${hoje}T15:00:00Z` : new Date().toISOString()), naData };
   }, [grupo, maquinasDoGrupo, demandas, semRede, doServidor, hoje]);
 }
 

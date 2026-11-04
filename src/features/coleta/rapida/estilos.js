@@ -187,9 +187,14 @@ export const est = {
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
   },
   itemDetalhe: { fontSize: tamanho.legenda, color: cores.textoFraco, marginTop: 2 },
+  // COLUNA de largura fixa, tudo a' direita (v2.100.0, pedido com foto do
+  // tablet): o "período" embaixo alargava so' algumas linhas, e o numero
+  // grande de cada uma comecava num lugar — a lista nao se lia de cima a
+  // baixo. 136 px cabem "3.3 vol/min período" e "999 vol/h".
   itemRitmo: {
-    flexShrink: 0, fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero,
-    fontVariantNumeric: 'tabular-nums',
+    flexShrink: 0, width: 136, textAlign: 'right',
+    fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero,
+    fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
   },
   itemRitmoSufixo: { fontSize: tamanho.legenda, color: cores.textoFraco, marginLeft: 3, fontWeight: 400 },
   // A mesma producao em pecas por MINUTO, embaixo do pc/h: e' a unidade em
@@ -203,6 +208,85 @@ export const est = {
     flexShrink: 0, width: 40, height: 40,
     background: 'transparent', border: 'none', borderRadius: raio.sm,
     color: cores.textoFraco, fontSize: 20, lineHeight: 1, cursor: 'pointer', fontFamily: 'inherit',
+  },
+  // A linha vira BOTAO na Embalagem Takt Time (v2.100.0): o toque abre o
+  // resultado. O "×" fica fora dele, botao proprio — remover nunca e' o
+  // mesmo toque de abrir.
+  itemAbrir: {
+    flex: 1, minWidth: 0, minHeight: 56,
+    display: 'flex', alignItems: 'center', gap: espaco.md,
+    padding: 0, background: 'transparent', border: 'none',
+    color: 'inherit', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+  },
+  itemSeta: { flexShrink: 0, fontSize: 28, lineHeight: 1, color: cores.textoFraco },
+
+  /* ---- o resultado de uma medicao salva, no tablet (v2.100.0) ----
+     Os mesmos numeros do volume a volume do PC, no tema escuro da coleta.
+     O grafico e' o do PC (fundo branco proprio): o mesmo desenho nos dois
+     lugares, sem uma segunda versao para divergir. */
+  salva: { flexShrink: 0, display: 'flex', flexDirection: 'column', gap: espaco.lg },
+  salvaCab: { display: 'flex', flexDirection: 'column', gap: 4 },
+  salvaProduto: { fontSize: tamanho.destaque, fontWeight: 700, lineHeight: 1.2, overflowWrap: 'anywhere' },
+  salvaQuando: { fontSize: tamanho.pequeno, color: cores.textoFraco, lineHeight: 1.4 },
+  // O tom do veredito vai numa faixa A' ESQUERDA (sombra interna), nao na
+  // cor do texto: o ambar como texto nao passa de 2.65:1 nesta superficie.
+  veredito: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm,
+    padding: `${espaco.lg}px ${espaco.lg}px ${espaco.lg}px ${espaco.xl}px`,
+    background: cores.superficie, borderRadius: raio.lg,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
+  },
+  vereditoManchete: { margin: 0, fontSize: tamanho.titulo, fontWeight: 700, lineHeight: 1.35 },
+  vereditoLinha: { margin: 0, fontSize: tamanho.corpo, lineHeight: 1.45, color: cores.textoFraco },
+  // Duas colunas no celular, quatro no tablet em pe' (800 px).
+  gradeSalva: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))', gap: espaco.sm },
+  cartaoSalva: {
+    display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0,
+    padding: espaco.md, background: cores.superficie, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
+  },
+  cartaoRotulo: { fontSize: 10, letterSpacing: 0.8, color: cores.textoFraco, textTransform: 'uppercase', lineHeight: 1.3 },
+  cartaoValor: {
+    fontSize: 30, fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1.1,
+    fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere',
+  },
+  cartaoUnidade: { fontSize: tamanho.pequeno, color: cores.textoFraco, fontWeight: 400, marginLeft: 3 },
+  cartaoSub: { fontSize: tamanho.legenda, color: cores.textoFraco, lineHeight: 1.35 },
+  blocoSalva: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm,
+    padding: espaco.lg, background: cores.superficie, borderRadius: raio.lg,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
+  },
+  deixouCab: { display: 'flex', alignItems: 'baseline', gap: espaco.md, flexWrap: 'wrap' },
+  deixouNumero: { fontSize: tamanho.numero, fontWeight: 700, fontFamily: fonte.numero, lineHeight: 1 },
+  deixouTitulo: { fontSize: tamanho.titulo, fontWeight: 700, lineHeight: 1.3 },
+  deixouSub: { margin: 0, fontSize: tamanho.corpo, color: cores.textoFraco, lineHeight: 1.45 },
+  causa: {
+    display: 'flex', alignItems: 'center', gap: espaco.md, padding: `${espaco.sm}px 0`,
+    borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: cores.borda,
+  },
+  causaTexto: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 },
+  causaRotulo: { fontSize: tamanho.corpo, fontWeight: 700 },
+  causaSub: { fontSize: tamanho.legenda, color: cores.textoFraco, lineHeight: 1.35 },
+  causaValor: { flexShrink: 0, fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero },
+  secaoSalva: {
+    margin: 0, fontSize: 10, fontWeight: 400, letterSpacing: 0.8,
+    color: cores.textoFraco, textTransform: 'uppercase',
+  },
+  lacunaSalva: {
+    display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', alignItems: 'baseline', gap: espaco.md,
+    padding: `${espaco.sm}px ${espaco.md}px`, background: cores.superficie, borderRadius: raio.sm,
+    fontSize: tamanho.corpo,
+  },
+  lacunaValor: { fontWeight: 700, fontFamily: fonte.numero, fontVariantNumeric: 'tabular-nums' },
+  lacunaAlem: { fontSize: tamanho.pequeno, color: cores.textoFraco, fontFamily: fonte.numero },
+  notaSalva: { margin: 0, fontSize: tamanho.legenda, color: cores.textoFraco, lineHeight: 1.5 },
+  botaoVoltarLista: {
+    width: '100%', minHeight: ALVO_MINIMO, flexShrink: 0,
+    background: cores.superficie, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: cores.borda,
+    color: cores.texto, fontSize: tamanho.corpo, fontWeight: 700, letterSpacing: 0.5,
+    cursor: 'pointer', fontFamily: 'inherit',
   },
 
   divisorOu: { flexShrink: 0, display: 'flex', alignItems: 'center', gap: espaco.md, padding: `${espaco.xs}px 0` },

@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.100.0',
+    data: '2026-11-04',
+    titulo: 'Embalagem Takt Time: o resultado da medição salva, no tablet',
+    itens: [
+      'VER O RESULTADO NO TABLET. Em "Salvas neste aparelho", toque numa medição: abre o mesmo volume a volume do PC — o veredito contra o takt, o tempo por volume no período, com a linha rodando e sem as lacunas, o total que deixou de ser embalado e de onde veio, o gráfico do intervalo de cada volume e as lacunas. Antes, depois do "Nova conferência", o resultado só existia no PC.',
+      'O TAKT É O DA SEMANA DA MEDIÇÃO, como no PC: a medição da semana passada é lida contra o programa da semana passada, não contra o de hoje. Sem programa da embalagem cadastrado, o takt aparece como "—" e a leitura diz o motivo; os outros números valem.',
+      'É SÓ PARA LER: corrigir o produto ou as paradas e salvar a análise do PCP continuam no PC. O resultado é o da cópia salva no tablet; se algo foi corrigido no PC depois, valem os números de lá, e a tela avisa isso.',
+      'A seta "voltar" do Android fecha o resultado e volta para a lista, sem sair da Embalagem Takt Time. Na lista, os volumes/hora ficam alinhados numa coluna só, e o nome da máquina (EMBALAGEM 01, a única) não se repete em toda linha.',
+    ],
+  },
+  {
     versao: '2.99.6',
     data: '2026-11-03',
     titulo: 'Embalagem Takt Time: o total que deixou de ser embalado',

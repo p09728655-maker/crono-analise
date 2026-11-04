@@ -1263,6 +1263,108 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   }
 }
 
+/* ------ o RESULTADO de uma medicao salva, no proprio tablet (v2.100.0) */
+{
+  /* Pedido com foto do tablet: a lista de salvas so' tinha volumes/hora, e
+     o resultado so' existia no PC. As contas sao as do teste de unidade
+     (leitura-salva.test.js), de mao: 12 toques, dez intervalos de 10 s e
+     uma lacuna de 40 s, 60 s de parada no cronometro, medicao de 240 s.
+     A da SEMANA PASSADA tem os mesmos toques e outro programa (4.400
+     volumes -> takt 36,0 s): o resultado usa o takt da semana DA medicao,
+     nao o de hoje (72,0 s), como o PC. */
+  const MARCAS = [10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 150000];
+  const passada = new Date(segunda.getTime() - 7 * 86400000);
+  const salva = (id, peca, salvoEm) => ({
+    id, salvoEm, maquina: 'EMBALAGEM 01', peca, horaInicial: null, horaFinal: null,
+    duracaoMs: 240000, pecas: 12, ciclosPorPeca: 1, furacaoPassante: false, observacao: null,
+    paradas: [{ motivo: 'falta-material', duracaoMs: 60000 }],
+    marcasMs: MARCAS, marcasRelogioMs: 200000, marcasSetupMs: 0,
+    pecasPorHora: 240, pecasPorHoraBruto: 180, paradaMs: 60000, produtivoMs: 180000, cicloMedioMs: 15000,
+    enviada: true,
+  });
+  const SALVAS = [
+    salva('salva-hoje', 'Rack Sirius 1.6', new Date().toISOString()),
+    // Quarta da semana passada, meio da tarde em Sao Paulo.
+    salva('salva-passada', 'Painel Antigo', new Date(passada.getTime() + 2 * 86400000 + 18 * 3600000).toISOString()),
+  ];
+  const ctx = await navegador.newContext({ viewport: { width: 800, height: 1280 }, hasTouch: true });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  await s.addInitScript((lista) => {
+    localStorage.setItem('ritmopatrimar.conferencias', JSON.stringify(lista));
+  }, SALVAS);
+  const erros = [];
+  s.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(s, {
+    demandas: [...DEMANDAS, {
+      ano: passada.getUTCFullYear(), numero: 2, pecas: 4400, inicio: passada.toISOString().slice(0, 10),
+      atualizado_em: new Date().toISOString(),
+    }],
+  });
+  await s.goto(`${BASE}/coleta/embalagem`);
+  await s.locator('[aria-label="Takt da semana"]').getByText('72.0').waitFor({ timeout: 8000 });
+
+  const linhas = s.locator('button[aria-label^="Ver o resultado"]');
+  checar(await linhas.count() === 2, 'resultado salvo: cada medicao salva e um botao "Ver o resultado"');
+  const nomes = await linhas.evaluateAll((bs) => bs.map((b) => b.querySelector('div > div').innerText.trim()));
+  checar(nomes[0] === 'Rack Sirius 1.6', `uma maquina so: o nome dela nao se repete na linha (${nomes[0]})`);
+  // ALINHAR (pedido com foto): a coluna de volumes/hora tem a mesma borda em
+  // toda linha — com e sem o "período" embaixo.
+  const colunas = await linhas.evaluateAll((bs) => bs.map((b) => {
+    const r = b.children[1].getBoundingClientRect();
+    return `${Math.round(r.left)}-${Math.round(r.right)}`;
+  }));
+  checar(new Set(colunas).size === 1, `a coluna de volumes/hora se alinha em todas as linhas (${colunas.join(', ')})`);
+
+  await linhas.first().tap();
+  const resultado = s.locator('[aria-label="Resultado da medição salva"]');
+  await resultado.waitFor({ timeout: 4000 });
+  const texto = (await resultado.innerText()).replace(/\s+/g, ' ');
+  checar(/No período, saiu um volume a cada 18\.2 s, paradas dentro — dentro do takt de 72\.0 s/.test(texto),
+    `o veredito do PC no tablet, contra o takt desta semana (${texto.slice(0, 120)})`);
+  checar(/POR VOLUME COM A LINHA RODANDO 12\.7 ?s/i.test(texto) && /POR VOLUME SEM AS LACUNAS 10\.0 ?s/i.test(texto),
+    'as camadas: rodando 12.7 s e sem as lacunas 10.0 s');
+  checar(/VOLUMES\/HORA 180/i.test(texto), 'volumes/hora 180 — o mesmo numero da linha da lista');
+  checar(/12 volumes deixaram de ser embalados nesta medição/.test(texto) && /teriam saído 24/.test(texto),
+    'o total que deixou de ser embalado: 12 (6 paradas + 3 lacunas + 3 fora), 24 no passo da linha');
+  checar(/Volume 12 40\.0 s \+30\.0 s/.test(texto), 'a lacuna no volume 12: 40.0 s, 30.0 s alem do normal');
+  checar(await resultado.locator('svg[aria-label^="Intervalo entre volumes"]').count() === 1, 'o grafico volume a volume aparece');
+  checar(await s.getByRole('button', { name: /INICIAR/ }).count() === 0, 'com o resultado aberto, o INICIAR sai da tela');
+  checar(await s.getByText('Resultado salvo neste aparelho').count() === 1, 'o cabecalho diz que e o resultado salvo');
+
+  // O Voltar do tablet (seta do Android) fecha o resultado, nao sai da tela.
+  await s.goBack();
+  await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
+  checar(new URL(s.url()).pathname === '/coleta/embalagem' && await resultado.count() === 0,
+    'o Voltar do aparelho fecha o resultado e fica na Embalagem Takt Time');
+
+  // A da semana passada, com o takt DAQUELA semana.
+  await linhas.nth(1).tap();
+  await resultado.waitFor({ timeout: 4000 });
+  const textoPassada = (await resultado.innerText()).replace(/\s+/g, ' ');
+  checar(/TAKT DA SEMANA 36\.0 ?s/i.test(textoPassada) && !/72\.0/.test(textoPassada),
+    `medicao da semana passada: o takt e o daquela semana (36.0 s), nao o de hoje (${textoPassada.slice(0, 160)})`);
+
+  // F5 com o resultado aberto reabre o mesmo; o botao do pe' volta a' lista
+  // sem deixar entrada morta no historico.
+  await s.reload();
+  await resultado.waitFor({ timeout: 8000 });
+  checar(/Painel Antigo/.test(await resultado.innerText()), 'F5 com o resultado aberto reabre a mesma medicao');
+  await s.getByRole('button', { name: /Voltar às medições salvas/ }).last().tap();
+  await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
+  checar(await s.evaluate(() => !window.history.state?.embalagemSalva), 'o botao do pe fecha e desfaz a entrada do historico');
+
+  // A seta do cabecalho, com o resultado aberto, volta a' lista — nao sai da tela.
+  await linhas.first().tap();
+  await resultado.waitFor({ timeout: 4000 });
+  await s.getByRole('button', { name: 'Voltar às medições salvas' }).first().tap();
+  await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
+  checar(new URL(s.url()).pathname === '/coleta/embalagem', 'a seta do cabecalho, com o resultado aberto, volta a lista');
+
+  checar(erros.length === 0, `resultado salvo: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+
 await navegador.close();
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTudo certo.');

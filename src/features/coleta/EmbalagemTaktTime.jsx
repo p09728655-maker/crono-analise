@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
+} from 'react';
 import {
   conferenciaRapida, formatarDuracao, formatarSegundos, leituraPecaAPeca, periodoPorPeca, unidadeDoPosto,
 } from '../../domain/cronoanalise.js';
@@ -17,10 +19,14 @@ import { CampoProduto } from './rapida/CamposDaPeca.jsx';
 import Historico from './rapida/Historico.jsx';
 import { useTaktDaSemana } from '../../lib/taktDaSemana.js';
 import { motivoSemTakt } from './embalagem/motivoSemTakt.js';
+import ResultadoSalvo from './embalagem/ResultadoSalvo.jsx';
+import { inicioDaSalva } from './embalagem/leituraSalva.js';
 
 const VOLUME = unidadeDoPosto('EMBALAGEM');
 const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume';
 const nada = () => {};
+/** No estado da entrada do historico: o id da medicao salva aberta. */
+const CHAVE_SALVA = 'embalagemSalva';
 
 /**
  * EMBALAGEM TAKT TIME — o volume embalado contra o takt, em segundos.
@@ -159,21 +165,78 @@ export default function EmbalagemTaktTime({ aoSair }) {
   const historicoDaEmbalagem = historico.historico
     .filter((c) => nomesEmbalagem.has(String(c.maquina || '').trim().toLowerCase()));
 
+  /* A MEDICAO SALVA ABERTA (v2.100.0). Tem entrada propria no historico do
+     navegador: o Voltar do tablet (a seta da barra do Android) fecha o
+     resultado e volta a' lista, em vez de sair da Embalagem Takt Time. O
+     F5 reabre a mesma. Medicao que ja' nao esta' no aparelho (removida)
+     nao abre: a tela fica na lista. */
+  const [vendoId, setVendoId] = useState(() => window.history.state?.[CHAVE_SALVA] ?? null);
+  useEffect(() => {
+    const caminho = window.location.pathname;
+    const aoNavegar = () => {
+      // O Voltar que ja' saiu da tela e' do App, nao daqui.
+      if (window.location.pathname !== caminho) return;
+      setVendoId(window.history.state?.[CHAVE_SALVA] ?? null);
+    };
+    window.addEventListener('popstate', aoNavegar);
+    return () => window.removeEventListener('popstate', aoNavegar);
+  }, []);
+  const vendo = crono.fase === 'pronto' && vendoId
+    ? historicoDaEmbalagem.find((c) => c.id === vendoId) || null
+    : null;
+  // A rolagem da lista: o resultado abre no topo, e fechar volta a' linha
+  // de onde se saiu — com 50 medicoes, voltar ao topo perdia o lugar.
+  const refTela = useRef(null);
+  const rolagemDaLista = useRef(0);
+  const abrirSalva = useCallback((id) => {
+    rolagemDaLista.current = refTela.current?.scrollTop ?? 0;
+    window.history.pushState({ ...(window.history.state || {}), [CHAVE_SALVA]: id }, '');
+    setVendoId(id);
+    vibrar(30);
+  }, []);
+  const fecharSalva = useCallback(() => {
+    // Desfaz a entrada que abrir criou; quem fecha e' o popstate.
+    if (window.history.state?.[CHAVE_SALVA]) window.history.back();
+    else setVendoId(null);
+  }, []);
+  useLayoutEffect(() => {
+    if (!refTela.current) return;
+    refTela.current.scrollTop = vendo ? 0 : rolagemDaLista.current;
+  }, [Boolean(vendo)]);
+
   return (
     // tela-takt: a altura reserva para navegador sem dvh (ver CronometroAoVivo).
-    <div className="tela-takt" style={{ ...est.tela, ...(crono.rodando ? {} : est.telaRolavel) }}>
+    <div ref={refTela} className="tela-takt" style={{ ...est.tela, ...(crono.rodando ? {} : est.telaRolavel) }}>
       <header style={est.cabecalho}>
-        <button type="button" onClick={aoSair} style={est.botaoVoltar} aria-label="Voltar para a lista">
+        {/* Com um resultado aberto, a seta volta as medicoes salvas, nao
+            sai da tela: e' o "voltar" que quem esta' lendo espera. */}
+        <button
+          type="button"
+          onClick={vendo ? fecharSalva : aoSair}
+          style={est.botaoVoltar}
+          aria-label={vendo ? 'Voltar às medições salvas' : 'Voltar para a lista'}
+        >
           ←
         </button>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={est.titulo}>Embalagem Takt Time</div>
-          <div style={est.subtitulo}>Volume a volume, em segundos</div>
+          <div style={est.subtitulo}>{vendo ? 'Resultado salvo neste aparelho' : 'Volume a volume, em segundos'}</div>
         </div>
         <span style={est.selo}>EMBALAGEM</span>
       </header>
 
-      {crono.fase === 'pronto' && (
+      {vendo && (
+        <ResultadoSalvo
+          registro={vendo}
+          takt={takt.naData(inicioDaSalva(vendo))}
+          unidade={VOLUME}
+          nomeGrupo={grupo?.nome}
+          mostrarMaquina={maquinas.length > 1}
+          aoVoltar={fecharSalva}
+        />
+      )}
+
+      {crono.fase === 'pronto' && !vendo && (
         <>
           <section style={est.formHoras} aria-label="O que vai ser medido">
             <label style={est.campoHora}>
@@ -221,6 +284,8 @@ export default function EmbalagemTaktTime({ aoSair }) {
             abrev={VOLUME.abrev}
             jaEsta="na Embalagem Takt Time, no PC"
             vaiPara="para a Embalagem Takt Time, no PC"
+            aoAbrir={abrirSalva}
+            mostrarMaquina={maquinas.length > 1}
           />
           <div style={est.rodape} />
         </>
@@ -302,7 +367,8 @@ function CartaoTakt({ takt }) {
 /**
  * O RESUMO do periodo que fechou: o que saiu (volumes/hora, paradas dentro)
  * e como saiu (tempo por volume no relogio contra o takt, e as lacunas). A leitura
- * completa, com grafico e a lista das lacunas, fica no PC.
+ * completa, com grafico e a lista das lacunas, abre depois de salvar, pela
+ * linha da medicao em "Salvas neste aparelho" (ResultadoSalvo), e no PC.
  */
 function ResumoTakt({
   resultado, leitura, takt, porVolumeMs,

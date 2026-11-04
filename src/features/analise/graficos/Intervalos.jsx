@@ -64,9 +64,13 @@ const COR_TEXTO_LACUNA = claro.critico;
  */
 export function GraficoIntervalos({
   leitura, unidade, altura = 260, larguraFixa = null, segmentos = null,
+  // O piso da largura medida. 360 e' o do PC; no celular (resultado salvo
+  // no tablet, v2.100.0) o espaco e' menor, e com o piso maior que ele o
+  // desenho encolhia por inteiro, com letra miuda e faixas vazias.
+  pisoLargura = 360,
 }) {
   const id = useId().replace(/:/g, '');
-  const [refContainer, larguraContainer] = useLarguraContainer(360);
+  const [refContainer, larguraContainer] = useLarguraContainer(pisoLargura);
 
   const intervalos = leitura?.intervalos || [];
   if (!intervalos.length) return <VazioGrafico texto="Sem intervalos para desenhar." />;
