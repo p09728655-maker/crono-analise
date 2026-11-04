@@ -22,6 +22,9 @@ export default function Historico({
   // Com uma maquina so' (a embalagem de hoje), o nome dela repetido em
   // toda linha so' empurrava o produto para fora.
   mostrarMaquina = true,
+  // A coluna de volumes/hora com largura fixa, alinhada a' direita (ver
+  // itemRitmoColuna). So' quem pede: no celular ela tira espaco do nome.
+  colunaFixa = false,
 }) {
   if (!historico.length) return null;
   const noPc = (c) => c.enviada && !naFila.has(c.id);
@@ -59,7 +62,7 @@ export default function Historico({
                 <div style={est.itemObservacao}>Obs.: {c.observacao}</div>
               )}
             </div>
-            <div style={est.itemRitmo}>
+            <div style={colunaFixa ? { ...est.itemRitmo, ...est.itemRitmoColuna } : est.itemRitmo}>
               {/* O mesmo numero da manchete do resultado: producao do
                   periodo. Registro antigo, sem o bruto, mostra o que tem. */}
               {Math.round(c.pecasPorHoraBruto ?? c.pecasPorHora)}

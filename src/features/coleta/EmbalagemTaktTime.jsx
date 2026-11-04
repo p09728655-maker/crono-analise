@@ -81,10 +81,29 @@ export default function EmbalagemTaktTime({ aoSair }) {
   const [produto, setProduto] = useState('');
   const [observacao, setObservacao] = useState('');
 
+  /* A MEDICAO SALVA ABERTA (v2.100.0). Tem entrada propria no historico do
+     navegador: o Voltar do tablet (a seta da barra do Android) fecha o
+     resultado e volta a' lista, em vez de sair da Embalagem Takt Time. O
+     F5 reabre a mesma. Medicao que ja' nao esta' no aparelho (removida)
+     nao abre: a tela fica na lista. Vem antes do cronometro: com o
+     resultado aberto, o Espaco do teclado nao arma medicao (o INICIAR
+     nem esta' na tela). */
+  const [vendoId, setVendoId] = useState(() => window.history.state?.[CHAVE_SALVA] ?? null);
+  useEffect(() => {
+    const caminho = window.location.pathname;
+    const aoNavegar = () => {
+      // O Voltar que ja' saiu da tela e' do App, nao daqui.
+      if (window.location.pathname !== caminho) return;
+      setVendoId(window.history.state?.[CHAVE_SALVA] ?? null);
+    };
+    window.addEventListener('popstate', aoNavegar);
+    return () => window.removeEventListener('popstate', aoNavegar);
+  }, []);
+
   const takt = useTaktDaSemana({ grupo, maquinasDoGrupo });
   const paradas = useParadasDoPeriodo(motivos);
   // Com largada: o INICIAR so' arma, e o relogio abre no primeiro toque.
-  const crono = useCronometroAoVivo({ paradas, comLargada: true });
+  const crono = useCronometroAoVivo({ paradas, comLargada: true, tecladoComeca: !vendoId });
   const historico = useHistoricoLocal();
 
   useEffect(() => {
@@ -165,25 +184,33 @@ export default function EmbalagemTaktTime({ aoSair }) {
   const historicoDaEmbalagem = historico.historico
     .filter((c) => nomesEmbalagem.has(String(c.maquina || '').trim().toLowerCase()));
 
-  /* A MEDICAO SALVA ABERTA (v2.100.0). Tem entrada propria no historico do
-     navegador: o Voltar do tablet (a seta da barra do Android) fecha o
-     resultado e volta a' lista, em vez de sair da Embalagem Takt Time. O
-     F5 reabre a mesma. Medicao que ja' nao esta' no aparelho (removida)
-     nao abre: a tela fica na lista. */
-  const [vendoId, setVendoId] = useState(() => window.history.state?.[CHAVE_SALVA] ?? null);
-  useEffect(() => {
-    const caminho = window.location.pathname;
-    const aoNavegar = () => {
-      // O Voltar que ja' saiu da tela e' do App, nao daqui.
-      if (window.location.pathname !== caminho) return;
-      setVendoId(window.history.state?.[CHAVE_SALVA] ?? null);
-    };
-    window.addEventListener('popstate', aoNavegar);
-    return () => window.removeEventListener('popstate', aoNavegar);
-  }, []);
   const vendo = crono.fase === 'pronto' && vendoId
     ? historicoDaEmbalagem.find((c) => c.id === vendoId) || null
     : null;
+  /* O TAKT DA MEDICAO ABERTA sai do grupo da maquina DELA, nao da escolhida
+     no topo — como o PC (grupoDe da medicao). Com duas linhas de embalagem
+     em grupos diferentes, a da EMBALAGEM 02 seria lida contra o programa
+     da 01 (achado da revisao). Sem medicao aberta o grupo e' nulo e o hook
+     nao busca nada. */
+  const maquinaDaSalva = vendo
+    ? maquinas.find((m) => m.nome.trim().toLowerCase() === String(vendo.maquina || '').trim().toLowerCase()) || null
+    : null;
+  const grupoDaSalva = gruposEmbalagem.find((g) => g.id === maquinaDaSalva?.grupo_id) || null;
+  const taktDaSalva = useTaktDaSemana({
+    grupo: grupoDaSalva,
+    maquinasDoGrupo: maquinas.filter((m) => m.grupo_id === grupoDaSalva?.id).length,
+  });
+  /* Entrada do historico de uma medicao que ja' nao esta' no aparelho
+     (removida, e a tela recarregada): ela vira entrada da lista, como no PC.
+     So' com o cadastro na mao — antes dele a lista vem vazia e toda
+     medicao pareceria removida. */
+  useEffect(() => {
+    if (!vendoId || vendo || crono.fase !== 'pronto' || !maquinas.length) return;
+    const estado = { ...(window.history.state || {}) };
+    delete estado[CHAVE_SALVA];
+    window.history.replaceState(estado, '');
+    setVendoId(null);
+  }, [vendoId, vendo, crono.fase, maquinas.length]);
   // A rolagem da lista: o resultado abre no topo, e fechar volta a' linha
   // de onde se saiu — com 50 medicoes, voltar ao topo perdia o lugar.
   const refTela = useRef(null);
@@ -228,9 +255,9 @@ export default function EmbalagemTaktTime({ aoSair }) {
       {vendo && (
         <ResultadoSalvo
           registro={vendo}
-          takt={takt.naData(inicioDaSalva(vendo))}
+          takt={taktDaSalva.naData(inicioDaSalva(vendo))}
           unidade={VOLUME}
-          nomeGrupo={grupo?.nome}
+          nomeGrupo={grupoDaSalva?.nome}
           mostrarMaquina={maquinas.length > 1}
           aoVoltar={fecharSalva}
         />
@@ -286,6 +313,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
             vaiPara="para a Embalagem Takt Time, no PC"
             aoAbrir={abrirSalva}
             mostrarMaquina={maquinas.length > 1}
+            colunaFixa
           />
           <div style={est.rodape} />
         </>

@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.100.1',
+    data: '2026-11-04',
+    titulo: 'Embalagem Takt Time: correções no resultado salvo do tablet',
+    itens: [
+      'COM DUAS LINHAS DE EMBALAGEM em grupos diferentes, o resultado de uma medição salva usa o takt do grupo da máquina DELA — como o PC. Antes ele usava o da máquina escolhida no topo da tela. Hoje, com uma linha só, os números não mudam.',
+      'SEM REDE, o resultado diz que o programa da semana ainda não chegou ao aparelho, em vez de dizer que o programa não cobre a semana (o que culpava o PCP pela falta de rede).',
+      'A barra de espaço de um teclado bluetooth não começa mais uma medição enquanto o resultado salvo está aberto.',
+      'RITMO DA MÁQUINA: a lista de salvas volta a ser como era. A coluna alinhada da 2.100.0 espremia o nome da peça no celular estreito; o alinhamento fica só na Embalagem Takt Time, que é usada no tablet.',
+    ],
+  },
+  {
     versao: '2.100.0',
     data: '2026-11-04',
     titulo: 'Embalagem Takt Time: o resultado da medição salva, no tablet',
