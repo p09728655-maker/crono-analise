@@ -18,7 +18,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { unidadeDoPosto } from '../src/domain/cronoanalise.js';
-import { frasesVolumeAVolume, semTakt } from '../src/domain/volumeAVolume.js';
+import { frasesVolumeAVolume, numerosDaLeitura, semTakt } from '../src/domain/volumeAVolume.js';
 import { comoConferencia, inicioDaSalva, leituraDaSalva } from '../src/features/coleta/embalagem/leituraSalva.js';
 
 const VOLUME = unidadeDoPosto('EMBALAGEM');
@@ -113,5 +113,13 @@ describe('semTakt no tablet', () => {
     expect(semTakt('sem-rede')).toMatch(/sem rede/);
     expect(semTakt('carregando')).toMatch(/sendo buscado/);
     expect(semTakt('sem-rede')).not.toMatch(/não tem data/);
+  });
+  it('o cartao do takt sem rede nao diz "sem programa"', () => {
+    const { leitura } = leituraDaSalva(SALVA, {});
+    const takt = (estado) => numerosDaLeitura(leitura, { estado }, VOLUME).find((k) => k.chave === 'takt');
+    expect(takt('sem-rede').sub).toMatch(/sem rede/);
+    expect(takt('carregando').sub).toMatch(/buscando/);
+    // O PC segue como sempre.
+    expect(takt('sem-demanda').sub).toBe('sem programa para comparar');
   });
 });

@@ -33,8 +33,14 @@ const hora = (iso) => {
  * a tela diz isso no pe' em vez de deixar dois numeros sem explicacao.
  */
 export default function ResultadoSalvo({
-  registro, takt, unidade, nomeGrupo, mostrarMaquina = true, aoVoltar,
+  registro, takt: doPrograma, unidade, nomeGrupo, mostrarMaquina = true, aoVoltar,
 }) {
+  /* Sem rede, o programa guardado no aparelho pode ser so' de outra semana:
+     "o programa nao cobre a semana" culparia o PCP pelo que e' falta de
+     rede — o cartao do takt ao vivo ja' trata assim (motivoSemTakt). */
+  const takt = doPrograma.semRede && doPrograma.estado === 'sem-semana'
+    ? { ...doPrograma, estado: 'sem-rede' }
+    : doPrograma;
   const r = leituraDaSalva(registro, takt);
   const { leitura, conferencia } = r;
   const inicio = inicioDaSalva(registro);
@@ -63,8 +69,9 @@ export default function ResultadoSalvo({
         </div>
       ) : (
         <section style={est.aviso} role="status">
-          Sem intervalo entre {unidade.plural} nesta medição (contagem corrigida à mão, ou um {unidade.singular}
-          {' '}só): não há o que comparar com o takt. Os {unidade.plural}/hora e as paradas valem.
+          Sem intervalo entre {unidade.plural} nesta medição (medida por horários, com a contagem corrigida à
+          {' '}mão ou com um {unidade.singular} só): não há o que comparar com o takt. Os {unidade.plural}/hora e
+          {' '}as paradas valem.
         </section>
       )}
 
@@ -94,8 +101,9 @@ export default function ResultadoSalvo({
       {registro.observacao && <div style={est.itemObservacao}>Obs.: {registro.observacao}</div>}
 
       <p style={est.notaSalva}>
-        Resultado da cópia salva neste aparelho, com o takt da semana da medição
-        {takt.semRede ? ' (programa guardado neste aparelho, sem rede agora)' : ''}. Se o produto ou as
+        Resultado da cópia salva neste aparelho
+        {leitura?.taktMs ? `, contra o takt da semana da medição${takt.semRede ? ' (programa guardado neste aparelho, sem rede agora)' : ''}` : ''}.
+        {' '}Se o produto ou as
         paradas foram corrigidos no PC, os números de lá valem: a correção não volta para cá. A análise
         do PCP continua sendo salva no PC, em Embalagem Takt Time.
         {conferencia.paradas.length > 0 && leitura
@@ -177,8 +185,9 @@ function ValorComUnidade({ valor }) {
 
 /**
  * O que deixou de ser embalado: o total num passo so' e de onde veio, como
- * no PC (BlocoDeixou). Medicao sem o relogio entre os toques fica com os
- * roubados pelas paradas — tambem como no PC.
+ * no PC (BlocoDeixou). Medicao sem o relogio entre os toques fica so' com
+ * os roubados pelas paradas; o PC poe ao lado os das lacunas, que aqui
+ * aparecem no cartao Lacunas (o mesmo numero, de roubadosPelasLacunas).
  */
 function PerdaDaMedicao({ r, unidade }) {
   const qtd = (n) => (n === 1 ? unidade.singular : unidade.plural);

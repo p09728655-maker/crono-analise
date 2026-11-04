@@ -1286,12 +1286,22 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
     salva('salva-hoje', 'Rack Sirius 1.6', new Date().toISOString()),
     // Quarta da semana passada, meio da tarde em Sao Paulo.
     salva('salva-passada', 'Painel Antigo', new Date(passada.getTime() + 2 * 86400000 + 18 * 3600000).toISOString()),
+    // SEM PARADA: a linha dela nao leva o "período" embaixo, e e' ela que
+    // prova o alinhamento — com todas as linhas com parada, a coluna antiga
+    // (sem largura fixa) tambem saia igual (achado da revisao).
+    {
+      ...salva('salva-sem-parada', 'Livreiro Encanto', new Date(Date.now() - 3600000).toISOString()),
+      paradas: [], paradaMs: 0, marcasRelogioMs: 140000, produtivoMs: 240000, pecasPorHora: 180,
+    },
   ];
   const ctx = await navegador.newContext({ viewport: { width: 800, height: 1280 }, hasTouch: true });
   const s = await ctx.newPage();
   await semearSessao(s);
+  // Semeia UMA vez: o F5 e a remocao abaixo precisam do que ficou no aparelho.
   await s.addInitScript((lista) => {
+    if (localStorage.getItem('e2e-salvas-semeadas')) return;
     localStorage.setItem('ritmopatrimar.conferencias', JSON.stringify(lista));
+    localStorage.setItem('e2e-salvas-semeadas', '1');
   }, SALVAS);
   const erros = [];
   s.on('pageerror', (e) => erros.push(e.message));
@@ -1305,7 +1315,7 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   await s.locator('[aria-label="Takt da semana"]').getByText('72.0').waitFor({ timeout: 8000 });
 
   const linhas = s.locator('button[aria-label^="Ver o resultado"]');
-  checar(await linhas.count() === 2, 'resultado salvo: cada medicao salva e um botao "Ver o resultado"');
+  checar(await linhas.count() === 3, 'resultado salvo: cada medicao salva e um botao "Ver o resultado"');
   const nomes = await linhas.evaluateAll((bs) => bs.map((b) => b.querySelector('div > div').innerText.trim()));
   checar(nomes[0] === 'Rack Sirius 1.6', `uma maquina so: o nome dela nao se repete na linha (${nomes[0]})`);
   // ALINHAR (pedido com foto): a coluna de volumes/hora tem a mesma borda em
@@ -1314,6 +1324,9 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
     const r = b.children[1].getBoundingClientRect();
     return `${Math.round(r.left)}-${Math.round(r.right)}`;
   }));
+  const comPeriodo = await linhas.evaluateAll((bs) => bs.map((b) => /período/.test(b.children[1].innerText)));
+  checar(comPeriodo.includes(true) && comPeriodo.includes(false),
+    `o teste do alinhamento tem linha com e sem "período" (${comPeriodo.join(', ')})`);
   checar(new Set(colunas).size === 1, `a coluna de volumes/hora se alinha em todas as linhas (${colunas.join(', ')})`);
 
   await linhas.first().tap();
@@ -1361,8 +1374,110 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
   checar(new URL(s.url()).pathname === '/coleta/embalagem', 'a seta do cabecalho, com o resultado aberto, volta a lista');
 
+  // O ESPACO (teclado bluetooth) com o resultado aberto nao arma medicao:
+  // o INICIAR nem esta' na tela (achado da revisao).
+  await linhas.first().tap();
+  await resultado.waitFor({ timeout: 4000 });
+  await s.keyboard.press('Space');
+  await s.waitForTimeout(400);
+  checar(await resultado.count() === 1 && await s.getByRole('button', { name: /Largada/ }).count() === 0,
+    'Espaco com o resultado aberto nao arma medicao');
+  await s.goBack();
+  await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
+  checar(await s.getByRole('button', { name: /Largada/ }).count() === 0, 'de volta a lista, nada armado pelo Espaco');
+
+  // A medicao aberta que sai do aparelho (removida, e a tela recarregada):
+  // a tela fica na lista e a entrada do historico deixa de ser dela.
+  await linhas.first().tap();
+  await resultado.waitFor({ timeout: 4000 });
+  await s.evaluate(() => {
+    const lista = JSON.parse(localStorage.getItem('ritmopatrimar.conferencias'));
+    localStorage.setItem('ritmopatrimar.conferencias', JSON.stringify(lista.filter((c) => c.id !== 'salva-hoje')));
+  });
+  await s.reload();
+  await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 8000 });
+  await s.waitForTimeout(300);
+  checar(await resultado.count() === 0 && await s.evaluate(() => !window.history.state?.embalagemSalva),
+    'medicao removida: F5 fica na lista, sem entrada morta no historico');
+
   checar(erros.length === 0, `resultado salvo: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
   await ctx.close();
+}
+
+/* --- resultado salvo: o takt e' o do grupo DA MEDICAO; e sem rede, a falta e' de rede */
+{
+  /* Duas linhas de embalagem em grupos diferentes (achado da revisao): a
+     do topo (EMBALAGEM 01) e' do programa de 2.200 volumes (72,0 s); a
+     medicao salva e' da EMBALAGEM 02, cujo grupo programa 4.400 (36,0 s).
+     O PC le' contra 36,0 (grupoDe da medicao); o tablet tem de ler igual. */
+  const G2 = { ...GRUPO, id: '00000000-0000-0000-0000-0000000000e2', codigo: '0006', nome: 'EMBALAGEM 2' };
+  const M2 = { id: '00000000-0000-0000-0000-0000000000a2', nome: 'EMBALAGEM 02', ativa: true, grupo_id: G2.id };
+  const MARCAS = [10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 150000];
+  const daLinha2 = {
+    id: 'salva-linha-2', salvoEm: new Date().toISOString(), maquina: 'EMBALAGEM 02', peca: 'Buffet Prism',
+    horaInicial: null, horaFinal: null, duracaoMs: 240000, pecas: 12, ciclosPorPeca: 1, furacaoPassante: false,
+    observacao: null, paradas: [{ motivo: 'falta-material', duracaoMs: 60000 }],
+    marcasMs: MARCAS, marcasRelogioMs: 200000, marcasSetupMs: 0,
+    pecasPorHora: 240, pecasPorHoraBruto: 180, paradaMs: 60000, produtivoMs: 180000, cicloMedioMs: 15000, enviada: true,
+  };
+  const ctx = await navegador.newContext({ viewport: { width: 800, height: 1280 }, hasTouch: true });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  await s.addInitScript((r) => { localStorage.setItem('ritmopatrimar.conferencias', JSON.stringify([r])); }, daLinha2);
+  const erros = [];
+  s.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(s, { cadastro: { maquinas: [MAQUINA, M2], grupos: [GRUPO, G2] } });
+  // O programa POR GRUPO (a rota de cima responde o mesmo a todos). A
+  // ultima rota registrada responde primeiro; o resto segue para a de cima.
+  await s.route('**/api/maquinas**', (rota) => {
+    const url = new URL(rota.request().url());
+    if (url.searchParams.get('demanda') !== '1') return rota.fallback();
+    const demandas = url.searchParams.get('grupo') === G2.id ? [{ ...DEMANDAS[0], pecas: 4400 }] : DEMANDAS;
+    return rota.fulfill({ json: { demandas } });
+  });
+  await s.goto(`${BASE}/coleta/embalagem`);
+  await s.locator('[aria-label="Takt da semana"]').getByText('72.0').waitFor({ timeout: 8000 });
+  await s.getByRole('button', { name: /Ver o resultado/ }).first().tap();
+  const resultado = s.locator('[aria-label="Resultado da medição salva"]');
+  // Espera o takt carregar (o cartao ganha "semana ... · por volume"), seja
+  // ele qual for: o valor e' conferido abaixo, nao esperado.
+  await resultado.getByText(/· por volume/).first().waitFor({ timeout: 8000 });
+  const texto = (await resultado.innerText()).replace(/\s+/g, ' ');
+  checar(/TAKT DA SEMANA 36\.0 ?s/i.test(texto) && !/72\.0/.test(texto),
+    `duas linhas: o resultado da EMBALAGEM 02 usa o takt do grupo dela (36.0 s), nao o da maquina do topo (${texto.slice(0, 140)})`);
+  checar(/EMBALAGEM 02/.test(texto), 'duas maquinas: o resultado diz de qual maquina e a medicao');
+  checar(erros.length === 0, `duas linhas: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+
+  /* SEM REDE, com o programa guardado so' da semana passada: o resultado
+     de hoje diz que falta rede — nao que o PCP deixou a semana sem
+     programa, que e' o que "nao cobre a semana" diria. */
+  const passada = new Date(segunda.getTime() - 7 * 86400000);
+  const ctx2 = await navegador.newContext({ viewport: { width: 800, height: 1280 }, hasTouch: true });
+  const s2 = await ctx2.newPage();
+  await semearSessao(s2);
+  await s2.addInitScript(({ r, grupoId, programa }) => {
+    localStorage.setItem('ritmopatrimar.conferencias', JSON.stringify([r]));
+    localStorage.setItem(`ritmopatrimar.demanda.${grupoId}`, JSON.stringify(programa));
+  }, {
+    r: { ...daLinha2, maquina: 'EMBALAGEM 01' },
+    grupoId: GRUPO.id,
+    programa: [{ ...DEMANDAS[0], inicio: passada.toISOString().slice(0, 10), numero: 2 }],
+  });
+  await simularServidor(s2);
+  await s2.route('**/api/maquinas**', (rota) => (new URL(rota.request().url()).searchParams.get('demanda') === '1'
+    ? rota.abort()
+    : rota.fallback()));
+  await s2.goto(`${BASE}/coleta/embalagem`);
+  await s2.getByRole('button', { name: /Ver o resultado/ }).first().waitFor({ timeout: 8000 });
+  await s2.waitForTimeout(500);
+  await s2.getByRole('button', { name: /Ver o resultado/ }).first().tap();
+  const res2 = s2.locator('[aria-label="Resultado da medição salva"]');
+  await res2.waitFor({ timeout: 4000 });
+  const texto2 = (await res2.innerText()).replace(/\s+/g, ' ');
+  checar(/sem rede/i.test(texto2) && !/não cobre a semana/.test(texto2) && !/sem programa para comparar/.test(texto2),
+    `sem rede: o resultado diz que falta rede, nao que falta programa (${texto2.slice(0, 220)})`);
+  await ctx2.close();
 }
 
 await navegador.close();

@@ -43,7 +43,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { TOQUE_MINIMO_MS } from '../../../domain/estatistica.js';
 import { useCronometro, vibrar } from '../../../lib/hooks.js';
 
-export function useCronometroAoVivo({ paradas, comLargada = false }) {
+export function useCronometroAoVivo({
+  paradas, comLargada = false,
+  // Falso quando a tela mostra outra coisa no lugar do INICIAR (o resultado
+  // de uma medicao salva, na Embalagem Takt Time): o Espaco do teclado
+  // bluetooth nao pode armar uma medicao que ninguem pediu.
+  tecladoComeca = true,
+}) {
   const [fase, setFase] = useState('pronto'); // pronto | rodando | resultado
   const [pecas, setPecas] = useState(0);
   const [duracaoFinal, setDuracaoFinal] = useState(0);
@@ -229,11 +235,11 @@ export function useCronometroAoVivo({ paradas, comLargada = false }) {
       ev.preventDefault();
       if (escolhendoMotivo) return;
       if (rodando) contarPeca();
-      else if (fase === 'pronto') comecar();
+      else if (fase === 'pronto' && tecladoComeca) comecar();
     };
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
-  }, [fase, rodando, contarPeca, comecar, escolhendoMotivo]);
+  }, [fase, rodando, contarPeca, comecar, escolhendoMotivo, tecladoComeca]);
 
   // Cronometro da parada em curso. Lido no render de proposito: quem faz a
   // tela repintar e' o cronometro do periodo, que segue correndo durante a

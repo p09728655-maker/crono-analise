@@ -153,13 +153,17 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   cartões, o total que deixou de ser embalado e de onde veio, o gráfico (o
   mesmo componente do PC) e as lacunas. As contas são as do PC, sobre a cópia
   guardada no aparelho (`embalagem/leituraSalva.js`). O takt sai do programa
-  guardado no tablet (`useTaktDaSemana().naData`). É só leitura: correção de
+  guardado no tablet (`useTaktDaSemana().naData`), do grupo da máquina **da
+  medição** — não da escolhida no topo (v2.100.1). Sem rede e com o programa
+  guardado só de outra semana, a tela diz que falta rede, não programa. É só leitura: correção de
   produto ou parada e a análise do PCP continuam no PC, e a tela avisa que o
   que o PC corrigiu não volta para o tablet. O resultado tem entrada no
   histórico do navegador: a seta *voltar* do Android fecha o resultado e
-  fica na tela, e o F5 reabre o mesmo. Na lista, a coluna de volumes/hora
-  tem largura fixa e alinha à direita, e o nome da máquina sai da linha
-  quando o grupo tem uma máquina só.
+  fica na tela, e o F5 reabre o mesmo (medição removida do aparelho volta
+  à lista); com ele aberto, o Espaço do teclado não arma medição. Na lista
+  da embalagem, a coluna de volumes/hora tem largura fixa e alinha à
+  direita (só ali: no Ritmo da máquina, no celular, ela espremia o nome da
+  peça), e o nome da máquina sai da linha quando há uma máquina só.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
   medições da embalagem. Cada medição tocada abre o **volume a volume** ao
   lado da lista (abaixo dela, em tela estreita), com identificação, cinco

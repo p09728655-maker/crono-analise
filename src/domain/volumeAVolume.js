@@ -159,7 +159,12 @@ export function numerosDaLeitura(leitura, takt = {}, unidade, { juncao = false }
       // dias com lote, e o papel diz quantos — senao 35,2 h parece erro.
       sub: leitura.taktMs
         ? `semana ${takt.semana} · por ${unidade.singular}${diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}`
-        : (takt.estado === 'takts-diferentes' ? 'medições em semanas diferentes do programa' : 'sem programa para comparar'),
+        : ({
+          'takts-diferentes': 'medições em semanas diferentes do programa',
+          // So' no tablet: a falta e' de rede, nao de programa (ver semTakt).
+          'sem-rede': 'sem rede: o programa não chegou a este aparelho',
+          carregando: 'buscando o programa da semana',
+        }[takt.estado] || 'sem programa para comparar'),
     },
     {
       chave: 'rodando',

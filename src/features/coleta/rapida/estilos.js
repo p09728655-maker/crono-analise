@@ -187,15 +187,17 @@ export const est = {
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
   },
   itemDetalhe: { fontSize: tamanho.legenda, color: cores.textoFraco, marginTop: 2 },
-  // COLUNA de largura fixa, tudo a' direita (v2.100.0, pedido com foto do
-  // tablet): o "período" embaixo alargava so' algumas linhas, e o numero
-  // grande de cada uma comecava num lugar — a lista nao se lia de cima a
-  // baixo. 136 px cabem "3.3 vol/min período" e "999 vol/h".
   itemRitmo: {
-    flexShrink: 0, width: 136, textAlign: 'right',
-    fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero,
-    fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+    flexShrink: 0, fontSize: tamanho.destaque, fontWeight: 700, fontFamily: fonte.numero,
+    fontVariantNumeric: 'tabular-nums',
   },
+  // COLUNA de largura fixa, tudo a' direita (v2.100.0, pedido com foto do
+  // tablet da embalagem): o "período" embaixo alargava so' algumas linhas,
+  // e o numero grande de cada uma comecava num lugar. 136 px cabem
+  // "3.3 vol/min período" e "999 vol/h". So' na Embalagem Takt Time: no
+  // Ritmo da maquina, celular de 360 px, a coluna fixa espremia o nome da
+  // peca de 158 para 95 px (revisao de 04/11).
+  itemRitmoColuna: { width: 136, textAlign: 'right', whiteSpace: 'nowrap' },
   itemRitmoSufixo: { fontSize: tamanho.legenda, color: cores.textoFraco, marginLeft: 3, fontWeight: 400 },
   // A mesma producao em pecas por MINUTO, embaixo do pc/h: e' a unidade em
   // que o chao de fabrica fala ("sai 11 por minuto"), e a conta de cabeca
