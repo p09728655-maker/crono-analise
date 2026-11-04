@@ -147,6 +147,19 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   - O
     *Cronometrar ao vivo* do Ritmo da máquina segue abrindo o relógio no
     toque do botão.
+- **O resultado de uma medição salva, no tablet** (v2.100). Na lista *Salvas
+  neste aparelho*, tocar numa medição abre o mesmo volume a volume do PC: o
+  veredito contra o takt da semana **da medição** (não o de hoje), os oito
+  cartões, o total que deixou de ser embalado e de onde veio, o gráfico (o
+  mesmo componente do PC) e as lacunas. As contas são as do PC, sobre a cópia
+  guardada no aparelho (`embalagem/leituraSalva.js`). O takt sai do programa
+  guardado no tablet (`useTaktDaSemana().naData`). É só leitura: correção de
+  produto ou parada e a análise do PCP continuam no PC, e a tela avisa que o
+  que o PC corrigiu não volta para o tablet. O resultado tem entrada no
+  histórico do navegador: a seta *voltar* do Android fecha o resultado e
+  fica na tela, e o F5 reabre o mesmo. Na lista, a coluna de volumes/hora
+  tem largura fixa e alinha à direita, e o nome da máquina sai da linha
+  quando o grupo tem uma máquina só.
 - **No PC**, a tela *Embalagem Takt Time* mostra o takt desta semana e as
   medições da embalagem. Cada medição tocada abre o **volume a volume** ao
   lado da lista (abaixo dela, em tela estreita), com identificação, cinco

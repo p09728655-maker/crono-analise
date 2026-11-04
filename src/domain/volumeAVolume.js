@@ -38,6 +38,10 @@ export function semTakt(estado, nomeGrupo) {
     // Junção: a trava e' pela semana do calendario, o takt pela semana do
     // programa (por data). Se elas nao casam, nao ha' um takt so'.
     case 'takts-diferentes': return 'as medições caem em semanas diferentes do programa, com takts diferentes — não há um takt só para comparar a junção.';
+    // So' no tablet (o programa vem guardado no aparelho, ver
+    // useTaktDaSemana): a falta e' de rede, nao de programa nem de data.
+    case 'sem-rede': return 'o programa da semana ainda não chegou a este aparelho (sem rede).';
+    case 'carregando': return 'o programa da semana ainda está sendo buscado.';
     default: return 'a medição não tem data para achar a semana.';
   }
 }
