@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.101.2',
+    data: '2026-11-05',
+    titulo: 'Folha da embalagem: o tempo da semana na 1ª página',
+    itens: [
+      'A CONTA DO TEMPO DA SEMANA VOLTA À 1ª PÁGINA no caso comum. Desde a 2.101.0 o gráfico ocupava todo o espaço que sobrava, e a conta ("Por máquina: 35h12min de jornada… → takt 49.4 s") ia para a 2ª página justamente quando o nome do produto era curto. Agora o espaço dela fica reservado sempre que o gráfico ainda tem a altura de antes; só quando a página aperta (nome comprido, junção) o gráfico leva tudo e a conta passa para a seguinte.',
+      'Quando o programa não carrega (servidor fora), o cartão do takt diz "não deu para carregar o programa", e não "sem programa para comparar" — como a leitura da mesma folha já dizia.',
+    ],
+  },
+  {
     versao: '2.101.1',
     data: '2026-11-05',
     titulo: 'Gráfico do volume a volume: o takt se vê',

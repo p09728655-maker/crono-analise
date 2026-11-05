@@ -1174,7 +1174,10 @@ const LARGURA_GRAFICO_PAPEL = 1000;
    sobra ate' o fim da pagina — entre o minimo, abaixo do qual o grafico
    deixa de mostrar o ritmo, e o maximo de sempre. */
 const PAGINA_PAPEL = { altura: 703, largura: 1032, folga: 14 };
-const ALTURA_GRAFICO_PAPEL = { min: 150, max: 260 };
+// `preferida`: a altura que o grafico tinha fixa antes — com pelo menos
+// ela, a conta do tempo da semana (logo depois do grafico) fica na 1a
+// pagina tambem (v2.101.2).
+const ALTURA_GRAFICO_PAPEL = { min: 150, preferida: 230, max: 260 };
 /* LETRA MAIOR NA FOLHA (v2.101.0, pedido do PCP: "aumentar as letras da
    impressao"): 15% em tudo o que a folha escreve, grafico incluido. So'
    nesta folha — `imp` e' dividido com a do Ritmo por maquina, em pe', cuja
@@ -1204,7 +1207,7 @@ const impF = {
 };
 // A junção tem a hora de cada medicao acima das barras e mais linhas na
 // leitura: o mesmo calculo, com teto menor.
-const ALTURA_GRAFICO_PAPEL_JUNCAO = { min: 130, max: 220 };
+const ALTURA_GRAFICO_PAPEL_JUNCAO = { min: 130, preferida: 185, max: 220 };
 
 /**
  * A FOLHA A4 — num portal, como a do cadastro de maquinas: enquanto a
@@ -1241,7 +1244,19 @@ function FolhaVolumeAVolume({
       const moldura = caixa.height - svg.getBoundingClientRect().height;
       const antes = caixa.top - folha.getBoundingClientRect().top;
       const cabe = Math.floor(PAGINA_PAPEL.altura - PAGINA_PAPEL.folga - antes - moldura);
-      const alvo = Math.max(limites.min, Math.min(limites.max, cabe));
+      /* A CONTA DO TEMPO DA SEMANA TAMBEM NA 1a PAGINA (v2.101.2, terceira
+         revisao de 05/11): dar as barras TUDO o que sobrava empurrava a
+         conta para a 2a pagina justo no caso comum, de nome curto. Agora o
+         espaco dela e' reservado sempre que o grafico ainda fica com a
+         altura preferida; so' quando a pagina aperta ele leva tudo e a
+         conta vai para a seguinte. A distancia da conta ate' o grafico nao
+         depende da altura das barras: a medida continua estavel. */
+      const conta = folha.querySelector('[data-conta-semana]');
+      const reserva = conta ? conta.getBoundingClientRect().bottom - caixa.bottom : 0;
+      const comConta = cabe - reserva;
+      const alvo = conta && comConta >= limites.preferida
+        ? Math.min(limites.max, comConta)
+        : Math.max(limites.min, Math.min(limites.max, cabe));
       if (alvo !== alturaGrafico) setAlturaGrafico(alvo);
     } finally {
       folha.classList.remove('folha-medindo');
@@ -1370,7 +1385,7 @@ function FolhaVolumeAVolume({
             inteira — jornada, dias, setup, o que sobra e o programa. Sem ela
             o papel dizia "takt 17.2 s" e ninguem na reuniao sabia de onde.
             Logo depois do grafico: na 1a pagina, se couber. */}
-        {tempo?.texto && <p style={impF.tempoSemana}>{tempo.texto}</p>}
+        {tempo?.texto && <p style={impF.tempoSemana} data-conta-semana>{tempo.texto}</p>}
         {medicoes.filter((c) => c.observacao).map((c) => (
           <p key={c.id} style={{ margin: '0 0 10px' }}>
             <strong>Obs. do analista{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {c.observacao}

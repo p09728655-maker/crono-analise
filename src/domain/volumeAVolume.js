@@ -170,6 +170,8 @@ export function numerosDaLeitura(leitura, takt = {}, unidade, { juncao = false }
           'sem-horas': 'faltam as horas da semana do grupo',
           'sem-dias': 'faltam os dias de produção da jornada',
           'setup-excede': 'o setup cadastrado passa da jornada',
+          // O servidor nao respondeu: ha' programa, so' nao chegou.
+          'erro-programa': 'não deu para carregar o programa',
         }[takt.estado] || 'sem programa para comparar'),
     },
     {
