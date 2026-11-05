@@ -92,15 +92,21 @@ async function simularServidor(pagina, {
  * impressao, e mede onde o grafico termina a partir do topo da folha:
  * passando de 703 px, ele iria inteiro para a 2a pagina.
  */
-async function fundoDoGraficoNaFolha(pagina) {
+async function fundoDoGraficoNaFolha(pagina, oQue = 'grafico') {
   const antes = pagina.viewportSize();
   await pagina.setViewportSize({ width: 1032, height: 703 });
   await pagina.emulateMedia({ media: 'print' });
-  const fundo = await pagina.evaluate(() => {
+  // Sem a barra de rolagem: com ela a folha media 1017 px, e o papel tem
+  // 1032 — o texto quebrava mais cedo que na impressao (revisao de 05/11).
+  const semRolagem = await pagina.addStyleTag({ content: 'html { overflow: hidden !important; }' });
+  const fundo = await pagina.evaluate((oQue) => {
     const folha = document.querySelector('body > .somente-impressao');
-    const figura = folha.querySelector('svg[aria-label^="Intervalo entre"]').closest('figure');
-    return Math.round(figura.getBoundingClientRect().bottom - folha.getBoundingClientRect().top);
-  });
+    const alvo = oQue === 'conta'
+      ? folha.querySelector('[data-conta-semana]')
+      : folha.querySelector('svg[aria-label^="Intervalo entre"]').closest('figure');
+    return alvo ? Math.round(alvo.getBoundingClientRect().bottom - folha.getBoundingClientRect().top) : null;
+  }, oQue);
+  await semRolagem.evaluate((e) => e.remove());
   await pagina.emulateMedia({ media: 'screen' });
   await pagina.setViewportSize(antes);
   return fundo;
@@ -547,6 +553,11 @@ const tamanhoDoPdf = async () => {
   if (FOTOS) writeFileSync(`${FOTOS}/pc-folha.pdf`, pdf);
   const fundo = await fundoDoGraficoNaFolha(p);
   checar(fundo <= 703, `folha deitada: o grafico cabe na 1a pagina (termina em ${fundo} de 703 px)`);
+  /* No caso comum (nome curto), a CONTA do tempo da semana tambem fica na
+     1a pagina: o grafico deixa o espaco dela quando ainda tem a altura
+     preferida (v2.101.2; com a altura toda para as barras, ela ia para a 2a). */
+  const fundoConta = await fundoDoGraficoNaFolha(p, 'conta');
+  checar(fundoConta != null && fundoConta <= 703, `folha deitada: a conta do tempo da semana fica na 1a pagina (termina em ${fundoConta} de 703 px)`);
 }
 
 const fechar = async () => {
@@ -1651,6 +1662,10 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
 for (const v of [
   { nome: 'semana digitada, 10 min parados', semana: { diasProducao: 4 }, paradaMs: 600000 },
   { nome: 'semana da planilha, 1 h parada', semana: { dias: 4 }, paradaMs: 3600000 },
+  /* NOME CURTO (terceira revisao de 05/11): aqui ha' espaco, e o grafico
+     levava tudo — a conta do tempo ia para a 2a pagina. Agora o espaco
+     dela fica reservado enquanto o grafico tiver a altura preferida. */
+  { nome: 'nome curto, conta na 1a pagina', semana: { diasProducao: 4 }, paradaMs: 600000, peca: 'RACK', contaNa1a: true },
 ]) {
   const G = { ...GRUPO, setups_dia: 5, setup_min: '15' };
   const intervalos = [60, 60, 60, 60, 60, 60, 200, 60, 60, 60, 60, 60, 60, 60, 300, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60];
@@ -1660,7 +1675,7 @@ for (const v of [
   const duracao = marcas.at(-1) - marcas[0] + v.paradaMs + 120000;
   const MED = {
     id: '00000000-0000-0000-0000-00000000c0f1', maquina: 'EMBALAGEM 01',
-    peca: 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES COM PORTA DE VIDRO',
+    peca: v.peca || 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES COM PORTA DE VIDRO',
     iniciado_em: new Date(fim.getTime() - duracao).toISOString(), finalizado_em: fim.toISOString(), salvo_em: fim.toISOString(),
     duracao_ms: duracao, pecas: marcas.length, ciclos_por_peca: 1, furacao_passante: false, arquivada: false, com_marcas: true,
     paradas: [{ motivo: 'falta-material', duracao_ms: v.paradaMs }], observacao: 'Faltou caixa às 9h10',
@@ -1676,11 +1691,16 @@ for (const v of [
     relogio: marcas.at(-1) - marcas[0] + v.paradaMs,
   });
   await s.goto(`${BASE}/analise/embalagem`);
-  await s.getByRole('region', { name: 'Medições da embalagem' }).getByRole('button', { name: /RACK SIRIUS/ }).first().click();
+  await s.getByRole('region', { name: 'Medições da embalagem' }).getByRole('button', { name: /RACK/ }).first().click();
   await s.getByRole('region', { name: /Volume a volume/ }).getByText(/No período/).first().waitFor({ timeout: 10000 });
   await s.waitForTimeout(300);
   const fundo = await fundoDoGraficoNaFolha(s);
-  checar(fundo <= 703, `folha no pior caso (${v.nome}, nome longo, setup, 4 de 5 dias): o grafico cabe na 1a pagina (termina em ${fundo} de 703 px)`);
+  checar(fundo <= 703, `folha no pior caso (${v.nome}, setup, 4 de 5 dias): o grafico cabe na 1a pagina (termina em ${fundo} de 703 px)`);
+  if (v.contaNa1a) {
+    const fundoConta = await fundoDoGraficoNaFolha(s, 'conta');
+    checar(fundoConta != null && fundoConta <= 703,
+      `folha (${v.nome}): a conta do tempo da semana fica na 1a pagina (termina em ${fundoConta} de 703 px)`);
+  }
   const texto = (await s.locator('body > .somente-impressao').innerText()).replace(/\s+/g, ' ');
   checar(/Por máquina: 35h12min de jornada \(4 de 5 dias programados\) − 5h00min de setup planejado = 30h12min\. 2\.200 volumes na semana → takt 49\.4 s por volume\./.test(texto),
     `folha (${v.nome}): a conta do tempo com setup e feriado fecha (${(/Tempo da semana.*?por volume\./.exec(texto) || ['nao achou'])[0]})`);

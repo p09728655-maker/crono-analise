@@ -122,4 +122,13 @@ describe('semTakt no tablet', () => {
     // O PC segue como sempre.
     expect(takt('sem-demanda').sub).toBe('sem programa para comparar');
   });
+  it('com programa cadastrado, o cartao do takt diz o que falta — nunca "sem programa"', () => {
+    const { leitura } = leituraDaSalva(SALVA, {});
+    const sub = (estado) => numerosDaLeitura(leitura, { estado }, VOLUME).find((k) => k.chave === 'takt').sub;
+    expect(sub('sem-semana')).toBe('o programa não cobre esta semana');
+    expect(sub('sem-horas')).toBe('faltam as horas da semana do grupo');
+    expect(sub('sem-dias')).toBe('faltam os dias de produção da jornada');
+    expect(sub('setup-excede')).toBe('o setup cadastrado passa da jornada');
+    expect(sub('erro-programa')).toBe('não deu para carregar o programa');
+  });
 });

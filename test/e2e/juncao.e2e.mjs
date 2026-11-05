@@ -115,15 +115,21 @@ async function simularServidor(pagina) {
  * impressao, e mede onde o grafico termina a partir do topo da folha:
  * passando de 703 px, ele iria inteiro para a 2a pagina.
  */
-async function fundoDoGraficoNaFolha(pagina) {
+async function fundoDoGraficoNaFolha(pagina, oQue = 'grafico') {
   const antes = pagina.viewportSize();
   await pagina.setViewportSize({ width: 1032, height: 703 });
   await pagina.emulateMedia({ media: 'print' });
-  const fundo = await pagina.evaluate(() => {
+  // Sem a barra de rolagem: com ela a folha media 1017 px, e o papel tem
+  // 1032 — o texto quebrava mais cedo que na impressao (revisao de 05/11).
+  const semRolagem = await pagina.addStyleTag({ content: 'html { overflow: hidden !important; }' });
+  const fundo = await pagina.evaluate((oQue) => {
     const folha = document.querySelector('body > .somente-impressao');
-    const figura = folha.querySelector('svg[aria-label^="Intervalo entre"]').closest('figure');
-    return Math.round(figura.getBoundingClientRect().bottom - folha.getBoundingClientRect().top);
-  });
+    const alvo = oQue === 'conta'
+      ? folha.querySelector('[data-conta-semana]')
+      : folha.querySelector('svg[aria-label^="Intervalo entre"]').closest('figure');
+    return alvo ? Math.round(alvo.getBoundingClientRect().bottom - folha.getBoundingClientRect().top) : null;
+  }, oQue);
+  await semRolagem.evaluate((e) => e.remove());
   await pagina.emulateMedia({ media: 'screen' });
   await pagina.setViewportSize(antes);
   return fundo;
