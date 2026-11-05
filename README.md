@@ -61,9 +61,21 @@ repique, tela acesa).
 **Paradas e setup.** O período quase nunca é só máquina rodando: troca de
 gabarito, falta de peça, manutenção. No formulário, `+ Setup / troca` e
 `+ Outra parada` marcam quantos minutos do período a máquina ficou parada;
-no cronômetro ao vivo, o botão **Parou** pergunta o motivo, cronometra a
-parada e **Voltou** a encerra (contar peça fica bloqueado enquanto isso — o
-relógio do período continua correndo, porque a parada está *dentro* dele).
+no cronômetro ao vivo, o botão **Parou** já começa a parada e abre a lista
+de motivos com o tempo correndo, e **Voltou** a encerra (contar peça fica
+bloqueado enquanto isso — o relógio do período continua correndo, porque a
+parada está *dentro* dele). Desde a v2.102.0 o motivo pode vir depois:
+*Motivo na volta* deixa a parada contando e pergunta no Voltou (a parada
+fecha no toque, o tempo de escolher não entra nela); *Não parou* desfaz o
+Parou tocado sem querer. Antes a parada só contava a partir da escolha do
+motivo — o tempo de ler a lista virava máquina rodando.
+
+**O Voltar não perde a medição** (v2.102.0). O cronômetro ao vivo guarda
+tudo na tela até o Salvar. Cronometrando — e no resultado ainda não salvo —
+o Voltar do aparelho, a seta ← do topo e o Sair do resultado perguntam
+"Sair da medição?" antes de descartar: uma entrada a mais no histórico, no
+mesmo endereço, segura o Voltar (`useGuardaDaMedicao`). Não cobre o
+navegador fechado pelo sistema: aí a medição em andamento ainda se perde.
 
 Com parada marcada, o ritmo passa a sair do **tempo em que a máquina
 rodou** — 100 peças em 30 min com 10 min de setup são 300 pç/h, não 200 —
@@ -115,7 +127,9 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   toque**, paradas dentro — só muda quando um volume fecha, v2.98.1; o do
   resultado vai até o Encerrar; a partir do 2º volume) e o intervalo do
   **último volume**. Quando o tempo por volume passa do takt, o rótulo ganha
-  "▲ takt". Desde a v2.98 o painel e o alvo de toque dividem a tela: um em
+  "▲ takt" e o quadro fica **vermelho**; chegando no takt, **verde** (v2.102.0
+  — antes era um fundo âmbar claro, que não se via de longe). Sem takt ou com
+  menos de 2 volumes, sem cor. O quadro do takt diz "Takt da semana". Desde a v2.98 o painel e o alvo de toque dividem a tela: um em
   cima do outro em pé, **lado a lado deitado** (v2.98.2). O tamanho dos
   números sai do próprio painel (`containerType: 'size'`, letras em
   `cqw`/`cqh`). Na v2.98.0 ele seguia só a largura da tela, e com o tablet

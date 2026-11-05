@@ -349,6 +349,12 @@ export const est = {
   // texto da' 2.65:1 nesta superficie (ver comparativoUnidade); quem avisa
   // de verdade e' o "▲ takt" escrito no rotulo — o fundo so' reforca.
   parcialAtencao: { background: cores.atencaoFundo, borderRadius: raio.sm, padding: '0 6px' },
+  /* O QUADRO do tempo por volume contra o takt (05/11): FUNDO CHEIO, que se
+     le' de longe — vermelho acima do takt, verde dentro dele. O rotulo e o
+     sufixo passam ao texto claro: o cinza de sempre some sobre a cor. */
+  quadroForaDoTakt: { background: cores.foraDoTakt, borderRadius: raio.md, padding: `${espaco.xs}px ${espaco.sm}px` },
+  quadroNoTakt: { background: cores.ok, borderRadius: raio.md, padding: `${espaco.xs}px ${espaco.sm}px` },
+  quadroTexto: { color: cores.texto },
 
   /* ---- EMBALAGEM RODANDO (v2.98.0; v2.98.2) ----
      Pedido do chao de fabrica, com foto do tablet: o alvo de toque tomava
@@ -593,6 +599,18 @@ export const est = {
     maxHeight: '86dvh', overflowY: 'auto',
   },
   folhaTitulo: { fontSize: tamanho.titulo, fontWeight: 700 },
+  folhaTempoParada: {
+    fontSize: tamanho.corpo, fontWeight: 700, color: cores.texto, lineHeight: 1.4,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  // Sair da medicao: por cima de tudo, ate' da lista de motivos aberta.
+  folhaSaida: { zIndex: 40 },
+  botaoContinuarMedindo: {
+    width: '100%', minHeight: 72,
+    background: cores.ok, border: 'none', borderRadius: raio.md,
+    color: '#fff', fontSize: tamanho.corpo, fontWeight: 700, letterSpacing: 1,
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
   gradeMotivos: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.sm },
   chipMotivo: {
     minHeight: 60, padding: `0 ${espaco.sm}px`,
