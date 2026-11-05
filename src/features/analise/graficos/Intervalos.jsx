@@ -360,6 +360,19 @@ export function GraficoIntervalos({
             />
           ))}
 
+          {/* O PERIODO ACIMA DO TOPO: a linha encosta no topo do eixo, e o
+              topo tem um rotulo que nao e' o dela (100 s quando ela vale
+              197 s). O valor vai escrito NA linha, com a seta para cima. */}
+          {periodoAcimaDoTopo && (
+            <text
+              x={largura - margem.dir - 2} y={yDe(maxY) + fs(11) + 3} textAnchor="end"
+              fontSize={fs(11)} fontWeight="700" fill={takt > 0 && periodoMs > takt ? claro.critico : claro.texto}
+              stroke={claro.papel} strokeWidth="3" paintOrder="stroke" pointerEvents="none"
+            >
+              ↑ {emSegundos(periodoMs)} no período
+            </text>
+          )}
+
           <line x1={margem.esq} x2={largura - margem.dir} y1={base} y2={base} stroke={claro.textoFraco} strokeWidth="1.5" />
 
           {/* Marca de cada volume no eixo, quando a banda comporta. */}

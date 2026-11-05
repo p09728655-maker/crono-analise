@@ -42,15 +42,22 @@ export function useDemanda(grupoInicial) {
   }, []);
 
   useEffect(() => {
-    if (!grupoId) return;
+    if (!grupoId) return undefined;
+    /* A resposta SO' VALE para o grupo que ainda esta' escolhido. Trocar de
+       grupo antes de ela chegar fazia a lista da EMBALAGEM aparecer sob a
+       FURADEIRA — e com o Editar (v2.101.0), "Salvar alteracao" gravava os
+       volumes de um grupo no outro (revisao de 05/11). */
+    let vivo = true;
     setSemanas(null);
     setPlanilha(null);
     lerDemanda(grupoId)
       .then((r) => {
+        if (!vivo) return;
         setSemanas(comChave(r.demandas));
         setPlanilha(r.planilha);
       })
-      .catch((e) => setErro(e.message));
+      .catch((e) => { if (vivo) setErro(e.message); });
+    return () => { vivo = false; };
   }, [grupoId]);
 
   const grupo = cadastro?.grupos?.find((g) => g.id === grupoId) || null;

@@ -100,7 +100,8 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
               <span style={est.rotuloCampo}>Grupo de máquina</span>
               <select
                 style={est.input} value={grupoId || ''} disabled={ocupado}
-                onChange={(ev) => escolherGrupo(ev.target.value)}
+                // Trocar de grupo LARGA a edicao: voltar ao grupo nao a reabre.
+                onChange={(ev) => { setEdicao(null); escolherGrupo(ev.target.value); }}
               >
                 {cadastro.grupos.map((g) => (
                   <option key={g.id} value={g.id}>{g.codigo} · {g.nome}</option>

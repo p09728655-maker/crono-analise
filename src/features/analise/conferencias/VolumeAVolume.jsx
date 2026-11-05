@@ -1,4 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
@@ -1161,11 +1163,18 @@ function NotasSalvas({ conferencia, medicoes }) {
 // mais linhas e o grafico, uma legenda a mais: ele desce para caber na 1a
 // pagina (o e2e confere as duas).
 const LARGURA_GRAFICO_PAPEL = 1000;
-// 230 (era 260) e 185 (era 200) desde a letra maior da v2.101.0: o grafico
-// perde um pouco de altura para os numeros crescerem e caber na 1a pagina
-// tambem no pior caso (nome em duas linhas, parada, setup e feriado — o
-// script da revisao media 739 de 703 px antes deste ajuste).
-const ALTURA_GRAFICO_PAPEL = 230;
+/* A ALTURA DO GRAFICO NA FOLHA E' MEDIDA, nao fixa (v2.101.0). A 1a pagina
+   do A4 deitado tem 186 x 273 mm uteis (703 x 1032 px a 96 dpi), e o que
+   vem antes do grafico muda de folha para folha: nome do produto em uma ou
+   duas linhas, leitura de 3 ou 5 linhas, cartoes com o tempo da semana. Com
+   altura fixa, cada ajuste servia aos casos medidos e o seguinte mandava o
+   grafico inteiro para a 2a pagina (duas revisoes de 05/11: 739 e 731 px).
+   Agora a folha e' desenhada fora da tela na largura do papel, mede onde o
+   grafico comeca e quanto ocupam titulo e legenda, e da' as barras o que
+   sobra ate' o fim da pagina — entre o minimo, abaixo do qual o grafico
+   deixa de mostrar o ritmo, e o maximo de sempre. */
+const PAGINA_PAPEL = { altura: 703, largura: 1032, folga: 14 };
+const ALTURA_GRAFICO_PAPEL = { min: 150, max: 260 };
 /* LETRA MAIOR NA FOLHA (v2.101.0, pedido do PCP: "aumentar as letras da
    impressao"): 15% em tudo o que a folha escreve, grafico incluido. So'
    nesta folha — `imp` e' dividido com a do Ritmo por maquina, em pe', cuja
@@ -1193,9 +1202,9 @@ const impF = {
     fontSize: Math.round(9.5 * ESCALA_PAPEL * 10) / 10, lineHeight: 1.35, breakInside: 'avoid',
   },
 };
-// 200, e nao 220: com o titulo do produto em 2 linhas sobravam ~8 px (revisao
-// de 30/10); uma linha a mais na leitura mandava o grafico para a 2a pagina.
-const ALTURA_GRAFICO_PAPEL_JUNCAO = 185;
+// A junção tem a hora de cada medicao acima das barras e mais linhas na
+// leitura: o mesmo calculo, com teto menor.
+const ALTURA_GRAFICO_PAPEL_JUNCAO = { min: 130, max: 220 };
 
 /**
  * A FOLHA A4 — num portal, como a do cadastro de maquinas: enquanto a
@@ -1212,6 +1221,32 @@ function FolhaVolumeAVolume({
   conferencia, leitura, takt, frases, unidade, r, maquinasDoGrupo = 1,
 }) {
   const tempo = contaDoTempo(takt, maquinasDoGrupo, unidade);
+  const refFolha = useRef(null);
+  const limites = r.juncao ? ALTURA_GRAFICO_PAPEL_JUNCAO : ALTURA_GRAFICO_PAPEL;
+  const [alturaGrafico, setAlturaGrafico] = useState(limites.max);
+  /* Mede a cada desenho (o conteudo acima do grafico muda com a leitura,
+     o produto, a analise). A medida nao depende da altura das barras — so'
+     do que vem antes e da moldura —, entao o segundo desenho repete a conta
+     e para. `folha-medindo` mostra a folha fora da tela, na largura do
+     papel, so' durante a medida. */
+  useLayoutEffect(() => {
+    const folha = refFolha.current;
+    if (!folha) return;
+    folha.classList.add('folha-medindo');
+    try {
+      const svg = folha.querySelector('svg[aria-label^="Intervalo entre"]');
+      const figura = svg?.closest('figure');
+      if (!svg || !figura) return;
+      const caixa = figura.getBoundingClientRect();
+      const moldura = caixa.height - svg.getBoundingClientRect().height;
+      const antes = caixa.top - folha.getBoundingClientRect().top;
+      const cabe = Math.floor(PAGINA_PAPEL.altura - PAGINA_PAPEL.folga - antes - moldura);
+      const alvo = Math.max(limites.min, Math.min(limites.max, cabe));
+      if (alvo !== alturaGrafico) setAlturaGrafico(alvo);
+    } finally {
+      folha.classList.remove('folha-medindo');
+    }
+  });
   const hoje = new Date().toLocaleDateString('pt-BR');
   const par = somarParadas(conferencia.paradas);
   const { juncao, roubo } = r;
@@ -1238,8 +1273,12 @@ function FolhaVolumeAVolume({
     ];
 
   return createPortal(
-    <div className="somente-impressao" style={impF.folha}>
-      <style>{'@media print { #raiz { display: none !important } @page { size: A4 landscape; margin: 12mm; } }'}</style>
+    <div className="somente-impressao" style={impF.folha} ref={refFolha}>
+      <style>
+        {'@media print { #raiz { display: none !important } @page { size: A4 landscape; margin: 12mm; } }'
+          + ` @media screen { .somente-impressao.folha-medindo { display: block !important; position: absolute !important;
+              left: -20000px; top: 0; width: ${PAGINA_PAPEL.largura}px; visibility: hidden; } }`}
+      </style>
 
       <header style={impF.cabecalho}>
         <div>
@@ -1315,7 +1354,7 @@ function FolhaVolumeAVolume({
 
       <GraficoIntervalos
         leitura={leitura} unidade={unidade} larguraFixa={LARGURA_GRAFICO_PAPEL}
-        altura={juncao ? ALTURA_GRAFICO_PAPEL_JUNCAO : ALTURA_GRAFICO_PAPEL}
+        altura={alturaGrafico}
         segmentos={segmentosDaJuncao(juncao)}
         escalaTexto={ESCALA_PAPEL}
       />
@@ -1460,7 +1499,9 @@ function contaDoTempo(takt, maquinas, unidade) {
     ? `${parte.semana} ${unidade.plural} na semana ÷ ${maquinas} máquinas = ${parte.texto} por máquina`
     : `${parte.texto} ${unidade.plural} na semana`;
   return {
-    curto: `${horas} ÷ ${parte.texto} ${unidade.plural}`,
+    // Com mais de uma maquina o divisor e' a parte de CADA uma — e diz isso:
+    // "÷ 1.100 volumes" sozinho e' um numero que nao esta' no programa.
+    curto: `${horas} ÷ ${parte.texto} ${unidade.plural}${Number(maquinas) > 1 ? ' por máquina' : ''}`,
     texto: `Tempo da semana ${takt.semana} — ${conta.texto} ${porMaq} → takt ${(takt.taktMs / 1000).toFixed(1)} s por ${unidade.singular}.`,
   };
 }

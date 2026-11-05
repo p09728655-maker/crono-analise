@@ -170,13 +170,19 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   cartões (volumes, **tempo por volume no período**, **tempo por volume com a
   linha rodando**, paradas marcadas, **lacunas**), o gráfico do intervalo de
   cada volume contra a linha do takt (o valor do takt e do "rodando" fica na
-  legenda, sem faixa de rótulos à direita, v2.100.2), a leitura em palavras e a folha A4 —
+  legenda, sem faixa de rótulos à direita, v2.100.2; a linha contínua do
+  período, com as paradas, v2.101.0), a leitura em palavras e a folha A4 —
   **deitada** (v2.98), para o gráfico ter a largura do papel (1.000 px). O
   `@page` paisagem vai na `<style>` do portal da folha e só vale enquanto ela
   está montada; as outras folhas seguem em pé. O gráfico fica sempre na 1ª
-  página, logo depois dos números; observação, análise do PCP, tabela da
-  junção, lacunas e nota vêm depois dele (em geral, na 2ª página). Os e2e
-  medem onde o gráfico termina na área útil da folha deitada. O PDF sai nomeado "Takt Time - produto - máquina - data hora". Clicar de novo
+  página, logo depois dos números; a conta do tempo da semana, observação,
+  análise do PCP, tabela da junção, lacunas e nota vêm depois dele. Desde a
+  v2.101.0 (letra 15% maior) a altura do gráfico é MEDIDA: a folha é
+  desenhada fora da tela na largura do papel (1.032 px), mede o que vem antes
+  e dá às barras o que sobra até 703 px, menos 14 de folga, entre 150 e
+  260 px (junção: 130 e 220). Os e2e medem onde o gráfico termina na área útil
+  da folha deitada, inclusive no pior caso (nome longo, parada, setup,
+  feriado, junção). O PDF sai nomeado "Takt Time - produto - máquina - data hora". Clicar de novo
   na linha, *Fechar* ou o Voltar do navegador fecham o painel — menos
   enquanto a análise daquela medição está sendo salva. O segundo clique de um
   duplo clique não vale.

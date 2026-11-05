@@ -409,6 +409,43 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join(' | ')})`);
   await c2.close();
 }
 
+/* ---- JUNCAO NO PIOR CASO (revisao de 05/11): nome do produto em duas
+   linhas e o takt da semana (setup e 4 de 5 dias): com altura fixa o
+   grafico ia para a 2a pagina (709 a 731 de 703 px). A altura e' medida. */
+{
+  const NOME = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES COM PORTA DE VIDRO';
+  const G = { ...GRUPO, setups_dia: 5, setup_min: '15' };
+  const [aa, mm, dd] = new Intl.DateTimeFormat('en-CA', { timeZone: FUSO }).format(new Date(t0)).split('-').map(Number);
+  const seg = new Date(Date.UTC(aa, mm - 1, dd));
+  seg.setUTCDate(seg.getUTCDate() - ((seg.getUTCDay() + 6) % 7));
+  const programa = [{ ano: seg.getUTCFullYear(), numero: 45, pecas: 2200, inicio: seg.toISOString().slice(0, 10), diasProducao: 4 }];
+  const meds = [M1, M2, M3].map((c) => ({ ...c, peca: NOME, analisada_em: null, analisada_por: null, analise_nota: null }));
+  const c3 = await navegador.newContext({ viewport: { width: 1600, height: 1000 }, timezoneId: FUSO });
+  const q = await c3.newPage();
+  await semearSessao(q);
+  await q.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
+    ? rota.fulfill({ json: { demandas: programa } })
+    : rota.fulfill({ json: { maquinas: [MAQUINA], grupos: [G] } })));
+  await q.route('**/api/conferencias**', (rota) => {
+    const id = new URL(rota.request().url()).searchParams.get('id');
+    if (id) return rota.fulfill({ json: { conferencia: { id, ...TOQUES[id] } } });
+    return rota.fulfill({ json: { conferencias: meds, outras: 0 } });
+  });
+  await q.goto(`${BASE}/analise/embalagem`);
+  const lista3 = q.getByRole('region', { name: 'Medições da embalagem' });
+  await lista3.waitFor({ timeout: 8000 });
+  const caixas3 = lista3.getByRole('checkbox');
+  for (let k = 0; k < 3; k++) await caixas3.nth(k).check();
+  await q.getByRole('region', { name: 'Medições marcadas para juntar' }).getByRole('button', { name: /^Juntar/ }).click();
+  await q.locator('svg[aria-label^="Intervalo entre"]').first().waitFor({ timeout: 8000 });
+  await q.waitForTimeout(300);
+  const folhaTexto = await q.evaluate(() => document.querySelector('body > .somente-impressao')?.textContent || '');
+  checar(/takt/i.test(folhaTexto) && /4 de 5 dias/.test(folhaTexto), 'junção no pior caso: a folha tem o takt da semana com 4 de 5 dias');
+  const fundo3 = await fundoDoGraficoNaFolha(q);
+  checar(fundo3 <= 703, `junção no pior caso (nome longo, takt com setup e feriado): o grafico cabe na 1a pagina (termina em ${fundo3} de 703 px)`);
+  await c3.close();
+}
+
 await navegador.close();
 console.log(falhas ? `\n${falhas} falha(s).` : '\nTudo certo.');
 process.exit(falhas ? 1 : 0);
