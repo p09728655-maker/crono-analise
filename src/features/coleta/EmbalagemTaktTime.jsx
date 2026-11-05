@@ -375,7 +375,9 @@ export default function EmbalagemTaktTime({ aoSair }) {
 
       <ConfirmarSaida
         aberta={guarda.perguntando}
-        cronometrando={crono.rodando}
+        // Encerrado com a parada pedindo motivo, o relogio ja' parou: o
+        // aviso nao pode dizer que ele esta' rodando.
+        cronometrando={crono.rodando && !crono.paradaFechada?.encerrando}
         aoContinuar={guarda.continuar}
         aoSair={guarda.sair}
       />
@@ -425,7 +427,9 @@ function ResumoTakt({
   return (
     <>
       <div style={est.destaqueRitmo} aria-label="Volumes por hora no período">
-        <span style={est.valorRitmo}>{Math.round(resultado.pecasPorHoraBruto)}</span>
+        {/* Sem o verde de sempre: aqui verde e' "dentro do takt" (o quadro
+            logo abaixo), e o volumes/hora sozinho nao diz isso. */}
+        <span style={{ ...est.valorRitmo, ...est.valorRitmoNeutro }}>{Math.round(resultado.pecasPorHoraBruto)}</span>
         <span style={est.sufixoRitmo}>
           {resultado.paradaMs > 0 ? 'volumes/hora produzidos no período' : 'volumes/hora'}
         </span>

@@ -389,7 +389,9 @@ export default function ConferenciaRapida({ aoSair }) {
 
       <ConfirmarSaida
         aberta={guarda.perguntando}
-        cronometrando={crono.rodando}
+        // Encerrado com a parada pedindo motivo, o relogio ja' parou: o
+        // aviso nao pode dizer que ele esta' rodando.
+        cronometrando={crono.rodando && !crono.paradaFechada?.encerrando}
         aoContinuar={guarda.continuar}
         aoSair={guarda.sair}
       />

@@ -263,6 +263,7 @@ await t.waitForTimeout(260);
 const marcarSetup = async (ms) => {
   await t.getByRole('button', { name: 'Parou' }).click();
   await t.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
+  await t.waitForTimeout(350); // a lista ignora os primeiros 0,3 s
   await t.getByRole('button', { name: 'Setup / Troca' }).click();
   const v = t.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
   await v.waitFor({ timeout: 4000 });
@@ -276,6 +277,7 @@ for (let i = 0; i < 3; i++) { await alvo.dispatchEvent('pointerdown'); await t.w
 // Setup de ~1,5 s ENTRE toques: tem de SAIR do intervalo seguinte.
 await t.getByRole('button', { name: 'Parou' }).click();
 await t.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
+await t.waitForTimeout(350); // a lista ignora os primeiros 0,3 s
 await t.getByRole('button', { name: 'Setup / Troca' }).click();
 const voltar = t.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
 await voltar.waitFor({ timeout: 4000 });
@@ -1917,6 +1919,11 @@ for (const v of [
   // NAO PAROU: o Parou tocado sem querer se desfaz, sem deixar parada.
   await v.getByRole('button', { name: 'Parou' }).click();
   await folhaV.waitFor({ timeout: 4000 });
+  // O quique da luva logo depois de abrir nao escolhe nada (guarda de 0,3 s).
+  await folhaV.getByRole('button', { name: 'Não parou' }).click();
+  await v.waitForTimeout(100);
+  checar(await folhaV.count() === 1, 'toque na lista logo ao abrir (quique da luva) e ignorado');
+  await v.waitForTimeout(300);
   await folhaV.getByRole('button', { name: 'Não parou' }).click();
   await alvoV.waitFor({ timeout: 4000 });
   checar(true, '"Não parou" desfaz o Parou tocado sem querer');
@@ -1945,12 +1952,21 @@ for (const v of [
   await alvoV.dispatchEvent('pointerdown');
   await v.getByRole('button', { name: 'Parou' }).click();
   await folhaV.waitFor({ timeout: 4000 });
+  await v.waitForTimeout(350);
   await folhaV.getByRole('button', { name: 'Motivo na volta' }).click();
   await v.waitForTimeout(1200);
   // O alvo da parada tambem diz "Encerrar a parada": o da barra e' o ■.
   await v.getByRole('button', { name: '■ Encerrar' }).click();
   await folhaV.waitFor({ timeout: 4000 });
   checar(/ver o resultado/.test(await folhaV.innerText()), 'Encerrar com parada sem motivo pede o motivo antes do resultado');
+  // Voltar com a lista pedindo o motivo do Encerrar: o relogio ja' parou.
+  await v.goBack();
+  await sairV.waitFor({ timeout: 4000 });
+  checar(/não foi salva/.test(await sairV.innerText()) && !/rodando/.test(await sairV.innerText()),
+    'encerrado, pedindo o motivo: o aviso de sair nao diz que o cronometro esta rodando');
+  await sairV.getByRole('button', { name: 'FICAR NO RESULTADO' }).click();
+  await sairV.waitFor({ state: 'detached', timeout: 4000 });
+  await v.waitForTimeout(350); // a lista abriu no Encerrar ha' pouco: guarda de 0,3 s
   await folhaV.getByRole('button', { name: 'Setup / Troca' }).click();
   const resumoV = v.locator('[aria-label="Resultado da conferência"]');
   await resumoV.waitFor({ timeout: 4000 });
@@ -1994,6 +2010,48 @@ for (const v of [
   await v.waitForFunction(() => location.pathname === '/coleta', { timeout: 4000 });
   checar(true, 'e o Voltar seguinte ja sai: a guarda nao ficou no historico');
   checar(erros.length === 0, `parada e Voltar: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+
+/* O TOQUE NO VOLTOU SEM MOTIVO, DEITADO (revisao de 05/11): a lista abre no
+   pointerdown, debaixo do dedo, e o click do MESMO toque caia num motivo —
+   o tablet gravava "Problema de qualidade" sem ninguem escolher. Aqui o
+   dedo fica 0,4 s no VOLTOU (passa a guarda de tempo da lista): so' a regra
+   "vale o toque que comecou no botao" segura. */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 1024, height: 552 }, hasTouch: true });
+  const d = await ctx.newPage();
+  await semearSessao(d);
+  await d.addInitScript(() => {
+    window.__cliques = [];
+    document.addEventListener('click', (e) => window.__cliques.push(e.target.closest('button')?.innerText || ''), true);
+  });
+  await simularServidor(d);
+  await d.goto(`${BASE}/coleta/embalagem`);
+  await d.getByRole('button', { name: /INICIAR/ }).click({ timeout: 8000 });
+  const larg = d.getByRole('button', { name: /Largada/ });
+  await larg.waitFor({ timeout: 4000 });
+  await d.waitForTimeout(260);
+  await larg.dispatchEvent('pointerdown');
+  await d.getByRole('button', { name: 'Contar um volume' }).waitFor({ timeout: 4000 });
+  const folha = d.locator('[aria-label="Por que a máquina parou"]');
+  await d.getByRole('button', { name: 'Parou' }).click();
+  await folha.waitFor({ timeout: 4000 });
+  await d.waitForTimeout(350);
+  await folha.getByRole('button', { name: 'Motivo na volta' }).click();
+  await folha.waitFor({ state: 'detached', timeout: 4000 });
+  await d.waitForTimeout(1200);
+  const caixa = await d.locator('[aria-label="Encerrar a parada e voltar a produzir"]').boundingBox();
+  const cdp = await ctx.newCDPSession(d);
+  const ponto = [{ x: caixa.x + caixa.width / 2, y: caixa.y + caixa.height / 2 }];
+  await d.evaluate(() => { window.__cliques = []; });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: ponto });
+  await d.waitForTimeout(400);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await d.waitForTimeout(400);
+  const cliques = await d.evaluate(() => window.__cliques);
+  checar(await folha.count() === 1 && /escolha o motivo/.test(await folha.innerText()),
+    `deitado, o toque no VOLTOU abre a lista e NAO escolhe motivo sozinho (o click caiu em ${JSON.stringify(cliques)})`);
   await ctx.close();
 }
 

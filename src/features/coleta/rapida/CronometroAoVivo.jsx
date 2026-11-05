@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import {
   formatarCronometro, formatarDuracao, formatarSegundos, rotuloMotivo,
 } from '../../../domain/cronoanalise.js';
@@ -216,14 +217,13 @@ export default function CronometroAoVivo({
             </div>
             <div style={est.gradeMotivos}>
               {motivos.map((m) => (
-                <button
+                <BotaoDaFolha
                   key={m.codigo}
-                  type="button"
                   style={{ ...est.chipMotivo, ...(m.codigo === 'setup' ? est.chipSetup : {}) }}
-                  onClick={() => escolherMotivo(m.codigo)}
+                  aoTocar={() => escolherMotivo(m.codigo)}
                 >
                   {m.rotulo}
-                </button>
+                </BotaoDaFolha>
               ))}
             </div>
             {/* Na volta (ou no Encerrar) a parada ja' fechou: o motivo e' a
@@ -231,12 +231,12 @@ export default function CronometroAoVivo({
                 ou desfazer o Parou tocado sem querer. */}
             {!paradaFechada && (
               <div style={est.linhaBotoesParada}>
-                <button type="button" style={est.botaoOutraPeca} onClick={adiarMotivo}>
+                <BotaoDaFolha style={est.botaoOutraPeca} aoTocar={adiarMotivo}>
                   Motivo na volta
-                </button>
-                <button type="button" style={est.botaoOutraPeca} onClick={cancelarParada}>
+                </BotaoDaFolha>
+                <BotaoDaFolha style={est.botaoOutraPeca} aoTocar={cancelarParada}>
                   Não parou
-                </button>
+                </BotaoDaFolha>
               </div>
             )}
           </div>
@@ -247,6 +247,34 @@ export default function CronometroAoVivo({
 }
 
 const maiuscula = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * BOTAO DA LISTA DE MOTIVOS: so' vale o toque que COMECOU nele.
+ *
+ * O VOLTOU sem motivo abre a lista no pointerdown; o click do mesmo toque,
+ * no soltar do dedo, caia no motivo que ficou debaixo dele — deitado, o
+ * tablet gravava "Problema de qualidade" sem ninguem escolher (revisao de
+ * 05/11). Com o toque comecado em outro lugar, o click e' ignorado. O
+ * click do teclado (detail 0) nao tem pointerdown e continua valendo.
+ */
+function BotaoDaFolha({ aoTocar, style, children }) {
+  const comecouAqui = useRef(false);
+  return (
+    <button
+      type="button"
+      style={style}
+      onPointerDown={() => { comecouAqui.current = true; }}
+      onPointerCancel={() => { comecouAqui.current = false; }}
+      onClick={(ev) => {
+        if (!comecouAqui.current && ev.detail !== 0) return;
+        comecouAqui.current = false;
+        aoTocar();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 /**
  * O QUE O ESTILO INLINE NAO ALCANCA na tela da embalagem (ver corpoTakt):

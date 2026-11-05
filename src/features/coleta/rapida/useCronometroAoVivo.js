@@ -89,6 +89,9 @@ export function useCronometroAoVivo({
   const rodando = fase === 'rodando';
   const { decorrido, iniciar, parar } = useCronometro();
   const ultimoToqueRef = useRef(0);
+  // Quando a lista de motivos abriu e fechou pela ultima vez (ver GUARDA_FOLHA_MS).
+  const folhaAbertaRef = useRef(-Infinity);
+  const folhaFechadaRef = useRef(-Infinity);
   // Ref, nao estado: o toque precisa da lista na hora, sem esperar render.
   const marcasRef = useRef([]);
   // O instante BRUTO de cada toque (paradas dentro), so' para o relogio
@@ -196,14 +199,28 @@ export function useCronometroAoVivo({
   const iniciarParada = useCallback((motivo = null) => {
     // Antes da largada nao ha' periodo: a parada nao teria onde caber.
     if (largadaPendenteRef.current) return;
-    setEmParada({ motivo, inicio: performance.now() });
+    const agora = performance.now();
+    setEmParada({ motivo, inicio: agora });
+    if (!motivo) folhaAbertaRef.current = agora;
     setEscolhendoMotivo(!motivo);
     vibrar([40, 60, 40]);
   }, []);
 
+  /* A lista acabou de abrir: o toque e' o quique da luva (ou o resto do
+     toque que a abriu), nao uma escolha. Fechando, marca a hora — o quique
+     seguinte nao pode fechar a parada (Voltou) nem contar volume. */
+  const cedoDemais = () => performance.now() - folhaAbertaRef.current < GUARDA_FOLHA_MS;
+  const fecharFolha = () => {
+    const agora = performance.now();
+    folhaFechadaRef.current = agora;
+    ultimoToqueRef.current = agora;
+    setEscolhendoMotivo(false);
+  };
+
   /** O motivo — da parada que esta' correndo ou da que acabou de fechar. */
   const escolherMotivo = useCallback((motivo) => {
-    setEscolhendoMotivo(false);
+    if (cedoDemais()) return;
+    fecharFolha();
     if (paradaFechada) {
       registrarParada(motivo, paradaFechada.ms);
       setParadaFechada(null);
@@ -215,17 +232,23 @@ export function useCronometroAoVivo({
   }, [paradaFechada, registrarParada]);
 
   /** A lista fecha sem motivo: a parada segue contando e pergunta na volta. */
-  const adiarMotivo = useCallback(() => setEscolhendoMotivo(false), []);
+  const adiarMotivo = useCallback(() => {
+    if (!cedoDemais()) fecharFolha();
+  }, []);
 
   /** "Nao parou": o Parou foi toque errado. A parada some, sem linha. */
   const cancelarParada = useCallback(() => {
-    setEscolhendoMotivo(false);
+    if (cedoDemais()) return;
+    fecharFolha();
     setEmParada(null);
     vibrar([25, 40, 25]);
   }, []);
 
   const encerrarParada = useCallback(() => {
     if (!emParada) return;
+    // O quique do toque que fechou a lista cai no VOLTOU, que tomou o lugar
+    // dela: a parada ja' passa de 1 s (conta do Parou) e fecharia sem querer.
+    if (performance.now() - folhaFechadaRef.current < GUARDA_FOLHA_MS) return;
     const ms = duracaoDaParada(emParada.inicio, performance.now());
     setEmParada(null);
     // Menos de 1s e' toque errado, nao parada.
@@ -237,6 +260,7 @@ export function useCronometroAoVivo({
       // Sem motivo: a parada fecha NESTE toque — o tempo de escolher ja' e'
       // linha rodando — e a lista abre para o motivo.
       setParadaFechada({ ms, encerrando: false });
+      folhaAbertaRef.current = performance.now();
       setEscolhendoMotivo(true);
     }
     vibrar(45);
@@ -276,6 +300,7 @@ export function useCronometroAoVivo({
     // pergunta antes do resultado. Escolher nao mexe no relogio.
     if (semMotivoMs != null) {
       setParadaFechada({ ms: semMotivoMs, encerrando: true });
+      folhaAbertaRef.current = performance.now();
       setEscolhendoMotivo(true);
       return;
     }
@@ -321,6 +346,14 @@ export function useCronometroAoVivo({
     escolherMotivo, adiarMotivo, cancelarParada,
   };
 }
+
+/**
+ * Quanto a lista de motivos ignora toque depois de abrir — e o VOLTOU
+ * depois de ela fechar. Ninguem le' a lista e escolhe em 0,3 s; o quique da
+ * luva vem em ~0,12 s (revisao de 05/11). Sem isto o toque no VOLTOU, que
+ * abre a lista sem motivo, escolhia o motivo que ficasse debaixo do dedo.
+ */
+export const GUARDA_FOLHA_MS = 300;
 
 const ultimoIntervalo = (marcas) => (marcas.length >= 2
   ? marcas[marcas.length - 1] - marcas[marcas.length - 2]

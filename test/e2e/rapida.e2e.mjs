@@ -294,11 +294,15 @@ checar(await p.evaluate(() => document.documentElement.scrollHeight <= window.in
 /* ---------------------------------- parada cronometrada durante o ao vivo */
 await p.getByRole('button', { name: 'Parou' }).tap();
 await p.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
+// A lista ignora toque nos primeiros 0,3 s (o quique da luva): espera passar.
+await p.waitForTimeout(350);
 await p.getByRole('button', { name: 'Setup / Troca' }).tap();
 
 const paradaViva = p.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
 await paradaViva.waitFor({ timeout: 4000 });
-checar(true, 'escolher o motivo comeca a parada e a tela vira o botao de voltar');
+checar(/PARADA · SETUP/i.test(await paradaViva.innerText())
+  && await p.locator('[aria-label="Por que a máquina parou"]').count() === 0,
+  'o Parou ja comeca a parada; o motivo escolhido fecha a lista e aparece no botao de voltar');
 checar(await contar.count() === 0, 'maquina parada nao oferece contar peca');
 
 await p.waitForTimeout(1200);

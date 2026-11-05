@@ -48,7 +48,9 @@ export function useGuardaDaMedicao({ ativa, aoSair }) {
       return;
     }
     setPerguntando(false);
-    if (comGuarda()) {
+    // Um Voltar proprio ja' a caminho tira a guarda: o segundo levaria a
+    // tela embora (StrictMode roda o efeito duas vezes antes do popstate).
+    if (comGuarda() && proprios.current === 0) {
       proprios.current += 1;
       window.history.back();
     }

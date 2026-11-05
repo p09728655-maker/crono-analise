@@ -497,6 +497,8 @@ export const est = {
     lineHeight: 1, letterSpacing: -1, fontVariantNumeric: 'tabular-nums', color: cores.ok,
   },
   sufixoRitmo: { fontSize: tamanho.pequeno, fontWeight: 700, letterSpacing: 1.5, color: cores.textoFraco },
+  // Embalagem: o verde fica reservado ao quadro "dentro do takt".
+  valorRitmoNeutro: { color: cores.texto },
 
   aviso: {
     flexShrink: 0, padding: espaco.md, textAlign: 'center',
