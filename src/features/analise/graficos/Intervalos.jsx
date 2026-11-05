@@ -108,7 +108,11 @@ export function GraficoIntervalos({
 
   const linhasDeReferencia = [
     takt > 0 && takt <= maxY && {
-      chave: 'takt', ms: takt, nome: 'Takt', cor: referencia.linha, traco: referencia.traco, espessura: 2,
+      /* O TAKT E' A REFERENCIA, e se ve' primeiro (v2.101.1, pedido do PCP:
+         "linha tracejada esta' ruim de ver"): 3 px, tracos longos. Com o
+         takt (15,4 s) quase em cima do rodando (15,2 s), o tracejado de 2 px
+         e o pontilhado de 2 px viravam um borrao — nenhum dos dois se lia. */
+      chave: 'takt', ms: takt, nome: 'Takt', cor: referencia.linha, traco: '12 6', espessura: 3,
     },
     // Continua e mais grossa: no papel P&B se separa do takt (tracejado) e
     // do rodando (pontilhado) pelo traco, nao pela cor.
@@ -119,7 +123,9 @@ export function GraficoIntervalos({
       cor: takt > 0 && periodoMs > takt ? claro.critico : claro.texto, traco: null, espessura: 3,
     },
     mediaMs > 0 && mediaMs <= maxY && {
-      chave: 'media', ms: mediaMs, nome: 'Rodando', cor: claro.texto, traco: '2 3', espessura: 2,
+      // Apoio, e nao referencia: cinza, fino e pontilhado — nunca disputa
+      // com o takt, mesmo quando os dois ficam no mesmo lugar.
+      chave: 'media', ms: mediaMs, nome: 'Rodando', cor: claro.textoMedio, traco: '1.5 3', espessura: 1.5,
     },
   ].filter(Boolean);
 
@@ -356,7 +362,7 @@ export function GraficoIntervalos({
             <line
               key={r.chave} pointerEvents="none"
               x1={margem.esq} x2={largura - margem.dir} y1={yDe(r.ms)} y2={yDe(r.ms)}
-              stroke={r.cor} strokeWidth={r.espessura} strokeDasharray={r.traco}
+              stroke={r.cor} strokeWidth={r.espessura} strokeDasharray={r.traco} data-linha={r.chave}
             />
           ))}
 

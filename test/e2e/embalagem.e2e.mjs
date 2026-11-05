@@ -519,8 +519,16 @@ const tamanhoDoPdf = async () => {
     // e' desenhada por cima da pontilhada (revisao de 05/11). O caso com
     // parada, em que ela aparece, esta' no bloco do pior caso.
     checar(!/No período, com as paradas/.test(legenda)
-      && await folha.locator('svg[aria-label^="Intervalo entre"] line[stroke-width="3"]').count() === 0,
+      && await folha.locator('svg[aria-label^="Intervalo entre"] line[data-linha="periodo"]').count() === 0,
     'folha sem parada: periodo = rodando, sem a linha do periodo repetindo a pontilhada');
+    /* O TAKT SE VE' (v2.101.1): 3 px e tracos longos; o rodando, fino e
+       cinza. Antes os dois tinham 2 px e, com takt e rodando quase iguais,
+       viravam um borrao. */
+    const linhas = await folha.locator('svg[aria-label^="Intervalo entre"] line[data-linha]').evaluateAll((ls) => Object.fromEntries(
+      ls.map((l) => [l.dataset.linha, Number(l.getAttribute('stroke-width'))]),
+    ));
+    checar(linhas.takt === 3 && linhas.media < linhas.takt,
+      `folha: o takt e a linha mais forte do grafico, o rodando fica abaixo dela (${JSON.stringify(linhas)})`);
     checar(/Takt da semana: 72\.0 s/.test(legenda)
       && await folha.locator('svg[aria-label^="Intervalo entre"] text', { hasText: /^Takt/ }).count() === 0,
     'folha: o valor do takt esta na legenda, nao numa faixa ao lado do grafico');
@@ -1681,7 +1689,7 @@ for (const v of [
   const figuraFolha = s.locator('body > .somente-impressao figure');
   const legendaFolha = (await figuraFolha.innerText()).replace(/\s+/g, ' ');
   checar(/No período, com as paradas: \d+\.\d s/.test(legendaFolha)
-    && await figuraFolha.locator('svg line[stroke-width="3"]').count() === 1,
+    && await figuraFolha.locator('svg line[data-linha="periodo"]').count() === 1,
   `folha (${v.nome}): a linha do periodo esta no grafico e na legenda`);
   if (v.paradaMs >= 3600000) {
     // Acima do topo: a linha encosta no topo, e o valor vai escrito nela.
