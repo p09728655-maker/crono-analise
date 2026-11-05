@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.102.0',
+    data: '2026-11-05',
+    titulo: 'Tablet: a parada conta do Parou, e o Voltar não perde a medição',
+    itens: [
+      'A PARADA COMEÇA NO TOQUE DO "PAROU". Antes o Parou abria a lista de motivos e a parada só começava a contar quando o motivo era escolhido — o tempo de ler a lista virava linha rodando, e quem ainda não sabia o motivo tinha de chutar um. Agora a parada conta desde o Parou, e a lista abre mostrando o tempo correndo. Dá para escolher o motivo na hora, tocar "Motivo na volta" (a tela mostra "PARADA · MOTIVO NA VOLTA" e pergunta quando a linha voltar) ou "Não parou", para desfazer o Parou tocado sem querer. A parada fecha no toque do Voltou: o tempo de escolher o motivo na volta não entra nela. Encerrar com a parada ainda sem motivo pergunta o motivo antes de abrir o resultado. O toque no VOLTOU nunca escolhe o motivo sozinho: a lista só aceita o toque que começou nela, e ignora o quique da luva no primeiro 0,3 s depois de abrir. Vale na Embalagem Takt Time e no Cronometrar ao vivo do Ritmo da máquina.',
+      'O VOLTAR SEM QUERER NÃO PERDE MAIS A MEDIÇÃO. Cronometrando, o Voltar do tablet (a seta ou o gesto na borda da tela) e a seta ← do topo não saem da tela: aparece "Sair da medição?", com CONTINUAR MEDINDO em destaque e "Sair e descartar" embaixo. Depois de Encerrar, enquanto o resultado não for salvo, o Voltar, a seta e o Sair perguntam igual. Salva a medição, o Voltar sai normalmente, de primeira. Atenção: se o próprio navegador for fechado (pelo sistema ou à força), a medição em andamento ainda se perde — ela só existe na tela até o Salvar.',
+      'EMBALAGEM: O QUADRO DO TEMPO POR VOLUME FICA VERMELHO ENQUANTO ESTIVER ACIMA DO TAKT DA SEMANA, e verde quando chega nele — o fundo âmbar claro de antes não se via de longe. A seta "▲ takt" continua escrita no rótulo, para quem não distingue vermelho de verde. Com menos de 2 volumes, ou sem programa da semana, o quadro fica sem cor: não há o que comparar. O mesmo quadro no resultado, antes de salvar — onde o número grande de volumes/hora deixou de ser verde, para o verde significar só "dentro do takt".',
+      'O quadro do takt, no cronômetro e no resultado, agora diz "TAKT DA SEMANA": ele vem do programa da semana que o PCP colou, não do dia nem da medição.',
+    ],
+  },
+  {
     versao: '2.101.2',
     data: '2026-11-05',
     titulo: 'Folha da embalagem: o tempo da semana na 1ª página',

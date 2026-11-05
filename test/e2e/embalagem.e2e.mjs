@@ -263,6 +263,7 @@ await t.waitForTimeout(260);
 const marcarSetup = async (ms) => {
   await t.getByRole('button', { name: 'Parou' }).click();
   await t.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
+  await t.waitForTimeout(350); // a lista ignora os primeiros 0,3 s
   await t.getByRole('button', { name: 'Setup / Troca' }).click();
   const v = t.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
   await v.waitFor({ timeout: 4000 });
@@ -276,6 +277,7 @@ for (let i = 0; i < 3; i++) { await alvo.dispatchEvent('pointerdown'); await t.w
 // Setup de ~1,5 s ENTRE toques: tem de SAIR do intervalo seguinte.
 await t.getByRole('button', { name: 'Parou' }).click();
 await t.locator('[aria-label="Por que a máquina parou"]').waitFor({ timeout: 4000 });
+await t.waitForTimeout(350); // a lista ignora os primeiros 0,3 s
 await t.getByRole('button', { name: 'Setup / Troca' }).click();
 const voltar = t.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
 await voltar.waitFor({ timeout: 4000 });
@@ -1835,6 +1837,222 @@ for (const v of [
   checar(/4 de 5 dias programados/.test(await cartao.innerText()),
     `tablet: a semana digitada com 4 dias da 57.6 s e diz os dias (${(await cartao.innerText()).replace(/\s+/g, ' ')})`);
   await ctx2.close();
+}
+
+/* ====== v2.102.0: a PARADA comeca no Parou, o VOLTAR nao perde a medicao,
+   o QUADRO do tempo por volume fica vermelho ate' chegar no takt da semana. */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const v = await ctx.newPage();
+  await semearSessao(v);
+  const erros = [];
+  v.on('pageerror', (e) => erros.push(e.message));
+  const subiram = [];
+  // Takt de 1,0 s (44 h x 3600 / 158.400 volumes): da' para passar do takt
+  // e voltar a ele em poucos segundos de teste.
+  await simularServidor(v, {
+    demandas: [{ ...DEMANDAS[0], pecas: 158400 }],
+    aoSincronizar: (c) => subiram.push(...(c.conferencias || [])),
+  });
+  await v.goto(`${BASE}/coleta`);
+  await v.getByRole('button', { name: /Embalagem Takt Time/ }).tap();
+  await v.waitForFunction(() => location.pathname === '/coleta/embalagem', { timeout: 8000 });
+  await v.locator('[aria-label="Takt da semana"]').getByText('1.0').waitFor({ timeout: 8000 });
+  await v.locator('input[aria-label="Produto embalado"]').fill('Painel Teste');
+  await v.getByRole('button', { name: /INICIAR/ }).click();
+  const largadaV = v.getByRole('button', { name: /Largada/ });
+  await largadaV.waitFor({ timeout: 4000 });
+  await v.waitForTimeout(260);
+  await largadaV.dispatchEvent('pointerdown');
+  const alvoV = v.getByRole('button', { name: 'Contar um volume' });
+  await alvoV.waitFor({ timeout: 4000 });
+  const painelV = v.locator('[aria-label="Tempo decorrido"]');
+  const quadro = painelV.locator('[data-tom]');
+
+  /* ---- o quadro do takt e o do tempo por volume */
+  checar(/TAKT DA SEMANA/i.test(await painelV.innerText()), 'rodando: o quadro do takt diz que e o takt DA SEMANA');
+  checar(await quadro.count() === 0, 'antes do 2o volume nao ha tempo por volume: o quadro nao tem cor');
+  // Devagar: 3 volumes a ~1,5 s, acima do takt de 1,0 s.
+  for (let i = 0; i < 3; i++) { await v.waitForTimeout(1500); await alvoV.dispatchEvent('pointerdown'); }
+  const fundoAcima = await quadro.evaluate((e) => getComputedStyle(e).backgroundColor);
+  checar(await quadro.getAttribute('data-tom') === 'foraDoTakt' && fundoAcima === 'rgb(185, 28, 28)',
+    `acima do takt o quadro do tempo por volume fica VERMELHO (${fundoAcima})`);
+  checar(/POR VOL ▲ TAKT/i.test(await quadro.innerText()), 'e a seta escrita no rotulo continua: a cor nao vai sozinha');
+  // Depressa, ate' o tempo por volume chegar no takt.
+  for (let i = 0; i < 12 && await quadro.getAttribute('data-tom') === 'foraDoTakt'; i++) {
+    await v.waitForTimeout(260);
+    await alvoV.dispatchEvent('pointerdown');
+  }
+  const fundoNoTakt = await quadro.evaluate((e) => getComputedStyle(e).backgroundColor);
+  checar(await quadro.getAttribute('data-tom') === 'noTakt' && fundoNoTakt === 'rgb(21, 128, 61)'
+    && /POR VOLUME/i.test(await quadro.innerText()),
+    `chegou no takt: o quadro sai do vermelho e fica verde (${fundoNoTakt})`);
+
+  /* ---- PAROU: a parada conta do toque, e o motivo vem depois */
+  const folhaV = v.locator('[aria-label="Por que a máquina parou"]');
+  const voltarV = v.locator('[aria-label="Encerrar a parada e voltar a produzir"]');
+  await v.waitForTimeout(260);
+  await v.getByRole('button', { name: 'Parou' }).click();
+  await folhaV.waitFor({ timeout: 4000 });
+  checar(/A parada já está contando/.test(await folhaV.innerText()), 'Parou: a lista abre com a parada ja contando');
+  await v.waitForTimeout(1500); // lendo a lista: este tempo E' parada
+  await folhaV.getByRole('button', { name: 'Motivo na volta' }).click();
+  await folhaV.waitFor({ state: 'detached', timeout: 4000 });
+  checar(/MOTIVO NA VOLTA/.test(await voltarV.innerText()) && await alvoV.count() === 0,
+    'sem motivo, a parada segue contando, bloqueia o volume e avisa que pergunta na volta');
+  await v.waitForTimeout(500);
+  await voltarV.dispatchEvent('pointerdown');
+  await folhaV.waitFor({ timeout: 4000 });
+  const textoVolta = await folhaV.innerText();
+  checar(/Parada de 00:0\d\.\d/.test(textoVolta) && await folhaV.getByRole('button', { name: 'Motivo na volta' }).count() === 0,
+    `Voltou sem motivo: a parada fecha e a lista pede o motivo, sem adiar de novo (${textoVolta.split('\n')[1]})`);
+  // Do Parou ao Voltou: 1,5 s com a lista aberta + 0,5 s e os cliques. A
+  // lista aberta CONTA (antes, a parada so' comecava no motivo).
+  const segundosParada = Number(/Parada de 00:(\d\d\.\d)/.exec(textoVolta)?.[1]);
+  checar(segundosParada >= 2 && segundosParada < 2.8,
+    `a parada conta do toque no Parou, com a lista aberta dentro (${segundosParada} s)`);
+  await v.waitForTimeout(800); // escolher o motivo NAO e' parada
+  await folhaV.getByRole('button', { name: 'Falta de material' }).click();
+  await alvoV.waitFor({ timeout: 4000 });
+  checar(true, 'escolhido o motivo, volta a contar volume');
+
+  // NAO PAROU: o Parou tocado sem querer se desfaz, sem deixar parada.
+  await v.getByRole('button', { name: 'Parou' }).click();
+  await folhaV.waitFor({ timeout: 4000 });
+  // O quique da luva logo depois de abrir nao escolhe nada (guarda de 0,3 s).
+  await folhaV.getByRole('button', { name: 'Não parou' }).click();
+  await v.waitForTimeout(100);
+  checar(await folhaV.count() === 1, 'toque na lista logo ao abrir (quique da luva) e ignorado');
+  await v.waitForTimeout(300);
+  await folhaV.getByRole('button', { name: 'Não parou' }).click();
+  await alvoV.waitFor({ timeout: 4000 });
+  checar(true, '"Não parou" desfaz o Parou tocado sem querer');
+
+  /* ---- o VOLTAR cronometrando nao perde a medicao */
+  const sairV = v.getByRole('dialog', { name: 'Sair da medição' });
+  const contagem = (await alvoV.innerText()).trim().split('\n')[0];
+  await v.goBack();
+  await sairV.waitFor({ timeout: 4000 });
+  checar(new URL(v.url()).pathname === '/coleta/embalagem' && (await alvoV.innerText()).trim().split('\n')[0] === contagem,
+    `o Voltar do aparelho cronometrando nao sai da tela: a medicao segue, com os ${contagem} volumes`);
+  await sairV.getByRole('button', { name: 'CONTINUAR MEDINDO' }).click();
+  await sairV.waitFor({ state: 'detached', timeout: 4000 });
+  await v.goBack();
+  await sairV.waitFor({ timeout: 4000 });
+  checar(new URL(v.url()).pathname === '/coleta/embalagem', 'um segundo Voltar sem querer tambem nao sai');
+  await sairV.getByRole('button', { name: 'CONTINUAR MEDINDO' }).click();
+  await v.getByRole('button', { name: 'Voltar para a lista' }).click();
+  await sairV.waitFor({ timeout: 4000 });
+  checar(/cronômetro está rodando/.test(await sairV.innerText()), 'a seta do topo cronometrando tambem pergunta antes de sair');
+  await sairV.getByRole('button', { name: 'CONTINUAR MEDINDO' }).click();
+  await sairV.waitFor({ state: 'detached', timeout: 4000 });
+
+  /* ---- ENCERRAR com a parada ainda sem motivo: pergunta antes do resultado */
+  await v.waitForTimeout(260);
+  await alvoV.dispatchEvent('pointerdown');
+  await v.getByRole('button', { name: 'Parou' }).click();
+  await folhaV.waitFor({ timeout: 4000 });
+  await v.waitForTimeout(350);
+  await folhaV.getByRole('button', { name: 'Motivo na volta' }).click();
+  await v.waitForTimeout(1200);
+  // O alvo da parada tambem diz "Encerrar a parada": o da barra e' o ■.
+  await v.getByRole('button', { name: '■ Encerrar' }).click();
+  await folhaV.waitFor({ timeout: 4000 });
+  checar(/ver o resultado/.test(await folhaV.innerText()), 'Encerrar com parada sem motivo pede o motivo antes do resultado');
+  // Voltar com a lista pedindo o motivo do Encerrar: o relogio ja' parou.
+  await v.goBack();
+  await sairV.waitFor({ timeout: 4000 });
+  checar(/não foi salva/.test(await sairV.innerText()) && !/rodando/.test(await sairV.innerText()),
+    'encerrado, pedindo o motivo: o aviso de sair nao diz que o cronometro esta rodando');
+  await sairV.getByRole('button', { name: 'FICAR NO RESULTADO' }).click();
+  await sairV.waitFor({ state: 'detached', timeout: 4000 });
+  await v.waitForTimeout(350); // a lista abriu no Encerrar ha' pouco: guarda de 0,3 s
+  await folhaV.getByRole('button', { name: 'Setup / Troca' }).click();
+  const resumoV = v.locator('[aria-label="Resultado da conferência"]');
+  await resumoV.waitFor({ timeout: 4000 });
+  checar(/TAKT DA SEMANA/i.test(await resumoV.innerText()), 'resultado: o takt tambem diz que e o da semana');
+
+  /* ---- resultado ainda nao salvo: o Voltar tambem pergunta */
+  await v.goBack();
+  await sairV.waitFor({ timeout: 4000 });
+  checar(/não foi salva/.test(await sairV.innerText()) && await resumoV.count() === 1,
+    'resultado nao salvo: o Voltar pergunta e o resultado fica na tela');
+  await sairV.getByRole('button', { name: 'FICAR NO RESULTADO' }).click();
+  await v.getByRole('button', { name: /salvar conferência/i }).click();
+  for (let i = 0; i < 40 && !subiram.length; i++) await v.waitForTimeout(150);
+  const paradasSalvas = subiram[0]?.paradas || [];
+  const falta = paradasSalvas.find((p) => p.motivo === 'falta_material');
+  // Os 0,8 s da escolha na volta ficam FORA. A lista de paradas guarda o
+  // minuto com duas casas (0,6 s de passo): 2,0 a 2,4 s vira 1.800 ou
+  // 2.400 ms; com a escolha dentro (2,8 s ou mais), seriam 3.000.
+  checar(falta?.duracaoMs >= 1800 && falta.duracaoMs <= 2400,
+    `a parada vai ate' o Voltou, sem o tempo de escolher o motivo (${falta?.duracaoMs} ms)`);
+  checar(paradasSalvas.length === 2 && paradasSalvas.some((p) => p.motivo === 'setup' && p.duracaoMs >= 1200),
+    `"Não parou" nao deixa parada; a do Encerrar entra com o motivo escolhido (${JSON.stringify(paradasSalvas)})`);
+  await v.waitForFunction(() => !window.history.state?.medicaoEmAndamento, { timeout: 4000 });
+  await v.goBack();
+  await v.waitForFunction(() => location.pathname === '/coleta', { timeout: 4000 });
+  checar(true, 'salva, o Voltar sai da tela de primeira — sem Voltar morto no historico');
+
+  /* ---- SAIR E DESCARTAR: vai para a lista, e o historico fica limpo */
+  await v.getByRole('button', { name: /Embalagem Takt Time/ }).tap();
+  await v.getByRole('button', { name: /INICIAR/ }).click();
+  await largadaV.waitFor({ timeout: 4000 });
+  await v.getByRole('button', { name: 'Voltar para a lista' }).click();
+  await sairV.waitFor({ timeout: 4000 });
+  await sairV.getByRole('button', { name: 'Sair e descartar' }).click();
+  await v.waitForFunction(() => location.pathname === '/coleta', { timeout: 4000 });
+  await v.goBack();
+  await v.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
+  checar(await sairV.count() === 0 && await largadaV.count() === 0,
+    'sair e descartar: o Voltar da lista reabre a tela vazia, sem medicao nem pergunta');
+  await v.goBack();
+  await v.waitForFunction(() => location.pathname === '/coleta', { timeout: 4000 });
+  checar(true, 'e o Voltar seguinte ja sai: a guarda nao ficou no historico');
+  checar(erros.length === 0, `parada e Voltar: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+
+/* O TOQUE NO VOLTOU SEM MOTIVO, DEITADO (revisao de 05/11): a lista abre no
+   pointerdown, debaixo do dedo, e o click do MESMO toque caia num motivo —
+   o tablet gravava "Problema de qualidade" sem ninguem escolher. Aqui o
+   dedo fica 0,4 s no VOLTOU (passa a guarda de tempo da lista): so' a regra
+   "vale o toque que comecou no botao" segura. */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 1024, height: 552 }, hasTouch: true });
+  const d = await ctx.newPage();
+  await semearSessao(d);
+  await d.addInitScript(() => {
+    window.__cliques = [];
+    document.addEventListener('click', (e) => window.__cliques.push(e.target.closest('button')?.innerText || ''), true);
+  });
+  await simularServidor(d);
+  await d.goto(`${BASE}/coleta/embalagem`);
+  await d.getByRole('button', { name: /INICIAR/ }).click({ timeout: 8000 });
+  const larg = d.getByRole('button', { name: /Largada/ });
+  await larg.waitFor({ timeout: 4000 });
+  await d.waitForTimeout(260);
+  await larg.dispatchEvent('pointerdown');
+  await d.getByRole('button', { name: 'Contar um volume' }).waitFor({ timeout: 4000 });
+  const folha = d.locator('[aria-label="Por que a máquina parou"]');
+  await d.getByRole('button', { name: 'Parou' }).click();
+  await folha.waitFor({ timeout: 4000 });
+  await d.waitForTimeout(350);
+  await folha.getByRole('button', { name: 'Motivo na volta' }).click();
+  await folha.waitFor({ state: 'detached', timeout: 4000 });
+  await d.waitForTimeout(1200);
+  const caixa = await d.locator('[aria-label="Encerrar a parada e voltar a produzir"]').boundingBox();
+  const cdp = await ctx.newCDPSession(d);
+  const ponto = [{ x: caixa.x + caixa.width / 2, y: caixa.y + caixa.height / 2 }];
+  await d.evaluate(() => { window.__cliques = []; });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: ponto });
+  await d.waitForTimeout(400);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await d.waitForTimeout(400);
+  const cliques = await d.evaluate(() => window.__cliques);
+  checar(await folha.count() === 1 && /escolha o motivo/.test(await folha.innerText()),
+    `deitado, o toque no VOLTOU abre a lista e NAO escolhe motivo sozinho (o click caiu em ${JSON.stringify(cliques)})`);
+  await ctx.close();
 }
 
 await navegador.close();

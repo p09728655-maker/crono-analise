@@ -11,6 +11,8 @@ import { carregarMaquinas, produtosDoGrupo, useCadastroMaquinas } from '../../li
 import { useParadasDoPeriodo } from './rapida/useParadasDoPeriodo.js';
 import { useCronometroAoVivo } from './rapida/useCronometroAoVivo.js';
 import { useHistoricoLocal } from './rapida/useHistoricoLocal.js';
+import { useGuardaDaMedicao } from './rapida/useGuardaDaMedicao.js';
+import ConfirmarSaida from './rapida/ConfirmarSaida.jsx';
 import { Parcial } from './rapida/Indicadores.jsx';
 import { est } from './rapida/estilos.js';
 import CronometroAoVivo from './rapida/CronometroAoVivo.jsx';
@@ -117,6 +119,12 @@ export default function EmbalagemTaktTime({ aoSair }) {
     window.addEventListener('beforeunload', aoFechar);
     return () => window.removeEventListener('beforeunload', aoFechar);
   }, [crono.rodando]);
+  // O Voltar sem querer nao leva a medicao: cronometrando, ou com o
+  // resultado ainda nao salvo, sair pergunta antes (ver useGuardaDaMedicao).
+  const guarda = useGuardaDaMedicao({
+    ativa: crono.rodando || (crono.fase === 'resultado' && historico.salvo !== 'ok'),
+    aoSair,
+  });
 
   const resultado = useMemo(
     () => conferenciaRapida({ duracaoMs: crono.duracaoFinal, pecas: crono.pecasFinais, paradas: paradas.emMs }),
@@ -239,7 +247,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
             sai da tela: e' o "voltar" que quem esta' lendo espera. */}
         <button
           type="button"
-          onClick={vendo ? fecharSalva : aoSair}
+          onClick={vendo ? fecharSalva : guarda.pedirSaida}
           style={est.botaoVoltar}
           aria-label={vendo ? 'Voltar às medições salvas' : 'Voltar para a lista'}
         >
@@ -361,9 +369,18 @@ export default function EmbalagemTaktTime({ aoSair }) {
           )}
           salvo={historico.salvo}
           aoSalvar={salvar}
-          aoSair={aoSair}
+          aoSair={guarda.pedirSaida}
         />
       )}
+
+      <ConfirmarSaida
+        aberta={guarda.perguntando}
+        // Encerrado com a parada pedindo motivo, o relogio ja' parou: o
+        // aviso nao pode dizer que ele esta' rodando.
+        cronometrando={crono.rodando && !crono.paradaFechada?.encerrando}
+        aoContinuar={guarda.continuar}
+        aoSair={guarda.sair}
+      />
     </div>
   );
 }
@@ -403,12 +420,16 @@ function ResumoTakt({
 }) {
   const suficiente = leitura?.suficiente;
   // O tempo por volume vale com poucos volumes (e' relogio, nao leitura);
-  // so' some sem toques que expliquem a contagem.
-  const acima = takt.taktMs > 0 && porVolumeMs > takt.taktMs;
+  // so' some sem toques que expliquem a contagem. O quadro tem a mesma cor
+  // da tela do cronometro: vermelho acima do takt, verde dentro dele.
+  const compara = takt.taktMs > 0 && porVolumeMs > 0;
+  const acima = compara && porVolumeMs > takt.taktMs;
   return (
     <>
       <div style={est.destaqueRitmo} aria-label="Volumes por hora no período">
-        <span style={est.valorRitmo}>{Math.round(resultado.pecasPorHoraBruto)}</span>
+        {/* Sem o verde de sempre: aqui verde e' "dentro do takt" (o quadro
+            logo abaixo), e o volumes/hora sozinho nao diz isso. */}
+        <span style={{ ...est.valorRitmo, ...est.valorRitmoNeutro }}>{Math.round(resultado.pecasPorHoraBruto)}</span>
         <span style={est.sufixoRitmo}>
           {resultado.paradaMs > 0 ? 'volumes/hora produzidos no período' : 'volumes/hora'}
         </span>
@@ -420,9 +441,9 @@ function ResumoTakt({
           rotulo={acima ? 'Por vol ▲ takt' : 'Por volume'}
           valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
           sufixo="s"
-          tom={acima ? 'atencao' : null}
+          tom={compara ? (acima ? 'foraDoTakt' : 'noTakt') : null}
         />
-        <Parcial rotulo="Takt" valor={takt.taktMs > 0 ? formatarSegundos(takt.taktMs) : '—'} sufixo="s" />
+        <Parcial rotulo="Takt da semana" valor={takt.taktMs > 0 ? formatarSegundos(takt.taktMs) : '—'} sufixo="s" />
         <Parcial rotulo="Lacunas" valor={suficiente ? String(leitura.lacunas.length) : '—'} />
         <Parcial rotulo="Parado" valor={resultado.paradaMs > 0 ? formatarDuracao(resultado.paradaMs) : '—'} />
       </div>

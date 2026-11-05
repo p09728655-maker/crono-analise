@@ -17,6 +17,9 @@ const ESCALAS = {
   },
 };
 const SEM_CLASSE = {};
+/* O tempo por volume contra o takt: o QUADRO inteiro ganha cor (ver
+   quadroForaDoTakt). 'atencao' segue so' com o fundo claro no numero. */
+const QUADROS = { foraDoTakt: est.quadroForaDoTakt, noTakt: est.quadroNoTakt };
 
 /** Um numero com rotulo, na linha de parciais. */
 export function Parcial({
@@ -26,13 +29,16 @@ export function Parcial({
   // As classes sao o RESERVA da tela da embalagem (ver CronometroAoVivo):
   // so' valem quando o navegador nao entende o tamanho em cq do estilo.
   const classe = e.classe || SEM_CLASSE;
+  const quadro = QUADROS[tom] || null;
   return (
-    <div style={est.parcial}>
-      <span className={classe.rotulo} style={e.rotulo}>{rotulo}</span>
+    <div style={quadro ? { ...est.parcial, ...quadro } : est.parcial} data-tom={tom || undefined}>
+      <span className={classe.rotulo} style={quadro ? { ...e.rotulo, ...est.quadroTexto } : e.rotulo}>{rotulo}</span>
       <span className={classe.valor} style={{ ...e.valor, ...(tom === 'atencao' ? est.parcialAtencao : {}) }}>
         {valor}
         {/* Sem valor, sem unidade: "—s" parece um numero que falta. */}
-        {sufixo && valor !== '—' && <span className={classe.sufixo} style={e.sufixo}>{sufixo}</span>}
+        {sufixo && valor !== '—' && (
+          <span className={classe.sufixo} style={quadro ? { ...e.sufixo, ...est.quadroTexto } : e.sufixo}>{sufixo}</span>
+        )}
       </span>
     </div>
   );

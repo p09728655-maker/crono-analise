@@ -10,6 +10,15 @@
  * faz e' registrar quanto desse periodo a maquina passou parada, e por que
  * (a linha vai para a lista de paradas, em minutos, ainda editavel).
  *
+ * A PARADA COMECA NO TOQUE DO "PAROU", nao na escolha do motivo (pedido do
+ * PPCP, 05/11). Antes o Parou abria a lista e o relogio da parada so'
+ * comecava no motivo: o tempo de ler a lista virava linha rodando, e quem
+ * ainda nao sabia por que a linha parou tinha de chutar. Agora o Parou ja'
+ * conta, e o motivo vem quando se souber — na hora, na lista que abre junto,
+ * ou na volta: o Voltou sem motivo fecha a parada naquele instante e so'
+ * depois pergunta. Enquanto a pergunta da volta esta' aberta nao se conta
+ * volume: o setup escolhido ali ainda tem de entrar na conta das marcas.
+ *
  * As MARCAS sao o instante de cada toque, em ms desde o comeco, no RELOGIO
  * DA LINHA RODANDO: o tempo das paradas marcadas aqui sai delas. E' o que
  * deixa o PC ver o intervalo volume a volume (ver domain/crono/intervalos.js)
@@ -55,8 +64,13 @@ export function useCronometroAoVivo({
   const [duracaoFinal, setDuracaoFinal] = useState(0);
   const [pecasFinais, setPecasFinais] = useState('0');
   const [pulso, setPulso] = useState(0);
-  const [emParada, setEmParada] = useState(null); // {motivo, inicio}
+  // {motivo, inicio}; motivo null = a parada ja' conta, o motivo vem depois.
+  const [emParada, setEmParada] = useState(null);
   const [escolhendoMotivo, setEscolhendoMotivo] = useState(false);
+  // A parada que ja' FECHOU (Voltou ou Encerrar) sem motivo: {ms, encerrando}.
+  // A lista de motivos fica aberta ate' a escolha, e so' entao a parada
+  // entra na lista — e, se era o Encerrar, o resultado abre.
+  const [paradaFechada, setParadaFechada] = useState(null);
   const [marcasFinais, setMarcasFinais] = useState([]);
   // O intervalo entre os DOIS ULTIMOS toques — o que a Embalagem Takt Time
   // mostra enquanto o cronometro roda. Null antes do segundo toque.
@@ -75,6 +89,9 @@ export function useCronometroAoVivo({
   const rodando = fase === 'rodando';
   const { decorrido, iniciar, parar } = useCronometro();
   const ultimoToqueRef = useRef(0);
+  // Quando a lista de motivos abriu e fechou pela ultima vez (ver GUARDA_FOLHA_MS).
+  const folhaAbertaRef = useRef(-Infinity);
+  const folhaFechadaRef = useRef(-Infinity);
   // Ref, nao estado: o toque precisa da lista na hora, sem esperar render.
   const marcasRef = useRef([]);
   // O instante BRUTO de cada toque (paradas dentro), so' para o relogio
@@ -99,6 +116,9 @@ export function useCronometroAoVivo({
     setRelogioEntreMarcasMs(null);
     setSetupEntreMarcasMs(null);
     setRelogioAteUltimoMs(null);
+    setEmParada(null);
+    setParadaFechada(null);
+    setEscolhendoMotivo(false);
     // O cronometro ao vivo mede o periodo inteiro; um setup que estivesse
     // correndo no formulario pertencia ao periodo anterior.
     paradas.limpar();
@@ -118,8 +138,9 @@ export function useCronometroAoVivo({
 
   const contarPeca = useCallback(() => {
     if (!rodando) return;
-    // Maquina parada nao produz peca: o toque aqui seria engano de dedo.
-    if (emParada) return;
+    // Maquina parada nao produz peca: o toque aqui seria engano de dedo. A
+    // parada que fechou sem motivo ainda nao entrou na conta das marcas.
+    if (emParada || paradaFechada) return;
     // Mesma guarda de repique da coleta: dedo/luva encostando duas vezes.
     const agora = performance.now();
     if (agora - ultimoToqueRef.current < TOQUE_MINIMO_MS) return;
@@ -150,7 +171,7 @@ export function useCronometroAoVivo({
     vibrar(45);
     setPulso((p) => p + 1);
     setPecas((n) => n + 1);
-  }, [rodando, emParada, iniciar]);
+  }, [rodando, emParada, paradaFechada, iniciar]);
 
   const desfazer = useCallback(() => {
     marcasRef.current.pop();
@@ -164,28 +185,86 @@ export function useCronometroAoVivo({
     vibrar([25, 40, 25]);
   }, []);
 
-  const iniciarParada = useCallback((motivo) => {
-    setEscolhendoMotivo(false);
+  /** A parada entra na lista do periodo e sai do relogio das marcas. */
+  const registrarParada = useCallback((motivo, ms) => {
+    // Duas casas no minuto: um setup de 45s precisa entrar como 0,75 —
+    // arredondar para 0,8 jogaria 3 segundos dentro do tempo de maquina rodando.
+    paradas.adicionar(motivo, (ms / 60000).toFixed(2));
+    paradaAcumuladaRef.current += ms;
+    if (motivo === 'setup') setupAcumuladoRef.current += ms;
+  }, [paradas.adicionar]);
+
+  /** PAROU: a parada conta deste toque, e a lista de motivos abre junto.
+      Com o motivo ja' na mao, ela nasce com ele e a lista nem abre. */
+  const iniciarParada = useCallback((motivo = null) => {
     // Antes da largada nao ha' periodo: a parada nao teria onde caber.
     if (largadaPendenteRef.current) return;
-    setEmParada({ motivo, inicio: performance.now() });
+    const agora = performance.now();
+    setEmParada({ motivo, inicio: agora });
+    if (!motivo) folhaAbertaRef.current = agora;
+    setEscolhendoMotivo(!motivo);
     vibrar([40, 60, 40]);
+  }, []);
+
+  /* A lista acabou de abrir: o toque e' o quique da luva (ou o resto do
+     toque que a abriu), nao uma escolha. Fechando, marca a hora — o quique
+     seguinte nao pode fechar a parada (Voltou) nem contar volume. */
+  const cedoDemais = () => performance.now() - folhaAbertaRef.current < GUARDA_FOLHA_MS;
+  const fecharFolha = () => {
+    const agora = performance.now();
+    folhaFechadaRef.current = agora;
+    ultimoToqueRef.current = agora;
+    setEscolhendoMotivo(false);
+  };
+
+  /** O motivo — da parada que esta' correndo ou da que acabou de fechar. */
+  const escolherMotivo = useCallback((motivo) => {
+    if (cedoDemais()) return;
+    fecharFolha();
+    if (paradaFechada) {
+      registrarParada(motivo, paradaFechada.ms);
+      setParadaFechada(null);
+      if (paradaFechada.encerrando) setFase('resultado');
+      vibrar(45);
+      return;
+    }
+    setEmParada((p) => (p ? { ...p, motivo } : p));
+  }, [paradaFechada, registrarParada]);
+
+  /** A lista fecha sem motivo: a parada segue contando e pergunta na volta. */
+  const adiarMotivo = useCallback(() => {
+    if (!cedoDemais()) fecharFolha();
+  }, []);
+
+  /** "Nao parou": o Parou foi toque errado. A parada some, sem linha. */
+  const cancelarParada = useCallback(() => {
+    if (cedoDemais()) return;
+    fecharFolha();
+    setEmParada(null);
+    vibrar([25, 40, 25]);
   }, []);
 
   const encerrarParada = useCallback(() => {
     if (!emParada) return;
+    // O quique do toque que fechou a lista cai no VOLTOU, que tomou o lugar
+    // dela: a parada ja' passa de 1 s (conta do Parou) e fecharia sem querer.
+    if (performance.now() - folhaFechadaRef.current < GUARDA_FOLHA_MS) return;
     const ms = duracaoDaParada(emParada.inicio, performance.now());
-    // Menos de 1s e' toque errado, nao parada. Duas casas no minuto: um
-    // setup de 45s precisa entrar como 0,75 — arredondar para 0,8 jogaria
-    // 3 segundos dentro do tempo de maquina rodando.
-    if (ms >= 1000) {
-      paradas.adicionar(emParada.motivo, (ms / 60000).toFixed(2));
-      paradaAcumuladaRef.current += ms;
-      if (emParada.motivo === 'setup') setupAcumuladoRef.current += ms;
-    }
     setEmParada(null);
+    // Menos de 1s e' toque errado, nao parada.
+    if (ms < 1000) {
+      setEscolhendoMotivo(false);
+    } else if (emParada.motivo) {
+      registrarParada(emParada.motivo, ms);
+    } else {
+      // Sem motivo: a parada fecha NESTE toque — o tempo de escolher ja' e'
+      // linha rodando — e a lista abre para o motivo.
+      setParadaFechada({ ms, encerrando: false });
+      folhaAbertaRef.current = performance.now();
+      setEscolhendoMotivo(true);
+    }
     vibrar(45);
-  }, [emParada, paradas.adicionar]);
+  }, [emParada, registrarParada]);
 
   const encerrar = useCallback(() => {
     // Encerrar antes da largada nao mediu nada: volta ao comeco, sem
@@ -200,9 +279,11 @@ export function useCronometroAoVivo({
     }
     // Encerrar com parada em curso fecha a parada primeiro: o tempo dela
     // ja' passou no relogio e nao pode virar tempo de maquina rodando.
+    let semMotivoMs = null;
     if (emParada) {
-      const ms = performance.now() - emParada.inicio;
-      if (ms >= 1000) paradas.adicionar(emParada.motivo, (ms / 60000).toFixed(2));
+      const ms = duracaoDaParada(emParada.inicio, performance.now());
+      if (ms >= 1000 && emParada.motivo) paradas.adicionar(emParada.motivo, (ms / 60000).toFixed(2));
+      else if (ms >= 1000) semMotivoMs = ms;
       setEmParada(null);
     }
     const total = parar();
@@ -214,8 +295,16 @@ export function useCronometroAoVivo({
     setRelogioEntreMarcasMs(entre == null ? null : Math.min(entre, Math.floor(total)));
     // Parada aberta no Encerrar cai DEPOIS do ultimo toque: fora do trecho.
     setSetupEntreMarcasMs(entrePrimeiraEUltima(setupNoToqueRef.current));
-    setFase('resultado');
     vibrar([30, 40, 30]);
+    // Parada ainda sem motivo: o periodo ja' fechou neste toque, e a lista
+    // pergunta antes do resultado. Escolher nao mexe no relogio.
+    if (semMotivoMs != null) {
+      setParadaFechada({ ms: semMotivoMs, encerrando: true });
+      folhaAbertaRef.current = performance.now();
+      setEscolhendoMotivo(true);
+      return;
+    }
+    setFase('resultado');
   }, [parar, pecas, emParada, paradas.adicionar, paradas.limpar]);
 
   /** Do resultado de volta ao formulario, com o periodo zerado. */
@@ -252,10 +341,19 @@ export function useCronometroAoVivo({
     fase, rodando, decorrido: aguardandoLargada ? 0 : decorrido, aguardandoLargada,
     pecas, pulso, duracaoFinal, pecasFinais, setPecasFinais, marcasFinais,
     ultimoIntervaloMs, relogioEntreMarcasMs, setupEntreMarcasMs, relogioAteUltimoMs,
-    emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
+    emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo, paradaFechada,
     comecar, contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, novaConferencia,
+    escolherMotivo, adiarMotivo, cancelarParada,
   };
 }
+
+/**
+ * Quanto a lista de motivos ignora toque depois de abrir — e o VOLTOU
+ * depois de ela fechar. Ninguem le' a lista e escolhe em 0,3 s; o quique da
+ * luva vem em ~0,12 s (revisao de 05/11). Sem isto o toque no VOLTOU, que
+ * abre a lista sem motivo, escolhia o motivo que ficasse debaixo do dedo.
+ */
+export const GUARDA_FOLHA_MS = 300;
 
 const ultimoIntervalo = (marcas) => (marcas.length >= 2
   ? marcas[marcas.length - 1] - marcas[marcas.length - 2]

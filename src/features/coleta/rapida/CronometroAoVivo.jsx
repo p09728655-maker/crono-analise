@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import {
   formatarCronometro, formatarDuracao, formatarSegundos, rotuloMotivo,
 } from '../../../domain/cronoanalise.js';
@@ -19,15 +20,21 @@ export default function CronometroAoVivo({
   produto = '',
 }) {
   const {
-    decorrido, pecas, pulso, emParada, tempoParadaAtual, escolhendoMotivo, setEscolhendoMotivo,
+    decorrido, pecas, pulso, emParada, tempoParadaAtual, escolhendoMotivo, paradaFechada,
     contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, ultimoIntervaloMs,
-    aguardandoLargada,
+    aguardandoLargada, escolherMotivo, adiarMotivo, cancelarParada,
   } = crono;
   /* O aviso vai no tempo por volume do PERIODO, nao no ultimo intervalo: o
      rack de dois volumes sai com os dois colados (25 s, 100 s...), e o
      ultimo passaria do takt a cada dois volumes numa linha que atende. E
-     com as paradas dentro: marcar "Parou" nao pode apagar o aviso. */
-  const acimaDoTakt = modoTakt && taktMs > 0 && porVolumeMs > taktMs;
+     com as paradas dentro: marcar "Parou" nao pode apagar o aviso.
+     O QUADRO fica VERMELHO acima do takt e VERDE quando chega nele (pedido
+     do PPCP, 05/11): o fundo ambar claro de antes nao se via de longe. Sem
+     takt ou sem tempo por volume ainda (menos de 2 volumes), nem um nem
+     outro: nao ha' o que comparar. */
+  const comparaTakt = modoTakt && taktMs > 0 && porVolumeMs > 0;
+  const acimaDoTakt = comparaTakt && porVolumeMs > taktMs;
+  const tomPorVolume = comparaTakt ? (acimaDoTakt ? 'foraDoTakt' : 'noTakt') : null;
   const nomeProduto = String(produto || '').trim();
   // Na embalagem a barra de baixo cresce junto com o painel (v2.98.1):
   // com o resto grande, os 64 px de Desfazer, Parou e Encerrar ficaram miudos.
@@ -56,16 +63,19 @@ export default function CronometroAoVivo({
       <span className="takt-rotulo-tempo" style={est.rotuloTempoTela}>TEMPO</span>
       <span className="takt-tempo" style={est.tempoCorridoTela}>{formatarCronometro(decorrido)}</span>
       <div style={est.gradeTaktPrincipal}>
-        {/* Acima do takt, ganha SETA no rotulo e fundo: a cor sozinha
-            nao serve a quem olha de longe, de luva, com sol. */}
+        {/* Acima do takt, o quadro fica vermelho E o rotulo ganha a SETA:
+            a cor sozinha nao serve a quem nao distingue vermelho de verde,
+            nem a quem olha de longe, de luva, com sol. */}
         <Parcial
           escala="grande"
           rotulo={acimaDoTakt ? 'Por vol ▲ takt' : 'Por volume'}
           valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
           sufixo="s"
-          tom={acimaDoTakt ? 'atencao' : null}
+          tom={tomPorVolume}
         />
-        <Parcial escala="grande" rotulo="Takt" valor={taktMs > 0 ? formatarSegundos(taktMs) : '—'} sufixo="s" />
+        {/* "da semana": o takt sai do programa da SEMANA que o PCP colou,
+            nao de um dia nem desta medicao — o rotulo diz de onde vem. */}
+        <Parcial escala="grande" rotulo="Takt da semana" valor={taktMs > 0 ? formatarSegundos(taktMs) : '—'} sufixo="s" />
       </div>
       <div style={est.gradeTaktApoio}>
         {/* Na embalagem o toque conta VOLUME — e a tela diz isso, porque
@@ -112,7 +122,11 @@ export default function CronometroAoVivo({
       style={{ ...est.botaoGrande, ...(modoTakt ? est.botaoGrandeTakt : {}), ...est.botaoVoltarProduzir }}
       aria-label="Encerrar a parada e voltar a produzir"
     >
-      <span style={est.rotuloParadaAtiva}>PARADA · {rotuloMotivo(emParada.motivo)}</span>
+      {/* Sem motivo ainda, a parada ja' conta — o motivo e' perguntado no
+          Voltou, e a tela avisa para ninguem achar que ficou sem registro. */}
+      <span style={est.rotuloParadaAtiva}>
+        PARADA · {emParada.motivo ? rotuloMotivo(emParada.motivo) : 'MOTIVO NA VOLTA'}
+      </span>
       <span className={modoTakt ? 'contagem-takt' : undefined} style={est.contagem}>
         {formatarCronometro(Math.max(0, tempoParadaAtual))}
       </span>
@@ -172,11 +186,12 @@ export default function CronometroAoVivo({
           <span style={icone}>↩</span>
           Desfazer
         </button>
-        {/* Antes da largada nao ha' periodo para a parada caber dentro. */}
+        {/* Antes da largada nao ha' periodo para a parada caber dentro.
+            O Parou ja' comeca a parada: o motivo vem depois. */}
         <button
           type="button"
           style={{ ...barra, ...est.botaoParou }}
-          onClick={() => (emParada ? encerrarParada() : setEscolhendoMotivo(true))}
+          onClick={() => (emParada ? encerrarParada() : iniciarParada())}
           disabled={aguardandoLargada}
         >
           <span style={icone}>{emParada ? '▶' : '⏸'}</span>
@@ -193,21 +208,37 @@ export default function CronometroAoVivo({
         <div style={est.folhaMotivos} role="dialog" aria-label="Por que a máquina parou">
           <div style={est.folhaCaixa}>
             <div style={est.folhaTitulo}>Por que parou?</div>
+            {/* O tempo da parada na propria lista: ela conta desde o Parou,
+                nao desde a escolha — e quem le' a lista ve' isso. */}
+            <div style={est.folhaTempoParada} role="timer">
+              {paradaFechada
+                ? `Parada de ${formatarCronometro(paradaFechada.ms)} — escolha o motivo para ${paradaFechada.encerrando ? 'ver o resultado' : 'seguir medindo'}.`
+                : `A parada já está contando: ${formatarCronometro(Math.max(0, tempoParadaAtual))}`}
+            </div>
             <div style={est.gradeMotivos}>
               {motivos.map((m) => (
-                <button
+                <BotaoDaFolha
                   key={m.codigo}
-                  type="button"
                   style={{ ...est.chipMotivo, ...(m.codigo === 'setup' ? est.chipSetup : {}) }}
-                  onClick={() => iniciarParada(m.codigo)}
+                  aoTocar={() => escolherMotivo(m.codigo)}
                 >
                   {m.rotulo}
-                </button>
+                </BotaoDaFolha>
               ))}
             </div>
-            <button type="button" style={est.botaoOutraPeca} onClick={() => setEscolhendoMotivo(false)}>
-              Cancelar
-            </button>
+            {/* Na volta (ou no Encerrar) a parada ja' fechou: o motivo e' a
+                saida. Antes disso, da' para deixar o motivo para a volta —
+                ou desfazer o Parou tocado sem querer. */}
+            {!paradaFechada && (
+              <div style={est.linhaBotoesParada}>
+                <BotaoDaFolha style={est.botaoOutraPeca} aoTocar={adiarMotivo}>
+                  Motivo na volta
+                </BotaoDaFolha>
+                <BotaoDaFolha style={est.botaoOutraPeca} aoTocar={cancelarParada}>
+                  Não parou
+                </BotaoDaFolha>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -216,6 +247,34 @@ export default function CronometroAoVivo({
 }
 
 const maiuscula = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * BOTAO DA LISTA DE MOTIVOS: so' vale o toque que COMECOU nele.
+ *
+ * O VOLTOU sem motivo abre a lista no pointerdown; o click do mesmo toque,
+ * no soltar do dedo, caia no motivo que ficou debaixo dele — deitado, o
+ * tablet gravava "Problema de qualidade" sem ninguem escolher (revisao de
+ * 05/11). Com o toque comecado em outro lugar, o click e' ignorado. O
+ * click do teclado (detail 0) nao tem pointerdown e continua valendo.
+ */
+function BotaoDaFolha({ aoTocar, style, children }) {
+  const comecouAqui = useRef(false);
+  return (
+    <button
+      type="button"
+      style={style}
+      onPointerDown={() => { comecouAqui.current = true; }}
+      onPointerCancel={() => { comecouAqui.current = false; }}
+      onClick={(ev) => {
+        if (!comecouAqui.current && ev.detail !== 0) return;
+        comecouAqui.current = false;
+        aoTocar();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 /**
  * O QUE O ESTILO INLINE NAO ALCANCA na tela da embalagem (ver corpoTakt):

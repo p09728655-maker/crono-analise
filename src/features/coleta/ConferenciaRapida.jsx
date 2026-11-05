@@ -9,6 +9,8 @@ import { useParadasDoPeriodo } from './rapida/useParadasDoPeriodo.js';
 import { useCronometroAoVivo } from './rapida/useCronometroAoVivo.js';
 import { useHistoricoLocal } from './rapida/useHistoricoLocal.js';
 import { useRascunho } from './rapida/useRascunho.js';
+import { useGuardaDaMedicao } from './rapida/useGuardaDaMedicao.js';
+import ConfirmarSaida from './rapida/ConfirmarSaida.jsx';
 import { est } from './rapida/estilos.js';
 import FormularioHorarios from './rapida/FormularioHorarios.jsx';
 import ResultadoHorarios from './rapida/ResultadoHorarios.jsx';
@@ -158,6 +160,14 @@ export default function ConferenciaRapida({ aoSair }) {
     return () => window.removeEventListener('beforeunload', aoFechar);
   }, [medindo]);
 
+  // O Voltar sem querer nao leva a medicao ao vivo: cronometrando, ou com o
+  // resultado dela ainda nao salvo, sair pergunta antes. O formulario de
+  // horarios nao precisa: o rascunho dele ja' sobrevive a' saida.
+  const guarda = useGuardaDaMedicao({
+    ativa: crono.rodando || (crono.fase === 'resultado' && historico.salvo !== 'ok'),
+    aoSair,
+  });
+
   /* ------------------------------------------------------ as contas */
   const parcial = useMemo(
     () => conferenciaRapida({ duracaoMs: crono.decorrido, pecas: crono.pecas, paradas: paradas.emMs, ciclosPorPeca, furacaoPassante }),
@@ -283,7 +293,7 @@ export default function ConferenciaRapida({ aoSair }) {
   return (
     <div style={{ ...est.tela, ...(crono.rodando ? {} : est.telaRolavel) }}>
       <header style={est.cabecalho}>
-        <button type="button" onClick={aoSair} style={est.botaoVoltar} aria-label="Voltar para a lista">
+        <button type="button" onClick={guarda.pedirSaida} style={est.botaoVoltar} aria-label="Voltar para a lista">
           ←
         </button>
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -373,9 +383,18 @@ export default function ConferenciaRapida({ aoSair }) {
           marcasDescartadas={marcasUsadas && crono.marcasFinais.length > 0 && !marcasConferem}
           salvo={historico.salvo}
           aoSalvar={() => salvar(resultado, false)}
-          aoSair={aoSair}
+          aoSair={guarda.pedirSaida}
         />
       )}
+
+      <ConfirmarSaida
+        aberta={guarda.perguntando}
+        // Encerrado com a parada pedindo motivo, o relogio ja' parou: o
+        // aviso nao pode dizer que ele esta' rodando.
+        cronometrando={crono.rodando && !crono.paradaFechada?.encerrando}
+        aoContinuar={guarda.continuar}
+        aoSair={guarda.sair}
+      />
     </div>
   );
 }

@@ -22,6 +22,12 @@ export const status = {
   // Laranja queimado, deliberadamente distinto do vermelho de marca.
   critico: '#C2410C',
   criticoFundo: 'rgba(194, 65, 12, 0.14)',
+  /* FORA DO TAKT — a unica excecao a regra acima, pedida pelo PPCP (05/11):
+     o quadro do tempo por volume na embalagem fica VERMELHO ate' chegar no
+     takt, como num andon. Vermelho mais escuro que o de marca (#DB2126), e
+     nunca sozinho: sempre com a seta e o "▲ takt" escritos no rotulo. Texto
+     claro sobre ele: ~6:1. Nao usar fora da comparacao com o takt. */
+  foraDoTakt: '#B91C1C',
   neutro: '#64748B',
 };
 
