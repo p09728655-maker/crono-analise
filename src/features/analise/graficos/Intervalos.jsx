@@ -8,14 +8,6 @@ import { larguraDoTexto, rotulosSemColisao } from './rotulos.js';
 /** Barras que ganham o valor escrito em cima (lacunas e cortadas): as maiores, ate' aqui. */
 const MAX_ROTULOS_VALOR = 6;
 
-/**
- * Margem direita quando ha' linha de referencia: o rotulo da linha ("Takt
- * 72.0 s", "Rodando 70.4 s") mora FORA da area das barras. Escrito por
- * cima delas, na ponta direita, o rotulo cobria as ultimas barras e se
- * misturava com elas.
- */
-const CALHA_ROTULOS = 100;
-
 /** Distancia minima entre os nomes dos volumes no eixo de baixo, em px. */
 const ESPACO_ROTULO_X = 28;
 const PASSOS_X = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
@@ -42,8 +34,9 @@ const COR_TEXTO_LACUNA = claro.critico;
  * destaque no eixo: e' o volume que se procura na tabela das lacunas.
  *
  * As linhas de referencia tem contorno branco por baixo (para nao sumirem
- * dentro das barras azuis), entrada propria na legenda e o rotulo na calha
- * da direita, fora das barras. Numero escrito no grafico nunca encosta em
+ * dentro das barras azuis) e entrada propria na legenda, com o VALOR ao
+ * lado ("Takt da semana: 17.2 s") — sem calha a' direita, que tomava 100 px
+ * do grafico (v2.100.2). Numero escrito no grafico nunca encosta em
  * outro (rotulos.js): o que nao cabe sai inteiro.
  *
  * O TETO do eixo e' tres vezes o ritmo normal (ou um pouco acima do takt, o que
@@ -100,7 +93,12 @@ export function GraficoIntervalos({
 
   const margem = {
     esq: EIXO.esq,
-    dir: linhasDeReferencia.length ? CALHA_ROTULOS : EIXO.dir,
+    /* SEM CALHA A' DIREITA (v2.100.2, pedido do PCP com print): o valor
+       das linhas ("Takt 17.2 s", "Rodando 15.2 s") morava numa faixa de
+       100 px fora das barras, que tomava a largura do grafico na tela e na
+       folha. O valor foi para a LEGENDA, ao lado da amostra da linha — o
+       grafico ganha a largura, e o rotulo continua sem cobrir barra. */
+    dir: EIXO.dir,
     // Com medicoes separadas, a hora de cada uma mora acima das barras.
     topo: segs ? 36 : 22,
     base: EIXO.base,
@@ -156,8 +154,6 @@ export function GraficoIntervalos({
     return partes.join(' — ');
   };
 
-  const posicoesRotulo = posicionarRotulos(linhasDeReferencia.map((r) => ({ chave: r.chave, y: yDe(r.ms) })));
-
   const tituloEixoY = (v) => (Math.abs(v / 1000 - Math.round(v / 1000)) < 1e-6
     ? `${Math.round(v / 1000)} s`
     : emSegundos(v));
@@ -182,7 +178,9 @@ export function GraficoIntervalos({
             hachura: `repeating-linear-gradient(45deg, ${serie.tolerancia} 0 3px, rgba(255,255,255,.55) 3px 5px)`,
           },
           ...linhasDeReferencia.map((r) => ({
-            rotulo: r.chave === 'media' ? 'Rodando — média dos intervalos' : 'Takt da semana',
+            rotulo: r.chave === 'media'
+              ? `Rodando — média dos intervalos: ${emSegundos(r.ms)}`
+              : `Takt da semana: ${emSegundos(r.ms)}`,
             cor: r.cor,
             linha: r.chave === 'media' ? 'dotted' : 'dashed',
           })),
@@ -303,19 +301,11 @@ export function GraficoIntervalos({
             />
           ))}
           {[...linhasDeReferencia].reverse().map((r) => (
-            <g key={r.chave} pointerEvents="none">
-              <line
-                x1={margem.esq} x2={largura - margem.dir} y1={yDe(r.ms)} y2={yDe(r.ms)}
-                stroke={r.cor} strokeWidth={r.espessura} strokeDasharray={r.traco}
-              />
-              <text
-                x={largura - margem.dir + 8} y={posicoesRotulo[r.chave] + 4} textAnchor="start"
-                fontSize="11" fill={claro.texto}
-              >
-                <tspan fontWeight="700">{r.nome}</tspan>
-                <tspan dx="4">{emSegundos(r.ms)}</tspan>
-              </text>
-            </g>
+            <line
+              key={r.chave} pointerEvents="none"
+              x1={margem.esq} x2={largura - margem.dir} y1={yDe(r.ms)} y2={yDe(r.ms)}
+              stroke={r.cor} strokeWidth={r.espessura} strokeDasharray={r.traco}
+            />
           ))}
 
           <line x1={margem.esq} x2={largura - margem.dir} y1={base} y2={base} stroke={claro.textoFraco} strokeWidth="1.5" />
@@ -352,24 +342,3 @@ export function GraficoIntervalos({
 }
 
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-
-/**
- * Onde escrever o rotulo de cada linha de referencia, na calha da direita.
- * Por padrao, na altura da propria linha; quando takt e media ficam a menos
- * de uma linha de texto um do outro, os dois se afastam igualmente — senao
- * se escrevem um por cima do outro justamente quando estao perto (que e'
- * quando a comparacao mais importa).
- */
-function posicionarRotulos(itens) {
-  const ALTURA_TEXTO = 15;
-  const pos = Object.fromEntries(itens.map((x) => [x.chave, x.y]));
-  if (itens.length === 2) {
-    const [a, b] = [...itens].sort((p, q) => p.y - q.y);
-    const falta = ALTURA_TEXTO - (b.y - a.y);
-    if (falta > 0) {
-      pos[a.chave] = a.y - falta / 2;
-      pos[b.chave] = b.y + falta / 2;
-    }
-  }
-  return pos;
-}

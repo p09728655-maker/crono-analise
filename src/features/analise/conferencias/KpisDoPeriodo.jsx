@@ -1,4 +1,4 @@
-import { formatarDuracao } from '../../../domain/cronoanalise.js';
+import { formatarDuracao, unidadeDoPosto } from '../../../domain/cronoanalise.js';
 import { est } from './estilos.js';
 import { porMinuto } from './formato.js';
 
@@ -18,7 +18,7 @@ import { porMinuto } from './formato.js';
  * parada eles sao o MESMO numero, e dois cartoes iguais lado a lado com
  * rotulos diferentes ensinariam a desconfiar dos dois.
  */
-export default function KpisDoPeriodo({ painel }) {
+export default function KpisDoPeriodo({ painel, unidade: u = unidadeDoPosto() }) {
   const { ritmoRelogio, ritmoMedio } = painel;
   // Parada marcada e' o que separa os dois ritmos. Sem ela, um cartao so'.
   const doisRitmos = painel.paradaMs > 0 && ritmoRelogio != null && ritmoMedio != null;
@@ -27,8 +27,8 @@ export default function KpisDoPeriodo({ painel }) {
     ? [
       {
         rot: 'Ritmo no relógio',
-        val: `${Math.round(ritmoRelogio)} pç/h`,
-        sub: `${porMinuto(ritmoRelogio)} peças por minuto — com as paradas dentro, é o que se compara com a demanda`,
+        val: `${Math.round(ritmoRelogio)} ${u.abrev}/h`,
+        sub: `${porMinuto(ritmoRelogio)} ${u.plural} por minuto — com as paradas dentro, é o que se compara com a demanda`,
       },
       {
         // O potencial fica em segundo e diz que E' potencial. Sem a base
@@ -36,16 +36,16 @@ export default function KpisDoPeriodo({ painel }) {
         // de baixo e um valor diferente do que saiu — a mesma confusao de
         // 10,3 x 13,2, agora dentro de uma tela so'.
         rot: 'Ritmo rodando',
-        val: `${Math.round(ritmoMedio)} pç/h`,
-        sub: `${porMinuto(ritmoMedio)} peças por minuto — só o tempo com a máquina rodando`,
+        val: `${Math.round(ritmoMedio)} ${u.abrev}/h`,
+        sub: `${porMinuto(ritmoMedio)} ${u.plural} por minuto — só o tempo com a máquina rodando`,
       },
     ]
     : [
       {
         rot: 'Ritmo médio',
-        val: ritmoRelogio != null ? `${Math.round(ritmoRelogio)} pç/h` : '—',
+        val: ritmoRelogio != null ? `${Math.round(ritmoRelogio)} ${u.abrev}/h` : '—',
         sub: ritmoRelogio != null
-          ? `${porMinuto(ritmoRelogio)} peças por minuto — sem parada marcada, é o ritmo de relógio e o de máquina rodando`
+          ? `${porMinuto(ritmoRelogio)} ${u.plural} por minuto — sem parada marcada, é o ritmo de relógio e o de máquina rodando`
           : 'sem tempo de máquina rodando',
       },
     ];
@@ -65,13 +65,15 @@ export default function KpisDoPeriodo({ painel }) {
     {
       rot: 'Tempo parado',
       val: painel.paradaMs > 0 ? formatarDuracao(painel.paradaMs) : '—',
+      // Com parada marcada e nenhuma de troca/setup, "nenhuma parada
+      // marcada" embaixo de "7 min" se contradizia (v2.100.2).
       sub: painel.pareto.setupMs > 0
         ? `${formatarDuracao(painel.pareto.setupMs)} em troca/setup`
-        : 'nenhuma parada marcada',
+        : (painel.paradaMs > 0 ? 'nenhuma em troca/setup' : 'nenhuma parada marcada'),
     },
     // A PROCEDENCIA por ultimo: diz com que base os numeros acima existem,
     // e por isso se le' depois deles, nao antes.
-    { rot: 'Medições', val: String(painel.n), sub: `${painel.maquinas} máquina(s) · ${painel.pecasTot} peças` },
+    { rot: 'Medições', val: String(painel.n), sub: `${painel.maquinas} máquina(s) · ${painel.pecasTot} ${u.plural}` },
   );
 
   return (

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { chaveSemana } from '../../domain/demandaSemanal.js';
+import { unidadeDoPosto } from '../../domain/cronoanalise.js';
 import ColarPlanilha from './demanda/ColarPlanilha.jsx';
 import ProgramaGravado from './demanda/ProgramaGravado.jsx';
 import SemanaManual from './demanda/SemanaManual.jsx';
@@ -56,6 +57,8 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
   // O tempo disponivel e' de dois quadros: onde se digita e a tabela, que
   // calcula o exigido de cada semana com ele.
   const tempo = useTempoDisponivel(grupo, maquinasDoGrupo);
+  // Volumes na embalagem, pecas no resto (pelo nome do grupo, v2.100.2).
+  const unidade = unidadeDoPosto(grupo?.nome);
 
   const semGrupo = cadastro && !cadastro.grupos?.length;
 
@@ -114,7 +117,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
             {!semColagem && (
               <>
                 <SemanaManual
-                  semanas={semanas} ocupado={ocupado} aoIncluir={demanda.gravarSemanas}
+                  semanas={semanas} ocupado={ocupado} aoIncluir={demanda.gravarSemanas} unidade={unidade}
                 />
                 <ColarPlanilha ocupado={ocupado} aoGravar={demanda.gravarSemanas} />
               </>
@@ -135,7 +138,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
 
             {semanas?.length > 0 && (
               <ProgramaGravado
-                semanas={semanas} horasNum={tempo.horasNum} maquinasDoGrupo={maquinasDoGrupo}
+                semanas={semanas} horasNum={tempo.horasNum} maquinasDoGrupo={maquinasDoGrupo} unidade={unidade}
                 setupHoras={tempo.setupHoras} ocupado={ocupado}
                 aoApagarSemana={demanda.apagarSemana} aoApagarTudo={demanda.apagarTudo}
                 somenteLeitura={semColagem} apagarTudo={apagarTudo}

@@ -4,6 +4,7 @@ import {
   TODAS, escopoDaLateral, filtrarPorPeriodo, loteDaMaquina, quandoMediu,
 } from '../../domain/relatorioConferencias.js';
 import { leituraDaDemanda, lerCodigoSemana } from '../../domain/demandaSemanal.js';
+import { unidadeDoPosto } from '../../domain/cronoanalise.js';
 import { caminhos } from '../../lib/dispositivo.js';
 import { lerDemanda } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
@@ -222,6 +223,14 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
     visiveis, resumoVisivel, resumoPecasVisivel, analise, barrasDoFiltro, painel,
     curvaDoDia, comparativo, entreMaquinas, porCiclo, secoes,
   } = leitura;
+  /* A UNIDADE DOS NUMEROS QUE SOMAM MAQUINAS (topo, custo da parada, folha)
+     — v2.100.2. "Volumes" so' quando TODAS as visiveis sao da embalagem;
+     com postos misturados a soma nao e' de uma coisa so', e fica "peças",
+     o nome geral. O cartao de cada maquina usa a do grupo dela. */
+  const unidadeDaTela = useMemo(() => {
+    const unidades = new Set(resumoVisivel.map((g) => unidadeDoPosto(grupoDe(g.maquina)).singular));
+    return unidadeDoPosto(unidades.size === 1 && unidades.has('volume') ? 'embalagem' : '');
+  }, [resumoVisivel, mapaGrupos]);
 
   const lote = loteDaMaquina({ filtro, visiveis, verArquivadas });
 
@@ -466,7 +475,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
 
           {estado === 'pronto' && linhasDoPeriodo.length > 0 && (
             <>
-              {!verArquivadas && painel && <KpisDoPeriodo painel={painel} />}
+              {!verArquivadas && painel && <KpisDoPeriodo painel={painel} unidade={unidadeDaTela} />}
 
               {/* O PROGRAMA DA SEMANA vem logo depois dos numeros do topo e
                   antes de tudo o mais: e' o unico quadro que responde "isso
@@ -491,7 +500,9 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               )}
 
               {!verArquivadas && comparativo && (
-                <ComparativoParadas comparativo={comparativo} resumo={resumoVisivel} escopo={escopo} />
+                <ComparativoParadas
+                  comparativo={comparativo} resumo={resumoVisivel} escopo={escopo} unidade={unidadeDaTela}
+                />
               )}
 
               <CartoesMaquina resumo={resumoVisivel} grupoDe={grupoDe} nominalDe={nominalDe} />
@@ -620,6 +631,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
 
       {estado === 'pronto' && linhasDoPeriodo.length > 0 && (
         <ImpressaoConferencias
+          unidade={unidadeDaTela}
           linhas={visiveis}
           resumo={resumoVisivel}
           resumoPecas={resumoPecasVisivel}

@@ -20,7 +20,14 @@ import { est } from './estilos.js';
 
 const VAZIO = { semana: '', inicio: '', pecas: '' };
 
-export default function SemanaManual({ semanas, ocupado, aoIncluir }) {
+export default function SemanaManual({
+  semanas, ocupado, aoIncluir,
+  // A unidade do grupo (unidadeDoPosto): na embalagem o campo e' de VOLUMES
+  // (v2.100.2) — "Peças" no grupo EMBALAGEM convidava a digitar produtos.
+  unidade = { singular: 'peça', plural: 'peças', abrev: 'pç' },
+}) {
+  const Unidade = `${unidade.plural.charAt(0).toUpperCase()}${unidade.plural.slice(1)}`;
+  const ehVolume = unidade.singular === 'volume';
   const [manual, setManual] = useState(VAZIO);
 
   const inicio = lerDataPtBr(manual.inicio);
@@ -33,7 +40,7 @@ export default function SemanaManual({ semanas, ocupado, aoIncluir }) {
   const problemas = [
     manual.semana.trim() !== '' && !semana && 'Semana no formato S38 ou 038-26.',
     manual.inicio.trim() !== '' && !inicio && 'Início no formato dd/mm/aaaa.',
-    manual.pecas.trim() !== '' && !(pecas > 0) && 'Peças precisa ser um número maior que zero.',
+    manual.pecas.trim() !== '' && !(pecas > 0) && `${Unidade} precisa ser um número maior que zero.`,
   ].filter(Boolean);
   const pronto = Boolean(semana && inicio && pecas > 0);
   const jaGravada = pronto
@@ -90,8 +97,10 @@ export default function SemanaManual({ semanas, ocupado, aoIncluir }) {
       <p style={est.blocoTexto}>
         Para uma semana reprogramada ou quando a planilha não está à mão. Semana como
         o PCP escreve (<strong>S38</strong>), início é o primeiro dia de produção dela
-        (a data de CORTE MDF da aba), peças é o TOTAL SEMANA. Semana que já existe é
-        substituída.
+        {ehVolume
+          ? <> (na embalagem, o primeiro dia de embalar), e <strong>volumes</strong> são as caixas da semana — um rack de 2 volumes conta 2, não 1.</>
+          : <> (a data de CORTE MDF da aba), peças é o TOTAL SEMANA.</>}
+        {' '}Semana que já existe é substituída.
       </p>
       <div style={est.linhaCampos}>
         <label style={est.campoEstreito}>
@@ -111,11 +120,11 @@ export default function SemanaManual({ semanas, ocupado, aoIncluir }) {
           />
         </label>
         <label style={est.campoEstreito}>
-          <span style={est.rotuloCampo}>Peças</span>
+          <span style={est.rotuloCampo}>{Unidade}</span>
           <input
             type="text" style={est.input} value={manual.pecas} disabled={ocupado}
             onChange={(ev) => setManual((m) => ({ ...m, pecas: ev.target.value }))}
-            placeholder="121.900" aria-label="Peças" inputMode="numeric"
+            placeholder={ehVolume ? '8.500' : '121.900'} aria-label={Unidade} inputMode="numeric"
           />
         </label>
         <button
@@ -131,7 +140,7 @@ export default function SemanaManual({ semanas, ocupado, aoIncluir }) {
             <div style={est.previaTitulo}>
               {chaveSemana(semana)} · {comoDia(inicio)} a{' '}
               {comoDia(new Date(inicio.getTime() + (6 * 86400000)), { ano: true })} ·{' '}
-              <strong>{pecas.toLocaleString('pt-BR')}</strong> peças
+              <strong>{pecas.toLocaleString('pt-BR')}</strong> {unidade.plural}
               {jaGravada && (
                 <span style={est.previaItem}>
                   {' '}— hoje está com {jaGravada.pecas.toLocaleString('pt-BR')}
@@ -141,7 +150,7 @@ export default function SemanaManual({ semanas, ocupado, aoIncluir }) {
             </div>
           ) : (
             <div style={est.previaTitulo}>
-              {problemas.length ? problemas.join(' ') : 'Preencha semana, início e peças.'}
+              {problemas.length ? problemas.join(' ') : `Preencha semana, início e ${unidade.plural}.`}
             </div>
           )}
         </div>

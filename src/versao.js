@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.100.2',
+    data: '2026-11-05',
+    titulo: 'Embalagem em volumes no relatório e na demanda; gráfico mais largo',
+    itens: [
+      'A EMBALAGEM FALA EM VOLUMES em todo lugar onde o número é dela: Demanda semanal (o campo é "Volumes", e o programa gravado mostra volumes e vol/h), o quadro do programa da semana no Ritmo por máquina ("8.500 volumes programados", "209 vol/h", "takt 17.2s por volume"), o cartão da EMBALAGEM 01 ("volumes por hora") e a folha impressa. Escrever "peças" no grupo da embalagem convidava a lançar produtos no lugar de caixas — e com produtos o takt sai maior e a linha parece folgada sem estar.',
+      'Os números do topo do relatório e "O que a parada custou" somam máquinas: dizem volumes só quando todas as máquinas na tela são da embalagem. Com furadeira e embalagem juntas, seguem em peças.',
+      'GRÁFICO DO VOLUME A VOLUME MAIS LARGO. Os valores do takt e do ritmo com a linha rodando saíram da faixa à direita do gráfico (100 px na tela e na folha) e foram para a legenda: "Takt da semana: 17.2 s", "Rodando — média dos intervalos: 15.2 s". As barras ganharam essa largura.',
+      'Corrigido no topo do relatório: o cartão TEMPO PARADO dizia "nenhuma parada marcada" embaixo de "7 min" quando nenhuma das paradas era troca/setup. Agora diz "nenhuma em troca/setup".',
+    ],
+  },
+  {
     versao: '2.100.1',
     data: '2026-11-04',
     titulo: 'Embalagem Takt Time: correções no resultado salvo do tablet',

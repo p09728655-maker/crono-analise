@@ -1,8 +1,12 @@
 import {
   comoDia, comoPeriodo, diasProgramados, faixaDeSemanas, nomeDaSemana, periodosDoPrograma, rotuloDaSemana,
 } from '../../../domain/demandaSemanal.js';
+import { unidadeDoPosto } from '../../../domain/cronoanalise.js';
 import { est } from './estilos.js';
 import { porMinuto } from './formato.js';
+
+/** "peças programadas" / "volumes programados" — o genero vem da unidade. */
+const programadas = (u) => `${u.plural} ${u.feminina ? 'programadas' : 'programados'}`;
 
 /**
  * O PROGRAMA DA SEMANA contra o que o grupo entrega.
@@ -38,6 +42,9 @@ export default function PainelDemanda({
   } = leitura;
   // Da planilha: o grupo que ela alimenta, ou programa com semana lida dela.
   const daPlanilha = planilhaAtiva || Boolean(programa?.daPlanilha);
+  // A unidade do GRUPO: na embalagem o programa e o ritmo sao em VOLUMES
+  // (v2.100.2). "8.500 peças" no grupo EMBALAGEM convidava a colar produtos.
+  const u = unidadeDoPosto(grupoNome);
 
   /* O periodo de cada semana cadastrada, para o seletor dizer de que dias
      fala cada opcao. Trinta e seis linhas: conta barata, feita a cada
@@ -52,7 +59,7 @@ export default function PainelDemanda({
       <section style={est.chamadaDemanda} aria-label="Programa da semana">
         <div style={est.chamadaTexto}>
           <strong>{titulo(estado)}</strong>{' '}
-          {explicacao(estado, semana, demanda, grupoNome, programa, medicao, daPlanilha)}
+          {explicacao(estado, semana, demanda, grupoNome, programa, medicao, daPlanilha, u)}
         </div>
         {/* O SELETOR TAMBEM AQUI. A janela de cada semana e' de sete dias
             fixos, e um dia util perdido num feriado longo fica sem programa
@@ -182,7 +189,7 @@ export default function PainelDemanda({
           </p>
         )}
         <p style={est.comparativoDica}>
-          {demanda.toLocaleString('pt-BR')} peças programadas
+          {demanda.toLocaleString('pt-BR')} {programadas(u)}
           {/* O PERIODO, sempre. A semana da fabrica nao e' a do calendario
               (a 034-26 e' rotulada S37 e roda de 31/08 a 04/09), entao o
               codigo sozinho nao permite conferir nada — a data permite. */}
@@ -190,7 +197,7 @@ export default function PainelDemanda({
             <> para {casadoPorData ? 'o período de' : 'a semana de'}{' '}
               {comoPeriodo(intervalo, { ano: true })}</>
           )}
-          , divididas entre <strong>{v.maquinas} máquina(s)</strong> do grupo.
+          , {u.feminina ? 'divididas' : 'divididos'} entre <strong>{v.maquinas} máquina(s)</strong> do grupo.
         </p>
       </div>
 
@@ -232,10 +239,10 @@ export default function PainelDemanda({
           <div style={est.comparativoRotulo}>Exigido por máquina</div>
           <div style={est.comparativoValor}>
             {Math.round(v.pecasPorHoraMaquina)}
-            <span style={est.comparativoUnidade}>pç/h</span>
+            <span style={est.comparativoUnidade}>{u.abrev}/h</span>
           </div>
           <div style={est.comparativoSub}>
-            {porMinuto(v.pecasPorHoraMaquina)} pç/min · takt {(v.taktMs / 1000).toFixed(1)}s por peça
+            {porMinuto(v.pecasPorHoraMaquina)} {u.abrev}/min · takt {(v.taktMs / 1000).toFixed(1)}s por {u.singular}
           </div>
           <div style={est.comparativoSub}>
             o ritmo que a demanda pede de cada máquina, hora de relógio
@@ -246,14 +253,14 @@ export default function PainelDemanda({
           <div style={est.comparativoRotulo}>Entregue no relógio</div>
           <div style={est.comparativoValor}>
             {Math.round(v.ritmoRelogio)}
-            <span style={est.comparativoUnidade}>pç/h</span>
+            <span style={est.comparativoUnidade}>{u.abrev}/h</span>
           </div>
           <div style={est.comparativoSub}>
-            {porMinuto(v.ritmoRelogio)} pç/min · medido no período observado
+            {porMinuto(v.ritmoRelogio)} {u.abrev}/min · medido no período observado
           </div>
           <div style={est.comparativoSub}>
             {paradaAlemDoSetup
-              ? `${Math.round(v.ritmoRodando)} pç/h com a máquina rodando — a diferença é tempo parado`
+              ? `${Math.round(v.ritmoRodando)} ${u.abrev}/h com a máquina rodando — a diferença é tempo parado`
               : (soSetupMarcado
                 ? 'a única parada marcada foi troca/setup, já contada no setup planejado'
                 : 'sem parada marcada no período: é também o ritmo com a máquina rodando')}
@@ -395,7 +402,7 @@ function cobertura(programa) {
   return ` Cadastradas: ${programa.n} semanas, ${faixaDoPrograma(programa)}.`;
 }
 
-function explicacao(estado, semana, demanda, grupoNome, programa, medicao, daPlanilha) {
+function explicacao(estado, semana, demanda, grupoNome, programa, medicao, daPlanilha, u = unidadeDoPosto(grupoNome)) {
   if (estado === 'varios-grupos') {
     /**
      * O quadro SUMIA calado quando a tela misturava grupos, e quem nunca
@@ -440,9 +447,9 @@ function explicacao(estado, semana, demanda, grupoNome, programa, medicao, daPla
     // dizer "as medicoes em tela" quando nao ha' nenhuma e' afirmar o que
     // a tela mostra que nao existe.
     return medicao
-      ? `Há ${quanto} peças programadas e a jornada do grupo está informada, mas as medições em tela não dão ritmo nenhum para comparar. Sem ritmo medido não há veredito — e inventar um a partir do programa seria comparar a demanda com ela mesma.`
-      : `Há ${quanto} peças programadas nesta semana, mas não há medição em tela para comparar. O veredito aparece quando houver conferência no período — sem medição, o número acima é só o programa.`;
+      ? `Há ${quanto} ${programadas(u)} e a jornada do grupo está informada, mas as medições em tela não dão ritmo nenhum para comparar. Sem ritmo medido não há veredito — e inventar um a partir do programa seria comparar a demanda com ela mesma.`
+      : `Há ${quanto} ${programadas(u)} nesta semana, mas não há medição em tela para comparar. O veredito aparece quando houver conferência no período — sem medição, o número acima é só o programa.`;
   }
   const qual = semana?.dias != null ? `a ${nomeDaSemana(semana)}` : (semana?.chave ?? 'a semana');
-  return `Há ${demanda?.toLocaleString('pt-BR') ?? ''} peças programadas para ${qual}, mas o grupo não tem horas por semana informadas. Sem elas não há ritmo exigido: jornada é decisão de turno, e não presumo nenhuma.`;
+  return `Há ${demanda?.toLocaleString('pt-BR') ?? ''} ${programadas(u)} para ${qual}, mas o grupo não tem horas por semana informadas. Sem elas não há ritmo exigido: jornada é decisão de turno, e não presumo nenhuma.`;
 }

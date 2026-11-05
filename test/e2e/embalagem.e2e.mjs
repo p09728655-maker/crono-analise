@@ -1076,7 +1076,7 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
     'sem os dias de producao: o Tempo disponivel vem aberto, com o campo a vista');
   checar(/Nas semanas lidas da planilha, o takt também precisa dos dias de produção/.test(await demanda.innerText()),
     'sem os dias de producao: o programa gravado diz o que falta');
-  checar(/^1 semana inteira, a 002-26, com 2\.200 peças \(fora 1 da planilha, que sem os dias de produção do grupo não se sabe se é inteira\)/.test(resumo.replace(/\s+/g, ' '))
+  checar(/^1 semana inteira, a 002-26, com 2\.200 volumes \(fora 1 da planilha, que sem os dias de produção do grupo não se sabe se é inteira\)/.test(resumo.replace(/\s+/g, ' '))
     && !/só em parte/.test(resumo),
   `sem os dias de producao: o resumo diz por que a semana da planilha ficou de fora (${resumo.replace(/\s+/g, ' ')})`);
   await ctx.close();
@@ -1478,6 +1478,74 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   checar(/sem rede/i.test(texto2) && !/não cobre a semana/.test(texto2) && !/sem programa para comparar/.test(texto2),
     `sem rede: o resultado diz que falta rede, nao que falta programa (${texto2.slice(0, 220)})`);
   await ctx2.close();
+}
+
+/* ------- Ritmo por maquina: a EMBALAGEM fala em VOLUMES (v2.100.2) */
+{
+  /* Pedido do PCP com print: o cartao da EMBALAGEM 01 dizia "peças por
+     hora" e o quadro do programa "8.500 peças", "209 pç/h". Na embalagem o
+     programa e o ritmo sao em volumes — "peças" convidava a colar produtos.
+     Uma medicao de hoje: 2 h, 400 volumes, sem parada -> 200 vol/h. */
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  const erros = [];
+  s.on('pageerror', (e) => erros.push(e.message));
+  const fim = new Date();
+  const inicio = new Date(fim.getTime() - 2 * 3600000);
+  await simularServidor(s, {
+    // Como a API real devolve: a maquina com o codigo e o nome do grupo — e'
+    // por eles que o relatorio sabe o grupo de cada cartao (useConferencias).
+    cadastro: { maquinas: [{ ...MAQUINA, grupo_codigo: GRUPO.codigo, grupo_nome: GRUPO.nome }], grupos: [GRUPO] },
+    conferencias: [{
+      id: 'r1', maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6',
+      iniciado_em: inicio.toISOString(), finalizado_em: fim.toISOString(), salvo_em: fim.toISOString(),
+      duracao_ms: 2 * 3600000, pecas: 400, ciclos_por_peca: 1, arquivada: false, paradas: [], com_marcas: false,
+    }],
+  });
+  await s.goto(`${BASE}/analise/conferencias`);
+  const cartoes = s.locator('[aria-label="Resumo por máquina"]');
+  await cartoes.waitFor({ timeout: 10000 });
+  const textoCartao = (await cartoes.innerText()).replace(/\s+/g, ' ');
+  checar(/200 volumes por hora/.test(textoCartao) && /400 volumes/.test(textoCartao) && !/peças/.test(textoCartao),
+    `Ritmo por maquina: o cartao da EMBALAGEM 01 fala em volumes (${textoCartao.slice(0, 120)})`);
+  // Os numeros do topo somam maquinas: so' a embalagem na tela, volumes.
+  const textoKpis = (await s.locator('[aria-label="Resumo do período"]').innerText()).replace(/\s+/g, ' ');
+  checar(/200 vol\/h/.test(textoKpis) && /volumes por minuto/.test(textoKpis) && /400 volumes/.test(textoKpis)
+    && !/pç|peças/.test(textoKpis),
+    `Ritmo por maquina: so a embalagem na tela, o topo fala em volumes (${textoKpis.slice(0, 140)})`);
+  const quadro = s.locator('[aria-label="Programa da semana"]');
+  await quadro.getByText(/O programa da semana/).waitFor({ timeout: 10000 });
+  const textoQuadro = (await quadro.innerText()).replace(/\s+/g, ' ');
+  checar(/2\.200 volumes programados/.test(textoQuadro) && /divididos entre/.test(textoQuadro)
+    && /vol\/h/.test(textoQuadro) && /por volume/.test(textoQuadro) && !/pç\//.test(textoQuadro) && !/peças/.test(textoQuadro),
+    `Ritmo por maquina: o programa da EMBALAGEM em volumes (${textoQuadro.slice(0, 160)})`);
+  checar(erros.length === 0, `Ritmo por maquina da embalagem: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+{
+  /* TEMPO PARADO com parada que nao e' troca/setup: o cartao dizia "7 min"
+     e, embaixo, "nenhuma parada marcada" (achado no print de 05/11). */
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  const fim = new Date();
+  await simularServidor(s, {
+    cadastro: { maquinas: [{ ...MAQUINA, grupo_codigo: GRUPO.codigo, grupo_nome: GRUPO.nome }], grupos: [GRUPO] },
+    conferencias: [{
+      id: 'r2', maquina: 'EMBALAGEM 01', peca: 'Rack Sirius 1.6',
+      iniciado_em: new Date(fim.getTime() - 3600000).toISOString(), finalizado_em: fim.toISOString(),
+      salvo_em: fim.toISOString(), duracao_ms: 3600000, pecas: 150, ciclos_por_peca: 1, arquivada: false,
+      paradas: [{ motivo: 'falta-material', duracao_ms: 420000 }], com_marcas: false,
+    }],
+  });
+  await s.goto(`${BASE}/analise/conferencias`);
+  const kpis = s.locator('[aria-label="Resumo do período"]');
+  await kpis.waitFor({ timeout: 10000 });
+  const texto = (await kpis.innerText()).replace(/\s+/g, ' ');
+  checar(/TEMPO PARADO 7 min nenhuma em troca\/setup/i.test(texto) && !/nenhuma parada marcada/.test(texto),
+    `TEMPO PARADO com parada marcada nao diz "nenhuma parada marcada" (${texto.slice(0, 200)})`);
+  await ctx.close();
 }
 
 await navegador.close();
