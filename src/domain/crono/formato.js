@@ -129,6 +129,7 @@ export function unidadeDoPosto(grupo) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLocaleLowerCase('pt-BR');
   return nome.includes('embalagem')
-    ? { singular: 'volume', plural: 'volumes', abrev: 'vol', comArtigo: 'um volume' }
-    : { singular: 'peça', plural: 'peças', abrev: 'pç', comArtigo: 'uma peça' };
+    // `feminina`: "peças programadas", "volumes programados" (v2.100.2).
+    ? { singular: 'volume', plural: 'volumes', abrev: 'vol', comArtigo: 'um volume', feminina: false }
+    : { singular: 'peça', plural: 'peças', abrev: 'pç', comArtigo: 'uma peça', feminina: true };
 }

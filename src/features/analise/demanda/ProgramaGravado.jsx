@@ -34,6 +34,8 @@ import { est } from './estilos.js';
 export default function ProgramaGravado({
   semanas, horasNum, maquinasDoGrupo, setupHoras, ocupado, aoApagarSemana, aoApagarTudo,
   somenteLeitura = false, apagarTudo: podeApagarTudo = true, diasDaJornada = null,
+  // A unidade do grupo (unidadeDoPosto): volumes na embalagem (v2.100.2).
+  unidade = { singular: 'peça', plural: 'peças', abrev: 'pç' },
 }) {
   const comDias = (semanas || []).some((s) => s.dias != null);
   const apagavel = (s) => !somenteLeitura || s.dias == null;
@@ -76,7 +78,7 @@ export default function ProgramaGravado({
       {resumo?.n === 1 && (
         <p style={est.blocoTexto}>
           1 semana{deFora.length > 0 && ' inteira'}, a {nomeDaSemana(resumo.primeira)}, com{' '}
-          {resumo.primeira.pecas.toLocaleString('pt-BR')} peças
+          {resumo.primeira.pecas.toLocaleString('pt-BR')} {unidade.plural}
           {deFora.length > 0 && ` (fora ${deFora.join(' e ')})`}.
         </p>
       )}
@@ -84,7 +86,7 @@ export default function ProgramaGravado({
         <p style={est.blocoTexto}>
           {resumo.n} semanas{deFora.length > 0 && ' inteiras'}, {faixaDeSemanas(resumo.primeira, resumo.ultima)}
           {deFora.length > 0 && ` (fora ${deFora.join(' e ')})`}.
-          Média de <strong>{Math.round(resumo.media).toLocaleString('pt-BR')}</strong> peças,
+          Média de <strong>{Math.round(resumo.media).toLocaleString('pt-BR')}</strong> {unidade.plural},
           variação de <strong>{resumo.cvPct.toFixed(1)}%</strong> —
           da menor ({nomeDaSemana(resumo.menor)}, {resumo.menor.pecas.toLocaleString('pt-BR')})
           para a maior ({nomeDaSemana(resumo.maior)}, {resumo.maior.pecas.toLocaleString('pt-BR')})
@@ -100,16 +102,16 @@ export default function ProgramaGravado({
               <th style={est.th} title="Os dias que essa semana do programa cobre na fábrica">
                 Período
               </th>
-              <th style={est.thNum}>Peças</th>
+              <th style={est.thNum}>{unidade.plural.charAt(0).toUpperCase()}{unidade.plural.slice(1)}</th>
               {comDias && (
                 <th style={est.thNum} title="Dias com lote programado na semana: as horas do takt são as desses dias">
                   Dias
                 </th>
               )}
-              <th style={est.thNum} title="Peças por hora que cada máquina do grupo precisa fazer">
+              <th style={est.thNum} title={`${unidade.plural.charAt(0).toUpperCase()}${unidade.plural.slice(1)} por hora que cada máquina do grupo precisa fazer`}>
                 Exigido por máquina
               </th>
-              <th style={est.thNum} title="Tempo que cada máquina tem para cada peça">Takt</th>
+              <th style={est.thNum} title={`Tempo que cada máquina tem para cada ${unidade.singular}`}>Takt</th>
               {comAcoes && <th style={est.th} aria-label="Ações" />}
             </tr>
           </thead>
@@ -136,7 +138,7 @@ export default function ProgramaGravado({
                     </td>
                   )}
                   <td style={est.tdNum}>
-                    {r ? `${Math.round(r.pecasPorHoraMaquina).toLocaleString('pt-BR')} pç/h` : '—'}
+                    {r ? `${Math.round(r.pecasPorHoraMaquina).toLocaleString('pt-BR')} ${unidade.abrev}/h` : '—'}
                   </td>
                   <td style={est.tdNum}>{r ? `${(r.taktMs / 1000).toFixed(1)}s` : '—'}</td>
                   {comAcoes && (

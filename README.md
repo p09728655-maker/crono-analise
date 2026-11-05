@@ -169,7 +169,8 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   lado da lista (abaixo dela, em tela estreita), com identificação, cinco
   cartões (volumes, **tempo por volume no período**, **tempo por volume com a
   linha rodando**, paradas marcadas, **lacunas**), o gráfico do intervalo de
-  cada volume contra a linha do takt, a leitura em palavras e a folha A4 —
+  cada volume contra a linha do takt (o valor do takt e do "rodando" fica na
+  legenda, sem faixa de rótulos à direita, v2.100.2), a leitura em palavras e a folha A4 —
   **deitada** (v2.98), para o gráfico ter a largura do papel (1.000 px). O
   `@page` paisagem vai na `<style>` do portal da folha e só vale enquanto ela
   está montada; as outras folhas seguem em pé. O gráfico fica sempre na 1ª
@@ -357,7 +358,12 @@ separação é de trabalho, não de dado.
 ### Demanda semanal — o que o posto precisa entregar
 
 Na lateral do relatório, **Demanda semanal** guarda o programa do PCP por
-**grupo de máquina** (0002 FURADEIRA), uma linha por semana. Entra por
+**grupo de máquina** (0002 FURADEIRA), uma linha por semana. No grupo da
+embalagem a tela fala em **volumes** (campo, programa gravado, quadro do
+programa e cartão da máquina — v2.100.2). No Ritmo por máquina, o que soma
+máquinas (topo, custo da parada, análise em texto, gráficos, tabelas e folha)
+diz volumes só quando todas as máquinas na tela são da embalagem — a
+unidade sai de `useLeitura` (`unidade`); misturado com outro posto, peças. Entra por
 **colagem da planilha**: a tela lê as colunas `SEMANA`, `INÍCIO` e
 `TOTAL SEMANA`, ignora os totalizadores do rodapé e confere o total contra a
 soma dos lotes, avisando com os dois números quando não bate. Gravar

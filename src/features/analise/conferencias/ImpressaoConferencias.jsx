@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import {
   comparativoDeParadas, conferenciaRapida, faixaHoraria, formatarDuracao, ritmoPorHoraDoDia,
-  somarParadas,
+  somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
 import { comoPeriodo, diasProgramados } from '../../../domain/demandaSemanal.js';
 import { constanciaTexto, lerGrupo } from '../../../domain/comparativoMaquinas.js';
@@ -30,7 +30,15 @@ import { porMinuto, porPeca } from './formato.js';
 export default function ImpressaoConferencias({
   linhas, resumo, resumoPecas, grupoDe, nominalDe = () => null, escopo, analise, entreMaquinas,
   porCiclo, demanda, grupoNome,
+  // A unidade dos numeros que somam maquinas (a tela decide: volumes so'
+  // com todas as maquinas da embalagem). v2.100.2.
+  unidade: u = unidadeDoPosto(),
 }) {
+  // A unidade do programa: a do GRUPO dele (volumes na embalagem), como o
+  // quadro da tela (v2.100.2).
+  const unidadeDoPrograma = unidadeDoPosto(grupoNome);
+  // "Volumes"/"Peças" com maiuscula, para cabecalho de tabela e legenda.
+  const U = `${u.plural.charAt(0).toUpperCase()}${u.plural.slice(1)}`;
   // Grupos cobertos pelo periodo, na ordem dos codigos — vao na identificacao.
   const gruposCobertos = [...new Set(resumo.map((g) => grupoDe?.(g.maquina)).filter(Boolean))].sort();
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -87,7 +95,7 @@ export default function ImpressaoConferencias({
           ['Grupos de máquina', gruposCobertos.length ? gruposCobertos.join(' · ') : '—'],
           ['Período coberto', periodo],
           ['Medições', String(linhas.length)],
-          ['Total de peças', String(totalPecas)],
+          [`Total de ${u.plural}`, String(totalPecas)],
           ['Tempo rodando', formatarDuracao(totalProdutivoMs)],
           ['Tempo parado', totalParadaMs > 0
             ? `${formatarDuracao(totalParadaMs)}${totalSetupMs > 0 ? ` (troca/setup ${formatarDuracao(totalSetupMs)})` : ''}`
@@ -96,7 +104,7 @@ export default function ImpressaoConferencias({
             ? `${Math.round((totalProdutivoMs / totalMs) * 100)}% do período observado`
             : '—'],
           ['Ritmo médio', ritmoGeral != null
-            ? `${Math.round(ritmoGeral)} pç/h · ${porMinuto(ritmoGeral)} pç/min`
+            ? `${Math.round(ritmoGeral)} ${u.abrev}/h · ${porMinuto(ritmoGeral)} ${u.abrev}/min`
             : '—'],
         ].map(([k, v]) => (
           <div key={k} style={imp.campo}>
@@ -130,20 +138,20 @@ export default function ImpressaoConferencias({
             <div style={imp.comparativoCaixa}>
               <span style={imp.comparativoRotulo}>Exigido por máquina</span>
               <span style={imp.comparativoValor}>
-                {Math.round(demanda.veredito.pecasPorHoraMaquina)} pç/h
+                {Math.round(demanda.veredito.pecasPorHoraMaquina)} {unidadeDoPrograma.abrev}/h
               </span>
               <span style={imp.comparativoSub}>
-                takt {(demanda.veredito.taktMs / 1000).toFixed(1)}s por peça
+                takt {(demanda.veredito.taktMs / 1000).toFixed(1)}s por {unidadeDoPrograma.singular}
               </span>
             </div>
             <div style={imp.comparativoCaixa}>
               <span style={imp.comparativoRotulo}>Entregue no relógio</span>
               <span style={imp.comparativoValor}>
-                {Math.round(demanda.veredito.ritmoRelogio)} pç/h
+                {Math.round(demanda.veredito.ritmoRelogio)} {unidadeDoPrograma.abrev}/h
               </span>
               <span style={imp.comparativoSub}>
                 {demanda.paradas === 'outras' && demanda.veredito.ritmoRodando
-                  ? `${Math.round(demanda.veredito.ritmoRodando)} pç/h com a máquina rodando`
+                  ? `${Math.round(demanda.veredito.ritmoRodando)} ${unidadeDoPrograma.abrev}/h com a máquina rodando`
                   : (demanda.paradas === 'so-setup' ? 'só troca/setup marcado, já no planejado' : 'sem parada marcada no período')}
               </span>
             </div>
@@ -162,7 +170,8 @@ export default function ImpressaoConferencias({
             </div>
           </div>
           <p style={imp.comparativoNota}>
-            {demanda.demanda.toLocaleString('pt-BR')} peças programadas, divididas entre
+            {demanda.demanda.toLocaleString('pt-BR')} {unidadeDoPrograma.plural}
+            {unidadeDoPrograma.feminina ? ' programadas, divididas' : ' programados, divididos'} entre
             {' '}{demanda.veredito.maquinas} máquina(s) com
             {' '}{demanda.conta ? demanda.conta.texto.produtivas : Math.round(demanda.veredito.horasDisponiveis)} horas-máquina
             {demanda.setup && demanda.conta && !demanda.setup.zerado
@@ -201,21 +210,21 @@ export default function ImpressaoConferencias({
           <div style={imp.comparativoGrade}>
             <div style={imp.comparativoCaixa}>
               <span style={imp.comparativoRotulo}>Saiu no período</span>
-              <span style={imp.comparativoValor}>{comparativo.pecas} peças</span>
+              <span style={imp.comparativoValor}>{comparativo.pecas} {u.plural}</span>
               <span style={imp.comparativoSub}>
-                {Math.round(comparativo.ritmoPeriodo)} pç/h · {porMinuto(comparativo.ritmoPeriodo)} pç/min
+                {Math.round(comparativo.ritmoPeriodo)} {u.abrev}/h · {porMinuto(comparativo.ritmoPeriodo)} {u.abrev}/min
               </span>
             </div>
             <div style={imp.comparativoCaixa}>
               <span style={imp.comparativoRotulo}>Teria saído no mesmo tempo</span>
-              <span style={imp.comparativoValor}>{comparativo.potencial} peças</span>
+              <span style={imp.comparativoValor}>{comparativo.potencial} {u.plural}</span>
               <span style={imp.comparativoSub}>
-                {Math.round(comparativo.ritmoPotencial)} pç/h · {porMinuto(comparativo.ritmoPotencial)} pç/min
+                {Math.round(comparativo.ritmoPotencial)} {u.abrev}/h · {porMinuto(comparativo.ritmoPotencial)} {u.abrev}/min
               </span>
             </div>
             <div style={imp.comparativoCaixaDestaque}>
               <span style={imp.comparativoRotulo}>Deixou de sair</span>
-              <span style={imp.comparativoValor}>{comparativo.perdidas} peças</span>
+              <span style={imp.comparativoValor}>{comparativo.perdidas} {u.plural}</span>
               <span style={imp.comparativoSub}>
                 {Math.round(comparativo.ganhoPct)}% a mais no mesmo tempo
               </span>
@@ -237,12 +246,12 @@ export default function ImpressaoConferencias({
             <th style={imp.th}>Máquina</th>
             <th style={imp.th}>Grupo</th>
             <th style={imp.thNum}>Medições</th>
-            <th style={imp.thNum}>Peças</th>
+            <th style={imp.thNum}>{U}</th>
             <th style={imp.thNum}>Tempo rodando</th>
             <th style={imp.thNum}>Parado</th>
             <th style={imp.thNum}>Rodando %</th>
-            <th style={imp.thNum}>Peças/hora</th>
-            <th style={imp.thNum}>Peças/min</th>
+            <th style={imp.thNum}>{U}/hora</th>
+            <th style={imp.thNum}>{U}/min</th>
             {/* "(ciclos)" no cabecalho: a coluna vizinha e' em pecas, e
                 quem dividir pc/min pelo nominal numa peca de 2 ciclos
                 acharia outro numero. */}
@@ -309,6 +318,7 @@ export default function ImpressaoConferencias({
           <GraficoTendenciaPeriodo
             conferencias={linhas}
             resumo={resumo}
+            unidade={u}
             altura={130}
             larguraFixa={resumo.length > 1 ? 312 : 640}
             colunas={resumo.length > 1 ? 2 : 1}
@@ -341,7 +351,7 @@ export default function ImpressaoConferencias({
                   <tr>
                     <th style={imp.th}>Máquina</th>
                     <th style={imp.thNum}>Medições</th>
-                    <th style={imp.thNum}>Peças/hora</th>
+                    <th style={imp.thNum}>{U}/hora</th>
                     <th style={imp.thNum}>vs. líder</th>
                     {g.temCiclos && <th style={imp.thNum}>Ciclos/hora</th>}
                     <th style={imp.thNum}>Rodando %</th>
@@ -391,7 +401,7 @@ export default function ImpressaoConferencias({
                 <p style={{ ...imp.nota, margin: '5px 0 0' }}>
                   <strong>Mesma peça nas duas</strong> (comparação sem ressalva):{' '}
                   {g.duelos.map((d) => (
-                    `${d.peca} — ${d.linhas.map((l) => `${l.maquina} ${Math.round(l.ritmoMedio)} pç/h`).join(' x ')}`
+                    `${d.peca} — ${d.linhas.map((l) => `${l.maquina} ${Math.round(l.ritmoMedio)} ${u.abrev}/h`).join(' x ')}`
                     + `${d.empate ? ' (praticamente igual)' : ` (${d.lider.maquina} ${Math.round(d.difPct)}% mais rápido)`}`
                   )).join(' · ')}
                 </p>
@@ -441,10 +451,10 @@ export default function ImpressaoConferencias({
                   <tr>
                     <th style={imp.th}>Hora</th>
                     <th style={imp.thNum}>Medições</th>
-                    <th style={imp.thNum}>Peças</th>
+                    <th style={imp.thNum}>{U}</th>
                     <th style={imp.thNum}>Tempo rodando</th>
-                    <th style={imp.thNum}>Peças/hora</th>
-                    <th style={imp.thNum}>Peças/min</th>
+                    <th style={imp.thNum}>{U}/hora</th>
+                    <th style={imp.thNum}>{U}/min</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -479,10 +489,10 @@ export default function ImpressaoConferencias({
                 <th style={imp.thNum}>Acion.</th>
                 <th style={imp.th}>Furação</th>
                 <th style={imp.thNum}>Medições</th>
-                <th style={imp.thNum}>Peças</th>
+                <th style={imp.thNum}>{U}</th>
                 <th style={imp.thNum}>Tempo rodando</th>
-                <th style={imp.thNum}>Peças/hora</th>
-                <th style={imp.thNum}>Peças/min</th>
+                <th style={imp.thNum}>{U}/hora</th>
+                <th style={imp.thNum}>{U}/min</th>
                 <th style={imp.thNum}>Por peça</th>
                 {temPorAcion && <th style={imp.thNum}>Por acion.</th>}
               </tr>
@@ -509,7 +519,7 @@ export default function ImpressaoConferencias({
           </table>
           <p style={imp.nota}>
             ACION.: quantas vezes o motor é acionado para fazer uma peça. Peça de mais
-            acionamentos rende menos peças/hora sem a máquina estar mais lenta. POR PEÇA é o
+            acionamentos rende menos {u.plural}/hora sem a máquina estar mais lenta. POR PEÇA é o
             tempo cheio de uma peça — manuseio e furação juntos — medido COM A MÁQUINA
             RODANDO: quem for multiplicar por uma quantidade planejada precisa somar o tempo
             parado do posto, senão a carga sai menor que a realidade.
@@ -564,9 +574,9 @@ export default function ImpressaoConferencias({
             <th style={imp.th}>Horários</th>
             <th style={imp.thNum}>Período</th>
             <th style={imp.thNum}>Parado</th>
-            <th style={imp.thNum}>Peças</th>
-            <th style={imp.thNum}>Peças/hora</th>
-            <th style={imp.thNum}>Peças/min</th>
+            <th style={imp.thNum}>{U}</th>
+            <th style={imp.thNum}>{U}/hora</th>
+            <th style={imp.thNum}>{U}/min</th>
           </tr>
         </thead>
         <tbody>
@@ -612,17 +622,17 @@ export default function ImpressaoConferencias({
         <strong>Como ler este relatório</strong>
         <div style={imp.gradeLegenda}>
           {[
-            ['Medição', 'um período observado no posto: hora inicial, hora final e as peças produzidas.'],
+            ['Medição', `um período observado no posto: hora inicial, hora final e ${u.feminina === false ? 'os' : 'as'} ${u.plural} ${u.feminina === false ? 'produzidos' : 'produzidas'}.`],
             ['Período', 'tempo entre a hora inicial e a hora final.'],
             ['Parado', 'tempo em que a máquina não produziu dentro do período: troca/setup, falta de material, manutenção.'],
-            ['Peças/hora', 'quantas peças saem em uma hora com a máquina rodando.'],
-            ['Peças/min', 'o mesmo ritmo, em peças por minuto.'],
+            [`${U}/hora`, `${u.feminina === false ? 'quantos' : 'quantas'} ${u.plural} saem em uma hora com a máquina rodando.`],
+            [`${U}/min`, `o mesmo ritmo, em ${u.plural} por minuto.`],
             ['Por peça', 'tempo cheio de UMA peça no posto — manuseio e furação juntos — '
               + 'medido com a máquina rodando. Para planejar carga, some o tempo parado do posto.'],
-            ['Ritmo médio', 'total de peças dividido pelo tempo total com a máquina rodando.'],
+            ['Ritmo médio', `total de ${u.plural} dividido pelo tempo total com a máquina rodando.`],
             ['Máquina rodando', 'quanto do período observado a máquina passou produzindo. '
               + 'É a DISPONIBILIDADE do período — 100% menos o tempo parado.'],
-            ['Deixou de sair', 'peças que teriam saído no MESMO período se a máquina não tivesse '
+            ['Deixou de sair', `${u.plural} que teriam saído no MESMO período se a máquina não tivesse `
               + 'parado, ao ritmo que ela própria fez rodando. Não é meta nem capacidade de catálogo.'],
             ['Grupo', 'grupo do cadastro de máquinas, com o código da fábrica (ex: 0002 · FURADEIRA).'],
             ['Do nominal', 'quanto do ritmo de catálogo do fabricante (ciclos por minuto, do cadastro) a máquina '

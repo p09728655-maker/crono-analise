@@ -1,4 +1,4 @@
-import { formatarDuracao } from '../../../domain/cronoanalise.js';
+import { formatarDuracao, unidadeDoPosto } from '../../../domain/cronoanalise.js';
 import { est } from './estilos.js';
 import { porMinuto } from './formato.js';
 
@@ -15,7 +15,9 @@ import { porMinuto } from './formato.js';
  * parada): sem parada, o que saiu ja' E' o potencial, e o quadro viraria
  * enfeite. Quem decide isso e' quem chama.
  */
-export default function ComparativoParadas({ comparativo, resumo, escopo }) {
+export default function ComparativoParadas({
+  comparativo, resumo, escopo, unidade: u = unidadeDoPosto(),
+}) {
   return (
     <section style={est.comparativo} aria-label="Comparativo com e sem parada">
       <div style={est.comparativoTopo}>
@@ -46,10 +48,10 @@ export default function ComparativoParadas({ comparativo, resumo, escopo }) {
           <div style={est.comparativoRotulo}>Saiu no período</div>
           <div style={est.comparativoValor}>
             {comparativo.pecas}
-            <span style={est.comparativoUnidade}>peças</span>
+            <span style={est.comparativoUnidade}>{u.plural}</span>
           </div>
           <div style={est.comparativoSub}>
-            {Math.round(comparativo.ritmoPeriodo)} pç/h · {porMinuto(comparativo.ritmoPeriodo)} pç/min
+            {Math.round(comparativo.ritmoPeriodo)} {u.abrev}/h · {porMinuto(comparativo.ritmoPeriodo)} {u.abrev}/min
           </div>
           <div style={est.comparativoSub}>
             com {formatarDuracao(comparativo.paradaMs)} de máquina parada dentro do período
@@ -60,10 +62,10 @@ export default function ComparativoParadas({ comparativo, resumo, escopo }) {
           <div style={est.comparativoRotulo}>Teria saído no mesmo tempo</div>
           <div style={est.comparativoValor}>
             {comparativo.potencial}
-            <span style={est.comparativoUnidade}>peças</span>
+            <span style={est.comparativoUnidade}>{u.plural}</span>
           </div>
           <div style={est.comparativoSub}>
-            {Math.round(comparativo.ritmoPotencial)} pç/h · {porMinuto(comparativo.ritmoPotencial)} pç/min
+            {Math.round(comparativo.ritmoPotencial)} {u.abrev}/h · {porMinuto(comparativo.ritmoPotencial)} {u.abrev}/min
           </div>
           <div style={est.comparativoSub}>
             o ritmo de cada máquina rodando ({formatarDuracao(comparativo.produtivoMs)} no
@@ -75,7 +77,7 @@ export default function ComparativoParadas({ comparativo, resumo, escopo }) {
           <div style={est.comparativoRotuloDestaque}>Deixou de sair</div>
           <div style={est.comparativoValorDestaque}>
             {comparativo.perdidas}
-            <span style={est.comparativoUnidade}>peças</span>
+            <span style={est.comparativoUnidade}>{u.plural}</span>
           </div>
           <div style={est.comparativoSubDestaque}>
             {Math.round(comparativo.ganhoPct)}% a mais de produção no mesmo tempo

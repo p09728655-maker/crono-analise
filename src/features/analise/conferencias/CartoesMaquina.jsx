@@ -1,4 +1,4 @@
-import { formatarDuracao } from '../../../domain/cronoanalise.js';
+import { formatarDuracao, unidadeDoPosto } from '../../../domain/cronoanalise.js';
 import { aproveitamentoDoNominal, formatarNominal } from '../../../domain/relatorioConferencias.js';
 import { est } from './estilos.js';
 import { porMinuto } from './formato.js';
@@ -15,7 +15,11 @@ import { porMinuto } from './formato.js';
 export default function CartoesMaquina({ resumo, grupoDe, nominalDe = () => null }) {
   return (
     <section style={est.resumoGrade} aria-label="Resumo por máquina">
-      {resumo.map((g) => (
+      {resumo.map((g) => {
+        // A unidade do GRUPO da maquina: a EMBALAGEM 01 conta volumes, nao
+        // pecas (v2.100.2). Maquina sem grupo segue em pecas.
+        const u = unidadeDoPosto(grupoDe(g.maquina));
+        return (
         <div key={g.maquina} style={est.cartaoMaquina}>
           <div style={est.cartaoTopo}>
             <div style={est.cartaoTitulo}>
@@ -25,11 +29,11 @@ export default function CartoesMaquina({ resumo, grupoDe, nominalDe = () => null
           </div>
           <div style={est.cartaoRitmo}>
             {Math.round(g.ritmoMedio)}
-            <span style={est.cartaoRitmoSufixo}>peças por hora</span>
+            <span style={est.cartaoRitmoSufixo}>{u.plural} por hora</span>
           </div>
-          <div style={est.cartaoRitmoMinuto}>{porMinuto(g.ritmoMedio)} peças por minuto</div>
+          <div style={est.cartaoRitmoMinuto}>{porMinuto(g.ritmoMedio)} {u.plural} por minuto</div>
           <div style={est.cartaoLinhas}>
-            <span>{g.n} medição(ões) · {g.totalPecas} peças · {formatarDuracao(g.totalProdutivoMs)} rodando</span>
+            <span>{g.n} medição(ões) · {g.totalPecas} {u.plural} · {formatarDuracao(g.totalProdutivoMs)} rodando</span>
             {/* O percentual ja' vem pronto de resumirConferencias
                 (disponibilidadePct) — a tela nao refaz a conta. Sem parada
                 marcada seria sempre 100%, e a linha viraria ruido: por isso
@@ -45,8 +49,8 @@ export default function CartoesMaquina({ resumo, grupoDe, nominalDe = () => null
             )}
             {g.n >= 2 && g.melhor && (
               <span>
-                Melhor: {Math.round(g.melhor.ritmo)} pç/h{g.melhor.peca ? ` (${g.melhor.peca})` : ''}
-                {' · '}Pior: {Math.round(g.pior.ritmo)} pç/h{g.pior.peca ? ` (${g.pior.peca})` : ''}
+                Melhor: {Math.round(g.melhor.ritmo)} {u.abrev}/h{g.melhor.peca ? ` (${g.melhor.peca})` : ''}
+                {' · '}Pior: {Math.round(g.pior.ritmo)} {u.abrev}/h{g.pior.peca ? ` (${g.pior.peca})` : ''}
               </span>
             )}
             {/* O NOMINAL do fabricante, quando o cadastro tem: e' o unico
@@ -75,7 +79,8 @@ export default function CartoesMaquina({ resumo, grupoDe, nominalDe = () => null
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </section>
   );
 }

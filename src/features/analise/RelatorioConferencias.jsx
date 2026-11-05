@@ -221,6 +221,8 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const {
     visiveis, resumoVisivel, resumoPecasVisivel, analise, barrasDoFiltro, painel,
     curvaDoDia, comparativo, entreMaquinas, porCiclo, secoes,
+    // A unidade dos numeros que somam maquinas (ver useLeitura).
+    unidade: unidadeDaTela,
   } = leitura;
 
   const lote = loteDaMaquina({ filtro, visiveis, verArquivadas });
@@ -466,7 +468,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
 
           {estado === 'pronto' && linhasDoPeriodo.length > 0 && (
             <>
-              {!verArquivadas && painel && <KpisDoPeriodo painel={painel} />}
+              {!verArquivadas && painel && <KpisDoPeriodo painel={painel} unidade={unidadeDaTela} />}
 
               {/* O PROGRAMA DA SEMANA vem logo depois dos numeros do topo e
                   antes de tudo o mais: e' o unico quadro que responde "isso
@@ -491,7 +493,9 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               )}
 
               {!verArquivadas && comparativo && (
-                <ComparativoParadas comparativo={comparativo} resumo={resumoVisivel} escopo={escopo} />
+                <ComparativoParadas
+                  comparativo={comparativo} resumo={resumoVisivel} escopo={escopo} unidade={unidadeDaTela}
+                />
               )}
 
               <CartoesMaquina resumo={resumoVisivel} grupoDe={grupoDe} nominalDe={nominalDe} />
@@ -501,11 +505,12 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               {!verArquivadas && <RitmoPorCiclo classes={porCiclo.classes} mistas={porCiclo.mistas} />}
 
               {!verArquivadas && resumoPecasVisivel.length > 0 && (
-                <TabelaRitmoPorPeca resumoPecas={resumoPecasVisivel} />
+                <TabelaRitmoPorPeca resumoPecas={resumoPecasVisivel} unidade={unidadeDaTela} />
               )}
 
               {!verArquivadas && (
                 <GraficosRitmo
+                  unidade={unidadeDaTela}
                   resumo={resumoVisivel}
                   filtro={filtro}
                   barrasDoFiltro={barrasDoFiltro}
@@ -528,6 +533,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               )}
 
               <TabelaMedicoes
+                unidade={unidadeDaTela}
                 linhas={visiveis}
                 escopo={escopo}
                 filtro={filtro}
@@ -620,6 +626,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
 
       {estado === 'pronto' && linhasDoPeriodo.length > 0 && (
         <ImpressaoConferencias
+          unidade={unidadeDaTela}
           linhas={visiveis}
           resumo={resumoVisivel}
           resumoPecas={resumoPecasVisivel}

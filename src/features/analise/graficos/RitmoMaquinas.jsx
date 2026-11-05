@@ -27,12 +27,15 @@ export function GraficoRitmoMaquinas({
      aceita `rotulo` (padrao: maquina), `nota` (linha pequena sob o rotulo;
      padrao: aviso quando nao confiavel) e `chave` (padrao: maquina). */
   titulo = 'Ritmo por máquina',
-  subtitulo = 'Peças por hora com a máquina rodando',
+  subtitulo: subtituloDado = null,
   rotuloOk = 'Ritmo medido',
   rotuloFraco = 'Ainda em medição',
   notaFraca = 'ainda em medição',
+  // A unidade da tela (v2.100.2): "volumes por hora" com so' a embalagem.
+  unidade: u = { singular: 'peça', plural: 'peças', abrev: 'pç' },
 }) {
   const id = useId().replace(/:/g, '');
+  const subtitulo = subtituloDado ?? `${u.plural.charAt(0).toUpperCase()}${u.plural.slice(1)} por hora com a máquina rodando`;
   const [refContainer, larguraContainer] = useLarguraContainer(360);
 
   if (!maquinas?.length) return <VazioGrafico texto="Sem conferências para comparar." />;
@@ -76,7 +79,7 @@ export function GraficoRitmoMaquinas({
           height={altura}
           style={{ maxWidth: '100%', height: altura, display: 'block' }}
           role="img"
-          aria-label={`${titulo}: ${maquinas.length} barra(s), em peças por hora`}
+          aria-label={`${titulo}: ${maquinas.length} barra(s), em ${u.plural} por hora`}
         >
           <Texturas id={id} />
 

@@ -15,7 +15,7 @@
  */
 import { useMemo } from 'react';
 import {
-  comparativoDeParadas, resumirConferencias, ritmoPorHoraDoDia,
+  comparativoDeParadas, resumirConferencias, ritmoPorHoraDoDia, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
 import { analisarConferencias } from '../../../domain/analiseConferencias.js';
 import { compararMaquinas } from '../../../domain/comparativoMaquinas.js';
@@ -49,11 +49,21 @@ export function useLeitura({ linhas, filtro, grupo, mapaGrupos, grupoDe }) {
     [resumoPecas, filtro, grupo, mapaGrupos],
   );
 
+  /* A UNIDADE DA TELA (v2.100.2): "volumes" so' quando TODAS as maquinas
+     visiveis sao da embalagem. Os numeros que somam maquinas (topo, custo
+     da parada, tabela, graficos, a leitura em texto e a folha) usam esta;
+     o cartao de cada maquina usa a do grupo dela. Com postos misturados a
+     soma nao e' de uma coisa so', e fica "peças", o nome geral. */
+  const unidade = useMemo(() => {
+    const us = new Set(resumoVisivel.map((g) => unidadeDoPosto(grupoDe(g.maquina)).singular));
+    return unidadeDoPosto(us.size === 1 && us.has('volume') ? 'embalagem' : '');
+  }, [resumoVisivel, mapaGrupos]);
+
   const analise = useMemo(
     () => analisarConferencias({
-      maquinas: resumoVisivel, pecas: resumoPecasVisivel, conferencias: visiveis, grupoDe,
+      maquinas: resumoVisivel, pecas: resumoPecasVisivel, conferencias: visiveis, grupoDe, unidade,
     }),
-    [resumoVisivel, resumoPecasVisivel, visiveis, mapaGrupos],
+    [resumoVisivel, resumoPecasVisivel, visiveis, mapaGrupos, unidade],
   );
 
   const barrasDoFiltro = useMemo(() => barrasPorMedicao(visiveis, filtro), [filtro, visiveis]);
@@ -108,7 +118,7 @@ export function useLeitura({ linhas, filtro, grupo, mapaGrupos, grupoDe }) {
   );
 
   return {
-    resumo, visiveis, resumoVisivel, resumoPecasVisivel, analise, barrasDoFiltro, painel,
+    unidade, resumo, visiveis, resumoVisivel, resumoPecasVisivel, analise, barrasDoFiltro, painel,
     curvaDoDia, comparativo, entreMaquinas, porCiclo, secoes,
   };
 }
