@@ -13,6 +13,14 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.101.1',
+    data: '2026-11-05',
+    titulo: 'Gráfico do volume a volume: o takt se vê',
+    itens: [
+      'A LINHA DO TAKT FICOU MAIS FORTE: 3 px, com traços longos, por cima das barras. Com o takt (15,4 s) quase em cima do ritmo com a linha rodando (15,2 s), o tracejado e o pontilhado — os dois finos — viravam um borrão e nenhum se lia. O takt é a referência do gráfico e agora é a linha que se vê primeiro; a do ritmo rodando ficou fina e cinza, de apoio, e o valor dela continua na legenda. Na tela, no tablet e na folha.',
+    ],
+  },
+  {
     versao: '2.101.0',
     data: '2026-11-05',
     titulo: 'Tempo de cada semana, editar o programa, e o período no gráfico',
