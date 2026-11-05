@@ -22,7 +22,12 @@
  * dela usam as horas so' desses dias (fracaoDaSemana) — os mesmos numeros
  * do takt da medicao. A coluna so' aparece quando alguma semana os traz. Os
  * dias da jornada sao os DIGITADOS em Tempo disponivel, como as horas e o
- * setup: a tabela mostra o efeito do numero antes de salvar.
+ * setup: a tabela mostra o efeito do numero antes de salvar. A semana
+ * DIGITADA tambem pode ter dias (v2.101.0: feriado), com o mesmo efeito.
+ *
+ * EDITAR (v2.101.0): a semana digitada ou colada tem "Editar", que a leva
+ * ao formulario de Incluir uma semana com os valores gravados. A da
+ * planilha nao: so' a planilha a muda.
  */
 import { useMemo, useState } from 'react';
 import {
@@ -36,8 +41,13 @@ export default function ProgramaGravado({
   somenteLeitura = false, apagarTudo: podeApagarTudo = true, diasDaJornada = null,
   // A unidade do grupo (unidadeDoPosto): volumes na embalagem (v2.100.2).
   unidade = { singular: 'peça', plural: 'peças', abrev: 'pç' },
+  // Leva a semana ao formulario (DemandaSemanal). Sem ele, sem o botao.
+  aoEditar = null,
 }) {
-  const comDias = (semanas || []).some((s) => s.dias != null);
+  // A coluna Dias: semana da planilha ou digitada com feriado (v2.101.0).
+  const comDias = (semanas || []).some((s) => s.dias != null || s.diasProducao != null);
+  const daPlanilha = (semanas || []).some((s) => s.dias != null);
+  const editavel = (s) => Boolean(aoEditar) && !somenteLeitura && s.dias == null;
   const apagavel = (s) => !somenteLeitura || s.dias == null;
   const comAcoes = (semanas || []).some(apagavel);
   const [confirmarLimpeza, setConfirmarLimpeza] = useState(false);
@@ -143,6 +153,15 @@ export default function ProgramaGravado({
                   <td style={est.tdNum}>{r ? `${(r.taktMs / 1000).toFixed(1)}s` : '—'}</td>
                   {comAcoes && (
                     <td style={est.tdAcoes}>
+                      {editavel(s) && (
+                        <button
+                          type="button" style={est.botaoTexto} disabled={ocupado}
+                          onClick={() => aoEditar(s)}
+                        >
+                          Editar
+                        </button>
+                      )}
+                      {editavel(s) && apagavel(s) && ' · '}
                       {apagavel(s) && (
                         <button
                           type="button" style={est.botaoTexto} disabled={ocupado}
@@ -167,8 +186,9 @@ export default function ProgramaGravado({
       )}
       {comDias && !(Number(diasDaJornada) > 0) && (
         <p style={est.blocoAviso}>
-          Nas semanas lidas da planilha, o takt também precisa dos dias de produção do
-          grupo: é com eles que se sabe que parte da semana são os dias programados.
+          {daPlanilha
+            ? 'Nas semanas lidas da planilha, o takt também precisa dos dias de produção do grupo: é com eles que se sabe que parte da semana são os dias programados.'
+            : 'Nas semanas com dias de produção informados, o takt também precisa dos dias de produção do grupo (Tempo disponível): é com eles que se sabe que parte da semana esses dias são.'}
         </p>
       )}
       {podeApagarTudo && (

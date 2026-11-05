@@ -82,13 +82,13 @@ function diaDaSemana(valor, campo) {
 const listar = (db, empresaId, grupoId) => (grupoId
   ? db`
     SELECT id, grupo_id, ano, numero, pecas,
-           to_char(inicio, 'YYYY-MM-DD') AS inicio, dias, atualizado_em
+           to_char(inicio, 'YYYY-MM-DD') AS inicio, dias, dias_producao AS "diasProducao", atualizado_em
       FROM demanda_semanal
      WHERE empresa_id = ${empresaId} AND grupo_id = ${grupoId}
      ORDER BY ano, numero`
   : db`
     SELECT id, grupo_id, ano, numero, pecas,
-           to_char(inicio, 'YYYY-MM-DD') AS inicio, dias, atualizado_em
+           to_char(inicio, 'YYYY-MM-DD') AS inicio, dias, dias_producao AS "diasProducao", atualizado_em
       FROM demanda_semanal
      WHERE empresa_id = ${empresaId}
      ORDER BY grupo_id, ano, numero`);
@@ -182,6 +182,13 @@ export async function demandaSemanal(req, res, auth) {
         // que alguem colou a coluna do acumulado do ano no lugar da semana.
         pecas: obrigatorio(s?.pecas, `semanas[${i}].pecas`, { min: 1, max: 10000000 }),
         inicio: diaDaSemana(s?.inicio, `semanas[${i}].inicio`),
+        /* OS DIAS DE PRODUCAO da semana (v2.101.0), opcionais. VIERAM no
+           pedido (a semana digitada sempre manda, numero ou null): gravam,
+           e null limpa. NAO vieram (a colagem nao tem a coluna): ficam os
+           que estavam — colar o programa de novo nao apaga o feriado que o
+           PCP ja' informou. */
+        diasInformados: Boolean(s) && Object.prototype.hasOwnProperty.call(s, 'diasProducao'),
+        diasProducao: inteiro(s?.diasProducao, `semanas[${i}].diasProducao`, { min: 1, max: 7 }),
       }));
 
       // Colagem com a mesma semana duas vezes: fica a ultima, como a tela
@@ -190,10 +197,13 @@ export async function demandaSemanal(req, res, auth) {
 
       for (const s of porSemana.values()) {
         await db`
-          INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas, inicio)
-          VALUES (${empresaId}, ${grupoId}, ${s.ano}, ${s.numero}, ${s.pecas}, ${s.inicio})
+          INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas, inicio, dias_producao)
+          VALUES (${empresaId}, ${grupoId}, ${s.ano}, ${s.numero}, ${s.pecas}, ${s.inicio},
+                  ${s.diasInformados ? s.diasProducao : null})
           ON CONFLICT (empresa_id, grupo_id, ano, numero)
           DO UPDATE SET pecas = EXCLUDED.pecas,
+                        dias_producao = CASE WHEN ${s.diasInformados}
+                          THEN EXCLUDED.dias_producao ELSE demanda_semanal.dias_producao END,
                         -- Colado e' a semana inteira: os dias que uma leitura
                         -- da planilha tinha gravado nao valem mais para ela.
                         dias = NULL,

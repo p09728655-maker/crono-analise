@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.101.0',
+    data: '2026-11-05',
+    titulo: 'Tempo de cada semana, editar o programa, e o período no gráfico',
+    itens: [
+      'DIAS DE PRODUÇÃO DA SEMANA. Em Demanda semanal, ao incluir ou alterar uma semana, informe os dias em que a linha trabalha (ex.: 4 na semana de Finados). O takt usa as horas e o setup só desses dias: 7.222 volumes em 4 de 5 dias dão 14,6 s por volume, e não os 18,2 s da semana inteira. Vazio é a semana inteira. Dia além da jornada (sábado de hora extra) não aumenta o tempo do takt.',
+      'EDITAR O PROGRAMA GRAVADO. Cada semana digitada ou colada tem "Editar": ela volta ao formulário com o que está gravado (volumes, início, dias), a semana travada, e "Salvar alteração" grava por cima. Antes era preciso apagar e digitar de novo. A semana lida da planilha do PCP continua só pela planilha.',
+      'SEM DIA REPETIDO ENTRE SEMANAS. A 038-26, que começou na terça 03/11, aparecia até 09/11 — o mesmo dia em que a 039-26 começa. Agora cada semana termina na véspera da seguinte (03/11 a 08/11). A medição de segunda já caía na semana certa; agora a tabela diz o mesmo.',
+      'GRÁFICO DO VOLUME A VOLUME: a linha do PERÍODO, com as paradas (contínua, a mais grossa), ao lado do takt (tracejada) e do ritmo com a linha rodando (pontilhada). Com ela o gráfico conta sozinho o que a leitura diz: rodando, a linha fica abaixo do takt; no período, com as paradas, fica acima. Na tela do PC, no resultado do tablet e na folha.',
+      'FOLHA IMPRESSA DA EMBALAGEM: letras 15% maiores, gráfico incluído (continua na 1ª página), e uma linha com o TEMPO DA SEMANA — "44 h de jornada − 3,3 h de setup = 40,7 h · programa de 8.500 volumes → takt 17,2 s por volume". Na semana com feriado, a linha diz os dias ("4 de 5 dias").',
+    ],
+  },
+  {
     versao: '2.100.2',
     data: '2026-11-05',
     titulo: 'Embalagem em volumes no relatório e na demanda; gráfico mais largo',

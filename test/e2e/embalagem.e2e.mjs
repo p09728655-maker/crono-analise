@@ -515,10 +515,23 @@ const tamanhoDoPdf = async () => {
       const barras = [...g.querySelectorAll('rect[fill]')].filter((r) => r.getAttribute('fill') !== 'transparent');
       return Math.round(caixa.right - Math.max(...barras.map((r) => r.getBoundingClientRect().right)));
     });
+    // A linha do PERIODO (v2.101.0): o numero do veredito, com as paradas,
+    // ao lado do takt e do rodando — o grafico conta a historia sozinho.
+    checar(/No período, com as paradas: \d+\.\d s/.test(legenda)
+      && await folha.locator('svg[aria-label^="Intervalo entre"] line[stroke-width="3"]').count() === 1,
+    'folha: a linha do periodo (com as paradas) esta no grafico e na legenda');
     checar(/Takt da semana: 72\.0 s/.test(legenda)
       && await folha.locator('svg[aria-label^="Intervalo entre"] text', { hasText: /^Takt/ }).count() === 0,
     'folha: o valor do takt esta na legenda, nao numa faixa ao lado do grafico');
     checar(sobra <= 30, `folha: as barras chegam ate perto da borda direita (sobram ${sobra} px; eram ~100)`);
+    /* O TEMPO DA SEMANA na folha (v2.101.0): a conta do takt por extenso.
+       Grupo de 44 h, sem setup, semana inteira: 44 x 3600 / 2200 = 72,0 s. */
+    const conta = (await folha.innerText()).replace(/\s+/g, ' ');
+    checar(/Tempo da semana \S+, por máquina: 44 h · programa de 2\.200 volumes → takt 72\.0 s por volume\./.test(conta),
+      `folha: o tempo da semana e a conta do takt (${(/Tempo da semana[^.]*\./.exec(conta) || ['nao achou'])[0]})`);
+    // A letra da folha cresceu (v2.101.0): o valor dos campos passa de 10,5 px.
+    const letra = await folha.evaluate((f) => parseFloat(getComputedStyle(f).fontSize));
+    checar(letra >= 12, `folha: letra maior (base ${letra} px; era 10.5)`);
   }
   if (FOTOS) writeFileSync(`${FOTOS}/pc-folha.pdf`, pdf);
   const fundo = await fundoDoGraficoNaFolha(p);
@@ -1614,6 +1627,96 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   checar(/150\s*volumes/.test(custo) && /vol\/h/.test(custo) && !/peças|pç/.test(custo),
     `"O que a parada custou" so da embalagem: em volumes (${custo.slice(0, 160)})`);
   await ctx.close();
+}
+
+/* ---- DIAS DE PRODUCAO da semana digitada e EDITAR o programa gravado (v2.101.0) */
+{
+  /* Pedido do PCP com print: a semana de Finados tem 4 dias e o takt dela
+     usava a jornada inteira; a 038-26 aparecia ate' 09/11, o dia em que a
+     039-26 comeca ("duplicando"); e alterar uma semana era apagar e
+     digitar de novo. Conta de mao (grupo de 44 h, 5 dias, sem setup):
+     2.200 volumes na semana inteira -> 44 x 3600 / 2200 = 72,0 s;
+     em 4 de 5 dias -> 35,2 x 3600 / 2200 = 57,6 s. */
+  const proxima = new Date(segunda.getTime() + 7 * 86400000);
+  let lista = [
+    { ...DEMANDAS[0], numero: 38, inicio: new Date(segunda.getTime() + 86400000).toISOString().slice(0, 10) },
+    { ...DEMANDAS[0], numero: 39, pecas: 3000, inicio: proxima.toISOString().slice(0, 10) },
+  ];
+  let pedido = null;
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  const erros = [];
+  s.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(s, {
+    cadastro: { maquinas: [{ ...MAQUINA, grupo_codigo: GRUPO.codigo, grupo_nome: GRUPO.nome }], grupos: [GRUPO] },
+  });
+  // O programa com POST: a semana gravada volta na lista, como a API faz.
+  await s.route('**/api/maquinas**', (rota) => {
+    const url = new URL(rota.request().url());
+    if (url.searchParams.get('demanda') !== '1') return rota.fallback();
+    if (rota.request().method() === 'POST') {
+      pedido = rota.request().postDataJSON();
+      const [nova] = pedido.semanas;
+      lista = lista.map((d) => (d.numero === nova.numero ? { ...d, ...nova } : d));
+      return rota.fulfill({ status: 201, json: { demandas: lista } });
+    }
+    return rota.fulfill({ json: { demandas: lista } });
+  });
+  await s.goto(`${BASE}/analise/conferencias`);
+  await s.getByRole('button', { name: 'Demanda semanal' }).click();
+  const janela = s.locator('[aria-label="Demanda semanal"]');
+  await janela.getByText('Programa gravado').waitFor({ timeout: 8000 });
+  const ddmm = (d) => `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  const linha38 = janela.locator('tr', { hasText: '038-26' });
+  const fim38 = new Date(proxima.getTime() - 86400000);
+  checar((await linha38.innerText()).includes(`a ${ddmm(fim38)}`) && !(await linha38.innerText()).includes(`a ${ddmm(proxima)}`),
+    `a 038-26 termina na vespera da 039-26 (${ddmm(fim38)}), sem o dia ${ddmm(proxima)} nas duas`);
+  checar(/72\.0s/.test(await linha38.innerText()), 'antes de editar: semana inteira, takt 72.0 s');
+
+  await linha38.getByRole('button', { name: 'Editar' }).click();
+  const semana = janela.locator('input[aria-label="Semana"]');
+  await semana.waitFor({ timeout: 4000 });
+  checar(await semana.inputValue() === '038-26' && await semana.isDisabled(),
+    'Editar traz a semana para o formulario, com a semana travada');
+  checar(await janela.locator('input[aria-label="Volumes"]').inputValue() === '2.200',
+    'Editar traz os volumes gravados');
+  await janela.locator('input[aria-label="Dias de produção"]').fill('4');
+  checar(/4 de 5 dias de produção/.test(await janela.innerText()), 'a previa diz 4 de 5 dias de producao');
+  await janela.getByRole('button', { name: 'Salvar alteração' }).click();
+  for (let i = 0; i < 40 && !pedido; i++) await s.waitForTimeout(100);
+  checar(pedido?.semanas?.length === 1 && pedido.semanas[0].numero === 38 && pedido.semanas[0].diasProducao === 4
+    && pedido.semanas[0].pecas === 2200,
+  `salvar alteracao manda a 038-26 com 4 dias (${JSON.stringify(pedido?.semanas)})`);
+  await janela.locator('tr', { hasText: '038-26' }).getByText('57.6s').waitFor({ timeout: 4000 });
+  checar(/4 de 5/.test(await janela.locator('tr', { hasText: '038-26' }).innerText()),
+    'depois de salvar: 038-26 com 4 de 5 dias e takt 57.6 s');
+  // Vazio de novo = a semana inteira: o pedido manda null, e nao omite.
+  pedido = null;
+  await janela.locator('tr', { hasText: '038-26' }).getByRole('button', { name: 'Editar' }).click();
+  // O formulario carrega a semana depois do clique: espera os 4 gravados
+  // aparecerem antes de apaga-los.
+  await s.waitForFunction(() => document.querySelector('input[aria-label="Dias de produção"]')?.value === '4', null, { timeout: 4000 });
+  checar(true, 'Editar traz os dias gravados (4)');
+  await janela.locator('input[aria-label="Dias de produção"]').fill('');
+  await janela.getByRole('button', { name: 'Salvar alteração' }).click();
+  for (let i = 0; i < 40 && !pedido; i++) await s.waitForTimeout(100);
+  checar(pedido?.semanas?.[0] && 'diasProducao' in pedido.semanas[0] && pedido.semanas[0].diasProducao === null,
+    'apagar os dias manda diasProducao null (volta a semana inteira)');
+  checar(erros.length === 0, `editar semana: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+
+  /* O TABLET usa os mesmos dias: a semana digitada com 4 dias da' 57,6 s. */
+  const ctx2 = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const t2 = await ctx2.newPage();
+  await semearSessao(t2);
+  await simularServidor(t2, { demandas: [{ ...DEMANDAS[0], diasProducao: 4 }] });
+  await t2.goto(`${BASE}/coleta/embalagem`);
+  const cartao = t2.locator('[aria-label="Takt da semana"]');
+  await cartao.getByText(/57\.6/).waitFor({ timeout: 8000 });
+  checar(/4 de 5 dias programados/.test(await cartao.innerText()),
+    `tablet: a semana digitada com 4 dias da 57.6 s e diz os dias (${(await cartao.innerText()).replace(/\s+/g, ' ')})`);
+  await ctx2.close();
 }
 
 await navegador.close();

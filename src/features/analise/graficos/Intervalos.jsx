@@ -61,7 +61,13 @@ export function GraficoIntervalos({
   // no tablet, v2.100.0) o espaco e' menor, e com o piso maior que ele o
   // desenho encolhia por inteiro, com letra miuda e faixas vazias.
   pisoLargura = 360,
+  /* LETRA MAIOR NO PAPEL (v2.101.0, pedido do PCP): a folha A4 deitada
+     passa 1,15 — titulo, legenda, eixos e valores crescem juntos, e a
+     colisao dos rotulos e o limite da borda usam o tamanho novo. A tela
+     segue em 1. */
+  escalaTexto = 1,
 }) {
+  const fs = (n) => Math.round(n * escalaTexto * 10) / 10;
   const id = useId().replace(/:/g, '');
   const [refContainer, larguraContainer] = useLarguraContainer(pisoLargura);
 
@@ -76,15 +82,25 @@ export function GraficoIntervalos({
   const takt = leitura.taktMs || 0;
   const mediaMs = leitura.suficiente ? leitura.mediaMs : 0;
   const normal = leitura.suficiente ? leitura.normalMs : 0;
+  /* O PERIODO (v2.101.0, pedido do PCP com print): o tempo por volume do
+     primeiro ao ultimo toque, COM as paradas — o numero do veredito. Com a
+     linha dele no grafico, a historia se le' sem texto: rodando abaixo do
+     takt, periodo acima — o que tira a linha do takt sao as paradas. */
+  const periodoMs = leitura.suficiente && leitura.periodoMs > 0 ? leitura.periodoMs : 0;
   const maior = Math.max(...intervalos);
-  const tetoDesejado = normal > 0 ? Math.max(normal * 3, mediaMs * 1.25, takt * 1.25) : 0;
+  const tetoDesejado = normal > 0 ? Math.max(normal * 3, mediaMs * 1.25, takt * 1.25, periodoMs * 1.15) : 0;
   const cortar = tetoDesejado > 0 && maior > tetoDesejado;
-  const maxY = cortar ? tetoDesejado : Math.max(maior, takt) * 1.12;
+  const maxY = cortar ? tetoDesejado : Math.max(maior, takt, periodoMs) * 1.12;
   const passoY = passoAgradavel(maxY / 1000) * 1000;
 
   const linhasDeReferencia = [
     takt > 0 && takt <= maxY && {
       chave: 'takt', ms: takt, nome: 'Takt', cor: referencia.linha, traco: referencia.traco, espessura: 2,
+    },
+    // Continua e mais grossa: no papel P&B se separa do takt (tracejado) e
+    // do rodando (pontilhado) pelo traco, nao pela cor.
+    periodoMs > 0 && periodoMs <= maxY && {
+      chave: 'periodo', ms: periodoMs, nome: 'No período', cor: claro.critico, traco: null, espessura: 3,
     },
     mediaMs > 0 && mediaMs <= maxY && {
       chave: 'media', ms: mediaMs, nome: 'Rodando', cor: claro.texto, traco: '2 3', espessura: 2,
@@ -131,7 +147,7 @@ export function GraficoIntervalos({
   // Valor escrito em cima: das lacunas e das barras cortadas no teto, as
   // maiores primeiro, sem dois no mesmo lugar (ver rotulos.js).
   const rotularValor = rotulosSemColisao(
-    destaques.map((x) => ({ chave: x.i, x: xCentro(x.i), largura: larguraDoTexto(emSegundos(x.ms)) })),
+    destaques.map((x) => ({ chave: x.i, x: xCentro(x.i), largura: larguraDoTexto(emSegundos(x.ms), fs(10.5)) })),
     { maximo: MAX_ROTULOS_VALOR },
   );
 
@@ -140,7 +156,7 @@ export function GraficoIntervalos({
   // depois os redondos a cada passo que caiba, por ultimo o primeiro
   // volume — o que encostaria num ja' escrito sai.
   const passoX = PASSOS_X.find((p) => p * banda >= ESPACO_ROTULO_X) || PASSOS_X[PASSOS_X.length - 1];
-  const candidatoX = (i) => ({ chave: i, x: xCentro(i), largura: larguraDoTexto(volumeDe(i)) });
+  const candidatoX = (i) => ({ chave: i, x: xCentro(i), largura: larguraDoTexto(volumeDe(i), fs(10.5)) });
   const comRotuloX = rotulosSemColisao([
     ...destaques.filter((x) => lacunas.has(x.i)).map((x) => candidatoX(x.i)),
     ...intervalos.map((_, i) => i).filter((i) => volumeDe(i) % passoX === 0).map(candidatoX),
@@ -172,9 +188,9 @@ export function GraficoIntervalos({
 
   return (
     <figure style={est.figura}>
-      <figcaption style={est.titulo}>
+      <figcaption style={escalaTexto === 1 ? est.titulo : { ...est.titulo, fontSize: fs(15) }}>
         Intervalo entre {unidade.plural}
-        <span style={est.subtitulo}>
+        <span style={escalaTexto === 1 ? est.subtitulo : { ...est.subtitulo, fontSize: fs(12) }}>
           Tempo de cada {unidade.singular} até {unidade.comArtigo.startsWith('uma') ? 'a seguinte' : 'o seguinte'},
           {' '}com a linha rodando — as paradas marcadas no cronômetro ficam fora
           {segs && '. As medições lado a lado, separadas por uma linha: o intervalo não passa de uma para a outra'}
@@ -182,6 +198,7 @@ export function GraficoIntervalos({
       </figcaption>
 
       <Legenda
+        estilo={escalaTexto === 1 ? null : { fontSize: fs(12) }}
         itens={[
           { rotulo: 'Intervalo', cor: serie.tn },
           {
@@ -190,11 +207,14 @@ export function GraficoIntervalos({
             hachura: `repeating-linear-gradient(45deg, ${serie.tolerancia} 0 3px, rgba(255,255,255,.55) 3px 5px)`,
           },
           ...linhasDeReferencia.map((r) => ({
-            rotulo: r.chave === 'media'
-              ? `Rodando — média dos intervalos: ${emSegundos(r.ms)}`
-              : `Takt da semana: ${emSegundos(r.ms)}`,
+            rotulo: {
+              media: `Rodando — média dos intervalos: ${emSegundos(r.ms)}`,
+              periodo: `No período, com as paradas: ${emSegundos(r.ms)}`,
+              takt: `Takt da semana: ${emSegundos(r.ms)}`,
+            }[r.chave],
             cor: r.cor,
-            linha: r.chave === 'media' ? 'dotted' : 'dashed',
+            linha: { media: 'dotted', periodo: 'solid', takt: 'dashed' }[r.chave],
+            espessura: r.espessura,
           })),
           ...(segs ? [{ rotulo: 'Início de outra medição', cor: claro.texto, linha: 'solid' }] : []),
         ]}
@@ -209,6 +229,7 @@ export function GraficoIntervalos({
           role="img"
           aria-label={`Intervalo entre ${unidade.plural}: ${n} intervalos`
             + `${mediaMs ? `, média de ${emSegundos(mediaMs)}` : ''}`
+            + `${periodoMs ? `, ${emSegundos(periodoMs)} no período com as paradas` : ''}`
             + `${takt ? `, takt de ${emSegundos(takt)}` : ''}`
             + `, ${lacunas.size} lacuna(s)`
             + `${segs ? `, em ${segs.length} medições` : ''}`}
@@ -224,7 +245,7 @@ export function GraficoIntervalos({
                 x1={margem.esq} x2={largura - margem.dir} y1={yDe(v)} y2={yDe(v)}
                 stroke={claro.borda} strokeWidth="1" strokeOpacity={v > 0 ? 0.7 : 0}
               />
-              <text x={margem.esq - 8} y={yDe(v) + 4} textAnchor="end" fontSize="11" fill={claro.textoMedio}>
+              <text x={margem.esq - 8} y={yDe(v) + 4} textAnchor="end" fontSize={fs(11)} fill={claro.textoMedio}>
                 {v > 0 ? tituloEixoY(v) : '0'}
               </text>
             </g>
@@ -270,8 +291,8 @@ export function GraficoIntervalos({
                 )}
                 {rotularValor.has(i) && (
                   <text
-                    x={xDoCentro(x + larguraBarra / 2, emSegundos(ms), 10.5)} y={y - 5} textAnchor="middle"
-                    fontSize="10.5" fontWeight="700" fill={lacuna ? COR_TEXTO_LACUNA : claro.texto}
+                    x={xDoCentro(x + larguraBarra / 2, emSegundos(ms), fs(10.5))} y={y - 5} textAnchor="middle"
+                    fontSize={fs(10.5)} fontWeight="700" fill={lacuna ? COR_TEXTO_LACUNA : claro.texto}
                     stroke={claro.papel} strokeWidth="3" paintOrder="stroke" pointerEvents="none"
                   >
                     {emSegundos(ms)}
@@ -291,7 +312,7 @@ export function GraficoIntervalos({
                   <line x1={xDivisa} x2={xDivisa} y1={margem.topo - 14} y2={base} stroke={claro.texto} strokeWidth="1.5" />
                 )}
                 <text
-                  x={xDoInicio(xDivisa + 4, x.rotulo, 11)} y={margem.topo - 18} fontSize="11" fontWeight="700" fill={claro.texto}
+                  x={xDoInicio(xDivisa + 4, x.rotulo, fs(11))} y={margem.topo - 18} fontSize={fs(11)} fontWeight="700" fill={claro.texto}
                   stroke={claro.papel} strokeWidth="3" paintOrder="stroke"
                 >
                   {x.rotulo}
@@ -334,7 +355,7 @@ export function GraficoIntervalos({
             <text
               key={`x${i}`}
               x={xCentro(i)} y={base + 17}
-              textAnchor="middle" fontSize="10.5"
+              textAnchor="middle" fontSize={fs(10.5)}
               fontWeight={lacunas.has(i) ? 700 : 400}
               fill={lacunas.has(i) ? COR_TEXTO_LACUNA : claro.textoMedio}
             >
@@ -343,7 +364,7 @@ export function GraficoIntervalos({
           ))}
           <text
             x={margem.esq + (largura - margem.esq - margem.dir) / 2} y={altura - 6}
-            textAnchor="middle" fontSize="11" fill={claro.textoMedio}
+            textAnchor="middle" fontSize={fs(11)} fill={claro.textoMedio}
           >
             {capital(unidade.singular)} nº{segs ? ', medição a medição' : ''}
           </text>

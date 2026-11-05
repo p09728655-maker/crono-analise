@@ -107,7 +107,10 @@ export function horasDeSetup({ setupsDia, dias, minutos } = {}) {
  */
 export function fracaoDaSemana(semana, diasDaJornada) {
   const daJornada = Number(diasDaJornada) > 0 ? Math.floor(Number(diasDaJornada)) : null;
-  const dias = Number(semana?.dias);
+  /* Os dias da PLANILHA (`dias`) ou, sem eles, os informados A' MAO na
+     semana digitada (`diasProducao`, v2.101.0) — a semana de Finados
+     digitada tambem tem 4 dias. A mesma regra para os dois. */
+  const dias = Number(semana?.dias ?? semana?.diasProducao);
   if (!(dias > 0)) return { fator: 1, programados: null, daJornada };
   if (!daJornada) return { fator: null, programados: Math.floor(dias), daJornada: null };
   const programados = Math.min(Math.floor(dias), daJornada);

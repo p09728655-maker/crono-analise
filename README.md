@@ -358,7 +358,16 @@ separação é de trabalho, não de dado.
 ### Demanda semanal — o que o posto precisa entregar
 
 Na lateral do relatório, **Demanda semanal** guarda o programa do PCP por
-**grupo de máquina** (0002 FURADEIRA), uma linha por semana. No grupo da
+**grupo de máquina** (0002 FURADEIRA), uma linha por semana. Desde a v2.101.0
+a semana digitada pode ter **dias de produção** (`demanda_semanal.dias_producao`,
+1 a 7; vazio = semana inteira): o takt usa as horas e o setup só desses dias,
+pela mesma regra dos dias da planilha (`fracaoDaSemana`; os da planilha, em
+`dias`, mandam quando existem). A coluna é separada de `dias` porque `dias`
+marca a semana lida da planilha, que não se edita nem se apaga. A colagem não
+traz dias e não mexe nos que já estão gravados; a semana digitada sempre manda
+o campo (número ou `null`, que limpa). Cada semana digitada tem **Editar**, que
+a leva ao formulário com a semana travada. O período de cada semana termina na
+véspera da seguinte (`periodosDoPrograma`), sem dia repetido entre duas. No grupo da
 embalagem a tela fala em **volumes** (campo, programa gravado, quadro do
 programa e cartão da máquina — v2.100.2). No Ritmo por máquina, o que soma
 máquinas (topo, custo da parada, análise em texto, gráficos, tabelas e folha)

@@ -76,15 +76,16 @@ export function Texturas({ id }) {
   );
 }
 
-export function Legenda({ itens }) {
+export function Legenda({ itens, estilo = null }) {
+  // `estilo`: so' a letra maior da folha A4 (Intervalos, escalaTexto).
   return (
-    <div style={est.legenda}>
+    <div style={estilo ? { ...est.legenda, ...estilo } : est.legenda}>
       {itens.map((i) => (
         <span key={i.rotulo} style={est.legendaItem}>
           {/* `linha`: amostra de linha de referencia (tracejada ou pontilhada),
               para a legenda dizer o que e' cada linha que atravessa as barras. */}
           {i.linha
-            ? <span style={{ ...est.legendaLinha, borderTopColor: i.cor, borderTopStyle: i.linha }} />
+            ? <span style={{ ...est.legendaLinha, borderTopColor: i.cor, borderTopStyle: i.linha, ...(i.espessura ? { borderTopWidth: i.espessura } : {}) }} />
             : <span style={{ ...est.legendaMarca, background: i.cor, backgroundImage: i.hachura }} />}
           {i.rotulo}
         </span>

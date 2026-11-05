@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { chaveSemana } from '../../domain/demandaSemanal.js';
 import { unidadeDoPosto } from '../../domain/cronoanalise.js';
 import ColarPlanilha from './demanda/ColarPlanilha.jsx';
@@ -59,6 +59,11 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
   const tempo = useTempoDisponivel(grupo, maquinasDoGrupo);
   // Volumes na embalagem, pecas no resto (pelo nome do grupo, v2.100.2).
   const unidade = unidadeDoPosto(grupo?.nome);
+  /* A semana que o "Editar" do programa gravado levou ao formulario
+     (v2.101.0). A versao faz o mesmo Editar recarregar o que esta' gravado.
+     Trocar de grupo larga a edicao: a semana era do outro grupo. */
+  const [edicao, setEdicao] = useState(null);
+  useEffect(() => { setEdicao(null); }, [grupoId]);
 
   const semGrupo = cadastro && !cadastro.grupos?.length;
 
@@ -118,6 +123,8 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
               <>
                 <SemanaManual
                   semanas={semanas} ocupado={ocupado} aoIncluir={demanda.gravarSemanas} unidade={unidade}
+                  diasDaJornada={tempo.valores.diasSemana}
+                  edicao={edicao} aoSairDaEdicao={() => setEdicao(null)}
                 />
                 <ColarPlanilha ocupado={ocupado} aoGravar={demanda.gravarSemanas} />
               </>
@@ -143,6 +150,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                 aoApagarSemana={demanda.apagarSemana} aoApagarTudo={demanda.apagarTudo}
                 somenteLeitura={semColagem} apagarTudo={apagarTudo}
                 diasDaJornada={tempo.valores.diasSemana}
+                aoEditar={(s) => setEdicao({ semana: s, versao: Date.now() })}
               />
             )}
           </>

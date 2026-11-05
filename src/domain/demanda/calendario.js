@@ -123,9 +123,20 @@ export function periodosDoPrograma(semanas) {
   return (semanas || [])
     .filter((s) => s?.inicio && emUtc(s.inicio))
     .sort((a, b) => (a.inicio < b.inicio ? -1 : (a.inicio > b.inicio ? 1 : 0)))
-    .map((s) => {
+    .map((s, i, todas) => {
       const inicio = emUtc(s.inicio);
-      const fim = new Date(inicio.getTime() + ((DIAS_DA_SEMANA_DO_PROGRAMA - 1) * UM_DIA));
+      /* Sete dias a partir do inicio — MAS NUNCA ALEM DA VESPERA DA
+         SEGUINTE (v2.101.0). A 038-26 que comeca na terca 03/11 (Finados na
+         segunda) ia ate' a segunda 09/11, o mesmo dia em que a 039-26
+         comeca: a tela mostrava o dia 09 nas duas ("duplicando", pediu o
+         PCP). O casamento ja' dava o dia a' mais recente; agora o periodo
+         escrito diz o mesmo. Encurtar nunca estica: dia sem semana continua
+         sem programa. */
+      const seteDias = inicio.getTime() + ((DIAS_DA_SEMANA_DO_PROGRAMA - 1) * UM_DIA);
+      const proxima = todas[i + 1] ? emUtc(todas[i + 1].inicio) : null;
+      const fim = new Date(proxima && proxima.getTime() > inicio.getTime()
+        ? Math.min(seteDias, proxima.getTime() - UM_DIA)
+        : seteDias);
       return { semana: s, inicio, fim };
     });
 }

@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import {
   faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
-import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
+import { comoHoras, taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
   deixaramDe, deixouDeEmbalar, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, porHoraDaMedicao,
-  roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
+  roubadosPelasLacunas, roubadosPelasParadas, semTakt, tempoSomado,
 } from '../../../domain/volumeAVolume.js';
 import {
   CRITERIOS_JUNCAO, PREFIXO_JUNCAO, faixaDaJuncao, frasesDaJuncao, horaDaMedicao, idsDaJuncao, juntarMedicoes,
@@ -1160,10 +1160,38 @@ function NotasSalvas({ conferencia, medicoes }) {
 // mais linhas e o grafico, uma legenda a mais: ele desce para caber na 1a
 // pagina (o e2e confere as duas).
 const LARGURA_GRAFICO_PAPEL = 1000;
-const ALTURA_GRAFICO_PAPEL = 260;
+// 240 (era 260) e 150 (era 200) desde a letra maior da v2.101.0: o grafico
+// perde altura para os numeros crescerem e ainda caber na 1a pagina.
+const ALTURA_GRAFICO_PAPEL = 240;
+/* LETRA MAIOR NA FOLHA (v2.101.0, pedido do PCP: "aumentar as letras da
+   impressao"): 15% em tudo o que a folha escreve, grafico incluido. So'
+   nesta folha — `imp` e' dividido com a do Ritmo por maquina, em pe', cuja
+   paginacao nao mudou. O grafico continua na 1a pagina (o e2e mede). */
+const ESCALA_PAPEL = 1.15;
+const maior = (estilo) => ({ ...estilo, fontSize: Math.round(estilo.fontSize * ESCALA_PAPEL * 10) / 10 });
+const impF = {
+  folha: maior(imp.folha),
+  titulo: maior(imp.titulo),
+  emissao: maior(imp.emissao),
+  campoRotulo: maior(imp.campoRotulo),
+  campoValor: maior(imp.campoValor),
+  campoSub: { fontSize: Math.round(8 * ESCALA_PAPEL * 10) / 10, color: '#555' },
+  tituloSecao: maior(imp.tituloSecao),
+  tabela: maior(imp.tabela),
+  nota: maior(imp.nota),
+  // Os blocos mais juntos que no Ritmo por maquina: a letra maior precisa
+  // do espaco, e o grafico tem de ficar na 1a pagina.
+  cabecalho: { ...imp.cabecalho, marginBottom: 10 },
+  identificacao: { ...imp.identificacao, marginBottom: 10 },
+  // A conta do takt, numa linha: borda fina, sem cor (a impressora e' P&B).
+  tempoSemana: {
+    border: '1px solid #999', padding: '4px 8px', margin: '-6px 0 10px',
+    fontSize: Math.round(9.5 * ESCALA_PAPEL * 10) / 10, lineHeight: 1.35, breakInside: 'avoid',
+  },
+};
 // 200, e nao 220: com o titulo do produto em 2 linhas sobravam ~8 px (revisao
 // de 30/10); uma linha a mais na leitura mandava o grafico para a 2a pagina.
-const ALTURA_GRAFICO_PAPEL_JUNCAO = 200;
+const ALTURA_GRAFICO_PAPEL_JUNCAO = 150;
 
 /**
  * A FOLHA A4 — num portal, como a do cadastro de maquinas: enquanto a
@@ -1205,26 +1233,26 @@ function FolhaVolumeAVolume({
     ];
 
   return createPortal(
-    <div className="somente-impressao" style={imp.folha}>
+    <div className="somente-impressao" style={impF.folha}>
       <style>{'@media print { #raiz { display: none !important } @page { size: A4 landscape; margin: 12mm; } }'}</style>
 
-      <header style={imp.cabecalho}>
+      <header style={impF.cabecalho}>
         <div>
           <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={imp.logo} />
           {/* Mesmo nome do arquivo: o que esta' escrito na folha bate com o
               nome do PDF na pasta. */}
-          <h1 style={imp.titulo}>
+          <h1 style={impF.titulo}>
             Takt Time — {[conferencia.peca || 'sem produto', conferencia.maquina, juncao && `junção de ${n} medições`]
               .filter(Boolean).join(' · ')}
           </h1>
         </div>
-        <div style={imp.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
+        <div style={impF.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
       </header>
 
       {/* Os roubados vao na identificacao, ao lado do parado que os causou.
           Seis colunas: os das lacunas cabem na mesma linha, e o grafico
           nao desce para a 2a pagina. */}
-      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
+      <section style={{ ...impF.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
         {[
           ...identificacao,
           [capital(unidade.plural), String(conferencia.pecas)],
@@ -1245,21 +1273,21 @@ function FolhaVolumeAVolume({
           ]),
         ].map(([k, v]) => (
           <div key={k} style={imp.campo}>
-            <span style={imp.campoRotulo}>{k}</span>
-            <span style={imp.campoValor}>{v}</span>
+            <span style={impF.campoRotulo}>{k}</span>
+            <span style={impF.campoValor}>{v}</span>
           </div>
         ))}
       </section>
 
       {/* O destaque no papel e' a borda grossa, nao a cor: a impressora da
           fabrica e' P&B. */}
-      <section style={{ border: '2px solid #000', padding: '6px 8px', marginBottom: 12, breakInside: 'avoid' }}>
+      <section style={{ border: '2px solid #000', padding: '6px 8px', marginBottom: 8, breakInside: 'avoid' }}>
         <p style={{ margin: 0, fontWeight: 700 }}>{frases.manchete}</p>
         {frases.linhas.map((l) => <p key={l} style={{ margin: '4px 0 0' }}>{l}</p>)}
       </section>
 
       {/* Volumes/hora depois de Lacunas, como na tela. */}
-      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
+      <section style={{ ...impF.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
         {[
           ...numerosDaLeitura(leitura, takt, unidade, { juncao: Boolean(juncao) }),
           juncao
@@ -1267,17 +1295,23 @@ function FolhaVolumeAVolume({
             : porHoraDaMedicao(conferencia, unidade),
         ].map((k) => (
           <div key={k.rotulo} style={imp.campo}>
-            <span style={imp.campoRotulo}>{k.rotulo}</span>
-            <span style={imp.campoValor}>{k.valor}</span>
-            {k.sub && <span style={{ fontSize: 8, color: '#555' }}>{k.sub}</span>}
+            <span style={impF.campoRotulo}>{k.rotulo}</span>
+            <span style={impF.campoValor}>{k.valor}</span>
+            {k.sub && <span style={impF.campoSub}>{k.sub}</span>}
           </div>
         ))}
       </section>
+
+      {/* O TEMPO DA SEMANA (v2.101.0, pedido do PCP): o takt com a conta
+          inteira — jornada, dias, setup, o que sobra e o programa. Sem ela o
+          papel dizia "takt 17.2 s" e ninguem na reuniao sabia de onde. */}
+      <ContaDoTempoDaSemana takt={takt} unidade={unidade} />
 
       <GraficoIntervalos
         leitura={leitura} unidade={unidade} larguraFixa={LARGURA_GRAFICO_PAPEL}
         altura={juncao ? ALTURA_GRAFICO_PAPEL_JUNCAO : ALTURA_GRAFICO_PAPEL}
         segmentos={segmentosDaJuncao(juncao)}
+        escalaTexto={ESCALA_PAPEL}
       />
 
       {/* DEPOIS DO GRAFICO (v2.98.2): deitada, a folha tem 186 mm de
@@ -1309,8 +1343,8 @@ function FolhaVolumeAVolume({
 
       {juncao && (
         <section style={{ marginBottom: 10, breakInside: 'avoid' }}>
-          <h2 style={imp.tituloSecao}>As {n} medições</h2>
-          <table style={imp.tabela}>
+          <h2 style={impF.tituloSecao}>As {n} medições</h2>
+          <table style={impF.tabela}>
             <thead>
               <tr>
                 <th style={imp.th}>Medição</th>
@@ -1341,8 +1375,8 @@ function FolhaVolumeAVolume({
 
       {lacunas.length > 0 && (
         <section style={{ marginTop: 10 }}>
-          <h2 style={imp.tituloSecao}>Onde a linha parou sem parada marcada</h2>
-          <table style={imp.tabela}>
+          <h2 style={impF.tituloSecao}>Onde a linha parou sem parada marcada</h2>
+          <table style={impF.tabela}>
             <thead>
               <tr>
                 {juncao && <th style={imp.th}>Medição</th>}
@@ -1367,12 +1401,12 @@ function FolhaVolumeAVolume({
             </tbody>
           </table>
           {restantes > 0 && (
-            <p style={imp.nota}>E mais {restantes} lacuna(s) menores — a lista completa está na tela.</p>
+            <p style={impF.nota}>E mais {restantes} lacuna(s) menores — a lista completa está na tela.</p>
           )}
         </section>
       )}
 
-      <p style={imp.nota}>
+      <p style={impF.nota}>
         {notaDoCriterio(leitura, unidade, {
           juncao: Boolean(juncao), roubo: roubo?.roubados > 0, lacunas: lacunasRoubo?.roubados > 0, deixou: deixou?.total > 0,
         })}
@@ -1389,4 +1423,37 @@ function porVideo(medicoes) {
   const deVideo = medicoes.filter((c) => c.origem === 'video').length;
   if (!deVideo) return null;
   return deVideo === medicoes.length ? 'por vídeo' : `${deVideo} de ${medicoes.length} por vídeo`;
+}
+
+/**
+ * A CONTA DO TAKT DA SEMANA, por maquina, como o programa a faz
+ * (taktDaMedicao): jornada (so' os dias de producao, na semana com
+ * feriado) menos o setup planejado, dividido pelo programa da semana.
+ * Sem takt, a linha diz por que — o mesmo motivo do cartao.
+ */
+function ContaDoTempoDaSemana({ takt, unidade }) {
+  if (!(takt?.taktMs > 0)) {
+    return <p style={impF.tempoSemana}><strong>Tempo da semana:</strong> sem takt — {semTakt(takt?.estado)}</p>;
+  }
+  const h = (x) => `${comoHoras(x)} h`;
+  const jornada = Number(takt.jornadaPorMaquina) > 0 ? takt.jornadaPorMaquina : null;
+  const setup = Number(takt.setupPorMaquina) > 0 ? takt.setupPorMaquina : null;
+  const dias = takt.dias?.programados && takt.dias.daJornada && takt.dias.programados < takt.dias.daJornada
+    ? ` (${takt.dias.programados} de ${takt.dias.daJornada} dias)`
+    : '';
+  // A conta so' aparece quando ha' o que descontar: "44 h de jornada =
+  // 44 h" seria conta sem assunto.
+  const partes = (setup || dias) ? [
+    jornada ? `${h(jornada)} de jornada${dias}` : null,
+    setup ? `− ${h(setup)} de setup` : null,
+  ].filter(Boolean) : [];
+  return (
+    <p style={impF.tempoSemana}>
+      <strong>Tempo da semana {takt.semana}, por máquina:</strong>{' '}
+      {partes.length ? `${partes.join(' ')} = ` : ''}
+      <strong>{h(takt.horasPorMaquina)}</strong>
+      {takt.demanda ? ` · programa de ${Number(takt.demanda).toLocaleString('pt-BR')} ${unidade.plural}` : ''}
+      {' '}→ takt <strong>{(takt.taktMs / 1000).toFixed(1)} s</strong> por {unidade.singular}.
+    </p>
+  );
 }
