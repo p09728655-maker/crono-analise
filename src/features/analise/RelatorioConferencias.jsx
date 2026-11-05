@@ -4,7 +4,6 @@ import {
   TODAS, escopoDaLateral, filtrarPorPeriodo, loteDaMaquina, quandoMediu,
 } from '../../domain/relatorioConferencias.js';
 import { leituraDaDemanda, lerCodigoSemana } from '../../domain/demandaSemanal.js';
-import { unidadeDoPosto } from '../../domain/cronoanalise.js';
 import { caminhos } from '../../lib/dispositivo.js';
 import { lerDemanda } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
@@ -222,15 +221,9 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const {
     visiveis, resumoVisivel, resumoPecasVisivel, analise, barrasDoFiltro, painel,
     curvaDoDia, comparativo, entreMaquinas, porCiclo, secoes,
+    // A unidade dos numeros que somam maquinas (ver useLeitura).
+    unidade: unidadeDaTela,
   } = leitura;
-  /* A UNIDADE DOS NUMEROS QUE SOMAM MAQUINAS (topo, custo da parada, folha)
-     — v2.100.2. "Volumes" so' quando TODAS as visiveis sao da embalagem;
-     com postos misturados a soma nao e' de uma coisa so', e fica "peças",
-     o nome geral. O cartao de cada maquina usa a do grupo dela. */
-  const unidadeDaTela = useMemo(() => {
-    const unidades = new Set(resumoVisivel.map((g) => unidadeDoPosto(grupoDe(g.maquina)).singular));
-    return unidadeDoPosto(unidades.size === 1 && unidades.has('volume') ? 'embalagem' : '');
-  }, [resumoVisivel, mapaGrupos]);
 
   const lote = loteDaMaquina({ filtro, visiveis, verArquivadas });
 
@@ -512,11 +505,12 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               {!verArquivadas && <RitmoPorCiclo classes={porCiclo.classes} mistas={porCiclo.mistas} />}
 
               {!verArquivadas && resumoPecasVisivel.length > 0 && (
-                <TabelaRitmoPorPeca resumoPecas={resumoPecasVisivel} />
+                <TabelaRitmoPorPeca resumoPecas={resumoPecasVisivel} unidade={unidadeDaTela} />
               )}
 
               {!verArquivadas && (
                 <GraficosRitmo
+                  unidade={unidadeDaTela}
                   resumo={resumoVisivel}
                   filtro={filtro}
                   barrasDoFiltro={barrasDoFiltro}
@@ -539,6 +533,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
               )}
 
               <TabelaMedicoes
+                unidade={unidadeDaTela}
                 linhas={visiveis}
                 escopo={escopo}
                 filtro={filtro}

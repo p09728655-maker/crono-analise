@@ -23,7 +23,13 @@ import { porMinuto, porPeca } from './formato.js';
  * tabela passa da largura do painel em 1440 e a ultima some atras da
  * rolagem lateral.
  */
-export default function TabelaRitmoPorPeca({ resumoPecas }) {
+export default function TabelaRitmoPorPeca({
+  resumoPecas,
+  // A unidade da tela (ver useLeitura): as colunas de contagem e ritmo
+  // dizem volumes com a embalagem sozinha. "Peça" como NOME do item fica.
+  unidade: u = { singular: 'peça', plural: 'peças', abrev: 'pç' },
+}) {
+  const U = `${u.plural.charAt(0).toUpperCase()}${u.plural.slice(1)}`;
   /**
    * So' ha' o que comparar por acionamento quando alguma peca pede mais de
    * um. Peca de acionamentos MISTOS (gravada ora com 1, ora com 2) nao
@@ -39,10 +45,10 @@ export default function TabelaRitmoPorPeca({ resumoPecas }) {
       <div style={{ padding: `${espaco.lg}px ${espaco.lg}px ${espaco.sm}px` }}>
         <h2 style={est.iaTitulo}>Ritmo por peça</h2>
         <p style={est.iaTexto}>
-          Quantas peças saem por hora e por minuto, peça a peça, com a máquina rodando.
+          {u.singular === 'peça' ? 'Quantas' : 'Quantos'} {u.plural} saem por hora e por minuto, peça a peça, com a máquina rodando.
           <strong> Por peça</strong> é o tempo cheio de uma peça no posto — manuseio e
           furação juntos. A coluna <strong>Acion.</strong> diz quantas vezes o motor é
-          acionado para fazer uma peça: peça de mais acionamentos rende menos peças/hora
+          acionado para fazer uma peça: peça de mais acionamentos rende menos {u.plural}/hora
           sem a máquina estar mais lenta.
           {temPorAcion
             ? <> Por isso <strong>Por acion.</strong> — o tempo por peça dividido pelos
@@ -64,10 +70,10 @@ export default function TabelaRitmoPorPeca({ resumoPecas }) {
               Furação
             </th>
             <th style={est.thNumEstreito}>Medições</th>
-            <th style={est.thNumEstreito}>Peças</th>
+            <th style={est.thNumEstreito}>{U}</th>
             <th style={est.thNumEstreito}>Tempo rodando</th>
-            <th style={est.thNumEstreito}>Peças/hora</th>
-            <th style={est.thNumEstreito}>Peças/min</th>
+            <th style={est.thNumEstreito}>{U}/hora</th>
+            <th style={est.thNumEstreito}>{U}/min</th>
             {/* O celular chama este mesmo numero de "Ciclo médio (s/pç)". O
                 rotulo aqui e' em portugues de fabrica (decisao de 31/08), e
                 a dica faz a ponte para quem mediu no aparelho. */}

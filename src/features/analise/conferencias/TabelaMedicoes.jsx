@@ -19,7 +19,10 @@ import { porMinuto } from './formato.js';
 export default function TabelaMedicoes({
   linhas, escopo, filtro, verArquivadas, lote, ocupado,
   aoArquivarLote, aoRenomear, aoEditarParadas, aoAlternarArquivo, aoExcluir,
+  // A unidade da tela (ver useLeitura): volumes so' com a embalagem sozinha.
+  unidade: u = { singular: 'peça', plural: 'peças', abrev: 'pç' },
 }) {
+  const U = `${u.plural.charAt(0).toUpperCase()}${u.plural.slice(1)}`;
   /**
    * A frase do LOTE. Com um GRUPO escolhido ela nao pode ser "escolha uma
    * máquina em MÁQUINAS": o usuário acabou de escolher nessa mesma lateral,
@@ -55,7 +58,7 @@ export default function TabelaMedicoes({
               de MAQUINA RODANDO: os dois estao certos, mas sem dizer isso
               pareciam contradicao. */}
           <p style={est.painelDica}>
-            Peças/hora e peças/min saem do tempo com a MÁQUINA RODANDO — o tempo
+            {U}/hora e {u.plural}/min saem do tempo com a MÁQUINA RODANDO — o tempo
             parado sai da conta. No celular, o número grande é a produção do período
             inteiro; o de máquina rodando fica na linha das paradas.
           </p>
@@ -84,9 +87,9 @@ export default function TabelaMedicoes({
             <th style={est.thNum}>Período</th>
             <th style={est.thNum}>Parado</th>
             <th style={est.thNum}>Rodando %</th>
-            <th style={est.thNum}>Peças</th>
-            <th style={est.thNum}>Peças/hora</th>
-            <th style={est.thNum}>Peças/min</th>
+            <th style={est.thNum}>{U}</th>
+            <th style={est.thNum}>{U}/hora</th>
+            <th style={est.thNum}>{U}/min</th>
             <th style={est.th} aria-label="Ações" />
           </tr>
         </thead>

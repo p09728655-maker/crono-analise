@@ -504,6 +504,22 @@ const tamanhoDoPdf = async () => {
   checar(largura === 842 && altura === 595, `impressao: a folha da medicao sai em A4 deitado (${largura} x ${altura} pt)`);
   checar(await folha.locator('svg[aria-label^="Intervalo entre"]').getAttribute('width') === '1000',
     'impressao: o grafico ocupa a folha deitada (1000 px de largura, eram 700)');
+  /* SEM CALHA (v2.100.2): o valor do takt mora na legenda, e as barras
+     chegam perto da borda direita — a faixa de 100 px de rotulos saiu. */
+  {
+    // `has` e' relativo a' figura: o seletor vai sem a folha na frente.
+    const figura = folha.locator('figure', { has: p.locator('svg[aria-label^="Intervalo entre"]') });
+    const legenda = await figura.innerText();
+    const sobra = await folha.locator('svg[aria-label^="Intervalo entre"]').evaluate((g) => {
+      const caixa = g.getBoundingClientRect();
+      const barras = [...g.querySelectorAll('rect[fill]')].filter((r) => r.getAttribute('fill') !== 'transparent');
+      return Math.round(caixa.right - Math.max(...barras.map((r) => r.getBoundingClientRect().right)));
+    });
+    checar(/Takt da semana: 72\.0 s/.test(legenda)
+      && await folha.locator('svg[aria-label^="Intervalo entre"] text', { hasText: /^Takt/ }).count() === 0,
+    'folha: o valor do takt esta na legenda, nao numa faixa ao lado do grafico');
+    checar(sobra <= 30, `folha: as barras chegam ate perto da borda direita (sobram ${sobra} px; eram ~100)`);
+  }
   if (FOTOS) writeFileSync(`${FOTOS}/pc-folha.pdf`, pdf);
   const fundo = await fundoDoGraficoNaFolha(p);
   checar(fundo <= 703, `folha deitada: o grafico cabe na 1a pagina (termina em ${fundo} de 703 px)`);
@@ -1520,7 +1536,55 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   checar(/2\.200 volumes programados/.test(textoQuadro) && /divididos entre/.test(textoQuadro)
     && /vol\/h/.test(textoQuadro) && /por volume/.test(textoQuadro) && !/pç\//.test(textoQuadro) && !/peças/.test(textoQuadro),
     `Ritmo por maquina: o programa da EMBALAGEM em volumes (${textoQuadro.slice(0, 160)})`);
+  // A DEMANDA SEMANAL do grupo EMBALAGEM pede VOLUMES, nao pecas.
+  await s.getByRole('button', { name: 'Demanda semanal' }).click();
+  const janela = s.locator('[aria-label="Demanda semanal"]');
+  await janela.waitFor({ timeout: 8000 });
+  await janela.getByRole('button', { name: /Digitar uma semana/ }).click();
+  checar(await janela.locator('input[aria-label="Volumes"]').count() === 1
+    && await janela.locator('input[aria-label="Peças"]').count() === 0,
+  'Demanda semanal da embalagem: o campo pede Volumes');
+  await janela.getByRole('button', { name: 'Fechar' }).last().click();
+  // A FOLHA acompanha: identificacao e tabela em volumes.
+  // Lida como os outros e2e do relatorio leem a folha: o texto do bloco
+  // .somente-impressao (celulas coladas, sem espaco entre elas).
+  const folhaRitmo = await s.evaluate(() => document.querySelector('.somente-impressao')?.textContent || '');
+  checar(/Total de volumes\s*400/i.test(folhaRitmo) && /Volumes\/hora/.test(folhaRitmo) && !/pç\/h|Peças\/hora/i.test(folhaRitmo),
+    `folha do Ritmo por maquina so da embalagem: em volumes (${folhaRitmo.slice(0, 200)})`);
   checar(erros.length === 0, `Ritmo por maquina da embalagem: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+{
+  /* POSTOS MISTURADOS: furadeira e embalagem na mesma tela. O topo soma as
+     duas e nao e' de uma coisa so' — fica em pecas; cada cartao fala na
+     unidade do grupo dele. */
+  const FURA = { id: '00000000-0000-0000-0000-0000000000f1', codigo: '0002', nome: 'FURADEIRA', horas_semana: '44.00', setups_dia: 0, setup_min: '0', dias_semana: 5 };
+  const M_FURA = { id: '00000000-0000-0000-0000-0000000000f2', nome: 'FURADEIRA 03', ativa: true, grupo_id: FURA.id, grupo_codigo: '0002', grupo_nome: 'FURADEIRA' };
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const s = await ctx.newPage();
+  await semearSessao(s);
+  const fim = new Date();
+  const ini = new Date(fim.getTime() - 3600000).toISOString();
+  const med = (id, maquina, pecas) => ({
+    id, maquina, peca: 'X', iniciado_em: ini, finalizado_em: fim.toISOString(), salvo_em: fim.toISOString(),
+    duracao_ms: 3600000, pecas, ciclos_por_peca: 1, arquivada: false, paradas: [], com_marcas: false,
+  });
+  await simularServidor(s, {
+    cadastro: {
+      maquinas: [{ ...MAQUINA, grupo_codigo: GRUPO.codigo, grupo_nome: GRUPO.nome }, M_FURA],
+      grupos: [GRUPO, FURA],
+    },
+    conferencias: [med('m1', 'EMBALAGEM 01', 200), med('m2', 'FURADEIRA 03', 700)],
+  });
+  await s.goto(`${BASE}/analise/conferencias`);
+  const cartoes = s.locator('[aria-label="Resumo por máquina"]');
+  await cartoes.waitFor({ timeout: 10000 });
+  const topo = (await s.locator('[aria-label="Resumo do período"]').innerText()).replace(/\s+/g, ' ');
+  const textoCartoes = (await cartoes.innerText()).replace(/\s+/g, ' ');
+  checar(/pç\/h/.test(topo) && /900 peças/.test(topo) && !/vol\/h|volumes/.test(topo),
+    `misturado: o topo soma postos diferentes e fica em pecas (${topo.slice(0, 160)})`);
+  checar(/200 volumes por hora/.test(textoCartoes) && /700 peças por hora/.test(textoCartoes),
+    `misturado: cada cartao na unidade do seu grupo (${textoCartoes.slice(0, 160)})`);
   await ctx.close();
 }
 {
@@ -1545,6 +1609,10 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   const texto = (await kpis.innerText()).replace(/\s+/g, ' ');
   checar(/TEMPO PARADO 7 min nenhuma em troca\/setup/i.test(texto) && !/nenhuma parada marcada/.test(texto),
     `TEMPO PARADO com parada marcada nao diz "nenhuma parada marcada" (${texto.slice(0, 200)})`);
+  const custo = (await s.locator('[aria-label="Comparativo com e sem parada"]').innerText()).replace(/\s+/g, ' ');
+  // Numero e unidade sao elementos vizinhos: o innerText os cola ("150volumes").
+  checar(/150\s*volumes/.test(custo) && /vol\/h/.test(custo) && !/peças|pç/.test(custo),
+    `"O que a parada custou" so da embalagem: em volumes (${custo.slice(0, 160)})`);
   await ctx.close();
 }
 

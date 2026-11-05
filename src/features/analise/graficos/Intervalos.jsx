@@ -154,6 +154,18 @@ export function GraficoIntervalos({
     return partes.join(' — ');
   };
 
+  /* DENTRO DA FIGURA, sempre (v2.100.2). Sem a calha de 100 px a' direita,
+     o texto que cresce para a direita — a hora da ultima medicao da
+     junção, o valor da barra mais a' direita — passava da borda e saia
+     cortado ("08:4" no lugar de "08:49", achado da revisao). O x e' puxado
+     para dentro so' o necessario; no meio do grafico nada muda. */
+  const limiteDireito = largura - 2;
+  const xDoInicio = (x, texto, fonte) => Math.min(x, limiteDireito - larguraDoTexto(texto, fonte));
+  const xDoCentro = (x, texto, fonte) => {
+    const meia = larguraDoTexto(texto, fonte) / 2;
+    return Math.max(meia + 2, Math.min(x, limiteDireito - meia));
+  };
+
   const tituloEixoY = (v) => (Math.abs(v / 1000 - Math.round(v / 1000)) < 1e-6
     ? `${Math.round(v / 1000)} s`
     : emSegundos(v));
@@ -258,7 +270,7 @@ export function GraficoIntervalos({
                 )}
                 {rotularValor.has(i) && (
                   <text
-                    x={x + larguraBarra / 2} y={y - 5} textAnchor="middle"
+                    x={xDoCentro(x + larguraBarra / 2, emSegundos(ms), 10.5)} y={y - 5} textAnchor="middle"
                     fontSize="10.5" fontWeight="700" fill={lacuna ? COR_TEXTO_LACUNA : claro.texto}
                     stroke={claro.papel} strokeWidth="3" paintOrder="stroke" pointerEvents="none"
                   >
@@ -279,7 +291,7 @@ export function GraficoIntervalos({
                   <line x1={xDivisa} x2={xDivisa} y1={margem.topo - 14} y2={base} stroke={claro.texto} strokeWidth="1.5" />
                 )}
                 <text
-                  x={xDivisa + 4} y={margem.topo - 18} fontSize="11" fontWeight="700" fill={claro.texto}
+                  x={xDoInicio(xDivisa + 4, x.rotulo, 11)} y={margem.topo - 18} fontSize="11" fontWeight="700" fill={claro.texto}
                   stroke={claro.papel} strokeWidth="3" paintOrder="stroke"
                 >
                   {x.rotulo}

@@ -40,7 +40,8 @@ export default function SemanaManual({
   const problemas = [
     manual.semana.trim() !== '' && !semana && 'Semana no formato S38 ou 038-26.',
     manual.inicio.trim() !== '' && !inicio && 'Início no formato dd/mm/aaaa.',
-    manual.pecas.trim() !== '' && !(pecas > 0) && `${Unidade} precisa ser um número maior que zero.`,
+    manual.pecas.trim() !== '' && !(pecas > 0)
+      && `Informe ${unidade.singular === 'peça' ? 'as' : 'os'} ${unidade.plural} como um número maior que zero.`,
   ].filter(Boolean);
   const pronto = Boolean(semana && inicio && pecas > 0);
   const jaGravada = pronto

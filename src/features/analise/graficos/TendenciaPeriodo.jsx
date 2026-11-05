@@ -25,7 +25,11 @@ import { est } from './estilos.js';
  * correcao pela peca (ver tendenciaPeriodo.js). Tracejada, ela diz "e' o
  * que os pontos fazem", nao "a maquina mudou".
  */
-export function GraficoTendenciaPeriodo({ conferencias, resumo, altura = 160, larguraFixa, colunas }) {
+export function GraficoTendenciaPeriodo({
+  conferencias, resumo, altura = 160, larguraFixa, colunas,
+  // A unidade da tela (v2.100.2): o eixo e o tooltip dizem vol/h com so' a embalagem.
+  unidade: u = { singular: 'peça', plural: 'peças', abrev: 'pç' },
+}) {
   const series = tendenciasDoPeriodo(conferencias, resumo).filter((s) => s.n > 0);
   if (!series.length) return null;
 
@@ -53,7 +57,7 @@ export function GraficoTendenciaPeriodo({ conferencias, resumo, altura = 160, la
       <style>{ESTILO_TELA_MINI}</style>
       <div style={{ ...est.gradeTendencia, ...(colunas ? { gridTemplateColumns: `repeat(${colunas}, 1fr)` } : {}) }}>
         {series.map((s) => (
-          <MiniPeriodo key={s.maquina} serie={s} altura={altura} larguraFixa={larguraFixa} />
+          <MiniPeriodo key={s.maquina} serie={s} altura={altura} larguraFixa={larguraFixa} u={u} />
         ))}
       </div>
     </figure>
@@ -62,7 +66,7 @@ export function GraficoTendenciaPeriodo({ conferencias, resumo, altura = 160, la
 
 const dataCurta = (ts) => new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
-function MiniPeriodo({ serie: s, altura, larguraFixa }) {
+function MiniPeriodo({ serie: s, altura, larguraFixa, u }) {
   const [refContainer, larguraMedida] = useLarguraContainer(240);
   const largura = larguraFixa || larguraMedida || 240;
   const id = useId().replace(/:/g, '');
@@ -147,7 +151,7 @@ function MiniPeriodo({ serie: s, altura, larguraFixa }) {
               stroke={claro.papel} strokeWidth="1.5"
             >
               <title>
-                {`${dataCurta(p.ts)} · ${p.peca}: ${Math.round(p.ritmo)} pç/h`}
+                {`${dataCurta(p.ts)} · ${p.peca}: ${Math.round(p.ritmo)} ${u.abrev}/h`}
                 {p.confiavel ? '' : ' (medição curta)'}
               </title>
             </circle>
@@ -162,7 +166,7 @@ function MiniPeriodo({ serie: s, altura, larguraFixa }) {
           <text x={largura - EIXO_MINI.dir} y={altura - 6} textAnchor="end" style={est.rotuloEixo}>
             {dataCurta(pontos[n - 1].ts)}
           </text>
-          <text x={EIXO_MINI.esq - 6} y={EIXO_MINI.topo - 1} textAnchor="end" style={est.rotuloEixo}>pç/h</text>
+          <text x={EIXO_MINI.esq - 6} y={EIXO_MINI.topo - 1} textAnchor="end" style={est.rotuloEixo}>{u.abrev}/h</text>
         </svg>
       </div>
 

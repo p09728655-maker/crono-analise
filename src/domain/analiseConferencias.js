@@ -39,7 +39,7 @@
  */
 import {
   CRITERIOS_CONFERENCIA, comparativoDeParadas, formatarDuracao, nomeChave, ritmoPorHoraDoDia,
-  somarParadas,
+  somarParadas, unidadeDoPosto,
 } from './cronoanalise.js';
 
 const MS_POR_HORA = 3600000;
@@ -68,7 +68,9 @@ const RUIDO_ENTRE_MAQUINAS_PCT = 5;
 const SEM_GRUPO = 'Sem grupo';
 
 const pMin = (pecasPorHora) => (pecasPorHora / 60).toFixed(1);
-const ritmoTexto = (pph) => `${Math.round(pph)} pç/h (${pMin(pph)} pç/min)`;
+/* A unidade e' a da tela (v2.100.2): "vol/h" quando so' a embalagem esta'
+   nela. O texto e' o mesmo; so' o nome do que se conta muda. */
+const ritmoTextoEm = (u) => (pph) => `${Math.round(pph)} ${u.abrev}/h (${pMin(pph)} ${u.abrev}/min)`;
 
 /** "medição" / "medições" — o plural errado denuncia texto de máquina. */
 const plural = (n, singular, muitos) => `${n} ${n === 1 ? singular : muitos}`;
@@ -146,7 +148,10 @@ function tendenciaDaMaquina(conferencias, chaveMaquina) {
   return { direcao: pct > 0 ? 'subindo' : 'caindo', pct, antes, agora };
 }
 
-export function analisarConferencias({ maquinas = [], pecas = [], conferencias = [], grupoDe } = {}) {
+export function analisarConferencias({
+  maquinas = [], pecas = [], conferencias = [], grupoDe, unidade: u = unidadeDoPosto(),
+} = {}) {
+  const ritmoTexto = ritmoTextoEm(u);
   const secoes = [];
   if (!maquinas.length) return secoes;
 
@@ -162,7 +167,7 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
   if (ritmoGeral != null) {
     geral.push(
       `${plural(totMedicoes, 'medição', 'medições')} em ${plural(maquinas.length, 'máquina', 'máquinas')}: `
-      + `${totPecas} peças em ${formatarDuracao(totProdutivo)} de máquina rodando — ritmo médio de ${ritmoTexto(ritmoGeral)}.`,
+      + `${totPecas} ${u.plural} em ${formatarDuracao(totProdutivo)} de máquina rodando — ritmo médio de ${ritmoTexto(ritmoGeral)}.`,
     );
   }
   if (totParada > 0) {
@@ -208,12 +213,12 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
     } else if (t.direcao === 'subindo') {
       linhasTendencia.push(
         `${g.maquina}: o ritmo está subindo — as medições mais recentes rodam ${t.pct}% acima das primeiras `
-        + `(${Math.round(t.antes)} → ${Math.round(t.agora)} pç/h). O que melhorou ali vale virar padrão.`,
+        + `(${Math.round(t.antes)} → ${Math.round(t.agora)} ${u.abrev}/h). O que melhorou ali vale virar padrão.`,
       );
     } else {
       linhasTendencia.push(
         `${g.maquina}: o ritmo está caindo — as medições mais recentes rodam ${Math.abs(t.pct)}% abaixo das primeiras `
-        + `(${Math.round(t.antes)} → ${Math.round(t.agora)} pç/h). Vale olhar broca, abastecimento e ajustes antes que vire perda.`,
+        + `(${Math.round(t.antes)} → ${Math.round(t.agora)} ${u.abrev}/h). Vale olhar broca, abastecimento e ajustes antes que vire perda.`,
       );
     }
   }
@@ -258,7 +263,7 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
       if (pct >= RUIDO_ENTRE_MAQUINAS_PCT) {
         linhas.push(
           `${prefixo}${rapida.maquina} está rodando ${pct}% mais rápido que ${lenta.maquina} `
-          + `(${Math.round(rapida.ritmoMedio)} contra ${Math.round(lenta.ritmoMedio)} pç/h). `
+          + `(${Math.round(rapida.ritmoMedio)} contra ${Math.round(lenta.ritmoMedio)} ${u.abrev}/h). `
           + 'Antes de concluir que uma máquina é melhor, confira se as duas mediram peças parecidas — peça com mais furação rende menos sem a máquina ser mais lenta.',
         );
       } else {
@@ -279,7 +284,7 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
       linhas.push(
         `As ${maquinas.length} máquinas medidas são de grupos diferentes `
         + `(${[...porGrupo.keys()].join(', ')}) — uma de cada. Postos de naturezas diferentes não `
-        + 'disputam peças/hora entre si: para comparar, meça outra máquina do mesmo grupo.',
+        + `disputam ${u.plural}/hora entre si: para comparar, meça outra máquina do mesmo grupo.`,
       );
     }
     if (linhas.length) secoes.push({ titulo: 'Entre máquinas', linhas });
@@ -301,8 +306,8 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
     const pct = Math.round(((rapida.ritmoMedio / lenta.ritmoMedio) - 1) * 100);
     if (pct < 10) continue;
     linhasPecas.push(
-      `Na ${maquina}, a peça mais rápida é ${rapida.peca} (${Math.round(rapida.ritmoMedio)} pç/h) `
-      + `e a mais lenta é ${lenta.peca} (${Math.round(lenta.ritmoMedio)} pç/h) — diferença de ${pct}%. `
+      `Na ${maquina}, a peça mais rápida é ${rapida.peca} (${Math.round(rapida.ritmoMedio)} ${u.abrev}/h) `
+      + `e a mais lenta é ${lenta.peca} (${Math.round(lenta.ritmoMedio)} ${u.abrev}/h) — diferença de ${pct}%. `
       + 'Para planejar carga e lote, use o ritmo da peça, não a média da máquina.',
     );
   }
@@ -311,7 +316,7 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
   for (const p of pecas) {
     if (p.n >= 3 && p.cvPct != null && p.cvPct > 20 && p.melhor && p.pior && p.pior.ritmo > 0) {
       linhasPecas.push(
-        `O ritmo de ${p.peca} na ${p.maquina} não se repete: foi de ${Math.round(p.pior.ritmo)} a ${Math.round(p.melhor.ritmo)} pç/h `
+        `O ritmo de ${p.peca} na ${p.maquina} não se repete: foi de ${Math.round(p.pior.ritmo)} a ${Math.round(p.melhor.ritmo)} ${u.abrev}/h `
         + 'entre as medições. Vale conferir o que mudou entre elas (gabarito, lote, operador).',
       );
     }
@@ -327,7 +332,7 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
     const pct = Math.round(((g.melhor.ritmo / g.ritmoMedio) - 1) * 100);
     if (pct < 15) continue;
     linhasChegar.push(
-      `O melhor período da ${g.maquina} fez ${Math.round(g.melhor.ritmo)} pç/h${g.melhor.peca ? ` (${g.melhor.peca})` : ''} — `
+      `O melhor período da ${g.maquina} fez ${Math.round(g.melhor.ritmo)} ${u.abrev}/h${g.melhor.peca ? ` (${g.melhor.peca})` : ''} — `
       + `${pct}% acima da média dela. O posto alcança esse ritmo: vale olhar o que estava diferente ali e repetir.`,
     );
   }
@@ -361,7 +366,7 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
     const custo = comparativoDeParadas(maquinas);
     if (custo && custo.perdidas >= 10 && totParada >= 5 * 60000) {
       linhas.push(
-        `Esse tempo parado custou cerca de ${custo.perdidas} peças que deixaram de sair `
+        `Esse tempo parado custou cerca de ${custo.perdidas} ${u.plural} que deixaram de sair `
         + `(conta feita máquina por máquina, ao ritmo de cada uma com ela rodando).`,
       );
       // O COMPARATIVO em uma frase: o numero sozinho ("perdemos 322") nao
@@ -376,10 +381,10 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
        * ler o potencial como META tem de vir dentro dela.
        */
       linhas.push(
-        `No MESMO período, sem as paradas marcadas, teriam saído cerca de ${custo.potencial} peças `
-        + `em vez de ${custo.pecas} — de ${Math.round(custo.ritmoPeriodo)} pç/h `
-        + `(${pMin(custo.ritmoPeriodo)} pç/min) para ${Math.round(custo.ritmoPotencial)} pç/h `
-        + `(${pMin(custo.ritmoPotencial)} pç/min), ${Math.round(custo.ganhoPct)}% a mais no mesmo `
+        `No MESMO período, sem as paradas marcadas, teriam saído cerca de ${custo.potencial} ${u.plural} `
+        + `em vez de ${custo.pecas} — de ${Math.round(custo.ritmoPeriodo)} ${u.abrev}/h `
+        + `(${pMin(custo.ritmoPeriodo)} ${u.abrev}/min) para ${Math.round(custo.ritmoPotencial)} ${u.abrev}/h `
+        + `(${pMin(custo.ritmoPotencial)} ${u.abrev}/min), ${Math.round(custo.ganhoPct)}% a mais no mesmo `
         + 'tempo. Não é meta nem capacidade de catálogo: é o ritmo que cada máquina fez com ela '
         + 'rodando, aplicado ao período dela.',
       );
@@ -416,13 +421,13 @@ export function analisarConferencias({ maquinas = [], pecas = [], conferencias =
     const pior = ordenadas[ordenadas.length - 1];
     const queda = ((melhor.ritmoMedio - pior.ritmoMedio) / melhor.ritmoMedio) * 100;
     const linhas = [
-      `Horas medidas: ${curva.map((h) => `${h.rotulo} ${Math.round(h.ritmoMedio)} pç/h`).join(' · ')}.`,
+      `Horas medidas: ${curva.map((h) => `${h.rotulo} ${Math.round(h.ritmoMedio)} ${u.abrev}/h`).join(' · ')}.`,
     ];
     // Diferenca pequena entre horas e ruido de medicao, nao padrao do dia.
     if (queda >= RUIDO_PCT) {
       linhas.push(
         `Às ${pior.rotulo} o ritmo é ${Math.round(queda)}% menor que às ${melhor.rotulo} — `
-        + `${Math.round(pior.ritmoMedio)} contra ${Math.round(melhor.ritmoMedio)} pç/h. `
+        + `${Math.round(pior.ritmoMedio)} contra ${Math.round(melhor.ritmoMedio)} ${u.abrev}/h. `
         + 'Vale olhar o que muda nessa hora: troca, abastecimento, revezamento ou fadiga.',
       );
     } else {

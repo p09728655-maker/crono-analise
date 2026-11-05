@@ -341,6 +341,74 @@ await uma.getByText(/Leitura da medição/).waitFor({ timeout: 4000 });
 }
 
 checar(erros.length === 0, `sem erro de pagina (${erros.join(' | ')})`);
+/* ---- O GRAFICO SEM A CALHA A' DIREITA (v2.100.2): nada cortado na borda.
+   O valor do takt e do "rodando" foi da calha de 100 px para a legenda, e o
+   texto que cresce para a direita passou a encostar na borda: com a ultima
+   medicao da junção bem curta (150 + 3 volumes), a hora dela saia "08:4"
+   (achado da revisao). Aqui nenhum texto do grafico passa da borda — na
+   tela e na folha — e o valor das linhas esta' na legenda. */
+{
+  const longa = Array.from({ length: 150 }, (_, i) => 8000 + i * 6000);
+  const curta = [6000, 13000, 20000];
+  const LONGA = {
+    ...base, id: '00000000-0000-0000-0000-0000000000c1', pecas: 150, duracao_ms: 920000,
+    iniciado_em: em(0), finalizado_em: em(920000), salvo_em: em(920000), paradas: [],
+  };
+  const CURTA = {
+    ...base, id: '00000000-0000-0000-0000-0000000000c2', pecas: 3, duracao_ms: 26000,
+    iniciado_em: em(1500000), finalizado_em: em(1526000), salvo_em: em(1526000), paradas: [],
+  };
+  const toques = {
+    [LONGA.id]: { marcas_ms: longa, marcas_relogio_ms: longa.at(-1) - longa[0], marcas_setup_ms: 0 },
+    [CURTA.id]: { marcas_ms: curta, marcas_relogio_ms: curta.at(-1) - curta[0], marcas_setup_ms: 0 },
+  };
+  const c2 = await navegador.newContext({ viewport: { width: 1600, height: 1000 }, timezoneId: FUSO });
+  const q = await c2.newPage();
+  const erros2 = [];
+  q.on('pageerror', (e) => erros2.push(e.message));
+  await semearSessao(q);
+  await q.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
+    ? rota.fulfill({ json: { demandas: [] } })
+    : rota.fulfill({ json: { maquinas: [MAQUINA], grupos: [GRUPO] } })));
+  await q.route('**/api/conferencias**', (rota) => {
+    const id = new URL(rota.request().url()).searchParams.get('id');
+    if (id) return rota.fulfill({ json: { conferencia: { id, ...toques[id] } } });
+    return rota.fulfill({ json: { conferencias: [CURTA, LONGA], outras: 0 } });
+  });
+  await q.goto(`${BASE}/analise/embalagem`);
+  const lista2 = q.getByRole('region', { name: 'Medições da embalagem' });
+  await lista2.waitFor({ timeout: 8000 });
+  const caixas = lista2.getByRole('checkbox');
+  await caixas.nth(0).check();
+  await caixas.nth(1).check();
+  await q.getByRole('region', { name: 'Medições marcadas para juntar' }).getByRole('button', { name: /^Juntar/ }).click();
+  const svg = q.locator('svg[aria-label^="Intervalo entre"]').first();
+  await svg.waitFor({ timeout: 8000 });
+  const foraDaBorda = (seletor) => q.evaluate((sel) => {
+    const g = document.querySelector(sel);
+    const caixa = g.getBoundingClientRect();
+    return [...g.querySelectorAll('text')]
+      .filter((t) => { const r = t.getBoundingClientRect(); return r.right > caixa.right + 0.5 || r.left < caixa.left - 0.5; })
+      .map((t) => t.textContent);
+  }, seletor);
+  const horaCurta = hm(CURTA.iniciado_em);
+  checar(await svg.locator('text', { hasText: horaCurta }).count() > 0, `a hora da medicao curta esta no grafico (${horaCurta})`);
+  const foraTela = await foraDaBorda('svg[aria-label^="Intervalo entre"]');
+  checar(foraTela.length === 0, `sem calha: nenhum texto do grafico passa da borda na tela${foraTela.length ? ` (${foraTela.join(', ')})` : ''}`);
+  // A da TELA (a primeira): a folha tem a sua, igual, fora de vista.
+  const figura = q.locator('figure', { has: q.locator('svg[aria-label^="Intervalo entre"]') }).first();
+  checar(/Rodando — média dos intervalos: \d+\.\d s/.test(await figura.innerText())
+    && await svg.locator('text', { hasText: /^Rodando/ }).count() === 0,
+  'o valor do "rodando" esta na legenda, nao escrito ao lado do grafico');
+  await q.setViewportSize({ width: 1032, height: 703 });
+  await q.emulateMedia({ media: 'print' });
+  await q.waitForTimeout(200);
+  const foraFolha = await foraDaBorda('body > .somente-impressao svg[aria-label^="Intervalo entre"]');
+  checar(foraFolha.length === 0, `sem calha: nenhum texto do grafico passa da borda na folha${foraFolha.length ? ` (${foraFolha.join(', ')})` : ''}`);
+  checar(erros2.length === 0, `junção curta: sem erro de pagina${erros2.length ? `: ${erros2[0]}` : ''}`);
+  await c2.close();
+}
+
 await navegador.close();
 console.log(falhas ? `\n${falhas} falha(s).` : '\nTudo certo.');
 process.exit(falhas ? 1 : 0);

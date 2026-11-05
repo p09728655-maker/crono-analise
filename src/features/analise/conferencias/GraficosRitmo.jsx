@@ -23,7 +23,12 @@ import { est } from './estilos.js';
  * nao compara com nada. Nos dois casos em que a curva nao aparece, a tela
  * diz por que e o que fazer, em vez de sumir em silencio.
  */
-export default function GraficosRitmo({ resumo, filtro, barrasDoFiltro, curvaDoDia, conferencias }) {
+export default function GraficosRitmo({
+  resumo, filtro, barrasDoFiltro, curvaDoDia, conferencias,
+  // A unidade da tela (ver useLeitura): volumes so' com a embalagem sozinha.
+  unidade: u = { singular: 'peça', plural: 'peças', abrev: 'pç' },
+}) {
+  const U = `${u.plural.charAt(0).toUpperCase()}${u.plural.slice(1)}`;
   return (
     <>
       {resumo.length > 0 && (
@@ -32,7 +37,8 @@ export default function GraficosRitmo({ resumo, filtro, barrasDoFiltro, curvaDoD
             <GraficoRitmoMaquinas
               maquinas={barrasDoFiltro}
               titulo={`Medições — ${filtro}`}
-              subtitulo="Peças/hora de cada medição, da mais antiga para a mais recente"
+              subtitulo={`${U}/hora de cada medição, da mais antiga para a mais recente`}
+              unidade={u}
               rotuloOk="Medição"
               rotuloFraco="Medição curta (menos de 5 min rodando)"
               notaFraca="medição curta"
@@ -40,7 +46,8 @@ export default function GraficosRitmo({ resumo, filtro, barrasDoFiltro, curvaDoD
           ) : (
             <GraficoRitmoMaquinas
               maquinas={resumo}
-              subtitulo="Peças por hora de cada máquina, com a máquina rodando"
+              subtitulo={`${U} por hora de cada máquina, com a máquina rodando`}
+              unidade={u}
               rotuloOk="Ritmo medido"
               rotuloFraco="Ainda em medição"
               notaFraca="ainda em medição"
@@ -51,7 +58,7 @@ export default function GraficosRitmo({ resumo, filtro, barrasDoFiltro, curvaDoD
 
       {resumo.length > 0 && (
         <section style={est.painelGrafico} aria-label="Tendência do ritmo no tempo">
-          <GraficoTendenciaPeriodo conferencias={conferencias} resumo={resumo} />
+          <GraficoTendenciaPeriodo conferencias={conferencias} resumo={resumo} unidade={u} />
         </section>
       )}
 
@@ -86,7 +93,8 @@ export default function GraficosRitmo({ resumo, filtro, barrasDoFiltro, curvaDoD
                quando so' uma foi medida no periodo. Pelo filtro, esses dois
                casos perdiam o nome de quem e' a curva. */
             titulo={`Ritmo por hora do dia${resumo.length === 1 ? ` — ${resumo[0].maquina}` : ''}`}
-            subtitulo="Peças por hora com a máquina rodando, em cada hora do relógio — as medições da mesma hora somam, mesmo de datas diferentes"
+            subtitulo={`${U} por hora com a máquina rodando, em cada hora do relógio — as medições da mesma hora somam, mesmo de datas diferentes`}
+            unidade={u}
             rotuloOk="Hora medida"
             rotuloFraco="Menos de 5 min medidos nessa hora"
             notaFraca="pouco tempo medido"

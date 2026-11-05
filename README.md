@@ -360,8 +360,10 @@ separação é de trabalho, não de dado.
 Na lateral do relatório, **Demanda semanal** guarda o programa do PCP por
 **grupo de máquina** (0002 FURADEIRA), uma linha por semana. No grupo da
 embalagem a tela fala em **volumes** (campo, programa gravado, quadro do
-programa e cartão da máquina — v2.100.2); os números do topo do relatório só
-dizem volumes quando todas as máquinas na tela são da embalagem. Entra por
+programa e cartão da máquina — v2.100.2). No Ritmo por máquina, o que soma
+máquinas (topo, custo da parada, análise em texto, gráficos, tabelas e folha)
+diz volumes só quando todas as máquinas na tela são da embalagem — a
+unidade sai de `useLeitura` (`unidade`); misturado com outro posto, peças. Entra por
 **colagem da planilha**: a tela lê as colunas `SEMANA`, `INÍCIO` e
 `TOTAL SEMANA`, ignora os totalizadores do rodapé e confere o total contra a
 soma dos lotes, avisando com os dois números quando não bate. Gravar
