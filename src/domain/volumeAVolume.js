@@ -164,6 +164,12 @@ export function numerosDaLeitura(leitura, takt = {}, unidade, { juncao = false }
           // So' no tablet: a falta e' de rede, nao de programa (ver semTakt).
           'sem-rede': 'sem rede: o programa não chegou a este aparelho',
           carregando: 'buscando o programa da semana',
+          // HA' programa; falta outra coisa (revisao de 05/11): "sem
+          // programa" nesses casos mandava procurar o que existe.
+          'sem-semana': 'o programa não cobre esta semana',
+          'sem-horas': 'faltam as horas da semana do grupo',
+          'sem-dias': 'faltam os dias de produção da jornada',
+          'setup-excede': 'o setup cadastrado passa da jornada',
         }[takt.estado] || 'sem programa para comparar'),
     },
     {

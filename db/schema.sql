@@ -701,6 +701,15 @@ ALTER TABLE demanda_semanal ADD COLUMN IF NOT EXISTS inicio date;
 -- no programa colado: a semana vale inteira, como sempre.
 ALTER TABLE demanda_semanal ADD COLUMN IF NOT EXISTS dias smallint
   CHECK (dias IS NULL OR dias BETWEEN 1 AND 7);
+-- Os DIAS DE PRODUCAO da semana informados A' MAO (v2.101.0), no programa
+-- colado ou digitado. Pedido do PCP: a semana de Finados tem 4 dias, e o
+-- programa digitado valia a jornada inteira — o takt dela saia 25% frouxo.
+-- Coluna PROPRIA, e nao `dias`: `dias` marca a semana LIDA da planilha (so'
+-- a planilha muda, nao se apaga, trava a colagem — api/_lib/demanda.js), e
+-- a semana digitada continua editavel e apagavel. NULA = a semana inteira.
+-- O takt usa `dias` da planilha e, sem ele, este (fracaoDaSemana).
+ALTER TABLE demanda_semanal ADD COLUMN IF NOT EXISTS dias_producao smallint
+  CHECK (dias_producao IS NULL OR dias_producao BETWEEN 1 AND 7);
 CREATE UNIQUE INDEX IF NOT EXISTS demanda_semanal_unq
   ON demanda_semanal (empresa_id, grupo_id, ano, numero);
 CREATE INDEX IF NOT EXISTS demanda_semanal_grupo_idx

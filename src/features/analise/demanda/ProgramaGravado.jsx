@@ -22,7 +22,12 @@
  * dela usam as horas so' desses dias (fracaoDaSemana) — os mesmos numeros
  * do takt da medicao. A coluna so' aparece quando alguma semana os traz. Os
  * dias da jornada sao os DIGITADOS em Tempo disponivel, como as horas e o
- * setup: a tabela mostra o efeito do numero antes de salvar.
+ * setup: a tabela mostra o efeito do numero antes de salvar. A semana
+ * DIGITADA tambem pode ter dias (v2.101.0: feriado), com o mesmo efeito.
+ *
+ * EDITAR (v2.101.0): a semana digitada ou colada tem "Editar", que a leva
+ * ao formulario de Incluir uma semana com os valores gravados. A da
+ * planilha nao: so' a planilha a muda.
  */
 import { useMemo, useState } from 'react';
 import {
@@ -36,8 +41,13 @@ export default function ProgramaGravado({
   somenteLeitura = false, apagarTudo: podeApagarTudo = true, diasDaJornada = null,
   // A unidade do grupo (unidadeDoPosto): volumes na embalagem (v2.100.2).
   unidade = { singular: 'peça', plural: 'peças', abrev: 'pç' },
+  // Leva a semana ao formulario (DemandaSemanal). Sem ele, sem o botao.
+  aoEditar = null,
 }) {
-  const comDias = (semanas || []).some((s) => s.dias != null);
+  // A coluna Dias: semana da planilha ou digitada com feriado (v2.101.0).
+  const comDias = (semanas || []).some((s) => s.dias != null || s.diasProducao != null);
+  const daPlanilha = (semanas || []).some((s) => s.dias != null);
+  const editavel = (s) => Boolean(aoEditar) && !somenteLeitura && s.dias == null;
   const apagavel = (s) => !somenteLeitura || s.dias == null;
   const comAcoes = (semanas || []).some(apagavel);
   const [confirmarLimpeza, setConfirmarLimpeza] = useState(false);
@@ -47,18 +57,22 @@ export default function ProgramaGravado({
      pela metade — e "da menor para a maior sao 11x" mediria isso. A semana
      da planilha sem a jornada em dias nao se sabe se e' inteira: fica de
      fora tambem, e o texto diz por que (nao e' por ser "em parte"). */
-  const { inteiras, emParte, semDias } = useMemo(() => {
+  const { inteiras, emParte, semDias, semDiasDigitadas } = useMemo(() => {
     const fracoes = (semanas || []).map((s) => [s, fracaoDaSemana(s, diasDaJornada).fator]);
     return {
       inteiras: fracoes.filter(([, f]) => f === 1).map(([s]) => s),
       emParte: fracoes.filter(([, f]) => f != null && f < 1).length,
-      semDias: fracoes.filter(([, f]) => f == null).length,
+      // Sem os dias da jornada: a da planilha e a digitada com dias ficam de
+      // fora pelo mesmo motivo, e o texto diz de qual se trata.
+      semDias: fracoes.filter(([s, f]) => f == null && s.dias != null).length,
+      semDiasDigitadas: fracoes.filter(([s, f]) => f == null && s.dias == null).length,
     };
   }, [semanas, diasDaJornada]);
   const resumo = useMemo(() => resumoDaDemanda(inteiras), [inteiras]);
   const deFora = [
     emParte > 0 && `${emParte} ${emParte === 1 ? 'programada' : 'programadas'} só em parte`,
     semDias > 0 && `${semDias} da planilha, que sem os dias de produção do grupo não se sabe se ${semDias === 1 ? 'é inteira' : 'são inteiras'}`,
+    semDiasDigitadas > 0 && `${semDiasDigitadas} com dias de produção digitados, que sem os dias da jornada (em Tempo disponível) não se sabe que parte da semana ${semDiasDigitadas === 1 ? 'é' : 'são'}`,
   ].filter(Boolean);
   const periodos = useMemo(
     () => new Map(periodosDoPrograma(semanas || []).map((x) => [chaveSemana(x.semana), x])),
@@ -143,6 +157,15 @@ export default function ProgramaGravado({
                   <td style={est.tdNum}>{r ? `${(r.taktMs / 1000).toFixed(1)}s` : '—'}</td>
                   {comAcoes && (
                     <td style={est.tdAcoes}>
+                      {editavel(s) && (
+                        <button
+                          type="button" style={est.botaoTexto} disabled={ocupado}
+                          onClick={() => aoEditar(s)}
+                        >
+                          Editar
+                        </button>
+                      )}
+                      {editavel(s) && apagavel(s) && ' · '}
                       {apagavel(s) && (
                         <button
                           type="button" style={est.botaoTexto} disabled={ocupado}
@@ -167,8 +190,9 @@ export default function ProgramaGravado({
       )}
       {comDias && !(Number(diasDaJornada) > 0) && (
         <p style={est.blocoAviso}>
-          Nas semanas lidas da planilha, o takt também precisa dos dias de produção do
-          grupo: é com eles que se sabe que parte da semana são os dias programados.
+          {daPlanilha
+            ? 'Nas semanas lidas da planilha, o takt também precisa dos dias de produção do grupo: é com eles que se sabe que parte da semana são os dias programados.'
+            : 'Nas semanas com dias de produção informados, o takt também precisa dos dias de produção do grupo (Tempo disponível): é com eles que se sabe que parte da semana esses dias são.'}
         </p>
       )}
       {podeApagarTudo && (

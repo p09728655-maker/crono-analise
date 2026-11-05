@@ -191,10 +191,14 @@ async function gravar(empresaId, grupoId, semanas, desde) {
         INSERT INTO demanda_semanal (empresa_id, grupo_id, ano, numero, pecas, inicio, dias)
         VALUES (${empresaId}, ${grupoId}, ${s.ano}, ${s.numero}, ${s.pecas}, ${s.inicio}::date, ${s.dias})
         ON CONFLICT (empresa_id, grupo_id, ano, numero)
-        DO UPDATE SET pecas = EXCLUDED.pecas, inicio = EXCLUDED.inicio, dias = EXCLUDED.dias
+        DO UPDATE SET pecas = EXCLUDED.pecas, inicio = EXCLUDED.inicio, dias = EXCLUDED.dias,
+                      -- A semana passa a ser da planilha: os dias digitados a'
+                      -- mao (v2.101.0) nao valem mais — os dela mandam.
+                      dias_producao = NULL
          WHERE demanda_semanal.pecas IS DISTINCT FROM EXCLUDED.pecas
             OR demanda_semanal.inicio IS DISTINCT FROM EXCLUDED.inicio
             OR demanda_semanal.dias IS DISTINCT FROM EXCLUDED.dias
+            OR demanda_semanal.dias_producao IS NOT NULL
         RETURNING id`;
       mudaram += gravada.length;
     }

@@ -237,8 +237,8 @@ checar(/040-26 · 22\/09 a 28\/09\/2026 · 90\.500 peças/.test(await texto()),
 await janela.getByRole('button', { name: 'Incluir semana' }).click();
 await p.waitForTimeout(300);
 checar(enviados.length === 2 && JSON.stringify(enviados[1].semanas)
-  === JSON.stringify([{ ano: 2026, numero: 40, pecas: 90500, inicio: '2026-09-22' }]),
-  'a semana manual sobe pela mesma rota, com data — sem data nao ha botao');
+  === JSON.stringify([{ ano: 2026, numero: 40, pecas: 90500, inicio: '2026-09-22', diasProducao: null }]),
+  'a semana manual sobe pela mesma rota, com data — e diasProducao null: vazio e a semana inteira (v2.101.0)');
 checar(/040-26/.test(await texto()) && /22\/09 a 28\/09/.test(await texto()),
   'e aparece na tabela gravada com o periodo');
 

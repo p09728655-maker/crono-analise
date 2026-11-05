@@ -170,13 +170,19 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   cartões (volumes, **tempo por volume no período**, **tempo por volume com a
   linha rodando**, paradas marcadas, **lacunas**), o gráfico do intervalo de
   cada volume contra a linha do takt (o valor do takt e do "rodando" fica na
-  legenda, sem faixa de rótulos à direita, v2.100.2), a leitura em palavras e a folha A4 —
+  legenda, sem faixa de rótulos à direita, v2.100.2; a linha contínua do
+  período, com as paradas, v2.101.0), a leitura em palavras e a folha A4 —
   **deitada** (v2.98), para o gráfico ter a largura do papel (1.000 px). O
   `@page` paisagem vai na `<style>` do portal da folha e só vale enquanto ela
   está montada; as outras folhas seguem em pé. O gráfico fica sempre na 1ª
-  página, logo depois dos números; observação, análise do PCP, tabela da
-  junção, lacunas e nota vêm depois dele (em geral, na 2ª página). Os e2e
-  medem onde o gráfico termina na área útil da folha deitada. O PDF sai nomeado "Takt Time - produto - máquina - data hora". Clicar de novo
+  página, logo depois dos números; a conta do tempo da semana, observação,
+  análise do PCP, tabela da junção, lacunas e nota vêm depois dele. Desde a
+  v2.101.0 (letra 15% maior) a altura do gráfico é MEDIDA: a folha é
+  desenhada fora da tela na largura do papel (1.032 px), mede o que vem antes
+  e dá às barras o que sobra até 703 px, menos 14 de folga, entre 150 e
+  260 px (junção: 130 e 220). Os e2e medem onde o gráfico termina na área útil
+  da folha deitada, inclusive no pior caso (nome longo, parada, setup,
+  feriado, junção). O PDF sai nomeado "Takt Time - produto - máquina - data hora". Clicar de novo
   na linha, *Fechar* ou o Voltar do navegador fecham o painel — menos
   enquanto a análise daquela medição está sendo salva. O segundo clique de um
   duplo clique não vale.
@@ -358,7 +364,16 @@ separação é de trabalho, não de dado.
 ### Demanda semanal — o que o posto precisa entregar
 
 Na lateral do relatório, **Demanda semanal** guarda o programa do PCP por
-**grupo de máquina** (0002 FURADEIRA), uma linha por semana. No grupo da
+**grupo de máquina** (0002 FURADEIRA), uma linha por semana. Desde a v2.101.0
+a semana digitada pode ter **dias de produção** (`demanda_semanal.dias_producao`,
+1 a 7; vazio = semana inteira): o takt usa as horas e o setup só desses dias,
+pela mesma regra dos dias da planilha (`fracaoDaSemana`; os da planilha, em
+`dias`, mandam quando existem). A coluna é separada de `dias` porque `dias`
+marca a semana lida da planilha, que não se edita nem se apaga. A colagem não
+traz dias e não mexe nos que já estão gravados; a semana digitada sempre manda
+o campo (número ou `null`, que limpa). Cada semana digitada tem **Editar**, que
+a leva ao formulário com a semana travada. O período de cada semana termina na
+véspera da seguinte (`periodosDoPrograma`), sem dia repetido entre duas. No grupo da
 embalagem a tela fala em **volumes** (campo, programa gravado, quadro do
 programa e cartão da máquina — v2.100.2). No Ritmo por máquina, o que soma
 máquinas (topo, custo da parada, análise em texto, gráficos, tabelas e folha)

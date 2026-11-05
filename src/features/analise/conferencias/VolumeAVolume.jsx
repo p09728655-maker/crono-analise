@@ -1,4 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
@@ -21,6 +23,7 @@ import { claro } from '../../../theme/tokensAnalise.js';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
 import { VERSAO } from '../../../versao.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
+import { contaDaMaquina, demandaPorMaquina, formatarHorasMin } from '../../../components/RitmoDemanda.jsx';
 import { colunasDosKpis, est, imp } from './estilos.js';
 import { emSegundos } from './formato.js';
 
@@ -571,7 +574,7 @@ export default function VolumeAVolume({
       {pronto && (
         <FolhaVolumeAVolume
           conferencia={conferencia} leitura={r.leitura} takt={r.takt} frases={frases}
-          unidade={unidade} r={r}
+          unidade={unidade} r={r} maquinasDoGrupo={maquinasDoGrupo}
         />
       )}
     </>
@@ -1160,10 +1163,48 @@ function NotasSalvas({ conferencia, medicoes }) {
 // mais linhas e o grafico, uma legenda a mais: ele desce para caber na 1a
 // pagina (o e2e confere as duas).
 const LARGURA_GRAFICO_PAPEL = 1000;
-const ALTURA_GRAFICO_PAPEL = 260;
-// 200, e nao 220: com o titulo do produto em 2 linhas sobravam ~8 px (revisao
-// de 30/10); uma linha a mais na leitura mandava o grafico para a 2a pagina.
-const ALTURA_GRAFICO_PAPEL_JUNCAO = 200;
+/* A ALTURA DO GRAFICO NA FOLHA E' MEDIDA, nao fixa (v2.101.0). A 1a pagina
+   do A4 deitado tem 186 x 273 mm uteis (703 x 1032 px a 96 dpi), e o que
+   vem antes do grafico muda de folha para folha: nome do produto em uma ou
+   duas linhas, leitura de 3 ou 5 linhas, cartoes com o tempo da semana. Com
+   altura fixa, cada ajuste servia aos casos medidos e o seguinte mandava o
+   grafico inteiro para a 2a pagina (duas revisoes de 05/11: 739 e 731 px).
+   Agora a folha e' desenhada fora da tela na largura do papel, mede onde o
+   grafico comeca e quanto ocupam titulo e legenda, e da' as barras o que
+   sobra ate' o fim da pagina — entre o minimo, abaixo do qual o grafico
+   deixa de mostrar o ritmo, e o maximo de sempre. */
+const PAGINA_PAPEL = { altura: 703, largura: 1032, folga: 14 };
+const ALTURA_GRAFICO_PAPEL = { min: 150, max: 260 };
+/* LETRA MAIOR NA FOLHA (v2.101.0, pedido do PCP: "aumentar as letras da
+   impressao"): 15% em tudo o que a folha escreve, grafico incluido. So'
+   nesta folha — `imp` e' dividido com a do Ritmo por maquina, em pe', cuja
+   paginacao nao mudou. O grafico continua na 1a pagina (o e2e mede). */
+const ESCALA_PAPEL = 1.15;
+const maior = (estilo) => ({ ...estilo, fontSize: Math.round(estilo.fontSize * ESCALA_PAPEL * 10) / 10 });
+const impF = {
+  folha: maior(imp.folha),
+  titulo: maior(imp.titulo),
+  emissao: maior(imp.emissao),
+  campoRotulo: maior(imp.campoRotulo),
+  campoValor: maior(imp.campoValor),
+  campoSub: { fontSize: Math.round(8 * ESCALA_PAPEL * 10) / 10, color: '#555' },
+  tituloSecao: maior(imp.tituloSecao),
+  tabela: maior(imp.tabela),
+  nota: maior(imp.nota),
+  // Os blocos mais juntos que no Ritmo por maquina: a letra maior precisa
+  // do espaco, e o grafico tem de ficar na 1a pagina.
+  cabecalho: { ...imp.cabecalho, marginBottom: 10 },
+  identificacao: { ...imp.identificacao, marginBottom: 10 },
+  // A conta do takt, numa linha: borda fina, sem cor (a impressora e' P&B).
+  // DEPOIS do grafico: na 1a pagina, o cartao do takt ja' traz as horas.
+  tempoSemana: {
+    border: '1px solid #999', padding: '4px 8px', margin: '0 0 10px',
+    fontSize: Math.round(9.5 * ESCALA_PAPEL * 10) / 10, lineHeight: 1.35, breakInside: 'avoid',
+  },
+};
+// A junção tem a hora de cada medicao acima das barras e mais linhas na
+// leitura: o mesmo calculo, com teto menor.
+const ALTURA_GRAFICO_PAPEL_JUNCAO = { min: 130, max: 220 };
 
 /**
  * A FOLHA A4 — num portal, como a do cadastro de maquinas: enquanto a
@@ -1177,8 +1218,35 @@ const ALTURA_GRAFICO_PAPEL_JUNCAO = 200;
  * estudo) seguem em pe', pelo @page do index.html.
  */
 function FolhaVolumeAVolume({
-  conferencia, leitura, takt, frases, unidade, r,
+  conferencia, leitura, takt, frases, unidade, r, maquinasDoGrupo = 1,
 }) {
+  const tempo = contaDoTempo(takt, maquinasDoGrupo, unidade);
+  const refFolha = useRef(null);
+  const limites = r.juncao ? ALTURA_GRAFICO_PAPEL_JUNCAO : ALTURA_GRAFICO_PAPEL;
+  const [alturaGrafico, setAlturaGrafico] = useState(limites.max);
+  /* Mede a cada desenho (o conteudo acima do grafico muda com a leitura,
+     o produto, a analise). A medida nao depende da altura das barras — so'
+     do que vem antes e da moldura —, entao o segundo desenho repete a conta
+     e para. `folha-medindo` mostra a folha fora da tela, na largura do
+     papel, so' durante a medida. */
+  useLayoutEffect(() => {
+    const folha = refFolha.current;
+    if (!folha) return;
+    folha.classList.add('folha-medindo');
+    try {
+      const svg = folha.querySelector('svg[aria-label^="Intervalo entre"]');
+      const figura = svg?.closest('figure');
+      if (!svg || !figura) return;
+      const caixa = figura.getBoundingClientRect();
+      const moldura = caixa.height - svg.getBoundingClientRect().height;
+      const antes = caixa.top - folha.getBoundingClientRect().top;
+      const cabe = Math.floor(PAGINA_PAPEL.altura - PAGINA_PAPEL.folga - antes - moldura);
+      const alvo = Math.max(limites.min, Math.min(limites.max, cabe));
+      if (alvo !== alturaGrafico) setAlturaGrafico(alvo);
+    } finally {
+      folha.classList.remove('folha-medindo');
+    }
+  });
   const hoje = new Date().toLocaleDateString('pt-BR');
   const par = somarParadas(conferencia.paradas);
   const { juncao, roubo } = r;
@@ -1205,26 +1273,30 @@ function FolhaVolumeAVolume({
     ];
 
   return createPortal(
-    <div className="somente-impressao" style={imp.folha}>
-      <style>{'@media print { #raiz { display: none !important } @page { size: A4 landscape; margin: 12mm; } }'}</style>
+    <div className="somente-impressao" style={impF.folha} ref={refFolha}>
+      <style>
+        {'@media print { #raiz { display: none !important } @page { size: A4 landscape; margin: 12mm; } }'
+          + ` @media screen { .somente-impressao.folha-medindo { display: block !important; position: absolute !important;
+              left: -20000px; top: 0; width: ${PAGINA_PAPEL.largura}px; visibility: hidden; } }`}
+      </style>
 
-      <header style={imp.cabecalho}>
+      <header style={impF.cabecalho}>
         <div>
           <img src={LOGO_PATRIMAR} alt="Patrimar Móveis" style={imp.logo} />
           {/* Mesmo nome do arquivo: o que esta' escrito na folha bate com o
               nome do PDF na pasta. */}
-          <h1 style={imp.titulo}>
+          <h1 style={impF.titulo}>
             Takt Time — {[conferencia.peca || 'sem produto', conferencia.maquina, juncao && `junção de ${n} medições`]
               .filter(Boolean).join(' · ')}
           </h1>
         </div>
-        <div style={imp.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
+        <div style={impF.emissao}>RitmoPatrimar v{VERSAO} · emitido em {hoje}</div>
       </header>
 
       {/* Os roubados vao na identificacao, ao lado do parado que os causou.
           Seis colunas: os das lacunas cabem na mesma linha, e o grafico
           nao desce para a 2a pagina. */}
-      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
+      <section style={{ ...impF.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
         {[
           ...identificacao,
           [capital(unidade.plural), String(conferencia.pecas)],
@@ -1245,39 +1317,46 @@ function FolhaVolumeAVolume({
           ]),
         ].map(([k, v]) => (
           <div key={k} style={imp.campo}>
-            <span style={imp.campoRotulo}>{k}</span>
-            <span style={imp.campoValor}>{v}</span>
+            <span style={impF.campoRotulo}>{k}</span>
+            <span style={impF.campoValor}>{v}</span>
           </div>
         ))}
       </section>
 
       {/* O destaque no papel e' a borda grossa, nao a cor: a impressora da
           fabrica e' P&B. */}
-      <section style={{ border: '2px solid #000', padding: '6px 8px', marginBottom: 12, breakInside: 'avoid' }}>
+      <section style={{ border: '2px solid #000', padding: '6px 8px', marginBottom: 8, breakInside: 'avoid' }}>
         <p style={{ margin: 0, fontWeight: 700 }}>{frases.manchete}</p>
         {frases.linhas.map((l) => <p key={l} style={{ margin: '4px 0 0' }}>{l}</p>)}
       </section>
 
       {/* Volumes/hora depois de Lacunas, como na tela. */}
-      <section style={{ ...imp.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
+      <section style={{ ...impF.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
         {[
           ...numerosDaLeitura(leitura, takt, unidade, { juncao: Boolean(juncao) }),
           juncao
             ? { ...porHoraDaMedicao(conferencia, unidade), sub: `nas ${n} medições inteiras, com as paradas` }
             : porHoraDaMedicao(conferencia, unidade),
-        ].map((k) => (
-          <div key={k.rotulo} style={imp.campo}>
-            <span style={imp.campoRotulo}>{k.rotulo}</span>
-            <span style={imp.campoValor}>{k.valor}</span>
-            {k.sub && <span style={{ fontSize: 8, color: '#555' }}>{k.sub}</span>}
-          </div>
-        ))}
+        ].map((k) => {
+          /* No papel o cartao do takt diz de que TEMPO ele sai (v2.101.0):
+             "40h42min ÷ 8.500 volumes" — a conta inteira vem depois do
+             grafico, e a 1a pagina nao ganha uma linha a mais. */
+          const sub = k.chave === 'takt' && tempo?.curto ? `${k.sub} · ${tempo.curto}` : k.sub;
+          return (
+            <div key={k.rotulo} style={imp.campo}>
+              <span style={impF.campoRotulo}>{k.rotulo}</span>
+              <span style={impF.campoValor}>{k.valor}</span>
+              {sub && <span style={impF.campoSub}>{sub}</span>}
+            </div>
+          );
+        })}
       </section>
 
       <GraficoIntervalos
         leitura={leitura} unidade={unidade} larguraFixa={LARGURA_GRAFICO_PAPEL}
-        altura={juncao ? ALTURA_GRAFICO_PAPEL_JUNCAO : ALTURA_GRAFICO_PAPEL}
+        altura={alturaGrafico}
         segmentos={segmentosDaJuncao(juncao)}
+        escalaTexto={ESCALA_PAPEL}
       />
 
       {/* DEPOIS DO GRAFICO (v2.98.2): deitada, a folha tem 186 mm de
@@ -1287,6 +1366,11 @@ function FolhaVolumeAVolume({
           sempre na 1a, logo abaixo dos numeros; o que se escreve sobre
           ele vem em seguida. */}
       <div style={{ marginTop: 10 }}>
+        {/* O TEMPO DA SEMANA (v2.101.0, pedido do PCP): o takt com a conta
+            inteira — jornada, dias, setup, o que sobra e o programa. Sem ela
+            o papel dizia "takt 17.2 s" e ninguem na reuniao sabia de onde.
+            Logo depois do grafico: na 1a pagina, se couber. */}
+        {tempo?.texto && <p style={impF.tempoSemana}>{tempo.texto}</p>}
         {medicoes.filter((c) => c.observacao).map((c) => (
           <p key={c.id} style={{ margin: '0 0 10px' }}>
             <strong>Obs. do analista{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {c.observacao}
@@ -1309,8 +1393,8 @@ function FolhaVolumeAVolume({
 
       {juncao && (
         <section style={{ marginBottom: 10, breakInside: 'avoid' }}>
-          <h2 style={imp.tituloSecao}>As {n} medições</h2>
-          <table style={imp.tabela}>
+          <h2 style={impF.tituloSecao}>As {n} medições</h2>
+          <table style={impF.tabela}>
             <thead>
               <tr>
                 <th style={imp.th}>Medição</th>
@@ -1341,8 +1425,8 @@ function FolhaVolumeAVolume({
 
       {lacunas.length > 0 && (
         <section style={{ marginTop: 10 }}>
-          <h2 style={imp.tituloSecao}>Onde a linha parou sem parada marcada</h2>
-          <table style={imp.tabela}>
+          <h2 style={impF.tituloSecao}>Onde a linha parou sem parada marcada</h2>
+          <table style={impF.tabela}>
             <thead>
               <tr>
                 {juncao && <th style={imp.th}>Medição</th>}
@@ -1367,12 +1451,12 @@ function FolhaVolumeAVolume({
             </tbody>
           </table>
           {restantes > 0 && (
-            <p style={imp.nota}>E mais {restantes} lacuna(s) menores — a lista completa está na tela.</p>
+            <p style={impF.nota}>E mais {restantes} lacuna(s) menores — a lista completa está na tela.</p>
           )}
         </section>
       )}
 
-      <p style={imp.nota}>
+      <p style={impF.nota}>
         {notaDoCriterio(leitura, unidade, {
           juncao: Boolean(juncao), roubo: roubo?.roubados > 0, lacunas: lacunasRoubo?.roubados > 0, deixou: deixou?.total > 0,
         })}
@@ -1389,4 +1473,35 @@ function porVideo(medicoes) {
   const deVideo = medicoes.filter((c) => c.origem === 'video').length;
   if (!deVideo) return null;
   return deVideo === medicoes.length ? 'por vídeo' : `${deVideo} de ${medicoes.length} por vídeo`;
+}
+
+/**
+ * A CONTA DO TAKT DA SEMANA, por maquina, como o painel do Ritmo / Demanda
+ * a escreve: as horas em h/min DERIVADAS uma da outra (contaDaMaquina — a
+ * subtracao que se confere de cabeca fecha sempre), o programa dividido
+ * pelas maquinas do grupo (demandaPorMaquina) e o takt. Com 2 maquinas, o
+ * takt de 43,9 s e' de 44 h sobre METADE dos volumes — dizer so' "7.222
+ * volumes" levava quem confere a 21,9 s (revisao de 05/11).
+ *
+ * Sem setup cadastrado a conta diz que falta (contaDaMaquina), como a tela.
+ * Sem takt, null: o motivo ja' esta' no cartao e na leitura — repetir
+ * gastaria uma linha da folha.
+ */
+function contaDoTempo(takt, maquinas, unidade) {
+  if (!(takt?.taktMs > 0)) return null;
+  const conta = contaDaMaquina({
+    jornadaPorMaquina: takt.jornadaPorMaquina, setupPorMaquina: takt.setupPorMaquina, dias: takt.dias,
+  });
+  const parte = demandaPorMaquina({ demanda: takt.demanda, maquinas });
+  if (!conta || !parte) return null;
+  const horas = formatarHorasMin(conta.produtivoMin / 60);
+  const porMaq = Number(maquinas) > 1
+    ? `${parte.semana} ${unidade.plural} na semana ÷ ${maquinas} máquinas = ${parte.texto} por máquina`
+    : `${parte.texto} ${unidade.plural} na semana`;
+  return {
+    // Com mais de uma maquina o divisor e' a parte de CADA uma — e diz isso:
+    // "÷ 1.100 volumes" sozinho e' um numero que nao esta' no programa.
+    curto: `${horas} ÷ ${parte.texto} ${unidade.plural}${Number(maquinas) > 1 ? ' por máquina' : ''}`,
+    texto: `Tempo da semana ${takt.semana} — ${conta.texto} ${porMaq} → takt ${(takt.taktMs / 1000).toFixed(1)} s por ${unidade.singular}.`,
+  };
 }

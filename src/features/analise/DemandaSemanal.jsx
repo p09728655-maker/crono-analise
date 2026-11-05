@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { chaveSemana } from '../../domain/demandaSemanal.js';
 import { unidadeDoPosto } from '../../domain/cronoanalise.js';
 import ColarPlanilha from './demanda/ColarPlanilha.jsx';
@@ -59,6 +59,14 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
   const tempo = useTempoDisponivel(grupo, maquinasDoGrupo);
   // Volumes na embalagem, pecas no resto (pelo nome do grupo, v2.100.2).
   const unidade = unidadeDoPosto(grupo?.nome);
+  /* A semana que o "Editar" do programa gravado levou ao formulario
+     (v2.101.0). A versao faz o mesmo Editar recarregar o que esta' gravado.
+     Trocar de grupo larga a edicao: a semana era do outro grupo. */
+  const [edicao, setEdicao] = useState(null);
+  // A edicao SABE DE QUAL GRUPO e': na troca, o formulario novo (key) ja'
+  // nasce sem ela. Limpar num efeito chegava tarde — o formulario montava
+  // com a semana do outro grupo e se preenchia antes (revisao de 05/11).
+  const edicaoDoGrupo = edicao?.grupoId === grupoId ? edicao : null;
 
   const semGrupo = cadastro && !cadastro.grupos?.length;
 
@@ -92,7 +100,8 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
               <span style={est.rotuloCampo}>Grupo de máquina</span>
               <select
                 style={est.input} value={grupoId || ''} disabled={ocupado}
-                onChange={(ev) => escolherGrupo(ev.target.value)}
+                // Trocar de grupo LARGA a edicao: voltar ao grupo nao a reabre.
+                onChange={(ev) => { setEdicao(null); escolherGrupo(ev.target.value); }}
               >
                 {cadastro.grupos.map((g) => (
                   <option key={g.id} value={g.id}>{g.codigo} · {g.nome}</option>
@@ -108,7 +117,9 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
             <TempoDisponivel
               tempo={tempo} grupo={grupo} maquinasDoGrupo={maquinasDoGrupo} ocupado={ocupado}
               aoSalvar={() => demanda.salvarTempo(tempo.valores)}
-              precisaDias={lidas || Boolean(planilha?.ativa)}
+              /* Semana com dias de producao (da planilha OU digitados) so'
+                 tem takt com os dias da jornada: o campo vem aberto. */
+              precisaDias={lidas || Boolean(planilha?.ativa) || (semanas || []).some((s) => s.diasProducao != null)}
             />
 
             {planilha && <OrigemPlanilha planilha={planilha} />}
@@ -116,8 +127,15 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
 
             {!semColagem && (
               <>
+                {/* key: trocar de grupo RECOMECA o formulario. So' largar o modo
+                    edicao deixava os numeros do outro grupo nos campos, e um
+                    clique os gravava por cima do programa deste (revisao de
+                    05/11: 7.222 da embalagem sobre os 120.000 da furadeira). */}
                 <SemanaManual
+                  key={grupoId || 'sem-grupo'}
                   semanas={semanas} ocupado={ocupado} aoIncluir={demanda.gravarSemanas} unidade={unidade}
+                  diasDaJornada={tempo.valores.diasSemana}
+                  edicao={edicaoDoGrupo} aoSairDaEdicao={() => setEdicao(null)}
                 />
                 <ColarPlanilha ocupado={ocupado} aoGravar={demanda.gravarSemanas} />
               </>
@@ -143,6 +161,7 @@ export default function DemandaSemanal({ aoFechar, grupoInicial = null }) {
                 aoApagarSemana={demanda.apagarSemana} aoApagarTudo={demanda.apagarTudo}
                 somenteLeitura={semColagem} apagarTudo={apagarTudo}
                 diasDaJornada={tempo.valores.diasSemana}
+                aoEditar={(s) => setEdicao({ semana: s, versao: Date.now(), grupoId })}
               />
             )}
           </>
