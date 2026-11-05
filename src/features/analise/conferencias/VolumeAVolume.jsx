@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import {
   faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
-import { comoHoras, taktDaMedicao } from '../../../domain/demandaSemanal.js';
+import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
   deixaramDe, deixouDeEmbalar, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, porHoraDaMedicao,
-  roubadosPelasLacunas, roubadosPelasParadas, semTakt, tempoSomado,
+  roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
 } from '../../../domain/volumeAVolume.js';
 import {
   CRITERIOS_JUNCAO, PREFIXO_JUNCAO, faixaDaJuncao, frasesDaJuncao, horaDaMedicao, idsDaJuncao, juntarMedicoes,
@@ -21,6 +21,7 @@ import { claro } from '../../../theme/tokensAnalise.js';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
 import { VERSAO } from '../../../versao.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
+import { contaDaMaquina, demandaPorMaquina, formatarHorasMin } from '../../../components/RitmoDemanda.jsx';
 import { colunasDosKpis, est, imp } from './estilos.js';
 import { emSegundos } from './formato.js';
 
@@ -571,7 +572,7 @@ export default function VolumeAVolume({
       {pronto && (
         <FolhaVolumeAVolume
           conferencia={conferencia} leitura={r.leitura} takt={r.takt} frases={frases}
-          unidade={unidade} r={r}
+          unidade={unidade} r={r} maquinasDoGrupo={maquinasDoGrupo}
         />
       )}
     </>
@@ -1160,9 +1161,11 @@ function NotasSalvas({ conferencia, medicoes }) {
 // mais linhas e o grafico, uma legenda a mais: ele desce para caber na 1a
 // pagina (o e2e confere as duas).
 const LARGURA_GRAFICO_PAPEL = 1000;
-// 240 (era 260) e 150 (era 200) desde a letra maior da v2.101.0: o grafico
-// perde altura para os numeros crescerem e ainda caber na 1a pagina.
-const ALTURA_GRAFICO_PAPEL = 240;
+// 230 (era 260) e 185 (era 200) desde a letra maior da v2.101.0: o grafico
+// perde um pouco de altura para os numeros crescerem e caber na 1a pagina
+// tambem no pior caso (nome em duas linhas, parada, setup e feriado — o
+// script da revisao media 739 de 703 px antes deste ajuste).
+const ALTURA_GRAFICO_PAPEL = 230;
 /* LETRA MAIOR NA FOLHA (v2.101.0, pedido do PCP: "aumentar as letras da
    impressao"): 15% em tudo o que a folha escreve, grafico incluido. So'
    nesta folha — `imp` e' dividido com a do Ritmo por maquina, em pe', cuja
@@ -1184,14 +1187,15 @@ const impF = {
   cabecalho: { ...imp.cabecalho, marginBottom: 10 },
   identificacao: { ...imp.identificacao, marginBottom: 10 },
   // A conta do takt, numa linha: borda fina, sem cor (a impressora e' P&B).
+  // DEPOIS do grafico: na 1a pagina, o cartao do takt ja' traz as horas.
   tempoSemana: {
-    border: '1px solid #999', padding: '4px 8px', margin: '-6px 0 10px',
+    border: '1px solid #999', padding: '4px 8px', margin: '0 0 10px',
     fontSize: Math.round(9.5 * ESCALA_PAPEL * 10) / 10, lineHeight: 1.35, breakInside: 'avoid',
   },
 };
 // 200, e nao 220: com o titulo do produto em 2 linhas sobravam ~8 px (revisao
 // de 30/10); uma linha a mais na leitura mandava o grafico para a 2a pagina.
-const ALTURA_GRAFICO_PAPEL_JUNCAO = 150;
+const ALTURA_GRAFICO_PAPEL_JUNCAO = 185;
 
 /**
  * A FOLHA A4 — num portal, como a do cadastro de maquinas: enquanto a
@@ -1205,8 +1209,9 @@ const ALTURA_GRAFICO_PAPEL_JUNCAO = 150;
  * estudo) seguem em pe', pelo @page do index.html.
  */
 function FolhaVolumeAVolume({
-  conferencia, leitura, takt, frases, unidade, r,
+  conferencia, leitura, takt, frases, unidade, r, maquinasDoGrupo = 1,
 }) {
+  const tempo = contaDoTempo(takt, maquinasDoGrupo, unidade);
   const hoje = new Date().toLocaleDateString('pt-BR');
   const par = somarParadas(conferencia.paradas);
   const { juncao, roubo } = r;
@@ -1293,19 +1298,20 @@ function FolhaVolumeAVolume({
           juncao
             ? { ...porHoraDaMedicao(conferencia, unidade), sub: `nas ${n} medições inteiras, com as paradas` }
             : porHoraDaMedicao(conferencia, unidade),
-        ].map((k) => (
-          <div key={k.rotulo} style={imp.campo}>
-            <span style={impF.campoRotulo}>{k.rotulo}</span>
-            <span style={impF.campoValor}>{k.valor}</span>
-            {k.sub && <span style={impF.campoSub}>{k.sub}</span>}
-          </div>
-        ))}
+        ].map((k) => {
+          /* No papel o cartao do takt diz de que TEMPO ele sai (v2.101.0):
+             "40h42min ÷ 8.500 volumes" — a conta inteira vem depois do
+             grafico, e a 1a pagina nao ganha uma linha a mais. */
+          const sub = k.chave === 'takt' && tempo?.curto ? `${k.sub} · ${tempo.curto}` : k.sub;
+          return (
+            <div key={k.rotulo} style={imp.campo}>
+              <span style={impF.campoRotulo}>{k.rotulo}</span>
+              <span style={impF.campoValor}>{k.valor}</span>
+              {sub && <span style={impF.campoSub}>{sub}</span>}
+            </div>
+          );
+        })}
       </section>
-
-      {/* O TEMPO DA SEMANA (v2.101.0, pedido do PCP): o takt com a conta
-          inteira — jornada, dias, setup, o que sobra e o programa. Sem ela o
-          papel dizia "takt 17.2 s" e ninguem na reuniao sabia de onde. */}
-      <ContaDoTempoDaSemana takt={takt} unidade={unidade} />
 
       <GraficoIntervalos
         leitura={leitura} unidade={unidade} larguraFixa={LARGURA_GRAFICO_PAPEL}
@@ -1321,6 +1327,11 @@ function FolhaVolumeAVolume({
           sempre na 1a, logo abaixo dos numeros; o que se escreve sobre
           ele vem em seguida. */}
       <div style={{ marginTop: 10 }}>
+        {/* O TEMPO DA SEMANA (v2.101.0, pedido do PCP): o takt com a conta
+            inteira — jornada, dias, setup, o que sobra e o programa. Sem ela
+            o papel dizia "takt 17.2 s" e ninguem na reuniao sabia de onde.
+            Logo depois do grafico: na 1a pagina, se couber. */}
+        {tempo?.texto && <p style={impF.tempoSemana}>{tempo.texto}</p>}
         {medicoes.filter((c) => c.observacao).map((c) => (
           <p key={c.id} style={{ margin: '0 0 10px' }}>
             <strong>Obs. do analista{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {c.observacao}
@@ -1426,34 +1437,30 @@ function porVideo(medicoes) {
 }
 
 /**
- * A CONTA DO TAKT DA SEMANA, por maquina, como o programa a faz
- * (taktDaMedicao): jornada (so' os dias de producao, na semana com
- * feriado) menos o setup planejado, dividido pelo programa da semana.
- * Sem takt, a linha diz por que — o mesmo motivo do cartao.
+ * A CONTA DO TAKT DA SEMANA, por maquina, como o painel do Ritmo / Demanda
+ * a escreve: as horas em h/min DERIVADAS uma da outra (contaDaMaquina — a
+ * subtracao que se confere de cabeca fecha sempre), o programa dividido
+ * pelas maquinas do grupo (demandaPorMaquina) e o takt. Com 2 maquinas, o
+ * takt de 43,9 s e' de 44 h sobre METADE dos volumes — dizer so' "7.222
+ * volumes" levava quem confere a 21,9 s (revisao de 05/11).
+ *
+ * Sem setup cadastrado a conta diz que falta (contaDaMaquina), como a tela.
+ * Sem takt, null: o motivo ja' esta' no cartao e na leitura — repetir
+ * gastaria uma linha da folha.
  */
-function ContaDoTempoDaSemana({ takt, unidade }) {
-  if (!(takt?.taktMs > 0)) {
-    return <p style={impF.tempoSemana}><strong>Tempo da semana:</strong> sem takt — {semTakt(takt?.estado)}</p>;
-  }
-  const h = (x) => `${comoHoras(x)} h`;
-  const jornada = Number(takt.jornadaPorMaquina) > 0 ? takt.jornadaPorMaquina : null;
-  const setup = Number(takt.setupPorMaquina) > 0 ? takt.setupPorMaquina : null;
-  const dias = takt.dias?.programados && takt.dias.daJornada && takt.dias.programados < takt.dias.daJornada
-    ? ` (${takt.dias.programados} de ${takt.dias.daJornada} dias)`
-    : '';
-  // A conta so' aparece quando ha' o que descontar: "44 h de jornada =
-  // 44 h" seria conta sem assunto.
-  const partes = (setup || dias) ? [
-    jornada ? `${h(jornada)} de jornada${dias}` : null,
-    setup ? `− ${h(setup)} de setup` : null,
-  ].filter(Boolean) : [];
-  return (
-    <p style={impF.tempoSemana}>
-      <strong>Tempo da semana {takt.semana}, por máquina:</strong>{' '}
-      {partes.length ? `${partes.join(' ')} = ` : ''}
-      <strong>{h(takt.horasPorMaquina)}</strong>
-      {takt.demanda ? ` · programa de ${Number(takt.demanda).toLocaleString('pt-BR')} ${unidade.plural}` : ''}
-      {' '}→ takt <strong>{(takt.taktMs / 1000).toFixed(1)} s</strong> por {unidade.singular}.
-    </p>
-  );
+function contaDoTempo(takt, maquinas, unidade) {
+  if (!(takt?.taktMs > 0)) return null;
+  const conta = contaDaMaquina({
+    jornadaPorMaquina: takt.jornadaPorMaquina, setupPorMaquina: takt.setupPorMaquina, dias: takt.dias,
+  });
+  const parte = demandaPorMaquina({ demanda: takt.demanda, maquinas });
+  if (!conta || !parte) return null;
+  const horas = formatarHorasMin(conta.produtivoMin / 60);
+  const porMaq = Number(maquinas) > 1
+    ? `${parte.semana} ${unidade.plural} na semana ÷ ${maquinas} máquinas = ${parte.texto} por máquina`
+    : `${parte.texto} ${unidade.plural} na semana`;
+  return {
+    curto: `${horas} ÷ ${parte.texto} ${unidade.plural}`,
+    texto: `Tempo da semana ${takt.semana} — ${conta.texto} ${porMaq} → takt ${(takt.taktMs / 1000).toFixed(1)} s por ${unidade.singular}.`,
+  };
 }

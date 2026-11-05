@@ -433,7 +433,7 @@ function explicacao(estado, semana, demanda, grupoNome, programa, medicao, daPla
     // So' a semana da planilha chega aqui: ela traz os dias com lote, e o
     // takt usa as horas so' desses dias — que parte da semana eles sao, so'
     // a jornada em dias diz.
-    return `Há ${demanda?.toLocaleString('pt-BR') ?? ''} volumes programados para a ${nomeDaSemana(semana)}, em ${semana?.dias ?? semana?.diasProducao} ${(semana?.dias ?? semana?.diasProducao) === 1 ? 'dia' : 'dias'}. O takt usa as horas só desses dias, e para isso precisa saber quantos dias de produção a semana do grupo tem. Informe os dias de produção na tela de demanda: não presumo nenhum, como não presumo as horas.`;
+    return `Há ${demanda?.toLocaleString('pt-BR') ?? ''} volumes programados para a ${nomeDaSemana(semana)}, em ${semana?.dias ?? semana?.diasProducao} ${(semana?.dias ?? semana?.diasProducao) === 1 ? 'dia' : 'dias'}. O takt usa as horas só desses dias, e para isso precisa saber quantos dias de produção a semana do grupo tem. Informe os dias de produção da jornada em Tempo disponível, na tela de demanda: não presumo nenhum, como não presumo as horas.`;
   }
   if (estado === 'setup-excede') {
     // As horas ESTAO informadas: mandar informa-las apontaria uma correcao

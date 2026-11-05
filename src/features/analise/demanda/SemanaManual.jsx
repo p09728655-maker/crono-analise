@@ -221,7 +221,9 @@ export default function SemanaManual({
                 <span style={est.previaItem}>
                   {' '}— hoje está com {jaGravada.pecas.toLocaleString('pt-BR')}
                   {jaGravada.inicio ? ` (início ${comoDia(emUtc(jaGravada.inicio))}` : ' (sem data'}
-                  {jaGravada.diasProducao != null ? `, ${jaGravada.diasProducao} dias)` : ', semana inteira)'}
+                  {jaGravada.diasProducao != null
+                    ? `, ${jaGravada.diasProducao} ${jaGravada.diasProducao === 1 ? 'dia' : 'dias'})`
+                    : ', semana inteira)'}
                 </span>
               )}
             </div>
@@ -239,10 +241,11 @@ export default function SemanaManual({
 /** O que os dias digitados fazem com o takt, em palavras. */
 function textoDosDias(dias, jornada) {
   if (dias == null) return jornada ? `semana inteira (${jornada} dias)` : 'semana inteira';
-  if (!jornada) return `${dias} dias de produção — informe os dias da jornada em Tempo disponível`;
+  const nDias = `${dias} ${dias === 1 ? 'dia' : 'dias'}`;
+  if (!jornada) return `${nDias} de produção — informe os dias da jornada em Tempo disponível`;
   if (dias >= jornada) {
     return dias > jornada
-      ? `${dias} dias — além dos ${jornada} da jornada: hora extra não entra no takt, vale a semana inteira`
+      ? `${nDias} — além dos ${jornada} da jornada: hora extra não entra no takt, vale a semana inteira`
       : `${dias} de ${jornada} dias: a semana inteira`;
   }
   return `${dias} de ${jornada} dias de produção: o takt usa ${Math.round((dias / jornada) * 100)}% das horas`;

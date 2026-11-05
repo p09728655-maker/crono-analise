@@ -57,18 +57,22 @@ export default function ProgramaGravado({
      pela metade — e "da menor para a maior sao 11x" mediria isso. A semana
      da planilha sem a jornada em dias nao se sabe se e' inteira: fica de
      fora tambem, e o texto diz por que (nao e' por ser "em parte"). */
-  const { inteiras, emParte, semDias } = useMemo(() => {
+  const { inteiras, emParte, semDias, semDiasDigitadas } = useMemo(() => {
     const fracoes = (semanas || []).map((s) => [s, fracaoDaSemana(s, diasDaJornada).fator]);
     return {
       inteiras: fracoes.filter(([, f]) => f === 1).map(([s]) => s),
       emParte: fracoes.filter(([, f]) => f != null && f < 1).length,
-      semDias: fracoes.filter(([, f]) => f == null).length,
+      // Sem os dias da jornada: a da planilha e a digitada com dias ficam de
+      // fora pelo mesmo motivo, e o texto diz de qual se trata.
+      semDias: fracoes.filter(([s, f]) => f == null && s.dias != null).length,
+      semDiasDigitadas: fracoes.filter(([s, f]) => f == null && s.dias == null).length,
     };
   }, [semanas, diasDaJornada]);
   const resumo = useMemo(() => resumoDaDemanda(inteiras), [inteiras]);
   const deFora = [
     emParte > 0 && `${emParte} ${emParte === 1 ? 'programada' : 'programadas'} só em parte`,
     semDias > 0 && `${semDias} da planilha, que sem os dias de produção do grupo não se sabe se ${semDias === 1 ? 'é inteira' : 'são inteiras'}`,
+    semDiasDigitadas > 0 && `${semDiasDigitadas} com dias de produção digitados, que sem os dias da jornada (em Tempo disponível) não se sabe que parte da semana ${semDiasDigitadas === 1 ? 'é' : 'são'}`,
   ].filter(Boolean);
   const periodos = useMemo(
     () => new Map(periodosDoPrograma(semanas || []).map((x) => [chaveSemana(x.semana), x])),

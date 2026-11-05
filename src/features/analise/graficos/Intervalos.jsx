@@ -86,11 +86,24 @@ export function GraficoIntervalos({
      primeiro ao ultimo toque, COM as paradas — o numero do veredito. Com a
      linha dele no grafico, a historia se le' sem texto: rodando abaixo do
      takt, periodo acima — o que tira a linha do takt sao as paradas. */
-  const periodoMs = leitura.suficiente && leitura.periodoMs > 0 ? leitura.periodoMs : 0;
+  /* Sem parada marcada entre os toques, periodo e rodando sao o MESMO
+     numero: a linha continua cobriria a pontilhada e diria duas vezes a
+     mesma coisa — so' aparece quando difere (mais de 1%). */
+  const periodoMs = leitura.suficiente && leitura.periodoMs > 0 && mediaMs > 0
+    && Math.abs(leitura.periodoMs - mediaMs) / mediaMs > 0.01
+    ? leitura.periodoMs : 0;
   const maior = Math.max(...intervalos);
-  const tetoDesejado = normal > 0 ? Math.max(normal * 3, mediaMs * 1.25, takt * 1.25, periodoMs * 1.15) : 0;
+  /* O TETO NAO SOBE pelo periodo (revisao de 05/11): com uma hora de parada
+     o periodo ia a 197 s e esmagava barras, takt e rodando nos 10% de
+     baixo — contra a regra do teto, que existe para as barras mostrarem o
+     ritmo. Ate' o teto de sempre ele entra na escala; acima, a linha fica
+     PRESA NO TOPO e a legenda diz o valor e que passou do topo. */
+  const tetoDesejado = normal > 0 ? Math.max(normal * 3, mediaMs * 1.25, takt * 1.25) : 0;
   const cortar = tetoDesejado > 0 && maior > tetoDesejado;
-  const maxY = cortar ? tetoDesejado : Math.max(maior, takt, periodoMs) * 1.12;
+  const maxY = cortar
+    ? tetoDesejado
+    : Math.max(maior, takt, Math.min(periodoMs, tetoDesejado || periodoMs)) * 1.12;
+  const periodoAcimaDoTopo = periodoMs > maxY;
   const passoY = passoAgradavel(maxY / 1000) * 1000;
 
   const linhasDeReferencia = [
@@ -99,8 +112,11 @@ export function GraficoIntervalos({
     },
     // Continua e mais grossa: no papel P&B se separa do takt (tracejado) e
     // do rodando (pontilhado) pelo traco, nao pela cor.
-    periodoMs > 0 && periodoMs <= maxY && {
-      chave: 'periodo', ms: periodoMs, nome: 'No período', cor: claro.critico, traco: null, espessura: 3,
+    // Vermelha so' quando passa do takt (a mesma cor da lacuna diz "atencao");
+    // dentro dele, a cor do texto. Acima do topo, desenhada no topo.
+    periodoMs > 0 && {
+      chave: 'periodo', ms: Math.min(periodoMs, maxY), valor: periodoMs, nome: 'No período',
+      cor: takt > 0 && periodoMs > takt ? claro.critico : claro.texto, traco: null, espessura: 3,
     },
     mediaMs > 0 && mediaMs <= maxY && {
       chave: 'media', ms: mediaMs, nome: 'Rodando', cor: claro.texto, traco: '2 3', espessura: 2,
@@ -187,7 +203,10 @@ export function GraficoIntervalos({
     : emSegundos(v));
 
   return (
-    <figure style={est.figura}>
+    /* No PAPEL (larguraFixa) a moldura respira menos: os 40 px de folga
+       interna eram o que faltava para o grafico ficar na 1a pagina com a
+       letra maior da v2.101.0. */
+    <figure style={larguraFixa ? { ...est.figura, padding: '8px 12px' } : est.figura}>
       <figcaption style={escalaTexto === 1 ? est.titulo : { ...est.titulo, fontSize: fs(15) }}>
         Intervalo entre {unidade.plural}
         <span style={escalaTexto === 1 ? est.subtitulo : { ...est.subtitulo, fontSize: fs(12) }}>
@@ -209,7 +228,7 @@ export function GraficoIntervalos({
           ...linhasDeReferencia.map((r) => ({
             rotulo: {
               media: `Rodando — média dos intervalos: ${emSegundos(r.ms)}`,
-              periodo: `No período, com as paradas: ${emSegundos(r.ms)}`,
+              periodo: `No período, com as paradas: ${emSegundos(r.valor)}${periodoAcimaDoTopo ? ' (acima do topo do gráfico)' : ''}`,
               takt: `Takt da semana: ${emSegundos(r.ms)}`,
             }[r.chave],
             cor: r.cor,
