@@ -64,6 +64,8 @@ const PRODUTO_DA_LISTA = /^\d{6} · /;
 const MAX_MOTIVO = 500;
 /** O que vem do painel (o `erro` dele) entra na frase com teto menor. */
 const MAX_DO_PAINEL = 300;
+/** O teto do MEDIDO POR no painel (o campo da tela dele tem 40). */
+const MAX_QUEM = 40;
 
 export const MENSAGEM_DESLIGADO = 'O envio ao painel está desligado: falta a variável PAINEL_APPS_SCRIPT_URL no servidor.';
 export const MENSAGEM_GS_ANTIGO = 'O painel ainda não aceita medição do app: falta colar o .gs v5.58 no Apps Script e reimplantar.';
@@ -226,8 +228,18 @@ export function montarParaOPainel({ conferencia, grupo, demandas = [] } = {}) {
       // O numero do cartao de volumes da tela e da folha (conferencias.pecas,
       // que o banco obriga a ser o numero de marcas).
       volumes: String(c.pecas),
+      // O MEDIDO POR do painel: quem salvou a analise (analisada_por, o nome
+      // copiado na hora). No caminho do PDF era o nome digitado no painel; sem
+      // ele, a medicao do app aparecia so' como "app". Vazio vai vazio.
+      quem: quemAnalisou(c.analisada_por),
     },
   };
+}
+
+/** O nome de quem analisou, aparado e com o teto do MEDIDO POR do painel. */
+function quemAnalisou(nome) {
+  const s = String(nome ?? '').trim().replace(/\s+/g, ' ');
+  return s.length > MAX_QUEM ? s.slice(0, MAX_QUEM).trim() : s;
 }
 
 /** O texto que veio do painel, aparado e com teto. */

@@ -91,6 +91,8 @@ describe('montarParaOPainel', () => {
       sLac: '60.0',
       sPer: '96.7',
       volumes: '13',
+      // Sem analisada_por (medicao de antes do nome), vai vazio: o painel mostra "app".
+      quem: '',
     });
     // O teto do REG_ID no painel.
     expect(params.regId).toHaveLength(40);
@@ -121,6 +123,16 @@ describe('montarParaOPainel', () => {
     // Grupo que nao faz setup: nada sai, nem com programa.
     const semSetup = { ...GRUPO, setups_dia: 0 };
     expect(montarParaOPainel({ conferencia: comSetup, grupo: semSetup, demandas: PROGRAMA }).params.sPer).toBe('96.7');
+  });
+
+  it('o MEDIDO POR do painel e\' quem salvou a analise: aparado, com o teto de 40 do campo do painel', () => {
+    const quem = (analisada_por) => montarParaOPainel({ conferencia: medicao({ analisada_por }), grupo: GRUPO, demandas: PROGRAMA }).params.quem;
+    expect(quem('Adriano Rodrigues')).toBe('Adriano Rodrigues');
+    expect(quem('  Oderli   Garcia ')).toBe('Oderli Garcia');
+    expect(quem(null)).toBe('');
+    const longo = quem('Maria Aparecida dos Santos Oliveira de Souza Pereira');
+    expect(longo.length).toBeLessThanOrEqual(40);
+    expect(longo).toBe('Maria Aparecida dos Santos Oliveira de S');
   });
 
   it('sem relogio entre os toques, o "no periodo" vai vazio (o PDF mostra —)', () => {

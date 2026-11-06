@@ -174,6 +174,8 @@ rodar('Mandar a medicao ao painel — integracao', () => {
       action: 'registrarCrono', origem: 'app', regId: `app-${id}`, rotulo: PRODUTO,
       // salvoEm 14:00 UTC, 20 min de medicao: 05/11 em Sao Paulo.
       data: '05/11/2026', sRod: '71.7', sLac: '60.0', sPer: '96.7', volumes: '13',
+      // O MEDIDO POR do painel: quem salvou a analise.
+      quem: 'Painel analista',
     });
 
     const depois = await gravado(id);

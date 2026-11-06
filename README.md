@@ -403,6 +403,11 @@ PDF no painel.
   a volume (`periodoPorPeca`, `leituraPecaAPeca`), e o setup planejado é
   decidido como a tela decide (pelo takt da semana: setup no cadastro do grupo
   **e** programa cadastrado). `regId` = `app-` + id da medição.
+  Desde a v2.103.2 vai também `quem` = **quem salvou a análise**
+  (`analisada_por`, até 40 caracteres, o teto do campo MEDIDO POR do painel):
+  sem ele, o painel mostrava a medição do app só como "app". O painel não
+  compara o `quem` para saber se é a mesma medição — a já enviada, reenviada,
+  continua "já estava" e fica como estava.
 - **O que não vai**, com o motivo na tela: medição de fora da embalagem, sem
   toques volume a volume, com poucos toques para a leitura, e **produto que não
   é da lista do cadastro** (`código de 6 dígitos · nome`, ex. `501059 ·

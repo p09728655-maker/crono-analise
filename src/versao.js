@@ -13,6 +13,14 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.103.2',
+    data: '2026-11-06',
+    titulo: 'Embalagem: o painel sabe quem analisou a medição',
+    itens: [
+      'A MEDIÇÃO QUE VAI AO PAINEL LEVA O NOME DE QUEM SALVOU A ANÁLISE. No painel RitmoPatrimar, a coluna MEDIDO POR mostrava só "app" para as medições enviadas daqui; agora mostra o nome, como acontecia quando o PDF era importado e o nome digitado lá. As medições já enviadas continuam como estavam.',
+    ],
+  },
+  {
     versao: '2.103.1',
     data: '2026-11-06',
     titulo: 'Embalagem: o aviso do painel aparece, e as linhas do gráfico se distinguem',
