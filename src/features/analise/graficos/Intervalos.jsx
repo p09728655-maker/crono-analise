@@ -16,6 +16,35 @@ const PASSOS_X = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
 const COR_TEXTO_LACUNA = claro.critico;
 
 /**
+ * LINHAS COLADAS (v2.103.0, pedido do PCP com print: "as linhas do grafico
+ * estao uma sobrepondo a outra"). Takt 15.4 s e periodo 15.2 s ficam a
+ * 1,4 px: nao ha' escala que as separe sem mentir o valor. Elas ficam onde
+ * estao; o que muda e' que se distinguem (o periodo tem a cor do veredito,
+ * o takt e' preto tracejado por cima) e a legenda diz que estao coladas,
+ * com a diferenca em segundos. "Colada" = a menos disto, em px.
+ */
+export const COLADA_PX = 6;
+
+/** A cor da linha do periodo: o veredito contra o takt (ver linhasDeReferencia). */
+export function corDoPeriodo(periodoMs, taktMs) {
+  if (!(taktMs > 0)) return claro.texto;
+  return periodoMs > taktMs ? claro.critico : claro.ok;
+}
+
+/**
+ * O que a legenda acrescenta a' linha colada no takt: a menos de COLADA_PX
+ * dele no desenho, com a diferenca pelos numeros ESCRITOS (decimos de
+ * segundo: 15.4 e 15.2 dizem 0.2, nunca 0.3 de um valor cru que a legenda
+ * nao mostra). Longe, ou sem takt, nada.
+ */
+export function textoColadaNoTakt(valorMs, taktMs, distanciaPx) {
+  if (!(taktMs > 0) || !(valorMs > 0) || !(distanciaPx < COLADA_PX)) return '';
+  const d = Math.round(valorMs / 100) - Math.round(taktMs / 100);
+  if (d === 0) return ' — igual ao takt';
+  return ` — colada no takt (${emSegundos(Math.abs(d) * 100)} ${d < 0 ? 'abaixo' : 'acima'})`;
+}
+
+/**
  * VOLUME A VOLUME — uma barra por intervalo, contra a linha do takt.
  *
  * E' o grafico que separa "a linha e' lenta" de "a linha para": com o takt
@@ -116,11 +145,15 @@ export function GraficoIntervalos({
     },
     // Continua e mais grossa: no papel P&B se separa do takt (tracejado) e
     // do rodando (pontilhado) pelo traco, nao pela cor.
-    // Vermelha so' quando passa do takt (a mesma cor da lacuna diz "atencao");
-    // dentro dele, a cor do texto. Acima do topo, desenhada no topo.
+    // A COR E' O VEREDITO: laranja quando passa do takt (a mesma cor da
+    // lacuna diz "atencao"), VERDE dentro dele — o verde do app e' so'
+    // "dentro do takt". Era a cor do texto, quase o preto do takt: colados,
+    // um sumia no outro (ver COLADA_PX). Sem takt nao ha' veredito: cor do
+    // texto. Acima do topo, desenhada no topo.
     periodoMs > 0 && {
       chave: 'periodo', ms: Math.min(periodoMs, maxY), valor: periodoMs, nome: 'No período',
-      cor: takt > 0 && periodoMs > takt ? claro.critico : claro.texto, traco: null, espessura: 3,
+      cor: corDoPeriodo(periodoMs, takt),
+      traco: null, espessura: 3,
     },
     mediaMs > 0 && mediaMs <= maxY && {
       // Apoio, e nao referencia: cinza, fino e pontilhado — nunca disputa
@@ -204,6 +237,16 @@ export function GraficoIntervalos({
     return Math.max(meia + 2, Math.min(x, limiteDireito - meia));
   };
 
+  /* Colada no takt (ver textoColadaNoTakt): o periodo preso no topo nao. SO'
+     NA TELA: na folha a legenda ja' ocupa a largura toda, e qualquer texto a
+     mais quebra uma linha e manda a conta do tempo da semana para a 2a
+     pagina (medido: 689 -> 724 de 703 px). No papel, a cor e o traco
+     separam as duas, e os valores estao na legenda e nos cartoes. */
+  const coladaNoTakt = (r) => (escalaTexto !== 1 || r.chave === 'takt' || takt > maxY
+    || (r.chave === 'periodo' && periodoAcimaDoTopo)
+    ? ''
+    : textoColadaNoTakt(r.valor ?? r.ms, takt, Math.abs(yDe(r.ms) - yDe(takt))));
+
   const tituloEixoY = (v) => (Math.abs(v / 1000 - Math.round(v / 1000)) < 1e-6
     ? `${Math.round(v / 1000)} s`
     : emSegundos(v));
@@ -236,7 +279,7 @@ export function GraficoIntervalos({
               media: `Rodando — média dos intervalos: ${emSegundos(r.ms)}`,
               periodo: `No período, com as paradas: ${emSegundos(r.valor)}${periodoAcimaDoTopo ? ' (acima do topo do gráfico)' : ''}`,
               takt: `Takt da semana: ${emSegundos(r.ms)}`,
-            }[r.chave],
+            }[r.chave] + coladaNoTakt(r),
             cor: r.cor,
             linha: { media: 'dotted', periodo: 'solid', takt: 'dashed' }[r.chave],
             espessura: r.espessura,
