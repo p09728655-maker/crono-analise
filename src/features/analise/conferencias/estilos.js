@@ -504,15 +504,25 @@ export const est = {
      envio. Faixa neutra (o papel e a borda da tela), nao a vermelha de erro:
      cada linha diz o proprio desfecho, e so' o "nao foi" ganha a cor de
      atencao. */
+  /* O AVISO DO ENVIO AO PAINEL (v2.103.0). A 1a versao era texto verde de
+     legenda num cartao branco, e passou despercebida no uso real ("nao
+     veio mensagem", PCP, 06/11): o aviso agora e' uma FAIXA com a cor do
+     desfecho — verde quando foi (ou ja' estava), ambar quando alguma nao
+     foi; neutra enquanto vai — e o texto no corpo, nao na letra de legenda.
+     A barra da esquerda e' sombra interna: borderLeft* misturado com o
+     borderWidth da base o React reclamaria (ver test/checar-estilos.mjs). */
   embPainelAviso: {
     display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: espaco.md,
-    padding: `${espaco.sm}px ${espaco.md}px`, marginBottom: espaco.lg,
+    padding: `${espaco.md}px ${espaco.lg}px`, marginBottom: espaco.lg,
     background: t.papel, borderRadius: raio.md, borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+    boxShadow: `inset 5px 0 0 ${t.bordaForte}`,
   },
-  embPainelLinhas: { flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 },
-  embPainelLinha: { display: 'block', ...tipo('legenda'), color: t.textoMedio, overflowWrap: 'anywhere' },
-  embPainelFoi: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.ok, overflowWrap: 'anywhere' },
-  embPainelFalha: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.atencao, overflowWrap: 'anywhere' },
+  embPainelAvisoFoi: { background: t.okFundo, borderColor: t.ok, boxShadow: `inset 5px 0 0 ${t.ok}` },
+  embPainelAvisoFalha: { background: t.atencaoFundo, borderColor: t.atencao, boxShadow: `inset 5px 0 0 ${t.atencao}` },
+  embPainelLinhas: { flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  embPainelLinha: { display: 'block', ...tipo('corpo'), color: t.textoMedio, overflowWrap: 'anywhere' },
+  embPainelFoi: { display: 'block', ...tipo('corpo'), fontWeight: 700, color: t.ok, overflowWrap: 'anywhere' },
+  embPainelFalha: { display: 'block', ...tipo('corpo'), fontWeight: 700, color: t.atencao, overflowWrap: 'anywhere' },
 
   /* ---- painel VOLUME A VOLUME (Embalagem Takt Time) ----
      Abre na propria pagina, ao lado da lista (abaixo dela, em tela

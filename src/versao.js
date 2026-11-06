@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.103.1',
+    data: '2026-11-06',
+    titulo: 'Embalagem: o aviso do painel aparece, e as linhas do gráfico se distinguem',
+    itens: [
+      'O AVISO DO ENVIO AO PAINEL VIROU UMA FAIXA COLORIDA acima da lista: verde quando a medição foi (ou já estava no painel), âmbar quando alguma não foi, com o texto no tamanho normal. Antes era uma linha pequena num cartão branco, e passava despercebida.',
+      'NO GRÁFICO DO VOLUME A VOLUME, A LINHA DO PERÍODO TEM A COR DO VEREDITO: verde dentro do takt, laranja acima. Antes era preta como a do takt, e com os dois quase iguais (15.2 s e 15.4 s) uma sumia debaixo da outra. As linhas continuam no valor exato; quando ficam coladas, a legenda da tela diz: "colada no takt (0.2 s abaixo)" (na folha impressa, a cor e o traço separam as duas, e os valores estão na legenda).',
+    ],
+  },
+  {
     versao: '2.103.0',
     data: '2026-11-06',
     titulo: 'Embalagem: a medição analisada vai sozinha para o painel',

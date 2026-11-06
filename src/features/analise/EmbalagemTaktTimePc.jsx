@@ -1017,8 +1017,13 @@ function AvisoDoPainel({ aviso }) {
     if (x.tipo === 'nao-foi') return est.embPainelFalha;
     return est.embPainelLinha;
   };
+  // A faixa inteira tem a cor do desfecho: verde, foi tudo (ou ja' estava);
+  // ambar, alguma nao foi; neutra enquanto vai.
+  const faixa = { ...est.embPainelAviso };
+  if (!indo && naoForam > 0) Object.assign(faixa, est.embPainelAvisoFalha);
+  else if (!indo) Object.assign(faixa, est.embPainelAvisoFoi);
   return (
-    <section style={est.embPainelAviso} role="status" aria-live="polite" aria-label="Envio ao painel RitmoPatrimar">
+    <section style={faixa} role="status" aria-live="polite" aria-label="Envio ao painel RitmoPatrimar">
       <div style={est.embPainelLinhas}>
         {aviso.medicoes.map((x) => {
           const c = x.medicao;
