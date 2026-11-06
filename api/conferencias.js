@@ -502,7 +502,7 @@ async function mandarAoPainel({ auth, res, conferenciaId }) {
   const lido = await auth.rls(async (db) => {
     const [conferencia] = await db`
       SELECT c.id, c.maquina, c.peca, c.pecas, c.duracao_ms, c.iniciado_em, c.salvo_em, c.analisada_em,
-             c.marcas_ms, c.marcas_relogio_ms, c.marcas_setup_ms
+             c.analisada_por, c.marcas_ms, c.marcas_relogio_ms, c.marcas_setup_ms
         FROM conferencias c
        WHERE c.id = ${conferenciaId} AND c.empresa_id = ${empresaId}`;
     if (!conferencia) throw naoEncontrado('Medição não encontrada');
