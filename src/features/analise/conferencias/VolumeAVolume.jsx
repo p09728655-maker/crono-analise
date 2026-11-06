@@ -16,8 +16,10 @@ import {
 } from '../../../domain/juncaoMedicoes.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
 import {
-  listarDemanda, marcasDaConferencia, salvarAnaliseConferencia, salvarAnaliseConferencias,
+  enviarAoPainel, listarDemanda, marcasDaConferencia, renomearPecaConferencia, renomearPecaConferencias,
+  salvarAnaliseConferencia, salvarAnaliseConferencias,
 } from '../../../lib/api.js';
+import { NO_PAINEL, podeEnviarAoPainel, situacaoNoPainel } from '../../../domain/envioAoPainel.js';
 import { dataDoArquivo, imprimirComo, nomeDoArquivo } from '../../../lib/impressao.js';
 import { claro } from '../../../theme/tokensAnalise.js';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
@@ -177,11 +179,47 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
  * A JUNCAO tem rascunho proprio (pelo id dela) e salva numa ida so', em
  * todas as medicoes, com "Junção de N medições (…)" no comeco da nota
  * (ver notaDaJuncao): tudo ou nada, como o servidor garante.
+ *
+ * O PAINEL RitmoPatrimar (v2.103.0): salva a analise, cada medicao vai ao
+ * painel — a da juncao, uma depois da outra, uma linha por medicao (o painel
+ * soma as do mesmo volume). So' com `painelLigado` true, que vem da lista
+ * (o servidor diz se PAINEL_APPS_SCRIPT_URL existe): desligado, nada sai, e
+ * sem saber (null) tambem nao. SEM TRAVA DE "JA' FOI": reaberta e salva de
+ * novo, ela vai de novo — o painel responde "ja' estava" (os toques nao
+ * mudam depois da analise; parada marcada no PC nao mexe neles) ou troca a
+ * linha se o periodo mudou (setup ou programa do grupo). O envio nao segura
+ * o painel aberto nem a tela: a analise ja' esta' salva, e o desfecho fica
+ * gravado na medicao (painel_em, painel_erro) mesmo que ninguem esteja
+ * olhando quando ele voltar. Os envios de toda a tela vao numa FILA, um por
+ * vez: duas analises salvas em seguida nao disputam o Apps Script.
+ *
+ * A FILA MORA NA PAGINA. Fechada ou recarregada no meio, o que nao saiu nao
+ * sai mais. Por isso: (1) a gravacao da analise ja' pede a marca de "nao
+ * confirmado" ao servidor (`painel: true`, ver pedeEnvio em
+ * api/conferencias.js), que o envio troca ao voltar — a que nao voltou fica
+ * com "⚠ nao foi ao painel" na lista depois do F5; (2) `enviosPendentes`
+ * conta a fila, e a tela pergunta antes de sair (beforeunload).
+ *
+ * PRODUTO CORRIGIDO (Editar produto) depois do envio: `renomearProduto`
+ * grava o nome (com o pedido de marca) e manda de novo as que ja' foram ao
+ * painel ou tentaram (o painel troca a linha pelo REG_ID); a nunca enviada
+ * nao vai por causa de um nome. Mora aqui, e nao na tela, para o teste
+ * alcancar a ligacao inteira (test/painel-tela.test.js).
+ *
+ * `conferencias` e' a lista de agora da tela: o aviso mostra e reenvia a
+ * medicao como ela esta' (o nome corrigido), nao o retrato de quando o
+ * envio saiu.
  */
-export function useAnalisesDoPcp(aplicar) {
+export function useAnalisesDoPcp(aplicar, { painelLigado = null, conferencias = null } = {}) {
   const [rascunhos, setRascunhos] = useState({}); // id -> texto
   const [salvando, setSalvando] = useState({}); // id -> true
   const [falhas, setFalhas] = useState({}); // id -> { mensagem, reabrir }
+  // O painel: o desfecho do envio de cada medicao NESTA tela (ver
+  // situacaoNoPainel) e o aviso do ultimo envio, para a lista.
+  const [envios, setEnvios] = useState({}); // id -> { fase, ... }
+  const [aviso, setAviso] = useState(null); // { lote, medicoes }
+  const fila = useRef(Promise.resolve());
+  const lotes = useRef(0);
   const sem = (mapa, id) => {
     if (!(id in mapa)) return mapa;
     const resto = { ...mapa };
@@ -200,23 +238,74 @@ export function useAnalisesDoPcp(aplicar) {
     return !c.analisada_em && !salvando[c.id] && digitada !== null && digitada !== (c.analise_nota || '').trim();
   };
 
+  /**
+   * Manda as medicoes ao painel, uma por vez, atras do que ja' esta' na fila.
+   * A falha de uma nao para as outras: cada uma tem o proprio desfecho. O
+   * aviso da lista passa a ser deste lote.
+   */
+  function mandarAoPainel(medicoes) {
+    const lista = (medicoes || []).filter(Boolean);
+    if (!lista.length) return;
+    lotes.current += 1;
+    setAviso({ lote: lotes.current, medicoes: lista });
+    setEnvios((m) => ({ ...m, ...Object.fromEntries(lista.map((c) => [c.id, { fase: 'na-fila' }])) }));
+    fila.current = fila.current.then(async () => {
+      for (const c of lista) {
+        setEnvios((m) => ({ ...m, [c.id]: { fase: 'enviando' } }));
+        let desfecho;
+        try {
+          const p = await enviarAoPainel(c.id);
+          desfecho = {
+            fase: 'feito',
+            estado: p.estado,
+            em: p.em ?? null,
+            erro: NO_PAINEL.includes(p.estado) || p.estado === 'desligado' ? null : p.mensagem,
+            substituida: Boolean(p.substituida),
+          };
+        } catch (e) {
+          // O NOSSO servidor nao respondeu (ou recusou o pedido): o banco
+          // pode ter mudado ou nao — a situacao diz "nao foi" e oferece o
+          // reenvio, que e' inofensivo.
+          desfecho = { fase: 'feito', falha: e.message };
+        }
+        setEnvios((m) => ({ ...m, [c.id]: desfecho }));
+      }
+    });
+  }
+  const situacaoDe = (c) => situacaoNoPainel(c, envios[c.id]);
+  // A medicao como ela esta' AGORA na tela (nome corrigido, desfecho gravado).
+  const porId = new Map((conferencias || []).map((c) => [c.id, c]));
+  const atual = (c) => (porId.has(c.id) ? { ...c, ...porId.get(c.id) } : c);
+  const enviosPendentes = Object.values(envios)
+    .filter((x) => x.fase === 'na-fila' || x.fase === 'enviando').length;
+
   async function salvar(conferencia, analisar) {
     const { id } = conferencia;
     setSalvando((m) => ({ ...m, [id]: true }));
     setFalhas((m) => sem(m, id));
+    // Salvar a analise com o envio ligado manda ao painel em seguida: a
+    // gravacao ja' pede a marca de "nao confirmado" (ver o cabecalho).
+    const vaiAoPainel = analisar && painelLigado === true;
     try {
       const atualizada = conferencia.juncao
         ? await salvarAnaliseConferencias(
           conferencia.medicoes.map((c) => c.id),
           notaDaJuncao(conferencia.medicoes, notaDe(conferencia)),
+          { painel: vaiAoPainel },
         )
         : await salvarAnaliseConferencia(id, {
-          analisada: analisar, nota: notaDe(conferencia).trim(),
+          analisada: analisar, nota: notaDe(conferencia).trim(), painel: vaiAoPainel,
         });
       // Salvo, o rascunho cumpriu o papel: o campo volta a ler o banco.
       setRascunhos((m) => sem(m, id));
       // Fecha so' ao salvar; reabrir deixa o painel aberto, com a nota.
       aplicar(atualizada, { fechar: analisar });
+      // Salva a analise, a medicao (ou as da juncao) vai ao painel — sempre,
+      // mesmo a que ja' tinha ido (o painel diz "ja' estava" ou troca a
+      // linha). Reabrir nao manda nada.
+      if (vaiAoPainel) {
+        mandarAoPainel(conferencia.juncao ? conferencia.medicoes : [conferencia]);
+      }
     } catch (e) {
       setFalhas((m) => ({ ...m, [id]: { mensagem: e.message, reabrir: !analisar } }));
     } finally {
@@ -224,9 +313,44 @@ export function useAnalisesDoPcp(aplicar) {
     }
   }
 
+  /**
+   * PRODUTO CORRIGIDO: das medicoes renomeadas (ja' com o nome novo), manda
+   * de novo ao painel as analisadas que ja' foram ou tentaram ir — o painel
+   * ainda esta' com o nome de antes. A nunca enviada fica: so' o "Salvar
+   * analise" ou o botao a mandam. Desligado, nada.
+   */
+  function aposRenomear(medicoes) {
+    if (painelLigado !== true) return;
+    // A que esta' INDO pode ja' ter lido o nome de antes: vai de novo,
+    // atras dela. A que esta' na fila ainda vai ler o nome novo.
+    const ja = (c) => ['no-painel', 'nao-foi', 'enviando'].includes(situacaoDe(c).tipo);
+    mandarAoPainel((medicoes || []).filter((c) => c && c.analisada_em && ja(c)));
+  }
+
+  /**
+   * GRAVA O PRODUTO CORRIGIDO de `ids` (o "as outras" do Editar produto
+   * renomeia varias) e reenvia ao painel o que precisa (aposRenomear). A
+   * recusa do servidor sobe para a janela, que a mostra; recusado, nada
+   * vai ao painel.
+   */
+  async function renomearProduto(ids, nome) {
+    const painel = painelLigado === true;
+    if (ids.length > 1) await renomearPecaConferencias(ids, nome, { painel });
+    else await renomearPecaConferencia(ids[0], nome, { painel });
+    aposRenomear(ids.map((id) => porId.get(id)).filter(Boolean).map((c) => ({ ...c, peca: nome })));
+  }
+
   return {
     /** Ha' alguma analise indo para o servidor (a tela nao deve sair). */
     ocupado: Object.keys(salvando).length > 0,
+    /**
+     * Medicoes na fila do painel ou indo agora: fechar ou recarregar a
+     * pagina as deixa sem enviar (a lista as marca depois, mas o PCP tem de
+     * mandar de novo) — a tela pergunta antes.
+     */
+    enviosPendentes,
+    /** O "Editar produto" grava por aqui (ver renomearProduto). */
+    renomearProduto,
     /** A analise DESTA medicao esta' indo para o servidor (o painel dela nao fecha). */
     salvandoA: (id) => Boolean(salvando[id]),
     notaNaoSalva,
@@ -252,14 +376,101 @@ export function useAnalisesDoPcp(aplicar) {
       return null;
     },
     /** O que o painel da medicao `c` precisa. */
-    da: (c) => ({
-      nota: notaDe(c),
-      mudarNota: (texto) => setRascunhos((m) => ({ ...m, [c.id]: texto })),
-      salvando: Boolean(salvando[c.id]),
-      erro: falhas[c.id]?.mensagem || null,
-      salvar: (analisar) => salvar(c, analisar),
-    }),
+    da: (c) => {
+      const medicoes = c.juncao ? c.medicoes : [c];
+      const situacoes = medicoes.map((m) => ({ medicao: m, ...situacaoDe(m) }));
+      return {
+        nota: notaDe(c),
+        mudarNota: (texto) => setRascunhos((m) => ({ ...m, [c.id]: texto })),
+        salvando: Boolean(salvando[c.id]),
+        erro: falhas[c.id]?.mensagem || null,
+        salvar: (analisar) => salvar(c, analisar),
+        // O painel RitmoPatrimar desta medicao (ou das da juncao). Enviar
+        // manda as que nao estao la'; com todas la', manda de novo todas —
+        // e' inofensivo (o painel responde "ja' estava", ou troca a linha
+        // se o produto ou o periodo mudaram). Nunca a que ja' esta' a caminho.
+        painel: {
+          ligado: painelLigado,
+          situacoes,
+          enviar: () => {
+            const fora = situacoes.filter((x) => podeEnviarAoPainel(x));
+            const alvo = fora.length ? fora : situacoes.filter((x) => x.tipo === 'no-painel');
+            mandarAoPainel(alvo.map((x) => x.medicao));
+          },
+        },
+      };
+    },
+    /** Onde a medicao `c` esta' em relacao ao painel (a marca da linha). */
+    situacaoNoPainel: situacaoDe,
+    /**
+     * O AVISO DO ULTIMO ENVIO, para a lista: o painel do volume a volume
+     * fecha ao salvar, e e' na lista que o desfecho aparece. Null sem envio
+     * nesta tela (ou dispensado). `reenviar` manda de novo as que nao foram.
+     */
+    avisoDoPainel: aviso && {
+      medicoes: aviso.medicoes.map(atual).map((m) => ({ medicao: m, ...situacaoDe(m) })),
+      reenviar: () => mandarAoPainel(aviso.medicoes.map(atual).filter((m) => situacaoDe(m).tipo === 'nao-foi')),
+      dispensar: () => setAviso((a) => (a?.lote === aviso.lote ? null : a)),
+    },
   };
+}
+
+/**
+ * A LINHA DO PAINEL no topo do volume a volume de uma medicao analisada
+ * (ou de uma juncao toda analisada): se ela esta' no painel RitmoPatrimar,
+ * e, se nao, por que — com o botao de enviar. Discreta: e' estado, nao a
+ * leitura da medicao. Desligado, uma linha cinza, sem botao e sem erro.
+ * Sem saber se o envio esta' ligado (`ligado` null), nada.
+ *
+ * O botao fica tambem com a medicao ja' la': reenviar e' inofensivo, e e'
+ * o caminho para levar ao painel o que mudou depois do envio.
+ */
+function LinhaDoPainel({ painel, ehJuncao }) {
+  if (!painel || painel.ligado == null) return null;
+  const { situacoes } = painel;
+  const todasLa = situacoes.every((x) => x.tipo === 'no-painel');
+  const indo = situacoes.some((x) => x.tipo === 'na-fila' || x.tipo === 'enviando');
+  if (indo) return <p style={est.vavPainelLinha} role="status">Painel: enviando…</p>;
+  if (painel.ligado === false && !todasLa) {
+    return <p style={est.vavPainelLinha}>Painel: envio desligado (falta PAINEL_APPS_SCRIPT_URL no servidor)</p>;
+  }
+  const textoDe = (x) => {
+    if (x.tipo === 'no-painel') return `${x.substituida ? 'atualizada' : 'enviada'} em ${formatarDataHora(x.em)}`;
+    const anterior = x.em ? ` (uma versão anterior está lá, de ${formatarDataHora(x.em)})` : '';
+    if (x.tipo === 'nao-foi') return `não foi — ${x.motivo}${anterior}`;
+    return 'ainda não enviada';
+  };
+  let linhas;
+  if (!ehJuncao) {
+    linhas = (
+      <span style={situacoes[0].tipo === 'nao-foi' ? est.vavPainelFalha : est.vavPainelLinha}>
+        Painel: {textoDe(situacoes[0])}
+      </span>
+    );
+  } else if (todasLa) {
+    const ultima = situacoes.map((x) => x.em).sort().at(-1);
+    linhas = (
+      <span style={est.vavPainelLinha}>
+        Painel: as {situacoes.length} enviadas · a última em {formatarDataHora(ultima)}
+      </span>
+    );
+  } else {
+    linhas = situacoes.filter((x) => x.tipo !== 'no-painel').map((x) => (
+      <span key={x.medicao.id} style={x.tipo === 'nao-foi' ? est.vavPainelFalha : est.vavPainelLinha}>
+        Painel · {horaDaMedicao(x.medicao)}: {textoDe(x)}
+      </span>
+    ));
+  }
+  return (
+    <div style={est.vavPainelBloco}>
+      <div style={est.vavPainelTextos}>{linhas}</div>
+      {painel.ligado === true && (
+        <button type="button" style={est.botaoLinha} onClick={cliqueSimples(painel.enviar)}>
+          Enviar ao painel
+        </button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -390,6 +601,9 @@ export default function VolumeAVolume({
                   .filter(Boolean).join(' · ')}
               </p>
             )}
+            {/* O painel RitmoPatrimar: so' a analisada vai, e so' quem
+                analisa ve o botao (o mesmo podeAnalisar do Salvar). */}
+            {analisada && podeAnalisar && <LinhaDoPainel painel={analise.painel} ehJuncao={ehJuncao} />}
           </div>
           <div style={est.vavAcoes}>
             {/* Salvar fecha o painel e tira a medicao da lista; reabrir o deixa aberto, com a nota no

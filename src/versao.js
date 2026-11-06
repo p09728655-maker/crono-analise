@@ -13,6 +13,20 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.103.0',
+    data: '2026-11-06',
+    titulo: 'Embalagem: a medição analisada vai sozinha para o painel',
+    itens: [
+      'SALVAR A ANÁLISE MANDA A MEDIÇÃO PARA O PAINEL RitmoPatrimar. Não é mais preciso imprimir o PDF do volume a volume e importá-lo no painel: no "Salvar análise e fechar", a medição vai com o produto, a data, os volumes e os três tempos por volume (com a linha rodando, sem as lacunas e no período) — os mesmos números da tela e do PDF. Se o PDF da mesma medição for importado depois, o painel reconhece e não duplica. Na junção, vai uma linha por medição: o painel soma as do mesmo volume.',
+      'O RESULTADO APARECE NA LISTA, porque o volume a volume fecha ao salvar: um aviso acima dela diz "enviada ao painel", "já estava no painel" ou "não foi ao painel" com o motivo e o botão "Enviar de novo". Cada medição analisada ganha a marca "✓ no painel" ou "⚠ não foi ao painel". No volume a volume de uma analisada, a linha "Painel: enviada em…" ou "Painel: não foi — motivo", com o botão "Enviar ao painel".',
+      'SÓ VAI PRODUTO DA LISTA DO CADASTRO (o código de 6 dígitos e o nome, como "501059 · PENTEADEIRA CAMARIM STRASS · VOL 2/2"). Nome digitado solto o painel não encontra: a tela diz para corrigir o produto em "Editar produto" e enviar de novo. Medição com poucos toques para a leitura também não vai.',
+      'REABRIU E SALVOU DE NOVO, A MEDIÇÃO VAI DE NOVO, e o painel responde "já estava no painel": marcar uma parada depois não muda os tempos que vão, que saem só dos toques. Excluir ou arquivar a medição aqui não mexe no painel.',
+      'CORRIGIU O PRODUTO DEPOIS DO ENVIO, ELA VAI DE NOVO SOZINHA. Em "Editar produto", a medição analisada que já foi ao painel (ou tentou ir) é reenviada com o nome novo, e o painel troca a linha dela ("atualizada no painel"). A que nunca foi ao painel não vai por causa de um nome: ela vai no "Salvar análise" ou no botão.',
+      'SE A PÁGINA FECHAR NO MEIO DO ENVIO, A LISTA AVISA. As medições vão ao painel uma por vez, depois de salvar. Recarregar ou fechar a página com alguma ainda na fila agora pergunta antes; e a que não chegou a sair aparece depois com "⚠ não foi ao painel" e o motivo — é só mandar de novo. Ir para outra tela do app não atrapalha: o envio continua.',
+      'Enquanto o servidor não tiver o endereço do painel configurado, nada é enviado e o rodapé da tela diz que o envio está desligado.',
+    ],
+  },
+  {
     versao: '2.102.0',
     data: '2026-11-05',
     titulo: 'Tablet: a parada conta do Parou, e o Voltar não perde a medição',

@@ -11,9 +11,7 @@ import { filtrarPorPeriodo, formatarDataHora } from '../../domain/relatorioConfe
 import {
   emOrdem, faixaDaJuncao, idsDaJuncao, medicaoDaJuncao, motivoParaNaoJuntar,
 } from '../../domain/juncaoMedicoes.js';
-import {
-  lerDemanda, listarCadastroMaquinas, listarConferenciasServidor, renomearPecaConferencia, renomearPecaConferencias,
-} from '../../lib/api.js';
+import { lerDemanda, listarCadastroMaquinas, listarConferenciasServidor } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
@@ -67,6 +65,14 @@ const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume'
  * medicoes do mesmo produto com nomes diferentes nao se juntam. E' a
  * correcao do relatorio de Ritmo (RenomearPeca), com os nomes do cadastro
  * da embalagem primeiro e o lote limitado a' embalagem desta lista.
+ *
+ * O PAINEL RitmoPatrimar (v2.103.0): salva a analise, a medicao vai sozinha
+ * ao painel da fabrica (ver useAnalisesDoPcp e api/_lib/painel.js). O
+ * volume a volume fecha ao salvar, entao o desfecho aparece AQUI: o aviso
+ * acima da lista (com "Enviar de novo" para o que nao foi) e, em cada
+ * analisada, a marca discreta "✓ no painel" / "⚠ não foi ao painel". Se o
+ * envio esta' ligado vem da propria lista (`painel.ligado`); desligado, o
+ * rodape diz, sem erro vermelho.
  */
 const ESTILO_GRADE = `
   @media (max-width: 1279px) {
@@ -164,6 +170,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
           setCarga({
             estado: 'pronto', cadastro, grupos, conferencias: lista.conferencias || [],
             arquivadas: arquivadas.conferencias || [],
+            // null = o servidor nao disse (versao anterior a' do painel):
+            // nao se manda nada e nao se fala do painel.
+            painelLigado: typeof lista.painel?.ligado === 'boolean' ? lista.painel.ligado : null,
             demandas: new Map(grupos.map((g, i) => [g.id, programas[i]?.demandas ?? null])),
             planilhas: new Map(grupos.map((g, i) => [g.id, programas[i]?.planilha ?? null])),
           });
@@ -374,7 +383,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
       setAberta((a) => (a ? juntar(a) : a));
       setVista(vistaDe(juntar(daTela)));
     }
-  });
+  }, { painelLigado: carga.painelLigado ?? null, conferencias: carga.conferencias });
 
   useLayoutEffect(() => {
     atual.current = {
@@ -392,12 +401,17 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
   const naoSalvas = (leitura ? leitura.medicoes.filter(analises.notaNaoSalva).length : 0)
     + analises.juncoesNaoSalvas(leitura?.medicoes || []);
   const pendente = analises.ocupado || naoSalvas > 0;
+  /* A fila do painel segura so' a PAGINA: ela mora na pagina, e recarregar
+     ou fechar para o que ainda nao saiu (a lista marca "nao foi ao painel",
+     mas o PCP tem de mandar de novo). Ir para outra tela do app nao: a fila
+     continua andando. */
+  const segurarPagina = pendente || analises.enviosPendentes > 0;
   useEffect(() => {
-    if (!pendente) return undefined;
+    if (!segurarPagina) return undefined;
     const aoSair = (ev) => { ev.preventDefault(); ev.returnValue = ''; };
     window.addEventListener('beforeunload', aoSair);
     return () => window.removeEventListener('beforeunload', aoSair);
-  }, [pendente]);
+  }, [segurarPagina]);
   const sairDaTela = (ir) => {
     if (!pendente) {
       ir();
@@ -423,8 +437,8 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
     const ids = tambemAsOutras && irmas.length > 1 ? irmas : [renomeando.id];
     setRenomeio({ ocupado: true, erro: null });
     try {
-      if (ids.length > 1) await renomearPecaConferencias(ids, nome);
-      else await renomearPecaConferencia(ids[0], nome);
+      // Grava e manda de novo ao painel a que ja' foi (ver renomearProduto).
+      await analises.renomearProduto(ids, nome);
     } catch (e) {
       if (montada.current) setRenomeio({ ocupado: false, erro: e.message });
       return;
@@ -574,6 +588,10 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
                 </div>
               </div>
 
+              {/* O desfecho do ultimo envio ao painel: o volume a volume
+                  fecha ao salvar, e e' aqui que ele aparece. */}
+              {analises.avisoDoPainel && <AvisoDoPainel aviso={analises.avisoDoPainel} />}
+
               {leitura.medicoes.length === 0 ? (
                 <EstadoVazio
                   modo="analise"
@@ -598,6 +616,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
                     aoAbrir={abrir}
                     aoEditarProduto={editarProduto}
                     pendenciaDe={analises.pendencia}
+                    painelDe={analises.situacaoNoPainel}
                     ocupado={analises.ocupado}
                   />
                   {aberta && (
@@ -621,6 +640,12 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
                 dias programados, descontado o setup planejado. Um produto que sai em dois
                 volumes conta dois.
               </p>
+              {carga.painelLigado === false && (
+                <p style={est.painelDica}>
+                  O envio das medições analisadas ao painel RitmoPatrimar está desligado: falta a
+                  variável PAINEL_APPS_SCRIPT_URL no servidor.
+                </p>
+              )}
             </>
           )}
         </main>
@@ -721,7 +746,8 @@ const AVISO_PENDENCIA = {
  * para juntar — por que.
  */
 function TabelaEmbalagem({
-  medicoes: todas, vista, aoTrocarVista, abertasIds, selecao, aoAbrir, aoEditarProduto, pendenciaDe, ocupado = false,
+  medicoes: todas, vista, aoTrocarVista, abertasIds, selecao, aoAbrir, aoEditarProduto, pendenciaDe,
+  painelDe = () => null, ocupado = false,
 }) {
   const variasMaquinas = new Set(todas.map((c) => nomeChave(c.maquina))).size > 1;
   const porVista = { fila: [], analisadas: [], outras: [] };
@@ -876,6 +902,8 @@ function TabelaEmbalagem({
                         ✓ Analisada{c.analisada_por ? ` · ${c.analisada_por}` : ''}
                       </span>
                     )}
+                    {/* O painel RitmoPatrimar: so' a analisada vai, e so' ela tem marca. */}
+                    {abre && c.analisada_em && <MarcaDoPainel situacao={painelDe(c)} />}
                     {/* A recusa que ficou sem resolver, ou a nota digitada e
                         deixada para tras: fechado o painel, sem isto ninguem
                         saberia. Na aberta, o painel ja' diz. */}
@@ -931,6 +959,87 @@ function TabelaEmbalagem({
             })}
           </tbody>
         </table>
+      )}
+    </section>
+  );
+}
+
+/**
+ * A MARCA DO PAINEL na linha de uma medicao analisada: discreta (cinza) quando
+ * ela esta' la' ou esta' indo; ambar quando a ultima tentativa nao foi, com o
+ * motivo no title — o volume a volume dela diz por extenso e tem o botao.
+ * Nunca tentada (ou envio desligado): nada.
+ */
+function MarcaDoPainel({ situacao }) {
+  switch (situacao?.tipo) {
+    case 'no-painel':
+      return (
+        <span style={est.embSub} title={`No painel RitmoPatrimar desde ${formatarDataHora(situacao.em)}`}>
+          ✓ no painel
+        </span>
+      );
+    case 'nao-foi':
+      return <span style={est.embPendenciaAtencao} title={situacao.motivo}>⚠ não foi ao painel</span>;
+    case 'na-fila':
+    case 'enviando':
+      return <span style={est.embSub}>enviando ao painel…</span>;
+    default:
+      return null;
+  }
+}
+
+/** O desfecho de UMA medicao no aviso, em palavras. */
+function desfechoNoAviso(x) {
+  switch (x.tipo) {
+    case 'na-fila': return 'na fila para o painel…';
+    case 'enviando': return 'enviando ao painel…';
+    case 'no-painel':
+      if (x.substituida) return 'atualizada no painel (a linha de antes foi trocada)';
+      return x.estado === 'ja-estava' ? 'já estava no painel' : 'enviada ao painel';
+    case 'nao-foi': return `não foi ao painel: ${x.motivo}`;
+    case 'desligado': return 'envio ao painel desligado';
+    default: return 'ainda não enviada ao painel';
+  }
+}
+
+/**
+ * O AVISO DO ULTIMO ENVIO AO PAINEL, acima da lista — uma linha por medicao
+ * (a juncao manda uma por medicao), com o produto e o horario dela. O que
+ * nao foi tem "Enviar de novo" (manda so' esses); terminado o envio, o aviso
+ * pode ser dispensado. Enquanto algum esta' indo, nenhum dos dois: o botao
+ * mandaria de novo o que ainda nao voltou.
+ */
+function AvisoDoPainel({ aviso }) {
+  const indo = aviso.medicoes.some((x) => x.tipo === 'na-fila' || x.tipo === 'enviando');
+  const naoForam = aviso.medicoes.filter((x) => x.tipo === 'nao-foi').length;
+  const estiloDe = (x) => {
+    if (x.tipo === 'no-painel') return est.embPainelFoi;
+    if (x.tipo === 'nao-foi') return est.embPainelFalha;
+    return est.embPainelLinha;
+  };
+  return (
+    <section style={est.embPainelAviso} role="status" aria-live="polite" aria-label="Envio ao painel RitmoPatrimar">
+      <div style={est.embPainelLinhas}>
+        {aviso.medicoes.map((x) => {
+          const c = x.medicao;
+          const [dia, hora] = formatarDataHora(c.iniciado_em || c.salvo_em).split(' ');
+          return (
+            <span key={c.id} style={estiloDe(x)}>
+              {x.tipo === 'no-painel' ? '✓ ' : ''}{x.tipo === 'nao-foi' ? '⚠ ' : ''}
+              {c.peca || 'Produto não informado'} · {dia} {faixaHoraria(c) || hora}: {desfechoNoAviso(x)}
+            </span>
+          );
+        })}
+      </div>
+      {!indo && naoForam > 0 && (
+        <button type="button" style={est.botaoLinha} onClick={cliqueSimples(aviso.reenviar)}>
+          {naoForam > 1 ? `Enviar as ${naoForam} de novo` : 'Enviar de novo'}
+        </button>
+      )}
+      {!indo && (
+        <button type="button" style={est.botaoLinha} onClick={cliqueSimples(aviso.dispensar)}>
+          Dispensar
+        </button>
       )}
     </section>
   );

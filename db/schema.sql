@@ -469,6 +469,25 @@ BEGIN
   END IF;
 END $$;
 
+-- O PAINEL (v2.103.0): a medicao da EMBALAGEM, analisada no PC, vai sozinha
+-- para o painel RitmoPatrimar (o Apps Script da planilha de producao, aba
+-- CRONOANALISE) — antes o PCP imprimia o PDF e o importava la'. Ver
+-- api/_lib/painel.js.
+--  - painel_em: quando o painel ACEITOU a medicao, ou disse que ja' a tinha
+--    (a mesma medicao importada antes pelo PDF). NULA = nao esta' la' por
+--    este caminho. Uma tentativa que falha depois NAO a apaga: o que o
+--    painel aceitou continua la'.
+--  - painel_erro: o ultimo motivo de NAO ter ido (produto fora da lista,
+--    recusa do painel, painel fora do ar). Limpa quando ele aceita. Com os
+--    DOIS preenchidos, uma versao anterior esta' la' e o ultimo reenvio (a
+--    analise reaberta e salva de novo, talvez com outros numeros) nao foi:
+--    a tela pede para enviar de novo.
+-- NAO e' edicao: enviar ao painel nao marca editada_em (que trava o reenvio
+-- do video) — os numeros da medicao nao mudam. Excluir ou arquivar aqui nao
+-- mexe no painel.
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS painel_em   timestamptz;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS painel_erro text;
+
 -- ------------------------------------------------------- motivos_parada
 -- Cadastro dos MOTIVOS de parada — a lista mestre que a coleta oferece e o
 -- relatorio interpreta.
