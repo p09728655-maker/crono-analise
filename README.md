@@ -375,6 +375,63 @@ A medição é a mesma conferência de sempre (mesma fila offline, mesma tabela,
 coluna `marcas_ms`). Por isso ela aparece também no relatório de ritmo. A
 separação é de trabalho, não de dado.
 
+### A medição vai para o painel
+
+Desde a v2.103.0 a medição da embalagem analisada no PC vai **sozinha** para o
+painel RitmoPatrimar da fábrica (o Apps Script da planilha de produção, aba
+`CRONOANALISE`). Antes o PCP imprimia o PDF do volume a volume e importava o
+PDF no painel.
+
+- **Quando:** no *Salvar análise e fechar* (e no *Salvar análise das N e
+  fechar* da junção, uma medição depois da outra, **uma linha por medição** —
+  o painel soma as do mesmo volume). Reaberta e salva de novo, ela vai de novo:
+  com outros números (uma parada marcada depois), o painel troca a linha dela.
+  Não há trava de "já foi". Reabrir não manda nada.
+- **O que vai:** produto, data (dia da medição em São Paulo), volumes e os três
+  tempos por volume — com a linha rodando, sem as lacunas e no período — com
+  **o mesmo texto da tela e do PDF** (`formatarSegundos`, ex. `71.7`). O painel
+  reconhece a medição repetida pelo conteúdo: o PDF dela importado antes ou
+  depois não vira uma segunda linha. A leitura sai das mesmas funções do volume
+  a volume (`periodoPorPeca`, `leituraPecaAPeca`), e o setup planejado é
+  decidido como a tela decide (pelo takt da semana: setup no cadastro do grupo
+  **e** programa cadastrado). `regId` = `app-` + id da medição.
+- **O que não vai**, com o motivo na tela: medição de fora da embalagem, sem
+  toques volume a volume, com poucos toques para a leitura, e **produto que não
+  é da lista do cadastro** (`código de 6 dígitos · nome`, ex. `501059 ·
+  PENTEADEIRA CAMARIM STRASS · VOL 2/2`) — nome digitado solto o painel não
+  acha; a tela manda corrigir em *Editar produto* e enviar de novo. Só a
+  medição analisada vai.
+- **Onde se vê:** o volume a volume fecha ao salvar, então o desfecho aparece
+  **na lista**: um aviso acima dela ("enviada ao painel", "já estava no
+  painel", "atualizada no painel" ou "não foi ao painel: motivo", com *Enviar
+  de novo*) e, em cada medição analisada, a marca "✓ no painel" ou "⚠ não foi
+  ao painel". No volume a volume de uma analisada, a linha "Painel: enviada em
+  dd/mm hh:mm" ou "Painel: não foi — motivo", com *Enviar ao painel* — também
+  na que já foi: reenviar é inofensivo (o painel responde que já estava, ou
+  troca a linha se os números mudaram).
+- **O que fica gravado:** `conferencias.painel_em` (quando o painel aceitou,
+  ou disse que já tinha) e `painel_erro` (o último motivo de não ter ido). Uma
+  tentativa que falha depois não apaga `painel_em`; com os dois preenchidos, o
+  painel tem uma versão anterior e a tela pede para enviar de novo. Mandar ao
+  painel **não marca `editada_em`**: não é edição, e o reenvio do vídeo continua
+  possível.
+- **Desligado:** sem `PAINEL_APPS_SCRIPT_URL` (ver [Deploy](#deploy-vercel))
+  nada sai, nada se grava, e a tela diz no rodapé que o envio está desligado.
+- **Não mexe no painel:** excluir ou arquivar a medição aqui, ou corrigir o
+  produto depois de enviada. A linha do painel continua lá; quem a tira é o
+  painel.
+- **Como:** `PATCH /api/conferencias?id=<uuid>&painel=1` (analista ou
+  administrador; o tablet recebe 403). O servidor lê a medição na RLS, chama o
+  Apps Script **fora da transação** (até 25 s; a conexão é uma por instância)
+  e grava o desfecho noutra. A chamada é um GET sem `callback` na URL `/exec`,
+  com `action=registrarCrono&origem=app&…`; o Apps Script responde com um 302
+  que o `fetch` segue. As respostas do `.gs` v5.58 viram `enviada`,
+  `ja-estava`, `recusada` (reenviar sem corrigir não adianta) ou `erro` (pode
+  reenviar); o "Sem o produto da medição." sem `app: true` é o `.gs` anterior
+  (`gs-antigo`: falta colar o `.gs` v5.58 no Apps Script e reimplantar).
+  Código em `api/_lib/painel.js`; a regra da tela em
+  `src/domain/envioAoPainel.js`.
+
 ### Demanda semanal — o que o posto precisa entregar
 
 Na lateral do relatório, **Demanda semanal** guarda o programa do PCP por
@@ -1337,6 +1394,7 @@ Em **Settings → Environment Variables**:
 | `VITE_API_TOKEN` | navegador | **Transição** — apagar junto com `API_TOKEN`; bundle novo não o lê |
 | `GOOGLE_CONTA_SERVICO` | servidor | O arquivo `.json` da chave da conta de serviço do Google, **inteiro**. Ver abaixo |
 | `PROGRAMA_EMBALAGEM_PLANILHA` | servidor | O endereço (ou só o ID) da planilha do programa da embalagem |
+| `PAINEL_APPS_SCRIPT_URL` | servidor | Liga o envio da medição analisada ao painel RitmoPatrimar ([A medição vai para o painel](#a-medição-vai-para-o-painel)). É a URL do **App da Web** do Apps Script, terminada em `/exec` — a do editor (`/edit`) não serve, e a tela de implantação a mostra truncada com "…": use o botão *Copiar* abaixo de *URL*. Implantada para "Qualquer pessoa". Sem ela, o envio fica desligado |
 
 > A URL do projeto Supabase e a chave publicável ficam no código
 > (`src/lib/supabase.js`, `api/_lib/supabase.js`): são identificadores

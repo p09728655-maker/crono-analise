@@ -189,6 +189,21 @@ export const salvarAnaliseConferencias = (ids, nota) =>
     metodo: 'PATCH',
     corpo: { ids, analisada: true, analiseNota: nota || null },
   }).then((r) => r.conferencias || []);
+/**
+ * MANDA UMA MEDICAO AO PAINEL RitmoPatrimar (ver api/_lib/painel.js e
+ * mandarAoPainel em api/conferencias.js). Uma por chamada: a juncao manda
+ * as dela uma depois da outra, uma linha por medicao — o painel soma as do
+ * mesmo volume. Devolve { estado, mensagem, em }: a recusa do PAINEL vem
+ * como estado, nao como erro; erro e' so' o nosso servidor nao responder.
+ */
+export const enviarAoPainel = (id) =>
+  requisitar(`/conferencias?id=${encodeURIComponent(id)}&painel=1`, { metodo: 'PATCH' })
+    .then((r) => {
+      if (!r.painel?.estado) {
+        throw new ErroApi(500, 'O servidor não disse se a medição foi ao painel. Envie de novo.');
+      }
+      return r.painel;
+    });
 export const excluirConferencia = (id) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'DELETE' });
 export const analisarConferenciasComIa = (dados) =>

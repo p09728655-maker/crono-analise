@@ -28,6 +28,9 @@ export default handler(async (req, res) => {
     // as duas juntas ligam a leitura; so' uma e' configuracao pela metade.
     GOOGLE_CONTA_SERVICO: Boolean(process.env.GOOGLE_CONTA_SERVICO),
     PROGRAMA_EMBALAGEM_PLANILHA: Boolean(process.env.PROGRAMA_EMBALAGEM_PLANILHA),
+    // O envio da medicao analisada ao painel RitmoPatrimar (api/_lib/painel.js).
+    // Ausente nao e' pendencia: e' o envio desligado, de proposito.
+    PAINEL_APPS_SCRIPT_URL: Boolean(process.env.PAINEL_APPS_SCRIPT_URL),
   };
 
   let banco = 'nao testado';

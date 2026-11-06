@@ -16,8 +16,9 @@ import {
 } from '../../../domain/juncaoMedicoes.js';
 import { formatarDataHora } from '../../../domain/relatorioConferencias.js';
 import {
-  listarDemanda, marcasDaConferencia, salvarAnaliseConferencia, salvarAnaliseConferencias,
+  enviarAoPainel, listarDemanda, marcasDaConferencia, salvarAnaliseConferencia, salvarAnaliseConferencias,
 } from '../../../lib/api.js';
+import { NO_PAINEL, podeEnviarAoPainel, situacaoNoPainel } from '../../../domain/envioAoPainel.js';
 import { dataDoArquivo, imprimirComo, nomeDoArquivo } from '../../../lib/impressao.js';
 import { claro } from '../../../theme/tokensAnalise.js';
 import { LOGO_PATRIMAR } from '../../../theme/logo.js';
@@ -177,11 +178,29 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
  * A JUNCAO tem rascunho proprio (pelo id dela) e salva numa ida so', em
  * todas as medicoes, com "Junção de N medições (…)" no comeco da nota
  * (ver notaDaJuncao): tudo ou nada, como o servidor garante.
+ *
+ * O PAINEL RitmoPatrimar (v2.103.0): salva a analise, cada medicao vai ao
+ * painel — a da juncao, uma depois da outra, uma linha por medicao (o painel
+ * soma as do mesmo volume). So' com `painelLigado` true, que vem da lista
+ * (o servidor diz se PAINEL_APPS_SCRIPT_URL existe): desligado, nada sai, e
+ * sem saber (null) tambem nao. SEM TRAVA DE "JA' FOI": reaberta e salva de
+ * novo, ela vai de novo — com outros numeros, o painel troca a linha. O
+ * envio nao segura o painel aberto nem a tela: a analise ja' esta' salva, e
+ * o desfecho fica gravado na medicao (painel_em, painel_erro) mesmo que
+ * ninguem esteja olhando quando ele voltar. Os envios de toda a tela vao
+ * numa FILA, um por vez: duas analises salvas em seguida nao disputam o
+ * Apps Script.
  */
-export function useAnalisesDoPcp(aplicar) {
+export function useAnalisesDoPcp(aplicar, { painelLigado = null } = {}) {
   const [rascunhos, setRascunhos] = useState({}); // id -> texto
   const [salvando, setSalvando] = useState({}); // id -> true
   const [falhas, setFalhas] = useState({}); // id -> { mensagem, reabrir }
+  // O painel: o desfecho do envio de cada medicao NESTA tela (ver
+  // situacaoNoPainel) e o aviso do ultimo envio, para a lista.
+  const [envios, setEnvios] = useState({}); // id -> { fase, ... }
+  const [aviso, setAviso] = useState(null); // { lote, medicoes }
+  const fila = useRef(Promise.resolve());
+  const lotes = useRef(0);
   const sem = (mapa, id) => {
     if (!(id in mapa)) return mapa;
     const resto = { ...mapa };
@@ -200,6 +219,42 @@ export function useAnalisesDoPcp(aplicar) {
     return !c.analisada_em && !salvando[c.id] && digitada !== null && digitada !== (c.analise_nota || '').trim();
   };
 
+  /**
+   * Manda as medicoes ao painel, uma por vez, atras do que ja' esta' na fila.
+   * A falha de uma nao para as outras: cada uma tem o proprio desfecho. O
+   * aviso da lista passa a ser deste lote.
+   */
+  function mandarAoPainel(medicoes) {
+    const lista = (medicoes || []).filter(Boolean);
+    if (!lista.length) return;
+    lotes.current += 1;
+    setAviso({ lote: lotes.current, medicoes: lista });
+    setEnvios((m) => ({ ...m, ...Object.fromEntries(lista.map((c) => [c.id, { fase: 'na-fila' }])) }));
+    fila.current = fila.current.then(async () => {
+      for (const c of lista) {
+        setEnvios((m) => ({ ...m, [c.id]: { fase: 'enviando' } }));
+        let desfecho;
+        try {
+          const p = await enviarAoPainel(c.id);
+          desfecho = {
+            fase: 'feito',
+            estado: p.estado,
+            em: p.em ?? null,
+            erro: NO_PAINEL.includes(p.estado) || p.estado === 'desligado' ? null : p.mensagem,
+            substituida: Boolean(p.substituida),
+          };
+        } catch (e) {
+          // O NOSSO servidor nao respondeu (ou recusou o pedido): o banco
+          // pode ter mudado ou nao — a situacao diz "nao foi" e oferece o
+          // reenvio, que e' inofensivo.
+          desfecho = { fase: 'feito', falha: e.message };
+        }
+        setEnvios((m) => ({ ...m, [c.id]: desfecho }));
+      }
+    });
+  }
+  const situacaoDe = (c) => situacaoNoPainel(c, envios[c.id]);
+
   async function salvar(conferencia, analisar) {
     const { id } = conferencia;
     setSalvando((m) => ({ ...m, [id]: true }));
@@ -217,6 +272,12 @@ export function useAnalisesDoPcp(aplicar) {
       setRascunhos((m) => sem(m, id));
       // Fecha so' ao salvar; reabrir deixa o painel aberto, com a nota.
       aplicar(atualizada, { fechar: analisar });
+      // Salva a analise, a medicao (ou as da juncao) vai ao painel — sempre,
+      // mesmo a que ja' tinha ido: reaberta e salva de novo, ela pode ter
+      // outros numeros. Reabrir nao manda nada.
+      if (analisar && painelLigado === true) {
+        mandarAoPainel(conferencia.juncao ? conferencia.medicoes : [conferencia]);
+      }
     } catch (e) {
       setFalhas((m) => ({ ...m, [id]: { mensagem: e.message, reabrir: !analisar } }));
     } finally {
@@ -252,14 +313,101 @@ export function useAnalisesDoPcp(aplicar) {
       return null;
     },
     /** O que o painel da medicao `c` precisa. */
-    da: (c) => ({
-      nota: notaDe(c),
-      mudarNota: (texto) => setRascunhos((m) => ({ ...m, [c.id]: texto })),
-      salvando: Boolean(salvando[c.id]),
-      erro: falhas[c.id]?.mensagem || null,
-      salvar: (analisar) => salvar(c, analisar),
-    }),
+    da: (c) => {
+      const medicoes = c.juncao ? c.medicoes : [c];
+      const situacoes = medicoes.map((m) => ({ medicao: m, ...situacaoDe(m) }));
+      return {
+        nota: notaDe(c),
+        mudarNota: (texto) => setRascunhos((m) => ({ ...m, [c.id]: texto })),
+        salvando: Boolean(salvando[c.id]),
+        erro: falhas[c.id]?.mensagem || null,
+        salvar: (analisar) => salvar(c, analisar),
+        // O painel RitmoPatrimar desta medicao (ou das da juncao). Enviar
+        // manda as que nao estao la'; com todas la', manda de novo todas —
+        // e' inofensivo (o painel responde "ja' estava", ou troca a linha
+        // se os numeros mudaram). Nunca a que ja' esta' a caminho.
+        painel: {
+          ligado: painelLigado,
+          situacoes,
+          enviar: () => {
+            const fora = situacoes.filter((x) => podeEnviarAoPainel(x));
+            const alvo = fora.length ? fora : situacoes.filter((x) => x.tipo === 'no-painel');
+            mandarAoPainel(alvo.map((x) => x.medicao));
+          },
+        },
+      };
+    },
+    /** Onde a medicao `c` esta' em relacao ao painel (a marca da linha). */
+    situacaoNoPainel: situacaoDe,
+    /**
+     * O AVISO DO ULTIMO ENVIO, para a lista: o painel do volume a volume
+     * fecha ao salvar, e e' na lista que o desfecho aparece. Null sem envio
+     * nesta tela (ou dispensado). `reenviar` manda de novo as que nao foram.
+     */
+    avisoDoPainel: aviso && {
+      medicoes: aviso.medicoes.map((m) => ({ medicao: m, ...situacaoDe(m) })),
+      reenviar: () => mandarAoPainel(aviso.medicoes.filter((m) => situacaoDe(m).tipo === 'nao-foi')),
+      dispensar: () => setAviso((a) => (a?.lote === aviso.lote ? null : a)),
+    },
   };
+}
+
+/**
+ * A LINHA DO PAINEL no topo do volume a volume de uma medicao analisada
+ * (ou de uma juncao toda analisada): se ela esta' no painel RitmoPatrimar,
+ * e, se nao, por que — com o botao de enviar. Discreta: e' estado, nao a
+ * leitura da medicao. Desligado, uma linha cinza, sem botao e sem erro.
+ * Sem saber se o envio esta' ligado (`ligado` null), nada.
+ *
+ * O botao fica tambem com a medicao ja' la': reenviar e' inofensivo, e e'
+ * o caminho para levar ao painel o que mudou depois do envio.
+ */
+function LinhaDoPainel({ painel, ehJuncao }) {
+  if (!painel || painel.ligado == null) return null;
+  const { situacoes } = painel;
+  const todasLa = situacoes.every((x) => x.tipo === 'no-painel');
+  const indo = situacoes.some((x) => x.tipo === 'na-fila' || x.tipo === 'enviando');
+  if (indo) return <p style={est.vavPainelLinha} role="status">Painel: enviando…</p>;
+  if (painel.ligado === false && !todasLa) {
+    return <p style={est.vavPainelLinha}>Painel: envio desligado (falta PAINEL_APPS_SCRIPT_URL no servidor)</p>;
+  }
+  const textoDe = (x) => {
+    if (x.tipo === 'no-painel') return `${x.substituida ? 'atualizada' : 'enviada'} em ${formatarDataHora(x.em)}`;
+    const anterior = x.em ? ` (uma versão anterior está lá, de ${formatarDataHora(x.em)})` : '';
+    if (x.tipo === 'nao-foi') return `não foi — ${x.motivo}${anterior}`;
+    return 'ainda não enviada';
+  };
+  let linhas;
+  if (!ehJuncao) {
+    linhas = (
+      <span style={situacoes[0].tipo === 'nao-foi' ? est.vavPainelFalha : est.vavPainelLinha}>
+        Painel: {textoDe(situacoes[0])}
+      </span>
+    );
+  } else if (todasLa) {
+    const ultima = situacoes.map((x) => x.em).sort().at(-1);
+    linhas = (
+      <span style={est.vavPainelLinha}>
+        Painel: as {situacoes.length} enviadas · a última em {formatarDataHora(ultima)}
+      </span>
+    );
+  } else {
+    linhas = situacoes.filter((x) => x.tipo !== 'no-painel').map((x) => (
+      <span key={x.medicao.id} style={x.tipo === 'nao-foi' ? est.vavPainelFalha : est.vavPainelLinha}>
+        Painel · {horaDaMedicao(x.medicao)}: {textoDe(x)}
+      </span>
+    ));
+  }
+  return (
+    <div style={est.vavPainelBloco}>
+      <div style={est.vavPainelTextos}>{linhas}</div>
+      {painel.ligado === true && (
+        <button type="button" style={est.botaoLinha} onClick={cliqueSimples(painel.enviar)}>
+          Enviar ao painel
+        </button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -390,6 +538,9 @@ export default function VolumeAVolume({
                   .filter(Boolean).join(' · ')}
               </p>
             )}
+            {/* O painel RitmoPatrimar: so' a analisada vai, e so' quem
+                analisa ve o botao (o mesmo podeAnalisar do Salvar). */}
+            {analisada && podeAnalisar && <LinhaDoPainel painel={analise.painel} ehJuncao={ehJuncao} />}
           </div>
           <div style={est.vavAcoes}>
             {/* Salvar fecha o painel e tira a medicao da lista; reabrir o deixa aberto, com a nota no

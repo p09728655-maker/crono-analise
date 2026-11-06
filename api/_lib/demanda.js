@@ -78,8 +78,11 @@ function diaDaSemana(valor, campo) {
  * QUANDO o programa foi colado. Programa velho dando veredito com cara de
  * atual e' o risco que sobra depois que a conta esta' certa — e ninguem
  * desconfia de um numero que nao diz a idade.
+ *
+ * Exportada: o envio ao painel (api/conferencias.js) le o programa na MESMA
+ * forma que a tela recebe, para decidir o setup planejado como ela.
  */
-const listar = (db, empresaId, grupoId) => (grupoId
+export const listar = (db, empresaId, grupoId) => (grupoId
   ? db`
     SELECT id, grupo_id, ano, numero, pecas,
            to_char(inicio, 'YYYY-MM-DD') AS inicio, dias, dias_producao AS "diasProducao", atualizado_em

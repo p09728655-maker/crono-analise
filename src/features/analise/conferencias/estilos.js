@@ -500,6 +500,19 @@ export const est = {
   },
   embPendenciaCritica: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.critico },
   embPendenciaAtencao: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.atencao },
+  /* O AVISO DO PAINEL RitmoPatrimar, acima da lista: o desfecho do ultimo
+     envio. Faixa neutra (o papel e a borda da tela), nao a vermelha de erro:
+     cada linha diz o proprio desfecho, e so' o "nao foi" ganha a cor de
+     atencao. */
+  embPainelAviso: {
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: espaco.md,
+    padding: `${espaco.sm}px ${espaco.md}px`, marginBottom: espaco.lg,
+    background: t.papel, borderRadius: raio.md, borderWidth: 1, borderStyle: 'solid', borderColor: t.borda,
+  },
+  embPainelLinhas: { flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 },
+  embPainelLinha: { display: 'block', ...tipo('legenda'), color: t.textoMedio, overflowWrap: 'anywhere' },
+  embPainelFoi: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.ok, overflowWrap: 'anywhere' },
+  embPainelFalha: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.atencao, overflowWrap: 'anywhere' },
 
   /* ---- painel VOLUME A VOLUME (Embalagem Takt Time) ----
      Abre na propria pagina, ao lado da lista (abaixo dela, em tela
@@ -615,6 +628,13 @@ export const est = {
   },
   // Abaixo da meta, na junção: o tempo entre as medicoes fica fora da conta.
   vavMetaNota: { ...tipo('legenda'), color: t.textoFraco, margin: `${espaco.xs}px 0 0` },
+  /* O PAINEL RitmoPatrimar (v2.103.0), logo abaixo do selo de analisada:
+     estado, nao leitura — cinza; o "nao foi" no ambar de atencao, com o
+     texto dizendo por que (a leitura nao depende da cor). */
+  vavPainelLinha: { display: 'block', ...tipo('legenda'), color: t.textoMedio, margin: 0, overflowWrap: 'anywhere' },
+  vavPainelFalha: { display: 'block', ...tipo('legenda'), fontWeight: 700, color: t.atencao, overflowWrap: 'anywhere' },
+  vavPainelBloco: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: espaco.sm },
+  vavPainelTextos: { flex: '1 1 220px', minWidth: 0, display: 'flex', flexDirection: 'column' },
 
   // O QUE AS PARADAS ROUBARAM. A faixa da esquerda e' a cor de estado
   // critico do sistema — nunca o vermelho da marca — e o numero vem escrito
