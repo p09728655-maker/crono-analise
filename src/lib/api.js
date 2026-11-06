@@ -157,11 +157,16 @@ export const arquivarConferencias = (ids, arquivada = true) =>
  * e' o que junta de novo. Uma lista de ids corrige todas as medicoes que
  * herdaram a grafia errada numa unica ida.
  */
-export const renomearPecaConferencia = (id, peca) =>
-  requisitar(`/conferencias?id=${encodeURIComponent(id)}`, { metodo: 'PATCH', corpo: { peca } });
-export const renomearPecaConferencias = (ids, peca) =>
+// `painel: true`: a tela vai reenviar ao painel as que ja' foram (ver
+// pedeEnvio em api/conferencias.js) — o servidor deixa a marca de produto
+// corrigido ate' o reenvio voltar.
+export const renomearPecaConferencia = (id, peca, { painel = false } = {}) =>
+  requisitar(`/conferencias?id=${encodeURIComponent(id)}`, {
+    metodo: 'PATCH', corpo: painel ? { peca, painel: true } : { peca },
+  });
+export const renomearPecaConferencias = (ids, peca, { painel = false } = {}) =>
   emPartes(ids, (parte) => requisitar('/conferencias', {
-    metodo: 'PATCH', corpo: { ids: parte, peca },
+    metodo: 'PATCH', corpo: painel ? { ids: parte, peca, painel: true } : { ids: parte, peca },
   }));
 // Paradas cadastradas no PC (setup marcado depois, olhando o apontamento).
 // A lista vai INTEIRA — e' o estado final das paradas daquela conferencia,
@@ -173,21 +178,27 @@ export const salvarParadasConferencia = (id, paradas) =>
  * e a nota (opcional); `false` reabre e a medicao volta a "a analisar",
  * com a nota guardada. Devolve a medicao com os campos novos, para a lista
  * mudar sem buscar tudo de novo.
+ *
+ * `painel: true` (so' ao salvar): a tela vai mandar a medicao ao painel em
+ * seguida, e o servidor ja' deixa a marca de "nao confirmado" ate' o envio
+ * voltar (ver pedeEnvio em api/conferencias.js).
  */
-export const salvarAnaliseConferencia = (id, { analisada, nota }) =>
+export const salvarAnaliseConferencia = (id, { analisada, nota, painel = false }) =>
   requisitar(`/conferencias?id=${encodeURIComponent(id)}`, {
     metodo: 'PATCH',
-    corpo: analisada ? { analisada: true, analiseNota: nota || null } : { analisada: false },
+    corpo: analisada
+      ? { analisada: true, analiseNota: nota || null, ...(painel ? { painel: true } : {}) }
+      : { analisada: false },
   }).then((r) => r.conferencia);
 /**
  * A ANALISE DE UMA JUNCAO: a mesma nota em todas as medicoes lidas juntas,
  * numa ida so' — tudo ou nada (ver analisarLote em api/conferencias.js).
  * Devolve as medicoes com os campos novos.
  */
-export const salvarAnaliseConferencias = (ids, nota) =>
+export const salvarAnaliseConferencias = (ids, nota, { painel = false } = {}) =>
   requisitar('/conferencias', {
     metodo: 'PATCH',
-    corpo: { ids, analisada: true, analiseNota: nota || null },
+    corpo: { ids, analisada: true, analiseNota: nota || null, ...(painel ? { painel: true } : {}) },
   }).then((r) => r.conferencias || []);
 /**
  * MANDA UMA MEDICAO AO PAINEL RitmoPatrimar (ver api/_lib/painel.js e

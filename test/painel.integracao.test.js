@@ -294,4 +294,141 @@ rodar('Mandar a medicao ao painel — integracao', () => {
     await conferenciasApi(req({ token: comoAnalista(analistaId) }), lista);
     expect(lista.corpo.painel).toEqual({ ligado: false });
   });
+
+  /*
+   * A MARCA DE ANTES DO ENVIO (pedeEnvio): o envio sai da fila da TELA,
+   * depois da analise salva. Fechada ou recarregada no meio, a medicao
+   * ficava analisada e sem marca nenhuma — o PCP achava que ela tinha ido.
+   */
+  const patch = async (corpo, { id, token = comoAnalista(analistaId) } = {}) => {
+    const r = res();
+    await conferenciasApi(req({ metodo: 'PATCH', token, query: id ? { id } : {}, corpo }), r);
+    return r;
+  };
+  const NAO_CONFIRMADO = /^O envio ao painel não foi confirmado/;
+  const PRODUTO_MUDOU = /^O produto foi corrigido depois do envio/;
+
+  it("a analise salva com o pedido de envio ja' deixa 'nao confirmado'; o envio troca pelo desfecho", async () => {
+    const id = await medicao();
+    const r = await patch({ analisada: true, painel: true }, { id });
+    expect(r.statusCode).toBe(200);
+    // A resposta ja' traz a marca: a lista da tela fica igual ao banco.
+    expect(r.corpo.conferencia.painel_erro).toMatch(NAO_CONFIRMADO);
+    expect(r.corpo.conferencia.painel_em).toBeNull();
+    // F5 antes do envio: a lista diz que nao foi.
+    const lista = res();
+    await conferenciasApi(req({ token: comoAnalista(analistaId) }), lista);
+    expect(lista.corpo.conferencias.find((c) => c.id === id).painel_erro).toMatch(NAO_CONFIRMADO);
+
+    await aoPainel(id);
+    expect(await gravado(id)).toMatchObject({ painel_erro: null });
+    const primeira = (await gravado(id)).painel_em;
+    expect(primeira).toBeTruthy();
+
+    // Reaberta e salva de novo: a marca volta, e o que o painel aceitou
+    // antes continua em painel_em (a tela diz "uma versao anterior esta' la'").
+    expect((await patch({ analisada: false }, { id })).statusCode).toBe(200);
+    expect((await patch({ analisada: true, painel: true }, { id })).statusCode).toBe(200);
+    const g = await gravado(id);
+    expect(g.painel_erro).toMatch(NAO_CONFIRMADO);
+    expect(g.painel_em.getTime()).toBe(primeira.getTime());
+    // O painel diz "ja' estava": a marca sai.
+    respostaPainel = { ok: true, app: true, registrado: true, duplicado: true, linha: 101 };
+    await aoPainel(id);
+    expect(await gravado(id)).toMatchObject({ painel_erro: null });
+  });
+
+  it("juncao: o lote com o pedido marca todas, e devolve a marca a' tela", async () => {
+    const a = await medicao();
+    const b = await medicao();
+    const r = await patch({ ids: [a, b], analisada: true, painel: true });
+    expect(r.statusCode).toBe(200);
+    expect(r.corpo.conferencias).toHaveLength(2);
+    for (const c of r.corpo.conferencias) expect(c.painel_erro).toMatch(NAO_CONFIRMADO);
+    expect((await gravado(a)).painel_erro).toMatch(NAO_CONFIRMADO);
+    expect((await gravado(b)).painel_erro).toMatch(NAO_CONFIRMADO);
+  });
+
+  it('sem o pedido, ou com o envio desligado, a analise nao marca nada', async () => {
+    const semPedido = await medicao();
+    expect((await patch({ analisada: true }, { id: semPedido })).statusCode).toBe(200);
+    expect(await gravado(semPedido)).toMatchObject({ painel_erro: null, painel_em: null });
+
+    // Desligado o envio nao grava desfecho: a marca ficaria para sempre.
+    delete process.env.PAINEL_APPS_SCRIPT_URL;
+    const desligado = await medicao();
+    expect((await patch({ analisada: true, painel: true }, { id: desligado })).statusCode).toBe(200);
+    const a = await medicao();
+    const b = await medicao();
+    expect((await patch({ ids: [a, b], analisada: true, painel: true })).statusCode).toBe(200);
+    for (const id of [desligado, a, b]) expect(await gravado(id)).toMatchObject({ painel_erro: null });
+  });
+
+  it("produto corrigido com o pedido: marca so' a analisada que ja' foi ao painel ou tentou", async () => {
+    const NOVO = '501059 · PENTEADEIRA CAMARIM STRASS · VOL 1/2';
+    const foi = await medicao();
+    await analisar(foi);
+    await aoPainel(foi);
+    const recusada = await medicao();
+    await analisar(recusada);
+    respostaPainel = { ok: true, app: true, registrado: false, recusado: true, erro: 'Produto fora do cadastro.' };
+    await aoPainel(recusada);
+    respostaPainel = null;
+    const nunca = await medicao();
+    await analisar(nunca);
+    const reaberta = await medicao();
+    await analisar(reaberta);
+    await aoPainel(reaberta);
+    expect((await patch({ analisada: false }, { id: reaberta })).statusCode).toBe(200);
+    const aAnalisar = await medicao();
+
+    // Uma por vez.
+    expect((await patch({ peca: NOVO, painel: true }, { id: foi })).statusCode).toBe(200);
+    const g = await gravado(foi);
+    expect(g.painel_erro).toMatch(PRODUTO_MUDOU);
+    expect(g.painel_em).toBeTruthy();
+    // O lote (o "as outras" do Editar produto).
+    expect((await patch({ ids: [recusada, nunca, reaberta, aAnalisar], peca: NOVO, painel: true })).statusCode).toBe(200);
+    expect((await gravado(recusada)).painel_erro).toMatch(PRODUTO_MUDOU);
+    for (const id of [nunca, reaberta, aAnalisar]) {
+      const x = await gravado(id);
+      expect(x.painel_erro).toBeNull();
+    }
+    // A reaberta sozinha tambem nao: so' vai de novo quando for salva.
+    expect((await patch({ peca: PRODUTO, painel: true }, { id: reaberta })).statusCode).toBe(200);
+    expect((await gravado(reaberta)).painel_erro).toBeNull();
+
+    // O reenvio leva o nome novo e tira a marca.
+    chamadas = [];
+    await aoPainel(foi);
+    expect(new URL(chamadas[0]).searchParams.get('rotulo')).toBe(NOVO);
+    expect(await gravado(foi)).toMatchObject({ painel_erro: null });
+
+    // Sem o pedido (envio desligado na tela), renomear nao marca.
+    const outra = await medicao();
+    await analisar(outra);
+    await aoPainel(outra);
+    expect((await patch({ peca: NOVO }, { id: outra })).statusCode).toBe(200);
+    expect(await gravado(outra)).toMatchObject({ painel_erro: null });
+  });
+
+  it('o pedido sozinho, com reabrir, com arquivar ou fora do formato e recusado sem gravar nada', async () => {
+    const id = await medicao();
+    const antes = await gravado(id);
+    for (const corpo of [
+      { painel: true },
+      { analisada: false, painel: true },
+      { analisada: true, painel: 'sim' },
+      { arquivada: true, painel: true },
+    ]) {
+      const r = await patch(corpo, { id });
+      expect(r.statusCode).toBe(400);
+    }
+    expect((await patch({ ids: [id], arquivada: true, painel: true })).statusCode).toBe(400);
+    expect((await patch({ ids: [id], analisada: true, painel: 1 })).statusCode).toBe(400);
+    const depois = await gravado(id);
+    expect(depois).toMatchObject({ painel_erro: null, painel_em: null });
+    // Recusado antes de qualquer escrita: nem a marca de edicao.
+    expect(depois.editada_em?.getTime()).toBe(antes.editada_em?.getTime());
+  });
 });

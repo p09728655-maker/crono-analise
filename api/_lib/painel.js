@@ -72,6 +72,20 @@ const MENSAGEM_URL = 'PAINEL_APPS_SCRIPT_URL não é a URL do App da Web do pain
 const MENSAGEM_NAO_JSON = 'O painel não respondeu em JSON: confira PAINEL_APPS_SCRIPT_URL — é a URL do App da Web, '
   + 'terminada em /exec, implantada para "Qualquer pessoa".';
 
+/**
+ * A MARCA DE ANTES DO ENVIO (ver marcaDeEnvio em api/conferencias.js). O
+ * envio sai da fila da TELA, depois que a analise ja' esta' salva: se a
+ * tela fecha ou recarrega no meio, a medicao ficava analisada sem marca
+ * nenhuma, e ninguem sabia que ela nao tinha ido. Por isso a gravacao que
+ * pede o envio ja' deixa o motivo em painel_erro; o envio, ao voltar, troca
+ * pelo desfecho de verdade. Fica escrito so' se o envio nao voltou.
+ */
+export const MENSAGEM_NAO_CONFIRMADO = 'O envio ao painel não foi confirmado: a análise foi salva, mas o envio '
+  + 'não voltou (a tela foi fechada ou recarregada no meio). Envie de novo; se ele já tinha chegado, '
+  + 'o painel responde "já estava".';
+export const MENSAGEM_PRODUTO_MUDOU = 'O produto foi corrigido depois do envio e o painel ainda está com o '
+  + 'nome de antes: envie de novo (o painel troca a linha).';
+
 /** O envio esta' ligado: a variavel existe e nao esta' em branco. */
 export const painelLigado = (env = process.env) => Boolean(String(env.PAINEL_APPS_SCRIPT_URL ?? '').trim());
 

@@ -11,9 +11,7 @@ import { filtrarPorPeriodo, formatarDataHora } from '../../domain/relatorioConfe
 import {
   emOrdem, faixaDaJuncao, idsDaJuncao, medicaoDaJuncao, motivoParaNaoJuntar,
 } from '../../domain/juncaoMedicoes.js';
-import {
-  lerDemanda, listarCadastroMaquinas, listarConferenciasServidor, renomearPecaConferencia, renomearPecaConferencias,
-} from '../../lib/api.js';
+import { lerDemanda, listarCadastroMaquinas, listarConferenciasServidor } from '../../lib/api.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
@@ -385,7 +383,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
       setAberta((a) => (a ? juntar(a) : a));
       setVista(vistaDe(juntar(daTela)));
     }
-  }, { painelLigado: carga.painelLigado ?? null });
+  }, { painelLigado: carga.painelLigado ?? null, conferencias: carga.conferencias });
 
   useLayoutEffect(() => {
     atual.current = {
@@ -403,12 +401,17 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
   const naoSalvas = (leitura ? leitura.medicoes.filter(analises.notaNaoSalva).length : 0)
     + analises.juncoesNaoSalvas(leitura?.medicoes || []);
   const pendente = analises.ocupado || naoSalvas > 0;
+  /* A fila do painel segura so' a PAGINA: ela mora na pagina, e recarregar
+     ou fechar para o que ainda nao saiu (a lista marca "nao foi ao painel",
+     mas o PCP tem de mandar de novo). Ir para outra tela do app nao: a fila
+     continua andando. */
+  const segurarPagina = pendente || analises.enviosPendentes > 0;
   useEffect(() => {
-    if (!pendente) return undefined;
+    if (!segurarPagina) return undefined;
     const aoSair = (ev) => { ev.preventDefault(); ev.returnValue = ''; };
     window.addEventListener('beforeunload', aoSair);
     return () => window.removeEventListener('beforeunload', aoSair);
-  }, [pendente]);
+  }, [segurarPagina]);
   const sairDaTela = (ir) => {
     if (!pendente) {
       ir();
@@ -434,8 +437,8 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
     const ids = tambemAsOutras && irmas.length > 1 ? irmas : [renomeando.id];
     setRenomeio({ ocupado: true, erro: null });
     try {
-      if (ids.length > 1) await renomearPecaConferencias(ids, nome);
-      else await renomearPecaConferencia(ids[0], nome);
+      // Grava e manda de novo ao painel a que ja' foi (ver renomearProduto).
+      await analises.renomearProduto(ids, nome);
     } catch (e) {
       if (montada.current) setRenomeio({ ocupado: false, erro: e.message });
       return;

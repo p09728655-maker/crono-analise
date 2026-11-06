@@ -384,9 +384,17 @@ PDF no painel.
 
 - **Quando:** no *Salvar análise e fechar* (e no *Salvar análise das N e
   fechar* da junção, uma medição depois da outra, **uma linha por medição** —
-  o painel soma as do mesmo volume). Reaberta e salva de novo, ela vai de novo:
-  com outros números (uma parada marcada depois), o painel troca a linha dela.
-  Não há trava de "já foi". Reabrir não manda nada.
+  o painel soma as do mesmo volume). Reaberta e salva de novo, ela vai de novo
+  e o painel responde que já estava: os tempos saem só dos toques, que não
+  mudam depois da análise — **parada marcada no PC não muda nenhum tempo
+  enviado**. Só troca a linha (`substituido`) o que muda o que vai: o produto
+  (ver abaixo) ou o período (setup ou programa do grupo). Não há trava de "já
+  foi". Reabrir não manda nada.
+- **Produto corrigido depois do envio:** em *Editar produto*, a medição
+  analisada que já foi ao painel ou tentou ir (`painel_em` ou `painel_erro`) é
+  reenviada sozinha com o nome novo, e o painel troca a linha pelo `regId`. A
+  que nunca foi não vai por causa de um nome. A que estava indo na hora vai de
+  novo, atrás dela (pode ter lido o nome de antes).
 - **O que vai:** produto, data (dia da medição em São Paulo), volumes e os três
   tempos por volume — com a linha rodando, sem as lacunas e no período — com
   **o mesmo texto da tela e do PDF** (`formatarSegundos`, ex. `71.7`). O painel
@@ -408,18 +416,29 @@ PDF no painel.
   ao painel". No volume a volume de uma analisada, a linha "Painel: enviada em
   dd/mm hh:mm" ou "Painel: não foi — motivo", com *Enviar ao painel* — também
   na que já foi: reenviar é inofensivo (o painel responde que já estava, ou
-  troca a linha se os números mudaram).
+  troca a linha se o produto ou o período mudaram).
+- **A fila mora na página:** os envios saem um por vez, depois que a análise
+  já está salva. Para a página fechada ou recarregada no meio não deixar a
+  medição analisada sem marca nenhuma, a própria gravação que pede o envio
+  (`painel: true` no PATCH da análise, da junção ou do produto corrigido) já
+  grava em `painel_erro` "o envio ao painel não foi confirmado…" (ou "o produto
+  foi corrigido depois do envio…"), e o envio, ao voltar, troca pelo desfecho.
+  O que não voltou aparece depois do F5 com "⚠ não foi ao painel". Com envios
+  na fila, recarregar ou fechar a página pergunta antes (`beforeunload`); ir
+  para outra tela do app não para a fila. Só com o envio ligado: desligado, o
+  envio não grava nada, e a marca ficaria para sempre.
 - **O que fica gravado:** `conferencias.painel_em` (quando o painel aceitou,
-  ou disse que já tinha) e `painel_erro` (o último motivo de não ter ido). Uma
+  ou disse que já tinha) e `painel_erro` (o último motivo de não ter ido, ou a
+  marca de antes do envio — ver *A fila mora na página*). Uma
   tentativa que falha depois não apaga `painel_em`; com os dois preenchidos, o
   painel tem uma versão anterior e a tela pede para enviar de novo. Mandar ao
   painel **não marca `editada_em`**: não é edição, e o reenvio do vídeo continua
   possível.
 - **Desligado:** sem `PAINEL_APPS_SCRIPT_URL` (ver [Deploy](#deploy-vercel))
   nada sai, nada se grava, e a tela diz no rodapé que o envio está desligado.
-- **Não mexe no painel:** excluir ou arquivar a medição aqui, ou corrigir o
-  produto depois de enviada. A linha do painel continua lá; quem a tira é o
-  painel.
+- **Não mexe no painel:** excluir ou arquivar a medição aqui. A linha do
+  painel continua lá; quem a tira é o painel (⏱ CRONOANÁLISE → MEDIÇÕES →
+  EXCLUIR).
 - **Como:** `PATCH /api/conferencias?id=<uuid>&painel=1` (analista ou
   administrador; o tablet recebe 403). O servidor lê a medição na RLS, chama o
   Apps Script **fora da transação** (até 25 s; a conexão é uma por instância)
@@ -1263,6 +1282,9 @@ npm run test:e2e          # navegador: coleta + análise + impressão
 
 # Integração da API (exige um Postgres com o schema aplicado)
 TEST_DATABASE_URL=postgres://... npx vitest run test/api.integracao.test.js
+# O envio ao painel (a marca de antes do envio, o produto corrigido, as
+# travas de papel e de RLS) só é guardado por este — sem o banco, ele pula
+TEST_DATABASE_URL=postgres://... npx vitest run test/painel.integracao.test.js
 ```
 
 ---

@@ -49,13 +49,40 @@ import {
 import { lista, paradasDaConferencia, texto, uuid } from './_lib/validar.js';
 import { listar as listarDemandas } from './_lib/demanda.js';
 import {
-  MENSAGEM_DESLIGADO, NO_PAINEL, chamarPainel, grupoDaMedicao, montarParaOPainel, motivoParaGravar, painelLigado,
+  MENSAGEM_DESLIGADO, MENSAGEM_NAO_CONFIRMADO, MENSAGEM_PRODUTO_MUDOU, NO_PAINEL, chamarPainel, grupoDaMedicao,
+  montarParaOPainel, motivoParaGravar, painelLigado,
 } from './_lib/painel.js';
 
 const MAX_LINHAS = 1000;
 // Teto do lote: uma maquina com mais medicoes que isto arquiva em duas
 // idas. O limite existe para uma requisicao nao virar uma transacao longa.
 const MAX_LOTE = 500;
+
+/**
+ * O PEDIDO DE ENVIO AO PAINEL (`painel: true`) que vai junto da gravacao da
+ * analise ou do produto corrigido — a tela vai mandar a medicao ao painel
+ * logo depois (mandarAoPainel, abaixo). O envio sai de uma fila da TELA:
+ * fechada ou recarregada no meio, a medicao ficava analisada e sem marca
+ * nenhuma, e ninguem sabia que ela nao tinha ido. Com o pedido, a propria
+ * gravacao ja' deixa em painel_erro o motivo de "nao confirmado" (ver
+ * MENSAGEM_NAO_CONFIRMADO); o envio, ao voltar, troca pelo desfecho. So'
+ * com o envio LIGADO: desligado, o envio nao grava nada, e a marca ficaria
+ * para sempre.
+ *
+ * Devolve se a gravacao marca. O pedido so' vai com a analise salva
+ * (`analisada: true`) ou com o produto corrigido (`peca`). No produto
+ * corrigido, so' marca a medicao analisada que ja' foi ao painel ou tentou
+ * ir (painel_em ou painel_erro): e' a que a tela reenvia — a nunca enviada
+ * nao vai sozinha por causa de um nome.
+ */
+function pedeEnvio(corpo, tem) {
+  if (!tem('painel')) return false;
+  if (typeof corpo.painel !== 'boolean') throw erroValidacao('Campo "painel" deve ser true ou false');
+  if (corpo.analisada !== true && !tem('peca')) {
+    throw erroValidacao('"painel" só vai junto de "analisada": true ou de "peca"');
+  }
+  return corpo.painel && painelLigado();
+}
 
 /**
  * O banco recusou em silencio.
@@ -188,6 +215,7 @@ export default handler(async (req, res) => {
     const peca = temNoLote('peca')
       ? texto(corpo.peca, 'peca', { obrigatorio: true, max: 120 })
       : null;
+    const marca = pedeEnvio(corpo, temNoLote);
 
     return auth.rls(async (db) => {
       let alteradas = null;
@@ -198,8 +226,13 @@ export default handler(async (req, res) => {
           RETURNING id`;
       }
       if (temNoLote('peca')) {
+        // A que ja' foi ao painel (ou tentou) vai de novo com o nome novo: a
+        // marca de produto corrigido fica ate' o reenvio voltar.
         alteradas = await db`
-          UPDATE conferencias SET peca = ${peca}, editada_em = now()
+          UPDATE conferencias SET peca = ${peca}, editada_em = now(),
+                 painel_erro = CASE WHEN ${marca} AND analisada_em IS NOT NULL
+                                         AND (painel_em IS NOT NULL OR painel_erro IS NOT NULL)
+                                    THEN ${MENSAGEM_PRODUTO_MUDOU} ELSE painel_erro END
            WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
           RETURNING id`;
       }
@@ -253,6 +286,7 @@ export default handler(async (req, res) => {
       const analiseNota = corpo.analisada === true
         ? texto(corpo.analiseNota, 'analiseNota', { max: 2000 })
         : null;
+      const marca = pedeEnvio(corpo, tem);
 
       /**
        * Mexida no PC: a medicao por video nao pode mais ser substituida pelo
@@ -296,7 +330,10 @@ export default handler(async (req, res) => {
       // e' recusado pelo mesmo motivo do lote: apagar nao e' renomear.
       if (tem('peca')) {
         const alteradas = await db`
-          UPDATE conferencias SET peca = ${pecaNova}
+          UPDATE conferencias SET peca = ${pecaNova},
+                 painel_erro = CASE WHEN ${marca} AND analisada_em IS NOT NULL
+                                         AND (painel_em IS NOT NULL OR painel_erro IS NOT NULL)
+                                    THEN ${MENSAGEM_PRODUTO_MUDOU} ELSE painel_erro END
            WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}
           RETURNING id`;
         if (!alteradas.length) throw nadaMudou();
@@ -315,7 +352,8 @@ export default handler(async (req, res) => {
           ? await db`
             UPDATE conferencias
                SET analisada_em = now(), analisada_por = ${auth.usuario?.nome || null},
-                   analise_nota = ${analiseNota}
+                   analise_nota = ${analiseNota},
+                   painel_erro = CASE WHEN ${marca} THEN ${MENSAGEM_NAO_CONFIRMADO} ELSE painel_erro END
              WHERE id = ${conferenciaId} AND empresa_id = ${empresaId}
             RETURNING id`
           : await db`
@@ -338,6 +376,7 @@ export default handler(async (req, res) => {
 
       const [linha] = await db`
         SELECT c.id, c.arquivada, c.peca, c.analisada_em, c.analisada_por, c.analise_nota,
+               c.painel_em, c.painel_erro,
                coalesce((
                  SELECT jsonb_agg(jsonb_build_object(
                           'motivo', p.motivo,
@@ -379,9 +418,10 @@ async function analisarLote({ auth, res, corpo, ids }) {
   if (corpo.analisada !== true) {
     throw erroValidacao('No lote, "analisada" só pode ser true: reabrir vai uma medição por vez');
   }
-  if (Object.keys(corpo).some((k) => !['ids', 'analisada', 'analiseNota'].includes(k))) {
-    throw erroValidacao('A análise vai sozinha no lote: só "ids", "analisada" e "analiseNota"');
+  if (Object.keys(corpo).some((k) => !['ids', 'analisada', 'analiseNota', 'painel'].includes(k))) {
+    throw erroValidacao('A análise vai sozinha no lote: só "ids", "analisada", "analiseNota" e "painel"');
   }
+  const marca = pedeEnvio(corpo, (k) => Object.prototype.hasOwnProperty.call(corpo, k));
   if (new Set(ids).size !== ids.length) throw erroValidacao('Medição repetida em "ids"');
   const analiseNota = texto(corpo.analiseNota, 'analiseNota', { max: 2000 });
 
@@ -397,11 +437,12 @@ async function analisarLote({ auth, res, corpo, ids }) {
     const alteradas = await db`
       UPDATE conferencias
          SET analisada_em = now(), analisada_por = ${auth.usuario?.nome || null},
-             analise_nota = ${analiseNota}, editada_em = now()
+             analise_nota = ${analiseNota}, editada_em = now(),
+             painel_erro = CASE WHEN ${marca} THEN ${MENSAGEM_NAO_CONFIRMADO} ELSE painel_erro END
        WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}
          AND (SELECT count(*) FROM conferencias
                WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}) = ${ids.length}
-      RETURNING id, analisada_em, analisada_por, analise_nota`;
+      RETURNING id, analisada_em, analisada_por, analise_nota, painel_em, painel_erro`;
     if (!alteradas.length) {
       const [{ n }] = await db`
         SELECT count(*)::int AS n FROM conferencias WHERE id = ANY(${ids}) AND empresa_id = ${empresaId}`;
@@ -424,10 +465,12 @@ async function analisarLote({ auth, res, corpo, ids }) {
  * substituida? } }, com `em` = painel_em depois da tentativa (null se nunca
  * foi).
  *
- * SEM TRAVA DE "JA' FOI": medicao com painel_em vai de novo quando pedida —
- * reaberta, com uma parada marcada e salva outra vez, ela chega ao painel
- * com numeros novos e o painel troca a linha (substituida). Quem decide se
- * ja' estava e' o painel, pelo REG_ID.
+ * SEM TRAVA DE "JA' FOI": medicao com painel_em vai de novo quando pedida.
+ * Quem decide e' o painel, pelo REG_ID: a mesma medicao com o mesmo
+ * conteudo volta "ja' estava"; com outro produto (corrigido em Editar
+ * produto) ou outro periodo (setup ou programa do grupo mudados), o painel
+ * troca a linha (substituida). Parada marcada no PC NAO muda o que vai: os
+ * tres tempos saem so' dos toques, e os toques nao mudam depois da analise.
  *
  * NAO E' EDICAO: nao marca editada_em. Aquela marca diz que o PCP mexeu na
  * medicao (produto, paradas, analise, arquivo) e trava o reenvio do video

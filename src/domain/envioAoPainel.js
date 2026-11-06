@@ -31,10 +31,12 @@ export const NO_PAINEL = Object.freeze(['enviada', 'ja-estava']);
  * respondeu: o retrato do banco depois da tentativa) ou { fase: 'feito',
  * falha } (o nosso servidor nem respondeu — o banco pode ter mudado ou nao).
  *
- * A ULTIMA TENTATIVA MANDA. A medicao reaberta, com uma parada marcada e
- * salva de novo, vai ao painel com numeros novos, e o painel troca a linha.
- * Se esse reenvio falha, o painel continua com os numeros VELHOS: "no
- * painel" ali esconderia justamente o que falta fazer. Por isso o motivo
+ * A ULTIMA TENTATIVA MANDA. A medicao com o produto corrigido (ou o
+ * periodo mudado pelo setup ou programa do grupo) vai ao painel de novo, e o
+ * painel troca a linha. Se esse reenvio falha, o painel continua com o que
+ * tinha ANTES: "no painel" ali esconderia justamente o que falta fazer. A
+ * marca de antes do envio (painel_erro gravado junto da analise, ver
+ * pedeEnvio em api/conferencias.js) cai aqui tambem: "nao foi", com o motivo. Por isso o motivo
  * vem antes de `em` — e `em` vai junto, para a tela dizer que uma versao
  * anterior esta' la'. Reenviar o que ja' estava igual nao custa nada: o
  * painel responde "ja' estava".
