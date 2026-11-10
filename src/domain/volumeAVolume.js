@@ -353,6 +353,69 @@ export function deixouDeEmbalar(itens, leitura) {
   };
 }
 
+/** "1 parada", "5 paradas". */
+export const qtdParadas = (n) => `${n} ${n === 1 ? 'parada' : 'paradas'}`;
+
+/** O % do parado de um motivo; a parada de 2 s em 12 min e' "<1%", nao "0%". */
+export const pctDoParado = (pct) => (pct > 0 && pct < 0.5 ? '<1%' : `${Math.round(pct)}%`);
+
+/**
+ * POR QUE A LINHA PAROU (v2.104.0) — a frase que acompanha o quadro das
+ * paradas por motivo (paradasPorMotivo). A MESMA conta na tela do PC, na
+ * folha e no resultado do tablet; muda so' o que cada saida pode afirmar:
+ *
+ *  - `saida`: 'pc', 'papel' ou 'tablet'. O tablet le' a COPIA dele, que
+ *    nunca recebe a parada anotada no PC: la', "as anotadas depois" sao as
+ *    do resultado deste tablet (revisao de 10/11).
+ *  - O total vai exato (8min43s): o cartao Paradas marcadas arredonda para
+ *    minutos (9 min) e, abaixo de um, mostra "< 1 min". No papel, que nao
+ *    tem cartao, o numero arredondado e' o "Parado (marcado)". Sem cartao
+ *    na tela (`comCartao` falso: a medicao com poucos toques nao os
+ *    mostra), a frase nao cita cartao nenhum.
+ *  - `comToques` falso (medicao sem toques validos): nao ha' "fora dos
+ *    toques" para citar.
+ *  - `entreToquesMs`: o "Paradas marcadas" do De onde veio — o RELOGIO do
+ *    cronometro entre o 1o e o ultimo toque (deixouDeEmbalar), nao a lista
+ *    de paradas. Passado so' quando a linha dele aparece. Menor que o
+ *    total: as paradas de fora dos toques e as anotadas depois nao estao
+ *    nele. Maior: parada marcada ao vivo e depois apagada ou encurtada
+ *    continua no relogio. A tolerancia absorve o arredondamento da lista
+ *    (cada parada ao vivo e' gravada em minutos com 2 casas: ate' 0,3 s).
+ */
+export function frasesDasParadas(pm, {
+  unidade, nMedicoes = 1, saida = 'pc', entreToquesMs = null, comToques = true, comCartao = true,
+} = {}) {
+  const onde = nMedicoes > 1 ? `nas ${nMedicoes} medições inteiras` : 'na medição inteira';
+  const anotadas = {
+    tablet: 'as anotadas depois, no resultado deste tablet',
+    papel: 'as anotadas depois (no resultado do tablet ou no PC)',
+  }[saida] || 'as anotadas depois (no resultado do tablet ou aqui no PC)';
+  const partes = [
+    `${tempoSomado(pm.totalMs)} em ${qtdParadas(pm.n)} ${onde}, o maior motivo primeiro: as marcadas no `
+      + `cronômetro e ${anotadas}${comToques ? ', também as de fora dos toques' : ''}.`,
+  ];
+  const menosDeUm = pm.totalMs < 60000;
+  if (saida === 'papel') {
+    partes.push(menosDeUm
+      ? 'É o total do Parado (marcado), que lá aparece como "< 1 min".'
+      : 'É o total do Parado (marcado), lá arredondado para minutos.');
+  } else if (comCartao) {
+    partes.push(menosDeUm
+      ? 'É o total do cartão Paradas marcadas, que mostra "< 1 min".'
+      : 'É o total do cartão Paradas marcadas, que arredonda para minutos.');
+  }
+  const folga = Math.max(1000, 300 * pm.n);
+  const toque = unidade?.singular || 'toque';
+  if (entreToquesMs != null && pm.totalMs - entreToquesMs >= folga) {
+    partes.push(`O "Paradas marcadas" do De onde veio dá ${tempoSomado(entreToquesMs)}: ele conta só o que o `
+      + `cronômetro tirou entre o 1º e o último ${toque}.`);
+  } else if (entreToquesMs != null && entreToquesMs - pm.totalMs >= folga) {
+    partes.push(`O "Paradas marcadas" do De onde veio dá ${tempoSomado(entreToquesMs)}: ele sai do relógio do `
+      + 'cronômetro, não desta lista — parada marcada ao vivo e depois apagada ou encurtada continua nele.');
+  }
+  return partes.join(' ');
+}
+
 /**
  * OS VOLUMES QUE AS PARADAS ROUBARAM — o que saiu x o que teria saido no
  * MESMO tempo, no passo que a linha provou rodando. E' potencialSemParada,

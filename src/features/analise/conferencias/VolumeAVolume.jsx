@@ -3,12 +3,12 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
+  faixaHoraria, formatarDuracao, leituraPecaAPeca, paradasPorMotivo, periodoPorPeca, somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
-  deixaramDe, deixouDeEmbalar, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, porHoraDaMedicao,
-  roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
+  deixaramDe, deixouDeEmbalar, frasesDasParadas, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, pctDoParado,
+  porHoraDaMedicao, qtdParadas, roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
 } from '../../../domain/volumeAVolume.js';
 import {
   CRITERIOS_JUNCAO, PREFIXO_JUNCAO, faixaDaJuncao, frasesDaJuncao, horaDaMedicao, idsDaJuncao, juntarMedicoes,
@@ -684,10 +684,14 @@ export default function VolumeAVolume({
             </div>
           )}
           {r.estado === 'sem-marcas' && (
-            <p style={est.textoModal}>
-              Esta medição não tem toques suficientes para mostrar intervalo — é preciso pelo
-              menos dois.
-            </p>
+            <>
+              <p style={est.textoModal}>
+                Esta medição não tem toques suficientes para mostrar intervalo — é preciso pelo
+                menos dois.
+              </p>
+              {/* O motivo nao depende de toque: a parada marcada vale igual. */}
+              <ParadasPorMotivo conferencia={conferencia} medicoes={medicoes} unidade={unidade} comLeitura={false} />
+            </>
           )}
 
           {pronto && (
@@ -701,6 +705,13 @@ export default function VolumeAVolume({
               <Indicadores
                 conferencia={conferencia} leitura={r.leitura} takt={r.takt} unidade={unidade} tom={frases.tom}
                 nMedicoes={ehJuncao ? n : 0}
+              />
+
+              {/* POR QUE A LINHA PAROU — logo abaixo do cartao Paradas
+                  marcadas, que diz quanto; aqui, por qual motivo. */}
+              <ParadasPorMotivo
+                conferencia={conferencia} medicoes={medicoes} unidade={unidade}
+                entreToquesMs={r.deixou?.partes.paradas > 0 ? r.deixou.partes.paradasMs : null}
               />
 
               {/* Na junção, cada medicao com os proprios numeros e a junção
@@ -778,6 +789,7 @@ export default function VolumeAVolume({
                 <ComoLer
                   leitura={r.leitura} unidade={unidade} juncao={ehJuncao} roubo={r.roubo?.roubados > 0}
                   lacunas={roubadosPelasLacunas(r.leitura)?.roubados > 0} deixou={r.deixou?.total > 0}
+                  motivos={somarParadas(conferencia.paradas).totalMs > 0}
                 />
               )}
             </>
@@ -872,6 +884,75 @@ function Indicadores({
   );
 }
 
+/**
+ * POR QUE A LINHA PAROU (v2.104.0) — as paradas marcadas por motivo, o
+ * maior primeiro. O volume a volume dizia QUANTO a linha parou e nunca POR
+ * QUE: o motivo estava gravado em cada parada, mas so' o Pareto do Ritmo
+ * por maquina o mostrava (pedido do PCP, 10/11). Mesmas paradas e mesmo
+ * total do cartao Paradas marcadas — a medicao inteira, as do cronometro e
+ * as anotadas depois —, por isso nao fecha com o "Paradas marcadas" do De
+ * onde veio, que e' so' o que o cronometro tirou entre o 1o e o ultimo
+ * toque: a dica diz isso quando os dois diferem.
+ *
+ * Tempo, nao volumes, por motivo: a parada anotada depois fica dentro dos
+ * intervalos (e vira lacuna so' se o intervalo passou do dobro do normal),
+ * e a de antes do 1o toque fica fora deles — converter cada motivo em
+ * volumes daria partes que nao fecham com o total do De onde veio. O total
+ * sai exato (8min43s), nao arredondado como no cartao (9 min): senao as
+ * linhas nao fechavam com ele. Sem parada marcada, nada (o cartao ja' diz
+ * "nenhuma").
+ *
+ * `entreToquesMs`: o "Paradas marcadas" do De onde veio, so' quando a linha
+ * dele aparece (ver deixouDeEmbalar).
+ */
+function ParadasPorMotivo({
+  conferencia, medicoes, unidade, entreToquesMs = null, comLeitura = true,
+}) {
+  const pm = paradasPorMotivo(paradasDaAnalise(conferencia, medicoes));
+  if (!pm) return null;
+  return (
+    <section aria-label="Paradas marcadas, por motivo">
+      <h3 style={est.vavSecaoTitulo}>Por que a linha parou — paradas marcadas, por motivo</h3>
+      <p style={est.vavSecaoDica}>
+        {/* Com poucos toques nao ha' cartoes na tela, nem "fora dos toques". */}
+        {frasesDasParadas(pm, {
+          unidade, nMedicoes: medicoes.length, entreToquesMs, comToques: comLeitura, comCartao: comLeitura,
+        })}
+      </p>
+      <div style={est.vavMotivosGrade}>
+        {pm.motivos.map((m) => (
+          <Fragment key={m.motivo}>
+            <span style={est.paretoRotulo} title={m.rotulo}>{m.rotulo}</span>
+            <span style={est.paretoTrilha}>
+              <i style={{ ...est.paretoBarra, width: `${Math.max(4, m.pct)}%` }} />
+            </span>
+            <span style={est.vavMotivoValor}>
+              <span style={est.vavMotivoValorForte}>{tempoSomado(m.ms)}</span>
+              {' · '}{qtdParadas(m.n)} · {pctDoParado(m.pct)}
+            </span>
+            {m.observacoes.length > 0 && (
+              <span style={est.vavMotivoObs}>Obs.: {m.observacoes.join(' · ')}</span>
+            )}
+          </Fragment>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * As paradas que o quadro le. Na junção, a observacao leva a hora da
+ * medicao dela: "faltou caixa" sozinho nao diz se foi na das 07:11 ou na
+ * das 07:52. As mesmas paradas de medicaoDaJuncao, na mesma ordem.
+ */
+function paradasDaAnalise(conferencia, medicoes) {
+  if (!conferencia.juncao) return conferencia.paradas;
+  return medicoes.flatMap((c) => (c.paradas || []).map((p) => {
+    const obs = String(p?.observacao ?? '').trim();
+    return obs ? { ...p, observacao: `${horaDaMedicao(c)}: ${obs}` } : p;
+  }));
+}
+
 /** "77.0 s" -> 77.0 grande e o "s" menor ao lado; o resto sai inteiro. */
 function ValorComUnidade({ valor }) {
   const m = /^(\d[\d.,]*) (s|min|h)$/.exec(valor);
@@ -890,7 +971,7 @@ function ValorComUnidade({ valor }) {
  * setup planejado — exatamente periodoPorPeca.
  */
 function definicoes(leitura, unidade, {
-  juncao = false, roubo: roubo0 = false, lacunas: lacunas0 = false, deixou = false,
+  juncao = false, roubo: roubo0 = false, lacunas: lacunas0 = false, deixou = false, motivos = false,
 } = {}) {
   // Com o total num passo so', ele substitui as duas contas separadas.
   const roubo = roubo0 && !deixou;
@@ -901,6 +982,7 @@ function definicoes(leitura, unidade, {
     ...(juncao ? [['Junção', `medições do mesmo produto, na mesma máquina e na mesma semana, lidas como uma só. Tudo somado pelo tempo, nunca a média das taxas. O tempo entre uma medição e a seguinte não foi medido: não vira intervalo, lacuna nem parada. A lacuna é contra o normal da junção, e por isso a contagem pode diferir da de cada medição sozinha. O passo de cada medição (a coluna "Sem as lacunas" da tabela) é a média sem as lacunas, comparada só entre as que têm ${minIntervalos} intervalos ou mais fora das lacunas — abaixo disso, "—"; "o passo muda" só quando a diferença passa de ${CRITERIOS_JUNCAO.passoIgualPct}% e do dobro do erro das médias.`]] : []),
     ...(deixou ? [[`${capital(unidade.plural)} que ${deixaramDe(unidade)}`, `a medição inteira no passo da linha sem parada nem lacuna, menos o que saiu. Abre em três partes, no mesmo passo, que fecham com o total: as paradas marcadas no cronômetro entre o 1º e o último ${unidade.singular}; as lacunas (o tempo além do normal); e o tempo antes do 1º e depois do último ${unidade.singular}, menos o ${unidade.singular} da largada. A parada anotada depois (no resultado do tablet ou aqui no PC) fica dentro dos intervalos: entra na lacuna, se virou uma, e não conta duas vezes.${juncao ? ' Na junção, o passo é o da junção.' : ''} Não projeta meta nem capacidade: é o passo que a própria linha fez.`]] : []),
     ...(roubo ? [[`${capital(unidade.plural)} roubados pelas paradas`, `o que teria saído no mesmo tempo, no passo que a linha fez rodando${juncao ? ' em cada medição' : ''}, menos o que saiu. As paradas são as marcadas, setup incluído. Não projeta meta nem capacidade: é o que a própria linha já fez.${juncao ? ' Na junção, soma os de cada medição.' : ''}`]] : []),
+    ...(motivos ? [['Por que a linha parou', `as paradas marcadas ${juncao ? 'nas medições inteiras' : 'na medição inteira'}, por motivo: as do cronômetro e as anotadas depois (no resultado do tablet ou aqui no PC), também as de antes do 1º e depois do último ${unidade.singular}. O total é o do cartão Paradas marcadas. O "Paradas marcadas" do De onde veio conta só o que o cronômetro tirou entre o 1º e o último ${unidade.singular}, e por isso pode dar outro número. A parada anotada depois fica dentro dos intervalos: quando o intervalo passou de ${leitura.criterios.fatorLacuna}× o normal, ela aparece também como lacuna — é a mesma parada, agora com motivo. Em tempo, e não em ${unidade.plural}: convertidas, essas partes não fechariam com o total do De onde veio.`]] : []),
     ...(lacunas ? [[`${capital(unidade.plural)} roubados pelas lacunas`, `o tempo das lacunas além do normal, dividido pelo passo sem as lacunas: o que daria para ter saído nesse tempo, no passo da própria linha.${juncao ? ' Na junção, contra o normal da junção.' : ''} Não soma com os roubados pelas paradas: a parada anotada depois (no tablet ou aqui no PC) continua dentro dos intervalos e pode virar lacuna — somando, contaria duas vezes.`]] : []),
     ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo: o intervalo vai de um toque ao seguinte, e o tempo antes do primeiro toque não entra.`],
     [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, e só quando o grupo tem setup planejado (ele já saiu das horas do takt). É o que vai contra o takt — a mesma régua do programa da semana.'],
@@ -913,14 +995,14 @@ function definicoes(leitura, unidade, {
 }
 
 function ComoLer({
-  leitura, unidade, juncao, roubo, lacunas, deixou,
+  leitura, unidade, juncao, roubo, lacunas, deixou, motivos,
 }) {
   return (
     <section aria-label="Como ler estes números">
       <h3 style={est.vavSecaoTitulo}>Como ler estes números</h3>
       <dl style={est.vavComoLer}>
         {definicoes(leitura, unidade, {
-          juncao, roubo, lacunas, deixou,
+          juncao, roubo, lacunas, deixou, motivos,
         }).map(([termo, texto]) => (
           <div key={termo} style={est.vavComoLerItem}>
             <dt style={{ display: 'inline', ...est.vavComoLerTermo }}>{termo}: </dt>
@@ -1478,11 +1560,14 @@ function FolhaVolumeAVolume({
   });
   const hoje = new Date().toLocaleDateString('pt-BR');
   const par = somarParadas(conferencia.paradas);
+
   const { juncao, roubo } = r;
   const lacunasRoubo = roubadosPelasLacunas(r.leitura);
   const { deixou } = r;
   const medicoes = juncao ? juncao.medicoes.map((m) => m.conferencia) : [conferencia];
   const n = medicoes.length;
+  const motivos = paradasPorMotivo(paradasDaAnalise(conferencia, medicoes));
+  const comObsDeParada = Boolean(motivos?.motivos.some((m) => m.observacoes.length));
   // Na junção, as lacunas dizem a medicao e o volume dentro dela.
   const todasLacunas = juncao ? juncao.lacunas : (leitura.lacunas || []);
   const lacunas = [...todasLacunas]
@@ -1619,6 +1704,37 @@ function FolhaVolumeAVolume({
             </p>
           ))}
       </div>
+
+      {/* Por que a linha parou: o mesmo quadro da tela, em tabela — na
+          reuniao, o motivo e' o que a lideranca da linha vai cobrar. */}
+      {motivos && (
+        <section style={{ marginBottom: 10, breakInside: 'avoid' }}>
+          <h2 style={impF.tituloSecao}>Por que a linha parou — paradas marcadas, por motivo</h2>
+          <table style={impF.tabela}>
+            <thead>
+              <tr>
+                <th style={imp.th}>Motivo</th>
+                <th style={imp.thNum}>Paradas</th>
+                <th style={imp.thNum}>Tempo</th>
+                <th style={imp.thNum}>% do parado</th>
+                {comObsDeParada && <th style={imp.th}>Observação</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {motivos.motivos.map((m) => (
+                <tr key={m.motivo}>
+                  <td style={imp.td}>{m.rotulo}</td>
+                  <td style={imp.tdNum}>{m.n}</td>
+                  <td style={{ ...imp.tdNum, fontWeight: 700 }}>{tempoSomado(m.ms)}</td>
+                  <td style={imp.tdNum}>{pctDoParado(m.pct)}</td>
+                  {comObsDeParada && <td style={imp.td}>{m.observacoes.join(' · ')}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={impF.nota}>{frasesDasParadas(motivos, { unidade, nMedicoes: n, saida: 'papel' })}</p>
+        </section>
+      )}
 
       {juncao && (
         <section style={{ marginBottom: 10, breakInside: 'avoid' }}>

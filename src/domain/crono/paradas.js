@@ -85,6 +85,13 @@ function codigoMotivo(valor) {
 }
 
 /**
+ * A duracao de uma parada, em ms. Tres nomes para o mesmo campo:
+ * conferencia (duracaoMs), banco (duracao_ms) e o payload do estudo
+ * (duracao).
+ */
+const duracaoDaParada = (p) => Math.max(0, Number(p?.duracaoMs ?? p?.duracao_ms ?? p?.duracao) || 0);
+
+/**
  * Soma as paradas de um periodo, separando SETUP do resto.
  *
  * Setup sai separado porque e' a unica parada que o proprio processo
@@ -104,9 +111,7 @@ export function somarParadas(paradas) {
   let n = 0;
 
   for (const p of paradas || []) {
-    // Tres nomes para o mesmo campo: conferencia (duracaoMs), banco
-    // (duracao_ms) e o payload do estudo (duracao).
-    const ms = Math.max(0, Number(p?.duracaoMs ?? p?.duracao_ms ?? p?.duracao) || 0);
+    const ms = duracaoDaParada(p);
     if (ms <= 0) continue;
     const motivo = codigoMotivo(p?.motivo);
     totalMs += ms;
@@ -132,6 +137,38 @@ export function somarParadas(paradas) {
         pct: totalMs > 0 ? (v.ms / totalMs) * 100 : 0,
       }))
       .sort((a, b) => b.ms - a.ms),
+  };
+}
+
+/**
+ * POR QUE A LINHA PAROU — as paradas de UMA medicao (ou das da juncao),
+ * por motivo, com a observacao de cada uma (v2.104.0).
+ *
+ * O volume a volume dizia QUANTO a linha ficou parada (o cartao Paradas
+ * marcadas, o "De onde veio") e nunca POR QUE: o motivo estava gravado em
+ * cada parada e nenhuma tela da embalagem o mostrava. E' a mesma conta do
+ * Pareto (somarParadas) — o mesmo total do cartao —, mais o que so' a
+ * medicao tem: o texto que o analista escreveu na parada ("faltou fita").
+ *
+ * Observacao repetida no mesmo motivo aparece uma vez so'. Null sem parada
+ * com tempo: a tela nao desenha um quadro vazio.
+ */
+export function paradasPorMotivo(paradas) {
+  const soma = somarParadas(paradas);
+  if (!(soma.totalMs > 0)) return null;
+  const obs = new Map();
+  for (const p of paradas || []) {
+    const texto = String(p?.observacao ?? '').trim();
+    if (!texto || duracaoDaParada(p) <= 0) continue;
+    const codigo = codigoMotivo(p?.motivo);
+    const lista = obs.get(codigo) || [];
+    if (!lista.includes(texto)) lista.push(texto);
+    obs.set(codigo, lista);
+  }
+  return {
+    totalMs: soma.totalMs,
+    n: soma.n,
+    motivos: soma.porMotivo.map((m) => ({ ...m, observacoes: obs.get(m.motivo) || [] })),
   };
 }
 

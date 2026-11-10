@@ -721,6 +721,23 @@ export const est = {
   vavTrTotal: { background: '#F1F3F6', fontWeight: 700 },
   vavTabelaRolagem: { overflowX: 'auto' },
 
+  /* POR QUE A LINHA PAROU (v2.104.0): as paradas da medicao por motivo,
+     nas colunas do pareto do Ritmo (paretoGrade) — os tres campos direto
+     no grid, para todas as barras comecarem no mesmo x. A observacao da
+     parada ocupa a linha inteira, embaixo do motivo dela. */
+  vavMotivosGrade: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(96px, max-content) minmax(0, 1fr) max-content',
+    columnGap: espaco.md, rowGap: espaco.sm, alignItems: 'center',
+    ...tipo('corpo'), ...numeros, color: t.texto,
+  },
+  vavMotivoValor: { whiteSpace: 'nowrap', textAlign: 'right', color: t.textoMedio },
+  vavMotivoValorForte: { fontWeight: 700, color: t.texto },
+  vavMotivoObs: {
+    gridColumn: '1 / -1', ...tipo('legenda'), color: t.textoMedio,
+    margin: `-${espaco.xs}px 0 0`, overflowWrap: 'anywhere',
+  },
+
   vavAnaliseNota: {
     ...tipo('corpo'), color: t.texto, margin: 0,
     padding: `${espaco.sm}px ${espaco.md}px`, background: t.fundo, borderRadius: raio.sm,
