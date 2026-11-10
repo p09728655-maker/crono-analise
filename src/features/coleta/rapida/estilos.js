@@ -283,6 +283,23 @@ export const est = {
   lacunaValor: { fontWeight: 700, fontFamily: fonte.numero, fontVariantNumeric: 'tabular-nums' },
   lacunaAlem: { fontSize: tamanho.pequeno, color: cores.textoFraco, fontFamily: fonte.numero },
   notaSalva: { margin: 0, fontSize: tamanho.legenda, color: cores.textoFraco, lineHeight: 1.5 },
+  /* POR QUE A LINHA PAROU (v2.104.0): um motivo por linha — rotulo e
+     tempo em cima, a barra na largura toda, as paradas e o % embaixo. A
+     barra no ambar de atencao, como o pareto do PC; o tempo vem escrito ao
+     lado, e a leitura nao depende da barra. */
+  motivoSalva: {
+    display: 'flex', flexDirection: 'column', gap: 4, padding: `${espaco.sm}px 0`,
+    borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: cores.borda,
+  },
+  motivoLinha: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: espaco.md },
+  motivoRotulo: { minWidth: 0, fontSize: tamanho.corpo, fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' },
+  motivoValor: {
+    flexShrink: 0, fontSize: tamanho.titulo, fontWeight: 700, fontFamily: fonte.numero, fontVariantNumeric: 'tabular-nums',
+  },
+  motivoTrilha: { height: 8, background: cores.borda, borderRadius: raio.pill, overflow: 'hidden' },
+  motivoBarra: { height: '100%', background: cores.atencao, borderRadius: raio.pill },
+  motivoSub: { fontSize: tamanho.pequeno, color: cores.textoFraco, lineHeight: 1.35 },
+  motivoObs: { fontSize: tamanho.pequeno, color: cores.textoFraco, lineHeight: 1.4, overflowWrap: 'anywhere' },
   botaoVoltarLista: {
     width: '100%', minHeight: ALVO_MINIMO, flexShrink: 0,
     background: cores.superficie, borderRadius: raio.md,

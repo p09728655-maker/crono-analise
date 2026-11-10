@@ -353,6 +353,45 @@ export function deixouDeEmbalar(itens, leitura) {
   };
 }
 
+/** "1 parada", "5 paradas". */
+export const qtdParadas = (n) => `${n} ${n === 1 ? 'parada' : 'paradas'}`;
+
+/** O % do parado de um motivo; a parada de 2 s em 12 min e' "<1%", nao "0%". */
+export const pctDoParado = (pct) => (pct > 0 && pct < 0.5 ? '<1%' : `${Math.round(pct)}%`);
+
+/**
+ * POR QUE A LINHA PAROU (v2.104.0) — a frase que acompanha o quadro das
+ * paradas por motivo (paradasPorMotivo). A MESMA na tela do PC, na folha e
+ * no resultado do tablet: de que paradas ele sai e com que total confere.
+ *
+ * O total vai exato (8min43s): o cartao Paradas marcadas arredonda para
+ * minutos (9 min), e com ele as linhas do quadro nao fechavam. `total` diz
+ * onde esta' o numero arredondado: o cartao (PC e tablet) ou, no papel,
+ * que nao tem cartao, o "Parado (marcado)".
+ *
+ * `entreToquesMs`: o "Paradas marcadas" do De onde veio — so' o que o
+ * cronometro tirou entre o 1o e o ultimo toque (deixouDeEmbalar). Passado
+ * so' quando a linha dele aparece; diferindo do total, a frase diz quanto
+ * ele da' e por que, para os dois "Paradas marcadas" nao parecerem erro.
+ */
+export function frasesDasParadas(pm, {
+  unidade, nMedicoes = 1, total = 'cartao', entreToquesMs = null,
+} = {}) {
+  const onde = nMedicoes > 1 ? `nas ${nMedicoes} medições inteiras` : 'na medição inteira';
+  const partes = [
+    `${tempoSomado(pm.totalMs)} em ${qtdParadas(pm.n)} ${onde}, o maior motivo primeiro: as marcadas no `
+      + 'cronômetro e as anotadas depois (no tablet ou no PC), também as de fora dos toques.',
+    total === 'papel'
+      ? 'É o total do Parado (marcado), lá arredondado para minutos.'
+      : 'É o total do cartão Paradas marcadas, que arredonda para minutos.',
+  ];
+  if (entreToquesMs != null && Math.abs(pm.totalMs - entreToquesMs) >= 1000) {
+    partes.push(`O "Paradas marcadas" do De onde veio dá ${tempoSomado(entreToquesMs)}: ele conta só o que o `
+      + `cronômetro tirou entre o 1º e o último ${unidade?.singular || 'toque'}.`);
+  }
+  return partes.join(' ');
+}
+
 /**
  * OS VOLUMES QUE AS PARADAS ROUBARAM — o que saiu x o que teria saido no
  * MESMO tempo, no passo que a linha provou rodando. E' potencialSemParada,

@@ -21,6 +21,7 @@ export const HISTORICO = [
       'O total do quadro é o mesmo do cartão Paradas marcadas, em minutos e segundos (o cartão arredonda para minutos): todas as paradas da medição, as do cronômetro e as anotadas depois (no tablet ou aqui no PC), também as de antes do 1º volume. Por isso ele pode dar outro número que o "Paradas marcadas" do "De onde veio", que conta só o que o cronômetro tirou entre o 1º e o último volume — quando os dois diferem, o quadro diz quanto dá o do "De onde veio". A parada anotada depois fica dentro dos intervalos: se o intervalo passou do dobro do normal, ela aparece também como lacuna. Por isso o quadro mostra tempo, e não volumes, por motivo: convertidas em volumes, as partes não fechariam com o total do "De onde veio".',
       'NA JUNÇÃO, as paradas das medições juntas, e a observação de cada parada leva a hora da medição dela ("07:52: faltou caixa").',
       'NA FOLHA IMPRESSA, a mesma lista em tabela (motivo, paradas, tempo, % do parado e a observação, quando houver), depois do gráfico — o gráfico continua na 1ª página.',
+      'NO TABLET TAMBÉM: o resultado de uma medição salva (tocar na linha em "Salvas neste aparelho") mostra o mesmo quadro, logo depois do "De onde veio", com as mesmas contas e as mesmas frases do PC. É a cópia do aparelho: o motivo corrigido no PC não volta para o tablet.',
     ],
   },
   {

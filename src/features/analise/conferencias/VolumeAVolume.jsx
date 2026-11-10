@@ -7,8 +7,8 @@ import {
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
-  deixaramDe, deixouDeEmbalar, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, porHoraDaMedicao,
-  roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
+  deixaramDe, deixouDeEmbalar, frasesDasParadas, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, pctDoParado,
+  porHoraDaMedicao, qtdParadas, roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
 } from '../../../domain/volumeAVolume.js';
 import {
   CRITERIOS_JUNCAO, PREFIXO_JUNCAO, faixaDaJuncao, frasesDaJuncao, horaDaMedicao, idsDaJuncao, juntarMedicoes,
@@ -910,14 +910,11 @@ function ParadasPorMotivo({
 }) {
   const pm = paradasPorMotivo(paradasDaAnalise(conferencia, medicoes));
   if (!pm) return null;
-  const n = medicoes.length;
-  const difere = entreToquesMs != null && Math.abs(pm.totalMs - entreToquesMs) >= 1000;
   return (
     <section aria-label="Paradas marcadas, por motivo">
       <h3 style={est.vavSecaoTitulo}>Por que a linha parou — paradas marcadas, por motivo</h3>
       <p style={est.vavSecaoDica}>
-        {dicaDasParadas(pm, n)} É o total do cartão Paradas marcadas, que arredonda para minutos.
-        {difere && ` O "Paradas marcadas" do De onde veio dá ${tempoSomado(entreToquesMs)}: ele conta só o que o cronômetro tirou entre o 1º e o último ${unidade.singular}.`}
+        {frasesDasParadas(pm, { unidade, nMedicoes: medicoes.length, entreToquesMs })}
       </p>
       <div style={est.vavMotivosGrade}>
         {pm.motivos.map((m) => (
@@ -940,11 +937,6 @@ function ParadasPorMotivo({
   );
 }
 
-const qtdParadas = (n) => `${n} ${n === 1 ? 'parada' : 'paradas'}`;
-
-/** O % do parado; a parada de 2 s em 12 min e' "<1%", nao "0%". */
-const pctDoParado = (pct) => (pct > 0 && pct < 0.5 ? '<1%' : `${Math.round(pct)}%`);
-
 /**
  * As paradas que o quadro le. Na junção, a observacao leva a hora da
  * medicao dela: "faltou caixa" sozinho nao diz se foi na das 07:11 ou na
@@ -956,13 +948,6 @@ function paradasDaAnalise(conferencia, medicoes) {
     const obs = String(p?.observacao ?? '').trim();
     return obs ? { ...p, observacao: `${horaDaMedicao(c)}: ${obs}` } : p;
   }));
-}
-
-/** De que paradas sai o quadro — o comeco da frase, igual na tela e na folha. */
-function dicaDasParadas(pm, nMedicoes = 1) {
-  const onde = nMedicoes > 1 ? `nas ${nMedicoes} medições inteiras` : 'na medição inteira';
-  return `${tempoSomado(pm.totalMs)} em ${qtdParadas(pm.n)} ${onde}, o maior motivo primeiro: as marcadas no `
-    + 'cronômetro e as anotadas depois (no tablet ou aqui no PC), também as de fora dos toques.';
 }
 
 /** "77.0 s" -> 77.0 grande e o "s" menor ao lado; o resto sai inteiro. */
@@ -1744,9 +1729,7 @@ function FolhaVolumeAVolume({
               ))}
             </tbody>
           </table>
-          <p style={impF.nota}>
-            {dicaDasParadas(motivos, n)} É o total do Parado (marcado), lá arredondado para minutos.
-          </p>
+          <p style={impF.nota}>{frasesDasParadas(motivos, { unidade, nMedicoes: n, total: 'papel' })}</p>
         </section>
       )}
 

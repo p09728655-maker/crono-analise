@@ -4,7 +4,12 @@
  * marcadas (somarParadas): o quadro abre o mesmo numero, nao cria outro.
  */
 import { describe, expect, it } from 'vitest';
-import { paradasPorMotivo, rotuloMotivo, somarParadas } from '../src/domain/cronoanalise.js';
+import {
+  paradasPorMotivo, rotuloMotivo, somarParadas, unidadeDoPosto,
+} from '../src/domain/cronoanalise.js';
+import { frasesDasParadas, pctDoParado } from '../src/domain/volumeAVolume.js';
+
+const VOLUME = unidadeDoPosto('EMBALAGEM');
 
 const S = 1000;
 const MIN = 60 * S;
@@ -68,5 +73,35 @@ describe('paradasPorMotivo', () => {
     expect(paradasPorMotivo([])).toBeNull();
     expect(paradasPorMotivo(undefined)).toBeNull();
     expect(paradasPorMotivo([{ motivo: 'setup', duracaoMs: 0 }])).toBeNull();
+  });
+});
+
+describe('frasesDasParadas — a mesma frase no PC, na folha e no tablet', () => {
+  // 523,2 s: o cartao diz "9 min"; o quadro tem de dizer o exato.
+  const pm = paradasPorMotivo([{ motivo: 'outro', duracaoMs: 523200 }, { motivo: 'outro', duracaoMs: 0 }]);
+
+  it('o total exato, e onde esta o arredondado: o cartao na tela, o Parado (marcado) no papel', () => {
+    const tela = frasesDasParadas(pm, { unidade: VOLUME });
+    expect(tela).toMatch(/^8min43s em 1 parada na medição inteira, o maior motivo primeiro:/);
+    expect(tela).toMatch(/É o total do cartão Paradas marcadas, que arredonda para minutos\.$/);
+    const papel = frasesDasParadas(pm, { unidade: VOLUME, total: 'papel', nMedicoes: 3 });
+    expect(papel).toMatch(/^8min43s em 1 parada nas 3 medições inteiras/);
+    expect(papel).toMatch(/É o total do Parado \(marcado\), lá arredondado para minutos\.$/);
+    expect(papel).not.toMatch(/cartão/);
+  });
+
+  it('o De onde veio com outro numero: a frase diz quanto ele da e por que', () => {
+    expect(frasesDasParadas(pm, { unidade: VOLUME, entreToquesMs: 480000 }))
+      .toMatch(/O "Paradas marcadas" do De onde veio dá 8min00s: ele conta só o que o cronômetro tirou entre o 1º e o último volume\.$/);
+    // Igual (menos de 1 s de diferenca) ou sem a linha dele: nada a explicar.
+    expect(frasesDasParadas(pm, { unidade: VOLUME, entreToquesMs: 522800 })).not.toMatch(/De onde veio/);
+    expect(frasesDasParadas(pm, { unidade: VOLUME })).not.toMatch(/De onde veio/);
+  });
+
+  it('o % do parado: "<1%" no lugar de "0%"', () => {
+    expect(pctDoParado(0.2)).toBe('<1%');
+    expect(pctDoParado(0.5)).toBe('1%');
+    expect(pctDoParado(58.33)).toBe('58%');
+    expect(pctDoParado(100)).toBe('100%');
   });
 });

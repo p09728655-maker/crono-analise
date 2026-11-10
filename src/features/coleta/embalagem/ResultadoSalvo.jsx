@@ -1,6 +1,9 @@
-import { formatarDuracao, formatarSegundos, somarParadas } from '../../../domain/cronoanalise.js';
 import {
-  deixaramDe, frasesVolumeAVolume, numerosDaLeitura, porHoraDaMedicao, tempoSomado,
+  formatarDuracao, formatarSegundos, paradasPorMotivo, somarParadas,
+} from '../../../domain/cronoanalise.js';
+import {
+  deixaramDe, frasesDasParadas, frasesVolumeAVolume, numerosDaLeitura, pctDoParado, porHoraDaMedicao, qtdParadas,
+  tempoSomado,
 } from '../../../domain/volumeAVolume.js';
 import { GraficoIntervalos } from '../../analise/graficos/Intervalos.jsx';
 import { cores } from '../../../theme/tokens.js';
@@ -78,6 +81,8 @@ export default function ResultadoSalvo({
       <Cartoes r={r} takt={takt} unidade={unidade} tom={frases?.tom} />
 
       <PerdaDaMedicao r={r} unidade={unidade} />
+
+      <MotivosDasParadas r={r} unidade={unidade} />
 
       {leitura && <GraficoIntervalos leitura={leitura} unidade={unidade} altura={240} pisoLargura={240} />}
 
@@ -180,6 +185,46 @@ function ValorComUnidade({ valor }) {
     <span style={est.cartaoValor}>
       {m[1]}<span style={est.cartaoUnidade}>{m[2]}</span>
     </span>
+  );
+}
+
+/**
+ * POR QUE A LINHA PAROU (v2.104.0) — as paradas desta medicao por motivo,
+ * como no volume a volume do PC (ParadasPorMotivo), com a mesma conta
+ * (paradasPorMotivo) e a mesma frase (frasesDasParadas). Logo depois do
+ * "De onde veio", que diz quanto as paradas custaram; aqui, por qual
+ * motivo. Vale tambem sem toques (medicao por horarios ou contagem
+ * corrigida): o motivo nao depende de toque. Sem parada, nada — o cartao
+ * Paradas marcadas ja' diz "nenhuma".
+ *
+ * Um motivo por linha, e nao o grid do PC: no tablet em pe' (400 a 800 px)
+ * rotulo e tempo vao em cima e a barra embaixo, na largura toda. E' a
+ * copia do aparelho: o motivo corrigido no PC nao volta para ca' (o pe' da
+ * tela ja' avisa).
+ */
+function MotivosDasParadas({ r, unidade }) {
+  const pm = paradasPorMotivo(r.conferencia.paradas);
+  if (!pm) return null;
+  // O "Paradas marcadas" do De onde veio, so' quando a linha dele aparece.
+  const entreToquesMs = r.deixou?.partes.paradas > 0 ? r.deixou.partes.paradasMs : null;
+  return (
+    <section style={est.blocoSalva} aria-label="Paradas marcadas, por motivo">
+      <h3 style={est.secaoSalva}>Por que a linha parou — paradas marcadas, por motivo</h3>
+      <p style={est.notaSalva}>{frasesDasParadas(pm, { unidade, entreToquesMs })}</p>
+      {pm.motivos.map((m) => (
+        <div key={m.motivo} style={est.motivoSalva}>
+          <div style={est.motivoLinha}>
+            <span style={est.motivoRotulo}>{m.rotulo}</span>
+            <span style={est.motivoValor}>{tempoSomado(m.ms)}</span>
+          </div>
+          <div style={est.motivoTrilha}>
+            <div style={{ ...est.motivoBarra, width: `${Math.max(4, m.pct)}%` }} />
+          </div>
+          <span style={est.motivoSub}>{qtdParadas(m.n)} · {pctDoParado(m.pct)} do parado</span>
+          {m.observacoes.length > 0 && <span style={est.motivoObs}>Obs.: {m.observacoes.join(' · ')}</span>}
+        </div>
+      ))}
+    </section>
   );
 }
 

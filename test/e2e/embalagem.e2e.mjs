@@ -1394,6 +1394,12 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   checar(/12 volumes deixaram de ser embalados nesta medição/.test(texto) && /teriam saído 24/.test(texto),
     'o total que deixou de ser embalado: 12 (6 paradas + 3 lacunas + 3 fora), 24 no passo da linha');
   checar(/Volume 12 40\.0 s \+30\.0 s/.test(texto), 'a lacuna no volume 12: 40.0 s, 30.0 s alem do normal');
+  /* POR QUE A LINHA PAROU (v2.104.0), como no PC: a parada de 60 s, com o
+     motivo. O De onde veio da' os mesmos 60 s (relogio 200 s - toques
+     140 s): a frase do "da' outro numero" nao aparece. */
+  checar(/Por que a linha parou — paradas marcadas, por motivo 1min00s em 1 parada na medição inteira, o maior motivo primeiro/i.test(texto)
+    && /1min00s 1 parada · 100% do parado/.test(texto) && !/do De onde veio dá/.test(texto),
+  `tablet: o quadro dos motivos, como no PC (${(/Por que a linha parou.{0,320}/i.exec(texto) || ['nao achou'])[0]})`);
   checar(await resultado.locator('svg[aria-label^="Intervalo entre volumes"]').count() === 1, 'o grafico volume a volume aparece');
   checar(await s.getByRole('button', { name: /INICIAR/ }).count() === 0, 'com o resultado aberto, o INICIAR sai da tela');
   checar(await s.getByText('Resultado salvo neste aparelho').count() === 1, 'o cabecalho diz que e o resultado salvo');
@@ -1426,6 +1432,13 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   await s.getByRole('button', { name: 'Voltar às medições salvas' }).first().tap();
   await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
   checar(new URL(s.url()).pathname === '/coleta/embalagem', 'a seta do cabecalho, com o resultado aberto, volta a lista');
+
+  // Sem parada marcada, o quadro dos motivos nao aparece.
+  await linhas.filter({ hasText: 'Livreiro Encanto' }).tap();
+  await resultado.waitFor({ timeout: 4000 });
+  checar(!/Por que a linha parou/i.test(await resultado.innerText()), 'tablet: sem parada marcada, sem o quadro dos motivos');
+  await s.goBack();
+  await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 4000 });
 
   // O ESPACO (teclado bluetooth) com o resultado aberto nao arma medicao:
   // o INICIAR nem esta' na tela (achado da revisao).
