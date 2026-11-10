@@ -85,6 +85,13 @@ function codigoMotivo(valor) {
 }
 
 /**
+ * A duracao de uma parada, em ms. Tres nomes para o mesmo campo:
+ * conferencia (duracaoMs), banco (duracao_ms) e o payload do estudo
+ * (duracao).
+ */
+const duracaoDaParada = (p) => Math.max(0, Number(p?.duracaoMs ?? p?.duracao_ms ?? p?.duracao) || 0);
+
+/**
  * Soma as paradas de um periodo, separando SETUP do resto.
  *
  * Setup sai separado porque e' a unica parada que o proprio processo
@@ -96,13 +103,6 @@ function codigoMotivo(valor) {
  *
  * Aceita paradas do aparelho (camelCase) e do banco (snake_case).
  */
-/**
- * A duracao de uma parada, em ms. Tres nomes para o mesmo campo:
- * conferencia (duracaoMs), banco (duracao_ms) e o payload do estudo
- * (duracao).
- */
-const duracaoDaParada = (p) => Math.max(0, Number(p?.duracaoMs ?? p?.duracao_ms ?? p?.duracao) || 0);
-
 export function somarParadas(paradas) {
   let totalMs = 0;
   let setupMs = 0;

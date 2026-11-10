@@ -196,6 +196,14 @@ checar(/POR VOLUME NO PERÍODO\s*17\.9 s\s*com as paradas, do 1º ao último toq
 checar(/POR VOLUME COM A LINHA RODANDO\s*14\.4 s/i.test(texto), 'rodando: 14.4 s');
 checar(/LACUNAS\s*2\s/i.test(texto), 'lacunas: 2, contra o normal da junção');
 checar(/VOLUMES\/HORA\s*197\s*nas 3 medições inteiras, com as paradas/i.test(texto), 'volumes/hora: 197, ponderado pelo tempo');
+/* POR QUE A LINHA PAROU (v2.104.0): as 9 paradas da fixture sao "outro".
+   Conta de mao: 23,4 + 48 + 95,4 + 3,6 + 18 + 200,4 + 31,8 + 52,2 + 50,4 =
+   523,2 s = 8min43s — exato, nao os "9 min" arredondados do cartao. */
+checar(/Por que a linha parou — paradas marcadas, por motivo\s*8min43s em 9 paradas nas 3 medições inteiras/.test(texto)
+  && /Outro\s*8min43s · 9 paradas · 100%/.test(texto),
+`quadro dos motivos: Outro, 8min43s em 9 paradas, 100% (${(/Por que a linha parou[\s\S]{0,400}/.exec(texto) || ['nao achou'])[0].replace(/\n/g, ' | ')})`);
+checar(/O "Paradas marcadas" do De onde veio dá \d+min\d{2}s: ele conta só o que o cronômetro tirou entre o 1º e o último volume\./.test(texto),
+  'quadro dos motivos: diz quanto da o "Paradas marcadas" do De onde veio, que e outro numero');
 // A tabela das medicoes, com a junção na ultima linha.
 // v2.99.6: uma coluna so', o que deixou de ser embalado (39), no lugar das
 // duas (paradas e lacunas).
@@ -255,6 +263,9 @@ checar(/DEIXARAM DE SER EMBALADOS\s*39 · teriam saído 177/i.test(folha) && /DE
 checar(/AS 3 MEDIÇÕES/i.test(folha) && /Junção\s*138\s*42 min\s*9 min\s*39/.test(folha), 'folha: a tabela das 3 medicoes');
 checar(/Nas 3 medições, 39 volumes deixaram de ser embalados/.test(folha), 'folha: a mesma manchete da tela');
 checar(/Junção = medições do mesmo produto/.test(folha), 'folha: a regra da junção na nota');
+checar(/Por que a linha parou — paradas marcadas, por motivo\s*Motivo\s*Paradas\s*Tempo\s*% do parado\s*Outro\s*9\s*8min43s\s*100%/i.test(folha)
+  && /É o total do Parado \(marcado\), lá arredondado para minutos\./.test(folha),
+'folha: a tabela dos motivos, com o nome do campo da folha (Parado (marcado), nao "cartao")');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/juncao-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
 
@@ -344,6 +355,7 @@ await uma.getByText(/Leitura da medição/).waitFor({ timeout: 4000 });
   const deOnde = (texto.split(/DE ONDE VEIO/i)[1] || '').split('A conta não projeta')[0];
   checar(!/Paradas marcadas/.test(deOnde) && !/por causa das paradas/.test(texto),
     `sem parada marcada, as paradas nao aparecem no que deixou de ser embalado (${deOnde.replace(/\n/g, ' | ').slice(0, 120)})`);
+  checar(!/Por que a linha parou/.test(texto), 'sem parada marcada, o quadro dos motivos nao aparece');
 }
 
 checar(erros.length === 0, `sem erro de pagina (${erros.join(' | ')})`);
