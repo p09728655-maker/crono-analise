@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.104.0',
+    data: '2026-11-10',
+    titulo: 'Embalagem: a análise mostra o motivo das paradas',
+    itens: [
+      'O VOLUME A VOLUME DIZ POR QUE A LINHA PAROU. Logo abaixo dos cartões, o quadro "Por que a linha parou" abre as paradas marcadas por motivo, o maior primeiro: o tempo de cada motivo, quantas paradas e quanto ele é do total parado, com a observação escrita na parada. Antes a tela dizia só quanto a linha ficou parada (o cartão Paradas marcadas e o "De onde veio"), e o motivo, gravado em cada parada, não aparecia em lugar nenhum da análise.',
+      'O total do quadro é o mesmo do cartão Paradas marcadas: todas as paradas da medição, as do cronômetro e as anotadas depois (no tablet ou aqui no PC), também as de antes do 1º volume. Por isso ele pode ser maior que o "Paradas marcadas" do "De onde veio", que conta só o que o cronômetro tirou entre o 1º e o último volume. O quadro mostra tempo, não volumes, por motivo: a parada anotada depois já entra na lacuna, e dividir os volumes por motivo daria partes que não fecham com o total de cima.',
+      'NA FOLHA IMPRESSA, a mesma lista em tabela (motivo, paradas, tempo, % do parado e a observação, quando houver), depois do gráfico. Na junção, as paradas das medições juntas.',
+    ],
+  },
+  {
     versao: '2.103.2',
     data: '2026-11-06',
     titulo: 'Embalagem: o painel sabe quem analisou a medição',

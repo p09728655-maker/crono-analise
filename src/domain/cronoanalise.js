@@ -16,7 +16,7 @@
  */
 export { MOTIVOS_PARADA } from './crono/paradas.js';
 export {
-  acaoDoMotivo, definirCatalogoParadas, resumirParadasDoEstudo, rotuloMotivo, somarParadas,
+  acaoDoMotivo, definirCatalogoParadas, paradasPorMotivo, resumirParadasDoEstudo, rotuloMotivo, somarParadas,
 } from './crono/paradas.js';
 export { FR_PRESETS, amostraSuficiente, calcularOperacao } from './crono/operacao.js';
 export {

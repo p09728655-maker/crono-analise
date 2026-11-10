@@ -3,7 +3,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  faixaHoraria, formatarDuracao, leituraPecaAPeca, periodoPorPeca, somarParadas, unidadeDoPosto,
+  faixaHoraria, formatarDuracao, leituraPecaAPeca, paradasPorMotivo, periodoPorPeca, somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
@@ -703,6 +703,10 @@ export default function VolumeAVolume({
                 nMedicoes={ehJuncao ? n : 0}
               />
 
+              {/* POR QUE A LINHA PAROU — logo abaixo do cartao Paradas
+                  marcadas, que diz quanto; aqui, por qual motivo. */}
+              <ParadasPorMotivo paradas={conferencia.paradas} nMedicoes={ehJuncao ? n : 0} />
+
               {/* Na junção, cada medicao com os proprios numeros e a junção
                   na ultima linha: e' aqui que se ve se juntar faz sentido. */}
               {r.juncao && <TabelaMedicoes r={r} unidade={unidade} />}
@@ -870,6 +874,57 @@ function Indicadores({
       </div>
     </>
   );
+}
+
+/**
+ * POR QUE A LINHA PAROU (v2.104.0) — as paradas marcadas por motivo, o
+ * maior primeiro. O painel dizia QUANTO a linha parou e nunca POR QUE: o
+ * motivo estava gravado em cada parada e ficava no banco (pedido do PCP,
+ * 10/11). Mesmas paradas e mesmo total do cartao Paradas marcadas — a
+ * medicao inteira, as do cronometro e as anotadas depois —, por isso nao
+ * fecha com o "Paradas marcadas" do De onde veio, que e' so' o que o
+ * cronometro tirou entre o 1o e o ultimo toque.
+ *
+ * Tempo, nao volumes, por motivo: a parada anotada depois esta' dentro dos
+ * intervalos (pode ser lacuna), e a de antes do 1o toque esta' fora deles —
+ * converter cada motivo em volumes daria partes que nao fecham com o total
+ * de cima. Sem parada marcada, nada (o cartao ja' diz "nenhuma").
+ */
+function ParadasPorMotivo({ paradas, nMedicoes = 0 }) {
+  const pm = paradasPorMotivo(paradas);
+  if (!pm) return null;
+  return (
+    <section aria-label="Paradas marcadas, por motivo">
+      <h3 style={est.vavSecaoTitulo}>Por que a linha parou — paradas marcadas, por motivo</h3>
+      <p style={est.vavSecaoDica}>{dicaDasParadas(pm, nMedicoes)}</p>
+      <div style={est.vavMotivosGrade}>
+        {pm.motivos.map((m) => (
+          <Fragment key={m.motivo}>
+            <span style={est.paretoRotulo} title={m.rotulo}>{m.rotulo}</span>
+            <span style={est.paretoTrilha}>
+              <i style={{ ...est.paretoBarra, width: `${Math.max(4, m.pct)}%` }} />
+            </span>
+            <span style={est.vavMotivoValor}>
+              <span style={est.vavMotivoValorForte}>{tempoSomado(m.ms)}</span>
+              {' · '}{qtdParadas(m.n)} · {Math.round(m.pct)}%
+            </span>
+            {m.observacoes.length > 0 && (
+              <span style={est.vavMotivoObs}>Obs.: {m.observacoes.join(' · ')}</span>
+            )}
+          </Fragment>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const qtdParadas = (n) => `${n} ${n === 1 ? 'parada' : 'paradas'}`;
+
+/** De que paradas sai o quadro — a mesma frase na tela e na folha. */
+function dicaDasParadas(pm, nMedicoes = 0) {
+  const onde = nMedicoes > 1 ? `nas ${nMedicoes} medições inteiras` : 'na medição inteira';
+  return `${formatarDuracao(pm.totalMs)} em ${qtdParadas(pm.n)} ${onde}, o maior motivo primeiro — o mesmo total `
+    + 'do cartão Paradas marcadas: as do cronômetro e as anotadas depois (no tablet ou aqui no PC), também fora dos toques.';
 }
 
 /** "77.0 s" -> 77.0 grande e o "s" menor ao lado; o resto sai inteiro. */
@@ -1478,6 +1533,8 @@ function FolhaVolumeAVolume({
   });
   const hoje = new Date().toLocaleDateString('pt-BR');
   const par = somarParadas(conferencia.paradas);
+  const motivos = paradasPorMotivo(conferencia.paradas);
+  const comObsDeParada = Boolean(motivos?.motivos.some((m) => m.observacoes.length));
   const { juncao, roubo } = r;
   const lacunasRoubo = roubadosPelasLacunas(r.leitura);
   const { deixou } = r;
@@ -1619,6 +1676,37 @@ function FolhaVolumeAVolume({
             </p>
           ))}
       </div>
+
+      {/* Por que a linha parou: o mesmo quadro da tela, em tabela — na
+          reuniao, o motivo e' o que a lideranca da linha vai cobrar. */}
+      {motivos && (
+        <section style={{ marginBottom: 10, breakInside: 'avoid' }}>
+          <h2 style={impF.tituloSecao}>Por que a linha parou — paradas marcadas, por motivo</h2>
+          <table style={impF.tabela}>
+            <thead>
+              <tr>
+                <th style={imp.th}>Motivo</th>
+                <th style={imp.thNum}>Paradas</th>
+                <th style={imp.thNum}>Tempo</th>
+                <th style={imp.thNum}>% do parado</th>
+                {comObsDeParada && <th style={imp.th}>Observação</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {motivos.motivos.map((m) => (
+                <tr key={m.motivo}>
+                  <td style={imp.td}>{m.rotulo}</td>
+                  <td style={imp.tdNum}>{m.n}</td>
+                  <td style={{ ...imp.tdNum, fontWeight: 700 }}>{tempoSomado(m.ms)}</td>
+                  <td style={imp.tdNum}>{Math.round(m.pct)}%</td>
+                  {comObsDeParada && <td style={imp.td}>{m.observacoes.join(' · ')}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={impF.nota}>{dicaDasParadas(motivos, n)}</p>
+        </section>
+      )}
 
       {juncao && (
         <section style={{ marginBottom: 10, breakInside: 'avoid' }}>
