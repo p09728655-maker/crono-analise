@@ -287,6 +287,9 @@ export const est = {
      tempo em cima, a barra na largura toda, as paradas e o % embaixo. A
      barra no ambar de atencao, como o pareto do PC; o tempo vem escrito ao
      lado, e a leitura nao depende da barra. */
+  // A frase do quadro diz de que paradas ele sai e por que difere do De
+  // onde veio: 13 px, nao os 11 da nota do pe' — quem le' esta' em pe'.
+  motivoNota: { margin: 0, fontSize: tamanho.pequeno, color: cores.textoFraco, lineHeight: 1.45 },
   motivoSalva: {
     display: 'flex', flexDirection: 'column', gap: 4, padding: `${espaco.sm}px 0`,
     borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: cores.borda,

@@ -1336,7 +1336,15 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
     enviada: true,
   });
   const SALVAS = [
-    salva('salva-hoje', 'Rack Sirius 1.6', new Date().toISOString()),
+    /* A de hoje tem, alem da parada de 60 s do cronometro, uma de 30 s
+       anotada depois, no resultado: o quadro dos motivos soma 90 s, e o De
+       onde veio (o relogio entre os toques) fica nos 60 s. O motivo da de
+       60 s e' do CADASTRO DA EMPRESA (falta_caixa), nao dos de fabrica. */
+    {
+      ...salva('salva-hoje', 'Rack Sirius 1.6', new Date().toISOString()),
+      paradas: [{ motivo: 'falta_caixa', duracaoMs: 60000 }, { motivo: 'outro', duracaoMs: 30000 }],
+      paradaMs: 90000, produtivoMs: 150000, pecasPorHora: 288,
+    },
     // Quarta da semana passada, meio da tarde em Sao Paulo.
     salva('salva-passada', 'Painel Antigo', new Date(passada.getTime() + 2 * 86400000 + 18 * 3600000).toISOString()),
     // SEM PARADA: a linha dela nao leva o "período" embaixo, e e' ela que
@@ -1364,6 +1372,16 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
       atualizado_em: new Date().toISOString(),
     }],
   });
+  // O cadastro de motivos da empresa: "Falta de caixa" nao existe nos de fabrica.
+  await s.route('**/api/motivos-parada**', (rota) => rota.fulfill({
+    json: {
+      motivos: [
+        { codigo: 'setup', rotulo: 'Setup / Troca', acao: 'SMED', grupos: [], ativo: true },
+        { codigo: 'falta_caixa', rotulo: 'Falta de caixa', acao: 'Abastecer antes da troca de turno', grupos: [], ativo: true },
+        { codigo: 'outro', rotulo: 'Outro', acao: 'Detalhar', grupos: [], ativo: true },
+      ],
+    },
+  }));
   await s.goto(`${BASE}/coleta/embalagem`);
   await s.locator('[aria-label="Takt da semana"]').getByText('72.0').waitFor({ timeout: 8000 });
 
@@ -1385,6 +1403,8 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   await linhas.first().tap();
   const resultado = s.locator('[aria-label="Resultado da medição salva"]');
   await resultado.waitFor({ timeout: 4000 });
+  // O nome vem do cadastro, que chega do servidor: espera por ele.
+  await resultado.getByText('Falta de caixa').waitFor({ timeout: 4000 }).catch(() => {});
   const texto = (await resultado.innerText()).replace(/\s+/g, ' ');
   checar(/No período, saiu um volume a cada 18\.2 s, paradas dentro — dentro do takt de 72\.0 s/.test(texto),
     `o veredito do PC no tablet, contra o takt desta semana (${texto.slice(0, 120)})`);
@@ -1394,12 +1414,17 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   checar(/12 volumes deixaram de ser embalados nesta medição/.test(texto) && /teriam saído 24/.test(texto),
     'o total que deixou de ser embalado: 12 (6 paradas + 3 lacunas + 3 fora), 24 no passo da linha');
   checar(/Volume 12 40\.0 s \+30\.0 s/.test(texto), 'a lacuna no volume 12: 40.0 s, 30.0 s alem do normal');
-  /* POR QUE A LINHA PAROU (v2.104.0), como no PC: a parada de 60 s, com o
-     motivo. O De onde veio da' os mesmos 60 s (relogio 200 s - toques
-     140 s): a frase do "da' outro numero" nao aparece. */
-  checar(/Por que a linha parou — paradas marcadas, por motivo 1min00s em 1 parada na medição inteira, o maior motivo primeiro/i.test(texto)
-    && /1min00s 1 parada · 100% do parado/.test(texto) && !/do De onde veio dá/.test(texto),
-  `tablet: o quadro dos motivos, como no PC (${(/Por que a linha parou.{0,320}/i.exec(texto) || ['nao achou'])[0]})`);
+  /* POR QUE A LINHA PAROU (v2.104.0), como no PC. Conta de mao: 60 + 30 =
+     90 s; 60/90 = 67%, 30/90 = 33%. O De onde veio e' o relogio entre os
+     toques: 200 s - 140 s = 60 s — outro numero, e a frase diz por que. A
+     copia do tablet nao recebe parada do PC: "no resultado deste tablet". */
+  checar(/Por que a linha parou — paradas marcadas, por motivo 1min30s em 2 paradas na medição inteira, o maior motivo primeiro: as marcadas no cronômetro e as anotadas depois, no resultado deste tablet, também as de fora dos toques\./i.test(texto)
+    && !/aqui no PC|ou no PC\)/.test(texto),
+  `tablet: de que paradas sai o quadro, sem prometer as do PC (${(/Por que a linha parou.{0,260}/i.exec(texto) || ['nao achou'])[0]})`);
+  checar(/Falta de caixa 1min00s 1 parada · 67% do parado/.test(texto) && /Outro 30\.0s 1 parada · 33% do parado/.test(texto),
+    'tablet: o motivo com o nome do cadastro da empresa (Falta de caixa), o tempo e o % de cada um');
+  checar(/O "Paradas marcadas" do De onde veio dá 1min00s: ele conta só o que o cronômetro tirou entre o 1º e o último volume\./.test(texto),
+    'tablet: o De onde veio da 1min00s (so entre os toques), e a frase diz por que');
   checar(await resultado.locator('svg[aria-label^="Intervalo entre volumes"]').count() === 1, 'o grafico volume a volume aparece');
   checar(await s.getByRole('button', { name: /INICIAR/ }).count() === 0, 'com o resultado aberto, o INICIAR sai da tela');
   checar(await s.getByText('Resultado salvo neste aparelho').count() === 1, 'o cabecalho diz que e o resultado salvo');

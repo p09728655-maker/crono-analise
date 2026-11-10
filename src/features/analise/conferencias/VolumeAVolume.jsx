@@ -690,7 +690,7 @@ export default function VolumeAVolume({
                 menos dois.
               </p>
               {/* O motivo nao depende de toque: a parada marcada vale igual. */}
-              <ParadasPorMotivo conferencia={conferencia} medicoes={medicoes} unidade={unidade} />
+              <ParadasPorMotivo conferencia={conferencia} medicoes={medicoes} unidade={unidade} comLeitura={false} />
             </>
           )}
 
@@ -906,7 +906,7 @@ function Indicadores({
  * dele aparece (ver deixouDeEmbalar).
  */
 function ParadasPorMotivo({
-  conferencia, medicoes, unidade, entreToquesMs = null,
+  conferencia, medicoes, unidade, entreToquesMs = null, comLeitura = true,
 }) {
   const pm = paradasPorMotivo(paradasDaAnalise(conferencia, medicoes));
   if (!pm) return null;
@@ -914,7 +914,10 @@ function ParadasPorMotivo({
     <section aria-label="Paradas marcadas, por motivo">
       <h3 style={est.vavSecaoTitulo}>Por que a linha parou — paradas marcadas, por motivo</h3>
       <p style={est.vavSecaoDica}>
-        {frasesDasParadas(pm, { unidade, nMedicoes: medicoes.length, entreToquesMs })}
+        {/* Com poucos toques nao ha' cartoes na tela, nem "fora dos toques". */}
+        {frasesDasParadas(pm, {
+          unidade, nMedicoes: medicoes.length, entreToquesMs, comToques: comLeitura, comCartao: comLeitura,
+        })}
       </p>
       <div style={est.vavMotivosGrade}>
         {pm.motivos.map((m) => (
@@ -1729,7 +1732,7 @@ function FolhaVolumeAVolume({
               ))}
             </tbody>
           </table>
-          <p style={impF.nota}>{frasesDasParadas(motivos, { unidade, nMedicoes: n, total: 'papel' })}</p>
+          <p style={impF.nota}>{frasesDasParadas(motivos, { unidade, nMedicoes: n, saida: 'papel' })}</p>
         </section>
       )}
 

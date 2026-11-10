@@ -210,7 +210,13 @@ function MotivosDasParadas({ r, unidade }) {
   return (
     <section style={est.blocoSalva} aria-label="Paradas marcadas, por motivo">
       <h3 style={est.secaoSalva}>Por que a linha parou — paradas marcadas, por motivo</h3>
-      <p style={est.notaSalva}>{frasesDasParadas(pm, { unidade, entreToquesMs })}</p>
+      {/* A copia do tablet nao recebe a parada anotada no PC: a frase diz
+          "no resultado deste tablet". Sem toques, sem "fora dos toques". */}
+      <p style={est.motivoNota}>
+        {frasesDasParadas(pm, {
+          unidade, saida: 'tablet', entreToquesMs, comToques: Boolean(r.leitura),
+        })}
+      </p>
       {pm.motivos.map((m) => (
         <div key={m.motivo} style={est.motivoSalva}>
           <div style={est.motivoLinha}>

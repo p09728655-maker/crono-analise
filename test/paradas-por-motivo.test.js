@@ -84,7 +84,7 @@ describe('frasesDasParadas — a mesma frase no PC, na folha e no tablet', () =>
     const tela = frasesDasParadas(pm, { unidade: VOLUME });
     expect(tela).toMatch(/^8min43s em 1 parada na medição inteira, o maior motivo primeiro:/);
     expect(tela).toMatch(/É o total do cartão Paradas marcadas, que arredonda para minutos\.$/);
-    const papel = frasesDasParadas(pm, { unidade: VOLUME, total: 'papel', nMedicoes: 3 });
+    const papel = frasesDasParadas(pm, { unidade: VOLUME, saida: 'papel', nMedicoes: 3 });
     expect(papel).toMatch(/^8min43s em 1 parada nas 3 medições inteiras/);
     expect(papel).toMatch(/É o total do Parado \(marcado\), lá arredondado para minutos\.$/);
     expect(papel).not.toMatch(/cartão/);
@@ -103,5 +103,42 @@ describe('frasesDasParadas — a mesma frase no PC, na folha e no tablet', () =>
     expect(pctDoParado(0.5)).toBe('1%');
     expect(pctDoParado(58.33)).toBe('58%');
     expect(pctDoParado(100)).toBe('100%');
+  });
+});
+
+describe('frasesDasParadas — o que cada saida pode afirmar (revisao de 10/11)', () => {
+  const pm = paradasPorMotivo([{ motivo: 'setup', duracaoMs: 60000 }, { motivo: 'outro', duracaoMs: 30000 }]);
+
+  it('no tablet, as anotadas depois sao as do resultado DESTE tablet — a copia nao recebe as do PC', () => {
+    const t = frasesDasParadas(pm, { unidade: VOLUME, saida: 'tablet' });
+    expect(t).toMatch(/as anotadas depois, no resultado deste tablet, também as de fora dos toques\./);
+    expect(t).not.toMatch(/PC/);
+    expect(frasesDasParadas(pm, { unidade: VOLUME })).toMatch(/\(no resultado do tablet ou aqui no PC\)/);
+    expect(frasesDasParadas(pm, { unidade: VOLUME, saida: 'papel' })).toMatch(/\(no resultado do tablet ou no PC\)/);
+  });
+
+  it('sem toques, sem "fora dos toques"; sem cartao na tela, sem citar o cartao', () => {
+    const t = frasesDasParadas(pm, { unidade: VOLUME, comToques: false, comCartao: false });
+    expect(t).not.toMatch(/fora dos toques/);
+    expect(t).not.toMatch(/cartão/);
+  });
+
+  it('abaixo de um minuto, o cartao mostra "< 1 min" — a frase nao diz que arredonda', () => {
+    const curto = paradasPorMotivo([{ motivo: 'outro', duracaoMs: 46000 }]);
+    expect(frasesDasParadas(curto, { unidade: VOLUME })).toMatch(/que mostra "< 1 min"\.$/);
+    expect(frasesDasParadas(curto, { unidade: VOLUME, saida: 'papel' })).toMatch(/que lá aparece como "< 1 min"\.$/);
+  });
+
+  it('o De onde veio MAIOR que a lista: a causa e outra (parada apagada ou encurtada), e a frase diz qual', () => {
+    expect(frasesDasParadas(pm, { unidade: VOLUME, entreToquesMs: 120000 }))
+      .toMatch(/dá 2min00s: ele sai do relógio do cronômetro, não desta lista — parada marcada ao vivo e depois apagada ou encurtada continua nele\.$/);
+  });
+
+  it('o arredondamento da lista (ate 0,3 s por parada) nao vira frase', () => {
+    // 13 paradas: folga de 3,9 s. 3 s de diferenca e' arredondamento.
+    const muitas = paradasPorMotivo(Array(13).fill(null).map(() => ({ motivo: 'outro', duracaoMs: 60000 })));
+    expect(frasesDasParadas(muitas, { unidade: VOLUME, entreToquesMs: 13 * 60000 - 3000 })).not.toMatch(/De onde veio/);
+    expect(frasesDasParadas(muitas, { unidade: VOLUME, entreToquesMs: 13 * 60000 + 3000 })).not.toMatch(/De onde veio/);
+    expect(frasesDasParadas(muitas, { unidade: VOLUME, entreToquesMs: 13 * 60000 - 60000 })).toMatch(/De onde veio dá 12min00s/);
   });
 });
