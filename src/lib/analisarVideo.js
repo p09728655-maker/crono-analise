@@ -155,8 +155,14 @@ export function analisarVideo({
     } else if (pausadoPorAba) {
       pausadoPorAba = false;
       ultimoAvanco = performance.now();
-      if (tocando) video.play().catch(() => falhar('o navegador não deixou continuar a leitura do vídeo'));
+      if (tocando) video.play().catch(() => recusouTocar('o navegador não deixou continuar a leitura do vídeo'));
     }
+  }
+  // Um pause() com o play() ainda pendente faz o navegador recusar esse
+  // play() (AbortError) — e' o que acontece num alt-tab rapido. Com a aba
+  // escondida, a recusa e' esperada: a volta da aba toca de novo.
+  function recusouTocar(mensagem) {
+    if (!pausadoPorAba) falhar(mensagem);
   }
 
   const cancelar = () => {
@@ -200,7 +206,7 @@ export function analisarVideo({
     try {
       await video.play();
     } catch {
-      falhar('o navegador não deixou tocar o vídeo para ler — clique na página e tente de novo');
+      recusouTocar('o navegador não deixou tocar o vídeo para ler — clique na página e tente de novo');
     }
   })();
 
