@@ -145,6 +145,12 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
   faltar luz ou o Windows reiniciar nesse meio-tempo, eles entram na próxima
   vez que o leitor abrir. O log avisa as duas coisas. Melhor ainda: **copie o
   arquivo e abra a cópia**, ou leia pelo Power BI.
+- **Não salve a planilha do leitor pelo Excel.** O Excel grava em outro formato
+  e as linhas seguintes do leitor ficam com acentos trocados. Para mexer nos
+  dados, use "Salvar como" com outro nome.
+- **Um leitor por vez.** Se o `iniciar.bat` estiver rodando e alguém abrir
+  outro, o segundo avisa e fecha — dois juntos contariam cada volume duas
+  vezes. O `--diagnostico` pode rodar junto, para conferir a câmera.
 - `dados\leitor.log` registra quedas de câmera, papelão descartado (passou
   menos de 2 s no retângulo: pessoa ou reflexo) e erro inesperado. A senha da
   câmera nunca aparece nele.

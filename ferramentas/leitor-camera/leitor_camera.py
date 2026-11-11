@@ -132,6 +132,9 @@ def ler_config():
     try:
         # utf-8-sig: o Bloco de Notas antigo grava uma marca invisível no começo.
         cfg = json.loads(arq.read_text(encoding='utf-8-sig'))
+    except UnicodeDecodeError:
+        parar('O config.json foi salvo numa codificação diferente. No Bloco de Notas: '
+              'Salvar como → Codificação: UTF-8.')
     except json.JSONDecodeError as e:
         parar(f'O config.json tem um erro de digitação na linha {e.lineno} '
               '(aspas, vírgula ou chave faltando). Compare com o config.exemplo.json.')
@@ -261,6 +264,41 @@ def gravar_no_disco(arq, texto, modo='a', bom=False):
         os.fsync(f.fileno())
 
 
+def ja_gravada(arq, linha):
+    """
+    A linha já está na planilha? Compara só data;entrou;saiu (números, sem
+    acento) e lê o arquivo aceitando qualquer codificação: se alguém salvou a
+    planilha pelo Excel ("CSV separado por vírgulas" grava em ANSI), ler como
+    UTF-8 estrito quebrava a recuperação — e o leitor, em ciclo.
+    """
+    chave = ';'.join(linha.split(';')[:3]) + ';'
+    texto = arq.read_bytes().decode('utf-8', errors='replace')
+    return any(l.lstrip('﻿').startswith(chave) for l in texto.splitlines())
+
+
+def travar_instancia(pasta):
+    """
+    Um leitor por pasta. Dois ao mesmo tempo (o iniciar.bat rodando e alguém
+    abrindo o .py com dois cliques) contavam cada volume duas vezes, sem aviso.
+    A trava é do sistema: some sozinha quando o processo morre (queda, X,
+    reinício), então nunca fica presa.
+    """
+    pasta.mkdir(exist_ok=True)
+    try:
+        trava = open(pasta / 'leitor.trava', 'a+')
+        if os.name == 'nt':
+            import msvcrt
+            trava.seek(0)
+            msvcrt.locking(trava.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(trava.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        parar('O leitor já está rodando em outra janela (ou pelo iniciar.bat). '
+              'Feche esta: dois ao mesmo tempo contariam cada volume duas vezes.')
+    return trava  # fica aberto enquanto o leitor rodar
+
+
 class Registro:
     """CSV do dia (separador ';' e vírgula decimal: abre direto no Excel em português)."""
 
@@ -270,14 +308,14 @@ class Registro:
     # ou reinício do Windows não podem levar o que já foi contado.
     ESPERA = 'volumes_esperando_planilha.txt'
 
-    def __init__(self, cfg, nome_fixo=None):
+    def __init__(self, cfg, nome_fixo=None, recuperar=True):
         self.pasta = PASTA / cfg.get('pasta_dados', 'dados')
         self.pasta.mkdir(exist_ok=True)
         self.nome_fixo = nome_fixo
         self.espera = self.pasta / self.ESPERA
         self.pendentes = []  # (arquivo, linha, veio_de_execucao_anterior)
         self.travado = False
-        if not nome_fixo:
+        if not nome_fixo and recuperar:
             self._recuperar()
 
     def log(self, msg):
@@ -319,7 +357,7 @@ class Registro:
                 novo = not arq.exists()
                 # Linha recuperada de uma execução que caiu no meio da gravação
                 # pode já estar na planilha: não duplica.
-                if not (anterior and not novo and linha in arq.read_text(encoding='utf-8-sig')):
+                if not (anterior and not novo and ja_gravada(arq, linha)):
                     gravar_no_disco(arq, (self.CABECALHO if novo else '') + linha, bom=novo)
             except OSError as e:
                 if not self.travado:
@@ -350,7 +388,7 @@ class Registro:
         if not self.espera.exists():
             return
         try:
-            linhas = self.espera.read_text(encoding='utf-8').splitlines(keepends=True)
+            linhas = self.espera.read_text(encoding='utf-8', errors='replace').splitlines(keepends=True)
         except OSError as e:
             self.log(f'não consegui ler {self.ESPERA} ({e.strerror}): volumes de antes ficam lá.')
             return
@@ -467,7 +505,14 @@ def tirar_foto(cfg, arquivo, momento):
 
 
 def rodar(cfg, arquivo, inicio, diagnostico):
-    reg = Registro(cfg, nome_fixo=f'volumes_{Path(arquivo).stem}.csv' if arquivo else None)
+    # Ao vivo grava a planilha do dia e a fila: só um leitor por vez. O
+    # diagnóstico só olha (não recupera fila nem grava volume) e pode rodar
+    # junto, para conferir a câmera sem parar a contagem.
+    trava = None
+    if not arquivo and not diagnostico:
+        trava = travar_instancia(PASTA / cfg.get('pasta_dados', 'dados'))
+    reg = Registro(cfg, nome_fixo=f'volumes_{Path(arquivo).stem}.csv' if arquivo else None,
+                   recuperar=not diagnostico)
     if arquivo and not diagnostico:
         saida = reg.pasta / reg.nome_fixo
         if saida.exists():
@@ -476,6 +521,8 @@ def rodar(cfg, arquivo, inicio, diagnostico):
         _rodar(cfg, arquivo, inicio, diagnostico, reg)
     finally:
         reg.fechar()  # nenhum volume guardado fica para trás, saia como sair
+        if trava:
+            trava.close()
 
 
 def _rodar(cfg, arquivo, inicio, diagnostico, reg):
