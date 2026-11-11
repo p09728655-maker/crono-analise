@@ -287,8 +287,11 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   média de 0,5 s centrada, limiares do PRÓPRIO vídeo por Otsu com contraste
   mínimo de 0,15, histerese 60%/40%, passagem de menos de 2 s descartada,
   caixa já presente no começo não marcada, volume com mais de 1,6× a
-  permanência típica apontado como "duas caixas?" e intervalo de mais de 3×
-  a mediana apontado como possível parada); as entradas viram marcação pelo
+  permanência típica apontado como "duas caixas?", intervalo de mais de 3×
+  a mediana apontado como possível parada e caixa que entrou a menos de 2 s
+  do fim do vídeo CONTADA e apontada — `cortadoNoFim`: a entrada foi filmada;
+  sem contraste, `semContraste`, e a tela diz as duas causas: trecho lido sem
+  caixa ou retângulo fora do tapete); as entradas viram marcação pelo
   `marcacaoDasEntradas` de `medicaoPorVideo.js` (a 1ª é a largada, como o
   1º Enter), e daí em diante é a medição por vídeo de sempre — nada muda no
   sync nem no banco. A leitura (`src/lib/analisarVideo.js`) toca uma CÓPIA do
@@ -298,7 +301,9 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   o porquê se o vídeo parar de andar. O vídeo não sobe. O retângulo fica no
   `localStorage` por máquina (`ritmopatrimar.video.retangulos`), em fração da
   imagem (a faixa preta do `object-fit: contain` é descontada); as marcas que a
-  leitura pôs vão no rascunho (`automaticas`), e a conferência (mantidas,
+  leitura pôs e o que ela apontou vão no rascunho (`automaticas`,
+  `automaticaResultado`: voltam no F5); lista esvaziada pelo ⌫ desfaz a marcação
+  automática inteira; uma caixa só (ela seria a largada) é erro com o porquê; e a conferência (mantidas,
   apagadas, acrescentadas — `conferirAutomatica`) aparece na marcação e no
   Revisar. Testes: `test/deteccao-volumes.test.js` (sintéticos e o sinal real
   da envolvedora — só números, em `test/fixtures/sinal-envolvedora-87s.json`)

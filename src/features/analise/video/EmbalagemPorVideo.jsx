@@ -355,7 +355,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     refEnvioTentado.current = Boolean(r.envioTentado || r.incerto);
     setMexida(r.mexida || null);
     setAutomaticas(r.automaticas || []);
-    setAutomatica({ estado: 'parado' });
+    setAutomatica(r.automaticaResultado ? { estado: 'pronto', resultado: r.automaticaResultado } : { estado: 'parado' });
     setFimMs(null);
     setRascunho(null);
     // A maquina guardada tem de estar ativa no cadastro: sem ela, o Salvar
@@ -407,12 +407,15 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     arquivo: chaveDoArquivo(arquivo), nome: arquivo.name, clientId, campos, marcacao, observacao, mexida,
     envioTentado: refEnvioTentado.current, maquinaNome: maquina?.nome || null, atualizadoEm: new Date().toISOString(),
     automaticas,
+    // O que a leitura apontou para conferir (caixas encostadas, intervalos
+    // longos...): sem isto, o F5 voltava com as marcas e sem os avisos.
+    automaticaResultado: automatica.resultado || null,
     ...troca,
   });
   useEffect(() => {
     if (!arquivo || !clientId || (etapa !== 'marcar' && etapa !== 'revisar')) return;
     gravarRascunho(rascunhoAtual());
-  }, [arquivo, clientId, campos, marcacao, observacao, mexida, etapa, automaticas]);
+  }, [arquivo, clientId, campos, marcacao, observacao, mexida, etapa, automaticas, automatica.resultado]);
 
   /* ---------------------------------------------------------- player */
   useEffect(() => {
@@ -537,14 +540,35 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setAutomatica({ estado: 'lendo', inicioMs: tempoDoVideo(), retangulo });
   };
 
-  const concluirLeitura = (amostras) => {
+  const concluirLeitura = (amostras, inicioMs) => {
     const r = detectarVolumes(amostras);
+    const trecho = `de ${emRelogio(inicioMs)} até o fim do vídeo`;
+    // O retangulo pode estar certo e o trecho lido nao ter caixa (comecou
+    // tarde, a linha parou): a mensagem diz as duas causas, e o que fazer em
+    // cada uma — culpar so' o retangulo fazia redesenhar um retangulo certo.
+    if (r.semContraste) {
+      setAutomatica({
+        estado: 'erro',
+        erro: `Não deu para marcar: no trecho lido (${trecho}) o retângulo não mostrou diferença entre caixa e `
+          + 'esteira vazia. Se nenhuma caixa passou nesse trecho, volte o vídeo para antes e leia de novo. Se passaram '
+          + 'caixas, o retângulo não está sobre o tapete verde onde a caixa passa: redesenhe.',
+      });
+      return;
+    }
     if (r.motivo) { setAutomatica({ estado: 'erro', erro: `Não deu para marcar: ${r.motivo}.` }); return; }
     if (!r.volumes.length) {
       setAutomatica({
         estado: 'erro',
-        erro: 'Nenhuma caixa entrou no retângulo do ponto da leitura até o fim do vídeo. Confira se o retângulo '
-          + 'está sobre o tapete verde, onde a caixa passa embaixo do filme, e leia de novo.',
+        erro: `Nenhuma caixa entrou no retângulo ${trecho}. Se passaram caixas nesse trecho, confira se o retângulo `
+          + 'está sobre o tapete verde, onde a caixa passa embaixo do filme. Se não, volte o vídeo para antes e leia de novo.',
+      });
+      return;
+    }
+    if (r.volumes.length === 1) {
+      setAutomatica({
+        estado: 'erro',
+        erro: `Só uma caixa entrou no retângulo ${trecho}: ela seria a largada, e não sobra volume para medir. `
+          + 'Volte o vídeo para antes e leia um trecho maior.',
       });
       return;
     }
@@ -566,6 +590,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
         suspeitos: r.suspeitos.map((v) => v.entrouMs),
         descartados: r.descartados.map((v) => v.entrouMs),
         longos: intervalosLongos(r.volumes.map((v) => v.entrouMs)),
+        cortadoNoFim: r.cortadoNoFim ? r.cortadoNoFim.entrouMs : null,
       },
     });
   };
@@ -589,7 +614,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       },
     });
     leitura.promessa
-      .then(({ amostras, cancelado }) => { if (vivo && !cancelado) concluirLeitura(amostras); })
+      .then(({ amostras, cancelado }) => { if (vivo && !cancelado) concluirLeitura(amostras, automatica.inicioMs); })
       .catch((e) => { if (vivo) setAutomatica({ estado: 'erro', erro: `Não deu para marcar: ${e.message}.` }); });
     return () => { vivo = false; leitura.cancelar(); };
   }, [automatica.estado]);
@@ -602,6 +627,15 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setAviso(null);
   };
   const conferencia = useMemo(() => conferirAutomatica(automaticas, marcacao), [automaticas, marcacao]);
+  // Lista esvaziada (⌫ ate' o fim): a marcacao automatica foi desfeita
+  // inteira. Sem isto, o resumo "a leitura marcou 4 volumes" ficava na tela
+  // ao lado de uma lista vazia e do botao de marcar de novo.
+  useEffect(() => {
+    if (automatica.estado !== 'lendo' && automaticas.length && listaVazia(marcacao)) {
+      setAutomaticas([]);
+      setAutomatica({ estado: 'parado' });
+    }
+  }, [marcacao]);
 
   // AS TECLAS — so' na etapa de marcar, e nunca com o cursor num campo.
   useEffect(() => {
@@ -1432,7 +1466,8 @@ function CamadaRetangulo({
 function TextoConferencia({ c }) {
   return (
     <>
-      Conferência da marcação automática: das {c.automaticas} marcas que ela pôs, <strong>{c.mantidas} ficaram</strong>,
+      Conferência da marcação automática: {c.automaticas === 1 ? 'da 1 marca' : `das ${c.automaticas} marcas`} que
+      {' '}ela pôs, <strong>{c.mantidas} {c.mantidas === 1 ? 'ficou' : 'ficaram'}</strong>,
       {' '}{c.apagadas} {c.apagadas === 1 ? 'foi apagada' : 'foram apagadas'} e {c.acrescentadas}
       {' '}{c.acrescentadas === 1 ? 'foi acrescentada' : 'foram acrescentadas'} por quem conferiu.
     </>
@@ -1553,8 +1588,21 @@ function MarcacaoAutomatica({
         <>
           {estado === 'pronto' && resultado && (
             <p style={ev.ok} role="status">
-              {volumes(resultado.volumes)} marcados automaticamente, mais a largada. Confira na lista: clique num
-              tempo para ver o vídeo nele; × apaga uma marca, Enter acrescenta.
+              A leitura marcou {volumes(resultado.volumes)}, mais a largada. Confira na lista: clique num tempo
+              para ver o vídeo nele; × apaga uma marca, Enter acrescenta.
+            </p>
+          )}
+          {estado === 'pronto' && resultado && (
+            <p style={ev.dica}>
+              Mão ou braço parado no retângulo também tem cor de papelão: se uma marca não mostra caixa entrando,
+              apague-a.
+            </p>
+          )}
+          {resultado?.cortadoNoFim != null && (
+            <p style={ev.aviso}>
+              Confira a última: algo entrou no retângulo perto do fim e o vídeo acabou antes de dar para ver se era
+              caixa. Ela foi marcada:{' '}
+              <Tempos lista={[resultado.cortadoNoFim]} aoIr={aoIr} />
             </p>
           )}
           {resultado?.comCaixaNoInicio && (

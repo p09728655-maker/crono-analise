@@ -155,8 +155,11 @@ await arrastar(p, { x: 0.05, y: 0.1 }, { x: 0.25, y: 0.4 });
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).waitFor({ timeout: 4000 });
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).click();
 await auto.getByRole('alert').waitFor({ timeout: 90000 });
-checar(/não mostra diferença entre caixa e esteira vazia/.test(await auto.getByRole('alert').innerText()),
-  'retangulo sem caixa: a leitura recusa e diz onde desenhar');
+{
+  const erro = await auto.getByRole('alert').innerText();
+  checar(/não mostrou diferença entre caixa e esteira vazia/.test(erro) && /volte o vídeo para antes/.test(erro)
+    && /redesenhe/.test(erro), 'retangulo sem caixa: a leitura recusa e diz as duas causas (trecho sem caixa ou retangulo fora)');
+}
 checar(!/Volume 1/.test(await marcas.innerText()), 'leitura recusada nao poe marca nenhuma');
 
 // Agora sobre a caixa, arrastando de baixo para cima (qualquer direcao vale).
@@ -184,7 +187,7 @@ await p.evaluate(() => document.activeElement?.blur());
 await p.keyboard.press('Enter');
 checar(!/Largada/.test(await marcas.innerText()), 'durante a leitura o Enter nao marca (as teclas ficam travadas)');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-auto-lendo.png` });
-await auto.getByText(/marcados automaticamente/).waitFor({ timeout: 120000 });
+await auto.getByText(/A leitura marcou/).waitFor({ timeout: 120000 });
 const lista = await marcas.innerText();
 const largada = tempos(lista, 'Largada');
 const volumes = tempos(lista, 'Volume \\d+');
@@ -193,11 +196,21 @@ checar(largada.length === 1 && Math.abs(largada[0] - ENTRADAS[0]) < 0.4,
 checar(volumes.length === 4 && volumes.every((t, i) => Math.abs(t - ENTRADAS[i + 1]) < 0.4),
   `um volume por caixa, na entrada dela: ${volumes.join(', ')} (esperado ${ENTRADAS.slice(1).join(', ')})`);
 const texto = await auto.innerText();
-checar(/4 volumes marcados automaticamente, mais a largada/.test(texto), 'o resumo diz quantos volumes marcou');
+checar(/A leitura marcou 4 volumes, mais a largada/.test(texto), 'o resumo diz quantos volumes marcou');
 checar(/já estava embaixo do filme no começo/.test(texto), 'a caixa que ja\' estava no comeco nao vira marca, e a tela diz por que');
 checar(/Passagens curtas ignoradas[\s\S]*0:3[56]\.\d/.test(texto), 'o vulto de 1 s em ~0:36 e\' ignorado, e a tela mostra onde');
 checar(/das 5 marcas que ela pôs, 5 ficaram/.test(texto), 'conferencia: 5 de 5 marcas mantidas antes de mexer');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-auto-pronto.png` });
+
+/* ------------------------- lista esvaziada: a marcacao automatica sai */
+await p.evaluate(() => document.activeElement?.blur());
+for (let i = 0; i < 5; i++) await p.keyboard.press('Backspace');
+await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).waitFor({ timeout: 4000 });
+checar(!/A leitura marcou/.test(await auto.innerText()) && !/Conferência/.test(await auto.innerText()),
+  'desfeita a lista inteira (⌫), o resumo e a conferencia saem e o botao de marcar volta');
+await irPara(p, 0);
+await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).click();
+await auto.getByText(/A leitura marcou 4 volumes/).waitFor({ timeout: 120000 });
 
 /* --------------------------------------------- a conferencia do analista */
 // Apaga um volume e acrescenta outro com o Enter de sempre.
@@ -216,6 +229,8 @@ await p.getByRole('button', { name: 'Continuar de onde parou' }).click({ timeout
 await auto.waitFor({ timeout: 4000 });
 checar(/das 5 marcas que ela pôs, 4 ficaram, 1 foi apagada e 1 foi acrescentada/.test(await auto.innerText()),
   'F5: a conferencia volta com a marcacao guardada');
+checar(/Passagens curtas ignoradas[\s\S]*0:3[56]\.\d/.test(await auto.innerText()),
+  'F5: o que a leitura apontou para conferir volta junto (passagem curta ignorada)');
 await p.waitForFunction(() => document.querySelector('[aria-hidden="true"][style*="dashed"]'), null, { timeout: 4000 })
   .then(() => checar(true, 'F5: o retangulo da maquina volta desenhado sobre o video'))
   .catch(() => checar(false, 'F5: o retangulo da maquina volta desenhado sobre o video'));
@@ -233,6 +248,19 @@ await p.getByText(/Medição salva/).waitFor({ timeout: 8000 });
 const enviada = enviados[enviados.length - 1];
 checar(enviada?.origem === 'video' && enviada?.pecas === 4 && enviada?.marcasMs?.length === 4,
   `a medicao salva e' a de sempre, com origem video (${enviada?.pecas} volumes, ${enviada?.marcasMs?.length} marcas)`);
+{
+  // Os NUMEROS gravados, nao so' as quantidades: tirado o volume 2 e
+  // acrescentado o de 59 s, as marcas sao os volumes menos a largada, e o
+  // periodo vai da largada ao Encerrar (59,5 s). Tolerancia de 0,2 s: a
+  // lista mostra decimos.
+  const L = largada[0];
+  const esperadas = [volumes[0], volumes[2], volumes[3], 59].map((t) => (t - L) * 1000);
+  const perto = (a, b) => Math.abs(a - b) <= 200;
+  checar(enviada?.marcasMs?.every((ms, i) => perto(ms, esperadas[i])),
+    `marcas gravadas ${JSON.stringify(enviada?.marcasMs)} ≈ ${JSON.stringify(esperadas.map(Math.round))}`);
+  checar(perto(enviada?.duracaoMs, (59.5 - L) * 1000),
+    `periodo gravado ${enviada?.duracaoMs} ms ≈ largada ao Encerrar (${Math.round((59.5 - L) * 1000)} ms)`);
+}
 
 checar(!erros.length, `sem erro no console da pagina${erros.length ? `: ${erros.join(' | ')}` : ''}`);
 await navegador.close();

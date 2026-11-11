@@ -104,10 +104,10 @@ export function limiaresDoSinal(valores) {
   const altos = lista.filter((v) => v >= corte);
   const media = (xs) => xs.reduce((s, v) => s + v, 0) / xs.length;
   if (corte < 0 || !baixos.length || !altos.length || media(altos) - media(baixos) < CONTRASTE_MINIMO) {
-    return {
-      motivo: 'o retângulo não mostra diferença entre caixa e esteira vazia — desenhe-o sobre o tapete verde, '
-        + 'onde a caixa passa embaixo do filme',
-    };
+    // Neutro de proposito: daqui nao da' para saber se o retangulo esta'
+    // errado ou se nenhuma caixa passou no trecho lido. A tela, que sabe de
+    // onde a leitura comecou, diz as duas causas.
+    return { motivo: 'o retângulo não mostrou diferença entre caixa e esteira vazia no trecho lido', semContraste: true };
   }
   const base = media(baixos);
   const topo = media(altos);
@@ -141,7 +141,8 @@ const mediana = (xs) => {
  *    a entrada dela nao foi filmada (comCaixaNoInicio).
  *  - Passagem curta demais (pessoa, reflexo) vai para `descartados`.
  *  - A que entrou e o video acabou com ela no retangulo vale, com saiuMs
- *    null — a entrada foi filmada.
+ *    null — a entrada foi filmada. Se ficou menos que a permanencia minima,
+ *    vale do mesmo jeito e vem em `cortadoNoFim`, para conferir.
  *  - `suspeitos`: os volumes que ficaram muito mais que o tipico no
  *    retangulo. Pode ser duas caixas encostadas lidas como uma — o analista
  *    confere esses pontos.
@@ -155,7 +156,7 @@ export function detectarVolumes(amostras, {
   if (lista.length < 10) return { motivo: 'o vídeo é curto demais para ler' };
   const sinal = suavizar(lista, janelaMs);
   const limiares = limiaresDoSinal(sinal.map((s) => s.v));
-  if (limiares.motivo) return { motivo: limiares.motivo };
+  if (limiares.motivo) return { motivo: limiares.motivo, semContraste: Boolean(limiares.semContraste) };
 
   const volumes = [];
   const descartados = [];
@@ -179,11 +180,16 @@ export function detectarVolumes(amostras, {
       entrou = null;
     }
   }
+  // O video acabou com algo no retangulo. A ENTRADA foi filmada: conta como
+  // volume. Se ficou menos que a permanencia minima, nao deu para ver se era
+  // caixa (o fim cortou) — conta e vai apontado para conferir, em vez de
+  // sumir como "pessoa ou reflexo" e deixar a medicao com um volume a menos.
+  let cortadoNoFim = null;
   if (dentro && entrou != null) {
     const ultimo = sinal[sinal.length - 1].ms;
     const volume = { entrouMs: Math.round(entrou), saiuMs: null };
-    if (ultimo - entrou < permanenciaMinimaMs) descartados.push(volume);
-    else volumes.push(volume);
+    volumes.push(volume);
+    if (ultimo - entrou < permanenciaMinimaMs) cortadoNoFim = volume;
   }
 
   const permanencias = volumes.filter((v) => v.saiuMs != null).map((v) => v.saiuMs - v.entrouMs);
@@ -192,7 +198,7 @@ export function detectarVolumes(amostras, {
     (v) => v.saiuMs != null && v.saiuMs - v.entrouMs > FATOR_SUSPEITO * tipica,
   );
   return {
-    volumes, descartados, suspeitos, comCaixaNoInicio, limiares,
+    volumes, descartados, suspeitos, cortadoNoFim, comCaixaNoInicio, limiares,
   };
 }
 

@@ -69,8 +69,10 @@ describe('limiares do proprio video', () => {
   });
 
   it('retangulo que nao separa caixa de esteira e' + "' recusado, com o que fazer", () => {
-    expect(limiaresDoSinal(Array(100).fill(0.04)).motivo).toMatch(/tapete verde/);
-    expect(limiaresDoSinal([...Array(50).fill(0.05), ...Array(50).fill(0.12)]).motivo).toMatch(/não mostra diferença/);
+    // Sem caixa no trecho ou retangulo fora do tapete: daqui nao da' para
+    // saber qual — a tela diz as duas causas (semContraste).
+    expect(limiaresDoSinal(Array(100).fill(0.04)).semContraste).toBe(true);
+    expect(limiaresDoSinal([...Array(50).fill(0.05), ...Array(50).fill(0.12)]).motivo).toMatch(/não mostrou diferença/);
     expect(limiaresDoSinal([0.1, 0.2]).motivo).toMatch(/curto/);
   });
 });
@@ -114,13 +116,18 @@ describe('os volumes no sinal', () => {
     expect(Math.abs(entradas(r)[0] - 20)).toBeLessThan(0.3);
   });
 
-  it('caixa que entrou e o video acabou: vale se ficou o bastante para ser caixa', () => {
+  it('caixa que entrou e o video acabou: a entrada foi filmada, conta como volume', () => {
     const longa = detectarVolumes(sinal({ duracao: 60, caixas: [[10, 17], [30, 37], [56.5, 61]] }));
     expect(entradas(longa)).toHaveLength(3);
     expect(longa.volumes[2].saiuMs).toBeNull();
+    expect(longa.cortadoNoFim).toBeNull();
+    // A menos de 2 s do fim: nao da' para ver se era caixa, mas a entrada
+    // foi filmada — conta, e vem apontada para conferir. Descartada, a
+    // medicao ficava com um volume a menos (revisao de 11/11).
     const curta = detectarVolumes(sinal({ duracao: 60, caixas: [[10, 17], [30, 37], [59, 61]] }));
-    expect(entradas(curta)).toHaveLength(2);
-    expect(curta.descartados).toHaveLength(1);
+    expect(entradas(curta)).toHaveLength(3);
+    expect(curta.descartados).toEqual([]);
+    expect(Math.abs(curta.cortadoNoFim.entrouMs / 1000 - 59)).toBeLessThan(0.3);
   });
 
   it('duas caixas encostadas (14 s contra 7 s do tipico) ficam apontadas para conferir', () => {
@@ -133,7 +140,8 @@ describe('os volumes no sinal', () => {
   });
 
   it('video sem caixa nenhuma: recusa com o porque, sem inventar volume', () => {
-    expect(detectarVolumes(sinal({ caixas: [] })).motivo).toMatch(/não mostra diferença/);
+    expect(detectarVolumes(sinal({ caixas: [] })).motivo).toMatch(/não mostrou diferença/);
+    expect(detectarVolumes(sinal({ caixas: [] })).semContraste).toBe(true);
   });
 
   it('o SINAL REAL da envolvedora: as entradas batem com as conferidas quadro a quadro', () => {

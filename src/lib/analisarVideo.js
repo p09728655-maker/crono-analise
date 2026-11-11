@@ -65,6 +65,9 @@ export function analisarVideo({
   const passos = [];
   let velocidade = VELOCIDADE;
   let encerrado = false;
+  // `tocando`: ja' passou da preparacao (metadados, ida ao ponto) e o video
+  // foi mandado tocar. Antes disso, esconder a aba so' fica anotado.
+  let tocando = false;
   let pausadoPorAba = false;
   let ultimoMs = -1;
   let ultimoAvanco = performance.now();
@@ -138,18 +141,21 @@ export function analisarVideo({
     rejeitar(new Error(mensagem));
   }
   function aoErro() { falhar('o navegador não conseguiu ler o vídeo até o fim'); }
+  function avisarPausa() {
+    aoProgresso({
+      ms: Math.max(0, ultimoMs), duracaoMs: duracaoMs(), velocidade, pausado: true,
+    });
+  }
   function aoAba() {
     if (encerrado) return;
     if (document.hidden) {
       pausadoPorAba = true;
-      video.pause();
-      aoProgresso({
-        ms: Math.max(0, ultimoMs), duracaoMs: duracaoMs(), velocidade, pausado: true,
-      });
+      if (tocando) video.pause();
+      avisarPausa();
     } else if (pausadoPorAba) {
       pausadoPorAba = false;
       ultimoAvanco = performance.now();
-      video.play().catch(() => falhar('o navegador não deixou continuar a leitura do vídeo'));
+      if (tocando) video.play().catch(() => falhar('o navegador não deixou continuar a leitura do vídeo'));
     }
   }
 
@@ -160,6 +166,9 @@ export function analisarVideo({
   };
 
   (async () => {
+    // A aba pode ser escondida ja' durante a preparacao (que leva ate' 20 s
+    // num video pesado): o aviso de aba e' ligado antes de tudo.
+    document.addEventListener('visibilitychange', aoAba);
     video.muted = true;
     if (video.readyState < 1) await esperar(video, 'loadedmetadata', 10000);
     if (encerrado) return;
@@ -172,7 +181,6 @@ export function analisarVideo({
     video.playbackRate = velocidade;
     video.addEventListener('ended', aoFim);
     video.addEventListener('error', aoErro);
-    document.addEventListener('visibilitychange', aoAba);
     vigia = setInterval(() => {
       if (!pausadoPorAba && performance.now() - ultimoAvanco > PARADO_MS) {
         falhar('o vídeo parou de andar durante a leitura (o PC pode estar sobrecarregado) — tente de novo');
@@ -180,6 +188,15 @@ export function analisarVideo({
     }, 1000);
     pedido = temQuadros ? video.requestVideoFrameCallback(aoQuadro) : requestAnimationFrame(aoAnimar);
     ultimoAvanco = performance.now();
+    tocando = true;
+    // Aba escondida AGORA (antes ou durante a preparacao): nao toca — o
+    // visibilitychange de quando ela voltar faz o play. Tocar escondida dava
+    // "parou de andar" em 15 s, culpando o PC.
+    if (document.hidden) {
+      pausadoPorAba = true;
+      avisarPausa();
+      return;
+    }
     try {
       await video.play();
     } catch {
