@@ -417,14 +417,31 @@ class Registro:
             nome, _, linha = item.partition('\t')
             if nome and linha:
                 antigos.append((self.pasta / nome, linha, True))
-        self.pendentes[:0] = antigos  # os de antes vêm primeiro: a planilha fica em ordem
+        # Os de antes vão na frente dos que ainda esperam. Se a fila estava
+        # ilegível e a planilha livre, volumes novos já entraram antes deles:
+        # a ordem das linhas pode sair trocada, mas cada uma leva a própria hora.
+        self.pendentes[:0] = antigos
         self.log(f'{len(antigos)} volume(s) que esperavam a planilha foram recuperados.')
 
     def fechar(self):
         self.gravar_pendentes()
-        if self.pendentes:
+        if not self.pendentes:
+            return
+        if not self.fila_ilegivel:
             self.log(f'{len(self.pendentes)} volume(s) esperando a planilha em {self.ESPERA}: '
                      'entram nela na próxima vez que o leitor abrir.')
+            return
+        # Fila ilegível a execução inteira E planilha travada: estes volumes só
+        # existem na memória. Vão para um arquivo à parte, e o log diz a verdade.
+        reserva = self.pasta / f'volumes_nao_gravados_{datetime.now():%Y-%m-%d_%H%M%S}.csv'
+        try:
+            gravar_no_disco(reserva, self.CABECALHO + ''.join(l for _, l, _ in self.pendentes),
+                            modo='w', bom=True)
+            self.log(f'{len(self.pendentes)} volume(s) não entraram na planilha nem na fila '
+                     f'({self.ESPERA} ilegível): estão em {reserva.name}. Copie as linhas para a planilha.')
+        except OSError as e:
+            self.log(f'{len(self.pendentes)} volume(s) PERDIDOS: planilha travada, fila ilegível '
+                     f'e não consegui gravar {reserva.name} ({e.strerror}).')
 
 
 class Detector:
