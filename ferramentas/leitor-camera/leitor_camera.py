@@ -308,14 +308,18 @@ class Registro:
     # ou reinício do Windows não podem levar o que já foi contado.
     ESPERA = 'volumes_esperando_planilha.txt'
 
-    def __init__(self, cfg, nome_fixo=None, recuperar=True):
+    def __init__(self, cfg, nome_fixo=None, dono_da_fila=False):
         self.pasta = PASTA / cfg.get('pasta_dados', 'dados')
         self.pasta.mkdir(exist_ok=True)
         self.nome_fixo = nome_fixo
         self.espera = self.pasta / self.ESPERA
         self.pendentes = []  # (arquivo, linha, veio_de_execucao_anterior)
         self.travado = False
-        if not nome_fixo and recuperar:
+        # Só o leitor ao vivo — o que segura a trava — lê, grava ou apaga a
+        # fila. Diagnóstico e validação com vídeo rodam com a fila vazia e,
+        # se mexessem nela, apagariam no fim os volumes de outra execução.
+        self.dono_da_fila = dono_da_fila and not nome_fixo
+        if self.dono_da_fila:
             self._recuperar()
 
     def log(self, msg):
@@ -372,6 +376,8 @@ class Registro:
             self.log('planilha liberada: os volumes que esperavam foram gravados.')
 
     def _atualizar_espera(self):
+        if not self.dono_da_fila:
+            return
         try:
             if self.pendentes:
                 tmp = self.espera.with_suffix('.tmp')
@@ -512,7 +518,7 @@ def rodar(cfg, arquivo, inicio, diagnostico):
     if not arquivo and not diagnostico:
         trava = travar_instancia(PASTA / cfg.get('pasta_dados', 'dados'))
     reg = Registro(cfg, nome_fixo=f'volumes_{Path(arquivo).stem}.csv' if arquivo else None,
-                   recuperar=not diagnostico)
+                   dono_da_fila=trava is not None)
     if arquivo and not diagnostico:
         saida = reg.pasta / reg.nome_fixo
         if saida.exists():
