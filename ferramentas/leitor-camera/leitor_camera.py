@@ -17,7 +17,9 @@ Uso (ver LEIA-ME.md):
 """
 import argparse
 import json
+import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -38,6 +40,10 @@ LARG, ALT = 128, 48
 # Quanto tempo sem receber imagem até considerar que a câmera caiu.
 SEM_IMAGEM_S = 30
 
+# Quanto a leitura pode ficar atrás do relógio (quadros represados) antes de
+# reconectar. Rajada depois de um engasgo é normal e se recupera sozinha.
+ATRASO_MAX_S = 60
+
 # A pasta do leitor vem primeiro: quem não consegue instalar o ffmpeg no
 # Windows só copia o ffmpeg.exe para cá, sem mexer no PATH.
 FFMPEG = next((str(p) for p in (PASTA / 'ffmpeg.exe', PASTA / 'ffmpeg') if p.is_file()),
@@ -47,11 +53,41 @@ CAMPOS = ('camera', 'retangulo', 'limiar_entra', 'limiar_sai',
           'permanencia_minima_s', 'quadros_por_segundo')
 
 
+def sem_senha(texto):
+    """O ffmpeg repete o endereço inteiro da câmera nos erros, com usuário e
+    senha. Nada que vai para tela ou log pode levar isso."""
+    # Também sem o "rtsp://" na frente: um corte no meio do endereço não pode
+    # deixar "usuario:senha@" passar.
+    return re.sub(r'(\w+://)?[^\s/@:]*:?[^\s/@]*@(?=[\w.-]+[:/])',
+                  lambda m: (m.group(1) or '') + '***@', texto)
+
+
 def parar(msg):
     """Erro que a pessoa precisa corrigir. Sai com código 2: o iniciar.bat para e
     mostra o motivo, em vez de reiniciar a cada 10 s repetindo o mesmo erro."""
-    print(msg, file=sys.stderr, flush=True)
+    print(sem_senha(msg), file=sys.stderr, flush=True)
     sys.exit(2)
+
+
+def desligar_selecao_do_console():
+    """
+    No Prompt do Windows, um clique na janela entra no modo de seleção e PAUSA
+    o programa na próxima escrita na tela, até alguém apertar uma tecla. A
+    câmera continua mandando imagem, a fila enche, e a leitura para sem
+    registro. Desliga esse modo só para esta janela.
+    """
+    if os.name != 'nt':
+        return
+    try:
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        entrada = k32.GetStdHandle(-10)  # STD_INPUT_HANDLE
+        modo = ctypes.c_uint32()
+        if k32.GetConsoleMode(entrada, ctypes.byref(modo)):
+            EDICAO_RAPIDA, FLAGS_ESTENDIDAS = 0x40, 0x80
+            k32.SetConsoleMode(entrada, (modo.value & ~EDICAO_RAPIDA) | FLAGS_ESTENDIDAS)
+    except Exception:
+        pass  # sem console (rodando escondido): nada a desligar
 
 
 def ler_config():
@@ -104,10 +140,13 @@ class Camera:
 
     def __init__(self, cfg, arquivo):
         self.fila = queue.Queue(maxsize=200)
-        cmd = [FFMPEG, '-v', 'error', *entrada_ffmpeg(cfg, arquivo),
+        # -nostdin e stdin fechado: sem isso o ffmpeg lê o teclado do Prompt, e
+        # um "q" digitado na janela derruba a câmera.
+        cmd = [FFMPEG, '-nostdin', '-v', 'error', *entrada_ffmpeg(cfg, arquivo),
                '-an', '-vf', f"fps={cfg['quadros_por_segundo']},{filtro_retangulo(cfg)}",
                '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.avisos = deque(maxlen=5)
         threading.Thread(target=self._ler, daemon=True).start()
         # Esvazia os avisos do ffmpeg o tempo todo. Câmera com perda de pacote
@@ -140,7 +179,7 @@ class Camera:
         except subprocess.TimeoutExpired:
             pass
         time.sleep(0.2)
-        return ' | '.join(self.avisos)[-300:]
+        return sem_senha(' | '.join(self.avisos))[-300:]
 
     def fechar(self):
         if self.proc.poll() is None:
@@ -156,27 +195,68 @@ class Registro:
         self.pasta = PASTA / cfg.get('pasta_dados', 'dados')
         self.pasta.mkdir(exist_ok=True)
         self.nome_fixo = nome_fixo
+        # Linhas que ainda não deu para gravar: o Excel tranca o CSV aberto.
+        self.pendentes = []
+        self.travado = False
 
     def log(self, msg):
-        linha = f'{datetime.now():%Y-%m-%d %H:%M:%S}  {msg}'
+        linha = f'{datetime.now():%Y-%m-%d %H:%M:%S}  {sem_senha(msg)}'
         print(linha, flush=True)
-        with open(self.pasta / 'leitor.log', 'a', encoding='utf-8') as f:
-            f.write(linha + '\n')
+        try:
+            with open(self.pasta / 'leitor.log', 'a', encoding='utf-8') as f:
+                f.write(linha + '\n')
+        except OSError:
+            pass  # log é ajuda, não pode derrubar a contagem
 
     def volume(self, entrou, saiu, desde_anterior, obs=''):
         arq = self.pasta / (self.nome_fixo or f'volumes_{saiu:%Y-%m-%d}.csv')
-        novo = not arq.exists()
         num = lambda s: '' if s is None else f'{s:.1f}'.replace('.', ',')
         no_filme = None if entrou is None else (saiu - entrou).total_seconds()
         linha = ';'.join([f'{saiu:%d/%m/%Y}', '' if entrou is None else f'{entrou:%H:%M:%S}',
                           f'{saiu:%H:%M:%S}', num(no_filme), num(desde_anterior), obs]) + '\n'
-        with open(arq, 'a', encoding='utf-8-sig' if novo else 'utf-8', newline='') as f:
-            if novo:
-                f.write(self.CABECALHO)
-            f.write(linha)
+        self.pendentes.append((arq, linha))
+        self.gravar_pendentes()
         print(f'  volume  saiu {saiu:%H:%M:%S}'
               + ('' if desde_anterior is None else f'   ciclo {num(desde_anterior)} s')
               + (f'   ({obs})' if obs else ''), flush=True)
+
+    def gravar_pendentes(self):
+        """Grava o que estiver guardado, na ordem. Se o CSV estiver trancado
+        (aberto no Excel), mantém guardado e tenta de novo depois — sem perder
+        volume e sem derrubar o leitor."""
+        while self.pendentes:
+            arq, linha = self.pendentes[0]
+            try:
+                novo = not arq.exists()
+                with open(arq, 'a', encoding='utf-8-sig' if novo else 'utf-8', newline='') as f:
+                    if novo:
+                        f.write(self.CABECALHO)
+                    f.write(linha)
+            except OSError as e:
+                if not self.travado:
+                    self.travado = True
+                    self.log(f'não consegui gravar {arq.name} ({e.strerror}) — aberto no Excel? '
+                             'Os volumes ficam guardados e são gravados quando ele fechar.')
+                return
+            self.pendentes.pop(0)
+        if self.travado:
+            self.travado = False
+            self.log('planilha liberada: os volumes guardados foram gravados.')
+
+    def fechar(self):
+        """Saindo com volumes ainda guardados: grava num arquivo à parte."""
+        self.gravar_pendentes()
+        if not self.pendentes:
+            return
+        reserva = self.pasta / f'volumes_nao_gravados_{datetime.now():%Y-%m-%d_%H%M%S}.csv'
+        try:
+            with open(reserva, 'w', encoding='utf-8-sig', newline='') as f:
+                f.write(self.CABECALHO)
+                f.writelines(linha for _, linha in self.pendentes)
+            self.log(f'{len(self.pendentes)} volume(s) não entraram na planilha do dia: '
+                     f'estão em {reserva.name}. Copie as linhas para a planilha.')
+        except OSError as e:
+            self.log(f'{len(self.pendentes)} volume(s) perdidos: não consegui gravar ({e.strerror}).')
 
 
 class Detector:
@@ -232,6 +312,10 @@ class Detector:
 
     def _registrar(self, entrou, saiu, obs):
         desde = None if self.ultima_saida is None else (saiu - self.ultima_saida).total_seconds()
+        if self.ultima_saida is not None and saiu.date() != self.ultima_saida.date():
+            # Com o leitor ligado direto, o 1º volume do dia carregaria a noite
+            # (ou o fim de semana) inteira como se fosse ciclo.
+            desde, obs = None, obs or '1º volume do dia'
         self.reg.volume(entrou, saiu, desde, obs)
         self.ultima_saida = saiu
 
@@ -243,7 +327,7 @@ class Detector:
 def tirar_foto(cfg, arquivo, momento):
     r = cfg['retangulo']
     saida = PASTA / 'foto_camera.jpg'
-    cmd = [FFMPEG, '-v', 'error', '-y']
+    cmd = [FFMPEG, '-nostdin', '-v', 'error', '-y']
     if arquivo:
         cmd += ['-ss', str(momento)]
     # Grade de 10 em 10% (linhas amarelas grossas no meio) para ler as frações
@@ -255,9 +339,9 @@ def tirar_foto(cfg, arquivo, momento):
     cmd += [*entrada_ffmpeg(cfg, arquivo), '-frames:v', '1', '-vf',
             grade + f"drawbox=x=iw*{r['x']}:y=ih*{r['y']}:w=iw*{r['largura']}:h=ih*{r['altura']}:color=red:t=3",
             str(saida)]
-    resultado = subprocess.run(cmd, capture_output=True, text=True)
+    resultado = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True)
     if resultado.returncode != 0:
-        parar('Não consegui tirar a foto: ' + resultado.stderr.strip()[-300:])
+        parar('Não consegui tirar a foto: ' + sem_senha(resultado.stderr.strip())[-300:])
     print(f'Foto salva em {saida}.\n'
           'O retângulo vermelho tem que cobrir o caminho da caixa na envolvedora.\n'
           'Cada linha branca = 10% da imagem; as amarelas marcam o meio (50%).\n'
@@ -270,18 +354,42 @@ def rodar(cfg, arquivo, inicio, diagnostico):
         saida = reg.pasta / reg.nome_fixo
         if saida.exists():
             saida.unlink()  # reprocessar o mesmo vídeo substitui, não soma
+    try:
+        _rodar(cfg, arquivo, inicio, diagnostico, reg)
+    finally:
+        reg.fechar()  # nenhum volume guardado fica para trás, saia como sair
+
+
+def _rodar(cfg, arquivo, inicio, diagnostico, reg):
     det = Detector(cfg, reg)
     fps = cfg['quadros_por_segundo']
     espera = 5
     reg.log('leitor iniciado' + (f' no arquivo {arquivo}' if arquivo else ''))
     while True:
         cam = Camera(cfg, arquivo)
-        n, momento, ultimo_print = 0, None, -1
+        n, momento, ultimo_print, ancora, motivo = 0, None, -1, None, ''
         while True:
             q = cam.proximo()
             if q is None:
                 break
-            momento = (inicio + timedelta(seconds=n / fps)) if arquivo else datetime.now()
+            if arquivo:
+                momento = inicio + timedelta(seconds=n / fps)
+            else:
+                # Hora pelo NÚMERO do quadro, não pela chegada. Depois de um
+                # engasgo (rede, PC ocupado) os quadros chegam em rajada, mas
+                # cada um continua 1/fps depois do anterior — usar a hora de
+                # chegada espremia a caixa em décimos de segundo e ela era
+                # descartada. A âncora só desce: fica no quadro que chegou com
+                # menos atraso, e assim também corrige a demora de conexão.
+                agora = datetime.now()
+                base = agora - timedelta(seconds=n / fps)
+                if ancora is None or base < ancora:
+                    ancora = base
+                momento = ancora + timedelta(seconds=n / fps)
+                atrasado = (agora - momento).total_seconds()
+                if atrasado > ATRASO_MAX_S:
+                    motivo = f'leitura {atrasado:.0f} s atrás do relógio (quadros represados)'
+                    break
             seg = int(n / fps)
             n += 1
             f = fracao_papelao(q)
@@ -293,6 +401,8 @@ def rodar(cfg, arquivo, inicio, diagnostico):
                 continue
             det.quadro(momento, f)
             espera = 5
+            if reg.pendentes and n % (10 * fps) == 0:
+                reg.gravar_pendentes()  # Excel fechou? grava sem esperar o próximo volume
         cam.fechar()
         if arquivo:
             if n == 0:
@@ -302,8 +412,9 @@ def rodar(cfg, arquivo, inicio, diagnostico):
             if not diagnostico:
                 print(f'Resultado em {reg.pasta / reg.nome_fixo}')
             return
-        # Câmera caiu ou não respondeu: espera e tenta de novo, cada vez esperando mais (até 1 min).
-        reg.log(f'sem imagem da câmera — nova tentativa em {espera} s. {cam.erro()}')
+        # Câmera caiu, não respondeu ou ficou para trás: espera e tenta de novo,
+        # cada vez esperando mais (até 1 min). O que estava na esteira é perdido.
+        reg.log(f'{motivo or "sem imagem da câmera"} — nova tentativa em {espera} s. {cam.erro()}')
         det.reiniciar(apos_queda=True)
         time.sleep(espera)
         espera = min(espera * 2, 60)
@@ -334,10 +445,22 @@ def main():
         except ValueError:
             parar('--inicio tem que ser HH:MM:SS, a hora que aparece na imagem da câmera.')
         inicio = datetime.combine(datetime.now().date(), h)
+    desligar_selecao_do_console()
     try:
         rodar(cfg, args.arquivo, inicio, args.diagnostico)
     except KeyboardInterrupt:
         print('\nLeitor parado.')
+    except Exception:
+        # Erro não previsto: fica no log (a janela pode nem estar aberta), e o
+        # iniciar.bat reinicia o leitor em 10 s.
+        import traceback
+        try:
+            with open(PASTA / cfg.get('pasta_dados', 'dados') / 'leitor.log', 'a', encoding='utf-8') as f:
+                f.write(f'{datetime.now():%Y-%m-%d %H:%M:%S}  ERRO INESPERADO, o leitor fechou:\n'
+                        + sem_senha(traceback.format_exc()))
+        except OSError:
+            pass
+        raise
 
 
 if __name__ == '__main__':

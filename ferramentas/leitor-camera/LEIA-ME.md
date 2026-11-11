@@ -62,9 +62,24 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    python leitor_camera.py --arquivo video.mp4 --inicio 10:01:06
    ```
    O resultado fica em `dados\volumes_video.csv`.
-5. Um analista marca **o mesmo vídeo** à mão no app (Cronometrar por vídeo).
-   Passa se: pelo menos 98% dos volumes encontrados, nenhum volume a mais, e o
-   intervalo médio entre volumes dentro de ±2% do manual.
+5. Um analista marca **o mesmo vídeo** à mão no app (Cronometrar por vídeo),
+   com a regra de sempre: **marcar quando a frente da caixa toca o tapete
+   verde**, em todo volume. Essa marca corresponde à coluna `entrou`.
+6. Compare **volume a volume**, não pela média. A média do intervalo só
+   depende do primeiro e do último volume: um volume perdido e um falso se
+   anulam e ela continua igual. Mande o CSV do leitor e a lista "volume a
+   volume" da medição manual para fazer o pareamento:
+   - desconta-se a diferença fixa entre as duas marcações (a mediana de
+     `entrou` − marca manual), porque o leitor marca quando a caixa já cobriu
+     parte do retângulo, um pouco depois do toque;
+   - cada marca manual procura um volume do leitor a até 1 s, e vice-versa.
+
+   **Passa se:** pelo menos 98% das marcas manuais têm par, **nenhum** volume
+   do leitor fica sem par (volume falso) e 95% dos pares diferem em até 1 s.
+
+   Não compare com o "por volume no período" nem com o tempo "rodando" do app:
+   eles descontam setup planejado e paradas marcadas, e o leitor não desconta
+   nada.
 
 ## 3. Ligar na câmera
 
@@ -103,10 +118,22 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
 | `segundos_desde_anterior` | intervalo entre este volume e o anterior (saída a saída) |
 | `observacao` | por que algum campo ficou vazio |
 
-- **Intervalo vazio não é erro**: é o 1º volume do dia ou o 1º depois de uma
-  queda da câmera. O buraco da queda **não** vira ciclo.
-- `dados\leitor.log` registra quedas de câmera e papelão descartado (passou
-  menos de 2 s no retângulo: pessoa ou reflexo).
+- **Intervalo vazio não é erro**: é o 1º volume do dia, o 1º depois de uma
+  queda da câmera, ou o que já estava no filme quando a leitura começou. A
+  noite e o buraco da queda **não** viram ciclo.
+- **O intervalo inclui as paradas** (almoço, falta de caixa, setup): a
+  **média** dessa coluna não é o ciclo. Para o ciclo típico use a **mediana**;
+  intervalo muito acima dela é parada.
+- **Abrir a planilha no Excel trava o arquivo.** O leitor não perde nada: guarda
+  os volumes e grava quando o Excel fechar (o log avisa). Se o leitor for
+  fechado com o Excel aberto, os volumes vão para
+  `volumes_nao_gravados_....csv` — copie as linhas para a planilha do dia.
+  Melhor: **copie o arquivo e abra a cópia**, ou leia pelo Power BI.
+- `dados\leitor.log` registra quedas de câmera, papelão descartado (passou
+  menos de 2 s no retângulo: pessoa ou reflexo) e erro inesperado. A senha da
+  câmera nunca aparece nele.
+- Não clique dentro da janela preta para selecionar texto: o leitor desliga
+  esse modo, mas se a janela "congelar", aperte Esc.
 
 ## 6. Conferir toda semana
 
