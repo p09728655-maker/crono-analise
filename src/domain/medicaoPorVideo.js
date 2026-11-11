@@ -246,6 +246,45 @@ export function encerrarParadaNoVideo(m, msBruto) {
   return { marcacao: { ...m, aberta: null, paradas } };
 }
 
+/**
+ * A MARCACAO AUTOMATICA (v2.105.0) vira marcacao como a do Enter: a
+ * primeira entrada achada e' a LARGADA (abre o periodo e nao conta volume,
+ * como o primeiro Enter), as outras sao volumes. A ordem de marcacao e' a
+ * do video: o ⌫ desfaz do fim para o comeco. Duas entradas a menos de
+ * TOQUE_REPETIDO_MS sao uma so', como a tecla repetida.
+ */
+export function marcacaoDasEntradas(entradasMs) {
+  const ordenadas = (entradasMs || []).filter(finito).map(inteiro).sort((a, b) => a - b);
+  const unicas = ordenadas.reduce(
+    (acc, ms) => (acc.length && ms - acc[acc.length - 1] < TOQUE_REPETIDO_MS ? acc : [...acc, ms]), [],
+  );
+  if (!unicas.length) return marcacaoVazia();
+  const [largadaMs, ...resto] = unicas;
+  return {
+    largadaMs, toques: resto.map((ms, i) => ({ ms, ordem: i + 1 })), paradas: [], aberta: null, ordem: resto.length,
+  };
+}
+
+/**
+ * O QUE O ANALISTA CORRIGIU na marcacao automatica: das marcas que ela pos
+ * (largada e volumes), quantas ficaram, quantas foram apagadas e quantas o
+ * analista acrescentou. Marca movida conta como uma apagada e uma
+ * acrescentada. E' a medida de quanto a marcacao automatica acerta neste
+ * video — `null` quando nao houve marcacao automatica.
+ */
+export function conferirAutomatica(automaticasMs, m) {
+  if (!automaticasMs?.length) return null;
+  const marcas = new Set([...(m.largadaMs != null ? [m.largadaMs] : []), ...m.toques.map((t) => t.ms)]);
+  const automaticas = new Set(automaticasMs);
+  const mantidas = [...automaticas].filter((ms) => marcas.has(ms)).length;
+  return {
+    automaticas: automaticas.size,
+    mantidas,
+    apagadas: automaticas.size - mantidas,
+    acrescentadas: [...marcas].filter((ms) => !automaticas.has(ms)).length,
+  };
+}
+
 /** O "x" da parada na lista; a aberta sai pelo mesmo caminho. */
 export function removerParada(m, inicioMs) {
   if (m.aberta && m.aberta.inicioMs === inicioMs) return { marcacao: { ...m, aberta: null } };

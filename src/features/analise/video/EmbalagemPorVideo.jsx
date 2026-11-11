@@ -7,9 +7,13 @@ import {
 } from '../../../domain/cronoanalise.js';
 import { diasProgramados, taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
-  desfazerUltimo, emRelogio, encerrarParadaNoVideo, iniciarParadaNoVideo, inicioSugerido, marcacaoVazia,
-  marcarToque, medicaoDoVideo, removerParada, removerVolume,
+  conferirAutomatica, desfazerUltimo, emRelogio, encerrarParadaNoVideo, iniciarParadaNoVideo, inicioSugerido,
+  marcacaoDasEntradas, marcacaoVazia, marcarToque, medicaoDoVideo, removerParada, removerVolume,
 } from '../../../domain/medicaoPorVideo.js';
+import {
+  areaDaImagem, detectarVolumes, intervalosLongos, pontoNaImagem, retanguloEntre, retanguloValido,
+} from '../../../domain/deteccaoVolumes.js';
+import { analisarVideo } from '../../../lib/analisarVideo.js';
 import {
   ErroApi, arquivarConferencia, enviarMedicaoPorVideo, lerDemanda, listarCadastroMaquinas,
 } from '../../../lib/api.js';
@@ -80,6 +84,23 @@ function apagarRascunho(arquivoChave) {
   const mapa = lerMapa(CHAVE_RASCUNHOS);
   delete mapa[arquivoChave];
   gravarMapa(CHAVE_RASCUNHOS, mapa);
+}
+/**
+ * O RETANGULO DA MARCACAO AUTOMATICA (v2.105.0), guardado NESTE PC por
+ * maquina: cada embalagem tem a sua camera e o seu enquadramento, e o
+ * proximo video da mesma maquina ja' abre com ele. Em fracao da imagem,
+ * nao em pixels — vale em qualquer tamanho de janela.
+ */
+const CHAVE_RETANGULOS = 'ritmopatrimar.video.retangulos';
+function lerRetangulo(maquinaId) {
+  const r = maquinaId ? lerMapa(CHAVE_RETANGULOS)[maquinaId] : null;
+  return retanguloValido(r) ? r : null;
+}
+function gravarRetangulo(maquinaId, r) {
+  if (!maquinaId) return;
+  try {
+    localStorage.setItem(CHAVE_RETANGULOS, JSON.stringify({ ...lerMapa(CHAVE_RETANGULOS), [maquinaId]: r }));
+  } catch { /* segue sem guardar: vale para este video */ }
 }
 const lerSalvo = (arquivoChave) => lerMapa(CHAVE_SALVOS)[arquivoChave] || null;
 function anotarSalvo(arquivoChave, info) {
@@ -205,6 +226,19 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const [agoraMs, setAgoraMs] = useState(0);
   const [tocando, setTocando] = useState(false);
   const [velocidade, setVelocidade] = useState(1);
+  // MARCACAO AUTOMATICA (v2.105.0). O retangulo e' da maquina; `automaticas`
+  // sao as marcas que ela pos (largada e volumes, ms do video) — vao no
+  // rascunho, para a conferencia sobreviver ao F5.
+  const [retangulo, setRetangulo] = useState(null);
+  const [desenhando, setDesenhando] = useState(false);
+  const [arrasto, setArrasto] = useState(null); // { a, b } em fracao da imagem, enquanto arrasta
+  const [caixaVideo, setCaixaVideo] = useState(null); // tamanho do <video> na tela, em px
+  // parado | lendo | pronto | erro
+  const [automatica, setAutomatica] = useState({ estado: 'parado' });
+  const [progresso, setProgresso] = useState(null);
+  const [automaticas, setAutomaticas] = useState([]);
+  const refVideoLeitura = useRef(null);
+  const refUltimoProgresso = useRef(0);
 
   /* ---------------------------------------------- cadastro e programa */
   useEffect(() => {
@@ -237,6 +271,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     [carga, grupo?.id],
   );
   const motivos = useMotivosDoGrupo(grupo?.id);
+  // O retangulo e' da maquina: trocar a maquina traz o dela (ou nenhum).
+  useEffect(() => { setRetangulo(lerRetangulo(maquina?.id)); }, [maquina?.id]);
 
   const inicioData = campos.inicio ? new Date(campos.inicio) : null;
   const inicioValido = Boolean(inicioData && !Number.isNaN(inicioData.getTime()));
@@ -283,7 +319,10 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     const v = refVideo.current;
     if (!v) return;
     const duracaoS = Number.isFinite(v.duration) ? v.duration : null;
-    setMeta({ duracaoS, erro: null, pronto: true });
+    // O tamanho da imagem: e' nele que o retangulo desenhado e' medido.
+    setMeta({
+      duracaoS, erro: null, pronto: true, largura: v.videoWidth || null, altura: v.videoHeight || null,
+    });
     // Sugestao: o arquivo e' gravado no fim da filmagem (ver inicioSugerido).
     // Sem duracao nao ha' como voltar do fim ao comeco: o campo fica vazio.
     setCampos((c) => (c.inicio || !arquivo ? c : { ...c, inicio: paraCampoLocal(inicioSugerido(arquivo.lastModified, duracaoS)) }));
@@ -293,6 +332,17 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     const v = refVideo.current;
     if (v && Number.isFinite(v.duration)) setMeta((m) => ({ ...m, duracaoS: v.duration }));
   };
+  // O tamanho do <video> na tela muda com a janela: o retangulo desenhado
+  // acompanha (ele e' guardado em fracao da imagem).
+  useEffect(() => {
+    const v = refVideo.current;
+    if (!url || !v || typeof ResizeObserver === 'undefined') return undefined;
+    const medir = () => setCaixaVideo({ largura: v.clientWidth, altura: v.clientHeight });
+    const obs = new ResizeObserver(medir);
+    obs.observe(v);
+    medir();
+    return () => obs.disconnect();
+  }, [url]);
 
   const continuarRascunho = () => {
     const r = rascunho;
@@ -304,6 +354,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     // substitui o que tiver chegado.
     refEnvioTentado.current = Boolean(r.envioTentado || r.incerto);
     setMexida(r.mexida || null);
+    setAutomaticas(r.automaticas || []);
+    setAutomatica({ estado: 'parado' });
     setFimMs(null);
     setRascunho(null);
     // A maquina guardada tem de estar ativa no cadastro: sem ela, o Salvar
@@ -343,6 +395,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setClientId(crypto.randomUUID());
     refEnvioTentado.current = false;
     setMexida(null);
+    setAutomaticas([]);
+    setAutomatica({ estado: 'parado' });
     setFimMs(null);
     setAviso(null);
     setEtapa('marcar');
@@ -352,12 +406,13 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const rascunhoAtual = (troca = {}) => ({
     arquivo: chaveDoArquivo(arquivo), nome: arquivo.name, clientId, campos, marcacao, observacao, mexida,
     envioTentado: refEnvioTentado.current, maquinaNome: maquina?.nome || null, atualizadoEm: new Date().toISOString(),
+    automaticas,
     ...troca,
   });
   useEffect(() => {
     if (!arquivo || !clientId || (etapa !== 'marcar' && etapa !== 'revisar')) return;
     gravarRascunho(rascunhoAtual());
-  }, [arquivo, clientId, campos, marcacao, observacao, mexida, etapa]);
+  }, [arquivo, clientId, campos, marcacao, observacao, mexida, etapa, automaticas]);
 
   /* ---------------------------------------------------------- player */
   useEffect(() => {
@@ -447,10 +502,118 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setEtapa('revisar');
   };
 
+  /* ------------------------------------------- marcacao automatica */
+  // A marcacao automatica comeca com a lista vazia: pondo marcas por cima
+  // das do analista, nao daria para saber o que conferir.
+  const listaVazia = (m) => m.largadaMs == null && !m.toques.length && !m.paradas.length && !m.aberta;
+  const lendo = automatica.estado === 'lendo';
+
+  const desenharRetangulo = () => {
+    refVideo.current?.pause();
+    setArrasto(null);
+    setAviso(null);
+    setDesenhando(true);
+  };
+  const cancelarDesenho = () => { setArrasto(null); setDesenhando(false); };
+  const terminarDesenho = (r) => {
+    setArrasto(null);
+    if (!retanguloValido(r)) {
+      setAviso('O retângulo ficou pequeno demais para ler. Arraste de novo, cobrindo a caixa inteira sobre o tapete verde.');
+      return;
+    }
+    setRetangulo(r);
+    gravarRetangulo(maquina?.id, r);
+    setDesenhando(false);
+    setAviso(null);
+    if (automatica.estado === 'erro') setAutomatica({ estado: 'parado' });
+  };
+
+  const lerAutomatica = () => {
+    if (!retangulo || !listaVazia(refMarcacao.current)) return;
+    refVideo.current?.pause();
+    refUltimoProgresso.current = 0;
+    setProgresso(null);
+    setAviso(null);
+    setAutomatica({ estado: 'lendo', inicioMs: tempoDoVideo(), retangulo });
+  };
+
+  const concluirLeitura = (amostras) => {
+    const r = detectarVolumes(amostras);
+    if (r.motivo) { setAutomatica({ estado: 'erro', erro: `Não deu para marcar: ${r.motivo}.` }); return; }
+    if (!r.volumes.length) {
+      setAutomatica({
+        estado: 'erro',
+        erro: 'Nenhuma caixa entrou no retângulo do ponto da leitura até o fim do vídeo. Confira se o retângulo '
+          + 'está sobre o tapete verde, onde a caixa passa embaixo do filme, e leia de novo.',
+      });
+      return;
+    }
+    if (!listaVazia(refMarcacao.current)) {
+      setAutomatica({ estado: 'erro', erro: 'A lista ganhou marcas durante a leitura: apague-as e leia de novo.' });
+      return;
+    }
+    // Pelo mesmo caminho do Enter: a primeira entrada e' a largada.
+    const m = marcacaoDasEntradas(r.volumes.map((v) => v.entrouMs));
+    refMarcacao.current = m;
+    setMarcacao(m);
+    setAviso(null);
+    setAutomaticas([m.largadaMs, ...m.toques.map((t) => t.ms)]);
+    setAutomatica({
+      estado: 'pronto',
+      resultado: {
+        volumes: m.toques.length,
+        comCaixaNoInicio: r.comCaixaNoInicio,
+        suspeitos: r.suspeitos.map((v) => v.entrouMs),
+        descartados: r.descartados.map((v) => v.entrouMs),
+        longos: intervalosLongos(r.volumes.map((v) => v.entrouMs)),
+      },
+    });
+  };
+
+  // A LEITURA: roda enquanto o estado e' "lendo". Parar (botao) ou sair da
+  // tela muda o estado ou desmonta, e a limpeza cancela a leitura.
+  useEffect(() => {
+    if (automatica.estado !== 'lendo' || !refVideoLeitura.current) return undefined;
+    let vivo = true;
+    const leitura = analisarVideo({
+      video: refVideoLeitura.current,
+      retangulo: automatica.retangulo,
+      inicioMs: automatica.inicioMs,
+      aoProgresso: (p) => {
+        // ~4 vezes por segundo basta para a barra: a cada quadro, a tela
+        // inteira se redesenharia 60 vezes por segundo.
+        const agora = performance.now();
+        if (!p.pausado && agora - refUltimoProgresso.current < 250) return;
+        refUltimoProgresso.current = agora;
+        setProgresso(p);
+      },
+    });
+    leitura.promessa
+      .then(({ amostras, cancelado }) => { if (vivo && !cancelado) concluirLeitura(amostras); })
+      .catch((e) => { if (vivo) setAutomatica({ estado: 'erro', erro: `Não deu para marcar: ${e.message}.` }); });
+    return () => { vivo = false; leitura.cancelar(); };
+  }, [automatica.estado]);
+
+  const apagarAutomatica = () => {
+    refMarcacao.current = marcacaoVazia();
+    setMarcacao(refMarcacao.current);
+    setAutomaticas([]);
+    setAutomatica({ estado: 'parado' });
+    setAviso(null);
+  };
+  const conferencia = useMemo(() => conferirAutomatica(automaticas, marcacao), [automaticas, marcacao]);
+
   // AS TECLAS — so' na etapa de marcar, e nunca com o cursor num campo.
   useEffect(() => {
     if (etapa !== 'marcar') return undefined;
     const aoTeclar = (e) => {
+      // Desenhando o retangulo, so' o Esc (cancela). Lendo o video, nenhuma:
+      // marca posta durante a leitura bateria com as automaticas.
+      if (desenhando) {
+        if (e.key === 'Escape') { cancelarDesenho(); e.preventDefault(); }
+        return;
+      }
+      if (lendo) return;
       if (motivoPedido != null) {
         if (e.key === 'Escape') { setMotivoPedido(null); e.preventDefault(); }
         return;
@@ -607,6 +770,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setJaSalvo(lerSalvo(chave));
     refMarcacao.current = marcacaoVazia();
     setMarcacao(refMarcacao.current);
+    setAutomaticas([]);
+    setAutomatica({ estado: 'parado' });
     setMexida(null);
     setClientId(null);
     setFimMs(null);
@@ -626,6 +791,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setCampos((c) => ({ ...c, produto: '', inicio: '' }));
     refMarcacao.current = marcacaoVazia();
     setMarcacao(refMarcacao.current);
+    setAutomaticas([]);
+    setAutomatica({ estado: 'parado' });
     setFimMs(null);
     setObservacao('');
     setClientId(null);
@@ -638,6 +805,10 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   // Filmagem antiga nao aparece na lista da Embalagem (ultimos 30 dias).
   const foraDaLista = inicioValido && foraDaListaDesde(campos.inicio);
   const duracaoVideoMs = meta.duracaoS != null ? meta.duracaoS * 1000 : null;
+  const areaVideo = caixaVideo && meta.largura && meta.altura ? areaDaImagem({
+    larguraElemento: caixaVideo.largura, alturaElemento: caixaVideo.altura,
+    larguraVideo: meta.largura, alturaVideo: meta.altura,
+  }) : null;
 
   return (
     <div style={est.tela}>
@@ -708,6 +879,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                   <section style={{ ...ev.cartao, ...(etapa === 'revisar' ? { display: 'none' } : {}) }} aria-label="Vídeo">
                     {/* Sem os controles do navegador: eles roubariam o Espaco e as
                         setas das teclas de marcar. Os daqui fazem o mesmo. */}
+                    <div style={ev.palco}>
                     <video
                       ref={refVideo}
                       src={url}
@@ -729,6 +901,13 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                       onSeeked={() => setAgoraMs(tempoDoVideo())}
                       onClick={alternarPlay}
                     />
+                    {etapa === 'marcar' && (
+                      <CamadaRetangulo
+                        area={areaVideo} retangulo={retangulo} arrasto={arrasto} desenhando={desenhando}
+                        aoArrastar={setArrasto} aoTerminar={terminarDesenho}
+                      />
+                    )}
+                    </div>
                     {meta.erro && <div style={est.faixaErro} role="alert">{meta.erro}</div>}
                     {etapa === 'marcar' && (
                       <Controles
@@ -738,11 +917,23 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                     )}
                     {etapa === 'marcar' && (
                       <Acoes
-                        marcacao={marcacao} aviso={aviso}
+                        marcacao={marcacao} aviso={aviso} travado={lendo || desenhando}
                         aoToque={toque} aoDesfazer={desfazer} aoParou={parou} aoEncerrar={encerrar}
                       />
                     )}
                   </section>
+                )}
+                {url && etapa === 'marcar' && !meta.erro && (
+                  <MarcacaoAutomatica
+                    url={url} refVideoLeitura={refVideoLeitura} maquina={maquina} retangulo={retangulo}
+                    desenhando={desenhando} automatica={automatica} progresso={progresso}
+                    listaVazia={listaVazia(marcacao)} conferencia={conferencia} agoraMs={agoraMs}
+                    podeDesenhar={Boolean(areaVideo)}
+                    aoDesenhar={desenharRetangulo} aoCancelarDesenho={cancelarDesenho}
+                    aoLer={lerAutomatica} aoParar={() => setAutomatica({ estado: 'parado' })}
+                    aoApagar={apagarAutomatica}
+                    aoIr={(ms) => { refVideo.current?.pause(); irPara(ms); }}
+                  />
                 )}
               </div>
 
@@ -757,7 +948,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
               {etapa === 'revisar' && final?.medicao && (
                 <Revisar
                   medicao={final.medicao} numeros={numeros(final.medicao)} takt={takt}
-                  maquina={maquina} produto={campos.produto}
+                  maquina={maquina} produto={campos.produto} conferencia={conferencia}
                   observacao={observacao} aoObservacao={setObservacao}
                   salvar={salvar} aoSalvar={() => salvarMedicao()}
                   mexida={mexida} aoArquivarESalvar={arquivarESalvar} aoDescartarMexida={descartarMexida}
@@ -979,7 +1170,7 @@ function Controles({
 
 /** As quatro acoes que tem tecla, com a tecla escrita no botao; e o aviso de quando nao marcou. */
 function Acoes({
-  marcacao, aviso, aoToque, aoDesfazer, aoParou, aoEncerrar,
+  marcacao, aviso, aoToque, aoDesfazer, aoParou, aoEncerrar, travado = false,
 }) {
   const semFoco = (e) => e.preventDefault();
   const largada = marcacao.largadaMs == null;
@@ -993,18 +1184,18 @@ function Acoes({
       )}
       <div style={ev.acoes} aria-label="Marcar">
         <button
-          type="button" onMouseDown={semFoco} onClick={aoToque}
+          type="button" onMouseDown={semFoco} onClick={aoToque} disabled={travado}
           style={{ ...ev.acao, ...(largada ? ev.acaoLargada : ev.acaoVolume) }}
         >
           {largada ? 'Largada' : '+1 volume'} <span style={ev.tecla}>Enter</span>
         </button>
-        <button type="button" onMouseDown={semFoco} onClick={aoDesfazer} style={ev.acao}>
+        <button type="button" onMouseDown={semFoco} onClick={aoDesfazer} style={ev.acao} disabled={travado}>
           Desfazer volume <span style={ev.tecla}>⌫</span>
         </button>
-        <button type="button" onMouseDown={semFoco} onClick={aoParou} style={{ ...ev.acao, ...ev.acaoParou }}>
+        <button type="button" onMouseDown={semFoco} onClick={aoParou} style={{ ...ev.acao, ...ev.acaoParou }} disabled={travado}>
           {marcacao.aberta ? 'Voltou' : 'Parou'} <span style={ev.tecla}>P</span>
         </button>
-        <button type="button" onMouseDown={semFoco} onClick={aoEncerrar} style={{ ...ev.acao, ...ev.acaoEncerrar }}>
+        <button type="button" onMouseDown={semFoco} onClick={aoEncerrar} style={{ ...ev.acao, ...ev.acaoEncerrar }} disabled={travado}>
           Encerrar <span style={ev.tecla}>F</span>
         </button>
       </div>
@@ -1115,7 +1306,7 @@ function Numero({
 /** REVISAR: a previa do volume a volume antes de salvar — e a volta para corrigir. */
 function Revisar({
   medicao, numeros, takt, maquina, produto, observacao, aoObservacao, salvar, aoSalvar, aoVoltar,
-  mexida, aoArquivarESalvar, aoDescartarMexida,
+  mexida, aoArquivarESalvar, aoDescartarMexida, conferencia = null,
 }) {
   const { porVolume, leitura, calc } = numeros;
   const acima = takt?.taktMs > 0 && porVolume > takt.taktMs;
@@ -1146,6 +1337,7 @@ function Revisar({
       {leitura && !leitura.suficiente && (
         <p style={ev.dica}>Poucos volumes para ler o intervalo: {leitura.motivo}. O tempo por volume vale; as lacunas, ainda não.</p>
       )}
+      {conferencia && <p style={ev.dica}><TextoConferencia c={conferencia} /></p>}
       {leitura && <GraficoIntervalos leitura={leitura} unidade={VOLUME} altura={240} />}
       <label style={ev.campo}>
         <span style={ev.rotulo}>Observação (opcional)</span>
@@ -1187,6 +1379,229 @@ function Revisar({
           Voltar a marcar
         </button>
       </div>
+    </section>
+  );
+}
+
+/**
+ * O RETANGULO por cima do video: mostra o guardado e, no modo de desenhar,
+ * recebe o arrasto. As contas de posicao (faixa preta, fracao da imagem)
+ * sao do dominio (deteccaoVolumes.js).
+ */
+function CamadaRetangulo({
+  area, retangulo, arrasto, desenhando, aoArrastar, aoTerminar,
+}) {
+  if (!area) return null;
+  const visivel = arrasto ? retanguloEntre(arrasto.a, arrasto.b) : retangulo;
+  const ponto = (e) => {
+    const caixa = e.currentTarget.getBoundingClientRect();
+    return pontoNaImagem(e.clientX - caixa.left, e.clientY - caixa.top, area);
+  };
+  return (
+    <>
+      {visivel && (
+        <div
+          aria-hidden="true"
+          style={{
+            ...ev.retangulo,
+            left: area.x + visivel.x * area.largura,
+            top: area.y + visivel.y * area.altura,
+            width: visivel.largura * area.largura,
+            height: visivel.altura * area.altura,
+          }}
+        />
+      )}
+      {desenhando && (
+        <div
+          style={ev.camadaDesenho}
+          aria-label="Desenhar o retângulo: clique e arraste sobre o vídeo"
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            const p = ponto(e);
+            aoArrastar({ a: p, b: p });
+          }}
+          onPointerMove={(e) => { if (arrasto) aoArrastar({ a: arrasto.a, b: ponto(e) }); }}
+          onPointerUp={(e) => { if (arrasto) aoTerminar(retanguloEntre(arrasto.a, ponto(e))); }}
+        />
+      )}
+    </>
+  );
+}
+
+/** "das 12 marcas automáticas, 11 ficaram…" — a medida de quanto a marcacao automatica acertou. */
+function TextoConferencia({ c }) {
+  return (
+    <>
+      Conferência da marcação automática: das {c.automaticas} marcas que ela pôs, <strong>{c.mantidas} ficaram</strong>,
+      {' '}{c.apagadas} {c.apagadas === 1 ? 'foi apagada' : 'foram apagadas'} e {c.acrescentadas}
+      {' '}{c.acrescentadas === 1 ? 'foi acrescentada' : 'foram acrescentadas'} por quem conferiu.
+    </>
+  );
+}
+
+/** Tempos do video que levam a ele (ate' 10; o resto, contado). */
+function Tempos({ lista, aoIr, rotulo = (ms) => emRelogio(ms) }) {
+  const MAX = 10;
+  return (
+    <span style={ev.tempos}>
+      {lista.slice(0, MAX).map((item) => {
+        const ms = typeof item === 'number' ? item : item.deMs;
+        return (
+          <button key={ms} type="button" style={ev.itemTempo} onClick={() => aoIr(ms)} title="Levar o vídeo a este ponto">
+            {rotulo(item)}
+          </button>
+        );
+      })}
+      {lista.length > MAX && <span style={ev.dica}>e mais {lista.length - MAX}</span>}
+    </span>
+  );
+}
+
+/**
+ * MARCACAO AUTOMATICA (v2.105.0): o retangulo, a leitura do video e o que
+ * ela achou. Marca so' os volumes; quem confere acerta, apaga, acrescenta e
+ * marca as paradas com as teclas de sempre.
+ */
+function MarcacaoAutomatica({
+  url, refVideoLeitura, maquina, retangulo, desenhando, automatica, progresso, listaVazia, conferencia,
+  agoraMs, podeDesenhar, aoDesenhar, aoCancelarDesenho, aoLer, aoParar, aoApagar, aoIr,
+}) {
+  const [confirmarApagar, setConfirmarApagar] = useState(false);
+  const { estado, resultado } = automatica;
+  const pct = progresso?.duracaoMs ? Math.min(100, Math.round((progresso.ms / progresso.duracaoMs) * 100)) : null;
+  const botaoDesenhar = (rotulo) => (
+    <button type="button" style={ev.link} onClick={aoDesenhar} disabled={!podeDesenhar}>{rotulo}</button>
+  );
+  return (
+    <section style={ev.cartao} aria-label="Marcação automática">
+      <h2 style={ev.subtitulo}>Marcação automática</h2>
+
+      {desenhando && (
+        <>
+          <p style={ev.aviso} role="status">
+            Clique e arraste sobre o vídeo, cobrindo o tapete verde onde a caixa passa embaixo do filme. Para
+            conferir, deixe o vídeo parado num ponto com caixa no tapete. Esc cancela.
+          </p>
+          <div style={ev.linhaBotoes}>
+            <button type="button" style={est.botaoSecundario} onClick={aoCancelarDesenho}>Cancelar o desenho</button>
+          </div>
+        </>
+      )}
+
+      {!desenhando && estado === 'lendo' && (
+        <>
+          <p style={ev.dica} role="status">
+            {progresso?.pausado
+              ? 'Leitura pausada: esta aba ficou escondida. Volte a ela para continuar.'
+              : `Lendo o vídeo${pct != null ? `: ${pct}%` : ''}${progresso ? ` — ${emRelogio(progresso.ms)}${progresso.duracaoMs ? ` de ${emRelogio(progresso.duracaoMs)}` : ''} · ${String(progresso.velocidade).replace('.', ',')}× ` : '…'}`}
+            {' '}Deixe esta aba aberta.
+          </p>
+          {pct != null && (
+            <div style={ev.barraProgresso} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+              <div style={{ ...ev.barraProgressoCheia, width: `${pct}%` }} />
+            </div>
+          )}
+          {/* A copia que e' lida: na tela porque o navegador so' entrega
+              quadros de video que esta' na pagina. */}
+          <video ref={refVideoLeitura} src={url} style={ev.videoLeitura} muted playsInline preload="auto" tabIndex={-1} />
+          <div style={ev.linhaBotoes}>
+            <button type="button" style={est.botaoSecundario} onClick={aoParar}>Parar a leitura</button>
+          </div>
+        </>
+      )}
+
+      {!desenhando && estado !== 'lendo' && !retangulo && (
+        <>
+          <p style={ev.dica}>
+            O app marca os volumes sozinho e você só confere. Desenhe um retângulo sobre o tapete verde da
+            envolvedora, onde a caixa passa embaixo do filme: cada caixa que entra nele vira uma marca.
+          </p>
+          <div style={ev.linhaBotoes}>
+            <button type="button" style={est.botaoSecundario} onClick={aoDesenhar} disabled={!podeDesenhar}>
+              Desenhar o retângulo
+            </button>
+            {!podeDesenhar && <span style={ev.dica}>Abrindo a imagem do vídeo…</span>}
+          </div>
+        </>
+      )}
+
+      {!desenhando && estado === 'erro' && <div style={est.faixaErro} role="alert">{automatica.erro}</div>}
+
+      {!desenhando && estado !== 'lendo' && retangulo && listaVazia && (
+        <>
+          <p style={ev.dica}>
+            Retângulo da {maquina?.nome || 'máquina'}, guardado neste PC. A leitura vai de {emRelogio(agoraMs)} até o
+            fim do vídeo, roda neste PC e leva alguns minutos.
+          </p>
+          <div style={ev.linhaBotoes}>
+            <button type="button" style={est.botaoImprimir} onClick={aoLer}>
+              {estado === 'erro' ? 'Ler o vídeo de novo' : 'Marcar volumes automaticamente'}
+            </button>
+            {botaoDesenhar('Redesenhar o retângulo')}
+          </div>
+        </>
+      )}
+
+      {!desenhando && estado !== 'lendo' && retangulo && !listaVazia && !conferencia && (
+        <p style={ev.dica}>
+          A marcação automática começa com a lista vazia. Para usá-la, desfaça as marcas (⌫) ou recomece o vídeo.
+          {' '}{botaoDesenhar('Redesenhar o retângulo')}
+        </p>
+      )}
+
+      {!desenhando && estado !== 'lendo' && conferencia && (
+        <>
+          {estado === 'pronto' && resultado && (
+            <p style={ev.ok} role="status">
+              {volumes(resultado.volumes)} marcados automaticamente, mais a largada. Confira na lista: clique num
+              tempo para ver o vídeo nele; × apaga uma marca, Enter acrescenta.
+            </p>
+          )}
+          {resultado?.comCaixaNoInicio && (
+            <p style={ev.dica}>
+              A caixa que já estava embaixo do filme no começo da leitura não foi marcada: a entrada dela não foi filmada.
+            </p>
+          )}
+          {resultado?.suspeitos.length > 0 && (
+            <p style={ev.aviso}>
+              Confira: {resultado.suspeitos.length === 1 ? 'esta caixa ficou' : 'estas caixas ficaram'} bem mais
+              tempo no retângulo que as outras — podem ser duas caixas encostadas:{' '}
+              <Tempos lista={resultado.suspeitos} aoIr={aoIr} />
+            </p>
+          )}
+          {resultado?.longos.length > 0 && (
+            <p style={ev.aviso}>
+              Intervalos longos, onde a linha pode ter parado. Se parou, marque a parada com P:{' '}
+              <Tempos lista={resultado.longos} aoIr={aoIr} rotulo={(x) => `${emRelogio(x.deMs)}–${emRelogio(x.ateMs)}`} />
+            </p>
+          )}
+          {resultado?.descartados.length > 0 && (
+            <p style={ev.dica}>
+              Passagens curtas ignoradas (pessoa ou reflexo): <Tempos lista={resultado.descartados} aoIr={aoIr} />
+            </p>
+          )}
+          <p style={ev.dica}><TextoConferencia c={conferencia} /></p>
+          <div style={ev.linhaBotoes}>
+            {!confirmarApagar && (
+              <button type="button" style={ev.link} onClick={() => setConfirmarApagar(true)}>
+                Apagar as marcas e ler de novo
+              </button>
+            )}
+            {confirmarApagar && (
+              <>
+                <span style={ev.dica}>Apagar todas as marcas da lista, inclusive as que você acrescentou?</span>
+                <button
+                  type="button" style={est.botaoSecundario}
+                  onClick={() => { setConfirmarApagar(false); aoApagar(); }}
+                >
+                  Apagar as marcas
+                </button>
+                <button type="button" style={ev.link} onClick={() => setConfirmarApagar(false)}>Manter</button>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </section>
   );
 }
