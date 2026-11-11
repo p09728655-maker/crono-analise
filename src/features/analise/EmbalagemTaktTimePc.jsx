@@ -22,7 +22,9 @@ import RenomearPeca, { TERMOS_PRODUTO_EMBALAGEM } from './conferencias/RenomearP
 import { est } from './conferencias/estilos.js';
 import { quandoLida, textoDaFalha } from './demanda/planilha.js';
 import { useTemposAlvo } from '../../lib/temposAlvo.js';
-import { semAlvo } from '../../domain/tempoAlvo.js';
+import {
+  alvoDoProduto, descontaSetup, idadeDoAlvo, semAlvo,
+} from '../../domain/tempoAlvo.js';
 import TempoAlvoDosProdutos from './conferencias/TempoAlvoDosProdutos.jsx';
 
 /** Janela padrao, a mesma do relatorio de ritmo: o que esta' acontecendo agora. */
@@ -123,6 +125,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
   /* OS TEMPOS-ALVO DO PAINEL (v2.106.0): lidos uma vez aqui e passados ao
      volume a volume — a regua do veredito de cada medicao. */
   const alvos = useTemposAlvo();
+  const alvosLido = alvos.lido;
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [aberta, setAberta] = useState(null);
   // 'fila' (as nao analisadas), 'analisadas' ou 'outras' (sem intervalos).
@@ -227,8 +230,8 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
     /* O "POR VOLUME NO PERIODO" de cada medicao, sem abrir uma a uma
        (v2.106.0, a lista de tempos-alvo): a MESMA conta do volume a volume
        (useVolumeAVolume) — o relogio entre o 1o e o ultimo toque, e o setup
-       marcado nele sai quando o takt da semana DA medicao tem setup
-       planejado. Sem toques, null. */
+       marcado nele sai pela regua do alvo do produto (descontaSetup; sem
+       alvo, pelo takt da semana DA medicao). Sem toques, null. */
     const periodoDe = (c) => {
       if (!c.com_marcas || !(Number(c.marcas_relogio_ms) > 0)) return null;
       const g = grupoDe(c.maquina);
@@ -246,14 +249,14 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
         relogioEntreMarcasMs: Number(c.marcas_relogio_ms),
         volumes: Number(c.pecas),
         setupNoTrechoMs: Number(c.marcas_setup_ms) || 0,
-        setupPlanejado: Boolean(takt?.setupPlanejado),
+        setupPlanejado: descontaSetup(alvoDoProduto(alvosLido, c.peca), takt),
       });
     };
     return {
       medicoes, taktHoje, ativasDoGrupo, arquivadas, tocadas, analisaveis: analisaveis.length, aAnalisar, produtosDoCadastro,
       grupoDe, periodoDe,
     };
-  }, [carga]);
+  }, [carga, alvosLido]);
 
   /* Trocou de medicao: o detalhe, que rola sozinho ao lado da lista, volta
      ao topo — a nova nao pode abrir no meio, onde a anterior foi deixada.
@@ -609,12 +612,12 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
                 <div style={est.kpi}>
                   <div style={est.kpiRotulo}>Tempo-alvo · por UEP</div>
                   <div style={est.kpiValor}>
-                    {alvos.lido?.estado === 'ok' ? `${alvos.lido.ref.sUep.toFixed(2).replace('.', ',')} s` : '—'}
+                    {alvos.lido?.estado === 'ok' ? `${alvos.lido.ref.sUep.toFixed(2)} s` : '—'}
                   </div>
                   <div style={est.kpiSub}>
                     {alvos.lido?.estado === 'ok'
-                      ? `× a UEP do produto · média da linha ${alvos.lido.ref.metaUep.toLocaleString('pt-BR')} UEP/dia, sem o setup (${String(alvos.lido.ref.setupDia).replace('.', ',')} min/dia) · do painel`
-                      : semAlvo(alvos.lido ? alvos.lido.estado : alvos.semRede ? 'sem-rede' : 'carregando')}
+                      ? `× a UEP do produto · média da linha ${Math.round(alvos.lido.ref.metaUep)} UEP/dia, sem o setup (${alvos.lido.ref.setupDia} min/dia) · do painel${idadeDoAlvo(alvos.lido.lidoEm) ? ` · ${idadeDoAlvo(alvos.lido.lidoEm)}` : ''}`
+                      : semAlvo(alvos.lido ? alvos.lido.estado : alvos.semRede ? 'sem-rede' : 'carregando', alvos.lido?.mensagem)}
                   </div>
                 </div>
                 <div style={est.kpi}>

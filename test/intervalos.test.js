@@ -203,7 +203,7 @@ describe('contra o takt vai o relogio entre o primeiro e o ultimo toque', () => 
     // O cartao do TEMPO-ALVO entra no lugar do takt (v2.106.0); o takt vai
     // no subtitulo dele, como a carga da semana.
     expect(k.map((x) => x.chave)).toEqual(['periodo', 'alvo', 'rodando', 'normal', 'lacunas']);
-    expect(k[1]).toMatchObject({ rotulo: 'Tempo-alvo do produto', valor: '72.0 s', sub: '2,48 UEP × 29,03 s · takt da semana 50.0 s' });
+    expect(k[1]).toMatchObject({ rotulo: 'Tempo-alvo do produto', valor: '72.0 s', sub: '2.48 UEP × 29.03 s · takt da semana 50.0 s' });
     expect(k[0].rotulo).toBe('Por volume no período');
     expect(k[2].rotulo).toBe('Por volume com a linha rodando');
     // Sem lacuna, diz o que o criterio viu — nao que nao houve perda.

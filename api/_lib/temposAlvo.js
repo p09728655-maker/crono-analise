@@ -83,27 +83,38 @@ export async function lerTemposAlvo({ url, buscar, prazoMs = PRAZO_PAINEL_MS } =
   };
 }
 
-let ultima = null; // { quando, resultado }
+let ultimaOk = null; // { quando, resultado } — a ultima leitura ok
+let ultimaFalha = null; // { quando, resultado } — a ultima tentativa que falhou
 let emAndamento = null;
 
 /** So' para os testes. */
-export function _esquecer() { ultima = null; emAndamento = null; }
+export function _esquecer() { ultimaOk = null; ultimaFalha = null; emAndamento = null; }
 
 /**
  * A leitura guardada: 10 min com sucesso, 1 min depois de falha; dois
  * pedidos ao mesmo tempo fazem UMA ida ao painel.
+ *
+ * A FALHA NAO APAGA A ULTIMA OK (revisao de 11/11/2026): com o painel calado,
+ * quem pergunta recebe a ultima leitura boa (com o lidoEm dela, para a tela
+ * dizer a idade), e o painel e' tentado de novo a cada minuto. So' sem
+ * nenhuma leitura ok a falha vai adiante, com o motivo.
  */
 export async function temposAlvo({ agora = Date.now(), ler = lerTemposAlvo } = {}) {
-  if (ultima) {
-    const prazo = ultima.resultado.estado === 'ok' ? INTERVALO_MS : INTERVALO_DEPOIS_DE_FALHA_MS;
-    if (agora - ultima.quando < prazo) return ultima.resultado;
+  if (ultimaOk && agora - ultimaOk.quando < INTERVALO_MS) return ultimaOk.resultado;
+  if (ultimaFalha && agora - ultimaFalha.quando < INTERVALO_DEPOIS_DE_FALHA_MS) {
+    return ultimaOk ? ultimaOk.resultado : ultimaFalha.resultado;
   }
   if (emAndamento) return emAndamento;
   emAndamento = (async () => {
     const r = await ler();
     const resultado = { ...r, lidoEm: new Date(agora).toISOString() };
-    ultima = { quando: agora, resultado };
-    return resultado;
+    if (resultado.estado === 'ok') {
+      ultimaOk = { quando: agora, resultado };
+      ultimaFalha = null;
+      return resultado;
+    }
+    ultimaFalha = { quando: agora, resultado };
+    return ultimaOk ? ultimaOk.resultado : resultado;
   })().finally(() => { emAndamento = null; });
   return emAndamento;
 }

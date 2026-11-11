@@ -10,7 +10,7 @@ import { cores } from '../../../theme/tokens.js';
 import { est } from '../rapida/estilos.js';
 import { dataCurta } from '../rapida/formato.js';
 import { inicioDaSalva, leituraDaSalva } from './leituraSalva.js';
-import { explicacaoDoAlvo } from '../../../domain/tempoAlvo.js';
+import { avisoDoAlvo, explicacaoDoAlvo } from '../../../domain/tempoAlvo.js';
 
 /** A cor da faixa do veredito. Falha e' o laranja de status, nunca o vermelho da marca. */
 const COR_DO_TOM = { atende: cores.ok, falha: cores.critico, atencao: cores.atencao };
@@ -70,7 +70,12 @@ export default function ResultadoSalvo({
         >
           <p style={est.vereditoManchete}>{frases.manchete}</p>
           {frases.linhas.map((l) => <p key={l} style={est.vereditoLinha}>{l}</p>)}
-          {explicacaoDoAlvo(alvo) && <p style={{ ...est.linhaConta, textAlign: 'left', marginTop: 6 }}>{explicacaoDoAlvo(alvo)}</p>}
+          {explicacaoDoAlvo(alvo) && (
+            <p style={{ ...est.linhaConta, textAlign: 'left', marginTop: 6 }}>
+              {explicacaoDoAlvo(alvo)}
+              {avisoDoAlvo(alvo, { data: inicio || registro.salvoEm }) && ` ${avisoDoAlvo(alvo, { data: inicio || registro.salvoEm })}`}
+            </p>
+          )}
           {frases.carga && <p style={{ ...est.linhaCarga, textAlign: 'left', marginTop: 6 }}>{frases.carga}</p>}
         </div>
       ) : (

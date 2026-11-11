@@ -26,7 +26,7 @@ import EstadoVazio from '../../../components/EstadoVazio.jsx';
 import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import { motivoSemTakt } from '../../coleta/embalagem/motivoSemTakt.js';
 import { useTemposAlvo } from '../../../lib/temposAlvo.js';
-import { explicacaoDoAlvo, semAlvo } from '../../../domain/tempoAlvo.js';
+import { descontaSetup, explicacaoDoAlvo, semAlvo } from '../../../domain/tempoAlvo.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
 import { est } from '../conferencias/estilos.js';
 import { ev } from './estilos.js';
@@ -705,9 +705,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     largadaMs: marcacao.largadaMs, toquesMs: marcacao.toques.map((t) => t.ms), paradas: marcacao.paradas,
     fimMs, inicioFilmagem: campos.inicio,
   })), [marcacao, fimMs, campos.inicio]);
-  // O MESMO criterio da lista, do volume a volume e do tablet: o do takt da
-  // semana (horas de setup x fracao da semana), nao so' o cadastro do grupo.
-  const setupPlanejado = Boolean(takt?.setupPlanejado);
+  // O MESMO criterio da lista, do volume a volume e do tablet: com tempo-alvo,
+  // o setup do painel (descontaSetup); sem, o do takt da semana.
+  const setupPlanejado = descontaSetup(alvo, takt);
   const numeros = (med) => {
     if (!med) return null;
     const porVolume = periodoPorPeca({
@@ -1150,7 +1150,7 @@ function Preparar({
             da semana da filmagem fica como a carga, sem julgar. */}
         {alvo.alvoMs > 0
           ? <>Tempo-alvo do produto: <strong>{formatarSegundos(alvo.alvoMs)} s por volume</strong>. {explicacaoDoAlvo(alvo)}{' '}</>
-          : `Sem tempo-alvo: ${semAlvo(alvo.estado)} `}
+          : `Sem tempo-alvo: ${semAlvo(alvo.estado, alvo.mensagem)} `}
         {inicioValido && takt?.taktMs > 0 && (
           <>
             Carga da semana {takt.semana}: takt de {formatarSegundos(takt.taktMs)} s por volume

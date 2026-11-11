@@ -114,7 +114,7 @@ export function frasesVolumeAVolume({
   } else {
     manchete = `No período, saiu um ${singular} a cada ${seg(periodo)}, paradas dentro; com a linha rodando, ${rodandoTxt}.`;
     tom = temLacuna ? 'atencao' : 'neutro';
-    linhas.push(`Sem tempo-alvo para comparar: ${semAlvo(alvo.estado)}`);
+    linhas.push(`Sem tempo-alvo para comparar: ${semAlvo(alvo.estado, alvo.mensagem)}`);
   }
   // O takt continua escrito, numa linha a' parte (`carga`), como a CARGA da
   // semana: sem cor e sem julgar (ver o cabecalho). A' parte das linhas do

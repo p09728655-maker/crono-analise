@@ -19,7 +19,14 @@
  *    conforme o produto.
  *
  * O alvo e' o de HOJE (o cadastro do painel agora): uma medicao antiga e'
- * lida com a UEP e a meta de hoje. A tela diz isso.
+ * lida com a UEP e a meta de hoje. O volume a volume, a folha e o resultado
+ * salvo do tablet dizem isso quando a medicao nao e' de hoje, e dizem a
+ * idade do alvo quando a leitura do painel ficou velha (avisoDoAlvo).
+ *
+ * NUMEROS COM PONTO, como o resto do app (o cronometro, o takt: "72.0 s"),
+ * e a META sem separador de milhar ("÷ 2761"): na mesma frase, "10.74" e
+ * "2.761" fariam o ponto valer duas coisas. O painel escreve com virgula;
+ * aqui vale a convencao do app.
  */
 import { nomeChave } from './crono/conferencia.js';
 import { formatarSegundos } from './crono/formato.js';
@@ -54,7 +61,7 @@ export function alvoDoProduto(lido, peca, { semRede = false } = {}) {
   return {
     alvoMs: p.alvoMs, estado: 'ok', rot: p.rot, uep: p.uep,
     sUep: lido.ref?.sUep ?? null, metaUep: lido.ref?.metaUep ?? null, setupDia: lido.ref?.setupDia ?? null,
-    minDia: lido.ref?.minDia ?? null,
+    minDia: lido.ref?.minDia ?? null, lidoEm: lido.lidoEm ?? null,
   };
 }
 
@@ -75,11 +82,33 @@ export function alvoDaJuncao(alvos) {
     : { alvoMs: null, estado: 'alvos-diferentes' };
 }
 
-/** "2,48 UEP × 10,74 s" — de onde o alvo sai, em uma linha. */
+/**
+ * O SETUP MARCADO ENTRE OS TOQUES SAI DO PERIODO? (revisao de 11/11/2026)
+ *
+ * Com tempo-alvo, quem decide e' a regua DO ALVO: os segundos por UEP do
+ * painel ja' vem sem o setup do ⚙ de la' (ref.setupDia > 0). O periodo tem de
+ * sair sem o setup marcado tambem — senao a medicao com uma troca no meio
+ * sai acima do alvo pela troca, e nao pelo passo. Antes a decisao era so'
+ * a do takt (setupPlanejado): sem o programa da semana (nao carregou, grupo
+ * sem programa, tablet sem nada guardado) ou com o grupo sem setup no app,
+ * o setup ficava no periodo e o veredito contra o alvo saia vermelho.
+ *
+ * Sem alvo nao ha' veredito, e vale o criterio de antes (o do takt).
+ */
+export function descontaSetup(alvo, takt) {
+  if (alvo?.alvoMs > 0) return Number(alvo.setupDia) > 0;
+  return Boolean(takt?.setupPlanejado);
+}
+
+/** O numero com ponto e as casas pedidas, como o resto do app. */
+const num = (v, casas) => Number(v).toFixed(casas);
+/** A meta inteira, sem separador de milhar (ver o cabecalho). */
+const inteiro = (v) => String(Math.round(Number(v)));
+
+/** "2.48 UEP × 10.74 s" — de onde o alvo sai, em uma linha. */
 export function contaDoAlvo(alvo) {
   if (!(alvo?.alvoMs > 0) || !(alvo.uep > 0) || !(alvo.sUep > 0)) return '';
-  const br = (v, casas) => v.toFixed(casas).replace('.', ',');
-  return `${br(alvo.uep, 2)} UEP × ${br(alvo.sUep, 2)} s`;
+  return `${num(alvo.uep, 2)} UEP × ${num(alvo.sUep, 2)} s`;
 }
 
 /**
@@ -88,8 +117,8 @@ export function contaDoAlvo(alvo) {
  * na ordem em que se confere: o alvo do produto e, depois, de onde saem os
  * segundos por UEP. A MESMA frase no tablet, no PC e na folha:
  *
- *   "Tempo-alvo = 2,48 UEP × 10,74 s por UEP = 26,6 s por volume. Os 10,74 s
- *    por UEP: (527 min de jornada − 32,8 min de setup) × 60 ÷ 2.761 UEP por
+ *   "Tempo-alvo = 2.48 UEP × 10.74 s por UEP = 26.6 s por volume. Os 10.74 s
+ *    por UEP: (527 min de jornada − 32.8 min de setup) × 60 ÷ 2761 UEP por
  *    dia, a média da linha sem hora extra."
  *
  * Sem alvo, ''. Sem a jornada (painel antes da v5.62 mandar o minDia), so'
@@ -97,13 +126,10 @@ export function contaDoAlvo(alvo) {
  */
 export function explicacaoDoAlvo(alvo) {
   if (!(alvo?.alvoMs > 0) || !(alvo.uep > 0) || !(alvo.sUep > 0)) return '';
-  // Virgula em toda a frase: "26.6" ao lado de "2.761" deixaria o ponto ambiguo.
-  const uma = `Tempo-alvo = ${br(alvo.uep, 2)} UEP × ${br(alvo.sUep, 2)} s por UEP = ${br(alvo.alvoMs / 1000, 1)} s por volume.`;
+  const uma = `Tempo-alvo = ${num(alvo.uep, 2)} UEP × ${num(alvo.sUep, 2)} s por UEP = ${num(alvo.alvoMs / 1000, 1)} s por volume.`;
   const regua = explicacaoDaRegua(alvo);
   return regua ? `${uma} ${regua}` : uma;
 }
-
-const br = (v, casas) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
 /**
  * De onde saem os segundos por UEP — a regua de TODOS os alvos (`ref` do
@@ -111,9 +137,44 @@ const br = (v, casas) => v.toLocaleString('pt-BR', { minimumFractionDigits: casa
  */
 export function explicacaoDaRegua(ref) {
   if (!(ref?.sUep > 0) || !(ref.minDia > 0) || !(ref.metaUep > 0)) return '';
-  const setup = ref.setupDia > 0 ? ` − ${br(ref.setupDia, ref.setupDia % 1 ? 1 : 0)} min de setup` : '';
-  return `Os ${br(ref.sUep, 2)} s por UEP: (${br(ref.minDia, 0)} min de jornada${setup}) × 60 ÷ `
-    + `${br(ref.metaUep, 0)} UEP por dia, a média da linha sem hora extra.`;
+  const setup = ref.setupDia > 0 ? ` − ${num(ref.setupDia, ref.setupDia % 1 ? 1 : 0)} min de setup` : '';
+  return `Os ${num(ref.sUep, 2)} s por UEP: (${inteiro(ref.minDia)} min de jornada${setup}) × 60 ÷ `
+    + `${inteiro(ref.metaUep)} UEP por dia, a média da linha sem hora extra.`;
+}
+
+/** A partir de quantas horas a leitura do painel e' "velha" e a tela diz a idade. */
+export const ALVO_VELHO_MS = 2 * 3600000;
+const FUSO = 'America/Sao_Paulo';
+const diaSp = (d) => d.toLocaleDateString('pt-BR', { timeZone: FUSO });
+const ddmm = (d) => d.toLocaleDateString('pt-BR', { timeZone: FUSO, day: '2-digit', month: '2-digit' });
+const hhmm = (d) => d.toLocaleTimeString('pt-BR', { timeZone: FUSO, hour: '2-digit', minute: '2-digit' });
+
+/**
+ * O QUE O ALVO NAO DIZ SOZINHO (revisao de 11/11/2026), em ate' duas frases:
+ *  - a medicao nao e' de hoje: ela foi lida com o alvo de HOJE (a UEP e a
+ *    media de agora) — se a UEP do produto mudou por cronoanalise, o
+ *    veredito de antes mudou junto;
+ *  - a leitura do painel tem mais de 2 h (painel calado, aparelho sem
+ *    rede): o alvo pode estar velho.
+ * '' quando nao ha' nada a dizer (ou sem alvo).
+ */
+export function avisoDoAlvo(alvo, { data = null, agora = new Date() } = {}) {
+  if (!(alvo?.alvoMs > 0)) return '';
+  const partes = [];
+  const quando = data ? new Date(data) : null;
+  if (quando && !Number.isNaN(quando.getTime()) && diaSp(quando) !== diaSp(agora)) {
+    partes.push(`Medição de ${ddmm(quando)} lida com o tempo-alvo de hoje (a UEP e a média de agora).`);
+  }
+  const idade = idadeDoAlvo(alvo.lidoEm, agora);
+  if (idade) partes.push(idade);
+  return partes.join(' ');
+}
+
+/** A idade da leitura do painel, so' quando passou de 2 h; '' antes disso. */
+export function idadeDoAlvo(lidoEm, agora = new Date()) {
+  const lido = lidoEm ? new Date(lidoEm) : null;
+  if (!lido || Number.isNaN(lido.getTime()) || agora - lido <= ALVO_VELHO_MS) return '';
+  return `Tempo-alvo lido do painel em ${ddmm(lido)} às ${hhmm(lido)}: sem leitura nova desde então.`;
 }
 
 /**
@@ -162,8 +223,12 @@ export function medidoXAlvo(lido, medicoes, periodoDe) {
 /** O alvo em segundos, como o takt: "26,6 s". */
 export const alvoEmSegundos = (alvo) => (alvo?.alvoMs > 0 ? `${formatarSegundos(alvo.alvoMs)} s` : '—');
 
-/** Por que nao ha' tempo-alvo — em palavras, nunca so' um traco. */
-export function semAlvo(estado) {
+/**
+ * Por que nao ha' tempo-alvo — em palavras, nunca so' um traco. Com o erro,
+ * a mensagem que o servidor deu (URL errada, setup que nao cabe na jornada,
+ * o painel respondeu 500), em vez da frase generica.
+ */
+export function semAlvo(estado, mensagem) {
   switch (estado) {
     case 'sem-produto': return 'escolha o produto da lista para ver o tempo-alvo dele.';
     case 'fora-da-lista': return 'o produto não é um da lista do painel (código · nome) — escolha da lista.';
@@ -173,7 +238,13 @@ export function semAlvo(estado) {
     case 'desligado': return 'o app não está ligado ao painel (falta PAINEL_APPS_SCRIPT_URL no servidor).';
     case 'gs-antigo': return 'o painel ainda não tem o tempo-alvo (falta implantar o Apps Script v5.62).';
     case 'alvos-diferentes': return 'as medições são de produtos com tempos-alvo diferentes — não há um alvo só para a junção.';
-    default: return 'não deu para buscar os tempos-alvo no painel agora.';
+    default: {
+      const m = String(mensagem || '').trim();
+      // A mensagem ja' e' frase inteira; so' a inicial desce, porque a tela
+      // a poe depois de "Sem tempo-alvo para comparar: ".
+      return m ? m.replace(/^\p{Lu}(?!\p{Lu})/u, (l) => l.toLowerCase())
+        : 'não deu para buscar os tempos-alvo no painel agora.';
+    }
   }
 }
 

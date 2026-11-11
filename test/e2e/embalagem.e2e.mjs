@@ -48,13 +48,14 @@ let atrasoMarcas = 0;
 
 /* OS TEMPOS-ALVO DO PAINEL (v2.106.0, GET /api/maquinas?alvo=1): a regua do
    veredito. Os produtos do teste com o alvo IGUAL ao takt do programa (72,0
-   s = 2,48 UEP × 29,03 s), para os numeros do veredito continuarem os de
+   s = 2,48 UEP × 29,036 s, e 527 × 60 ÷ 1.089 = 29,036 — a regua fecha, como
+   o painel manda), para os numeros do veredito continuarem os de
    antes — o que muda e' a regua escrita. O 'Produto sem UEP' prova o "sem
    alvo, sem cor". */
 const ALVOS = {
   estado: 'ok',
   ref: {
-    metaUep: 2761, metaOrigem: 'planilha', setupsDia: 0, setupMin: 0, setupOrigem: 'planilha', setupDia: 0, minDia: 527, minProd: 527, sUep: 29.032,
+    metaUep: 1089, metaOrigem: 'planilha', setupsDia: 0, setupMin: 0, setupOrigem: 'planilha', setupDia: 0, minDia: 527, minProd: 527, sUep: 29.036,
   },
   produtos: ['Rack Sirius 1.6', 'Toucador Magic New', 'Painel Sirius 1.4', 'Produto rapido']
     .map((rot) => ({ rot, uep: 2.48, alvoMs: 72000 }))
@@ -115,12 +116,14 @@ async function fundoDoGraficoNaFolha(pagina, oQue = 'grafico') {
   await pagina.emulateMedia({ media: 'print' });
   // Sem a barra de rolagem: com ela a folha media 1017 px, e o papel tem
   // 1032 — o texto quebrava mais cedo que na impressao (revisao de 05/11).
-  const semRolagem = await pagina.addStyleTag({ content: 'html { overflow: hidden !important; }' });
+  // O scrollbar-gutter: stable do index.html guardava a calha da barra mesmo
+  // com overflow hidden: a folha media 1017 px (revisao de 11/11).
+  const semRolagem = await pagina.addStyleTag({ content: 'html { overflow: hidden !important; scrollbar-gutter: auto !important; }' });
   const fundo = await pagina.evaluate((oQue) => {
     const folha = document.querySelector('body > .somente-impressao');
-    const alvo = oQue === 'conta'
-      ? folha.querySelector('[data-conta-semana]')
-      : folha.querySelector('svg[aria-label^="Intervalo entre"]').closest('figure');
+    const alvo = oQue === 'conta' ? folha.querySelector('[data-conta-semana]')
+      : oQue === 'alvo' ? folha.querySelector('[data-conta-alvo]')
+        : folha.querySelector('svg[aria-label^="Intervalo entre"]').closest('figure');
     return alvo ? Math.round(alvo.getBoundingClientRect().bottom - folha.getBoundingClientRect().top) : null;
   }, oQue);
   await semRolagem.evaluate((e) => e.remove());
@@ -162,7 +165,7 @@ checar(await t.getByRole('radio', { name: '2 ciclos' }).count() === 0, 'sem camp
 
 await t.locator('input[aria-label="Produto embalado"]').fill('Rack Sirius 1.6');
 await cartaoTakt.getByText('TEMPO-ALVO DO PRODUTO').waitFor({ timeout: 4000 });
-checar(/72\.0\s*s por volume\s*Tempo-alvo = 2,48 UEP × 29,03 s por UEP = 72,0 s por volume\. Os 29,03 s por UEP: \(527 min de jornada\) × 60 ÷ 2\.761 UEP por dia/.test(await cartaoTakt.innerText()),
+checar(/72\.0\s*s por volume\s*Tempo-alvo = 2\.48 UEP × 29\.04 s por UEP = 72\.0 s por volume\. Os 29\.04 s por UEP: \(527 min de jornada\) × 60 ÷ 1089 UEP por dia/.test(await cartaoTakt.innerText()),
   `com o produto: o tempo-alvo dele em segundos, e de onde sai (${(await cartaoTakt.innerText()).replace(/\n/g, ' | ')})`);
 await t.getByRole('button', { name: /INICIAR/ }).click();
 /* ARMADO: o INICIAR nao abre o relogio. Quem abre e' a LARGADA, o toque
@@ -461,16 +464,16 @@ checar(await lista.getByRole('button', { name: 'Não analisadas (2)' }).count() 
 {
   const alvoBloco = p.locator('details[aria-label="Tempo-alvo de cada produto"]');
   const resumo = (await alvoBloco.locator('summary').innerText()).replace(/\s+/g, ' ');
-  checar(/a UEP do produto × 29,03 s por UEP · 2 medidos, com o medido ao lado/.test(resumo) && !/acima do alvo/.test(resumo),
+  checar(/a UEP do produto × 29\.04 s por UEP · 2 medidos, com o medido ao lado/.test(resumo) && !/acima do alvo/.test(resumo),
     `tempos-alvo: recolhido, a regua e os 2 medidos no titulo, nenhum acima (${resumo})`);
   checar(!(await alvoBloco.locator('table').isVisible()), 'tempos-alvo: a tabela fica recolhida ate\' abrir');
   await alvoBloco.locator('summary').click();
   const txt = (await alvoBloco.innerText()).replace(/\s+/g, ' ');
-  checar(/Tempo-alvo do produto = a UEP dele × 29,03 s por UEP\. Os 29,03 s por UEP: \(527 min de jornada\) × 60 ÷ 2\.761 UEP por dia/.test(txt),
+  checar(/Tempo-alvo do produto = a UEP dele × 29\.04 s por UEP\. Os 29\.04 s por UEP: \(527 min de jornada\) × 60 ÷ 1089 UEP por dia/.test(txt),
     'tempos-alvo: a conta da regua por extenso');
   const linhaRack = alvoBloco.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' });
   const rack = (await linhaRack.innerText()).replace(/\s+/g, ' ');
-  checar(/2,48 72\.0 s 70\.8 s ✓ 2% dentro 1 · última \d{2}\/\d{2}/.test(rack),
+  checar(/2\.48 72\.0 s 70\.8 s ✓ 2% dentro 1 · última \d{2}\/\d{2}/.test(rack),
     `tempos-alvo: Rack com UEP, alvo, ultima medicao e a diferenca (${rack})`);
   checar(await alvoBloco.getByRole('row').filter({ hasText: 'Painel Sirius 1.4' }).count() === 0
     && await alvoBloco.getByRole('row').filter({ hasText: 'Produto sem UEP' }).count() === 0,
@@ -498,7 +501,7 @@ const textoJanela = await janela.innerText();
 checar(/dentro do tempo-alvo do produto, 72.0 s, com 2% de folga/.test(textoJanela), 'veredito pelo relogio entre toques: 70.8 s dentro do tempo-alvo de 72.0 s');
 /* COMO CHEGAMOS NO TEMPO-ALVO, por extenso, embaixo do veredito; e o takt
    como carga, sem julgar (v2.106.0). */
-checar(/Tempo-alvo = 2,48 UEP × 29,03 s por UEP = 72,0 s por volume\. Os 29,03 s por UEP: \(527 min de jornada\) × 60 ÷ 2\.761 UEP por dia, a média da linha sem hora extra\./.test(textoJanela.replace(/\s+/g, ' ')),
+checar(/Tempo-alvo = 2\.48 UEP × 29\.04 s por UEP = 72\.0 s por volume\. Os 29\.04 s por UEP: \(527 min de jornada\) × 60 ÷ 1089 UEP por dia, a média da linha sem hora extra\./.test(textoJanela.replace(/\s+/g, ' ')),
   'PC: a conta do tempo-alvo por extenso, embaixo do veredito');
 checar(/Takt da semana: 72\.0 s por volume — a carga da semana, igual para todo volume; não julga o produto\./.test(textoJanela),
   'PC: o takt da semana fica como carga, sem julgar');
@@ -614,9 +617,9 @@ const tamanhoDoPdf = async () => {
     const conta = (await folha.innerText()).replace(/\s+/g, ' ');
     checar(/Tempo da semana de \d{2}\/\d{2} — Por máquina: 44h00min de jornada, sem setup planejado\. 2\.200 volumes na semana → takt 72\.0 s por volume\./.test(conta),
       `folha: o tempo da semana e a conta do takt (${(/Tempo da semana.*?por volume\./.exec(conta) || ['nao achou'])[0]})`);
-    checar(/Tempo-alvo do produto ?72\.0 s ?2,48 UEP × 29,03 s · takt da semana 72\.0 s/.test(conta),
+    checar(/Tempo-alvo do produto ?72\.0 s ?2\.48 UEP × 29\.04 s · takt da semana 72\.0 s/.test(conta),
       `folha: o cartao do tempo-alvo diz de onde ele sai, e o takt da semana como carga (${(/Tempo-alvo do produto.{0,60}/.exec(conta) || ['nao achou'])[0]})`);
-    checar(/Tempo-alvo = 2,48 UEP × 29,03 s por UEP = 72,0 s por volume\. Os 29,03 s por UEP: \(527 min de jornada\) × 60 ÷ 2\.761 UEP por dia/.test(conta),
+    checar(/Tempo-alvo = 2\.48 UEP × 29\.04 s por UEP = 72\.0 s por volume\. Os 29\.04 s por UEP: \(527 min de jornada\) × 60 ÷ 1089 UEP por dia/.test(conta),
       'folha: a conta do tempo-alvo por extenso, depois do grafico');
     // A letra da folha cresceu (v2.101.0): o valor dos campos passa de 10,5 px.
     const letra = await folha.evaluate((f) => parseFloat(getComputedStyle(f).fontSize));
@@ -1481,7 +1484,7 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   const texto = (await resultado.innerText()).replace(/\s+/g, ' ');
   checar(/No período, saiu um volume a cada 18\.2 s, paradas dentro — dentro do tempo-alvo do produto, 72\.0 s/.test(texto),
     `o veredito do PC no tablet, contra o tempo-alvo do produto (${texto.slice(0, 120)})`);
-  checar(/Tempo-alvo = 2,48 UEP × 29,03 s por UEP = 72,0 s por volume\. Os 29,03 s por UEP/.test(texto),
+  checar(/Tempo-alvo = 2\.48 UEP × 29\.04 s por UEP = 72\.0 s por volume\. Os 29\.04 s por UEP/.test(texto),
     'tablet: a conta do tempo-alvo por extenso, no resultado salvo');
   checar(/POR VOLUME COM A LINHA RODANDO 12\.7 ?s/i.test(texto) && /POR VOLUME SEM AS LACUNAS 10\.0 ?s/i.test(texto),
     'as camadas: rodando 12.7 s e sem as lacunas 10.0 s');
@@ -1784,7 +1787,10 @@ for (const v of [
   /* NOME CURTO (terceira revisao de 05/11): aqui ha' espaco, e o grafico
      levava tudo — a conta do tempo ia para a 2a pagina. Agora o espaco
      dela fica reservado enquanto o grafico tiver a altura preferida. */
-  { nome: 'nome curto, conta na 1a pagina', semana: { diasProducao: 4 }, paradaMs: 600000, peca: 'RACK', contaNa1a: true },
+  { nome: 'nome curto, sem tempo-alvo: conta na 1a pagina', semana: { diasProducao: 4 }, paradaMs: 600000, peca: 'RACK', contaNa1a: true, semAlvo: true },
+  /* COM TEMPO-ALVO (revisao de 11/11): a conta do ALVO vem antes e e' ela
+     que fica na 1a pagina; a do takt so' quando couber junto. */
+  { nome: 'nome curto, com tempo-alvo', semana: { diasProducao: 4 }, paradaMs: 600000, peca: 'RACK' },
 ]) {
   const G = { ...GRUPO, setups_dia: 5, setup_min: '15' };
   const intervalos = [60, 60, 60, 60, 60, 60, 200, 60, 60, 60, 60, 60, 60, 60, 300, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60];
@@ -1808,6 +1814,9 @@ for (const v of [
     conferencias: [MED],
     marcas,
     relogio: marcas.at(-1) - marcas[0] + v.paradaMs,
+    // O PIOR CASO COM TEMPO-ALVO (revisao de 11/11): o produto tem alvo, e a
+    // conta dele entra na folha antes da do takt.
+    alvos: v.semAlvo ? ALVOS : { ...ALVOS, produtos: [...ALVOS.produtos, { rot: MED.peca, uep: 2.48, alvoMs: 72000 }] },
   });
   await s.goto(`${BASE}/analise/embalagem`);
   await s.getByRole('region', { name: 'Medições da embalagem' }).getByRole('button', { name: /RACK/ }).first().click();
@@ -1815,10 +1824,20 @@ for (const v of [
   await s.waitForTimeout(300);
   const fundo = await fundoDoGraficoNaFolha(s);
   checar(fundo <= 703, `folha no pior caso (${v.nome}, setup, 4 de 5 dias): o grafico cabe na 1a pagina (termina em ${fundo} de 703 px)`);
-  if (v.contaNa1a) {
+  {
+    const fundoAlvo = await fundoDoGraficoNaFolha(s, 'alvo');
     const fundoConta = await fundoDoGraficoNaFolha(s, 'conta');
-    checar(fundoConta != null && fundoConta <= 703,
-      `folha (${v.nome}): a conta do tempo da semana fica na 1a pagina (termina em ${fundoConta} de 703 px)`);
+    console.log(`     [${v.nome}] grafico ${fundo} · conta do alvo ${fundoAlvo} · conta da semana ${fundoConta}`);
+    if (!v.semAlvo) {
+      checar(fundoAlvo != null && fundoAlvo <= 703,
+        `folha (${v.nome}): a conta do TEMPO-ALVO fica na 1a pagina (termina em ${fundoAlvo} de 703 px)`);
+    } else {
+      checar(fundoAlvo == null, `folha (${v.nome}): produto fora da lista do painel, sem a conta do alvo`);
+    }
+    if (v.contaNa1a) {
+      checar(fundoConta != null && fundoConta <= 703,
+        `folha (${v.nome}): a conta do tempo da semana tambem fica na 1a pagina (termina em ${fundoConta} de 703 px)`);
+    }
   }
   const texto = (await s.locator('body > .somente-impressao').innerText()).replace(/\s+/g, ' ');
   checar(/Por máquina: 35h12min de jornada \(4 de 5 dias programados\) − 5h00min de setup planejado = 30h12min\. 2\.200 volumes na semana → takt 49\.4 s por volume\./.test(texto),
@@ -1956,6 +1975,39 @@ for (const v of [
   await ctx2.close();
 }
 
+/* ====== v2.106.0: PRODUTO SEM UEP NO PAINEL — sem tempo-alvo e SEM COR no
+   andon, com o motivo; nunca o takt no lugar (decisao do PPCP, 11/11). O
+   takt aqui e' de 1,0 s: se ele pintasse, os volumes a ~1,5 s sairiam
+   vermelhos. */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 400, height: 860 }, hasTouch: true });
+  const u = await ctx.newPage();
+  await semearSessao(u);
+  const erros = [];
+  u.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(u, { demandas: [{ ...DEMANDAS[0], pecas: 158400 }] });
+  await u.goto(`${BASE}/coleta/embalagem`);
+  const cartaoU = u.locator('[aria-label="Tempo-alvo do produto"]');
+  await cartaoU.getByText(/takt 1\.0/).waitFor({ timeout: 8000 });
+  await u.locator('input[aria-label="Produto embalado"]').fill('Produto sem UEP');
+  await cartaoU.getByText(/sem UEP não há tempo-alvo/).waitFor({ timeout: 4000 });
+  checar(true, 'sem UEP: o cartao diz que nao ha tempo-alvo, e por que');
+  await u.getByRole('button', { name: /INICIAR/ }).click();
+  const largadaU = u.getByRole('button', { name: /Largada/ });
+  await largadaU.waitFor({ timeout: 4000 });
+  await u.waitForTimeout(600); // o quique logo depois do INICIAR nao da' a largada
+  await largadaU.dispatchEvent('pointerdown');
+  const alvoU = u.getByRole('button', { name: 'Contar um volume' });
+  await alvoU.waitFor({ timeout: 4000 });
+  for (let i = 0; i < 3; i++) { await u.waitForTimeout(1500); await alvoU.dispatchEvent('pointerdown'); }
+  const painelU = u.locator('[aria-label="Tempo decorrido"]');
+  const textoU = (await painelU.innerText()).replace(/\s+/g, ' ');
+  checar(await painelU.locator('[data-tom]').count() === 0 && !/▲|✓/.test(textoU) && /POR VOLUME 1\.\d\s*s/i.test(textoU),
+    `sem UEP: o quadro do tempo por volume mostra o numero e fica SEM COR, nem pelo takt (${textoU.slice(0, 120)})`);
+  checar(erros.length === 0, `sem UEP: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
+  await ctx.close();
+}
+
 /* ====== v2.102.0: a PARADA comeca no Parou, o VOLTAR nao perde a medicao,
    o QUADRO do tempo por volume fica vermelho ate' chegar no takt da semana. */
 {
@@ -1966,12 +2018,13 @@ for (const v of [
   v.on('pageerror', (e) => erros.push(e.message));
   const subiram = [];
   // Takt de 1,0 s (44 h x 3600 / 158.400 volumes) e, desde a v2.106.0, o
-  // TEMPO-ALVO do produto de 1,0 s — e' ele que pinta o quadro: da' para
-  // passar dele e voltar em poucos segundos de teste.
+  // TEMPO-ALVO do produto de 2,0 s — DIFERENTE do takt, para provar que e'
+  // o alvo que pinta o quadro (revisao de 11/11): entre 1 e 2 s por volume,
+  // o takt pintaria vermelho e o alvo pinta verde.
   await simularServidor(v, {
     demandas: [{ ...DEMANDAS[0], pecas: 158400 }],
     aoSincronizar: (c) => subiram.push(...(c.conferencias || [])),
-    alvos: { ...ALVOS, produtos: [...ALVOS.produtos, { rot: 'Painel Teste', uep: 0.03, alvoMs: 1000 }] },
+    alvos: { ...ALVOS, produtos: [...ALVOS.produtos, { rot: 'Painel Teste', uep: 0.07, alvoMs: 2000 }] },
   });
   await v.goto(`${BASE}/coleta`);
   await v.getByRole('button', { name: /Embalagem Takt Time/ }).tap();
@@ -1993,14 +2046,20 @@ for (const v of [
   checar(/TEMPO-ALVO/i.test(await painelV.innerText()) && /carga da semana: takt 1\.0 s — não julga o produto/i.test(await painelV.innerText()),
     'rodando: o quadro grande e\' o TEMPO-ALVO; o takt da semana vai numa linha, como carga');
   checar(await quadro.count() === 0, 'antes do 2o volume nao ha tempo por volume: o quadro nao tem cor');
-  // Devagar: 3 volumes a ~1,5 s, acima do tempo-alvo de 1,0 s.
+  // ~1,5 s por volume: acima do TAKT (1,0 s), dentro do TEMPO-ALVO (2,0 s).
   for (let i = 0; i < 3; i++) { await v.waitForTimeout(1500); await alvoV.dispatchEvent('pointerdown'); }
+  const fundoEntre = await quadro.evaluate((e) => getComputedStyle(e).backgroundColor);
+  checar(await quadro.getAttribute('data-tom') === 'noTakt' && fundoEntre === 'rgb(21, 128, 61)'
+    && /POR VOLUME ✓ ALVO/i.test(await quadro.innerText()),
+  `1,5 s por volume: acima do takt (1,0 s) mas dentro do tempo-alvo (2,0 s) — VERDE, e' o alvo que pinta (${fundoEntre})`);
+  // Devagar: mais 3 volumes a ~3,5 s; a media do periodo passa do alvo.
+  for (let i = 0; i < 3; i++) { await v.waitForTimeout(3500); await alvoV.dispatchEvent('pointerdown'); }
   const fundoAcima = await quadro.evaluate((e) => getComputedStyle(e).backgroundColor);
   checar(await quadro.getAttribute('data-tom') === 'foraDoTakt' && fundoAcima === 'rgb(185, 28, 28)',
     `acima do tempo-alvo o quadro do tempo por volume fica VERMELHO (${fundoAcima})`);
   checar(/POR VOL ▲ ALVO/i.test(await quadro.innerText()), 'e a seta escrita no rotulo continua: a cor nao vai sozinha');
   // Depressa, ate' o tempo por volume chegar no takt.
-  for (let i = 0; i < 12 && await quadro.getAttribute('data-tom') === 'foraDoTakt'; i++) {
+  for (let i = 0; i < 30 && await quadro.getAttribute('data-tom') === 'foraDoTakt'; i++) {
     await v.waitForTimeout(260);
     await alvoV.dispatchEvent('pointerdown');
   }

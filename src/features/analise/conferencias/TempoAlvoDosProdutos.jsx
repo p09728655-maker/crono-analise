@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { formatarSegundos } from '../../../domain/cronoanalise.js';
-import { explicacaoDaRegua, medidoXAlvo, semAlvo } from '../../../domain/tempoAlvo.js';
+import {
+  explicacaoDaRegua, idadeDoAlvo, medidoXAlvo, semAlvo,
+} from '../../../domain/tempoAlvo.js';
 import { claro } from '../../../theme/tokensAnalise.js';
 import { est } from './estilos.js';
 
-const uep = (v) => (v > 0 ? v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—');
+// Com ponto, como os segundos do app (ver domain/tempoAlvo.js).
+const uep = (v) => (v > 0 ? v.toFixed(2) : '—');
 const quandoCurto = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -33,7 +36,7 @@ export default function TempoAlvoDosProdutos({
       <section style={est.painelBloco} aria-label="Tempo-alvo de cada produto">
         <h3 style={est.painelTitulo}>Tempo-alvo de cada produto</h3>
         <p style={est.painelDica}>
-          {semAlvo(lido ? lido.estado : alvos?.semRede ? 'sem-rede' : 'carregando')}
+          {semAlvo(lido ? lido.estado : alvos?.semRede ? 'sem-rede' : 'carregando', lido?.mensagem)}
         </p>
       </section>
     );
@@ -41,7 +44,8 @@ export default function TempoAlvoDosProdutos({
   const m = medidoXAlvo(lido, medicoes, periodoDe);
   const semMedicao = m.todos.filter((l) => !l.medicao);
   const linhas = verTodos ? [...m.medidos, ...semMedicao] : m.medidos;
-  const sUep = lido.ref.sUep.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sUep = lido.ref.sUep.toFixed(2);
+  const idade = idadeDoAlvo(lido.lidoEm);
 
   /* Recolhido, com a regua no titulo: aberto, a tabela empurrava a lista de
      medicoes e o detalhe (o trabalho do dia nesta tela) para baixo. */
@@ -56,6 +60,7 @@ export default function TempoAlvoDosProdutos({
         <strong>Tempo-alvo do produto = a UEP dele × {sUep} s por UEP.</strong> {explicacaoDaRegua(lido.ref)}
         {' '}A UEP é a do cadastro do painel, volume a volume (a média das cores; o produto inteiro, a média
         dos volumes). É o tempo que cada volume pode levar para a linha fazer a média sem hora extra.
+        {' '}É o de hoje: a medição antiga é lida com a UEP e a média de agora.{idade ? ` ${idade}` : ''}
       </p>
       <p style={est.painelDica}>
         {m.medidos.length > 0

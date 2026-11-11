@@ -21,7 +21,7 @@ import { CampoProduto } from './rapida/CamposDaPeca.jsx';
 import Historico from './rapida/Historico.jsx';
 import { useTaktDaSemana } from '../../lib/taktDaSemana.js';
 import { useTemposAlvo } from '../../lib/temposAlvo.js';
-import { explicacaoDoAlvo, semAlvo } from '../../domain/tempoAlvo.js';
+import { descontaSetup, explicacaoDoAlvo, semAlvo } from '../../domain/tempoAlvo.js';
 import { motivoSemTakt } from './embalagem/motivoSemTakt.js';
 import ResultadoSalvo from './embalagem/ResultadoSalvo.jsx';
 import { inicioDaSalva } from './embalagem/leituraSalva.js';
@@ -33,7 +33,8 @@ const nada = () => {};
 const CHAVE_SALVA = 'embalagemSalva';
 
 /**
- * EMBALAGEM TAKT TIME — o volume embalado contra o takt, em segundos.
+ * EMBALAGEM TAKT TIME — o volume embalado contra o tempo-alvo do produto
+ * (v2.106.0; antes, contra o takt da semana), em segundos.
  *
  * Funcao PROPRIA, separada do Ritmo da maquina, a pedido do PPCP: na
  * embalagem a pergunta nao e' "quantas pecas por hora", e' "cada volume
@@ -160,7 +161,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
      anda a cada toque — uma parada em curso nao faz o aviso piscar; ela
      entra no proximo volume. Sem toques que expliquem a contagem (contagem
      corrigida a mao), nao ha' tempo por volume: a tela mostra vazio. */
-  const descontarSetup = Boolean(takt.setupPlanejado);
+  const descontarSetup = descontaSetup(alvo, takt);
   const porVolumeAoVivo = periodoPorPeca({
     relogioEntreMarcasMs: crono.relogioEntreMarcasMs, volumes: crono.pecas,
     setupNoTrechoMs: crono.setupEntreMarcasMs, setupPlanejado: descontarSetup,
@@ -415,7 +416,7 @@ function CartaoAlvo({ alvo, takt }) {
           <span style={est.linhaConta}>{explicacaoDoAlvo(alvo)}</span>
         </>
       ) : (
-        <span style={est.sufixoRitmo}>Tempo-alvo: {semAlvo(alvo.estado)}</span>
+        <span style={est.sufixoRitmo}>Tempo-alvo: {semAlvo(alvo.estado, alvo.mensagem)}</span>
       )}
       <span style={est.linhaCarga}>
         {takt.taktMs > 0
@@ -474,7 +475,7 @@ function ResumoTakt({
         </section>
       )}
       {!(alvo.alvoMs > 0) && (
-        <section style={est.aviso} role="status">Sem tempo-alvo para comparar: {semAlvo(alvo.estado)}</section>
+        <section style={est.aviso} role="status">Sem tempo-alvo para comparar: {semAlvo(alvo.estado, alvo.mensagem)}</section>
       )}
       {takt.taktMs > 0 && (
         <p style={est.linhaCarga}>

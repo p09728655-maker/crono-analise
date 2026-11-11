@@ -6,7 +6,9 @@ import {
   faixaHoraria, formatarDuracao, leituraPecaAPeca, paradasPorMotivo, periodoPorPeca, somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
-import { alvoDaJuncao, alvoDoProduto, explicacaoDoAlvo } from '../../../domain/tempoAlvo.js';
+import {
+  alvoDaJuncao, alvoDoProduto, avisoDoAlvo, descontaSetup, explicacaoDoAlvo,
+} from '../../../domain/tempoAlvo.js';
 import {
   deixaramDe, deixouDeEmbalar, frasesDasParadas, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, pctDoParado,
   porHoraDaMedicao, qtdParadas, roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
@@ -131,7 +133,7 @@ export function useVolumeAVolume({
       const alvo = alvoDaJuncao(conferencia.medicoes.map(alvoDe));
       const juncao = juntarMedicoes(
         conferencia.medicoes.map((c, k) => ({ conferencia: c, ...carga.toques[k] })),
-        { taktMs: takt.taktMs, alvoMs: alvo.alvoMs, setupPlanejado: Boolean(takt.setupPlanejado) },
+        { taktMs: takt.taktMs, alvoMs: alvo.alvoMs, setupPlanejado: descontaSetup(alvo, takt) },
       );
       return {
         estado: juncao?.leitura ? 'pronto' : 'sem-marcas',
@@ -152,7 +154,7 @@ export function useVolumeAVolume({
       relogioEntreMarcasMs: carga.relogio,
       volumes: (carga.marcas || []).length,
       setupNoTrechoMs: carga.setup,
-      setupPlanejado: Boolean(takt.setupPlanejado),
+      setupPlanejado: descontaSetup(alvo, takt),
     });
     const leitura = leituraPecaAPeca({
       marcasMs: carga.marcas, taktMs: takt.taktMs, alvoMs: alvo.alvoMs, periodoPorPecaMs,
@@ -749,7 +751,12 @@ export default function VolumeAVolume({
                     </ul>
                     {/* COMO SE CHEGA NO TEMPO-ALVO, por extenso, e o takt como
                         CARGA, menor e sem cor (v2.106.0): nao julga. */}
-                    {explicacaoDoAlvo(r.alvo) && <p style={est.vavCarga}>{explicacaoDoAlvo(r.alvo)}</p>}
+                    {explicacaoDoAlvo(r.alvo) && (
+                      <p style={est.vavCarga}>
+                        {explicacaoDoAlvo(r.alvo)}
+                        {avisoDoAlvo(r.alvo, { data: quando }) && ` ${avisoDoAlvo(r.alvo, { data: quando })}`}
+                      </p>
+                    )}
                     {frases.carga && <p style={est.vavCarga}>{frases.carga}</p>}
                   </div>
                 </section>
@@ -828,8 +835,8 @@ export default function VolumeAVolume({
 
 /**
  * OS NUMEROS DA MEDICAO — oito cartoes, duas linhas de quatro (v2.99.5).
- * Em cima, o TEMPO POR VOLUME nas tres camadas, ao lado do takt: no
- * periodo (o veredito, contra o takt), com a linha rodando (a diferenca sao
+ * Em cima, o TEMPO POR VOLUME nas tres camadas, ao lado do tempo-alvo: no
+ * periodo (o veredito, contra o tempo-alvo do produto), com a linha rodando (a diferenca sao
  * as paradas marcadas) e sem as lacunas (a diferenca sao as paradas que
  * ninguem marcou; o que sobra e' o passo da linha). Embaixo, o que saiu e
  * o que se perdeu: volumes, paradas marcadas, lacunas (com os volumes que
@@ -985,9 +992,9 @@ function ValorComUnidade({ valor }) {
 
 /**
  * O criterio, por extenso — o mesmo da nota da folha A4, item por item.
- * Contra o takt vai o relogio entre o primeiro e o ultimo toque dividido
- * pelos INTERVALOS (volumes - 1), menos o setup marcado no trecho quando ha'
- * setup planejado — exatamente periodoPorPeca.
+ * Contra o tempo-alvo vai o relogio entre o primeiro e o ultimo toque dividido
+ * pelos INTERVALOS (volumes - 1), menos o setup marcado no trecho quando o
+ * alvo ja' vem sem o setup (descontaSetup) — exatamente periodoPorPeca.
  */
 function definicoes(leitura, unidade, {
   juncao = false, roubo: roubo0 = false, lacunas: lacunas0 = false, deixou = false, motivos = false,
@@ -1004,7 +1011,9 @@ function definicoes(leitura, unidade, {
     ...(motivos ? [['Por que a linha parou', `as paradas marcadas ${juncao ? 'nas medições inteiras' : 'na medição inteira'}, por motivo: as do cronômetro e as anotadas depois (no resultado do tablet ou aqui no PC), também as de antes do 1º e depois do último ${unidade.singular}. O total é o do cartão Paradas marcadas. O "Paradas marcadas" do De onde veio conta só o que o cronômetro tirou entre o 1º e o último ${unidade.singular}, e por isso pode dar outro número. A parada anotada depois fica dentro dos intervalos: quando o intervalo passou de ${leitura.criterios.fatorLacuna}× o normal, ela aparece também como lacuna — é a mesma parada, agora com motivo. Em tempo, e não em ${unidade.plural}: convertidas, essas partes não fechariam com o total do De onde veio.`]] : []),
     ...(lacunas ? [[`${capital(unidade.plural)} roubados pelas lacunas`, `o tempo das lacunas além do normal, dividido pelo passo sem as lacunas: o que daria para ter saído nesse tempo, no passo da própria linha.${juncao ? ' Na junção, contra o normal da junção.' : ''} Não soma com os roubados pelas paradas: a parada anotada depois (no tablet ou aqui no PC) continua dentro dos intervalos e pode virar lacuna — somando, contaria duas vezes.`]] : []),
     ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo: o intervalo vai de um toque ao seguinte, e o tempo antes do primeiro toque não entra.`],
-    [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, e só quando o grupo tem setup planejado (ele já saiu das horas do takt). É o que vai contra o takt — a mesma régua do programa da semana.'],
+    [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, quando o tempo-alvo já vem sem o setup do painel (sem tempo-alvo: quando o grupo tem setup planejado no takt). É o que vai contra o tempo-alvo do produto.'],
+    ['Tempo-alvo do produto', 'a UEP do produto × os segundos por UEP da média da linha sem hora extra: (jornada − setup do painel) × 60 ÷ a META UEP do painel. É o tempo que cada volume pode levar para a linha fazer a média sem hora extra. É o de hoje (o cadastro do painel agora): a medição antiga é lida com a UEP e a média de agora. Produto sem UEP no painel fica sem tempo-alvo e sem veredito.'],
+    ['Takt da semana', 'as horas da semana (sem o setup planejado) ÷ os volumes programados: a carga da semana, igual para todo volume. Não julga o produto: o pesado leva mais que o takt e o leve menos, pelo peso.'],
     [`Por ${unidade.singular} com a linha rodando`, 'soma dos intervalos dividida pela quantidade de intervalos.'],
     [`Por ${unidade.singular} sem as lacunas`, `a média dos intervalos que não são lacuna: o passo da linha, sem parada marcada nem lacuna. A diferença para o "com a linha rodando" são as paradas que ninguém marcou.`],
     ['Lacuna', `intervalo maior que ${fatorLacuna}× o normal — o "por ${unidade.singular} sem as lacunas". Parada marcada e passo lento não viram lacuna.`],
@@ -1057,8 +1066,8 @@ function notaDoCriterio(leitura, unidade, {
     + `Intervalo = tempo de um ${unidade.singular === 'volume' ? 'volume' : 'toque'} até o seguinte, com a linha rodando: `
     + 'as paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) '
     + 'continuam dentro dos intervalos. O primeiro toque não tem intervalo: o intervalo vai de um toque ao '
-    + 'seguinte, e o tempo antes do primeiro toque não entra. Contra o takt vai o relógio do primeiro ao último toque ÷ intervalos, com as paradas dentro '
-    + '(sem o setup marcado entre os toques, quando o grupo tem setup planejado) — a mesma régua do programa da semana. '
+    + 'seguinte, e o tempo antes do primeiro toque não entra. Contra o tempo-alvo do produto vai o relógio do primeiro ao último toque ÷ intervalos, com as paradas dentro '
+    + '(sem o setup marcado entre os toques, quando o tempo-alvo já vem sem o setup). O takt da semana é a carga: não julga o produto. '
     + 'Com a linha rodando = soma dos intervalos ÷ quantidade. '
     + `Sem as lacunas = a média dos intervalos que não são lacuna: o passo da linha. `
     + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal (o sem as lacunas). `
@@ -1566,12 +1575,19 @@ function FolhaVolumeAVolume({
          altura preferida; so' quando a pagina aperta ele leva tudo e a
          conta vai para a seguinte. A distancia da conta ate' o grafico nao
          depende da altura das barras: a medida continua estavel. */
-      const conta = folha.querySelector('[data-conta-semana]');
-      const reserva = conta ? conta.getBoundingClientRect().bottom - caixa.bottom : 0;
-      const comConta = cabe - reserva;
-      const alvo = conta && comConta >= limites.preferida
-        ? Math.min(limites.max, comConta)
-        : Math.max(limites.min, Math.min(limites.max, cabe));
+      /* COM O TEMPO-ALVO (v2.106.0, revisao de 11/11): a conta do ALVO vem
+         antes da do takt e e' ela que julga — o papel que chega a' reuniao
+         tem de dizer de onde sai o numero. Cabendo as duas com o grafico na
+         altura preferida, as duas ficam; senao fica a do ALVO, e por ela o
+         grafico desce ate' a altura minima; a do takt (a carga) vai para a
+         2a pagina. Nem a do alvo cabendo, o grafico leva tudo. */
+      const reservaAte = (el) => (el ? el.getBoundingClientRect().bottom - caixa.bottom : null);
+      const rSemana = reservaAte(folha.querySelector('[data-conta-semana]'));
+      const rAlvo = reservaAte(folha.querySelector('[data-conta-alvo]'));
+      let alvo;
+      if (rSemana != null && cabe - rSemana >= limites.preferida) alvo = Math.min(limites.max, cabe - rSemana);
+      else if (rAlvo != null && cabe - rAlvo >= limites.min) alvo = Math.min(limites.max, cabe - rAlvo);
+      else alvo = Math.max(limites.min, Math.min(limites.max, cabe));
       if (alvo !== alturaGrafico) setAlturaGrafico(alvo);
     } finally {
       folha.classList.remove('folha-medindo');
@@ -1705,7 +1721,12 @@ function FolhaVolumeAVolume({
             Logo depois do grafico: na 1a pagina, se couber. */}
         {/* COMO SE CHEGA NO TEMPO-ALVO (v2.106.0), por extenso: o papel que
             chega a' reuniao diz de onde sai o numero que julga. */}
-        {explicacaoDoAlvo(alvo) && <p style={impF.tempoSemana} data-conta-alvo>{explicacaoDoAlvo(alvo)}</p>}
+        {explicacaoDoAlvo(alvo) && (
+          <p style={impF.tempoSemana} data-conta-alvo>
+            {explicacaoDoAlvo(alvo)}
+            {avisoDoAlvo(alvo, { data: quando }) && ` ${avisoDoAlvo(alvo, { data: quando })}`}
+          </p>
+        )}
         {tempo?.texto && <p style={impF.tempoSemana} data-conta-semana>{tempo.texto}</p>}
         {medicoes.filter((c) => c.observacao).map((c) => (
           <p key={c.id} style={{ margin: '0 0 10px' }}>

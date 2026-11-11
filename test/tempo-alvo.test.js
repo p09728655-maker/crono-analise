@@ -8,14 +8,14 @@ import {
   afterEach, describe, expect, it,
 } from 'vitest';
 import {
-  alvoDaJuncao, alvoDoProduto, alvoEmSegundos, contaDoAlvo, explicacaoDaRegua, explicacaoDoAlvo, medidoXAlvo,
-  semAlvo, semAlvoCurto,
+  alvoDaJuncao, alvoDoProduto, alvoEmSegundos, avisoDoAlvo, contaDoAlvo, descontaSetup, explicacaoDaRegua,
+  explicacaoDoAlvo, idadeDoAlvo, medidoXAlvo, semAlvo, semAlvoCurto,
 } from '../src/domain/tempoAlvo.js';
 import {
   _esquecer, lerTemposAlvo, MENSAGEM_ALVO_GS_ANTIGO, respostaDosAlvos, temposAlvo,
 } from '../api/_lib/temposAlvo.js';
 import { frasesVolumeAVolume } from '../src/domain/volumeAVolume.js';
-import { leituraPecaAPeca } from '../src/domain/crono/intervalos.js';
+import { leituraPecaAPeca, periodoPorPeca } from '../src/domain/crono/intervalos.js';
 import { unidadeDoPosto } from '../src/domain/crono/formato.js';
 
 const URL_OK = 'https://script.google.com/macros/s/abc/exec';
@@ -57,7 +57,7 @@ describe('o alvo do produto', () => {
   it('casa pelo nome da lista, sem caixa, acento nem espaço repetido', () => {
     const a = alvoDoProduto(LIDO, '501059 · Penteadeira  Camarim Strass · VOL 2/2');
     expect(a).toMatchObject({ estado: 'ok', alvoMs: 19330, uep: 1.8, sUep: 10.739 });
-    expect(contaDoAlvo(a)).toBe('1,80 UEP × 10,74 s');
+    expect(contaDoAlvo(a)).toBe('1.80 UEP × 10.74 s');
     expect(alvoEmSegundos(a)).toBe('19.3 s');
   });
   it('cada motivo de não ter alvo, em palavras', () => {
@@ -86,12 +86,61 @@ describe('o alvo do produto', () => {
 describe('como chegamos no tempo-alvo — por extenso (PPCP: "deixar claro como chegamos no tempo-alvo de cada produto")', () => {
   it('a frase: UEP × s por UEP = alvo, e de onde saem os s por UEP (jornada − setup, × 60 ÷ a média da linha)', () => {
     const a = alvoDoProduto(LIDO, '501059 · PENTEADEIRA CAMARIM STRASS · VOL 2/2');
-    expect(explicacaoDoAlvo(a)).toBe('Tempo-alvo = 1,80 UEP × 10,74 s por UEP = 19,3 s por volume. '
-      + 'Os 10,74 s por UEP: (527 min de jornada − 32,8 min de setup) × 60 ÷ 2.761 UEP por dia, a média da linha sem hora extra.');
+    // Com ponto, como os segundos do app, e a meta sem milhar: "10.74" e
+    // "2.761" na mesma frase fariam o ponto valer duas coisas.
+    expect(explicacaoDoAlvo(a)).toBe('Tempo-alvo = 1.80 UEP × 10.74 s por UEP = 19.3 s por volume. '
+      + 'Os 10.74 s por UEP: (527 min de jornada − 32.8 min de setup) × 60 ÷ 2761 UEP por dia, a média da linha sem hora extra.');
     // A conta fecha: (527 − 32,8) × 60 ÷ 2.761 = 10,739; × 1,80 = 19,33.
     expect(Math.round(((527 - 32.8) * 60 / 2761) * 1.8 * 100) / 100).toBe(19.33);
-    expect(explicacaoDaRegua({ ...LIDO.ref, setupDia: 0 })).toBe('Os 10,74 s por UEP: (527 min de jornada) × 60 ÷ 2.761 UEP por dia, a média da linha sem hora extra.');
+    expect(explicacaoDaRegua({ ...LIDO.ref, setupDia: 0 })).toBe('Os 10.74 s por UEP: (527 min de jornada) × 60 ÷ 2761 UEP por dia, a média da linha sem hora extra.');
     expect(explicacaoDoAlvo(alvoDoProduto(LIDO, '501160 · BERCO ALGODAO DOCE · VOL 1/2'))).toBe('');
+  });
+  it('a medicao antiga e a leitura velha sao ditas; a de hoje, com leitura nova, nao', () => {
+    const agora = new Date('2026-11-11T18:00:00Z'); // 15:00 em Sao Paulo
+    const a = { ...alvoDoProduto(LIDO, '501149 · MESA CABECEIRA MADERO'), lidoEm: '2026-11-11T17:30:00Z' };
+    expect(avisoDoAlvo(a, { data: '2026-11-11T12:00:00Z', agora })).toBe('');
+    expect(avisoDoAlvo(a, { data: '2026-10-20T12:00:00Z', agora }))
+      .toBe('Medição de 20/10 lida com o tempo-alvo de hoje (a UEP e a média de agora).');
+    const velho = { ...a, lidoEm: '2026-11-11T12:10:00Z' };
+    expect(avisoDoAlvo(velho, { data: '2026-11-11T12:00:00Z', agora }))
+      .toBe('Tempo-alvo lido do painel em 11/11 às 09:10: sem leitura nova desde então.');
+    // 23h em Sao Paulo ainda e' o mesmo dia (02:00 UTC do dia seguinte).
+    expect(avisoDoAlvo({ ...a, lidoEm: '2026-11-12T02:10:00Z' }, { data: '2026-11-12T02:00:00Z', agora: new Date('2026-11-12T02:30:00Z') })).toBe('');
+    expect(avisoDoAlvo({ alvoMs: null }, { data: '2026-10-20T12:00:00Z', agora })).toBe('');
+    expect(idadeDoAlvo('2026-11-11T16:30:00Z', agora)).toBe('');
+  });
+});
+
+describe('o setup marcado sai do periodo pela regua do ALVO (revisao de 11/11)', () => {
+  it('com alvo: sai quando o painel tira o setup da jornada, qualquer que seja o takt', () => {
+    const a = alvoDoProduto(LIDO, '501149 · MESA CABECEIRA MADERO');
+    expect(a.setupDia).toBe(32.8);
+    expect(descontaSetup(a, null)).toBe(true); // sem programa: antes ficava no periodo
+    expect(descontaSetup(a, { setupPlanejado: false })).toBe(true);
+    expect(descontaSetup({ ...a, setupDia: 0 }, { setupPlanejado: true })).toBe(false);
+  });
+  it('sem alvo: o criterio de antes, o do takt', () => {
+    expect(descontaSetup({ alvoMs: null, estado: 'sem-uep' }, { setupPlanejado: true })).toBe(true);
+    expect(descontaSetup({ alvoMs: null }, { setupPlanejado: false })).toBe(false);
+    expect(descontaSetup(null, null)).toBe(false);
+  });
+  it('o caso da revisao: 21 volumes a 20 s com 8 min de setup marcados — 20 s, dentro do alvo, sem programa', () => {
+    const a = { alvoMs: 26600, setupDia: 32.8 };
+    const p = periodoPorPeca({
+      relogioEntreMarcasMs: 20 * 20000 + 480000, volumes: 21, setupNoTrechoMs: 480000,
+      setupPlanejado: descontaSetup(a, null),
+    });
+    expect(p).toBe(20000);
+  });
+});
+
+describe('semAlvo diz o erro do servidor', () => {
+  it('com a mensagem, ela; sem, a frase generica', () => {
+    expect(semAlvo('erro', 'O painel não montou os tempos-alvo: o setup não cabe na jornada.'))
+      .toBe('o painel não montou os tempos-alvo: o setup não cabe na jornada.');
+    expect(semAlvo('erro', 'URL do painel inválida')).toBe('URL do painel inválida');
+    expect(semAlvo('erro')).toBe('não deu para buscar os tempos-alvo no painel agora.');
+    expect(semAlvo('sem-uep', 'x')).toMatch(/sem UEP não há tempo-alvo/);
   });
 });
 
@@ -186,5 +235,30 @@ describe('a leitura no painel, pelo servidor', () => {
     expect(falhas).toBe(1);
     await temposAlvo({ agora: t0 + 60000, ler: falha });
     expect(falhas).toBe(2);
+  });
+  it('a falha nao apaga a ultima leitura ok: serve a ok (com a idade) e tenta o painel a cada minuto', async () => {
+    let idas = 0;
+    let painelFora = false;
+    const ler = async () => {
+      idas += 1;
+      return painelFora ? { estado: 'erro', mensagem: 'O painel não respondeu.' } : respostaDosAlvos(DO_PAINEL);
+    };
+    const t0 = 5_000_000;
+    const ok = await temposAlvo({ agora: t0, ler });
+    expect(ok.estado).toBe('ok');
+    painelFora = true;
+    const depois = await temposAlvo({ agora: t0 + 10 * 60000, ler });
+    expect(idas).toBe(2);
+    expect(depois.estado).toBe('ok');
+    expect(depois.lidoEm).toBe(ok.lidoEm); // a idade e' a da leitura ok
+    await temposAlvo({ agora: t0 + 10 * 60000 + 30000, ler });
+    expect(idas).toBe(2); // 1 min de espera depois da falha
+    await temposAlvo({ agora: t0 + 11 * 60000, ler });
+    expect(idas).toBe(3);
+    painelFora = false;
+    await temposAlvo({ agora: t0 + 12 * 60000, ler });
+    expect(idas).toBe(4);
+    await temposAlvo({ agora: t0 + 13 * 60000, ler });
+    expect(idas).toBe(4); // voltou ok: 10 min de novo
   });
 });

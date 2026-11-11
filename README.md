@@ -148,11 +148,28 @@ do produto dele**.
     ou junção de produtos com alvos diferentes: **sem alvo e sem cor**, com o
     motivo (`semAlvo`) — nunca o takt no lugar.
   - **Como se chega no alvo** vai escrito onde ele aparece
-    (`explicacaoDoAlvo`, `src/domain/tempoAlvo.js`): *"Tempo-alvo = 2,48 UEP
-    × 10,74 s por UEP = 26,6 s por volume. Os 10,74 s por UEP: (527 min de
-    jornada − 32,8 min de setup) × 60 ÷ 2.761 UEP por dia, a média da linha
+    (`explicacaoDoAlvo`, `src/domain/tempoAlvo.js`): *"Tempo-alvo = 2.48 UEP
+    × 10.74 s por UEP = 26.6 s por volume. Os 10.74 s por UEP: (527 min de
+    jornada − 32.8 min de setup) × 60 ÷ 2761 UEP por dia, a média da linha
     sem hora extra."* — cartão do tablet, preparar do vídeo, veredito do
-    volume a volume e folha.
+    volume a volume e folha. Com ponto, como os segundos do app, e a meta sem
+    o ponto de milhar (o painel escreve com vírgula; aqui vale o app).
+  - **O setup marcado entre os toques sai do período pela régua do ALVO**
+    (`descontaSetup`): com alvo, quando o painel já tira o setup da jornada
+    (`ref.setupDia > 0`); sem alvo, pelo takt (`setupPlanejado`). Antes era
+    sempre o takt, e sem o programa da semana o setup ficava no período e a
+    medição com troca saía acima do alvo pela troca. ⚠ O envio ao painel
+    (`montarParaOPainel`) continua pelo takt: o NO PERÍODO de lá pode diferir
+    do da tela quando há setup marcado e o programa da semana não existe.
+  - **Medição antiga e leitura velha** (`avisoDoAlvo`): fora do dia de hoje,
+    o veredito, a folha e o resultado salvo dizem que a medição foi lida com
+    o alvo de HOJE; leitura do painel com mais de 2 h diz a hora dela.
+  - **Falha**: o servidor serve a última leitura ok enquanto o painel está
+    calado e tenta de novo a cada minuto; o aparelho sem nenhuma leitura ok
+    tenta de novo em 1 min, e erro do servidor (401, 500, 504) aparece com o
+    motivo, não como "sem rede".
+  - **Folha**: a conta do alvo fica na 1ª página (o gráfico desce até a
+    altura mínima por ela); a do takt, quando couber junto.
   - **No PC**, o quadro *Tempo-alvo de cada produto* (`<details>` fechado,
     ACIMA da lista: embaixo dela, com a página rolada até o fim, ele virava a
     âncora de rolagem do navegador e abrir uma medição puxava a linha

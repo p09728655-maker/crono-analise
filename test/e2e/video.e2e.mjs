@@ -49,12 +49,13 @@ const DEMANDAS = [{
   ano: segunda.getUTCFullYear(), numero: 1, pecas: 2200, inicio: segunda.toISOString().slice(0, 10),
   atualizado_em: hoje.toISOString(),
 }];
-/* O tempo-alvo do painel (v2.106.0): o Rack com 10,0 s (0,40 UEP × 25 s),
+/* O tempo-alvo do painel (v2.106.0): o Rack com 10,0 s (0,40 UEP × 25 s;
+   527 × 60 ÷ 1.265 = 24,996 — a regua fecha, como o painel manda),
    bem abaixo do que o video mede (12,9 s), para o "▲ alvo" aparecer.
    Quem nao escolhe produto (o teste do setup) fica sem alvo, como antes. */
 const ALVOS = {
   estado: 'ok',
-  ref: { metaUep: 2761, setupDia: 0, minDia: 527, minProd: 527, sUep: 25 },
+  ref: { metaUep: 1265, setupDia: 0, minDia: 527, minProd: 527, sUep: 24.996 },
   produtos: [{ rot: 'Rack Sirius 1.6', uep: 0.4, alvoMs: 10000 }],
 };
 const dois = (n) => String(n).padStart(2, '0');
@@ -177,7 +178,7 @@ await preparar.getByText(/72\.0 s por volume/).waitFor({ timeout: 4000 });
 checar(true, 'a data da filmagem decide o takt: 72.0 s por volume, o da semana');
 await p.locator('select[aria-label="Produto embalado"]').selectOption('Rack Sirius 1.6');
 await preparar.getByText(/Tempo-alvo do produto: 10\.0 s por volume/).waitFor({ timeout: 4000 });
-checar(/Tempo-alvo = 0,40 UEP × 25,00 s por UEP = 10,0 s por volume\. Os 25,00 s por UEP: \(527 min de jornada\) × 60 ÷ 2\.761 UEP por dia/
+checar(/Tempo-alvo = 0\.40 UEP × 25\.00 s por UEP = 10\.0 s por volume\. Os 25\.00 s por UEP: \(527 min de jornada\) × 60 ÷ 1265 UEP por dia/
   .test((await preparar.innerText()).replace(/\s+/g, ' ')), 'preparar: o tempo-alvo do produto e a conta dele por extenso');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-preparar.png` });
 await p.getByRole('button', { name: 'Começar a marcar' }).click();

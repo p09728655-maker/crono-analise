@@ -136,6 +136,6 @@ describe('semTakt no tablet', () => {
     expect(cartao({ estado: 'sem-uep' }).valor).toBe('—');
     const comAlvo = leituraDaSalva(SALVA, { taktMs: 16400 }, { alvoMs: 26600 }).leitura;
     const k = numerosDaLeitura(comAlvo, { alvoMs: 26600, uep: 2.48, sUep: 10.742 }, VOLUME).find((x) => x.chave === 'alvo');
-    expect(k).toMatchObject({ rotulo: 'Tempo-alvo do produto', valor: '26.6 s', sub: '2,48 UEP × 10,74 s · takt da semana 16.4 s' });
+    expect(k).toMatchObject({ rotulo: 'Tempo-alvo do produto', valor: '26.6 s', sub: '2.48 UEP × 10.74 s · takt da semana 16.4 s' });
   });
 });

@@ -15,6 +15,7 @@
  */
 import { leituraPecaAPeca, periodoPorPeca } from '../../../domain/cronoanalise.js';
 import { deixouDeEmbalar, roubadosPelasParadas } from '../../../domain/volumeAVolume.js';
+import { descontaSetup } from '../../../domain/tempoAlvo.js';
 
 /**
  * O instante em que a medicao comecou, como o servidor grava o
@@ -55,7 +56,7 @@ export function leituraDaSalva(registro, takt = {}, alvo = {}) {
       relogioEntreMarcasMs: relogio,
       volumes: marcas.length,
       setupNoTrechoMs: registro.marcasSetupMs,
-      setupPlanejado: Boolean(takt.setupPlanejado),
+      setupPlanejado: descontaSetup(alvo, takt),
     })
     : null;
   const leitura = comMarcas
