@@ -342,7 +342,9 @@ do produto dele**.
   403 — substituir é UPDATE, que a RLS só deixa para quem faz análise. O reenvio do tablet
   continua ignorado (`DO NOTHING`). O rascunho guarda `envioTentado`: o F5 e o
   Descartar avisam que a medição pode já estar no servidor. O "por volume" da
-  prévia usa o `setupPlanejado` do takt da semana, como a lista e o tablet.
+  prévia tira o setup marcado pela mesma régua da lista e do tablet
+  (`descontaSetup`, v2.106.0: com tempo-alvo, o setup do painel; sem, o
+  `setupPlanejado` do takt da semana).
 - **Marcação automática no Cronometrar por vídeo** (v2.105.0): o analista
   desenha com o mouse um retângulo sobre o tapete verde da envolvedora e o app
   marca cada caixa no instante em que ela ENTRA nele; o analista confere e

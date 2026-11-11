@@ -21,7 +21,9 @@ import { CampoProduto } from './rapida/CamposDaPeca.jsx';
 import Historico from './rapida/Historico.jsx';
 import { useTaktDaSemana } from '../../lib/taktDaSemana.js';
 import { useTemposAlvo } from '../../lib/temposAlvo.js';
-import { descontaSetup, explicacaoDoAlvo, semAlvo } from '../../domain/tempoAlvo.js';
+import {
+  descontaSetup, explicacaoDoAlvo, idadeDoAlvo, semAlvo,
+} from '../../domain/tempoAlvo.js';
 import { motivoSemTakt } from './embalagem/motivoSemTakt.js';
 import ResultadoSalvo from './embalagem/ResultadoSalvo.jsx';
 import { inicioDaSalva } from './embalagem/leituraSalva.js';
@@ -414,6 +416,9 @@ function CartaoAlvo({ alvo, takt }) {
           {/* COMO SE CHEGA NELE, por extenso (PPCP: "deixar claro como
               chegamos no tempo-alvo de cada produto"). */}
           <span style={est.linhaConta}>{explicacaoDoAlvo(alvo)}</span>
+          {/* O alvo guardado no aparelho, velho (sem rede ou painel calado):
+              a idade, como o takt diz "programa guardado neste aparelho". */}
+          {idadeDoAlvo(alvo.lidoEm) && <span style={est.linhaCarga}>{idadeDoAlvo(alvo.lidoEm)}</span>}
         </>
       ) : (
         <span style={est.sufixoRitmo}>Tempo-alvo: {semAlvo(alvo.estado, alvo.mensagem)}</span>

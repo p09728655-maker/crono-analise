@@ -144,8 +144,14 @@ function dataDaMedicao(conferencia) {
  * Com toques de menos, mandar "corrigir o produto e enviar de novo" seria
  * mandar fazer uma correcao que nao leva a medicao a lugar nenhum.
  *
- * O SETUP PLANEJADO e' o da tela, que o tira do TAKT
- * (taktDaMedicao(...).setupPlanejado, em VolumeAVolume.jsx): setup maior
+ * O SETUP PLANEJADO e' o do TAKT (taktDaMedicao(...).setupPlanejado) —
+ * desde a v2.106.0 a TELA decide pela regua do tempo-alvo (descontaSetup,
+ * src/domain/tempoAlvo.js) e aqui NAO, de proposito: o servidor nao tem o
+ * alvo do produto sem mais uma ida ao Apps Script no envio, e o NO PERIODO
+ * no painel so' informa (a UEP sai do sem as lacunas). Os dois so' diferem
+ * com setup marcado entre os toques e sem o programa da semana (ou com o
+ * grupo sem setup no app e o painel com setup). O que segue e' a regra do
+ * takt, como era: setup maior
  * que zero no cadastro do grupo (setups_dia x dias_semana x setup_min, ver
  * horasDeSetup) E programa da semana cadastrado — sem programa, a tela nao
  * tem takt, o setup nao sai das horas, e o setup que a medicao pegou entre
@@ -182,8 +188,9 @@ export function montarParaOPainel({ conferencia, grupo, demandas = [] } = {}) {
     pecas: c.pecas,
     duracaoMs: Number(c.duracao_ms),
   });
-  // As mesmas duas chamadas de VolumeAVolume.jsx. O takt nao entra: ele so'
-  // acrescenta a comparacao, nao muda nenhum dos tres tempos.
+  // As duas chamadas de VolumeAVolume.jsx, com o setup pela regra do takt
+  // (ver acima: a tela usa a do alvo). O takt nao entra: ele so' acrescenta
+  // a comparacao, nao muda nenhum dos tres tempos.
   const periodoMs = periodoPorPeca({
     relogioEntreMarcasMs: c.marcas_relogio_ms,
     volumes: marcas.length,
