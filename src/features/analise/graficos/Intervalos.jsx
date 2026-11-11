@@ -25,10 +25,10 @@ const COR_TEXTO_LACUNA = claro.critico;
  */
 export const COLADA_PX = 6;
 
-/** A cor da linha do periodo: o veredito contra o takt (ver linhasDeReferencia). */
-export function corDoPeriodo(periodoMs, taktMs) {
-  if (!(taktMs > 0)) return claro.texto;
-  return periodoMs > taktMs ? claro.critico : claro.ok;
+/** A cor da linha do periodo: o veredito contra o tempo-alvo do produto (ver linhasDeReferencia). */
+export function corDoPeriodo(periodoMs, alvoMs) {
+  if (!(alvoMs > 0)) return claro.texto;
+  return periodoMs > alvoMs ? claro.critico : claro.ok;
 }
 
 /**
@@ -37,11 +37,11 @@ export function corDoPeriodo(periodoMs, taktMs) {
  * segundo: 15.4 e 15.2 dizem 0.2, nunca 0.3 de um valor cru que a legenda
  * nao mostra). Longe, ou sem takt, nada.
  */
-export function textoColadaNoTakt(valorMs, taktMs, distanciaPx) {
-  if (!(taktMs > 0) || !(valorMs > 0) || !(distanciaPx < COLADA_PX)) return '';
-  const d = Math.round(valorMs / 100) - Math.round(taktMs / 100);
-  if (d === 0) return ' — igual ao takt';
-  return ` — colada no takt (${emSegundos(Math.abs(d) * 100)} ${d < 0 ? 'abaixo' : 'acima'})`;
+export function textoColadaNoAlvo(valorMs, alvoMs, distanciaPx) {
+  if (!(alvoMs > 0) || !(valorMs > 0) || !(distanciaPx < COLADA_PX)) return '';
+  const d = Math.round(valorMs / 100) - Math.round(alvoMs / 100);
+  if (d === 0) return ' — igual ao tempo-alvo';
+  return ` — colada no tempo-alvo (${emSegundos(Math.abs(d) * 100)} ${d < 0 ? 'abaixo' : 'acima'})`;
 }
 
 /**
@@ -108,7 +108,11 @@ export function GraficoIntervalos({
   const segmentoDe = (i) => segs && segs.reduce((achado, x) => (i >= x.inicio ? x : achado), segs[0]);
   // O volume que fecha o intervalo i: o primeiro intervalo termina no 2o.
   const volumeDe = (i) => (segs ? i - segmentoDe(i).inicio + 2 : i + 2);
-  const takt = leitura.taktMs || 0;
+  /* A REFERENCIA e' o TEMPO-ALVO DO PRODUTO (v2.106.0; antes, o takt da
+     semana — um numero so' para todo volume, que pintava o pesado sempre
+     acima). O takt nao vai ao grafico: ele e' a carga da semana, escrito
+     nas frases e no cartao, sem julgar. Sem alvo, sem linha e sem cor. */
+  const alvo = leitura.alvoMs || 0;
   const mediaMs = leitura.suficiente ? leitura.mediaMs : 0;
   const normal = leitura.suficiente ? leitura.normalMs : 0;
   /* O PERIODO (v2.101.0, pedido do PCP com print): o tempo por volume do
@@ -127,21 +131,21 @@ export function GraficoIntervalos({
      baixo — contra a regra do teto, que existe para as barras mostrarem o
      ritmo. Ate' o teto de sempre ele entra na escala; acima, a linha fica
      PRESA NO TOPO e a legenda diz o valor e que passou do topo. */
-  const tetoDesejado = normal > 0 ? Math.max(normal * 3, mediaMs * 1.25, takt * 1.25) : 0;
+  const tetoDesejado = normal > 0 ? Math.max(normal * 3, mediaMs * 1.25, alvo * 1.25) : 0;
   const cortar = tetoDesejado > 0 && maior > tetoDesejado;
   const maxY = cortar
     ? tetoDesejado
-    : Math.max(maior, takt, Math.min(periodoMs, tetoDesejado || periodoMs)) * 1.12;
+    : Math.max(maior, alvo, Math.min(periodoMs, tetoDesejado || periodoMs)) * 1.12;
   const periodoAcimaDoTopo = periodoMs > maxY;
   const passoY = passoAgradavel(maxY / 1000) * 1000;
 
   const linhasDeReferencia = [
-    takt > 0 && takt <= maxY && {
+    alvo > 0 && alvo <= maxY && {
       /* O TAKT E' A REFERENCIA, e se ve' primeiro (v2.101.1, pedido do PCP:
          "linha tracejada esta' ruim de ver"): 3 px, tracos longos. Com o
          takt (15,4 s) quase em cima do rodando (15,2 s), o tracejado de 2 px
          e o pontilhado de 2 px viravam um borrao — nenhum dos dois se lia. */
-      chave: 'takt', ms: takt, nome: 'Takt', cor: referencia.linha, traco: '12 6', espessura: 3,
+      chave: 'alvo', ms: alvo, nome: 'Tempo-alvo', cor: referencia.linha, traco: '12 6', espessura: 3,
     },
     // Continua e mais grossa: no papel P&B se separa do takt (tracejado) e
     // do rodando (pontilhado) pelo traco, nao pela cor.
@@ -152,7 +156,7 @@ export function GraficoIntervalos({
     // texto. Acima do topo, desenhada no topo.
     periodoMs > 0 && {
       chave: 'periodo', ms: Math.min(periodoMs, maxY), valor: periodoMs, nome: 'No período',
-      cor: corDoPeriodo(periodoMs, takt),
+      cor: corDoPeriodo(periodoMs, alvo),
       traco: null, espessura: 3,
     },
     mediaMs > 0 && mediaMs <= maxY && {
@@ -237,15 +241,15 @@ export function GraficoIntervalos({
     return Math.max(meia + 2, Math.min(x, limiteDireito - meia));
   };
 
-  /* Colada no takt (ver textoColadaNoTakt): o periodo preso no topo nao. SO'
+  /* Colada no tempo-alvo (ver textoColadaNoAlvo): o periodo preso no topo nao. SO'
      NA TELA: na folha a legenda ja' ocupa a largura toda, e qualquer texto a
      mais quebra uma linha e manda a conta do tempo da semana para a 2a
      pagina (medido: 689 -> 724 de 703 px). No papel, a cor e o traco
      separam as duas, e os valores estao na legenda e nos cartoes. */
-  const coladaNoTakt = (r) => (escalaTexto !== 1 || r.chave === 'takt' || takt > maxY
+  const coladaNoAlvo = (r) => (escalaTexto !== 1 || r.chave === 'alvo' || alvo > maxY
     || (r.chave === 'periodo' && periodoAcimaDoTopo)
     ? ''
-    : textoColadaNoTakt(r.valor ?? r.ms, takt, Math.abs(yDe(r.ms) - yDe(takt))));
+    : textoColadaNoAlvo(r.valor ?? r.ms, alvo, Math.abs(yDe(r.ms) - yDe(alvo))));
 
   const tituloEixoY = (v) => (Math.abs(v / 1000 - Math.round(v / 1000)) < 1e-6
     ? `${Math.round(v / 1000)} s`
@@ -278,10 +282,10 @@ export function GraficoIntervalos({
             rotulo: {
               media: `Rodando — média dos intervalos: ${emSegundos(r.ms)}`,
               periodo: `No período, com as paradas: ${emSegundos(r.valor)}${periodoAcimaDoTopo ? ' (acima do topo do gráfico)' : ''}`,
-              takt: `Takt da semana: ${emSegundos(r.ms)}`,
-            }[r.chave] + coladaNoTakt(r),
+              alvo: `Tempo-alvo do produto: ${emSegundos(r.ms)}`,
+            }[r.chave] + coladaNoAlvo(r),
             cor: r.cor,
-            linha: { media: 'dotted', periodo: 'solid', takt: 'dashed' }[r.chave],
+            linha: { media: 'dotted', periodo: 'solid', alvo: 'dashed' }[r.chave],
             espessura: r.espessura,
           })),
           ...(segs ? [{ rotulo: 'Início de outra medição', cor: claro.texto, linha: 'solid' }] : []),
@@ -298,7 +302,7 @@ export function GraficoIntervalos({
           aria-label={`Intervalo entre ${unidade.plural}: ${n} intervalos`
             + `${mediaMs ? `, média de ${emSegundos(mediaMs)}` : ''}`
             + `${periodoMs ? `, ${emSegundos(periodoMs)} no período com as paradas` : ''}`
-            + `${takt ? `, takt de ${emSegundos(takt)}` : ''}`
+            + `${alvo ? `, tempo-alvo de ${emSegundos(alvo)}` : ''}`
             + `, ${lacunas.size} lacuna(s)`
             + `${segs ? `, em ${segs.length} medições` : ''}`}
         >
@@ -415,7 +419,7 @@ export function GraficoIntervalos({
           {periodoAcimaDoTopo && (
             <text
               x={largura - margem.dir - 2} y={yDe(maxY) + fs(11) + 3} textAnchor="end"
-              fontSize={fs(11)} fontWeight="700" fill={takt > 0 && periodoMs > takt ? claro.critico : claro.texto}
+              fontSize={fs(11)} fontWeight="700" fill={alvo > 0 && periodoMs > alvo ? claro.critico : claro.texto}
               stroke={claro.papel} strokeWidth="3" paintOrder="stroke" pointerEvents="none"
             >
               ↑ {emSegundos(periodoMs)} no período

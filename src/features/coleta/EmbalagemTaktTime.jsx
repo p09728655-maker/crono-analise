@@ -20,6 +20,8 @@ import ResultadoAoVivo from './rapida/ResultadoAoVivo.jsx';
 import { CampoProduto } from './rapida/CamposDaPeca.jsx';
 import Historico from './rapida/Historico.jsx';
 import { useTaktDaSemana } from '../../lib/taktDaSemana.js';
+import { useTemposAlvo } from '../../lib/temposAlvo.js';
+import { explicacaoDoAlvo, semAlvo } from '../../domain/tempoAlvo.js';
 import { motivoSemTakt } from './embalagem/motivoSemTakt.js';
 import ResultadoSalvo from './embalagem/ResultadoSalvo.jsx';
 import { inicioDaSalva } from './embalagem/leituraSalva.js';
@@ -103,6 +105,11 @@ export default function EmbalagemTaktTime({ aoSair }) {
   }, []);
 
   const takt = useTaktDaSemana({ grupo, maquinasDoGrupo });
+  /* O TEMPO-ALVO DO PRODUTO (v2.106.0): a regua da cor. O takt fica como a
+     carga da semana, sem cor, e segue dando o setup planejado do grupo (que
+     sai do tempo por volume). Ver domain/tempoAlvo.js. */
+  const alvos = useTemposAlvo();
+  const alvo = alvos.alvoDe(produto);
   const paradas = useParadasDoPeriodo(motivos);
   // Com largada: o INICIAR so' arma, e o relogio abre no primeiro toque.
   const crono = useCronometroAoVivo({ paradas, comLargada: true, tecladoComeca: !vendoId });
@@ -164,9 +171,11 @@ export default function EmbalagemTaktTime({ aoSair }) {
   }) : null;
   const leitura = useMemo(
     () => (marcasConferem
-      ? leituraPecaAPeca({ marcasMs: crono.marcasFinais, taktMs: takt.taktMs, periodoPorPecaMs: porVolumeFinal })
+      ? leituraPecaAPeca({
+        marcasMs: crono.marcasFinais, taktMs: takt.taktMs, alvoMs: alvo.alvoMs, periodoPorPecaMs: porVolumeFinal,
+      })
       : null),
-    [marcasConferem, crono.marcasFinais, takt.taktMs, porVolumeFinal],
+    [marcasConferem, crono.marcasFinais, takt.taktMs, alvo.alvoMs, porVolumeFinal],
   );
 
   const salvar = () => historico.salvar({
@@ -264,8 +273,8 @@ export default function EmbalagemTaktTime({ aoSair }) {
         <ResultadoSalvo
           registro={vendo}
           takt={taktDaSalva.naData(inicioDaSalva(vendo))}
+          alvo={alvos.alvoDe(vendo.peca)}
           unidade={VOLUME}
-          nomeGrupo={grupoDaSalva?.nome}
           mostrarMaquina={maquinas.length > 1}
           aoVoltar={fecharSalva}
         />
@@ -297,7 +306,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
               />
             </label>
 
-            <CartaoTakt takt={takt} />
+            <CartaoAlvo alvo={alvo} takt={takt} />
           </section>
 
           {maquina ? (
@@ -336,6 +345,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           unidade={VOLUME}
           modoTakt
           taktMs={takt.taktMs}
+          alvoMs={alvo.alvoMs}
           porVolumeMs={porVolumeAoVivo}
           produto={produto}
         />
@@ -365,7 +375,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           avisoSalvar={'Salvar envia esta medição para a Embalagem Takt Time, no PC, com o '
             + 'intervalo de cada volume, e guarda uma cópia neste aparelho.'}
           resumo={resultado && (
-            <ResumoTakt resultado={resultado} leitura={leitura} takt={takt} porVolumeMs={porVolumeFinal} />
+            <ResumoTakt resultado={resultado} leitura={leitura} takt={takt} alvo={alvo} porVolumeMs={porVolumeFinal} />
           )}
           salvo={historico.salvo}
           aoSalvar={salvar}
@@ -385,26 +395,35 @@ export default function EmbalagemTaktTime({ aoSair }) {
   );
 }
 
-/** O takt da semana antes de comecar — ou, sem ele, o porque. */
-function CartaoTakt({ takt }) {
-  const motivo = motivoSemTakt(takt.estado, takt);
-  if (!(takt.taktMs > 0) && !motivo) return null;
+/**
+ * O TEMPO-ALVO DO PRODUTO antes de comecar (v2.106.0) — o numero contra o
+ * qual o tempo por volume vai ser pintado — ou, sem ele, o porque. Embaixo,
+ * numa linha so' e sem cor, o takt da semana: a carga, igual para todo
+ * volume; nao julga o produto (PPCP, 11/11/2026).
+ */
+function CartaoAlvo({ alvo, takt }) {
+  const motivoTakt = motivoSemTakt(takt.estado, takt);
   return (
-    <div style={est.destaqueRitmo} aria-label="Takt da semana">
-      {takt.taktMs > 0 ? (
+    <div style={est.destaqueRitmo} aria-label="Tempo-alvo do produto">
+      {alvo.alvoMs > 0 ? (
         <>
-          <span style={est.valorRitmo}>{formatarSegundos(takt.taktMs)}</span>
-          <span style={est.sufixoRitmo}>
-            s por volume — takt da semana {takt.semana}
-            {/* Semana com feriado ou ainda sendo programada: o takt usa as
-                horas so' dos dias com lote, e o tablet diz quantos. */}
-            {diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}
-            {takt.semRede ? ' (programa guardado neste aparelho)' : ''}
-          </span>
+          <span style={est.rotuloAlvo}>TEMPO-ALVO DO PRODUTO</span>
+          <span style={est.valorRitmo}>{formatarSegundos(alvo.alvoMs)}</span>
+          <span style={est.sufixoRitmo}>s por volume</span>
+          {/* COMO SE CHEGA NELE, por extenso (PPCP: "deixar claro como
+              chegamos no tempo-alvo de cada produto"). */}
+          <span style={est.linhaConta}>{explicacaoDoAlvo(alvo)}</span>
         </>
       ) : (
-        <span style={est.sufixoRitmo}>Takt: {motivo}</span>
+        <span style={est.sufixoRitmo}>Tempo-alvo: {semAlvo(alvo.estado)}</span>
       )}
+      <span style={est.linhaCarga}>
+        {takt.taktMs > 0
+          ? <>Carga da semana {takt.semana}: takt {formatarSegundos(takt.taktMs)} s por volume
+            {diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}
+            {takt.semRede ? ' (programa guardado neste aparelho)' : ''} — não julga o produto</>
+          : motivoTakt ? `Takt da semana: ${motivoTakt}` : null}
+      </span>
     </div>
   );
 }
@@ -416,19 +435,20 @@ function CartaoTakt({ takt }) {
  * linha da medicao em "Salvas neste aparelho" (ResultadoSalvo), e no PC.
  */
 function ResumoTakt({
-  resultado, leitura, takt, porVolumeMs,
+  resultado, leitura, takt, alvo, porVolumeMs,
 }) {
   const suficiente = leitura?.suficiente;
   // O tempo por volume vale com poucos volumes (e' relogio, nao leitura);
   // so' some sem toques que expliquem a contagem. O quadro tem a mesma cor
-  // da tela do cronometro: vermelho acima do takt, verde dentro dele.
-  const compara = takt.taktMs > 0 && porVolumeMs > 0;
-  const acima = compara && porVolumeMs > takt.taktMs;
+  // da tela do cronometro: vermelho acima do TEMPO-ALVO do produto, verde
+  // dentro dele (v2.106.0). Sem alvo, sem cor — nunca o takt no lugar.
+  const compara = alvo.alvoMs > 0 && porVolumeMs > 0;
+  const acima = compara && porVolumeMs > alvo.alvoMs;
   return (
     <>
       <div style={est.destaqueRitmo} aria-label="Volumes por hora no período">
-        {/* Sem o verde de sempre: aqui verde e' "dentro do takt" (o quadro
-            logo abaixo), e o volumes/hora sozinho nao diz isso. */}
+        {/* Sem o verde de sempre: aqui verde e' "dentro do tempo-alvo" (o
+            quadro logo abaixo), e o volumes/hora sozinho nao diz isso. */}
         <span style={{ ...est.valorRitmo, ...est.valorRitmoNeutro }}>{Math.round(resultado.pecasPorHoraBruto)}</span>
         <span style={est.sufixoRitmo}>
           {resultado.paradaMs > 0 ? 'volumes/hora produzidos no período' : 'volumes/hora'}
@@ -436,14 +456,14 @@ function ResumoTakt({
       </div>
       <div style={est.linhaParcial}>
         {/* O tempo POR VOLUME do periodo, paradas dentro, e' o que se
-            compara com o takt — a regua do programa da semana. */}
+            compara com o tempo-alvo do produto. */}
         <Parcial
-          rotulo={acima ? 'Por vol ▲ takt' : 'Por volume'}
+          rotulo={acima ? 'Por vol ▲ alvo' : compara ? 'Por volume ✓ alvo' : 'Por volume'}
           valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
           sufixo="s"
           tom={compara ? (acima ? 'foraDoTakt' : 'noTakt') : null}
         />
-        <Parcial rotulo="Takt da semana" valor={takt.taktMs > 0 ? formatarSegundos(takt.taktMs) : '—'} sufixo="s" />
+        <Parcial rotulo="Tempo-alvo" valor={alvo.alvoMs > 0 ? formatarSegundos(alvo.alvoMs) : '—'} sufixo="s" />
         <Parcial rotulo="Lacunas" valor={suficiente ? String(leitura.lacunas.length) : '—'} />
         <Parcial rotulo="Parado" valor={resultado.paradaMs > 0 ? formatarDuracao(resultado.paradaMs) : '—'} />
       </div>
@@ -453,8 +473,13 @@ function ResumoTakt({
           as lacunas, ainda não.
         </section>
       )}
-      {!(takt.taktMs > 0) && motivoSemTakt(takt.estado, takt) && (
-        <section style={est.aviso} role="status">Sem takt para comparar: {motivoSemTakt(takt.estado, takt)}</section>
+      {!(alvo.alvoMs > 0) && (
+        <section style={est.aviso} role="status">Sem tempo-alvo para comparar: {semAlvo(alvo.estado)}</section>
+      )}
+      {takt.taktMs > 0 && (
+        <p style={est.linhaCarga}>
+          Carga da semana: takt {formatarSegundos(takt.taktMs)} s por volume — igual para todo volume; não julga o produto.
+        </p>
       )}
     </>
   );

@@ -13,9 +13,10 @@ import { est } from './estilos.js';
 export default function CronometroAoVivo({
   crono, parcial, totalParadaMs, motivos, unidade,
   // Embalagem Takt Time: o tempo POR VOLUME do periodo ate' aqui (paradas
-  // dentro — a regua do takt, ver periodoPorPeca) contra o takt, em
-  // segundos; e, de apoio, volumes, volumes/hora e o ULTIMO intervalo.
-  modoTakt = false, taktMs = null, porVolumeMs = null,
+  // dentro, ver periodoPorPeca) contra o TEMPO-ALVO DO PRODUTO (v2.106.0),
+  // em segundos; e, de apoio, volumes, volumes/hora e o ULTIMO intervalo. O
+  // takt da semana fica numa linha, sem cor: a carga, nao o veredito.
+  modoTakt = false, taktMs = null, alvoMs = null, porVolumeMs = null,
   // O produto escolhido antes do INICIAR, no topo do painel da embalagem.
   produto = '',
 }) {
@@ -28,13 +29,16 @@ export default function CronometroAoVivo({
      rack de dois volumes sai com os dois colados (25 s, 100 s...), e o
      ultimo passaria do takt a cada dois volumes numa linha que atende. E
      com as paradas dentro: marcar "Parou" nao pode apagar o aviso.
-     O QUADRO fica VERMELHO acima do takt e VERDE quando chega nele (pedido
-     do PPCP, 05/11): o fundo ambar claro de antes nao se via de longe. Sem
-     takt ou sem tempo por volume ainda (menos de 2 volumes), nem um nem
-     outro: nao ha' o que comparar. */
-  const comparaTakt = modoTakt && taktMs > 0 && porVolumeMs > 0;
-  const acimaDoTakt = comparaTakt && porVolumeMs > taktMs;
-  const tomPorVolume = comparaTakt ? (acimaDoTakt ? 'foraDoTakt' : 'noTakt') : null;
+     O QUADRO fica VERMELHO acima do alvo e VERDE quando chega nele (pedido
+     do PPCP, 05/11): o fundo ambar claro de antes nao se via de longe. A
+     regua e' o TEMPO-ALVO DO PRODUTO (v2.106.0, PPCP 11/11): com o takt, um
+     numero so' para todo volume, o produto pesado ficava sempre vermelho.
+     Sem alvo (produto sem UEP) ou sem tempo por volume ainda (menos de 2
+     volumes), nem um nem outro: nao ha' o que comparar — e o takt NUNCA
+     entra no lugar do alvo. */
+  const comparaAlvo = modoTakt && alvoMs > 0 && porVolumeMs > 0;
+  const acimaDoAlvo = comparaAlvo && porVolumeMs > alvoMs;
+  const tomPorVolume = comparaAlvo ? (acimaDoAlvo ? 'foraDoTakt' : 'noTakt') : null;
   const nomeProduto = String(produto || '').trim();
   // Na embalagem a barra de baixo cresce junto com o painel (v2.98.1):
   // com o resto grande, os 64 px de Desfazer, Parou e Encerrar ficaram miudos.
@@ -63,19 +67,19 @@ export default function CronometroAoVivo({
       <span className="takt-rotulo-tempo" style={est.rotuloTempoTela}>TEMPO</span>
       <span className="takt-tempo" style={est.tempoCorridoTela}>{formatarCronometro(decorrido)}</span>
       <div style={est.gradeTaktPrincipal}>
-        {/* Acima do takt, o quadro fica vermelho E o rotulo ganha a SETA:
+        {/* Acima do alvo, o quadro fica vermelho E o rotulo ganha a SETA:
             a cor sozinha nao serve a quem nao distingue vermelho de verde,
-            nem a quem olha de longe, de luva, com sol. */}
+            nem a quem olha de longe, de luva, com sol. Dentro, o ✓. */}
         <Parcial
           escala="grande"
-          rotulo={acimaDoTakt ? 'Por vol ▲ takt' : 'Por volume'}
+          rotulo={acimaDoAlvo ? 'Por vol ▲ alvo' : comparaAlvo ? 'Por volume ✓ alvo' : 'Por volume'}
           valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
           sufixo="s"
           tom={tomPorVolume}
         />
-        {/* "da semana": o takt sai do programa da SEMANA que o PCP colou,
-            nao de um dia nem desta medicao — o rotulo diz de onde vem. */}
-        <Parcial escala="grande" rotulo="Takt da semana" valor={taktMs > 0 ? formatarSegundos(taktMs) : '—'} sufixo="s" />
+        {/* O TEMPO-ALVO do produto: o que ele pode levar para a linha fazer
+            a media sem hora extra (UEP × segundos por UEP). */}
+        <Parcial escala="grande" rotulo="Tempo-alvo" valor={alvoMs > 0 ? formatarSegundos(alvoMs) : '—'} sufixo="s" />
       </div>
       <div style={est.gradeTaktApoio}>
         {/* Na embalagem o toque conta VOLUME — e a tela diz isso, porque
@@ -99,6 +103,13 @@ export default function CronometroAoVivo({
           sufixo="s"
         />
       </div>
+      {/* O takt da semana: a CARGA, igual para todo volume — escrito, sem
+          cor e sem julgar. Some no painel baixo (ESTILO_TAKT). */}
+      {taktMs > 0 && (
+        <span className="takt-carga" style={est.linhaCarga}>
+          carga da semana: takt {formatarSegundos(taktMs)} s — não julga o produto
+        </span>
+      )}
     </section>
   ) : (
     <section style={est.painelTempo} aria-label="Tempo decorrido">
@@ -309,6 +320,7 @@ const ESTILO_TAKT = `
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   }
   .takt-sufixo { font-size: clamp(11px, 2vw, 20px); }
+  .takt-carga { font-size: clamp(11px, 1.8vw, 16px); }
   @media (orientation: landscape) {
     .corpo-takt { flex-direction: row !important; }
     .corpo-takt .contagem-takt { font-size: clamp(40px, 6vw, 72px) !important; }
@@ -317,6 +329,7 @@ const ESTILO_TAKT = `
     .takt-media { font-size: clamp(20px, min(3.2vw, 8vh), 52px); }
     .takt-produto { font-size: clamp(14px, min(2.6vw, 6vh), 34px); }
   }
+  @container (max-height: 230px) { .takt-carga { display: none; } }
   @container (max-height: 185px) { .takt-produto { -webkit-line-clamp: 1; } }
   @container (max-height: 175px) { .takt-rotulo-tempo { display: none; } }
   @container (max-height: 140px) { .takt-tempo { display: none; } }
@@ -326,7 +339,7 @@ const ESTILO_TAKT = `
     /* Tela baixa, ou em pe' quase quadrada (as letras seguem a largura e
        o painel fica baixo): sem o produto, como era antes dele. */
     @media (max-height: 600px), (orientation: portrait) and (min-aspect-ratio: 4/5) {
-      .takt-produto { display: none; }
+      .takt-produto, .takt-carga { display: none; }
     }
   }
 `;

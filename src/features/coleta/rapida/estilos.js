@@ -517,6 +517,18 @@ export const est = {
     lineHeight: 1, letterSpacing: -1, fontVariantNumeric: 'tabular-nums', color: cores.ok,
   },
   sufixoRitmo: { fontSize: tamanho.pequeno, fontWeight: 700, letterSpacing: 1.5, color: cores.textoFraco },
+  // O rotulo em cima do numero do tempo-alvo (v2.106.0): o numero grande
+  // tem de dizer de que regua e', antes de quem le' achar que e' o takt.
+  rotuloAlvo: { fontSize: tamanho.pequeno, fontWeight: 700, letterSpacing: 2, color: cores.textoFraco },
+  // A conta do tempo-alvo, por extenso (v2.106.0): de onde sai o numero.
+  linhaConta: {
+    fontSize: tamanho.legenda, color: cores.texto, textAlign: 'center', margin: 0, lineHeight: 1.45, maxWidth: 520,
+  },
+  // O takt da semana como CARGA (v2.106.0): uma linha, sem cor, menor que o
+  // resto — informa, nao julga.
+  linhaCarga: {
+    fontSize: tamanho.legenda, color: cores.textoFraco, textAlign: 'center', margin: 0, lineHeight: 1.4,
+  },
   // Embalagem: o verde fica reservado ao quadro "dentro do takt".
   valorRitmoNeutro: { color: cores.texto },
 

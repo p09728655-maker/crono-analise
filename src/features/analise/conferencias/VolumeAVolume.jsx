@@ -6,6 +6,7 @@ import {
   faixaHoraria, formatarDuracao, leituraPecaAPeca, paradasPorMotivo, periodoPorPeca, somarParadas, unidadeDoPosto,
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
+import { alvoDaJuncao, alvoDoProduto, explicacaoDoAlvo } from '../../../domain/tempoAlvo.js';
 import {
   deixaramDe, deixouDeEmbalar, frasesDasParadas, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, pctDoParado,
   porHoraDaMedicao, qtdParadas, roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
@@ -70,7 +71,9 @@ const MAX_LACUNAS_PAPEL = 15;
  * grafico e a analise salva em todas de uma vez. As contas moram em
  * domain/juncaoMedicoes.js.
  */
-export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
+export function useVolumeAVolume({
+  conferencia, grupo, maquinasDoGrupo, alvos = null,
+}) {
   const [carga, setCarga] = useState({ estado: 'carregando' });
 
   useEffect(() => {
@@ -117,18 +120,24 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
           pecas: c.pecas,
           duracaoMs: Number(c.duracao_ms),
         }));
+    /* O TEMPO-ALVO do produto de cada medicao (v2.106.0): a regua do
+       veredito. O de HOJE (o cadastro do painel agora) — a tela diz. */
+    const alvoDe = (c) => alvoDoProduto(alvos?.lido ?? null, c.peca, { semRede: Boolean(alvos?.semRede) });
     if (conferencia.juncao) {
       // O takt de CADA medicao: semanas do programa diferentes deixam a
-      // junção sem veredito, com o setup planejado (ver taktDaJuncao).
+      // junção sem a carga, com o setup planejado (ver taktDaJuncao). O
+      // alvo: um so', quando todas sao do mesmo (ver alvoDaJuncao).
       const takt = taktDaJuncao(conferencia.medicoes.map(taktDe));
+      const alvo = alvoDaJuncao(conferencia.medicoes.map(alvoDe));
       const juncao = juntarMedicoes(
         conferencia.medicoes.map((c, k) => ({ conferencia: c, ...carga.toques[k] })),
-        { taktMs: takt.taktMs, setupPlanejado: Boolean(takt.setupPlanejado) },
+        { taktMs: takt.taktMs, alvoMs: alvo.alvoMs, setupPlanejado: Boolean(takt.setupPlanejado) },
       );
       return {
         estado: juncao?.leitura ? 'pronto' : 'sem-marcas',
         leitura: juncao?.leitura || null,
         takt,
+        alvo,
         juncao,
         roubo: juncao?.roubo || null,
         deixou: juncao?.deixou || null,
@@ -136,20 +145,24 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
       };
     }
     const takt = taktDe(conferencia);
+    const alvo = alvoDe(conferencia);
     // O veredito e' do PERIODO, paradas dentro, entre o primeiro e o ultimo
-    // toque (ver periodoPorPeca).
+    // toque (ver periodoPorPeca), contra o tempo-alvo do produto.
     const periodoPorPecaMs = periodoPorPeca({
       relogioEntreMarcasMs: carga.relogio,
       volumes: (carga.marcas || []).length,
       setupNoTrechoMs: carga.setup,
       setupPlanejado: Boolean(takt.setupPlanejado),
     });
-    const leitura = leituraPecaAPeca({ marcasMs: carga.marcas, taktMs: takt.taktMs, periodoPorPecaMs });
+    const leitura = leituraPecaAPeca({
+      marcasMs: carga.marcas, taktMs: takt.taktMs, alvoMs: alvo.alvoMs, periodoPorPecaMs,
+    });
     const roubo = roubadosPelasParadas(conferencia);
     return {
       estado: leitura ? 'pronto' : 'sem-marcas',
       leitura,
       takt,
+      alvo,
       juncao: null,
       // O total num passo so' (v2.99.6); null sem leitura ou sem relogio.
       deixou: deixouDeEmbalar([{ conferencia, marcas: carga.marcas, relogio: carga.relogio }], leitura),
@@ -157,7 +170,7 @@ export function useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo }) {
       roubo: roubo ? { saiu: roubo.saiu, roubados: roubo.roubados, potencial: roubo.potencial } : null,
       de: carga.de,
     };
-  }, [carga, grupo, maquinasDoGrupo, conferencia]);
+  }, [carga, grupo, maquinasDoGrupo, conferencia, alvos?.lido, alvos?.semRede]);
 }
 
 /**
@@ -497,10 +510,12 @@ const TOM = {
 const COR_DO_TOM = { atende: claro.ok, falha: claro.critico, atencao: claro.atencao };
 
 export default function VolumeAVolume({
-  conferencia, grupo, maquinasDoGrupo, aoFechar, analise, rolar = true,
+  conferencia, grupo, maquinasDoGrupo, aoFechar, analise, rolar = true, alvos = null,
 }) {
   const unidade = unidadeDoPosto(grupo?.nome);
-  const r = useVolumeAVolume({ conferencia, grupo, maquinasDoGrupo });
+  const r = useVolumeAVolume({
+    conferencia, grupo, maquinasDoGrupo, alvos,
+  });
   const titulo = `${capital(unidade.singular)} a ${unidade.singular}`;
   const ehJuncao = Boolean(conferencia.juncao);
   const medicoes = ehJuncao ? conferencia.medicoes : [conferencia];
@@ -508,9 +523,9 @@ export default function VolumeAVolume({
   const pronto = r.estado === 'pronto';
   const frases = !pronto ? null : r.juncao
     ? frasesDaJuncao({
-      juncao: r.juncao, takt: r.takt, unidade, nomeGrupo: grupo?.nome, hora: horaDaMedicao,
+      juncao: r.juncao, alvo: r.alvo, unidade, hora: horaDaMedicao,
     })
-    : frasesVolumeAVolume({ ...r, unidade, nomeGrupo: grupo?.nome });
+    : frasesVolumeAVolume({ leitura: r.leitura, alvo: r.alvo, unidade });
   // So' com a leitura na tela: nao se analisa o que nao carregou. O estado
   // da analise (nota digitada, "Salvando…", recusa) vem da tela — ver
   // useAnalisesDoPcp.
@@ -703,7 +718,7 @@ export default function VolumeAVolume({
 
               {/* 3. INDICADORES */}
               <Indicadores
-                conferencia={conferencia} leitura={r.leitura} takt={r.takt} unidade={unidade} tom={frases.tom}
+                conferencia={conferencia} leitura={r.leitura} alvo={r.alvo} unidade={unidade} tom={frases.tom}
                 nMedicoes={ehJuncao ? n : 0}
               />
 
@@ -732,6 +747,10 @@ export default function VolumeAVolume({
                     <ul style={est.vavLista}>
                       {frases.linhas.map((l) => <li key={l} style={est.vereditoTexto}>{l}</li>)}
                     </ul>
+                    {/* COMO SE CHEGA NO TEMPO-ALVO, por extenso, e o takt como
+                        CARGA, menor e sem cor (v2.106.0): nao julga. */}
+                    {explicacaoDoAlvo(r.alvo) && <p style={est.vavCarga}>{explicacaoDoAlvo(r.alvo)}</p>}
+                    {frases.carga && <p style={est.vavCarga}>{frases.carga}</p>}
                   </div>
                 </section>
                 {r.leitura.suficiente && r.leitura.lacunas.length > 0 && (
@@ -799,7 +818,7 @@ export default function VolumeAVolume({
 
       {pronto && (
         <FolhaVolumeAVolume
-          conferencia={conferencia} leitura={r.leitura} takt={r.takt} frases={frases}
+          conferencia={conferencia} leitura={r.leitura} takt={r.takt} alvo={r.alvo} frases={frases}
           unidade={unidade} r={r} maquinasDoGrupo={maquinasDoGrupo}
         />
       )}
@@ -822,10 +841,10 @@ export default function VolumeAVolume({
  * A4; nenhum numero novo nasce aqui.
  */
 function Indicadores({
-  conferencia, leitura, takt, unidade, tom, nMedicoes = 0,
+  conferencia, leitura, alvo, unidade, tom, nMedicoes = 0,
 }) {
   const ehJuncao = nMedicoes > 1;
-  const numeros = numerosDaLeitura(leitura, takt, unidade, { juncao: ehJuncao });
+  const numeros = numerosDaLeitura(leitura, alvo, unidade, { juncao: ehJuncao });
   const doDominio = Object.fromEntries(numeros.map((k) => [k.chave, k]));
   const par = somarParadas(conferencia.paradas);
   const volumes = {
@@ -859,7 +878,7 @@ function Indicadores({
     sub: ehJuncao ? `nas ${nMedicoes} medições inteiras, com as paradas` : `${doPapel.sub} — o mesmo da lista`,
   };
   const principais = leitura.suficiente
-    ? [doDominio.periodo, doDominio.takt, doDominio.rodando, doDominio.normal,
+    ? [doDominio.periodo, doDominio.alvo, doDominio.rodando, doDominio.normal,
       volumes, paradas, doDominio.lacunas, porHora]
     : [volumes, ...numeros, paradas, porHora];
   const corVeredito = COR_DO_TOM[tom];
@@ -1517,7 +1536,7 @@ const ALTURA_GRAFICO_PAPEL_JUNCAO = { min: 130, preferida: 185, max: 220 };
  * estudo) seguem em pe', pelo @page do index.html.
  */
 function FolhaVolumeAVolume({
-  conferencia, leitura, takt, frases, unidade, r, maquinasDoGrupo = 1,
+  conferencia, leitura, takt, alvo, frases, unidade, r, maquinasDoGrupo = 1,
 }) {
   const tempo = contaDoTempo(takt, maquinasDoGrupo, unidade);
   const refFolha = useRef(null);
@@ -1647,15 +1666,15 @@ function FolhaVolumeAVolume({
       {/* Volumes/hora depois de Lacunas, como na tela. */}
       <section style={{ ...impF.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}>
         {[
-          ...numerosDaLeitura(leitura, takt, unidade, { juncao: Boolean(juncao) }),
+          ...numerosDaLeitura(leitura, alvo, unidade, { juncao: Boolean(juncao) }),
           juncao
             ? { ...porHoraDaMedicao(conferencia, unidade), sub: `nas ${n} medições inteiras, com as paradas` }
             : porHoraDaMedicao(conferencia, unidade),
         ].map((k) => {
-          /* No papel o cartao do takt diz de que TEMPO ele sai (v2.101.0):
-             "40h42min ÷ 8.500 volumes" — a conta inteira vem depois do
-             grafico, e a 1a pagina nao ganha uma linha a mais. */
-          const sub = k.chave === 'takt' && tempo?.curto ? `${k.sub} · ${tempo.curto}` : k.sub;
+          /* O cartao do TEMPO-ALVO (v2.106.0) ja' diz de onde sai (UEP ×
+             s por UEP) e o takt da semana; a conta do takt inteira vem
+             depois do grafico (o TEMPO DA SEMANA). */
+          const { sub } = k;
           return (
             <div key={k.rotulo} style={imp.campo}>
               <span style={impF.campoRotulo}>{k.rotulo}</span>
@@ -1684,6 +1703,9 @@ function FolhaVolumeAVolume({
             inteira — jornada, dias, setup, o que sobra e o programa. Sem ela
             o papel dizia "takt 17.2 s" e ninguem na reuniao sabia de onde.
             Logo depois do grafico: na 1a pagina, se couber. */}
+        {/* COMO SE CHEGA NO TEMPO-ALVO (v2.106.0), por extenso: o papel que
+            chega a' reuniao diz de onde sai o numero que julga. */}
+        {explicacaoDoAlvo(alvo) && <p style={impF.tempoSemana} data-conta-alvo>{explicacaoDoAlvo(alvo)}</p>}
         {tempo?.texto && <p style={impF.tempoSemana} data-conta-semana>{tempo.texto}</p>}
         {medicoes.filter((c) => c.observacao).map((c) => (
           <p key={c.id} style={{ margin: '0 0 10px' }}>

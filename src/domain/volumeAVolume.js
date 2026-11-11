@@ -11,7 +11,7 @@
  */
 import { conferenciaRapida, potencialSemParada } from './crono/conferencia.js';
 import { formatarSegundos } from './crono/formato.js';
-import { diasProgramados } from './demanda/formato.js';
+import { contaDoAlvo, semAlvo, semAlvoCurto } from './tempoAlvo.js';
 
 /** Takt e intervalo em SEGUNDOS, sempre: "72.0 s", nunca "1min12s". */
 const seg = (ms) => (Number.isFinite(ms) && ms > 0 ? `${formatarSegundos(ms)} s` : '—');
@@ -47,17 +47,25 @@ export function semTakt(estado, nomeGrupo) {
 }
 
 /**
- * O VEREDITO. Contra o takt vai o PERIODO por volume, paradas dentro (ver
- * periodoPorPeca) — a regua do veredito da semana. As duas camadas de baixo
- * dizem de onde vem a diferenca, e a primeira que cai dentro do takt
- * aponta a acao: paradas marcadas, lacunas ou o passo da linha.
+ * O VEREDITO. Contra o TEMPO-ALVO DO PRODUTO (v2.106.0; antes, o takt da
+ * semana) vai o PERIODO por volume, paradas dentro (ver periodoPorPeca). As
+ * duas camadas de baixo dizem de onde vem a diferenca, e a primeira que cai
+ * dentro do alvo aponta a acao: paradas marcadas, lacunas ou o passo da
+ * linha.
+ *
+ * O alvo e' de CADA produto (UEP × segundos por UEP da media da linha, ver
+ * domain/tempoAlvo.js). O takt da semana e' um numero so' para todo volume:
+ * o pesado saia sempre acima e o leve sempre abaixo. Ele continua escrito,
+ * numa linha so', como a CARGA da semana — sem julgar (PPCP, 11/11/2026).
+ * Sem alvo (produto sem UEP, fora da lista do painel), SEM veredito: nunca
+ * o takt no lugar, senao a tela teria duas reguas conforme o produto.
  *
  * Sem periodo (medicao sem o relogio entre toques) NAO ha' veredito: cair
  * para a linha rodando seria exatamente a regua otimista que esta tela
  * deixou de usar.
  */
 export function frasesVolumeAVolume({
-  leitura, takt = {}, unidade, nomeGrupo, juncao = false,
+  leitura, alvo = {}, unidade, juncao = false,
 }) {
   const { singular, plural } = unidade;
   if (!leitura.suficiente) {
@@ -78,34 +86,43 @@ export function frasesVolumeAVolume({
   const rodandoTxt = seg(leitura.mediaMs);
   const normalTxt = seg(leitura.normalMs);
   const temLacuna = leitura.lacunas.length > 0;
-  const alvo = leitura.taktMs;
+  const alvoMs = leitura.alvoMs;
 
   if (!periodo) {
     manchete = `Com a linha rodando, saiu um ${singular} a cada ${rodandoTxt}.`;
     tom = temLacuna ? 'atencao' : 'neutro';
-    linhas.push('Sem o relógio entre o primeiro e o último toque, não há veredito contra o takt: comparar a linha rodando com ele deixaria as paradas de fora.');
-  } else if (alvo) {
+    linhas.push('Sem o relógio entre o primeiro e o último toque, não há veredito contra o tempo-alvo: comparar a linha rodando com ele deixaria as paradas de fora.');
+  } else if (alvoMs) {
     const abertura = `No período, saiu um ${singular} a cada ${seg(periodo)}, paradas dentro`;
-    const pct = Math.abs(Math.round(((periodo / alvo) - 1) * 100));
-    if (periodo <= alvo) {
-      manchete = `${abertura} — dentro do takt de ${seg(alvo)}, com ${pct}% de folga.`;
+    const pct = Math.abs(Math.round(((periodo / alvoMs) - 1) * 100));
+    if (periodo <= alvoMs) {
+      manchete = `${abertura} — dentro do tempo-alvo do produto, ${seg(alvoMs)}, com ${pct}% de folga.`;
       tom = temLacuna ? 'atencao' : 'atende';
     } else {
-      manchete = `${abertura} — ${pct}% acima do takt de ${seg(alvo)}.`;
+      manchete = `${abertura} — ${pct}% acima do tempo-alvo do produto, ${seg(alvoMs)}.`;
       tom = 'falha';
-      if (leitura.mediaMs <= alvo) {
-        linhas.push(`Com a linha rodando seriam ${rodandoTxt} por ${singular}, dentro do takt: o que tira a linha do takt são as paradas marcadas ${juncao ? 'nestas medições' : 'nesta medição'}.`);
-      } else if (leitura.normalMs <= alvo) {
-        linhas.push(`Com a linha rodando, ${rodandoTxt}; sem as lacunas, ${normalTxt}, dentro do takt: o que tira a linha do takt são as paradas que ninguém marcou.`);
+      if (leitura.mediaMs <= alvoMs) {
+        linhas.push(`Com a linha rodando seriam ${rodandoTxt} por ${singular}, dentro do tempo-alvo: o que tira a linha dele são as paradas marcadas ${juncao ? 'nestas medições' : 'nesta medição'}.`);
+      } else if (leitura.normalMs <= alvoMs) {
+        linhas.push(`Com a linha rodando, ${rodandoTxt}; sem as lacunas, ${normalTxt}, dentro do tempo-alvo: o que tira a linha dele são as paradas que ninguém marcou.`);
       } else {
-        linhas.push(`Mesmo sem parada nenhuma (${normalTxt} por ${singular}), a linha não acompanha a demanda: é o passo dela que está mais lento que o takt.`);
+        // Sem parada e sem lacuna e ainda acima: o passo da linha neste
+        // produto e' mais lento que o da media — ou a UEP dele esta' baixa.
+        linhas.push(`Mesmo sem parada nenhuma (${normalTxt} por ${singular}), a linha não chega ao tempo-alvo: o passo neste produto está mais lento que o da média da linha — ou a UEP dele está baixa (confira na cronoanálise).`);
       }
     }
   } else {
     manchete = `No período, saiu um ${singular} a cada ${seg(periodo)}, paradas dentro; com a linha rodando, ${rodandoTxt}.`;
     tom = temLacuna ? 'atencao' : 'neutro';
-    linhas.push(`Sem takt para comparar: ${semTakt(takt.estado, nomeGrupo)}`);
+    linhas.push(`Sem tempo-alvo para comparar: ${semAlvo(alvo.estado)}`);
   }
+  // O takt continua escrito, numa linha a' parte (`carga`), como a CARGA da
+  // semana: sem cor e sem julgar (ver o cabecalho). A' parte das linhas do
+  // veredito: a tela a escreve menor, e o papel nao — la' a conta do tempo
+  // da semana ja' diz o takt, e uma linha a mais empurra o grafico.
+  const carga = leitura.taktMs
+    ? `Takt da semana: ${seg(leitura.taktMs)} por ${singular} — a carga da semana, igual para todo ${singular}; não julga o produto.`
+    : null;
 
   if (temLacuna) {
     const n = leitura.lacunas.length;
@@ -119,12 +136,17 @@ export function frasesVolumeAVolume({
   } else {
     linhas.push('Nenhuma lacuna: nenhum intervalo passou do dobro do normal.');
   }
-  return { tom, manchete, linhas };
+  return {
+    tom, manchete, linhas, carga,
+  };
 }
 
 /**
- * Os cinco numeros, na ordem em que se leem: o veredito (periodo x takt) e
- * as duas camadas do "se nao parasse". Mesma lista na tela e no papel.
+ * Os cinco numeros, na ordem em que se leem: o veredito (periodo x tempo-
+ * alvo do produto) e as duas camadas do "se nao parasse". Mesma lista na
+ * tela e no papel. O cartao do alvo (v2.106.0) entra no lugar do takt — o
+ * takt vai no subtitulo dele, como a carga da semana: um cartao a mais
+ * mandava a folha deitada para a 2a pagina.
  *
  * A `chave` e' para a tela escolher o que vai em destaque e o que vai na
  * faixa de apoio sem depender do texto do rotulo. Os dois tempos por
@@ -135,7 +157,7 @@ export function frasesVolumeAVolume({
  * passou do limite. Nao diz que nao houve perda — parada marcada e passo
  * lento nao sao lacuna.
  */
-export function numerosDaLeitura(leitura, takt = {}, unidade, { juncao = false } = {}) {
+export function numerosDaLeitura(leitura, alvo = {}, unidade, { juncao = false } = {}) {
   if (!leitura.suficiente) {
     return [{
       chave: 'tocados', rotulo: 'Intervalos tocados', valor: String(leitura.n),
@@ -152,31 +174,14 @@ export function numerosDaLeitura(leitura, takt = {}, unidade, { juncao = false }
       sub: `com as paradas, do 1º ao último toque${juncao ? ' de cada medição' : ''}`,
     },
     {
-      chave: 'takt',
-      rotulo: 'Takt da semana',
-      valor: seg(leitura.taktMs),
-      // Semana programada so' em parte: o takt ja' usa as horas so' dos
-      // dias com lote, e o papel diz quantos — senao 35,2 h parece erro.
-      // Sem repetir "semana": o rotulo ja' a diz, e o cartao le "Takt da
-      // semana / 49,4 s / de 09/11 · por volume". A palavra a mais quebrava
-      // uma linha no cartao da folha deitada e mandava a conta do tempo da
-      // semana para a 2a pagina (v2.104.1).
-      sub: leitura.taktMs
-        ? `${takt.semana} · por ${unidade.singular}${diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}`
-        : ({
-          'takts-diferentes': 'medições em semanas diferentes do programa',
-          // So' no tablet: a falta e' de rede, nao de programa (ver semTakt).
-          'sem-rede': 'sem rede: o programa não chegou a este aparelho',
-          carregando: 'buscando o programa da semana',
-          // HA' programa; falta outra coisa (revisao de 05/11): "sem
-          // programa" nesses casos mandava procurar o que existe.
-          'sem-semana': 'o programa não cobre esta semana',
-          'sem-horas': 'faltam as horas da semana do grupo',
-          'sem-dias': 'faltam os dias de produção da jornada',
-          'setup-excede': 'o setup cadastrado passa da jornada',
-          // O servidor nao respondeu: ha' programa, so' nao chegou.
-          'erro-programa': 'não deu para carregar o programa',
-        }[takt.estado] || 'sem programa para comparar'),
+      chave: 'alvo',
+      rotulo: 'Tempo-alvo do produto',
+      valor: seg(leitura.alvoMs),
+      // De onde sai (UEP × s por UEP) e o takt da semana como carga, sem
+      // julgar. Sem alvo, o porque, curto.
+      sub: leitura.alvoMs
+        ? [contaDoAlvo(alvo), leitura.taktMs ? `takt da semana ${seg(leitura.taktMs)}` : ''].filter(Boolean).join(' · ') || `por ${unidade.singular}`
+        : semAlvoCurto(alvo.estado),
     },
     {
       chave: 'rodando',

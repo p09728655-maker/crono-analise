@@ -46,13 +46,30 @@ let atrasoLista = 0;
 // Atraso das marcas de UMA medicao (o painel em "Carregando os toques…").
 let atrasoMarcas = 0;
 
+/* OS TEMPOS-ALVO DO PAINEL (v2.106.0, GET /api/maquinas?alvo=1): a regua do
+   veredito. Os produtos do teste com o alvo IGUAL ao takt do programa (72,0
+   s = 2,48 UEP × 29,03 s), para os numeros do veredito continuarem os de
+   antes — o que muda e' a regua escrita. O 'Produto sem UEP' prova o "sem
+   alvo, sem cor". */
+const ALVOS = {
+  estado: 'ok',
+  ref: {
+    metaUep: 2761, metaOrigem: 'planilha', setupsDia: 0, setupMin: 0, setupOrigem: 'planilha', setupDia: 0, minDia: 527, minProd: 527, sUep: 29.032,
+  },
+  produtos: ['Rack Sirius 1.6', 'Toucador Magic New', 'Painel Sirius 1.4', 'Produto rapido']
+    .map((rot) => ({ rot, uep: 2.48, alvoMs: 72000 }))
+    .concat([{ rot: 'Produto sem UEP', uep: null, alvoMs: null }]),
+};
+const rotaDosAlvos = (rota, alvos = ALVOS) => (/[?&]alvo=1/.test(rota.request().url())
+  ? rota.fulfill({ json: alvos }) : null);
+
 async function simularServidor(pagina, {
   conferencias = [], marcas = null, relogio = null, aoSincronizar, demandas = DEMANDAS, aoAlterar,
-  planilha = null, cadastro = CADASTRO,
+  planilha = null, cadastro = CADASTRO, alvos = ALVOS,
 } = {}) {
   // `planilha`: o estado da leitura da planilha do PCP que o servidor manda
   // junto do programa da embalagem (ver api/_lib/programaEmbalagem.js).
-  await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
+  await pagina.route('**/api/maquinas**', (rota) => rotaDosAlvos(rota, alvos) || (/demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas, ...(planilha ? { planilha } : {}) } })
     : rota.fulfill({ json: cadastro })));
   await pagina.route('**/api/conferencias**', async (rota) => {
@@ -131,14 +148,22 @@ await atalho.tap();
 await t.waitForFunction(() => location.pathname === '/coleta/embalagem', { timeout: 8000 });
 checar(true, 'atalho leva para /coleta/embalagem');
 
-const cartaoTakt = t.locator('[aria-label="Takt da semana"]');
-await cartaoTakt.getByText('72.0').waitFor({ timeout: 8000 });
-checar(/s por volume/.test(await cartaoTakt.innerText()), 'takt da semana em SEGUNDOS antes de medir: 72.0 s por volume');
+/* v2.106.0: o cartao antes de medir e' o do TEMPO-ALVO do produto; sem
+   produto, ele pede o produto, e o takt da semana fica numa linha, como a
+   carga — sem julgar. */
+const cartaoTakt = t.locator('[aria-label="Tempo-alvo do produto"]');
+await cartaoTakt.getByText(/takt 72\.0 s/).waitFor({ timeout: 8000 });
+checar(/Carga da semana de \d{2}\/\d{2}: takt 72\.0 s por volume/.test(await cartaoTakt.innerText())
+  && /escolha o produto da lista/.test(await cartaoTakt.innerText()),
+  'antes do produto: o cartao pede o produto, e o takt da semana vai como carga (72.0 s por volume)');
 checar(await t.getByText('EMBALAGEM 01').count() > 0, 'a maquina da embalagem ja vem escolhida');
 checar(await t.locator('input[aria-label="Hora inicial"]').count() === 0, 'sem formulario de horarios');
 checar(await t.getByRole('radio', { name: '2 ciclos' }).count() === 0, 'sem campo de furacao');
 
 await t.locator('input[aria-label="Produto embalado"]').fill('Rack Sirius 1.6');
+await cartaoTakt.getByText('TEMPO-ALVO DO PRODUTO').waitFor({ timeout: 4000 });
+checar(/72\.0\s*s por volume\s*Tempo-alvo = 2,48 UEP × 29,03 s por UEP = 72,0 s por volume\. Os 29,03 s por UEP: \(527 min de jornada\) × 60 ÷ 2\.761 UEP por dia/.test(await cartaoTakt.innerText()),
+  `com o produto: o tempo-alvo dele em segundos, e de onde sai (${(await cartaoTakt.innerText()).replace(/\n/g, ' | ')})`);
 await t.getByRole('button', { name: /INICIAR/ }).click();
 /* ARMADO: o INICIAR nao abre o relogio. Quem abre e' a LARGADA, o toque
    dado quando um volume fecha — e ela nao conta volume. */
@@ -189,8 +214,8 @@ for (let i = 0; i < 12; i++) {
   await t.waitForTimeout(260);
 }
 const painelTempo = await t.locator('[aria-label="Tempo decorrido"]').innerText();
-checar(/ÚLTIMO/i.test(painelTempo) && /POR VOLUME/i.test(painelTempo) && /TAKT/i.test(painelTempo)
-  && painelTempo.includes('72.0'), 'cronometro rodando mostra ULTIMO, POR VOLUME e TAKT 72.0');
+checar(/ÚLTIMO/i.test(painelTempo) && /POR VOLUME/i.test(painelTempo) && /TEMPO-ALVO/i.test(painelTempo)
+  && painelTempo.includes('72.0'), 'cronometro rodando mostra ULTIMO, POR VOLUME e TEMPO-ALVO 72.0');
 checar(painelTempo.split('\n')[0].trim() === 'Rack Sirius 1.6', `cronometro rodando mostra o produto no topo (${painelTempo.split('\n')[0]})`);
 /* v2.98.0: volumes/hora ao vivo (volumes ÷ relogio desde a largada) e o
    painel do mesmo tamanho do alvo — o alvo tomava dois tercos da tela. */
@@ -346,6 +371,9 @@ const medicao = {
   duracao_ms: 1000000, pecas: marcas.length, ciclos_por_peca: 1, furacao_passante: false,
   salvo_em: hoje.toISOString(), arquivada: false, com_marcas: true, paradas: [],
   observacao: 'Faltou caixa às 9h10',
+  // A lista ja' traz o relogio entre toques (v2.106.0): e' dele que sai o
+  // "ultima medicao" da lista de tempos-alvo, sem abrir uma a uma.
+  marcas_relogio_ms: marcas.at(-1) - marcas[0],
 };
 // Uma segunda, mais antiga: para trocar de medicao e salvar a analise.
 const medicao2 = {
@@ -427,6 +455,32 @@ checar(await lista.getByRole('button', { name: 'Não analisadas (2)' }).count() 
   && await lista.getByRole('row').filter({ hasText: 'Painel Sirius 1.4' }).count() === 0,
 'a fila conta o mesmo que o cartao (2); a de um toque fica em "Sem intervalos", fora da fila');
 
+/* O TEMPO-ALVO DE CADA PRODUTO (v2.106.0): recolhido acima da lista, com a
+   regua no titulo; aberto, os medidos com a ultima medicao ao lado do alvo
+   (70,8 s contra 72,0 s: 2% dentro) e a de um toque so' fora dos medidos. */
+{
+  const alvoBloco = p.locator('details[aria-label="Tempo-alvo de cada produto"]');
+  const resumo = (await alvoBloco.locator('summary').innerText()).replace(/\s+/g, ' ');
+  checar(/a UEP do produto × 29,03 s por UEP · 2 medidos, com o medido ao lado/.test(resumo) && !/acima do alvo/.test(resumo),
+    `tempos-alvo: recolhido, a regua e os 2 medidos no titulo, nenhum acima (${resumo})`);
+  checar(!(await alvoBloco.locator('table').isVisible()), 'tempos-alvo: a tabela fica recolhida ate\' abrir');
+  await alvoBloco.locator('summary').click();
+  const txt = (await alvoBloco.innerText()).replace(/\s+/g, ' ');
+  checar(/Tempo-alvo do produto = a UEP dele × 29,03 s por UEP\. Os 29,03 s por UEP: \(527 min de jornada\) × 60 ÷ 2\.761 UEP por dia/.test(txt),
+    'tempos-alvo: a conta da regua por extenso');
+  const linhaRack = alvoBloco.getByRole('row').filter({ hasText: 'Rack Sirius 1.6' });
+  const rack = (await linhaRack.innerText()).replace(/\s+/g, ' ');
+  checar(/2,48 72\.0 s 70\.8 s ✓ 2% dentro 1 · última \d{2}\/\d{2}/.test(rack),
+    `tempos-alvo: Rack com UEP, alvo, ultima medicao e a diferenca (${rack})`);
+  checar(await alvoBloco.getByRole('row').filter({ hasText: 'Painel Sirius 1.4' }).count() === 0
+    && await alvoBloco.getByRole('row').filter({ hasText: 'Produto sem UEP' }).count() === 0,
+  'tempos-alvo: a de um toque so\' nao vira medido; os sem medicao ficam no botao');
+  await alvoBloco.getByRole('button', { name: /Mostrar também os 3 sem medição/ }).click();
+  const semUep = (await alvoBloco.getByRole('row').filter({ hasText: 'Produto sem UEP' }).innerText()).replace(/\s+/g, ' ');
+  checar(/— sem UEP — —/.test(semUep), `tempos-alvo: produto sem UEP diz "sem UEP", sem alvo nem diferenca (${semUep})`);
+  await alvoBloco.locator('summary').click();
+}
+
 await lista.getByRole('button', { name: 'Rack Sirius 1.6' }).click();
 // Relogio entre o 1o e o ultimo toque: 920 s / 13 = 70,8 s por volume,
 // paradas dentro; takt 72 s. Sem a lacuna: 60 s.
@@ -441,7 +495,13 @@ checar(await p.getByRole('dialog').count() === 0, 'o detalhe abre na propria pag
     'na lista, a linha aberta fica marcada');
 }
 const textoJanela = await janela.innerText();
-checar(/dentro do takt de 72.0 s, com 2% de folga/.test(textoJanela), 'veredito pelo relogio entre toques: 70.8 s dentro do takt de 72.0 s');
+checar(/dentro do tempo-alvo do produto, 72.0 s, com 2% de folga/.test(textoJanela), 'veredito pelo relogio entre toques: 70.8 s dentro do tempo-alvo de 72.0 s');
+/* COMO CHEGAMOS NO TEMPO-ALVO, por extenso, embaixo do veredito; e o takt
+   como carga, sem julgar (v2.106.0). */
+checar(/Tempo-alvo = 2,48 UEP × 29,03 s por UEP = 72,0 s por volume\. Os 29,03 s por UEP: \(527 min de jornada\) × 60 ÷ 2\.761 UEP por dia, a média da linha sem hora extra\./.test(textoJanela.replace(/\s+/g, ' ')),
+  'PC: a conta do tempo-alvo por extenso, embaixo do veredito');
+checar(/Takt da semana: 72\.0 s por volume — a carga da semana, igual para todo volume; não julga o produto\./.test(textoJanela),
+  'PC: o takt da semana fica como carga, sem julgar');
 // O valor logo depois do rotulo do proprio cartao — nao um 70.8 qualquer
 // mais adiante (manchete, rotulo do grafico).
 checar(/POR VOLUME COM A LINHA RODANDO\s*70\.8 s/i.test(textoJanela) && /SEM AS LACUNAS\s*60\.0 s/i.test(textoJanela),
@@ -543,19 +603,21 @@ const tamanhoDoPdf = async () => {
     const linhas = await folha.locator('svg[aria-label^="Intervalo entre"] line[data-linha]').evaluateAll((ls) => Object.fromEntries(
       ls.map((l) => [l.dataset.linha, Number(l.getAttribute('stroke-width'))]),
     ));
-    checar(linhas.takt === 3 && linhas.media < linhas.takt,
-      `folha: o takt e a linha mais forte do grafico, o rodando fica abaixo dela (${JSON.stringify(linhas)})`);
-    checar(/Takt da semana: 72\.0 s/.test(legenda)
-      && await folha.locator('svg[aria-label^="Intervalo entre"] text', { hasText: /^Takt/ }).count() === 0,
-    'folha: o valor do takt esta na legenda, nao numa faixa ao lado do grafico');
+    checar(linhas.alvo === 3 && linhas.media < linhas.alvo,
+      `folha: o tempo-alvo e a linha mais forte do grafico, o rodando fica abaixo dela (${JSON.stringify(linhas)})`);
+    checar(/Tempo-alvo do produto: 72\.0 s/.test(legenda)
+      && await folha.locator('svg[aria-label^="Intervalo entre"] text', { hasText: /^Tempo-alvo/ }).count() === 0,
+    'folha: o valor do tempo-alvo esta na legenda, nao numa faixa ao lado do grafico');
     checar(sobra <= 30, `folha: as barras chegam ate perto da borda direita (sobram ${sobra} px; eram ~100)`);
     /* O TEMPO DA SEMANA na folha (v2.101.0): a conta do takt por extenso.
        Grupo de 44 h, sem setup, semana inteira: 44 x 3600 / 2200 = 72,0 s. */
     const conta = (await folha.innerText()).replace(/\s+/g, ' ');
     checar(/Tempo da semana de \d{2}\/\d{2} — Por máquina: 44h00min de jornada, sem setup planejado\. 2\.200 volumes na semana → takt 72\.0 s por volume\./.test(conta),
       `folha: o tempo da semana e a conta do takt (${(/Tempo da semana.*?por volume\./.exec(conta) || ['nao achou'])[0]})`);
-    checar(/(?<!semana )de \d{2}\/\d{2} · por volume · 44h00min ÷ 2\.200 volumes/.test(conta),
-      'folha: na 1a pagina, o cartao do takt diz de que tempo ele sai (44h00min ÷ 2.200 volumes)');
+    checar(/Tempo-alvo do produto ?72\.0 s ?2,48 UEP × 29,03 s · takt da semana 72\.0 s/.test(conta),
+      `folha: o cartao do tempo-alvo diz de onde ele sai, e o takt da semana como carga (${(/Tempo-alvo do produto.{0,60}/.exec(conta) || ['nao achou'])[0]})`);
+    checar(/Tempo-alvo = 2,48 UEP × 29,03 s por UEP = 72,0 s por volume\. Os 29,03 s por UEP: \(527 min de jornada\) × 60 ÷ 2\.761 UEP por dia/.test(conta),
+      'folha: a conta do tempo-alvo por extenso, depois do grafico');
     // A letra da folha cresceu (v2.101.0): o valor dos campos passa de 10,5 px.
     const letra = await folha.evaluate((f) => parseFloat(getComputedStyle(f).fontSize));
     checar(letra >= 12, `folha: letra maior (base ${letra} px; era 10.5)`);
@@ -1152,10 +1214,11 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
   s.on('pageerror', (e) => erros.push(e.message));
   await simularServidor(s, { demandas: [{ ...DEMANDAS[0], dias: 4 }] });
   await s.goto(`${BASE}/coleta/embalagem`);
-  const cartao = s.locator('[aria-label="Takt da semana"]');
+  // v2.106.0: o takt vai na linha da CARGA do cartao do tempo-alvo.
+  const cartao = s.locator('[aria-label="Tempo-alvo do produto"]');
   await cartao.getByText(/57\.6/).waitFor({ timeout: 8000 });
   const texto = (await cartao.innerText()).replace(/\s+/g, ' ');
-  checar(/57\.6 s por volume — takt da semana de \d{2}\/\d{2} · 4 de 5 dias programados/.test(texto),
+  checar(/Carga da semana de \d{2}\/\d{2}: takt 57\.6 s por volume · 4 de 5 dias programados — não julga o produto/.test(texto),
     `tablet: o takt da semana da planilha diz de quantos dias ele e' (${texto})`);
   await ctx.close();
 
@@ -1169,9 +1232,9 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
     cadastro: { ...CADASTRO, grupos: [{ ...GRUPO, dias_semana: null }] },
   });
   await s2.goto(`${BASE}/coleta/embalagem`);
-  const cartao2 = s2.locator('[aria-label="Takt da semana"]');
+  const cartao2 = s2.locator('[aria-label="Tempo-alvo do produto"]');
   await cartao2.getByText(/Faltam/).waitFor({ timeout: 8000 });
-  checar(/Takt: Faltam os dias de produção da semana do grupo EMBALAGEM no cadastro\./.test(await cartao2.innerText()),
+  checar(/Takt da semana: Faltam os dias de produção da semana do grupo EMBALAGEM no cadastro\./.test(await cartao2.innerText()),
     'tablet: sem os dias de producao no cadastro, diz o que falta em vez de presumir 5');
   checar(erros.length === 0, `tablet com planilha: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
   await ctx2.close();
@@ -1194,8 +1257,10 @@ checar(errosPc.length === 0, `PC sem erro de pagina${errosPc.length ? `: ${erros
   await programaChegou;
   await s.getByRole('button', { name: /INICIAR/ }).waitFor({ timeout: 8000 });
   await s.waitForTimeout(300);
-  checar(await s.locator('[aria-label="Takt da semana"]').count() === 0,
-    'sem programa: o cartao do takt nao aparece no tablet');
+  // v2.106.0: o cartao e' o do TEMPO-ALVO (nao depende do programa); sem
+  // programa, ele so' nao traz a linha da carga.
+  checar(!/Carga da semana|Takt da semana/.test(await s.locator('[aria-label="Tempo-alvo do produto"]').innerText()),
+    'sem programa: o cartao do tempo-alvo nao traz a linha do takt no tablet');
   checar(await s.getByText(/colou/).count() === 0, 'sem programa: nenhum aviso de programa nao colado');
   checar(!(await s.getByRole('button', { name: /INICIAR/ }).isDisabled()), 'sem programa: a medicao comeca normalmente');
   checar(erros.length === 0, `sem programa: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
@@ -1391,7 +1456,7 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
     },
   }));
   await s.goto(`${BASE}/coleta/embalagem`);
-  await s.locator('[aria-label="Takt da semana"]').getByText('72.0').waitFor({ timeout: 8000 });
+  await s.locator('[aria-label="Tempo-alvo do produto"]').getByText(/takt 72\.0/).waitFor({ timeout: 8000 });
 
   const linhas = s.locator('button[aria-label^="Ver o resultado"]');
   checar(await linhas.count() === 3, 'resultado salvo: cada medicao salva e um botao "Ver o resultado"');
@@ -1414,8 +1479,10 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   // O nome vem do cadastro, que chega do servidor: espera por ele.
   await resultado.getByText('Falta de caixa').waitFor({ timeout: 4000 }).catch(() => {});
   const texto = (await resultado.innerText()).replace(/\s+/g, ' ');
-  checar(/No período, saiu um volume a cada 18\.2 s, paradas dentro — dentro do takt de 72\.0 s/.test(texto),
-    `o veredito do PC no tablet, contra o takt desta semana (${texto.slice(0, 120)})`);
+  checar(/No período, saiu um volume a cada 18\.2 s, paradas dentro — dentro do tempo-alvo do produto, 72\.0 s/.test(texto),
+    `o veredito do PC no tablet, contra o tempo-alvo do produto (${texto.slice(0, 120)})`);
+  checar(/Tempo-alvo = 2,48 UEP × 29,03 s por UEP = 72,0 s por volume\. Os 29,03 s por UEP/.test(texto),
+    'tablet: a conta do tempo-alvo por extenso, no resultado salvo');
   checar(/POR VOLUME COM A LINHA RODANDO 12\.7 ?s/i.test(texto) && /POR VOLUME SEM AS LACUNAS 10\.0 ?s/i.test(texto),
     'as camadas: rodando 12.7 s e sem as lacunas 10.0 s');
   checar(/VOLUMES\/HORA 180/i.test(texto), 'volumes/hora 180 — o mesmo numero da linha da lista');
@@ -1447,8 +1514,8 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   await linhas.nth(1).tap();
   await resultado.waitFor({ timeout: 4000 });
   const textoPassada = (await resultado.innerText()).replace(/\s+/g, ' ');
-  checar(/TAKT DA SEMANA 36\.0 ?s/i.test(textoPassada) && !/72\.0/.test(textoPassada),
-    `medicao da semana passada: o takt e o daquela semana (36.0 s), nao o de hoje (${textoPassada.slice(0, 160)})`);
+  checar(/Takt da semana:? 36\.0 ?s/i.test(textoPassada) && !/takt da semana:? 72\.0/i.test(textoPassada),
+    `medicao da semana passada: o takt (a carga) e o daquela semana (36.0 s), nao o de hoje (${textoPassada.slice(0, 160)})`);
 
   // F5 com o resultado aberto reabre o mesmo; o botao do pe' volta a' lista
   // sem deixar entrada morta no historico.
@@ -1535,14 +1602,14 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
     return rota.fulfill({ json: { demandas } });
   });
   await s.goto(`${BASE}/coleta/embalagem`);
-  await s.locator('[aria-label="Takt da semana"]').getByText('72.0').waitFor({ timeout: 8000 });
+  await s.locator('[aria-label="Tempo-alvo do produto"]').getByText(/takt 72\.0/).waitFor({ timeout: 8000 });
   await s.getByRole('button', { name: /Ver o resultado/ }).first().tap();
   const resultado = s.locator('[aria-label="Resultado da medição salva"]');
-  // Espera o takt carregar (o cartao ganha "de 09/11 · por volume"), seja
-  // ele qual for: o valor e' conferido abaixo, nao esperado.
-  await resultado.getByText(/· por volume/).first().waitFor({ timeout: 8000 });
+  // Espera o takt carregar (a linha da CARGA, v2.106.0), seja ele qual for:
+  // o valor e' conferido abaixo, nao esperado.
+  await resultado.getByText(/Takt da semana: \d/).first().waitFor({ timeout: 8000 });
   const texto = (await resultado.innerText()).replace(/\s+/g, ' ');
-  checar(/TAKT DA SEMANA 36\.0 ?s/i.test(texto) && !/72\.0/.test(texto),
+  checar(/Takt da semana: 36\.0 s/i.test(texto) && !/takt da semana:? 72\.0/i.test(texto),
     `duas linhas: o resultado da EMBALAGEM 02 usa o takt do grupo dela (36.0 s), nao o da maquina do topo (${texto.slice(0, 140)})`);
   checar(/EMBALAGEM 02/.test(texto), 'duas maquinas: o resultado diz de qual maquina e a medicao');
   checar(erros.length === 0, `duas linhas: sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
@@ -1574,8 +1641,12 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   const res2 = s2.locator('[aria-label="Resultado da medição salva"]');
   await res2.waitFor({ timeout: 4000 });
   const texto2 = (await res2.innerText()).replace(/\s+/g, ' ');
-  checar(/sem rede/i.test(texto2) && !/não cobre a semana/.test(texto2) && !/sem programa para comparar/.test(texto2),
-    `sem rede: o resultado diz que falta rede, nao que falta programa (${texto2.slice(0, 220)})`);
+  // v2.106.0: o takt nao julga mais — sem ele, a linha da carga so' nao
+  // aparece; o que nao pode e' culpar o PCP ("nao cobre a semana"). O
+  // veredito diz por que nao ha' alvo (o produto, aqui, e' de texto livre).
+  checar(!/não cobre a semana/.test(texto2) && !/sem programa para comparar/.test(texto2)
+    && /Sem tempo-alvo para comparar: o produto não é um da lista do painel/.test(texto2),
+  `sem rede: nada culpa o PCP, e o veredito diz por que nao ha' alvo (${texto2.slice(0, 220)})`);
   await ctx2.close();
 }
 
@@ -1878,7 +1949,7 @@ for (const v of [
   await semearSessao(t2);
   await simularServidor(t2, { demandas: [{ ...DEMANDAS[0], diasProducao: 4 }] });
   await t2.goto(`${BASE}/coleta/embalagem`);
-  const cartao = t2.locator('[aria-label="Takt da semana"]');
+  const cartao = t2.locator('[aria-label="Tempo-alvo do produto"]');
   await cartao.getByText(/57\.6/).waitFor({ timeout: 8000 });
   checar(/4 de 5 dias programados/.test(await cartao.innerText()),
     `tablet: a semana digitada com 4 dias da 57.6 s e diz os dias (${(await cartao.innerText()).replace(/\s+/g, ' ')})`);
@@ -1894,17 +1965,20 @@ for (const v of [
   const erros = [];
   v.on('pageerror', (e) => erros.push(e.message));
   const subiram = [];
-  // Takt de 1,0 s (44 h x 3600 / 158.400 volumes): da' para passar do takt
-  // e voltar a ele em poucos segundos de teste.
+  // Takt de 1,0 s (44 h x 3600 / 158.400 volumes) e, desde a v2.106.0, o
+  // TEMPO-ALVO do produto de 1,0 s — e' ele que pinta o quadro: da' para
+  // passar dele e voltar em poucos segundos de teste.
   await simularServidor(v, {
     demandas: [{ ...DEMANDAS[0], pecas: 158400 }],
     aoSincronizar: (c) => subiram.push(...(c.conferencias || [])),
+    alvos: { ...ALVOS, produtos: [...ALVOS.produtos, { rot: 'Painel Teste', uep: 0.03, alvoMs: 1000 }] },
   });
   await v.goto(`${BASE}/coleta`);
   await v.getByRole('button', { name: /Embalagem Takt Time/ }).tap();
   await v.waitForFunction(() => location.pathname === '/coleta/embalagem', { timeout: 8000 });
-  await v.locator('[aria-label="Takt da semana"]').getByText('1.0').waitFor({ timeout: 8000 });
+  await v.locator('[aria-label="Tempo-alvo do produto"]').getByText(/takt 1\.0/).waitFor({ timeout: 8000 });
   await v.locator('input[aria-label="Produto embalado"]').fill('Painel Teste');
+  await v.locator('[aria-label="Tempo-alvo do produto"]').getByText('TEMPO-ALVO DO PRODUTO').waitFor({ timeout: 4000 });
   await v.getByRole('button', { name: /INICIAR/ }).click();
   const largadaV = v.getByRole('button', { name: /Largada/ });
   await largadaV.waitFor({ timeout: 4000 });
@@ -1916,14 +1990,15 @@ for (const v of [
   const quadro = painelV.locator('[data-tom]');
 
   /* ---- o quadro do takt e o do tempo por volume */
-  checar(/TAKT DA SEMANA/i.test(await painelV.innerText()), 'rodando: o quadro do takt diz que e o takt DA SEMANA');
+  checar(/TEMPO-ALVO/i.test(await painelV.innerText()) && /carga da semana: takt 1\.0 s — não julga o produto/i.test(await painelV.innerText()),
+    'rodando: o quadro grande e\' o TEMPO-ALVO; o takt da semana vai numa linha, como carga');
   checar(await quadro.count() === 0, 'antes do 2o volume nao ha tempo por volume: o quadro nao tem cor');
-  // Devagar: 3 volumes a ~1,5 s, acima do takt de 1,0 s.
+  // Devagar: 3 volumes a ~1,5 s, acima do tempo-alvo de 1,0 s.
   for (let i = 0; i < 3; i++) { await v.waitForTimeout(1500); await alvoV.dispatchEvent('pointerdown'); }
   const fundoAcima = await quadro.evaluate((e) => getComputedStyle(e).backgroundColor);
   checar(await quadro.getAttribute('data-tom') === 'foraDoTakt' && fundoAcima === 'rgb(185, 28, 28)',
-    `acima do takt o quadro do tempo por volume fica VERMELHO (${fundoAcima})`);
-  checar(/POR VOL ▲ TAKT/i.test(await quadro.innerText()), 'e a seta escrita no rotulo continua: a cor nao vai sozinha');
+    `acima do tempo-alvo o quadro do tempo por volume fica VERMELHO (${fundoAcima})`);
+  checar(/POR VOL ▲ ALVO/i.test(await quadro.innerText()), 'e a seta escrita no rotulo continua: a cor nao vai sozinha');
   // Depressa, ate' o tempo por volume chegar no takt.
   for (let i = 0; i < 12 && await quadro.getAttribute('data-tom') === 'foraDoTakt'; i++) {
     await v.waitForTimeout(260);
@@ -1931,8 +2006,8 @@ for (const v of [
   }
   const fundoNoTakt = await quadro.evaluate((e) => getComputedStyle(e).backgroundColor);
   checar(await quadro.getAttribute('data-tom') === 'noTakt' && fundoNoTakt === 'rgb(21, 128, 61)'
-    && /POR VOLUME/i.test(await quadro.innerText()),
-    `chegou no takt: o quadro sai do vermelho e fica verde (${fundoNoTakt})`);
+    && /POR VOLUME ✓ ALVO/i.test(await quadro.innerText()),
+    `chegou no tempo-alvo: o quadro sai do vermelho e fica verde, com o ✓ (${fundoNoTakt})`);
 
   /* ---- PAROU: a parada conta do toque, e o motivo vem depois */
   const folhaV = v.locator('[aria-label="Por que a máquina parou"]');
@@ -2016,7 +2091,8 @@ for (const v of [
   await folhaV.getByRole('button', { name: 'Setup / Troca' }).click();
   const resumoV = v.locator('[aria-label="Resultado da conferência"]');
   await resumoV.waitFor({ timeout: 4000 });
-  checar(/TAKT DA SEMANA/i.test(await resumoV.innerText()), 'resultado: o takt tambem diz que e o da semana');
+  checar(/TEMPO-ALVO/i.test(await resumoV.innerText()) && /Carga da semana: takt 1\.0 s por volume/.test(await resumoV.innerText()),
+    'resultado: o quadro e\' o TEMPO-ALVO, e o takt vai como a carga da semana');
 
   /* ---- resultado ainda nao salvo: o Voltar tambem pergunta */
   await v.goBack();

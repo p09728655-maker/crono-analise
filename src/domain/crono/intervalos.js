@@ -141,17 +141,24 @@ export function periodoPorPeca({
  * nao ha' "quantos volumes acima do takt" aqui — so' a media contra ele.
  *
  * @param marcasMs instante de cada volume, ms no relogio da linha rodando
- * @param taktMs   takt da semana da medicao, por maquina (opcional)
+ * @param taktMs   takt da semana da medicao, por maquina (opcional) — na
+ *                 embalagem, so' informa a CARGA da semana (v2.106.0)
+ * @param alvoMs   TEMPO-ALVO do produto (v2.106.0): a regua do veredito na
+ *                 embalagem — segundos por UEP da media da linha × UEP do
+ *                 volume (ver domain/tempoAlvo.js). Sem ele, sem veredito.
  */
-export function leituraPecaAPeca({ marcasMs, taktMs = null, periodoPorPecaMs = null } = {}) {
+export function leituraPecaAPeca({
+  marcasMs, taktMs = null, alvoMs = null, periodoPorPecaMs = null,
+} = {}) {
   const intervalos = intervalosEntreMarcas(marcasMs);
   if (!intervalos.length) return null;
 
   const c = CRITERIOS_INTERVALOS;
   const n = intervalos.length;
   const takt = Number(taktMs) > 0 ? Number(taktMs) : null;
+  const alvo = Number(alvoMs) > 0 ? Number(alvoMs) : null;
   const periodo = Number(periodoPorPecaMs) > 0 ? Number(periodoPorPecaMs) : null;
-  const base = { n, intervalos, taktMs: takt, periodoMs: periodo, criterios: c };
+  const base = { n, intervalos, taktMs: takt, alvoMs: alvo, periodoMs: periodo, criterios: c };
 
   if (n < c.minIntervalos) {
     return {
@@ -190,5 +197,8 @@ export function leituraPecaAPeca({ marcasMs, taktMs = null, periodoPorPecaMs = n
     periodoVsTaktPct: takt && periodo ? ((periodo / takt) - 1) * 100 : null,
     mediaVsTaktPct: takt ? ((mediaMs / takt) - 1) * 100 : null,
     normalVsTaktPct: takt ? ((normalMs / takt) - 1) * 100 : null,
+    // O mesmo contra o tempo-alvo do produto (v2.106.0): o do periodo e' o
+    // veredito da embalagem.
+    periodoVsAlvoPct: alvo && periodo ? ((periodo / alvo) - 1) * 100 : null,
   };
 }

@@ -114,10 +114,57 @@ em máquina na mão. O grupo é a unidade com que se decide capacidade, e é
 dele que sai o programa da semana. Com um grupo só medido no período o item
 não aparece: ali **Todas** já é o grupo.
 
-### Embalagem Takt Time — cada volume contra o takt (`/coleta/embalagem`, `/analise/embalagem`)
+### Embalagem Takt Time — cada volume contra o tempo-alvo do produto (`/coleta/embalagem`, `/analise/embalagem`)
 
 Função própria, separada do ritmo por máquina: na embalagem a pergunta não é
-quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
+quantas peças por hora, é **se cada volume embalado sai dentro do tempo-alvo
+do produto dele**.
+
+- **A RÉGUA DO VEREDITO É O TEMPO-ALVO (v2.106.0)**, não mais o takt da semana.
+  PPCP, 11/11/2026: o takt (horas da semana ÷ volumes programados) é um número
+  só para todo volume — o produto pesado saía sempre vermelho e o leve sempre
+  verde, pelo peso. O tempo-alvo é o tempo que CADA volume pode levar para a
+  linha fazer a média sem hora extra:
+
+  ```
+  s por UEP  = (527 min de jornada − setup do ⚙ do painel) × 60 ÷ META UEP
+  tempo-alvo = s por UEP × UEP do volume (cadastro do painel)
+  ```
+
+  Com a META UEP de 2.761 e o setup de 4 × 8,2 min: 10,74 s por UEP. **A conta
+  mora no painel** (`.gs` v5.62, `getTemposAlvo`); o app não guarda cópia da
+  UEP, da meta nem do setup. O servidor lê pelo `PAINEL_APPS_SCRIPT_URL`
+  (`GET /api/maquinas?alvo=1`, em `/maquinas` pelo limite de 12 funções do
+  Hobby; `api/_lib/temposAlvo.js`), guarda 10 min (1 min depois de falha) e
+  devolve `estado` (`ok` · `gs-antigo` · `desligado` · `erro`). O aparelho
+  guarda a última resposta ok (`src/lib/temposAlvo.js`, chave
+  `ritmopatrimar.temposAlvo`, nova busca a cada meia hora): sem rede, vale a
+  guardada. O produto é achado pelo nome da lista do painel (`modelo · NOME`
+  e `· VOL v/n`), o mesmo que a medição manda ao painel.
+  - **Decisões do PPCP** (11/11/2026): a COR (vermelho/verde, no andon do
+    tablet, no cartão, no volume a volume, na folha e no vídeo) segue o
+    tempo-alvo; o takt da semana vira uma linha de **carga**, sem cor ("não
+    julga o produto"). Produto **sem UEP** no painel, fora da lista do painel
+    ou junção de produtos com alvos diferentes: **sem alvo e sem cor**, com o
+    motivo (`semAlvo`) — nunca o takt no lugar.
+  - **Como se chega no alvo** vai escrito onde ele aparece
+    (`explicacaoDoAlvo`, `src/domain/tempoAlvo.js`): *"Tempo-alvo = 2,48 UEP
+    × 10,74 s por UEP = 26,6 s por volume. Os 10,74 s por UEP: (527 min de
+    jornada − 32,8 min de setup) × 60 ÷ 2.761 UEP por dia, a média da linha
+    sem hora extra."* — cartão do tablet, preparar do vídeo, veredito do
+    volume a volume e folha.
+  - **No PC**, o quadro *Tempo-alvo de cada produto* (`<details>` fechado,
+    ACIMA da lista: embaixo dela, com a página rolada até o fim, ele virava a
+    âncora de rolagem do navegador e abrir uma medição puxava a linha
+    clicada) traz a régua e, produto a produto, a UEP, o alvo e — para os
+    medidos em 30 dias — o *por volume no período* da última medição
+    (`medidoXAlvo`, pela mesma conta do volume a volume: `periodoPorPeca`
+    com o `marcas_relogio_ms` que a lista passou a trazer) e a diferença, do
+    mais acima do alvo para o mais abaixo.
+  - O alvo é o **de hoje**: medição antiga é lida com a UEP e a meta de
+    agora. O que segue abaixo sobre "▲ takt" e "linha do takt" no veredito
+    vale hoje para o tempo-alvo ("▲ alvo", "linha do tempo-alvo"); o takt
+    continua no cartão da carga, no setup planejado e na junção.
 
 - **No tablet**, o atalho *Embalagem Takt Time* abre direto o cronômetro, com a
   máquina do grupo EMBALAGEM já escolhida. Antes de começar aparece o takt da

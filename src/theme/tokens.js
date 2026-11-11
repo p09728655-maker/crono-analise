@@ -26,7 +26,9 @@ export const status = {
      o quadro do tempo por volume na embalagem fica VERMELHO ate' chegar no
      takt, como num andon. Vermelho mais escuro que o de marca (#DB2126), e
      nunca sozinho: sempre com a seta e o "▲ takt" escritos no rotulo. Texto
-     claro sobre ele: ~6:1. Nao usar fora da comparacao com o takt. */
+     claro sobre ele: ~6:1. Nao usar fora da comparacao com o takt — desde
+     a v2.106.0, com o TEMPO-ALVO DO PRODUTO, que tomou o lugar do takt
+     nessa comparacao (o nome do token ficou). */
   foraDoTakt: '#B91C1C',
   neutro: '#64748B',
 };

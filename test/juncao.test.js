@@ -132,25 +132,28 @@ describe('a junção das tres medicoes', () => {
     expect(2517023 / j.deixou.passoMs - 138).toBeCloseTo(39.7, 1);
   });
 
-  it('a manchete e o que as paradas roubaram, quando nao ha takt para veredito', () => {
+  it('a manchete e o que as paradas roubaram, quando nao ha tempo-alvo para veredito', () => {
     const f = frasesDaJuncao({
-      juncao: j, takt: { estado: 'sem-demanda' }, unidade: VOLUME, nomeGrupo: 'EMBALAGEM', hora,
+      juncao: j, alvo: { estado: 'sem-uep' }, unidade: VOLUME, hora,
     });
     expect(f.manchete).toBe('Nas 3 medições, 39 volumes deixaram de ser embalados: saíram 138, e no passo da linha sem parada nem lacuna teriam saído 177.');
     // Passo SEM as lacunas da junção: 07:11 = (829.906 - 29.493) / 58 = 13,8 s;
     // 07:27 = (863.046 - 33.014) / 58 = 14,3 s; 07:52 = 253.431 / 17 = 14,9 s.
     expect(f.linhas[0]).toBe('O passo é o mesmo nas 3 (de 13.8 a 14.9 s sem as lacunas): o que muda de uma para outra são as paradas. A das 07:27 sozinha perdeu 23.');
     expect(f.linhas[1]).toBe('No período, saiu um volume a cada 17.9 s, paradas dentro; com a linha rodando, 14.4 s.');
-    expect(f.linhas[2]).toMatch(/^Sem takt para comparar/);
+    expect(f.linhas[2]).toBe('Sem tempo-alvo para comparar: o produto não tem UEP no cadastro do painel, e sem UEP não há tempo-alvo.');
     expect(f.linhas[3]).toMatch(/^2 lacunas/);
   });
 
-  it('com takt, a manchete e o veredito; os roubados vem logo abaixo', () => {
-    const comTakt = juntarMedicoes([M1, M2, M3], { taktMs: 20000 });
+  it('com tempo-alvo, a manchete e o veredito; os roubados vem logo abaixo; o takt so\' informa a carga', () => {
+    // O takt de 12 s (a carga) NAO julga: o alvo do produto (20 s) e' que diz "dentro".
+    const comAlvo = juntarMedicoes([M1, M2, M3], { taktMs: 12000, alvoMs: 20000 });
     const f = frasesDaJuncao({
-      juncao: comTakt, takt: { semana: 'de 26/10' }, unidade: VOLUME, nomeGrupo: 'EMBALAGEM', hora,
+      juncao: comAlvo, alvo: { alvoMs: 20000, estado: 'ok' }, unidade: VOLUME, hora,
     });
-    expect(f.manchete).toMatch(/^No período, saiu um volume a cada 17.9 s, paradas dentro — dentro do takt de 20.0 s/);
+    expect(f.tom).not.toBe('falha');
+    expect(f.manchete).toMatch(/^No período, saiu um volume a cada 17.9 s, paradas dentro — dentro do tempo-alvo do produto, 20.0 s/);
+    expect(f.carga).toBe('Takt da semana: 12.0 s por volume — a carga da semana, igual para todo volume; não julga o produto.');
     expect(f.linhas[0]).toMatch(/^Nas 3 medições, 39 volumes deixaram de ser embalados/);
   });
 });
@@ -229,7 +232,7 @@ describe('o passo entre as medicoes', () => {
     expect(f.linhas.some((l) => l.startsWith('O passo'))).toBe(false);
   });
 
-  it('veredito acima do takt: a causa vem colada a ele, no plural', () => {
+  it('veredito acima do tempo-alvo: a causa vem colada a ele, no plural', () => {
     // 2 medicoes de 12 x 14 s, com 48 s de parada marcada ao vivo em cada:
     // periodo = (168 + 48) / 12 = 18 s > takt 16 s; rodando 14 s <= 16 s.
     const comParada = (id, inicio) => {
@@ -240,10 +243,10 @@ describe('o passo entre as medicoes', () => {
         conferencia: { ...m.conferencia, duracao_ms: m.relogio + 58000, paradas: [{ motivo: 'outro', duracaoMs: 48000 }] },
       };
     };
-    const j = juntarMedicoes([comParada('07:00', '2026-10-28T10:00:00Z'), comParada('08:00', '2026-10-28T11:00:00Z')], { taktMs: 16000 });
-    const f = frasesDaJuncao({ juncao: j, takt: { semana: 'de 26/10' }, unidade: VOLUME, hora });
+    const j = juntarMedicoes([comParada('07:00', '2026-10-28T10:00:00Z'), comParada('08:00', '2026-10-28T11:00:00Z')], { alvoMs: 16000 });
+    const f = frasesDaJuncao({ juncao: j, alvo: { alvoMs: 16000, estado: 'ok' }, unidade: VOLUME, hora });
     expect(f.tom).toBe('falha');
-    expect(f.manchete).toMatch(/^No período, saiu um volume a cada 18.0 s, paradas dentro — 13% acima do takt de 16.0 s\.$/);
+    expect(f.manchete).toMatch(/^No período, saiu um volume a cada 18.0 s, paradas dentro — 13% acima do tempo-alvo do produto, 16.0 s\.$/);
     expect(f.linhas[0]).toMatch(/são as paradas marcadas nestas medições\.$/);
     expect(f.linhas[1]).toMatch(/^Nas 2 medições, 7 volumes deixaram de ser embalados/);
   });

@@ -201,7 +201,7 @@ const erroDaMedia = (xs) => {
  * medicao comeca nessa sequencia — o grafico separa, a tabela de lacunas
  * diz de qual medicao e' cada uma.
  */
-export function juntarMedicoes(itens, { taktMs = null, setupPlanejado = false } = {}) {
+export function juntarMedicoes(itens, { taktMs = null, alvoMs = null, setupPlanejado = false } = {}) {
   const ordenados = [...(itens || [])].sort((a, b) => new Date(a.conferencia.iniciado_em || a.conferencia.salvo_em)
     - new Date(b.conferencia.iniciado_em || b.conferencia.salvo_em));
 
@@ -239,7 +239,9 @@ export function juntarMedicoes(itens, { taktMs = null, setupPlanejado = false } 
   // Sem o relogio de alguma, nao ha' periodo da junção: somar so' as que
   // tem deixaria a regua do veredito com um pedaço faltando.
   const periodoPorPecaMs = !semRelogio && todos.length ? relogioUtil / todos.length : null;
-  const leitura = leituraPecaAPeca({ marcasMs: marcasJuntas, taktMs, periodoPorPecaMs });
+  // O veredito da junção e' contra o tempo-alvo (v2.106.0): um so', quando
+  // todas sao do mesmo alvo (alvoDaJuncao); o takt so' informa a carga.
+  const leitura = leituraPecaAPeca({ marcasMs: marcasJuntas, taktMs, alvoMs, periodoPorPecaMs });
 
   // O passo de cada medicao, sem as lacunas da junção (ver CRITERIOS_JUNCAO).
   const ehLacuna = new Set((leitura?.lacunas || []).map((l) => l.indice));
@@ -328,22 +330,23 @@ export function passoDasMedicoes(medicoes) {
  * takt, lacunas) mais o que so' a junção sabe: quanto as paradas
  * roubaram e se o passo foi o mesmo nas medicoes.
  *
- * A manchete e' o veredito contra o takt quando ha' veredito (e' a pergunta
- * da tela); sem ele, o que as paradas roubaram — e' o que move a acao.
+ * A manchete e' o veredito contra o tempo-alvo quando ha' veredito (e' a
+ * pergunta da tela); sem ele, o que as paradas roubaram — e' o que move a
+ * acao.
  *
  * `hora(c)` escreve o horario de uma medicao ("07:27"): vem da tela, que
  * sabe o fuso de quem le.
  */
 export function frasesDaJuncao({
-  juncao, takt = {}, unidade, nomeGrupo, hora,
+  juncao, alvo = {}, unidade, hora,
 }) {
   const { leitura, medicoes, roubo, deixou } = juncao;
   const base = frasesVolumeAVolume({
-    leitura, takt, unidade, nomeGrupo, juncao: true,
+    leitura, alvo, unidade, juncao: true,
   });
   const n = medicoes.length;
   const { plural } = unidade;
-  const temVeredito = Boolean(leitura.suficiente && leitura.periodoMs && leitura.taktMs);
+  const temVeredito = Boolean(leitura.suficiente && leitura.periodoMs && leitura.alvoMs);
 
   const extras = [];
   let manchete = base.manchete;
@@ -396,12 +399,16 @@ export function frasesDaJuncao({
     }
   }
 
-  // Com veredito ACIMA do takt, a causa ("o que tira a linha do takt…")
-  // fica colada a ele, antes dos roubados e do passo.
+  // Com veredito ACIMA do alvo, a causa ("o que tira a linha dele…") fica
+  // colada a ele, antes dos roubados e do passo.
   if (temVeredito && base.tom === 'falha') {
-    return { tom: base.tom, manchete, linhas: [linhasBase[0], ...extras, ...linhasBase.slice(1)] };
+    return {
+      tom: base.tom, manchete, linhas: [linhasBase[0], ...extras, ...linhasBase.slice(1)], carga: base.carga,
+    };
   }
   // Sem veredito, a frase do periodo vem logo depois do passo (que explica
   // a diferenca entre as medicoes).
-  return { tom: base.tom, manchete, linhas: [...extras, ...linhasBase] };
+  return {
+    tom: base.tom, manchete, linhas: [...extras, ...linhasBase], carga: base.carga,
+  };
 }

@@ -160,6 +160,10 @@ export default handler(async (req, res) => {
                c.analisada_em, c.analisada_por, c.analise_nota, c.origem,
                c.painel_em, c.painel_erro,
                (c.marcas_ms IS NOT NULL) AS com_marcas,
+               -- O relogio entre o 1o e o ultimo toque e o setup marcado nele
+               -- (dois numeros, v2.106.0): o "por volume no periodo" de cada
+               -- medicao na lista de tempos-alvo do PC, sem abrir uma a uma.
+               c.marcas_relogio_ms, c.marcas_setup_ms,
                coalesce((
                  SELECT jsonb_agg(jsonb_build_object(
                           'motivo', p.motivo,
