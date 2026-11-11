@@ -216,7 +216,7 @@ const b = await chromium.launch({ executablePath: EXEC });
   // O painel usa espaco inseparavel entre o numero e a unidade.
   const lerPainel = async () => (await painel.innerText()).replace(/\u00a0/g, ' ');
   const texto = await lerPainel();
-  checar(/0002 · FURADEIRA · semana \d{3}-\d{2}/.test(texto), 'programa: o painel diz o grupo e a semana');
+  checar(/0002 · FURADEIRA · semana de \d{2}\/\d{2}/.test(texto), 'programa: o painel diz o grupo e a semana');
   checar(texto.includes('02:24'), 'programa: takt do programa = 44 h / (6.600 / 6) = 02:24 por peca');
   checar(texto.includes('6.600 peças') && texto.includes('44h00min'), 'programa: a conta aparece (demanda e horas)');
   checar(texto.includes('144.0 s por peça') && texto.includes('Por máquina: 44h00min de jornada, sem setup planejado.'),
@@ -248,7 +248,7 @@ const b = await chromium.launch({ executablePath: EXEC });
   await painel.locator('label', { hasText: 'Quantidade por dia' }).locator('input').fill('480');
   await painel.locator('label', { hasText: 'Horas disponíveis' }).locator('input').fill('5.6');
   const simulado = await lerPainel();
-  checar(simulado.includes('00:42') && /É a conta acima que o estudo grava\. O programa da semana \d{3}-\d{2} pede 144\.0 s por peça\./.test(simulado),
+  checar(simulado.includes('00:42') && /É a conta acima que o estudo grava\. O programa da semana de \d{2}\/\d{2} pede 144\.0 s por peça\./.test(simulado),
     'simular: a conta digitada vale, e o painel lembra o que o programa pede');
   await painel.getByRole('button', { name: /Usar o takt do programa/ }).click();
   checar(await painel.getByText('Do programa da semana').count() === 1, 'simular: um clique volta ao programa');
@@ -318,7 +318,7 @@ const b = await chromium.launch({ executablePath: EXEC });
   await painel.getByRole('button', { name: /Usar o takt do programa \(72\.0\s+s por volume\)/ }).waitFor({ timeout: 4000 });
   checar(await painel.getByText('Do programa da semana').count() === 0,
     'troca: o clique dado na furadeira nao impoe o takt por volume na embalagem');
-  checar(/O programa da semana \d{3}-\d{2} é em volumes: 72\.0 s por volume/.test((await painel.innerText()).replace(/\u00a0/g, ' ')),
+  checar(/O programa da semana de \d{2}\/\d{2} é em volumes: 72\.0 s por volume/.test((await painel.innerText()).replace(/\u00a0/g, ' ')),
     'embalagem: o programa em volumes e oferecido, com a unidade escrita');
   let corpo = await criar();
   checar(corpo.taktTimeMs === null, `troca: sem clique na embalagem, nada de takt por volume (${corpo.taktTimeMs})`);

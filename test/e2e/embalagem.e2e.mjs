@@ -544,9 +544,9 @@ const tamanhoDoPdf = async () => {
     /* O TEMPO DA SEMANA na folha (v2.101.0): a conta do takt por extenso.
        Grupo de 44 h, sem setup, semana inteira: 44 x 3600 / 2200 = 72,0 s. */
     const conta = (await folha.innerText()).replace(/\s+/g, ' ');
-    checar(/Tempo da semana \S+ — Por máquina: 44h00min de jornada, sem setup planejado\. 2\.200 volumes na semana → takt 72\.0 s por volume\./.test(conta),
+    checar(/Tempo da semana de \d{2}\/\d{2} — Por máquina: 44h00min de jornada, sem setup planejado\. 2\.200 volumes na semana → takt 72\.0 s por volume\./.test(conta),
       `folha: o tempo da semana e a conta do takt (${(/Tempo da semana.*?por volume\./.exec(conta) || ['nao achou'])[0]})`);
-    checar(/semana \S+ · por volume · 44h00min ÷ 2\.200 volumes/.test(conta),
+    checar(/de \d{2}\/\d{2} · por volume · 44h00min ÷ 2\.200 volumes/.test(conta),
       'folha: na 1a pagina, o cartao do takt diz de que tempo ele sai (44h00min ÷ 2.200 volumes)');
     // A letra da folha cresceu (v2.101.0): o valor dos campos passa de 10,5 px.
     const letra = await folha.evaluate((f) => parseFloat(getComputedStyle(f).fontSize));
@@ -1530,7 +1530,7 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   await s.locator('[aria-label="Takt da semana"]').getByText('72.0').waitFor({ timeout: 8000 });
   await s.getByRole('button', { name: /Ver o resultado/ }).first().tap();
   const resultado = s.locator('[aria-label="Resultado da medição salva"]');
-  // Espera o takt carregar (o cartao ganha "semana ... · por volume"), seja
+  // Espera o takt carregar (o cartao ganha "de 09/11 · por volume"), seja
   // ele qual for: o valor e' conferido abaixo, nao esperado.
   await resultado.getByText(/· por volume/).first().waitFor({ timeout: 8000 });
   const texto = (await resultado.innerText()).replace(/\s+/g, ' ');
