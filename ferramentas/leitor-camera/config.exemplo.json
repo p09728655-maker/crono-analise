@@ -1,0 +1,9 @@
+{
+  "camera": "rtsp://USUARIO:SENHA@IP_DO_GRAVADOR:554/cam/realmonitor?channel=5&subtype=1",
+  "retangulo": { "x": 0.67, "y": 0.66, "largura": 0.10, "altura": 0.20 },
+  "limiar_entra": 0.30,
+  "limiar_sai": 0.20,
+  "permanencia_minima_s": 2.0,
+  "quadros_por_segundo": 10,
+  "pasta_dados": "dados"
+}
