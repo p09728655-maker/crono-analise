@@ -279,6 +279,14 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
   continua ignorado (`DO NOTHING`). O rascunho guarda `envioTentado`: o F5 e o
   Descartar avisam que a medição pode já estar no servidor. O "por volume" da
   prévia usa o `setupPlanejado` do takt da semana, como a lista e o tablet.
+- **Leitor de câmera da envolvedora** (`ferramentas/leitor-camera/`, **fora do
+  app**, em validação): programa Python + ffmpeg que roda num PC da fábrica,
+  lê a câmera Intelbras da envolvedora (RTSP) ou um vídeo exportado e grava um
+  CSV por dia com a hora de cada volume. Detecta pela fração de cor de papelão
+  num retângulo fixo sobre o tapete verde, com dois limiares para o filme
+  balançando não duplicar a caixa. Não usa IA nem internet e não guarda imagem.
+  Ainda **não manda nada ao app**: primeiro valida contra a marcação manual por
+  vídeo (critérios e passo a passo em `ferramentas/leitor-camera/LEIA-ME.md`).
 - **O takt** é o programa da semana do grupo EMBALAGEM ÷ as horas da semana,
   descontado o setup planejado. É a mesma conta do quadro "Programa da semana".
   **O programa da embalagem é em VOLUMES**: um rack que sai em dois volumes

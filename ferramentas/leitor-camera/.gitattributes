@@ -1,0 +1,2 @@
+# Arquivo .bat com quebra de linha Unix confunde o goto do Windows.
+*.bat text eol=crlf

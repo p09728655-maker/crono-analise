@@ -1,0 +1,6 @@
+# Tem a senha da câmera: fica só no PC da fábrica.
+config.json
+# Saída do leitor e foto de conferência: dado de produção, não código.
+dados/
+foto_camera.jpg
+__pycache__/
