@@ -28,6 +28,7 @@ import time
 from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 import numpy as np
 
@@ -52,14 +53,41 @@ FFMPEG = next((str(p) for p in (PASTA / 'ffmpeg.exe', PASTA / 'ffmpeg') if p.is_
 CAMPOS = ('camera', 'retangulo', 'limiar_entra', 'limiar_sai',
           'permanencia_minima_s', 'quadros_por_segundo')
 
+# Intervalo maior que isto entre dois volumes não é ciclo: é noite, fim de
+# semana ou turno parado. Almoço e parada comum ficam abaixo e continuam no
+# intervalo (por isso a planilha manda usar a mediana).
+PAUSA_MAXIMA_MIN = 120
+
+# Usuário:senha da câmera, tirados do config.json, para nunca saírem na tela
+# nem no log.
+SEGREDOS = []
+
+
+def guardar_segredos(endereco):
+    # Tudo entre "://" e o ÚLTIMO "@". Não usar um leitor de URL comum: senha
+    # com "/" ou espaço é lida por ele como início do caminho e escaparia.
+    resto = endereco.split('://', 1)[-1]
+    if '@' not in resto:
+        return
+    info = resto.rsplit('@', 1)[0]
+    candidatos = {info, unquote(info)}
+    if ':' in info:
+        senha = info.split(':', 1)[1]
+        candidatos |= {senha, unquote(senha), quote(unquote(senha), safe='')}
+    # Do mais longo para o mais curto; muito curto não é trocado para não
+    # estragar o resto do texto (e senha de 1–2 letras não protege nada).
+    SEGREDOS[:] = sorted((c for c in candidatos if len(c) >= 3), key=len, reverse=True)
+
 
 def sem_senha(texto):
     """O ffmpeg repete o endereço inteiro da câmera nos erros, com usuário e
     senha. Nada que vai para tela ou log pode levar isso."""
-    # Também sem o "rtsp://" na frente: um corte no meio do endereço não pode
-    # deixar "usuario:senha@" passar.
-    return re.sub(r'(\w+://)?[^\s/@:]*:?[^\s/@]*@(?=[\w.-]+[:/])',
-                  lambda m: (m.group(1) or '') + '***@', texto)
+    # Troca o texto exato da senha (qualquer caractere, em qualquer pedaço da
+    # mensagem) e, por garantia, qualquer "xxx://usuario:senha@".
+    for segredo in SEGREDOS:
+        texto = texto.replace(segredo, '***')
+    # Nome do protocolo com tamanho limitado: texto longo não fica lento.
+    return re.sub(r'([A-Za-z][\w+.-]{0,15}://)[^\s/@]+@', r'\1***@', texto)
 
 
 def parar(msg):
@@ -107,17 +135,42 @@ def ler_config():
     except json.JSONDecodeError as e:
         parar(f'O config.json tem um erro de digitação na linha {e.lineno} '
               '(aspas, vírgula ou chave faltando). Compare com o config.exemplo.json.')
+    if not isinstance(cfg, dict):
+        parar('O config.json tem que começar com { e terminar com }. Compare com o config.exemplo.json.')
     faltam = [c for c in CAMPOS if c not in cfg]
     if faltam:
         parar('Faltam no config.json: ' + ', '.join(faltam) + '. Compare com o config.exemplo.json.')
+
+    def numero(valor, nome, minimo, maximo, exemplo, inteiro=False):
+        # Número escrito entre aspas ("0.30") vira texto e quebraria o leitor
+        # só no meio da operação — no 1º volume, perdendo-o.
+        ok = (isinstance(valor, (int, float)) and not isinstance(valor, bool)
+              and minimo <= valor <= maximo and (not inteiro or float(valor).is_integer()))
+        if not ok:
+            parar(f'{nome} tem que ser um número de {minimo} a {maximo}, sem aspas '
+                  f'(ex.: {exemplo}; decimal com ponto). Compare com o config.exemplo.json.')
+
+    if not isinstance(cfg['camera'], str):
+        parar('camera tem que ser o endereço entre aspas. Compare com o config.exemplo.json.')
     r = cfg['retangulo']
+    if not isinstance(r, dict):
+        parar('retangulo tem que ter x, y, largura e altura. Compare com o config.exemplo.json.')
     for k in ('x', 'y', 'largura', 'altura'):
-        if not isinstance(r.get(k), (int, float)) or not 0 <= r[k] <= 1:
-            parar(f'retangulo.{k} tem que ser uma fração da imagem, entre 0 e 1 (ex.: 0.25).')
+        numero(r.get(k), f'retangulo.{k}', 0, 1, '0.25')
     if r['x'] + r['largura'] > 1 or r['y'] + r['altura'] > 1:
         parar('O retângulo passa da borda da imagem: confira x+largura e y+altura.')
+    numero(cfg['limiar_entra'], 'limiar_entra', 0, 1, '0.30')
+    numero(cfg['limiar_sai'], 'limiar_sai', 0, 1, '0.20')
     if not cfg['limiar_sai'] < cfg['limiar_entra']:
         parar('limiar_sai tem que ser menor que limiar_entra.')
+    numero(cfg['permanencia_minima_s'], 'permanencia_minima_s', 0, 60, '2.0')
+    numero(cfg['quadros_por_segundo'], 'quadros_por_segundo', 1, 30, '10', inteiro=True)
+    cfg['quadros_por_segundo'] = int(cfg['quadros_por_segundo'])
+    cfg.setdefault('pausa_maxima_min', PAUSA_MAXIMA_MIN)
+    numero(cfg['pausa_maxima_min'], 'pausa_maxima_min', 1, 24 * 60, '120')
+    if not isinstance(cfg.get('pasta_dados', 'dados'), str):
+        parar('pasta_dados tem que ser um nome entre aspas (ex.: "dados").')
+    guardar_segredos(cfg['camera'])
     return cfg
 
 
@@ -193,18 +246,39 @@ class Camera:
             self.proc.kill()
 
 
+def hora(t):
+    """HH:MM:SS,d — com décimo de segundo: cortar no segundo inteiro já erra
+    até 1 s, o tamanho da tolerância da validação."""
+    t = t + timedelta(microseconds=50_000)  # arredonda para o décimo mais próximo
+    return f'{t:%H:%M:%S},{t.microsecond // 100_000}'
+
+
+def gravar_no_disco(arq, texto, modo='a', bom=False):
+    """Grava e força a ida para o disco: falta de luz não leva o que já foi contado."""
+    with open(arq, modo, encoding='utf-8-sig' if bom else 'utf-8', newline='') as f:
+        f.write(texto)
+        f.flush()
+        os.fsync(f.fileno())
+
+
 class Registro:
     """CSV do dia (separador ';' e vírgula decimal: abre direto no Excel em português)."""
 
     CABECALHO = 'data;entrou;saiu;segundos_no_filme;segundos_desde_anterior;observacao\n'
+    # Volumes à espera de a planilha do dia ser liberada (o Excel tranca o CSV
+    # aberto). Fica em DISCO, não na memória: janela fechada no X, falta de luz
+    # ou reinício do Windows não podem levar o que já foi contado.
+    ESPERA = 'volumes_esperando_planilha.txt'
 
     def __init__(self, cfg, nome_fixo=None):
         self.pasta = PASTA / cfg.get('pasta_dados', 'dados')
         self.pasta.mkdir(exist_ok=True)
         self.nome_fixo = nome_fixo
-        # Linhas que ainda não deu para gravar: o Excel tranca o CSV aberto.
-        self.pendentes = []
+        self.espera = self.pasta / self.ESPERA
+        self.pendentes = []  # (arquivo, linha, veio_de_execucao_anterior)
         self.travado = False
+        if not nome_fixo:
+            self._recuperar()
 
     def log(self, msg):
         linha = f'{datetime.now():%Y-%m-%d %H:%M:%S}  {sem_senha(msg)}'
@@ -219,51 +293,79 @@ class Registro:
         arq = self.pasta / (self.nome_fixo or f'volumes_{saiu:%Y-%m-%d}.csv')
         num = lambda s: '' if s is None else f'{s:.1f}'.replace('.', ',')
         no_filme = None if entrou is None else (saiu - entrou).total_seconds()
-        linha = ';'.join([f'{saiu:%d/%m/%Y}', '' if entrou is None else f'{entrou:%H:%M:%S}',
-                          f'{saiu:%H:%M:%S}', num(no_filme), num(desde_anterior), obs]) + '\n'
-        self.pendentes.append((arq, linha))
-        self.gravar_pendentes()
-        print(f'  volume  saiu {saiu:%H:%M:%S}'
+        linha = ';'.join([f'{saiu:%d/%m/%Y}', '' if entrou is None else hora(entrou),
+                          hora(saiu), num(no_filme), num(desde_anterior), obs]) + '\n'
+        if self.nome_fixo:
+            # Vídeo exportado (validação): planilha aberta é só fechar e rodar de novo.
+            try:
+                gravar_no_disco(arq, (self.CABECALHO if not arq.exists() else '') + linha,
+                                bom=not arq.exists())
+            except OSError as e:
+                parar(f'Não consegui gravar {arq.name} ({e.strerror}). '
+                      'Está aberto no Excel? Feche e rode de novo.')
+        else:
+            self.pendentes.append((arq, linha, False))
+            self.gravar_pendentes()
+        print(f'  volume  entrou {"   ?    " if entrou is None else hora(entrou)}'
               + ('' if desde_anterior is None else f'   ciclo {num(desde_anterior)} s')
               + (f'   ({obs})' if obs else ''), flush=True)
 
     def gravar_pendentes(self):
-        """Grava o que estiver guardado, na ordem. Se o CSV estiver trancado
-        (aberto no Excel), mantém guardado e tenta de novo depois — sem perder
-        volume e sem derrubar o leitor."""
+        """Grava o que estiver esperando, na ordem. Se a planilha estiver
+        trancada, deixa esperando em disco e tenta de novo depois."""
         while self.pendentes:
-            arq, linha = self.pendentes[0]
+            arq, linha, anterior = self.pendentes[0]
             try:
                 novo = not arq.exists()
-                with open(arq, 'a', encoding='utf-8-sig' if novo else 'utf-8', newline='') as f:
-                    if novo:
-                        f.write(self.CABECALHO)
-                    f.write(linha)
+                # Linha recuperada de uma execução que caiu no meio da gravação
+                # pode já estar na planilha: não duplica.
+                if not (anterior and not novo and linha in arq.read_text(encoding='utf-8-sig')):
+                    gravar_no_disco(arq, (self.CABECALHO if novo else '') + linha, bom=novo)
             except OSError as e:
                 if not self.travado:
                     self.travado = True
                     self.log(f'não consegui gravar {arq.name} ({e.strerror}) — aberto no Excel? '
-                             'Os volumes ficam guardados e são gravados quando ele fechar.')
-                return
+                             f'Os volumes esperam em {self.ESPERA} e entram quando ele fechar.')
+                break
             self.pendentes.pop(0)
-        if self.travado:
+        self._atualizar_espera()
+        if self.travado and not self.pendentes:
             self.travado = False
-            self.log('planilha liberada: os volumes guardados foram gravados.')
+            self.log('planilha liberada: os volumes que esperavam foram gravados.')
+
+    def _atualizar_espera(self):
+        try:
+            if self.pendentes:
+                tmp = self.espera.with_suffix('.tmp')
+                gravar_no_disco(tmp, ''.join(f'{a.name}\t{l}' for a, l, _ in self.pendentes), modo='w')
+                os.replace(tmp, self.espera)  # troca inteira: nunca fica pela metade
+            elif self.espera.exists():
+                self.espera.unlink()
+        except OSError as e:
+            self.log(f'não consegui guardar os volumes em espera ({e.strerror}): '
+                     f'{len(self.pendentes)} volume(s) só na memória até a planilha liberar.')
+
+    def _recuperar(self):
+        """Volumes que esperavam a planilha quando o leitor foi fechado."""
+        if not self.espera.exists():
+            return
+        try:
+            linhas = self.espera.read_text(encoding='utf-8').splitlines(keepends=True)
+        except OSError as e:
+            self.log(f'não consegui ler {self.ESPERA} ({e.strerror}): volumes de antes ficam lá.')
+            return
+        for item in linhas:
+            nome, _, linha = item.partition('\t')
+            if nome and linha:
+                self.pendentes.append((self.pasta / nome, linha, True))
+        self.log(f'{len(self.pendentes)} volume(s) que esperavam a planilha foram recuperados.')
+        self.gravar_pendentes()
 
     def fechar(self):
-        """Saindo com volumes ainda guardados: grava num arquivo à parte."""
         self.gravar_pendentes()
-        if not self.pendentes:
-            return
-        reserva = self.pasta / f'volumes_nao_gravados_{datetime.now():%Y-%m-%d_%H%M%S}.csv'
-        try:
-            with open(reserva, 'w', encoding='utf-8-sig', newline='') as f:
-                f.write(self.CABECALHO)
-                f.writelines(linha for _, linha in self.pendentes)
-            self.log(f'{len(self.pendentes)} volume(s) não entraram na planilha do dia: '
-                     f'estão em {reserva.name}. Copie as linhas para a planilha.')
-        except OSError as e:
-            self.log(f'{len(self.pendentes)} volume(s) perdidos: não consegui gravar ({e.strerror}).')
+        if self.pendentes:
+            self.log(f'{len(self.pendentes)} volume(s) esperando a planilha em {self.ESPERA}: '
+                     'entram nela na próxima vez que o leitor abrir.')
 
 
 class Detector:
@@ -278,7 +380,8 @@ class Detector:
         self.janela = deque(maxlen=max(1, round(cfg['quadros_por_segundo'] / 2)))  # média de 0,5 s
         # A média atrasa a leitura em meia janela; desconta isso da hora.
         self.atraso = timedelta(seconds=(self.janela.maxlen - 1) / 2 / cfg['quadros_por_segundo'])
-        self.ultima_saida = None
+        self.pausa_maxima_s = cfg.get('pausa_maxima_min', PAUSA_MAXIMA_MIN) * 60
+        self.ultima_entrada = None
         self.reiniciar(apos_queda=False)
 
     def reiniciar(self, apos_queda):
@@ -287,7 +390,7 @@ class Detector:
         self.dentro, self.entrou, self.parcial = False, None, False
         self.primeira_leitura = True
         if apos_queda:
-            self.ultima_saida = None  # o intervalo atravessaria a queda: não é ciclo
+            self.ultima_entrada = None  # o intervalo atravessaria a queda: não é ciclo
 
     def quadro(self, momento, fracao):
         self.janela.append(fracao)
@@ -318,13 +421,21 @@ class Detector:
             self.entrou, self.parcial = None, False
 
     def _registrar(self, entrou, saiu, obs):
-        desde = None if self.ultima_saida is None else (saiu - self.ultima_saida).total_seconds()
-        if self.ultima_saida is not None and saiu.date() != self.ultima_saida.date():
-            # Com o leitor ligado direto, o 1º volume do dia carregaria a noite
-            # (ou o fim de semana) inteira como se fosse ciclo.
-            desde, obs = None, obs or '1º volume do dia'
+        """
+        O intervalo é de ENTRADA a ENTRADA: a mesma marca que o analista usa
+        (frente da caixa tocando o tapete verde) e que a validação confere.
+        """
+        desde = None
+        if entrou is not None and self.ultima_entrada is not None:
+            desde = (entrou - self.ultima_entrada).total_seconds()
+            if desde > self.pausa_maxima_s:
+                # Noite, fim de semana, turno parado — por tempo, não por data:
+                # turno que atravessa a meia-noite continua com o ciclo certo.
+                obs = obs or f'{desde / 3600:.1f} h sem volume antes deste: não é ciclo'
+                desde = None
         self.reg.volume(entrou, saiu, desde, obs)
-        self.ultima_saida = saiu
+        if entrou is not None:
+            self.ultima_entrada = entrou
 
     def fim(self, momento):
         if self.dentro:
