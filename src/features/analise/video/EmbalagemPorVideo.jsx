@@ -25,6 +25,8 @@ import HistoricoVersoes from '../../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../../components/EstadoVazio.jsx';
 import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import { motivoSemTakt } from '../../coleta/embalagem/motivoSemTakt.js';
+import { useTemposAlvo } from '../../../lib/temposAlvo.js';
+import { descontaSetup, explicacaoDoAlvo, semAlvo } from '../../../domain/tempoAlvo.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
 import { est } from '../conferencias/estilos.js';
 import { ev } from './estilos.js';
@@ -295,6 +297,11 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       duracaoMs: 3600000,
     });
   }, [grupo, inicioValido, campos.inicio, carga, marcacao.largadaMs]);
+
+  /* O TEMPO-ALVO do produto (v2.106.0): a regua do "▲ alvo", como no tablet
+     e no volume a volume. O takt fica como a carga da semana, sem cor. */
+  const alvos = useTemposAlvo();
+  const alvo = alvos.alvoDe(campos.produto);
 
   /* --------------------------------------------------------- arquivo */
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -698,16 +705,18 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     largadaMs: marcacao.largadaMs, toquesMs: marcacao.toques.map((t) => t.ms), paradas: marcacao.paradas,
     fimMs, inicioFilmagem: campos.inicio,
   })), [marcacao, fimMs, campos.inicio]);
-  // O MESMO criterio da lista, do volume a volume e do tablet: o do takt da
-  // semana (horas de setup x fracao da semana), nao so' o cadastro do grupo.
-  const setupPlanejado = Boolean(takt?.setupPlanejado);
+  // O MESMO criterio da lista, do volume a volume e do tablet: com tempo-alvo,
+  // o setup do painel (descontaSetup); sem, o do takt da semana.
+  const setupPlanejado = descontaSetup(alvo, takt);
   const numeros = (med) => {
     if (!med) return null;
     const porVolume = periodoPorPeca({
       relogioEntreMarcasMs: med.marcasRelogioMs, volumes: med.pecas,
       setupNoTrechoMs: med.marcasSetupMs, setupPlanejado,
     });
-    const leitura = leituraPecaAPeca({ marcasMs: med.marcasMs, taktMs: takt?.taktMs, periodoPorPecaMs: porVolume });
+    const leitura = leituraPecaAPeca({
+      marcasMs: med.marcasMs, taktMs: takt?.taktMs, alvoMs: alvo.alvoMs, periodoPorPecaMs: porVolume,
+    });
     const calc = conferenciaRapida({ duracaoMs: med.duracaoMs, pecas: med.pecas, paradas: med.paradas });
     return { porVolume, leitura, calc };
   };
@@ -898,7 +907,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                   <Preparar
                     arquivo={arquivo} aoEscolher={escolherArquivo} meta={meta} campos={campos}
                     aoTrocar={(c) => setCampos((x) => ({ ...x, ...c }))}
-                    maquinas={carga.maquinas} produtos={produtos} takt={takt} inicioValido={inicioValido}
+                    maquinas={carga.maquinas} produtos={produtos} takt={takt} alvo={alvo} inicioValido={inicioValido}
                     rascunho={rascunho} aoContinuar={continuarRascunho} aoDescartar={descartarRascunho}
                     // Com marcacao guardada deste video na tela, comecar do zero
                     // a apagaria — e, se ela tinha chegado ao servidor, o mesmo
@@ -973,7 +982,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
 
               {etapa === 'marcar' && (
                 <Marcas
-                  marcacao={marcacao} numeros={vivo} takt={takt} instante={instante}
+                  marcacao={marcacao} numeros={vivo} alvo={alvo} instante={instante}
                   aoIr={irPara}
                   aoRemoverVolume={(ms) => aplicar((m) => removerVolume(m, ms))}
                   aoRemoverParada={(ms) => aplicar((m) => removerParada(m, ms))}
@@ -981,7 +990,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
               )}
               {etapa === 'revisar' && final?.medicao && (
                 <Revisar
-                  medicao={final.medicao} numeros={numeros(final.medicao)} takt={takt}
+                  medicao={final.medicao} numeros={numeros(final.medicao)} alvo={alvo}
                   maquina={maquina} produto={campos.produto} conferencia={conferencia}
                   observacao={observacao} aoObservacao={setObservacao}
                   salvar={salvar} aoSalvar={() => salvarMedicao()}
@@ -1019,7 +1028,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
 
 /** PREPARAR: o arquivo, a maquina, o produto e quando a filmagem comecou. */
 function Preparar({
-  arquivo, aoEscolher, meta, campos, aoTrocar, maquinas, produtos, takt, inicioValido,
+  arquivo, aoEscolher, meta, campos, aoTrocar, maquinas, produtos, takt, alvo, inicioValido,
   rascunho, aoContinuar, aoDescartar, podeComecar, aoComecar, retomando, aviso, jaSalvo, foraDaLista,
 }) {
   const motivoTakt = takt && !(takt.taktMs > 0) ? (motivoSemTakt(takt.estado) || 'sem programa da embalagem para esta semana') : null;
@@ -1137,10 +1146,15 @@ function Preparar({
         {/* A data decide a semana e o takt: errada, a medicao e' julgada pelo
             programa de outra semana. Por isso ela vai escrita, com o takt. */}
         {!inicioValido && 'Informe quando a filmagem começou: é a data que decide a semana e o takt. '}
+        {/* O veredito e' contra o TEMPO-ALVO do produto (v2.106.0); o takt
+            da semana da filmagem fica como a carga, sem julgar. */}
+        {alvo.alvoMs > 0
+          ? <>Tempo-alvo do produto: <strong>{formatarSegundos(alvo.alvoMs)} s por volume</strong>. {explicacaoDoAlvo(alvo)}{' '}</>
+          : `Sem tempo-alvo: ${semAlvo(alvo.estado, alvo.mensagem)} `}
         {inicioValido && takt?.taktMs > 0 && (
           <>
-            Vale o takt da semana {takt.semana}: <strong>{formatarSegundos(takt.taktMs)} s por volume</strong>
-            {diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}.{' '}
+            Carga da semana {takt.semana}: takt de {formatarSegundos(takt.taktMs)} s por volume
+            {diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''} — não julga o produto.{' '}
           </>
         )}
         {inicioValido && motivoTakt && `Sem takt para essa data: ${motivoTakt} `}
@@ -1246,7 +1260,7 @@ function Acoes({
 
 /** A coluna das marcas: os numeros (os mesmos do tablet) e a lista, em ordem de video. */
 function Marcas({
-  marcacao, numeros, takt, instante, aoIr, aoRemoverVolume, aoRemoverParada,
+  marcacao, numeros, alvo, instante, aoIr, aoRemoverVolume, aoRemoverParada,
 }) {
   const { largadaMs, toques, paradas, aberta } = marcacao;
   const itens = [
@@ -1257,7 +1271,7 @@ function Marcas({
     ...paradas.map((p) => ({ tipo: 'parada', ms: p.inicioMs, parada: p })),
     ...(aberta ? [{ tipo: 'parada', ms: aberta.inicioMs, parada: aberta }] : []),
   ].sort((a, b) => a.ms - b.ms || (a.tipo === 'parada' ? -1 : 1));
-  const acima = takt?.taktMs > 0 && numeros?.porVolume > takt.taktMs;
+  const acima = alvo?.alvoMs > 0 && numeros?.porVolume > alvo.alvoMs;
   const lacunas = numeros?.leitura?.suficiente ? numeros.leitura.lacunas.length : null;
   // As paradas daqui sao intervalos do video (inicio/fim), nao duracoes.
   const parado = paradas.reduce((soma, p) => soma + (p.fimMs - p.inicioMs), 0);
@@ -1271,11 +1285,11 @@ function Marcas({
       <div style={ev.numeros}>
         <Numero rotulo="Volumes" valor={String(toques.length)} />
         <Numero
-          rotulo={acima ? 'Por vol ▲ takt' : 'Por volume'}
+          rotulo={acima ? 'Por vol ▲ alvo' : 'Por volume'}
           valor={numeros?.porVolume ? `${formatarSegundos(numeros.porVolume)} s` : '—'}
           atencao={acima}
         />
-        <Numero rotulo="Takt" valor={takt?.taktMs > 0 ? `${formatarSegundos(takt.taktMs)} s` : '—'} />
+        <Numero rotulo="Tempo-alvo" valor={alvo?.alvoMs > 0 ? `${formatarSegundos(alvo.alvoMs)} s` : '—'} />
         <Numero rotulo="Vol/h período" valor={volHora != null ? String(volHora) : '—'} sub="até o último volume" />
         <Numero rotulo="Lacunas" valor={lacunas != null ? String(lacunas) : '—'} />
         <Numero rotulo="Parado" valor={parado > 0 ? duracaoCurta(parado) : '—'} />
@@ -1339,11 +1353,11 @@ function Numero({
 
 /** REVISAR: a previa do volume a volume antes de salvar — e a volta para corrigir. */
 function Revisar({
-  medicao, numeros, takt, maquina, produto, observacao, aoObservacao, salvar, aoSalvar, aoVoltar,
+  medicao, numeros, alvo, maquina, produto, observacao, aoObservacao, salvar, aoSalvar, aoVoltar,
   mexida, aoArquivarESalvar, aoDescartarMexida, conferencia = null,
 }) {
   const { porVolume, leitura, calc } = numeros;
-  const acima = takt?.taktMs > 0 && porVolume > takt.taktMs;
+  const acima = alvo?.alvoMs > 0 && porVolume > alvo.alvoMs;
   const inicio = new Date(medicao.iniciadoEm);
   const fim = new Date(medicao.salvoEm);
   return (
@@ -1356,11 +1370,11 @@ function Revisar({
       <div style={ev.numeros}>
         <Numero rotulo="Volumes" valor={String(medicao.pecas)} />
         <Numero
-          rotulo={acima ? 'Por vol ▲ takt' : 'Por volume no período'}
+          rotulo={acima ? 'Por vol ▲ alvo' : 'Por volume no período'}
           valor={porVolume ? `${formatarSegundos(porVolume)} s` : '—'}
           atencao={acima}
         />
-        <Numero rotulo="Takt" valor={takt?.taktMs > 0 ? `${formatarSegundos(takt.taktMs)} s` : '—'} />
+        <Numero rotulo="Tempo-alvo" valor={alvo?.alvoMs > 0 ? `${formatarSegundos(alvo.alvoMs)} s` : '—'} />
         <Numero
           rotulo="Volumes/hora" valor={calc ? String(Math.round(calc.pecasPorHoraBruto)) : '—'}
           sub="da largada ao Encerrar, paradas dentro"

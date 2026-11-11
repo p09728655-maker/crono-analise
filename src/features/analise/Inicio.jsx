@@ -310,8 +310,8 @@ export default function Inicio({
               <span style={est.caminhoRotulo}>Embalagem</span>
               <span style={est.caminhoTitulo}>Embalagem Takt Time</span>
               <span style={est.caminhoTexto}>
-                Cada volume embalado contra o takt da semana, em segundos — e onde a linha
-                parou sem ninguém marcar.
+                Cada volume embalado contra o tempo-alvo do produto, em segundos — e onde a
+                linha parou sem ninguém marcar.
               </span>
               <div style={est.caminhoAcoes}>
                 <button type="button" style={est.botaoPrimario} onClick={aoAbrirEmbalagem}>

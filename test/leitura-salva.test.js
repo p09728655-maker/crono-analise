@@ -74,13 +74,24 @@ describe('leituraDaSalva', () => {
     expect(deixou.potencial).toBe(24);
   });
 
-  it('o veredito e o do PC: periodo contra o takt, paradas dentro', () => {
-    const { leitura } = leituraDaSalva(SALVA, { taktMs: 15000 });
-    const frases = frasesVolumeAVolume({ leitura, takt: { taktMs: 15000 }, unidade: VOLUME });
+  it('o veredito e o do PC: periodo contra o TEMPO-ALVO do produto, paradas dentro; o takt so\' informa', () => {
+    // v2.106.0: a regua e' o alvo (15 s); o takt (25 s) diria "dentro" — e nao julga mais.
+    const { leitura } = leituraDaSalva(SALVA, { taktMs: 25000 }, { alvoMs: 15000, estado: 'ok' });
+    const frases = frasesVolumeAVolume({ leitura, alvo: { alvoMs: 15000, estado: 'ok' }, unidade: VOLUME });
     // 18,18 / 15 = 1,212 -> 21% acima; rodando 12,7 s fica dentro.
     expect(frases.tom).toBe('falha');
-    expect(frases.manchete).toBe('No período, saiu um volume a cada 18.2 s, paradas dentro — 21% acima do takt de 15.0 s.');
-    expect(frases.linhas[0]).toMatch(/^Com a linha rodando seriam 12\.7 s por volume, dentro do takt/);
+    expect(frases.manchete).toBe('No período, saiu um volume a cada 18.2 s, paradas dentro — 21% acima do tempo-alvo do produto, 15.0 s.');
+    expect(frases.linhas[0]).toMatch(/^Com a linha rodando seriam 12\.7 s por volume, dentro do tempo-alvo/);
+    expect(frases.carga).toBe('Takt da semana: 25.0 s por volume — a carga da semana, igual para todo volume; não julga o produto.');
+  });
+
+  it('sem tempo-alvo, sem veredito e sem cor — nunca o takt no lugar', () => {
+    const { leitura } = leituraDaSalva(SALVA, { taktMs: 15000 }, { alvoMs: null, estado: 'sem-uep' });
+    const frases = frasesVolumeAVolume({ leitura, alvo: { estado: 'sem-uep' }, unidade: VOLUME });
+    expect(frases.tom).not.toBe('falha');
+    expect(frases.tom).not.toBe('atende');
+    expect(frases.manchete).not.toMatch(/acima do|dentro do (tempo|takt)/);
+    expect(frases.linhas[0]).toBe('Sem tempo-alvo para comparar: o produto não tem UEP no cadastro do painel, e sem UEP não há tempo-alvo.');
   });
 
   it('com setup planejado, so o setup marcado entre os toques sai do periodo', () => {
@@ -114,21 +125,17 @@ describe('semTakt no tablet', () => {
     expect(semTakt('carregando')).toMatch(/sendo buscado/);
     expect(semTakt('sem-rede')).not.toMatch(/não tem data/);
   });
-  it('o cartao do takt sem rede nao diz "sem programa"', () => {
+  it('o cartao do TEMPO-ALVO diz por que nao ha alvo — e o takt vai no subtitulo dele, como carga', () => {
     const { leitura } = leituraDaSalva(SALVA, {});
-    const takt = (estado) => numerosDaLeitura(leitura, { estado }, VOLUME).find((k) => k.chave === 'takt');
-    expect(takt('sem-rede').sub).toMatch(/sem rede/);
-    expect(takt('carregando').sub).toMatch(/buscando/);
-    // O PC segue como sempre.
-    expect(takt('sem-demanda').sub).toBe('sem programa para comparar');
-  });
-  it('com programa cadastrado, o cartao do takt diz o que falta — nunca "sem programa"', () => {
-    const { leitura } = leituraDaSalva(SALVA, {});
-    const sub = (estado) => numerosDaLeitura(leitura, { estado }, VOLUME).find((k) => k.chave === 'takt').sub;
-    expect(sub('sem-semana')).toBe('o programa não cobre esta semana');
-    expect(sub('sem-horas')).toBe('faltam as horas da semana do grupo');
-    expect(sub('sem-dias')).toBe('faltam os dias de produção da jornada');
-    expect(sub('setup-excede')).toBe('o setup cadastrado passa da jornada');
-    expect(sub('erro-programa')).toBe('não deu para carregar o programa');
+    const cartao = (alvo) => numerosDaLeitura(leitura, alvo, VOLUME).find((k) => k.chave === 'alvo');
+    expect(cartao({ estado: 'sem-rede' }).sub).toBe('sem rede: ainda não chegou');
+    expect(cartao({ estado: 'carregando' }).sub).toBe('buscando no painel');
+    expect(cartao({ estado: 'sem-uep' }).sub).toBe('produto sem UEP no painel');
+    expect(cartao({ estado: 'fora-da-lista' }).sub).toBe('produto fora da lista do painel');
+    expect(cartao({ estado: 'gs-antigo' }).sub).toBe('falta o Apps Script v5.62');
+    expect(cartao({ estado: 'sem-uep' }).valor).toBe('—');
+    const comAlvo = leituraDaSalva(SALVA, { taktMs: 16400 }, { alvoMs: 26600 }).leitura;
+    const k = numerosDaLeitura(comAlvo, { alvoMs: 26600, uep: 2.48, sUep: 10.742 }, VOLUME).find((x) => x.chave === 'alvo');
+    expect(k).toMatchObject({ rotulo: 'Tempo-alvo do produto', valor: '26.6 s', sub: '2.48 UEP × 10.74 s · takt da semana 16.4 s' });
   });
 });

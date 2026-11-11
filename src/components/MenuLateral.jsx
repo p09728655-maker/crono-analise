@@ -309,7 +309,7 @@ export default function MenuLateral({
       {aoVerEmbalagem && (
         <div style={est.bloco}>
           <div style={est.grupoRotulo}>Embalagem</div>
-          <div style={est.grupoDica}>Cada volume contra o takt, em segundos</div>
+          <div style={est.grupoDica}>Cada volume contra o tempo-alvo do produto, em segundos</div>
           <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerEmbalagem}>
             <span style={est.itemComIcone}>
               <IconeRitmo />

@@ -4,7 +4,7 @@ import {
 import { VERSAO } from '../../versao.js';
 import {
   conferenciaRapida, faixaHoraria, formatarDuracao, formatarSegundos, nomeChave, somarParadas,
-  unidadeDoPosto,
+  unidadeDoPosto, periodoPorPeca,
 } from '../../domain/cronoanalise.js';
 import { diasProgramados, taktDaMedicao } from '../../domain/demandaSemanal.js';
 import { filtrarPorPeriodo, formatarDataHora } from '../../domain/relatorioConferencias.js';
@@ -21,6 +21,11 @@ import MotivosParada from './MotivosParada.jsx';
 import RenomearPeca, { TERMOS_PRODUTO_EMBALAGEM } from './conferencias/RenomearPeca.jsx';
 import { est } from './conferencias/estilos.js';
 import { quandoLida, textoDaFalha } from './demanda/planilha.js';
+import { useTemposAlvo } from '../../lib/temposAlvo.js';
+import {
+  alvoDoProduto, descontaSetup, idadeDoAlvo, semAlvo,
+} from '../../domain/tempoAlvo.js';
+import TempoAlvoDosProdutos from './conferencias/TempoAlvoDosProdutos.jsx';
 
 /** Janela padrao, a mesma do relatorio de ritmo: o que esta' acontecendo agora. */
 const DIAS = 30;
@@ -117,6 +122,10 @@ const seletorDaLinha = (id) => `[data-medicao="${id}"]`;
 const VISTA_NA_TELA = '[data-vista][aria-pressed="true"]';
 export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometrarVideo }) {
   const [verVersoes, setVerVersoes] = useState(false);
+  /* OS TEMPOS-ALVO DO PAINEL (v2.106.0): lidos uma vez aqui e passados ao
+     volume a volume — a regua do veredito de cada medicao. */
+  const alvos = useTemposAlvo();
+  const alvosLido = alvos.lido;
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [aberta, setAberta] = useState(null);
   // 'fila' (as nao analisadas), 'analisadas' ou 'outras' (sem intervalos).
@@ -217,11 +226,37 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
     // A analisar, so' as que o detalhe deixa analisar (ver analisavel).
     const analisaveis = medicoes.filter(analisavel);
     const aAnalisar = analisaveis.filter((c) => !c.analisada_em).length;
+    const grupoDe = (maquina) => carga.grupos.find((g) => g.id === grupoDaMaquina.get(nomeChave(maquina))) || null;
+    /* O "POR VOLUME NO PERIODO" de cada medicao, sem abrir uma a uma
+       (v2.106.0, a lista de tempos-alvo): a MESMA conta do volume a volume
+       (useVolumeAVolume) — o relogio entre o 1o e o ultimo toque, e o setup
+       marcado nele sai pela regua do alvo do produto (descontaSetup; sem
+       alvo, pelo takt da semana DA medicao). Sem toques, null. */
+    const periodoDe = (c) => {
+      if (!c.com_marcas || !(Number(c.marcas_relogio_ms) > 0)) return null;
+      const g = grupoDe(c.maquina);
+      const demandas = g ? carga.demandas.get(g.id) : null;
+      const takt = g && demandas ? taktDaMedicao({
+        demandas,
+        horas: g.horas_semana,
+        maquinas: ativasDoGrupo(g.id),
+        setup: { setupsDia: g.setups_dia, dias: g.dias_semana, minutos: g.setup_min },
+        data: c.iniciado_em || c.salvo_em,
+        pecas: c.pecas,
+        duracaoMs: Number(c.duracao_ms),
+      }) : null;
+      return periodoPorPeca({
+        relogioEntreMarcasMs: Number(c.marcas_relogio_ms),
+        volumes: Number(c.pecas),
+        setupNoTrechoMs: Number(c.marcas_setup_ms) || 0,
+        setupPlanejado: descontaSetup(alvoDoProduto(alvosLido, c.peca), takt),
+      });
+    };
     return {
       medicoes, taktHoje, ativasDoGrupo, arquivadas, tocadas, analisaveis: analisaveis.length, aAnalisar, produtosDoCadastro,
-      grupoDe: (maquina) => carga.grupos.find((g) => g.id === grupoDaMaquina.get(nomeChave(maquina))) || null,
+      grupoDe, periodoDe,
     };
-  }, [carga]);
+  }, [carga, alvosLido]);
 
   /* Trocou de medicao: o detalhe, que rola sozinho ao lado da lista, volta
      ao topo — a nova nao pode abrir no meio, onde a anterior foi deixada.
@@ -508,7 +543,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
           contexto={{
             rotulo: 'Embalagem',
             titulo: 'Embalagem Takt Time',
-            subtitulo: 'Cada volume contra o takt da semana, em segundos',
+            subtitulo: 'Cada volume contra o tempo-alvo do produto, em segundos',
           }}
         />
 
@@ -571,6 +606,20 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
                     </div>
                   </div>
                 ))}
+                {/* A REGUA DO VEREDITO (v2.106.0): o tempo-alvo de cada produto
+                    = estes segundos por UEP × a UEP dele. O takt, ao lado, e' a
+                    carga da semana. */}
+                <div style={est.kpi}>
+                  <div style={est.kpiRotulo}>Tempo-alvo · por UEP</div>
+                  <div style={est.kpiValor}>
+                    {alvos.lido?.estado === 'ok' ? `${alvos.lido.ref.sUep.toFixed(2)} s` : '—'}
+                  </div>
+                  <div style={est.kpiSub}>
+                    {alvos.lido?.estado === 'ok'
+                      ? `× a UEP do produto · média da linha ${Math.round(alvos.lido.ref.metaUep)} UEP/dia, sem o setup (${alvos.lido.ref.setupDia} min/dia) · do painel${idadeDoAlvo(alvos.lido.lidoEm) ? ` · ${idadeDoAlvo(alvos.lido.lidoEm)}` : ''}`
+                      : semAlvo(alvos.lido ? alvos.lido.estado : alvos.semRede ? 'sem-rede' : 'carregando', alvos.lido?.mensagem)}
+                  </div>
+                </div>
                 <div style={est.kpi}>
                   <div style={est.kpiRotulo}>Medições em {DIAS} dias</div>
                   <div style={est.kpiValor}>{leitura.medicoes.length}</div>
@@ -587,6 +636,16 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
                   <div style={est.kpiSub}>{subAAnalisar(leitura)}</div>
                 </div>
               </div>
+
+              {/* O TEMPO-ALVO DE CADA PRODUTO, por extenso, e o medido dos que ja'
+                  passaram pelo app (v2.106.0). Logo abaixo do cartao "Tempo-alvo ·
+                  por UEP", que ele explica, e ACIMA da lista: embaixo dela, com a
+                  pagina rolada ate' o fim, ele virava a ancora da rolagem do
+                  navegador e abrir uma medicao ao lado puxava a linha clicada
+                  138 px para cima. */}
+              <TempoAlvoDosProdutos
+                alvos={alvos} medicoes={leitura.medicoes} periodoDe={leitura.periodoDe} dias={DIAS}
+              />
 
               {/* O desfecho do ultimo envio ao painel: o volume a volume
                   fecha ao salvar, e e' aqui que ele aparece. */}
@@ -628,6 +687,7 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
                         aoFechar={fecharPainel}
                         analise={analises.da(aberta)}
                         rolar={porClique}
+                        alvos={alvos}
                       />
                     </div>
                   )}
@@ -635,7 +695,14 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
               )}
 
               <p style={est.painelDica}>
-                O takt é o programa da semana do grupo EMBALAGEM — em VOLUMES, não em produtos,
+                Cada medição é julgada contra o TEMPO-ALVO do produto: os segundos por UEP da média
+                da linha sem hora extra (a META UEP do painel, já sem o setup) × a UEP do volume, do
+                cadastro do painel. É o de hoje: medição antiga é lida com a UEP e a meta de agora.
+                Produto sem UEP fica sem veredito.
+              </p>
+              <p style={est.painelDica}>
+                O takt é a carga da semana, igual para todo volume, e não julga o produto: é o
+                programa da semana do grupo EMBALAGEM — em VOLUMES, não em produtos,
                 lido da planilha do PCP quando a leitura está ligada — dividido pelas horas dos
                 dias programados, descontado o setup planejado. Um produto que sai em dois
                 volumes conta dois.

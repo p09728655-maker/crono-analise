@@ -10,6 +10,7 @@ import { cores } from '../../../theme/tokens.js';
 import { est } from '../rapida/estilos.js';
 import { dataCurta } from '../rapida/formato.js';
 import { inicioDaSalva, leituraDaSalva } from './leituraSalva.js';
+import { avisoDoAlvo, explicacaoDoAlvo } from '../../../domain/tempoAlvo.js';
 
 /** A cor da faixa do veredito. Falha e' o laranja de status, nunca o vermelho da marca. */
 const COR_DO_TOM = { atende: cores.ok, falha: cores.critico, atencao: cores.atencao };
@@ -27,7 +28,7 @@ const hora = (iso) => {
  * Pedido do chao de fabrica, com foto do tablet: as medicoes salvas eram
  * so' uma lista de volumes/hora, e o resultado inteiro so' existia no PC.
  * Tocar na linha abre aqui o mesmo volume a volume do PC — o veredito
- * contra o takt da semana da medicao, os cartoes, o que deixou de ser
+ * contra o tempo-alvo do produto (v2.106.0), os cartoes, o que deixou de ser
  * embalado, o grafico e as lacunas —, com as mesmas contas e as mesmas
  * frases (domain/volumeAVolume.js). Leitura, nao edicao: corrigir produto
  * ou parada e salvar a analise do PCP continuam no PC.
@@ -36,7 +37,7 @@ const hora = (iso) => {
  * a tela diz isso no pe' em vez de deixar dois numeros sem explicacao.
  */
 export default function ResultadoSalvo({
-  registro, takt: doPrograma, unidade, nomeGrupo, mostrarMaquina = true, aoVoltar,
+  registro, takt: doPrograma, alvo = {}, unidade, mostrarMaquina = true, aoVoltar,
 }) {
   /* Sem rede, o programa guardado no aparelho pode ser so' de outra semana:
      "o programa nao cobre a semana" culparia o PCP pelo que e' falta de
@@ -44,7 +45,7 @@ export default function ResultadoSalvo({
   const takt = doPrograma.semRede && doPrograma.estado === 'sem-semana'
     ? { ...doPrograma, estado: 'sem-rede' }
     : doPrograma;
-  const r = leituraDaSalva(registro, takt);
+  const r = leituraDaSalva(registro, takt, alvo);
   const { leitura, conferencia } = r;
   const inicio = inicioDaSalva(registro);
   const quando = [
@@ -53,7 +54,7 @@ export default function ResultadoSalvo({
     inicio ? `${hora(inicio)}–${hora(registro.salvoEm)}` : null,
     `${formatarDuracao(registro.duracaoMs)} de medição`,
   ].filter(Boolean).join(' · ');
-  const frases = leitura ? frasesVolumeAVolume({ leitura, takt, unidade, nomeGrupo }) : null;
+  const frases = leitura ? frasesVolumeAVolume({ leitura, alvo, unidade }) : null;
 
   return (
     <section style={est.salva} aria-label="Resultado da medição salva">
@@ -69,16 +70,23 @@ export default function ResultadoSalvo({
         >
           <p style={est.vereditoManchete}>{frases.manchete}</p>
           {frases.linhas.map((l) => <p key={l} style={est.vereditoLinha}>{l}</p>)}
+          {explicacaoDoAlvo(alvo) && (
+            <p style={{ ...est.linhaConta, textAlign: 'left', marginTop: 6 }}>
+              {explicacaoDoAlvo(alvo)}
+              {avisoDoAlvo(alvo, { data: inicio || registro.salvoEm }) && ` ${avisoDoAlvo(alvo, { data: inicio || registro.salvoEm })}`}
+            </p>
+          )}
+          {frases.carga && <p style={{ ...est.linhaCarga, textAlign: 'left', marginTop: 6 }}>{frases.carga}</p>}
         </div>
       ) : (
         <section style={est.aviso} role="status">
           Sem intervalo entre {unidade.plural} nesta medição (medida por horários, com a contagem corrigida à
-          {' '}mão ou com um {unidade.singular} só): não há o que comparar com o takt. Os {unidade.plural}/hora e
+          {' '}mão ou com um {unidade.singular} só): não há o que comparar com o tempo-alvo. Os {unidade.plural}/hora e
           {' '}as paradas valem.
         </section>
       )}
 
-      <Cartoes r={r} takt={takt} unidade={unidade} tom={frases?.tom} />
+      <Cartoes r={r} alvo={alvo} unidade={unidade} tom={frases?.tom} />
 
       <PerdaDaMedicao r={r} unidade={unidade} />
 
@@ -107,7 +115,7 @@ export default function ResultadoSalvo({
 
       <p style={est.notaSalva}>
         Resultado da cópia salva neste aparelho
-        {leitura?.taktMs ? `, contra o takt da semana da medição${takt.semRede ? ' (programa guardado neste aparelho, sem rede agora)' : ''}` : ''}.
+        {leitura?.alvoMs ? ', contra o tempo-alvo de hoje do produto (o cadastro do painel agora)' : ''}.
         {' '}Se o produto ou as
         paradas foram corrigidos no PC, os números de lá valem: a correção não volta para cá. A análise
         do PCP continua sendo salva no PC, em Embalagem Takt Time.
@@ -129,7 +137,7 @@ export default function ResultadoSalvo({
  * volumes/hora embaixo. Volumes/hora e' o MESMO numero da linha da lista.
  */
 function Cartoes({
-  r, takt, unidade, tom,
+  r, alvo, unidade, tom,
 }) {
   const { leitura, conferencia } = r;
   const par = somarParadas(conferencia.paradas);
@@ -152,10 +160,10 @@ function Cartoes({
   let lista;
   if (!leitura) lista = [volumes, paradas, porHora];
   else {
-    const numeros = numerosDaLeitura(leitura, takt, unidade);
+    const numeros = numerosDaLeitura(leitura, alvo, unidade);
     const k = Object.fromEntries(numeros.map((x) => [x.chave, x]));
     lista = leitura.suficiente
-      ? [k.periodo, k.takt, k.rodando, k.normal, volumes, paradas, k.lacunas, porHora]
+      ? [k.periodo, k.alvo, k.rodando, k.normal, volumes, paradas, k.lacunas, porHora]
       : [volumes, ...numeros, paradas, porHora];
   }
   const corVeredito = COR_DO_TOM[tom];

@@ -144,8 +144,14 @@ function dataDaMedicao(conferencia) {
  * Com toques de menos, mandar "corrigir o produto e enviar de novo" seria
  * mandar fazer uma correcao que nao leva a medicao a lugar nenhum.
  *
- * O SETUP PLANEJADO e' o da tela, que o tira do TAKT
- * (taktDaMedicao(...).setupPlanejado, em VolumeAVolume.jsx): setup maior
+ * O SETUP PLANEJADO e' o do TAKT (taktDaMedicao(...).setupPlanejado) —
+ * desde a v2.106.0 a TELA decide pela regua do tempo-alvo (descontaSetup,
+ * src/domain/tempoAlvo.js) e aqui NAO, de proposito: o servidor nao tem o
+ * alvo do produto sem mais uma ida ao Apps Script no envio, e o NO PERIODO
+ * no painel so' informa (a UEP sai do sem as lacunas). Os dois so' diferem
+ * com setup marcado entre os toques e sem o programa da semana (ou com o
+ * grupo sem setup no app e o painel com setup). O que segue e' a regra do
+ * takt, como era: setup maior
  * que zero no cadastro do grupo (setups_dia x dias_semana x setup_min, ver
  * horasDeSetup) E programa da semana cadastrado — sem programa, a tela nao
  * tem takt, o setup nao sai das horas, e o setup que a medicao pegou entre
@@ -182,8 +188,9 @@ export function montarParaOPainel({ conferencia, grupo, demandas = [] } = {}) {
     pecas: c.pecas,
     duracaoMs: Number(c.duracao_ms),
   });
-  // As mesmas duas chamadas de VolumeAVolume.jsx. O takt nao entra: ele so'
-  // acrescenta a comparacao, nao muda nenhum dos tres tempos.
+  // As duas chamadas de VolumeAVolume.jsx, com o setup pela regra do takt
+  // (ver acima: a tela usa a do alvo). O takt nao entra: ele so' acrescenta
+  // a comparacao, nao muda nenhum dos tres tempos.
   const periodoMs = periodoPorPeca({
     relogioEntreMarcasMs: c.marcas_relogio_ms,
     volumes: marcas.length,
@@ -313,6 +320,59 @@ export function respostaDoPainel(corpo) {
 }
 
 /**
+ * O GET NO PAINEL, cru (v2.106.0): a URL conferida, os parametros, o prazo e
+ * o JSON. Devolve { corpo } ou { falha: 'desligado'|'url'|'status'|'json'|
+ * 'prazo'|'rede', status?, motivo? } — quem chama diz a frase. E' o que o
+ * envio (chamarPainel) e a leitura dos tempos-alvo (temposAlvo.js) dividem:
+ * a mesma conferencia do /exec, o mesmo prazo, o mesmo `buscar` dos testes;
+ * as frases sao de cada um ("envie de novo" so' faz sentido no envio).
+ * Nunca lanca.
+ */
+export async function lerDoPainel({
+  params, url = process.env.PAINEL_APPS_SCRIPT_URL, buscar = fetch, prazoMs = PRAZO_PAINEL_MS,
+} = {}) {
+  const endereco = String(url ?? '').trim();
+  if (!endereco) return { falha: 'desligado' };
+  let alvo = null;
+  try { alvo = new URL(endereco); } catch { alvo = null; }
+  if (!alvo || alvo.protocol !== 'https:' || !/\/exec$/.test(alvo.pathname)) return { falha: 'url' };
+  // URLSearchParams, como o painel espera: espaco vai como "+", e o "·"
+  // em UTF-8. Pelo objeto URL, e nao "?" colado: uma URL que ja' traga
+  // query string nao sai com dois "?".
+  Object.entries(params || {}).forEach(([chave, valor]) => alvo.searchParams.set(chave, valor ?? ''));
+
+  const prazo = comPrazo(prazoMs);
+  try {
+    const r = await buscar(alvo.toString(), { method: 'GET', redirect: 'follow', signal: prazo.sinal });
+    const texto = await r.text();
+    if (!r.ok) return { falha: 'status', status: r.status };
+    try {
+      return { corpo: JSON.parse(texto) };
+    } catch {
+      return { falha: 'json' };
+    }
+  } catch (e) {
+    if (prazo.sinal.aborted || e?.name === 'AbortError' || e?.name === 'TimeoutError') return { falha: 'prazo' };
+    return { falha: 'rede', motivo: semPontoFinal(textoDoPainel(e?.message || e)) };
+  } finally {
+    prazo.encerrar();
+  }
+}
+
+/** A frase de cada falha do GET, para quem le (a URL e o JSON sao as mesmas do envio). */
+export function frasePorFalha(g, { prazoMs = PRAZO_PAINEL_MS, depois = '' } = {}) {
+  const fim = depois ? ` ${depois}` : '';
+  switch (g.falha) {
+    case 'desligado': return MENSAGEM_DESLIGADO;
+    case 'url': return MENSAGEM_URL;
+    case 'json': return MENSAGEM_NAO_JSON;
+    case 'status': return `O painel respondeu ${g.status}.${fim}`;
+    case 'prazo': return `O painel não respondeu em ${Math.round(prazoMs / 1000)} s.${fim}`;
+    default: return `Não deu para falar com o painel (${g.motivo}).${fim}`;
+  }
+}
+
+/**
  * A CHAMADA AO PAINEL. Devolve o desfecho (respostaDoPainel), ou:
  *   desligado  sem PAINEL_APPS_SCRIPT_URL — nada sai daqui;
  *   erro       URL que nao e' a do App da Web, resposta que nao e' JSON,
@@ -326,46 +386,11 @@ export function respostaDoPainel(corpo) {
 export async function chamarPainel({
   params, url = process.env.PAINEL_APPS_SCRIPT_URL, buscar = fetch, prazoMs = PRAZO_PAINEL_MS,
 } = {}) {
-  const endereco = String(url ?? '').trim();
-  if (!endereco) return { estado: 'desligado', mensagem: MENSAGEM_DESLIGADO };
-  let alvo = null;
-  try { alvo = new URL(endereco); } catch { alvo = null; }
-  if (!alvo || alvo.protocol !== 'https:' || !/\/exec$/.test(alvo.pathname)) {
-    return { estado: 'erro', mensagem: MENSAGEM_URL };
-  }
-  // URLSearchParams, como o painel espera: espaco vai como "+", e o "·"
-  // em UTF-8. Pelo objeto URL, e nao "?" colado: uma URL que ja' traga
-  // query string nao sai com dois "?".
-  Object.entries(params || {}).forEach(([chave, valor]) => alvo.searchParams.set(chave, valor ?? ''));
-
-  const prazo = comPrazo(prazoMs);
-  try {
-    const r = await buscar(alvo.toString(), { method: 'GET', redirect: 'follow', signal: prazo.sinal });
-    const texto = await r.text();
-    if (!r.ok) {
-      return {
-        estado: 'erro',
-        mensagem: `O painel respondeu ${r.status}. Envie de novo; se repetir, confira PAINEL_APPS_SCRIPT_URL.`,
-      };
-    }
-    let corpo;
-    try {
-      corpo = JSON.parse(texto);
-    } catch {
-      return { estado: 'erro', mensagem: MENSAGEM_NAO_JSON };
-    }
-    return respostaDoPainel(corpo);
-  } catch (e) {
-    if (prazo.sinal.aborted || e?.name === 'AbortError' || e?.name === 'TimeoutError') {
-      return { estado: 'erro', mensagem: `O painel não respondeu em ${Math.round(prazoMs / 1000)} s. Envie de novo.` };
-    }
-    return {
-      estado: 'erro',
-      mensagem: `Não deu para falar com o painel (${semPontoFinal(textoDoPainel(e?.message || e))}). Envie de novo.`,
-    };
-  } finally {
-    prazo.encerrar();
-  }
+  const g = await lerDoPainel({ params, url, buscar, prazoMs });
+  if (!g.falha) return respostaDoPainel(g.corpo);
+  if (g.falha === 'desligado') return { estado: 'desligado', mensagem: MENSAGEM_DESLIGADO };
+  const depois = g.falha === 'status' ? 'Envie de novo; se repetir, confira PAINEL_APPS_SCRIPT_URL.' : 'Envie de novo.';
+  return { estado: 'erro', mensagem: frasePorFalha(g, { prazoMs, depois }) };
 }
 
 /** O motivo que vai para painel_erro, com o teto da coluna. */

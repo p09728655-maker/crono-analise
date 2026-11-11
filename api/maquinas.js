@@ -24,6 +24,7 @@ import { ErroHttp, erroValidacao, handler, json, lerCorpo, naoEncontrado, permit
 import { decimal, inteiro, texto, uuid } from './_lib/validar.js';
 import { demandaSemanal } from './_lib/demanda.js';
 import { listarProdutos, produtos } from './_lib/produtos.js';
+import { rotaTemposAlvo } from './_lib/temposAlvo.js';
 
 // Nome canonico: apara e recolhe espaco repetido. Caixa e acento ficam —
 // e' o nome EXIBIDO; a unicidade compara sem caixa (indice lower/btrim).
@@ -101,6 +102,10 @@ export default handler(async (req, res) => {
   // da demanda: e' trabalho de PCP, nao so' de administrador. Ver
   // api/_lib/produtos.js.
   if (req.query?.produtos === '1') return produtos(req, res, auth);
+  // OS TEMPOS-ALVO DO PAINEL (?alvo=1, v2.106.0): a leitura, por qualquer
+  // usuario logado — o tablet da embalagem julga cada volume por ela. Nada e'
+  // gravado. Ver api/_lib/temposAlvo.js.
+  if (req.query?.alvo === '1') return rotaTemposAlvo(req, res);
 
   const { empresaId } = auth;
   const id = req.query?.id;

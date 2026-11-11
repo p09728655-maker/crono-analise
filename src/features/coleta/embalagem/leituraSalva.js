@@ -15,6 +15,7 @@
  */
 import { leituraPecaAPeca, periodoPorPeca } from '../../../domain/cronoanalise.js';
 import { deixouDeEmbalar, roubadosPelasParadas } from '../../../domain/volumeAVolume.js';
+import { descontaSetup } from '../../../domain/tempoAlvo.js';
 
 /**
  * O instante em que a medicao comecou, como o servidor grava o
@@ -36,14 +37,16 @@ export const comoConferencia = (registro) => ({
 });
 
 /**
- * A leitura da medicao salva, com o takt da semana dela.
+ * A leitura da medicao salva, com o takt da semana dela (a carga, e o setup
+ * planejado do grupo, que sai do periodo) e o TEMPO-ALVO do produto (a
+ * regua do veredito, v2.106.0).
  *
  * As marcas so' valem com a contagem que elas explicam — a mesma regra do
  * banco (uma marca por volume). Contagem corrigida a' mao ou medicao por
  * horarios nao tem marca: `leitura` sai null e a tela mostra so' o que a
  * medicao inteira diz (volumes/hora e paradas).
  */
-export function leituraDaSalva(registro, takt = {}) {
+export function leituraDaSalva(registro, takt = {}, alvo = {}) {
   const conferencia = comoConferencia(registro);
   const marcas = Array.isArray(registro?.marcasMs) ? registro.marcasMs.map(Number) : null;
   const comMarcas = Boolean(marcas) && marcas.length >= 2 && marcas.length === conferencia.pecas;
@@ -53,11 +56,13 @@ export function leituraDaSalva(registro, takt = {}) {
       relogioEntreMarcasMs: relogio,
       volumes: marcas.length,
       setupNoTrechoMs: registro.marcasSetupMs,
-      setupPlanejado: Boolean(takt.setupPlanejado),
+      setupPlanejado: descontaSetup(alvo, takt),
     })
     : null;
   const leitura = comMarcas
-    ? leituraPecaAPeca({ marcasMs: marcas, taktMs: takt.taktMs, periodoPorPecaMs })
+    ? leituraPecaAPeca({
+      marcasMs: marcas, taktMs: takt.taktMs, alvoMs: alvo.alvoMs, periodoPorPecaMs,
+    })
     : null;
   const roubo = roubadosPelasParadas(conferencia);
   return {

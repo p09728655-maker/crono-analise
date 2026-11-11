@@ -276,6 +276,10 @@ export const removerGrupoMaquina = (id) =>
 /* A rota vive dentro de /maquinas (?demanda=1), e nao num /demanda proprio:
    o plano Hobby da Vercel aceita 12 funcoes por deploy e o projeto ja' esta'
    nas 12 — a 13a derruba o deploy inteiro. Ver api/_lib/demanda.js. */
+/* OS TEMPOS-ALVO DO PAINEL (v2.106.0): { estado, ref, produtos, mensagem,
+   lidoEm } — o servidor le do painel e guarda 10 min. Mora em /maquinas
+   (?alvo=1) pela mesma razao da demanda. Ver api/_lib/temposAlvo.js. */
+export const listarTemposAlvo = () => requisitar('/maquinas?alvo=1');
 const ROTA_DEMANDA = '/maquinas?demanda=1';
 export const listarDemanda = (grupoId) =>
   requisitar(grupoId ? `${ROTA_DEMANDA}&grupo=${encodeURIComponent(grupoId)}` : ROTA_DEMANDA)

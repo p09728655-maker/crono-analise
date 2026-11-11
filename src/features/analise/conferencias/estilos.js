@@ -121,6 +121,9 @@ export const est = {
   vereditoFalha: { background: t.criticoFundo, borderLeftColor: t.critico },
   vereditoManchete: { ...tipo('corpoF'), color: t.texto, margin: 0 },
   vereditoTexto: { ...tipo('legenda'), color: t.texto, margin: 0, lineHeight: 1.55 },
+  // O takt da semana como CARGA (v2.106.0), embaixo do veredito: menor e
+  // apagado — informa, nao julga.
+  vavCarga: { ...tipo('legenda'), color: t.textoMedio, margin: '8px 0 0', lineHeight: 1.5 },
 
   /* ---- programa da semana (demanda x entregue) ---- */
   // O titulo e o seletor de semana dividem a linha: a semana e' PARTE do
@@ -808,6 +811,16 @@ export const est = {
   painel: {
     background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
     border: `1px solid ${t.borda}`, overflowX: 'auto', marginBottom: espaco.xl,
+  },
+  // O TEMPO-ALVO DE CADA PRODUTO (v2.106.0): a regua por extenso e a tabela.
+  painelBloco: {
+    background: t.papel, borderRadius: raio.lg, boxShadow: elevacao.baixa,
+    border: `1px solid ${t.borda}`, padding: espaco.lg, marginBottom: espaco.xl,
+    display: 'flex', flexDirection: 'column', gap: espaco.sm,
+  },
+  botaoTexto: {
+    alignSelf: 'flex-start', background: 'none', border: 'none', padding: `${espaco.xs}px 0`,
+    ...tipo('legenda'), color: t.textoMedio, textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit',
   },
   painelTopo: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',

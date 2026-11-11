@@ -132,14 +132,15 @@ describe('volume em par e ritmo misto — o que a mediana errava', () => {
  */
 const VOLUME = unidadeDoPosto('EMBALAGEM');
 /** Uma sessao inteira: as marcas (relogio rodando) e o relogio entre toques. */
-function frase({ rodandoS, relogioS, takt = 72000, setupNoTrechoS = 0, setupPlanejado = false }) {
+function frase({ rodandoS, relogioS, alvo = 72000, setupNoTrechoS = 0, setupPlanejado = false }) {
   const marcasMs = marcasDe(rodandoS);
   const periodoPorPecaMs = periodoPorPeca({
     relogioEntreMarcasMs: relogioS * 1000, volumes: marcasMs.length,
     setupNoTrechoMs: setupNoTrechoS * 1000, setupPlanejado,
   });
-  const leitura = leituraPecaAPeca({ marcasMs, taktMs: takt, periodoPorPecaMs });
-  return frasesVolumeAVolume({ leitura, takt: { semana: '043-26' }, unidade: VOLUME });
+  // A regua do veredito e' o TEMPO-ALVO do produto (v2.106.0): 72 s aqui.
+  const leitura = leituraPecaAPeca({ marcasMs, alvoMs: alvo, periodoPorPecaMs });
+  return frasesVolumeAVolume({ leitura, unidade: VOLUME });
 }
 
 describe('contra o takt vai o relogio entre o primeiro e o ultimo toque', () => {
@@ -152,9 +153,9 @@ describe('contra o takt vai o relogio entre o primeiro e o ultimo toque', () => 
   it('sem estaca de cerca: linha de 75 s em todos os volumes NAO passa no takt de 72 s', () => {
     // Revisao de 19/10: "duracao / N" dava 69,8 s e aprovava esta linha.
     const f = frase({ rodandoS: Array(13).fill(75), relogioS: 13 * 75 });
-    expect(f.manchete).toBe('No período, saiu um volume a cada 75.0 s, paradas dentro — 4% acima do takt de 72.0 s.');
+    expect(f.manchete).toBe('No período, saiu um volume a cada 75.0 s, paradas dentro — 4% acima do tempo-alvo do produto, 72.0 s.');
     expect(f.tom).toBe('falha');
-    expect(f.linhas[0]).toMatch(/é o passo dela que está mais lento que o takt/);
+    expect(f.linhas[0]).toMatch(/o passo neste produto está mais lento que o da média da linha — ou a UEP dele está baixa/);
   });
 
   it('marcar "Parou" NAO melhora o veredito — cada sessao com o seu proprio relogio', () => {
@@ -164,7 +165,7 @@ describe('contra o takt vai o relogio entre o primeiro e o ultimo toque', () => 
     const semMarcar = frase({ rodandoS: [...Array(12).fill(60), 1260], relogioS: 2040 });
     const marcada = frase({ rodandoS: Array(13).fill(60), relogioS: 13 * 60 + 1260 });
     expect(semMarcar.manchete).toBe(marcada.manchete);
-    expect(marcada.manchete).toBe('No período, saiu um volume a cada 156.9 s, paradas dentro — 118% acima do takt de 72.0 s.');
+    expect(marcada.manchete).toBe('No período, saiu um volume a cada 156.9 s, paradas dentro — 118% acima do tempo-alvo do produto, 72.0 s.');
     // E o diagnostico diz de onde veio, em cada caso.
     expect(marcada.linhas[0]).toMatch(/paradas marcadas nesta medição/);
     expect(semMarcar.linhas[0]).toMatch(/paradas que ninguém marcou/);
@@ -182,24 +183,27 @@ describe('contra o takt vai o relogio entre o primeiro e o ultimo toque', () => 
     // do trecho, faziam esta linha de 75 s sair com 28,8 s e 60% de folga.
     // Fora do trecho, o setup no trecho e' zero — o veredito nao muda.
     const f = frase({ rodandoS: Array(13).fill(75), relogioS: 975, setupNoTrechoS: 0, setupPlanejado: true });
-    expect(f.manchete).toBe('No período, saiu um volume a cada 75.0 s, paradas dentro — 4% acima do takt de 72.0 s.');
+    expect(f.manchete).toBe('No período, saiu um volume a cada 75.0 s, paradas dentro — 4% acima do tempo-alvo do produto, 72.0 s.');
   });
 
   it('sem o relogio entre toques NAO ha veredito — nunca cai para a linha rodando', () => {
     const marcasMs = marcasDe(Array(13).fill(60));
-    const leitura = leituraPecaAPeca({ marcasMs, taktMs: 72000, periodoPorPecaMs: null });
+    const leitura = leituraPecaAPeca({ marcasMs, alvoMs: 72000, periodoPorPecaMs: null });
     const f = frasesVolumeAVolume({ leitura, unidade: VOLUME });
     expect(f.manchete).toBe('Com a linha rodando, saiu um volume a cada 60.0 s.');
-    expect(f.linhas[0]).toMatch(/não há veredito contra o takt/);
+    expect(f.linhas[0]).toMatch(/não há veredito contra o tempo-alvo/);
     expect(numerosDaLeitura(leitura, {}, VOLUME)[0].valor).toBe('—');
   });
 
   it('os numeros tem chave fixa, e os dois tempos por volume dizem a regua no nome', () => {
     const marcasMs = marcasDe(Array(13).fill(60));
-    const leitura = leituraPecaAPeca({ marcasMs, taktMs: 72000, periodoPorPecaMs: 60000 });
-    const k = numerosDaLeitura(leitura, { semana: '043-26' }, VOLUME);
+    const leitura = leituraPecaAPeca({ marcasMs, taktMs: 50000, alvoMs: 72000, periodoPorPecaMs: 60000 });
+    const k = numerosDaLeitura(leitura, { alvoMs: 72000, uep: 2.48, sUep: 29.032 }, VOLUME);
     // A tela escolhe destaque e apoio pela chave — a ordem e' a da folha.
-    expect(k.map((x) => x.chave)).toEqual(['periodo', 'takt', 'rodando', 'normal', 'lacunas']);
+    // O cartao do TEMPO-ALVO entra no lugar do takt (v2.106.0); o takt vai
+    // no subtitulo dele, como a carga da semana.
+    expect(k.map((x) => x.chave)).toEqual(['periodo', 'alvo', 'rodando', 'normal', 'lacunas']);
+    expect(k[1]).toMatchObject({ rotulo: 'Tempo-alvo do produto', valor: '72.0 s', sub: '2.48 UEP × 29.03 s · takt da semana 50.0 s' });
     expect(k[0].rotulo).toBe('Por volume no período');
     expect(k[2].rotulo).toBe('Por volume com a linha rodando');
     // Sem lacuna, diz o que o criterio viu — nao que nao houve perda.

@@ -13,6 +13,22 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.106.0',
+    data: '2026-11-11',
+    titulo: 'Embalagem: cada volume contra o tempo-alvo do produto',
+    itens: [
+      'O VEREDITO DA EMBALAGEM PASSA A SER CONTRA O TEMPO-ALVO DO PRODUTO. Antes todo volume era comparado com o takt da semana (as horas da semana ÷ os volumes programados), um número só para qualquer produto: o produto pesado saía sempre vermelho e o leve sempre verde, pelo peso e não pelo desempenho. Agora cada volume é comparado com o tempo-alvo do produto dele, o tempo que ele pode levar para a linha fazer a média sem hora extra. Vale no tablet (a cor do cronômetro ao vivo, o cartão, o resumo e a medição salva), no volume a volume e na junção do PC, na folha impressa e no Cronometrar por vídeo.',
+      'COMO SE CHEGA NO TEMPO-ALVO VEM ESCRITO ONDE ELE APARECE: "Tempo-alvo = 2.48 UEP × 10.74 s por UEP = 26.6 s por volume. Os 10.74 s por UEP: (527 min de jornada − 32.8 min de setup) × 60 ÷ 2761 UEP por dia, a média da linha sem hora extra." Com ponto, como os segundos do resto do app, e a média sem o ponto de milhar, para o ponto não valer duas coisas na mesma frase. A UEP do produto, a média da linha e o setup vêm do painel RitmoPatrimar (o cadastro e o ⚙ de lá); nada disso é digitado aqui. Mudou a UEP de um produto no painel, o tempo-alvo dele muda junto.',
+      'O SETUP MARCADO NO MEIO DA MEDIÇÃO SAI DO TEMPO POR VOLUME QUANDO O TEMPO-ALVO JÁ VEM SEM O SETUP do painel (o setup do ⚙ de lá maior que zero). Antes, quem decidia era o takt: sem o programa da semana (não carregou, grupo sem programa, tablet sem nada guardado), o setup ficava no período e a medição com uma troca no meio sairia acima do tempo-alvo pela troca. Sem tempo-alvo, vale o critério de antes.',
+      'O TAKT DA SEMANA CONTINUA, COMO CARGA, SEM COR. Uma linha "Carga da semana: takt X s por volume" diz quanto a semana pede; ela não julga o produto. Duas réguas pintando a mesma medição confundiriam.',
+      'PRODUTO SEM UEP NO PAINEL FICA SEM TEMPO-ALVO E SEM COR, com o motivo escrito — nunca o takt no lugar. O mesmo vale para produto que não é um da lista do painel (digitado à mão) e para a junção de produtos com tempos-alvo diferentes. O tablet guarda os tempos-alvo: sem rede, vale o último que chegou; sem nenhum, a tela diz que ainda não chegaram.',
+      'NA EMBALAGEM TAKT TIME DO PC, O QUADRO "TEMPO-ALVO DE CADA PRODUTO" (fechado, acima da lista; clique para abrir): a régua por extenso e, produto a produto, a UEP, o tempo-alvo e, para os produtos medidos nos últimos 30 dias, o tempo por volume da última medição (no período, paradas dentro — o número do veredito) com a diferença para o alvo, do mais acima para o mais abaixo. Os produtos sem medição abrem num botão. O cartão "Tempo-alvo · por UEP" mostra os segundos por UEP de hoje.',
+      'A MEDIÇÃO ANTIGA É LIDA COM O TEMPO-ALVO DE HOJE (a UEP e a média de agora): se a UEP de um produto mudou por cronoanálise, o veredito das medições antigas dele muda junto. O volume a volume, a folha impressa e o resultado salvo do tablet dizem isso quando a medição não é de hoje ("Medição de 20/10 lida com o tempo-alvo de hoje"), e dizem a hora da leitura quando o painel ficou mais de 2 h sem responder.',
+      'SEM RESPOSTA DO PAINEL, O APP TENTA DE NOVO EM 1 MINUTO quando o aparelho ainda não tem nenhum tempo-alvo guardado (o tablet novo não fica meia hora sem cor). Erro do servidor aparece com o motivo dele, não como "sem rede". Com o painel calado, vale o último tempo-alvo que chegou, e o cartão do tablet diz de quando ele é quando passa de 2 h.',
+      'NA FOLHA IMPRESSA, A CONTA DO TEMPO-ALVO FICA NA 1ª PÁGINA, logo depois do gráfico (o gráfico pode ficar um pouco mais baixo para ela caber, até a altura mínima — só com o cabeçalho muito alto ela passa para a 2ª); a conta do takt da semana vem junto quando cabe, senão abre a 2ª página.',
+    ],
+  },
+  {
     versao: '2.105.0',
     data: '2026-11-11',
     titulo: 'Cronometrar por vídeo: o app marca os volumes sozinho',

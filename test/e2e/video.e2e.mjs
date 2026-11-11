@@ -49,6 +49,15 @@ const DEMANDAS = [{
   ano: segunda.getUTCFullYear(), numero: 1, pecas: 2200, inicio: segunda.toISOString().slice(0, 10),
   atualizado_em: hoje.toISOString(),
 }];
+/* O tempo-alvo do painel (v2.106.0): o Rack com 10,0 s (0,40 UEP × 25 s;
+   527 × 60 ÷ 1.265 = 24,996 — a regua fecha, como o painel manda),
+   bem abaixo do que o video mede (12,9 s), para o "▲ alvo" aparecer.
+   Quem nao escolhe produto (o teste do setup) fica sem alvo, como antes. */
+const ALVOS = {
+  estado: 'ok',
+  ref: { metaUep: 1265, setupDia: 0, minDia: 527, minProd: 527, sUep: 24.996 },
+  produtos: [{ rot: 'Rack Sirius 1.6', uep: 0.4, alvoMs: 10000 }],
+};
 const dois = (n) => String(n).padStart(2, '0');
 // Sem segundos: e' o formato que o campo aceita digitado (com 00 s o navegador omite).
 const HOJE_8H = `${anoSp}-${dois(mesSp)}-${dois(diaSp)}T08:00`;
@@ -65,9 +74,13 @@ const MEXIDA_ID = '00000000-0000-0000-0000-00000000c0b9';
 async function simularServidor(pagina, {
   enviados, conferencias = [], recusarSync = false, cadastro = CADASTRO, falha = null, banco = new Map(), arquivadas = [],
 }) {
-  await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
-    ? rota.fulfill({ json: { demandas: DEMANDAS } })
-    : rota.fulfill({ json: cadastro })));
+  await pagina.route('**/api/maquinas**', (rota) => {
+    const url = rota.request().url();
+    if (/[?&]alvo=1/.test(url)) return rota.fulfill({ json: ALVOS });
+    return /demanda=1/.test(url)
+      ? rota.fulfill({ json: { demandas: DEMANDAS } })
+      : rota.fulfill({ json: cadastro });
+  });
   await pagina.route('**/api/motivos-parada**', (rota) => rota.fulfill({ json: { motivos: MOTIVOS } }));
   await pagina.route('**/api/conferencias**', (rota) => {
     if (rota.request().method() === 'PATCH') {
@@ -164,6 +177,9 @@ await inicio.fill(HOJE_8H);
 await preparar.getByText(/72\.0 s por volume/).waitFor({ timeout: 4000 });
 checar(true, 'a data da filmagem decide o takt: 72.0 s por volume, o da semana');
 await p.locator('select[aria-label="Produto embalado"]').selectOption('Rack Sirius 1.6');
+await preparar.getByText(/Tempo-alvo do produto: 10\.0 s por volume/).waitFor({ timeout: 4000 });
+checar(/Tempo-alvo = 0\.40 UEP × 25\.00 s por UEP = 10\.0 s por volume\. Os 25\.00 s por UEP: \(527 min de jornada\) × 60 ÷ 1265 UEP por dia/
+  .test((await preparar.innerText()).replace(/\s+/g, ' ')), 'preparar: o tempo-alvo do produto e a conta dele por extenso');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-preparar.png` });
 await p.getByRole('button', { name: 'Começar a marcar' }).click();
 await p.getByRole('region', { name: 'Marcas da medição' }).or(p.locator('[aria-label="Marcas da medição"]')).first().waitFor({ timeout: 4000 });
@@ -210,8 +226,8 @@ await p.evaluate(() => {
 });
 checar(/VOLUMES 8/i.test((await marcas.innerText()).replace(/\s+/g, ' ')), 'tecla segurada: a repeticao nao apaga nem marca volume');
 const numeros = (await marcas.innerText()).replace(/\s+/g, ' ');
-checar(/VOLUMES 8/i.test(numeros) && /POR VOLUME 12.9 s/i.test(numeros) && /PARADO 15 s/i.test(numeros),
-  `os numeros enquanto marca: 8 volumes, 12.9 s por volume (90 s / 7), 15 s parado (${numeros.slice(0, 160)})`);
+checar(/VOLUMES 8/i.test(numeros) && /POR VOL ▲ ALVO 12.9 s/i.test(numeros) && /TEMPO-ALVO 10.0 s/i.test(numeros) && /PARADO 15 s/i.test(numeros),
+  `os numeros enquanto marca: 8 volumes, 12.9 s por volume (90 s / 7) acima do alvo de 10.0 s, 15 s parado (${numeros.slice(0, 200)})`);
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-marcar.png` });
 
 /* --------------------------------------- o F5 nao leva a marcacao */
