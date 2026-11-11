@@ -66,6 +66,13 @@ def parar(msg):
     """Erro que a pessoa precisa corrigir. Sai com código 2: o iniciar.bat para e
     mostra o motivo, em vez de reiniciar a cada 10 s repetindo o mesmo erro."""
     print(sem_senha(msg), file=sys.stderr, flush=True)
+    if os.name == 'nt' and 'PROMPT' not in os.environ:
+        # Aberto com dois cliques (fora do Prompt e do iniciar.bat, que definem
+        # PROMPT): a janela fecharia na hora, antes de dar para ler o motivo.
+        try:
+            input('\nAperte Enter para fechar.')
+        except (EOFError, KeyboardInterrupt):
+            pass
     sys.exit(2)
 
 
@@ -433,6 +440,10 @@ def main():
         parar('ffmpeg não encontrado. Instale (LEIA-ME.md, passo 1) e abra um Prompt novo, '
               'ou copie o ffmpeg.exe para esta pasta.')
     cfg = ler_config()
+    if not args.arquivo and any(p in cfg['camera'] for p in ('USUARIO:SENHA', 'IP_DO_GRAVADOR')):
+        parar('A câmera ainda não está no config.json: troque USUARIO, SENHA e IP_DO_GRAVADOR '
+              '(LEIA-ME, passo 3).\nPara testar com um vídeo, no Prompt de Comando:\n'
+              '  python leitor_camera.py --arquivo video.mp4 --inicio HH:MM:SS')
     if args.arquivo and not Path(args.arquivo).exists():
         parar(f'Arquivo não encontrado: {args.arquivo}')
     if args.foto:
