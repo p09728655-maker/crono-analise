@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.105.0',
+    data: '2026-11-11',
+    titulo: 'Cronometrar por vídeo: o app marca os volumes sozinho',
+    itens: [
+      'MARCAÇÃO AUTOMÁTICA NO CRONOMETRAR POR VÍDEO. Desenhe com o mouse um retângulo sobre o tapete verde da envolvedora, onde a caixa passa embaixo do filme, e clique em "Marcar volumes automaticamente". O app lê o vídeo neste PC (nada sobe para o servidor) e marca cada caixa no instante em que ela entra no retângulo. A primeira vira a largada, como o primeiro Enter. Você confere na lista e corrige com as teclas de sempre: × apaga, Enter acrescenta, P marca a parada. 30 minutos de vídeo levam alguns minutos; deixe a aba aberta.',
+      'O retângulo fica guardado neste PC para cada máquina: o próximo vídeo da mesma câmera já abre com ele. Retângulo que não separa a caixa da esteira vazia é recusado, com o que fazer.',
+      'O que conferir vem apontado: caixa que ficou bem mais tempo no retângulo que as outras (podem ser duas caixas encostadas), intervalos longos onde a linha pode ter parado (se parou, marque com P), a última caixa quando o vídeo acaba logo depois de ela entrar, e passagens curtas ignoradas (pessoa ou reflexo). Mão ou braço parado no retângulo também tem cor de papelão: marca sem caixa entrando, apague. A caixa que já estava no filme no começo da leitura não é marcada: a entrada dela não foi filmada.',
+      'A marcação automática marca volumes, não paradas: as paradas continuam com o P. A marca fica uns décimos de segundo depois do instante em que a frente da caixa toca o tapete; o atraso é o mesmo em toda caixa e não muda o tempo por volume.',
+      'A conferência mostra quantas marcas automáticas ficaram, quantas você apagou e quantas acrescentou — também no Revisar, antes de salvar. É a medida de quanto a marcação automática acerta em cada vídeo. A medição salva é igual à marcada à mão: mesmo volume a volume, takt e folha.',
+    ],
+  },
+  {
     versao: '2.104.1',
     data: '2026-11-11',
     titulo: 'Takt da semana pela data, não pelo código do PCP',

@@ -126,4 +126,26 @@ export const ev = {
     background: t.okFundo, borderRadius: raio.md, borderWidth: 1, borderStyle: 'solid', borderColor: t.ok,
   },
   linhaBotoes: { display: 'flex', gap: espaco.sm, flexWrap: 'wrap', alignItems: 'center' },
+
+  // MARCACAO AUTOMATICA (v2.105.0). O video fica num "palco" para o
+  // retangulo ser desenhado por cima dele, no mesmo lugar da imagem.
+  palco: { position: 'relative' },
+  // Tracejado amarelo com contorno escuro: aparece sobre papelao, tapete
+  // verde e filme brilhante; nao bloqueia o clique no video.
+  retangulo: {
+    position: 'absolute', boxSizing: 'border-box', pointerEvents: 'none',
+    borderWidth: 2, borderStyle: 'dashed', borderColor: '#FACC15',
+    boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.7)',
+  },
+  camadaDesenho: { position: 'absolute', inset: 0, cursor: 'crosshair', touchAction: 'none' },
+  subtitulo: { ...tipo('corpoF'), margin: 0 },
+  barraProgresso: {
+    height: 8, background: t.borda, borderRadius: 999, overflow: 'hidden',
+  },
+  barraProgressoCheia: { height: '100%', background: '#1D4ED8' },
+  // A copia lida pela marcacao automatica: pequena, so' para mostrar que anda.
+  videoLeitura: {
+    width: 240, maxWidth: '100%', background: '#000', borderRadius: raio.sm, display: 'block',
+  },
+  tempos: { display: 'inline-flex', flexWrap: 'wrap', gap: espaco.sm, alignItems: 'baseline' },
 };
