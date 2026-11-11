@@ -50,14 +50,30 @@ describe('taktDaMedicao com a semana da planilha', () => {
     expect(t.setupPorMaquina).toBeCloseTo(4, 6);
   });
 
-  it('a semana colada (sem `dias`) nao muda nada: jornada inteira e o codigo do PCP', () => {
+  it('a semana colada (sem `dias`) nao muda a conta: jornada inteira', () => {
     const colada = {
       ano: 2026, numero: 45, inicio: '2026-11-02', pecas: 7160,
     };
     expect(takt(colada).taktMs / 1000).toBeCloseTo(22.123, 2);
     expect(takt(colada, { setupsDia: 2, dias: 5, minutos: 30 }).taktMs / 1000).toBeCloseTo(19.609, 2);
-    expect(takt(colada).semana).toBe('045-26');
     expect(takt(colada).dias).toBeNull();
+  });
+
+  it('o takt diz a semana pela data em que ela comeca, tambem na colada — nao pelo codigo do PCP', () => {
+    // "039-26" ao lado do takt confundia: ninguem sabe de cabeca que dia e'.
+    const colada = {
+      ano: 2026, numero: 39, inicio: '2026-11-03', pecas: 7160,
+    };
+    expect(takt(colada).semana).toBe('de 03/11');
+  });
+
+  it('colada sem a coluna INICIO (casada pelo numero) segue com o codigo: sem data, nada a escrever', () => {
+    // 04/11/2026 e' a semana ISO 45.
+    const semData = { ano: 2026, numero: 45, pecas: 7160 };
+    const t = takt(semData);
+    expect(t.taktMs).toBeGreaterThan(0);
+    expect(t.casadoPorData).toBe(false);
+    expect(t.semana).toBe('045-26');
   });
 
   it('semana inteira programada: igual a de antes', () => {

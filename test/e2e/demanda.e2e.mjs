@@ -270,8 +270,17 @@ if (process.env.FOTO) await janela.screenshot({ path: process.env.FOTO });
    atende, mas atenderia sem as paradas. E' a diferenca entre comprar
    maquina e organizar o setup, e o quadro tem de dizer qual dos dois.
    ================================================================== */
+/* O RELOGIO DO NAVEGADOR NA EPOCA DAS MEDICOES. As medicoes daqui sao de
+   setembro de 2026, com datas fixas (a semana 37, o feriado de 07/09), e o
+   relatorio mostra so' os ultimos 30 dias: a partir de 07/10 a medicao saia
+   do periodo, o quadro do programa nao aparecia e o teste parava por tempo
+   esgotado. O teste quebrava pela data do dia, nao pelo codigo. Com o
+   relogio em 10/09 o cenario e' o de quando foi escrito, em qualquer dia. */
+const NA_EPOCA = new Date('2026-09-10T12:00:00-03:00');
+
 const ctx2 = await navegador.newContext({ viewport: { width: 1440, height: 1200 } });
 const p2 = await ctx2.newPage();
+await p2.clock.install({ time: NA_EPOCA });
 await semearSessao(p2);
 const erros2 = [];
 p2.on('pageerror', (e) => erros2.push(e.message));
@@ -378,6 +387,7 @@ checar(erros2.length === 0, `sem erro de pagina no veredito (${erros2.join(' | '
    ================================================================== */
 const ctx3 = await navegador.newContext({ viewport: { width: 1440, height: 1200 } });
 const p3 = await ctx3.newPage();
+await p3.clock.install({ time: NA_EPOCA });
 await semearSessao(p3);
 const erros3 = [];
 p3.on('pageerror', (e) => erros3.push(e.message));

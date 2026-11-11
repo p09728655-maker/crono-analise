@@ -157,8 +157,12 @@ export function numerosDaLeitura(leitura, takt = {}, unidade, { juncao = false }
       valor: seg(leitura.taktMs),
       // Semana programada so' em parte: o takt ja' usa as horas so' dos
       // dias com lote, e o papel diz quantos — senao 35,2 h parece erro.
+      // Sem repetir "semana": o rotulo ja' a diz, e o cartao le "Takt da
+      // semana / 49,4 s / de 09/11 · por volume". A palavra a mais quebrava
+      // uma linha no cartao da folha deitada e mandava a conta do tempo da
+      // semana para a 2a pagina (v2.104.1).
       sub: leitura.taktMs
-        ? `semana ${takt.semana} · por ${unidade.singular}${diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}`
+        ? `${takt.semana} · por ${unidade.singular}${diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}`
         : ({
           'takts-diferentes': 'medições em semanas diferentes do programa',
           // So' no tablet: a falta e' de rede, nao de programa (ver semTakt).

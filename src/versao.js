@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.104.1',
+    data: '2026-11-11',
+    titulo: 'Takt da semana pela data, não pelo código do PCP',
+    itens: [
+      'O TAKT DIZ A SEMANA PELO DIA EM QUE ELA COMEÇA. Onde aparecia "semana 039-26" ao lado do takt — no cartão "Takt desta semana" da Embalagem Takt Time, no tablet, no volume a volume, na folha impressa, no Cronometrar por vídeo e no takt do programa ao criar ou ajustar um estudo — agora aparece "semana de 09/11". O código do PCP não diz a ninguém que dia é, e não é o número da semana do calendário nem o "S" da planilha. Semana colada sem a data de início continua com o código: sem data, não há o que escrever.',
+      'No cartão "Takt da semana" do volume a volume (tela, tablet e folha), a palavra "semana" não se repete: abaixo do valor vem "de 09/11 · por volume". Com o texto mais curto, a conta do tempo da semana continua cabendo na 1ª página da folha.',
+    ],
+  },
+  {
     versao: '2.104.0',
     data: '2026-11-10',
     titulo: 'Embalagem: a análise mostra o motivo das paradas',

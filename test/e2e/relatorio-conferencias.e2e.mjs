@@ -538,6 +538,11 @@ await movel.close();
 {
   const ctx3 = await navegador.newContext({ viewport: { width: 1440, height: 1200 } });
   const p3 = await ctx3.newPage();
+  /* O relogio do navegador na epoca das medicoes (01 a 09/09/2026, datas
+     fixas): o relatorio mostra so' os ultimos 30 dias, e a partir de 01/10
+     elas saiam do periodo — o quadro nao aparecia e o teste parava por
+     tempo esgotado, pela data do dia e nao pelo codigo. */
+  await p3.clock.install({ time: new Date('2026-09-10T12:00:00-03:00') });
   await semearSessao(p3);
   const errosT = [];
   p3.on('pageerror', (e) => errosT.push(e.message));

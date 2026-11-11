@@ -12,7 +12,7 @@ import { fracaoDaSemana, horasDeSetup, vereditoDaSemana } from './capacidade.js'
 import {
   diaCivil, intervaloIso, periodoDaSemana, periodosDoPrograma, semanaIso, semanaQueContem,
 } from './calendario.js';
-import { contaDasHoras, rotuloDaSemana } from './formato.js';
+import { comoDia, contaDasHoras, rotuloDaSemana } from './formato.js';
 
 /**
  * Leitura do programa: media, variacao e extremos.
@@ -362,8 +362,16 @@ export function taktDaMedicao({
   return {
     taktMs: leitura.veredito?.taktMs ?? null,
     estado: leitura.estado,
-    // O rotulo: "038-26" no programa colado, "de 26/10" no da planilha.
-    semana: leitura.semana?.rotulo ?? null,
+    /* O rotulo: "de 09/11", o dia em que a semana comeca, sempre que a
+       linha do programa tem data — a colada tambem (v2.104.1). O codigo do
+       PCP ("039-26") ao lado do takt confundia: ninguem no chao de fabrica
+       sabe de cabeca que a 039-26 e' a semana de 09/11, e o numero nao e' o
+       da semana ISO nem o "S" da planilha. Linha colada sem a coluna
+       INICIO (casada pelo numero) segue com o codigo: sem data, nao ha' o
+       que escrever. */
+    semana: leitura.periodo
+      ? `de ${comoDia(leitura.periodo.inicio)}`
+      : (leitura.semana?.rotulo ?? null),
     // Semana da planilha: { programados, daJornada } — a tela escreve "4 de
     // 5 dias programados" (diasProgramados), e o takt ja' usa as horas so'
     // desses dias.

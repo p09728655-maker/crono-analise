@@ -307,6 +307,12 @@ quantas peças por hora, é **se cada volume embalado sai dentro do takt**.
     dias e vale a semana inteira, como sempre;
   - a semana aparece **pela data** ("semana de 26/10"): o número ISO não é o
     código do PCP para os mesmos dias.
+    Desde a v2.104.1 o **takt** (`taktDaMedicao`) escreve a semana pela data
+    também na colada que tem `inicio`: "semana de 09/11" em vez de "039-26" —
+    no cartão da Embalagem Takt Time, no tablet, no volume a volume, na folha,
+    no vídeo e no takt do estudo. O código do PCP não diz a ninguém que dia é.
+    Só a colada sem `inicio` (casada pelo número) segue com o código. O
+    quadro e a tabela do programa continuam com o código, ao lado do período.
 
   A leitura acontece no GET do programa — quando alguém o pede —, no máximo a
   cada 10 minutos por instância (1 minuto depois de uma falha). O tablet ligado

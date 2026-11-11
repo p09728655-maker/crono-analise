@@ -158,7 +158,7 @@ checar(erros.length === 0, `sem erro de pagina (${erros.join('; ') || 'nenhum'})
   const dlg = q.locator('[aria-label="Ajustes do estudo"]');
   await dlg.waitFor({ timeout: 8000 });
 
-  const usar = dlg.getByRole('button', { name: /Usar o takt do programa da semana \d{3}-\d{2}: 144\.0 s por peça/ });
+  const usar = dlg.getByRole('button', { name: /Usar o takt do programa da semana de \d{2}\/\d{2}: 144\.0 s por peça/ });
   await usar.waitFor({ timeout: 8000 });
   checar(true, 'ajustes: o takt do programa e oferecido em segundos, como o campo');
   const campoTakt = dlg.locator('label', { hasText: 'Takt Time (segundos por peça)' }).locator('input');
