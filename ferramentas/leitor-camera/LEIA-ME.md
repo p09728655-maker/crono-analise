@@ -21,6 +21,11 @@ esvazia. Cada enche-esvazia é um volume.
    ```
    winget install Gyan.FFmpeg
    ```
+   Se o `winget` não existir ou for bloqueado pela TI: baixe
+   `ffmpeg-release-essentials.zip` em gyan.dev/ffmpeg/builds, abra o zip, entre
+   na pasta `bin` e **copie o `ffmpeg.exe` para dentro desta pasta**
+   (`C:\leitor-camera`). O leitor procura ali primeiro; não precisa mexer em
+   mais nada do Windows.
 3. Feche o Prompt, abra **outro** e rode:
    ```
    pip install numpy
@@ -29,6 +34,10 @@ esvazia. Cada enche-esvazia é um volume.
    copie `config.exemplo.json` para `config.json`.
 
 Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`).
+
+> **Não abra o `iniciar.bat` agora.** Ele é o modo "rodar sempre na câmera"
+> (passo 4) e só funciona depois que a câmera estiver no `config.json` e a
+> validação tiver passado.
 
 ## 2. Validar com vídeo exportado — antes de ligar na câmera
 

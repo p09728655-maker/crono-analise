@@ -38,20 +38,43 @@ LARG, ALT = 128, 48
 # Quanto tempo sem receber imagem até considerar que a câmera caiu.
 SEM_IMAGEM_S = 30
 
+# A pasta do leitor vem primeiro: quem não consegue instalar o ffmpeg no
+# Windows só copia o ffmpeg.exe para cá, sem mexer no PATH.
+FFMPEG = next((str(p) for p in (PASTA / 'ffmpeg.exe', PASTA / 'ffmpeg') if p.is_file()),
+              None) or shutil.which('ffmpeg')
+
+CAMPOS = ('camera', 'retangulo', 'limiar_entra', 'limiar_sai',
+          'permanencia_minima_s', 'quadros_por_segundo')
+
+
+def parar(msg):
+    """Erro que a pessoa precisa corrigir. Sai com código 2: o iniciar.bat para e
+    mostra o motivo, em vez de reiniciar a cada 10 s repetindo o mesmo erro."""
+    print(msg, file=sys.stderr, flush=True)
+    sys.exit(2)
+
 
 def ler_config():
     arq = PASTA / 'config.json'
     if not arq.exists():
-        sys.exit('Falta o config.json. Copie config.exemplo.json para config.json e preencha.')
-    cfg = json.loads(arq.read_text(encoding='utf-8'))
+        parar('Falta o config.json. Copie config.exemplo.json para config.json e preencha.')
+    try:
+        # utf-8-sig: o Bloco de Notas antigo grava uma marca invisível no começo.
+        cfg = json.loads(arq.read_text(encoding='utf-8-sig'))
+    except json.JSONDecodeError as e:
+        parar(f'O config.json tem um erro de digitação na linha {e.lineno} '
+              '(aspas, vírgula ou chave faltando). Compare com o config.exemplo.json.')
+    faltam = [c for c in CAMPOS if c not in cfg]
+    if faltam:
+        parar('Faltam no config.json: ' + ', '.join(faltam) + '. Compare com o config.exemplo.json.')
     r = cfg['retangulo']
     for k in ('x', 'y', 'largura', 'altura'):
-        if not 0 <= r[k] <= 1:
-            sys.exit(f'retangulo.{k} tem que ser uma fração da imagem, entre 0 e 1.')
+        if not isinstance(r.get(k), (int, float)) or not 0 <= r[k] <= 1:
+            parar(f'retangulo.{k} tem que ser uma fração da imagem, entre 0 e 1 (ex.: 0.25).')
     if r['x'] + r['largura'] > 1 or r['y'] + r['altura'] > 1:
-        sys.exit('O retângulo passa da borda da imagem: confira x+largura e y+altura.')
+        parar('O retângulo passa da borda da imagem: confira x+largura e y+altura.')
     if not cfg['limiar_sai'] < cfg['limiar_entra']:
-        sys.exit('limiar_sai tem que ser menor que limiar_entra.')
+        parar('limiar_sai tem que ser menor que limiar_entra.')
     return cfg
 
 
@@ -81,7 +104,7 @@ class Camera:
 
     def __init__(self, cfg, arquivo):
         self.fila = queue.Queue(maxsize=200)
-        cmd = ['ffmpeg', '-v', 'error', *entrada_ffmpeg(cfg, arquivo),
+        cmd = [FFMPEG, '-v', 'error', *entrada_ffmpeg(cfg, arquivo),
                '-an', '-vf', f"fps={cfg['quadros_por_segundo']},{filtro_retangulo(cfg)}",
                '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -220,7 +243,7 @@ class Detector:
 def tirar_foto(cfg, arquivo, momento):
     r = cfg['retangulo']
     saida = PASTA / 'foto_camera.jpg'
-    cmd = ['ffmpeg', '-v', 'error', '-y']
+    cmd = [FFMPEG, '-v', 'error', '-y']
     if arquivo:
         cmd += ['-ss', str(momento)]
     # Grade de 10 em 10% (linhas amarelas grossas no meio) para ler as frações
@@ -234,7 +257,7 @@ def tirar_foto(cfg, arquivo, momento):
             str(saida)]
     resultado = subprocess.run(cmd, capture_output=True, text=True)
     if resultado.returncode != 0:
-        sys.exit('Não consegui tirar a foto: ' + resultado.stderr.strip()[-300:])
+        parar('Não consegui tirar a foto: ' + resultado.stderr.strip()[-300:])
     print(f'Foto salva em {saida}.\n'
           'O retângulo vermelho tem que cobrir o caminho da caixa na envolvedora.\n'
           'Cada linha branca = 10% da imagem; as amarelas marcam o meio (50%).\n'
@@ -273,7 +296,7 @@ def rodar(cfg, arquivo, inicio, diagnostico):
         cam.fechar()
         if arquivo:
             if n == 0:
-                sys.exit('Não li nenhum quadro do arquivo: ' + cam.erro())
+                parar('Não li nenhum quadro do arquivo: ' + cam.erro())
             det.fim(momento)
             reg.log(f'fim do arquivo: {n / fps:.0f} s processados')
             if not diagnostico:
@@ -295,11 +318,12 @@ def main():
     ap.add_argument('--diagnostico', action='store_true', help='mostra o %% de papelão a cada segundo')
     args = ap.parse_args()
 
-    if not shutil.which('ffmpeg'):
-        sys.exit('ffmpeg não encontrado. Instale (LEIA-ME.md, passo 1) e abra um terminal novo.')
+    if not FFMPEG:
+        parar('ffmpeg não encontrado. Instale (LEIA-ME.md, passo 1) e abra um Prompt novo, '
+              'ou copie o ffmpeg.exe para esta pasta.')
     cfg = ler_config()
     if args.arquivo and not Path(args.arquivo).exists():
-        sys.exit(f'Arquivo não encontrado: {args.arquivo}')
+        parar(f'Arquivo não encontrado: {args.arquivo}')
     if args.foto:
         return tirar_foto(cfg, args.arquivo, args.momento)
 
@@ -308,7 +332,7 @@ def main():
         try:
             h = datetime.strptime(args.inicio, '%H:%M:%S').time()
         except ValueError:
-            sys.exit('--inicio tem que ser HH:MM:SS, a hora que aparece na imagem da câmera.')
+            parar('--inicio tem que ser HH:MM:SS, a hora que aparece na imagem da câmera.')
         inicio = datetime.combine(datetime.now().date(), h)
     try:
         rodar(cfg, args.arquivo, inicio, args.diagnostico)
