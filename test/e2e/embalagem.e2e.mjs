@@ -396,6 +396,14 @@ checar(true, 'menu leva para /analise/embalagem');
 
 await p.getByText('Takt desta semana · EMBALAGEM').waitFor({ timeout: 8000 });
 checar(await p.getByText('72.0 s').count() > 0, 'takt desta semana em segundos: 72.0 s');
+/* A SEMANA PELA DATA (v2.104.1, pedido do PCP: "039-26" ao lado do takt
+   confundia). O programa daqui e' colado, com INICIO: o cartao diz o dia
+   em que a semana comeca, nao o codigo do PCP. */
+{
+  const kpiTakt = (await p.getByText('Takt desta semana · EMBALAGEM').locator('..').innerText()).replace(/\s+/g, ' ');
+  checar(/por volume · semana de \d{2}\/\d{2}/.test(kpiTakt) && !/\d{3}-\d{2}/.test(kpiTakt),
+    `takt desta semana: a semana pela data, sem o codigo do PCP (${kpiTakt})`);
+}
 checar(await p.getByText('Faltou caixa às 9h10').count() > 0, 'a observacao do analista aparece na tabela');
 
 // A tela chega na LISTA: nada abre sozinho. Clicar no produto abre o
@@ -546,7 +554,7 @@ const tamanhoDoPdf = async () => {
     const conta = (await folha.innerText()).replace(/\s+/g, ' ');
     checar(/Tempo da semana de \d{2}\/\d{2} — Por máquina: 44h00min de jornada, sem setup planejado\. 2\.200 volumes na semana → takt 72\.0 s por volume\./.test(conta),
       `folha: o tempo da semana e a conta do takt (${(/Tempo da semana.*?por volume\./.exec(conta) || ['nao achou'])[0]})`);
-    checar(/de \d{2}\/\d{2} · por volume · 44h00min ÷ 2\.200 volumes/.test(conta),
+    checar(/(?<!semana )de \d{2}\/\d{2} · por volume · 44h00min ÷ 2\.200 volumes/.test(conta),
       'folha: na 1a pagina, o cartao do takt diz de que tempo ele sai (44h00min ÷ 2.200 volumes)');
     // A letra da folha cresceu (v2.101.0): o valor dos campos passa de 10,5 px.
     const letra = await folha.evaluate((f) => parseFloat(getComputedStyle(f).fontSize));
