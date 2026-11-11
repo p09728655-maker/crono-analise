@@ -63,7 +63,8 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    ```
    python leitor_camera.py --arquivo video.mp4 --inicio 10:01:06
    ```
-   O resultado fica em `dados\volumes_video.csv`.
+   O resultado fica em `dados\videos\video.csv` (pasta separada: nunca se
+   mistura com as planilhas do dia).
 5. Um analista marca **o mesmo vídeo** à mão no app (Cronometrar por vídeo).
    A tela diz "Enter a cada volume que fecha"; para esta validação — e para
    todos os analistas, sempre — **"fecha" = a frente da caixa toca o tapete

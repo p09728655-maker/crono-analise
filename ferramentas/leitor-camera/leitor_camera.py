@@ -319,8 +319,11 @@ class Registro:
         # fila. Diagnóstico e validação com vídeo rodam com a fila vazia e,
         # se mexessem nela, apagariam no fim os volumes de outra execução.
         self.dono_da_fila = dono_da_fila and not nome_fixo
+        self.fila_ilegivel = False
         if self.dono_da_fila:
             self._recuperar()
+            if self.pendentes:
+                self.gravar_pendentes()
 
     def log(self, msg):
         linha = f'{datetime.now():%Y-%m-%d %H:%M:%S}  {sem_senha(msg)}'
@@ -378,6 +381,10 @@ class Registro:
     def _atualizar_espera(self):
         if not self.dono_da_fila:
             return
+        if self.fila_ilegivel:
+            self._recuperar()  # junta os de antes na frente, se agora der para ler
+            if self.fila_ilegivel:
+                return  # não grava por cima do que não conseguiu ler
         try:
             if self.pendentes:
                 tmp = self.espera.with_suffix('.tmp')
@@ -390,20 +397,28 @@ class Registro:
                      f'{len(self.pendentes)} volume(s) só na memória até a planilha liberar.')
 
     def _recuperar(self):
-        """Volumes que esperavam a planilha quando o leitor foi fechado."""
+        """Volumes que esperavam a planilha quando o leitor foi fechado. Se a
+        fila não puder ser lida agora (antivírus segurando o arquivo), marca e
+        não mexe nela até conseguir: gravar por cima apagaria esses volumes."""
         if not self.espera.exists():
+            self.fila_ilegivel = False
             return
         try:
             linhas = self.espera.read_text(encoding='utf-8', errors='replace').splitlines(keepends=True)
         except OSError as e:
-            self.log(f'não consegui ler {self.ESPERA} ({e.strerror}): volumes de antes ficam lá.')
+            if not self.fila_ilegivel:
+                self.log(f'não consegui ler {self.ESPERA} ({e.strerror}): os volumes de antes ficam '
+                         'lá, e o leitor tenta de novo antes de mexer na fila.')
+            self.fila_ilegivel = True
             return
+        self.fila_ilegivel = False
+        antigos = []
         for item in linhas:
             nome, _, linha = item.partition('\t')
             if nome and linha:
-                self.pendentes.append((self.pasta / nome, linha, True))
-        self.log(f'{len(self.pendentes)} volume(s) que esperavam a planilha foram recuperados.')
-        self.gravar_pendentes()
+                antigos.append((self.pasta / nome, linha, True))
+        self.pendentes[:0] = antigos  # os de antes vêm primeiro: a planilha fica em ordem
+        self.log(f'{len(antigos)} volume(s) que esperavam a planilha foram recuperados.')
 
     def fechar(self):
         self.gravar_pendentes()
@@ -517,7 +532,12 @@ def rodar(cfg, arquivo, inicio, diagnostico):
     trava = None
     if not arquivo and not diagnostico:
         trava = travar_instancia(PASTA / cfg.get('pasta_dados', 'dados'))
-    reg = Registro(cfg, nome_fixo=f'volumes_{Path(arquivo).stem}.csv' if arquivo else None,
+    # Resultado de vídeo vai para dados\videos\: com o mesmo padrão das
+    # planilhas do dia, um vídeo chamado 2026-11-11.mp4 apagava a produção
+    # daquele dia e gravava os números do vídeo no lugar.
+    if arquivo:
+        (PASTA / cfg.get('pasta_dados', 'dados') / 'videos').mkdir(parents=True, exist_ok=True)
+    reg = Registro(cfg, nome_fixo=f'videos/{Path(arquivo).stem}.csv' if arquivo else None,
                    dono_da_fila=trava is not None)
     if arquivo and not diagnostico:
         saida = reg.pasta / reg.nome_fixo
