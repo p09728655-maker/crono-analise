@@ -15,12 +15,12 @@ export const HISTORICO = [
   {
     versao: '2.110.3',
     data: '2026-11-12',
-    titulo: 'Perdas da embalagem: a parada anotada não esconde mais a lacuna que ninguém marcou',
+    titulo: 'Perdas da embalagem: a parada anotada depois volta para as lacunas, como no volume a volume',
     itens: [
-      'A PARADA ANOTADA DEPOIS NÃO APAGA MAIS A LACUNA CURTA QUE NINGUÉM MARCOU. Na 2.110.2, numa medição com uma parada anotada depois, uma lacuna curta sem marca podia sumir junto e o cartão dizia "0 lacunas" — por exemplo, 5 min anotados e 1 min parado sem marca davam 6 min anotados e nenhuma lacuna. Agora o tempo da largada até o 1º volume é o que a própria medição registrou (não uma estimativa), e a anotada só cobre a lacuna que ela abriu: 5 min anotados e 1 lacuna de 1 min.',
+      'A PARADA ANOTADA DEPOIS (no resultado ou no PC) FICA NAS LACUNAS, COMO NO VOLUME A VOLUME, e o motivo dela aparece em "Por que a linha parou". As versões 2.110.1 e 2.110.2 tentavam passá-la para "Paradas marcadas" pela soma da lista; como a lista não tem o horário da parada, em alguns casos reais uma lacuna que ninguém marcou sumia junto — por exemplo, 5 min anotados e 1 min parado sem marca davam "6 min anotados · 0 lacunas", e a troca do começo esquecida no cronômetro e anotada depois apagava lacunas do meio da medição. O "sem produzir" e a hora extra não mudam: a parada anotada sempre esteve no total.',
+      '"PARADAS MARCADAS" é o que o cronômetro tirou (tablet ou vídeo); "lacunas" é o que ele não tirou. O setup anotado depois também não sai da conta: só o setup marcado no cronômetro entre os volumes sai. A tela e a folha dizem isso.',
       'NO QUADRO "POR QUE A LINHA PAROU", a troca antes do 1º volume não aparece mais como "2×" quando houve outro setup no trecho: o setup que sai da conta é abatido da troca do tamanho dele.',
-      'O "COMO LER" E A FOLHA DIZEM que o setup anotado depois (no resultado ou no PC) conta como parada, como no volume a volume: só o setup marcado no cronômetro entre os volumes sai da conta.',
-      'Na base do relatório, "1 medição do mesmo trecho contada uma vez só" (estava "medição(ões)").',
+      'Plurais: "1 medição", "1 medição do mesmo trecho contada uma vez só" (estavam "1 medições" e "medição(ões)").',
     ],
   },
   {

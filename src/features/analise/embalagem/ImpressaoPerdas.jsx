@@ -38,7 +38,7 @@ export default function ImpressaoPerdas({
         {[
           ['Grupo', grupos.length ? grupos.join(' · ') : '—'],
           ['Período', `últimos ${dias} dias${periodo ? ` · ${periodo}` : ''}`],
-          ['Medições', `${total.medicoes}${r.sobrepostas ? ` (+${r.sobrepostas} do mesmo trecho, contadas uma vez)` : ''}`],
+          ['Medições', `${total.medicoes}${r.sobrepostas ? ` (+${r.sobrepostas} do mesmo trecho, ${r.sobrepostas === 1 ? 'contada' : 'contadas'} uma vez)` : ''}`],
           ['Setup planejado fora da conta', total.setupMs > 0 ? formatarDuracao(total.setupMs) : '—'],
           ['Volumes', nVolumes(total.volumes)],
           ['Linha medida', horas(total.horasMedidas)],
@@ -127,8 +127,8 @@ export default function ImpressaoPerdas({
             </tbody>
           </table>
           <p style={imp.comparativoNota}>
-            {formatarDuracao(r.totalMotivosMs)} de paradas marcadas. As lacunas ({formatarDuracao(total.lacunasMs)}) não
-            têm motivo: ninguém marcou a parada.
+            {formatarDuracao(r.totalMotivosMs)} de paradas com motivo. As lacunas ({formatarDuracao(total.lacunasMs)}) são as
+            paradas que o cronômetro não tirou: a anotada depois aparece aqui com o motivo, mas o tempo dela está nas lacunas.
             {r.setupForaMs > 0 && ` O setup planejado marcado entre os volumes (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
             {r.semDefinicaoPct >= 20 && ` ${pct(r.semDefinicaoPct)} do tempo parado está em “${rotuloMotivo(MOTIVO_SEM_DEFINICAO)}”: sem o motivo, não dá para atacar a causa.`}
           </p>
@@ -185,8 +185,8 @@ export default function ImpressaoPerdas({
           {[
             ['Medição', 'um trecho da linha medido no tablet ou no Cronometrar por vídeo, volume a volume.'],
             ['Sem produzir', 'paradas marcadas + lacunas, sobre o tempo do 1º ao último volume de cada medição. O setup planejado no cadastro do grupo fica fora, como nas horas da linha.'],
-            ['Paradas marcadas', 'tempo parado com motivo, no tablet, no vídeo ou anotado depois no resultado. O setup anotado depois fica aqui: só o marcado no cronômetro entre os volumes sai da conta.'],
-            ['Lacunas', 'intervalos entre volumes acima do dobro do normal: paradas que ninguém marcou. Conta só o excesso.'],
+            ['Paradas marcadas', 'tempo parado marcado no cronômetro (tablet ou vídeo), com motivo.'],
+            ['Lacunas', 'intervalos entre volumes acima do dobro do normal: paradas que o cronômetro não tirou — inclusive a anotada só depois, no resultado (o motivo dela está no quadro dos motivos). Conta só o excesso. O setup anotado depois não sai da conta: só o marcado no cronômetro entre os volumes.'],
             ['Período', 'tempo por volume com tudo dentro — o que a linha entregou.'],
             ['Rodando', 'tempo por volume da linha rodando, sem paradas e sem lacunas — o ritmo que ela provou.'],
             ['Vol. perdidos', 'volumes que teriam saído no tempo parado, no ritmo rodando do próprio produto.'],

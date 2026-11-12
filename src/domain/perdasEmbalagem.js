@@ -8,9 +8,9 @@
  *    sai de verdade;
  *  - NORMAL: o ritmo da linha quando roda, sem as paradas marcadas e sem as
  *    lacunas — a capacidade que ela provou;
- *  - SEM PRODUZIR = paradas marcadas (o relogio menos as marcas, que ja' vem
- *    sem elas) + lacunas (o excesso dos intervalos acima do dobro do normal:
- *    paradas que ninguem marcou).
+ *  - SEM PRODUZIR = paradas marcadas no cronometro (o relogio menos as
+ *    marcas, que ja' vem sem elas) + lacunas (o excesso dos intervalos acima
+ *    do dobro do normal: paradas que o cronometro nao tirou).
  * relogio = (N-1) x normal + lacunas + paradas, exato.
  *
  * Duas regras da revisao da v2.110.0 (acertadas na v2.110.2):
@@ -20,14 +20,13 @@
  *    (nao toda parada "setup" da lista): fora da conta e' fora de tudo, e
  *    so' isso;
  *  - a PARADA ANOTADA DEPOIS (no resultado do tablet ou no PC) nao tirou
- *    nada das marcas: ela esta' dentro dos intervalos e cairia como lacuna,
- *    "ninguem marcou" — e foi marcada. O que a lista de paradas tem a mais
- *    que o relogio tirou E que nao cabe fora dos toques (antes do 1o volume
- *    e depois do ultimo: duracao − relogio − o trabalho ate' o 1o volume,
- *    marcas_ms[0]) sai das lacunas, ate' o tempo delas, e vai para as
- *    marcadas; a lacuna que ela cobre inteira deixa de contar. Abaixo da
- *    folga do arredondamento da lista nao e' anotada: e' arredondamento.
- *    O total sem produzir nao muda.
+ *    nada das marcas: o tempo dela FICA NA LACUNA, como no volume a volume
+ *    (deixouDeEmbalar), e o motivo dela aparece no quadro dos motivos. A
+ *    lista nao tem horario: nao se sabe se a anotada caiu no trecho ou
+ *    antes do 1o volume. As v2.110.1 a 2.110.3 tentaram separar pela soma
+ *    da lista, e cada regra escondia lacuna sem marca em algum caso real (a
+ *    troca do comeco anotada depois, a anotada junto de uma lacuna curta).
+ *    O total sem produzir e a hora extra nunca dependeram disso.
  *
  * Tudo puro: recebe as medicoes como a API manda (snake_case, com
  * `marcas_ms` e `paradas`) e devolve numeros. A tela so' desenha.
@@ -117,51 +116,15 @@ export function perdasDaMedicao(c, { descontarSetup = false } = {}) {
   const suficiente = Boolean(leitura?.suficiente);
   const lacunasBrutasMs = suficiente ? leitura.excessoMs : 0;
   const normalMs = suficiente ? leitura.normalMs : somaMs / intervalos;
-  // As anotadas depois: o que a lista tem alem do que o relogio tirou e do
-  // que cabe fora dos toques (a parada antes do 1o volume, a aberta no
-  // Encerrar). Fora dos toques, o trabalho da largada ao 1o volume e'
-  // marcas_ms[0] — a marca ja' vem sem as paradas ao vivo, no tablet e no
-  // video (revisao da v2.110.2: trocar esse numero pelo normal errava em
-  // ate' um volume, e a tolerancia para compensar escondia lacuna).
-  const paradas = Array.isArray(c.paradas) ? c.paradas : [];
-  const listadasMs = paradas.reduce((a, x) => a + duracaoDa(x), 0);
-  const dur = Number(c.duracao_ms);
-  const foraDosToquesMs = dur > 0 ? Math.max(0, dur - relogioBrutoMs - Math.max(0, marcas[0])) : 0;
-  const alemMs = listadasMs - noTrechoMs - foraDosToquesMs;
-  // A anotada cobre a lacuna inteira — a maior primeiro (a parada longa
-  // anotada e' a que abriu a lacuna longa), com um volume de tolerancia
-  // (o volume daquele intervalo andou mais devagar ou mais rapido) — SO'
-  // enquanto o que resta dela for de pelo menos um volume: segundos de
-  // sobra nao cobrem a lacuna curta que ninguem marcou. O que sobra, de um
-  // volume para cima, tira da lacuna que ela nao cobre. Na duvida fica
-  // lacuna.
-  let anotadasMs = 0;
-  let cobertas = 0;
-  if (lacunasBrutasMs > 0 && alemMs >= folgaDaLista(paradas.length)) {
-    let resta = alemMs;
-    let descobertoMs = 0;
-    const excessos = leitura.lacunas.map((x) => x.ms - normalMs).sort((a, b) => b - a);
-    for (const e of excessos) {
-      if (resta >= normalMs && resta + normalMs >= e) {
-        anotadasMs += e;
-        resta = Math.max(0, resta - e);
-        cobertas += 1;
-      } else {
-        descobertoMs += e;
-      }
-    }
-    if (resta >= normalMs) anotadasMs += Math.min(resta, descobertoMs);
-  }
   return {
     intervalos,
     volumes: Number(c.pecas) || marcas.length,
     relogioMs: relogioBrutoMs - setupMs,
     setupMs,
-    paradasMs: noTrechoMs - setupMs + anotadasMs,
-    anotadasMs,
-    lacunasMs: lacunasBrutasMs - anotadasMs,
+    paradasMs: noTrechoMs - setupMs,
+    lacunasMs: lacunasBrutasMs,
     normalMs,
-    nLacunas: suficiente ? leitura.lacunas.length - cobertas : 0,
+    nLacunas: suficiente ? leitura.lacunas.length : 0,
     suficiente,
   };
 }
@@ -179,10 +142,9 @@ function somar(lidas) {
     nLacunas: a.nLacunas + x.nLacunas,
     curtas: a.curtas + (x.suficiente ? 0 : 1),
     setupMs: a.setupMs + x.setupMs,
-    anotadasMs: a.anotadasMs + x.anotadasMs,
   }), {
     medicoes: 0, volumes: 0, intervalos: 0, relogioMs: 0, paradasMs: 0, lacunasMs: 0, normalXint: 0, nLacunas: 0, curtas: 0,
-    setupMs: 0, anotadasMs: 0,
+    setupMs: 0,
   });
   const normalMs = s.intervalos > 0 ? s.normalXint / s.intervalos : null;
   const semProduzirMs = s.paradasMs + s.lacunasMs;
@@ -203,10 +165,8 @@ function somar(lidas) {
     // linha provou.
     volumesPerdidos: normalMs > 0 ? semProduzirMs / normalMs : null,
     curtas: s.curtas,
-    // O setup planejado tirado do trecho (fora da conta) e as paradas
-    // anotadas depois que sairam das lacunas — a tela diz os dois.
+    // O setup planejado tirado do trecho (fora da conta): a tela o diz.
     setupMs: s.setupMs,
-    anotadasMs: s.anotadasMs,
   };
 }
 

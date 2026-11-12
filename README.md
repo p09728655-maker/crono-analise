@@ -429,15 +429,12 @@ do produto dele**.
   `setupDescontado` do takt); na hora extra, quando o takt daquela semana o
   tirou das horas (`takt.setupPlanejado`) — as duas pontas com a mesma regra.
   O mesmo setup que saiu do relógio sai das paradas por motivo (`setupForaMs`);
-  o de antes do 1º volume ou anotado depois fica. A parada anotada depois (a
-  lista tem mais do que o relógio tirou e do que cabe fora dos toques,
-  `duracao_ms − relógio − marcas_ms[0]` — a marca já vem sem as paradas ao vivo —,
-  acima da folga do arredondamento da lista) sai das lacunas e entra nas
-  marcadas: cobre inteira, a maior primeiro e com um volume de tolerância, só
-  enquanto resta dela pelo menos um volume, e a lacuna coberta deixa de contar
-  (v2.110.3: segundos de sobra não apagam a lacuna curta sem marca). O setup que
-  saiu do relógio sai do quadro abatido da troca de duração mais próxima;
-  medição sem
+  o de antes do 1º volume ou anotado depois fica. A parada anotada depois fica
+  na lacuna, como no volume a volume (`deixouDeEmbalar`), e o motivo dela vai
+  para o quadro: a lista não tem horário, e as v2.110.1 a 2.110.2 tentaram
+  separá-la pela soma da lista — cada regra escondia lacuna sem marca em algum
+  caso real (v2.110.3 voltou à regra do app). O setup que saiu do relógio sai
+  do quadro abatido da troca de duração mais próxima; medição sem
   marcas sai antes da sobreposição, e a sobreposição casa a máquina por
   `nomeChave`. A hora extra é por grupo, no ritmo do próprio grupo
   (`horaExtraDosGrupos`), e a semana sem conta diz o motivo. A API casa a

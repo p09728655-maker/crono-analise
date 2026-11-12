@@ -138,8 +138,8 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
               <h1 style={ep.titulo}>Perdas da embalagem</h1>
               <p style={ep.subtitulo}>
                 A partir das medições do tablet e do vídeo: o tempo em que a linha ficou sem produzir — paradas
-                marcadas e lacunas (intervalos acima do dobro do normal, paradas que ninguém marcou) — por motivo e
-                por produto.
+                marcadas no cronômetro e lacunas (intervalos acima do dobro do normal: paradas que o cronômetro não
+                tirou) — por motivo e por produto.
               </p>
             </div>
             <label style={est.demandaSeletor}>
@@ -172,7 +172,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
           {total && (
             <>
               <p style={{ ...ep.secaoDica, marginBottom: 12 }} aria-label="Base do relatório">
-                {total.medicoes} medições · {nVolumes(total.volumes)} volumes · {horas(total.horasMedidas)} de linha
+                {total.medicoes === 1 ? '1 medição' : `${total.medicoes} medições`} · {nVolumes(total.volumes)} volumes · {horas(total.horasMedidas)} de linha
                 medida nos últimos {dias} dias
                 {r.sobrepostas === 1 && ' · 1 medição do mesmo trecho (tablet e vídeo) contada uma vez só'}
                 {r.sobrepostas > 1 && ` · ${r.sobrepostas} medições do mesmo trecho (tablet e vídeo) contadas uma vez só`}
@@ -205,9 +205,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   <div style={est.kpiRotulo}>Paradas marcadas</div>
                   <div style={est.kpiValor}>{formatarDuracao(total.paradasMs)}</div>
                   <div style={est.kpiSub}>
-                    {total.anotadasMs > 0
-                      ? `com motivo; ${formatarDuracao(total.anotadasMs)} anotadas depois, no resultado`
-                      : 'com motivo, no tablet ou no vídeo'}
+                    no cronômetro, com motivo (tablet ou vídeo)
                   </div>
                 </div>
                 <div style={est.kpi}>
@@ -264,7 +262,8 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   <h2 style={ep.secaoTitulo}>Por que a linha parou</h2>
                   <p style={ep.secaoDica}>
                     {formatarDuracao(r.totalMotivosMs)} de paradas marcadas, os maiores motivos primeiro. As lacunas
-                    ({formatarDuracao(total.lacunasMs)}) não têm motivo: ninguém marcou a parada.
+                    ({formatarDuracao(total.lacunasMs)}) são as paradas que o cronômetro não tirou: a anotada depois, no
+                    resultado, aparece aqui com o motivo, mas o tempo dela está nas lacunas.
                     {r.setupForaMs > 0 && ` O setup planejado marcado entre os volumes (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
                   </p>
                   {r.semDefinicaoPct >= 20 && (
@@ -357,8 +356,9 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                     pode ficar um pouco diferente das paradas do resumo.
                   </li>
                   <li>
-                    O setup planejado que sai da conta é o marcado no cronômetro entre os volumes. O setup anotado depois
-                    (no resultado ou no PC) fica como parada, como no volume a volume.
+                    A parada anotada depois, no resultado ou no PC, não foi tirada pelo cronômetro: o tempo dela fica nas
+                    lacunas, como no volume a volume, e o motivo aparece em “Por que a linha parou”. Pelo mesmo motivo, o
+                    setup anotado depois não sai da conta: só o marcado no cronômetro entre os volumes sai.
                   </li>
                   <li>
                     O mesmo produto com nomes diferentes (digitado à mão) aparece em linhas separadas: corrija o produto na
