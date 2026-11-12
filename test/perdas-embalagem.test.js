@@ -9,7 +9,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  chaveDoProduto, horaExtraDaSemana, perdasDaMedicao, relatorioDePerdas, semSobreposicao,
+  chaveDoProduto, horaExtraDaSemana, horaExtraDosGrupos, perdasDaMedicao, relatorioDePerdas, semSobreposicao,
+  setupPlanejadoDoCadastro,
 } from '../src/domain/perdasEmbalagem.js';
 
 const s = (seg) => seg * 1000;
@@ -165,6 +166,13 @@ describe('revisao da v2.110.0', () => {
     const r = relatorioDePerdas([c], { descontarSetupDe: () => true });
     expect(r.total.periodoMs).toBe(s(60));
     expect(r.total.setupMs).toBe(s(600));
+    // Fora da conta e' fora dos motivos tambem (revisao da v2.110.1): o
+    // quadro dizia "12 min de paradas" com o cartao em 2 min.
+    expect(r.porMotivo.find((m) => m.motivo === 'setup')).toBeUndefined();
+    expect(r.totalMotivosMs).toBe(0);
+    expect(r.setupForaMs).toBe(s(600));
+    // Sem setup planejado, ele continua la'.
+    expect(relatorioDePerdas([c]).porMotivo[0].motivo).toBe('setup');
   });
   it('PARADA ANOTADA DEPOIS sai das lacunas e vai para as marcadas (o total nao muda)', () => {
     // 20 min de "falta de material" anotados no resultado: o cronometro nao
@@ -182,7 +190,7 @@ describe('revisao da v2.110.0', () => {
   it('a anotada depois maior que as lacunas so tira o que as lacunas tem', () => {
     const marcas = marcasDe([...Array(6).fill(20), 120, ...Array(6).fill(20)]);
     const soma = marcas[marcas.length - 1] - marcas[0];
-    const p = perdasDaMedicao(medicao({ marcas_ms: marcas, marcas_relogio_ms: soma,
+    const p = perdasDaMedicao(medicao({ marcas_ms: marcas, marcas_relogio_ms: soma, duracao_ms: soma,
       paradas: [{ motivo: 'outro', duracaoMs: s(300) }] }));
     expect(p.lacunasMs).toBe(0);
     expect(p.anotadasMs).toBe(s(100));
@@ -197,5 +205,104 @@ describe('revisao da v2.110.0', () => {
     expect(r.total.medicoes).toBe(1);
     expect(r.semMarcas).toBe(1);
     expect(r.sobrepostas).toBe(0);
+  });
+});
+
+describe('revisao da v2.110.1', () => {
+  const min = 60000;
+  // 61 volumes a 60 s, com UMA lacuna de 9 min que ninguem marcou (8 min de
+  // excesso sobre o normal).
+  const comLacuna = marcasDe([...Array(30).fill(60), 540, ...Array(30).fill(60)]);
+  const somaLacuna = comLacuna[comLacuna.length - 1] - comLacuna[0];
+
+  it('PARADA ANTES DO 1o VOLUME nao vira "anotada depois": a lacuna continua lacuna', () => {
+    // 15 min de falta de material entre a largada e o 1o volume (fora dos
+    // toques, fora do relogio do trecho).
+    const p = perdasDaMedicao(medicao({ marcas_ms: comLacuna, marcas_relogio_ms: somaLacuna,
+      duracao_ms: somaLacuna + 16 * min, paradas: [{ motivo: 'falta_material', duracaoMs: 15 * min }] }));
+    expect(p.anotadasMs).toBe(0);
+    expect(p.lacunasMs).toBe(8 * min);
+    expect(p.nLacunas).toBe(1);
+    expect(p.paradasMs).toBe(0);
+  });
+  it('a anotada depois de verdade (sem folga fora dos toques) ainda sai da lacuna', () => {
+    const p = perdasDaMedicao(medicao({ marcas_ms: comLacuna, marcas_relogio_ms: somaLacuna,
+      duracao_ms: somaLacuna, paradas: [{ motivo: 'falta_material', duracaoMs: 9 * min }] }));
+    expect(p.anotadasMs).toBe(8 * min);
+    expect(p.lacunasMs).toBe(0);
+  });
+  it('o ARREDONDAMENTO DA LISTA (minutos com 2 casas) nao inventa parada anotada', () => {
+    // Paradas ao vivo de 45.4 s e 61.7 s (o relogio tirou 107.1 s), gravadas
+    // como 45.6 s e 61.8 s: 0.3 s a mais na lista.
+    const rel = somaLacuna + 107100;
+    const p = perdasDaMedicao(medicao({ marcas_ms: comLacuna, marcas_relogio_ms: rel, duracao_ms: rel,
+      paradas: [{ motivo: 'outro', duracaoMs: 45600 }, { motivo: 'outro', duracaoMs: 61800 }] }));
+    expect(p.anotadasMs).toBe(0);
+    expect(p.lacunasMs).toBe(8 * min);
+    expect(p.paradasMs).toBe(107100);
+  });
+  it('a MESMA MAQUINA com acento e espaco diferentes e' + "' o mesmo trecho (a chave da API)", () => {
+    const video = medicao({ id: 'v', maquina: 'Embalagem Rápida 01', marcas_ms: marcasDe(Array(10).fill(20)),
+      iniciado_em: '2026-11-12T13:00:00Z', finalizado_em: '2026-11-12T13:10:00Z' });
+    const tablet = medicao({ id: 't', maquina: 'EMBALAGEM RAPIDA  01', marcas_ms: marcasDe(Array(5).fill(20)),
+      iniciado_em: '2026-11-12T13:02:00Z', finalizado_em: '2026-11-12T13:05:00Z' });
+    const r = relatorioDePerdas([video, tablet]);
+    expect(r.total.medicoes).toBe(1);
+    expect(r.total.volumes).toBe(11);
+    expect(r.sobrepostas).toBe(1);
+  });
+
+  describe('a hora extra de cada grupo', () => {
+    const agora = Date.parse('2026-11-11T12:00:00Z'); // quarta; a semana comeca em 09/11
+    const programa = (pecas) => [{ ano: 2026, numero: 46, pecas, inicio: '2026-11-09', atualizado_em: '2026-11-09T08:00:00Z' }];
+    const grupo = (id, nome, over = {}) => ({
+      id, nome, horas_semana: '44.00', setups_dia: 0, setup_min: '0', dias_semana: 5, ...over,
+    });
+    // 40 volumes a 60 s com 10 min de setup marcado no trecho.
+    const comSetup = (id, maquina) => medicao({ id, maquina, marcas_ms: marcasDe(Array(39).fill(60)),
+      marcas_relogio_ms: s(39 * 60 + 600), marcas_setup_ms: s(600), duracao_ms: s(39 * 60 + 600),
+      paradas: [{ motivo: 'setup', duracaoMs: s(600) }] });
+
+    it('CADA GRUPO NO RITMO DELE: a linha lenta nao empresta o ritmo para a rapida', () => {
+      const lenta = { grupo: grupo('a', 'EMB A'), ativas: 1, demandas: programa(2640),
+        medicoes: [medicao({ id: 'a1', maquina: 'EMB A 01', marcas_ms: marcasDe(Array(20).fill(60)) })] };
+      const rapida = { grupo: grupo('b', 'EMB B'), ativas: 1, demandas: programa(2640),
+        medicoes: [medicao({ id: 'b1', maquina: 'EMB B 01', marcas_ms: marcasDe(Array(20).fill(30)) })] };
+      const { colunas } = horaExtraDosGrupos([lenta, rapida], { agora });
+      const esta = colunas.filter((c) => c.chave.endsWith('-0'));
+      expect(esta.map((c) => c.rotulo)).toEqual(['EMB A · Esta semana (de 09/11)', 'EMB B · Esta semana (de 09/11)']);
+      expect(esta[0].periodoMs).toBe(s(60));
+      expect(esta[0].conta.precisaPeriodo).toBeCloseTo(44, 6);
+      expect(esta[1].periodoMs).toBe(s(30));
+      expect(esta[1].conta.precisaPeriodo).toBeCloseTo(22, 6);
+    });
+    it('SETUP NO CADASTRO: sai das horas E das medicoes — 2.5 h de hora extra, nao 13.8 h', () => {
+      const g = { grupo: grupo('a', 'EMB A', { setups_dia: 1, setup_min: '30' }), ativas: 1, demandas: programa(2640),
+        medicoes: [comSetup('a1', 'EMB A 01')] };
+      expect(setupPlanejadoDoCadastro(g.grupo)).toBe(true);
+      const [c] = horaExtraDosGrupos([g], { agora }).colunas;
+      expect(c.periodoMs).toBe(s(60));
+      expect(c.conta.horasDisponiveis).toBeCloseTo(41.5, 6);
+      expect(c.conta.horaExtra).toBeCloseTo(2.5, 6);
+    });
+    it('SEM SETUP NO CADASTRO: o setup e perda nas medicoes, e as horas sao a jornada (11.3 h, nao nenhuma)', () => {
+      const g = { grupo: grupo('a', 'EMB A'), ativas: 1, demandas: programa(2640), medicoes: [comSetup('a1', 'EMB A 01')] };
+      expect(setupPlanejadoDoCadastro(g.grupo)).toBe(false);
+      const [c] = horaExtraDosGrupos([g], { agora }).colunas;
+      expect(c.periodoMs / 1000).toBeCloseTo(75.4, 1);
+      expect(c.conta.horasDisponiveis).toBe(44);
+      expect(c.conta.horaExtra).toBeCloseTo(11.3, 1);
+    });
+    it('a semana sem conta diz por que, sem o codigo do PCP e sem "esta semana" na proxima', () => {
+      const g = { grupo: grupo('a', 'EMB A'), ativas: 1, demandas: programa(2640),
+        medicoes: [medicao({ id: 'a1', maquina: 'EMB A 01', marcas_ms: marcasDe(Array(20).fill(60)) })] };
+      const { colunas, avisos } = horaExtraDosGrupos([g], { agora });
+      expect(colunas).toHaveLength(1);
+      expect(avisos).toEqual(['Próxima semana: o programa colado não cobre a semana.']);
+      const semPrograma = horaExtraDosGrupos([{ ...g, demandas: [] }], { agora });
+      expect(semPrograma.avisos).toEqual(['Esta semana: não há programa colado.', 'Próxima semana: não há programa colado.']);
+      const foraDoAr = horaExtraDosGrupos([{ ...g, erroPrograma: 'HTTP 500' }], { agora });
+      expect(foraDoAr.avisos).toEqual(['não deu para ler o programa da semana (HTTP 500).']);
+    });
   });
 });

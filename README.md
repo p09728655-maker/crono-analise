@@ -423,17 +423,22 @@ do produto dele**.
   período e no normal; a diferença é o custo das perdas. Testes:
   `test/perdas-embalagem.test.js` (inclui uma medição real, só números, que bate
   com a mesma conta feita em SQL no banco) e `test/e2e/perdas.e2e.mjs`.
-  v2.110.1: o setup planejado marcado no trecho sai do relógio quando o takt da
-  medição o desconta (`descontaSetup`, a mesma régua do volume a volume — ele já
-  saiu das horas da linha); a parada anotada depois (a lista de paradas tem mais
-  que o relógio tirou) sai das lacunas e entra nas marcadas; medição sem marcas
-  sai antes da sobreposição; a hora extra é por grupo, no ritmo do próprio
-  grupo, e a semana sem conta diz o motivo (`motivoSemTakt`). A API casa a
+  O setup planejado marcado no trecho sai do relógio pela régua das HORAS DA
+  LINHA, não pela do tempo-alvo: no resumo, quando o cadastro do grupo tem setup
+  (`setupPlanejadoDoCadastro`); na hora extra, quando o takt daquela semana o
+  tirou das horas (`takt.setupPlanejado`) — as duas pontas da conta com a mesma
+  regra. O setup fora da conta sai também das paradas por motivo
+  (`setupForaMs`). A parada anotada depois (a lista tem mais do que o relógio
+  tirou e do que cabe fora dos toques, `duracao_ms − relógio`, acima da folga do
+  arredondamento da lista) sai das lacunas e entra nas marcadas; medição sem
+  marcas sai antes da sobreposição, e a sobreposição casa a máquina por
+  `nomeChave`. A hora extra é por grupo, no ritmo do próprio grupo
+  (`horaExtraDosGrupos`), e a semana sem conta diz o motivo. A API casa a
   máquina como `nomeChave` (sem acento, sem maiúscula, espaços juntados), só
   devolve medição com marcas e diz `truncado` no limite de 1.000 linhas. A
-  folha A4 (`embalagem/ImpressaoPerdas.jsx`) traz todos os produtos; o
-  invólucro da tela fica branco e sem altura mínima no papel
-  (`:has(> .somente-impressao)` no CSS de impressão do `index.html`).
+  folha A4 (`embalagem/ImpressaoPerdas.jsx`) traz todos os produtos (a tabela
+  pode quebrar página); o invólucro da tela fica branco e sem altura mínima no
+  papel (`:has(> .somente-impressao)` no CSS de impressão do `index.html`).
 - **A marcação automática marca na SAÍDA da caixa** (v2.109.0): o padrão de
   marcação do PPCP é o fim da caixa saindo do rolete e entrando no tapete (o
   toque do tablet e o Enter). O retângulo passa a ser uma faixa fina sobre essa

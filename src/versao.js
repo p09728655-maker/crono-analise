@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.110.2',
+    data: '2026-11-12',
+    titulo: 'Perdas da embalagem: setup, paradas e hora extra acertados',
+    itens: [
+      'O SETUP SEGUE O CADASTRO DO GRUPO, DOS DOIS LADOS DA CONTA. Na 2.110.1 o setup saía da medição pela regra do tempo-alvo do produto, e as horas da linha pela do cadastro: num grupo com setup cadastrado e produto com tempo-alvo sem setup, ele ainda contava duas vezes (13,8 h de hora extra onde eram 2,5 h); no contrário, sumia dos dois lados (nenhuma hora extra onde eram 11,3 h). Agora, com setup planejado no cadastro do grupo, ele sai das horas E das medições; sem, ele é perda nas medições e as horas são a jornada inteira.',
+      'O SETUP FORA DA CONTA SAI TAMBÉM DE "POR QUE A LINHA PAROU". O quadro dizia 12 min de paradas com o cartão em 2 min, e o "Outro" aparecia menor do que é. A tela e a folha dizem quanto de setup ficou fora.',
+      'PARADA ANTES DO 1º VOLUME NÃO É MAIS "ANOTADA DEPOIS". A parada marcada entre a largada e o 1º volume (ou a aberta no Encerrar) está fora do trecho medido; na 2.110.1 ela tirava tempo das lacunas, e a lacuna que ninguém marcou sumia. Também não conta mais como anotada a diferença de arredondamento da lista (décimos de segundo por parada). Na dúvida, fica lacuna, como no volume a volume.',
+      'O TABLET E O VÍDEO DO MESMO TRECHO CONTAM UMA VEZ SÓ mesmo com o nome da máquina escrito com acento ou espaço diferente ("Embalagem Rápida 01" e "EMBALAGEM RAPIDA 01").',
+      'A HORA EXTRA DA PRÓXIMA SEMANA sem programa diz "o programa colado não cobre a semana", e não mais "esta semana"; o rótulo traz o dia em que a semana começa ("de 09/11"), nunca o código do PCP.',
+      'NA FOLHA IMPRESSA: a ressalva quando o período passa de 1.000 medições (os números são das mais recentes), a nota das medições curtas, e a tabela dos produtos começa logo abaixo do título — com muitos produtos ela continua na página seguinte, em vez de pular inteira e deixar meia página em branco.',
+    ],
+  },
+  {
     versao: '2.110.1',
     data: '2026-11-12',
     titulo: 'Perdas da embalagem: impressão e correções das contas',
