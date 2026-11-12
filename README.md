@@ -406,6 +406,19 @@ do produto dele**.
   e `test/e2e/video-automatico.e2e.mjs` (vídeo sintético
   `test/fixtures/caixas-60s.webm`: fundo verde e caixa parda em horários
   conhecidos — nenhuma imagem da fábrica no repositório).
+- **A tela de marcar por vídeo com a visão do tablet** (v2.108.0): o painel do
+  topo da coluna da direita é o `PainelTakt` do cronômetro do tablet
+  (exportado de `src/features/coleta/rapida/CronometroAoVivo.jsx`, que o usa
+  igual), numa caixa de altura fixa (as letras saem do tamanho dela, por
+  container query) e com o texto claro do tablet. Os números são os da lista:
+  por volume (`periodoPorPeca`) contra o tempo-alvo, vol/h até o último volume,
+  o ÚLTIMO entre as duas últimas `marcasMs` (relógio da linha rodando, como o
+  tablet) e o TEMPO = posição do vídeo − largada. Lacunas e parado ficam logo
+  abaixo. A marcação automática mudou para baixo da lista, ao lado do vídeo
+  (a lista deixou de ser `sticky`, senão correria por cima dela, e ficou com
+  26dvh): em 1920 × 1080 a tela cabe sem rolar. "← Voltar ao preparo", em cima
+  do vídeo, volta ao preparo no modo `retomando` (o mesmo da máquina que saiu
+  do cadastro): as marcas ficam, e o botão vira "Continuar a marcação".
 - **Leitor de câmera da envolvedora** (`ferramentas/leitor-camera/`, **fora do
   app**, em validação): programa Python + ffmpeg que roda num PC da fábrica,
   lê a câmera Intelbras da envolvedora (RTSP) ou um vídeo exportado e grava um

@@ -30,6 +30,7 @@ import {
   descontaSetup, explicacaoDoAlvo, fraseDaSemana, semAlvo,
 } from '../../../domain/tempoAlvo.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
+import { ESTILO_TAKT, PainelTakt } from '../../coleta/rapida/CronometroAoVivo.jsx';
 import { est } from '../conferencias/estilos.js';
 import { ev } from './estilos.js';
 
@@ -410,6 +411,23 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setFimMs(null);
     setAviso(null);
     setEtapa('marcar');
+  };
+
+  /* VOLTAR AO PREPARO no meio da marcacao (v2.108.0): trocar a maquina (o
+     video era de outra camera, e o retangulo e' da maquina), o produto ou o
+     inicio sem perder as marcas. E' o "retomando" de quando a maquina do
+     rascunho saiu do cadastro: no preparo o botao vira "Continuar a
+     marcacao" e o comecar() nao zera nada. Trocar o ARQUIVO la' sai do
+     retomando, e a marcacao deste video fica no rascunho dele. */
+  const voltarAoPreparo = () => {
+    refVideo.current?.pause();
+    setAviso(null);
+    setRetomando(true);
+    const m = refMarcacao.current;
+    setAvisoPreparar(`As marcas deste vídeo continuam aqui (${volumes(m.toques.length)}`
+      + `${m.largadaMs != null ? ', mais a largada' : ''}${m.paradas.length || m.aberta ? ' e as paradas' : ''}). `
+      + 'Troque o que precisar e clique em “Continuar a marcação”.');
+    setEtapa('preparar');
   };
 
   // O rascunho acompanha cada marca; salva a medicao, ele some.
@@ -923,6 +941,21 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                   /* Na revisao o video so' some da tela: desmontado, "Voltar a
                      marcar" recomecaria do segundo zero. */
                   <section style={{ ...ev.cartao, ...(etapa === 'revisar' ? { display: 'none' } : {}) }} aria-label="Vídeo">
+                    {etapa === 'marcar' && (
+                      <div style={ev.linhaBotoes}>
+                        {/* Sem foco no botao: o Enter seguinte seria clique nele. */}
+                        <button
+                          type="button" style={ev.botaoControle} onClick={voltarAoPreparo}
+                          onMouseDown={(e) => e.preventDefault()} disabled={lendo || desenhando}
+                          title={lendo || desenhando ? 'Termine ou pare a leitura (ou o desenho) antes' : undefined}
+                        >
+                          ← Voltar ao preparo
+                        </button>
+                        <span style={ev.dica}>
+                          {[arquivo?.name, maquina?.nome, campos.produto || 'produto não informado'].filter(Boolean).join(' · ')}
+                        </span>
+                      </div>
+                    )}
                     {/* Sem os controles do navegador: eles roubariam o Espaco e as
                         setas das teclas de marcar. Os daqui fazem o mesmo. */}
                     <div style={ev.palco}>
@@ -969,27 +1002,33 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                     )}
                   </section>
                 )}
-                {url && etapa === 'marcar' && !meta.erro && (
-                  <MarcacaoAutomatica
-                    url={url} refVideoLeitura={refVideoLeitura} maquina={maquina} retangulo={retangulo}
-                    desenhando={desenhando} automatica={automatica} progresso={progresso}
-                    listaVazia={listaVazia(marcacao)} conferencia={conferencia} agoraMs={agoraMs}
-                    podeDesenhar={Boolean(areaVideo)}
-                    aoDesenhar={desenharRetangulo} aoCancelarDesenho={cancelarDesenho}
-                    aoLer={lerAutomatica} aoParar={() => setAutomatica({ estado: 'parado' })}
-                    aoApagar={apagarAutomatica}
-                    aoIr={(ms) => { refVideo.current?.pause(); irPara(ms); }}
-                  />
-                )}
               </div>
 
+              {/* A coluna da direita: o painel do tablet e as marcas, e embaixo
+                  a marcacao automatica (v2.108.0) — ao lado do video, sem rolar
+                  ate' ela; e a conferencia dela anda junto com a lista. */}
               {etapa === 'marcar' && (
-                <Marcas
-                  marcacao={marcacao} numeros={vivo} alvo={alvo} instante={instante}
-                  aoIr={irPara}
-                  aoRemoverVolume={(ms) => aplicar((m) => removerVolume(m, ms))}
-                  aoRemoverParada={(ms) => aplicar((m) => removerParada(m, ms))}
-                />
+                <div style={ev.coluna}>
+                  <Marcas
+                    marcacao={marcacao} numeros={vivo} alvo={alvo} instante={instante}
+                    produto={campos.produto} agoraMs={agoraMs} takt={takt} marcasMs={parcial?.marcasMs}
+                    aoIr={irPara}
+                    aoRemoverVolume={(ms) => aplicar((m) => removerVolume(m, ms))}
+                    aoRemoverParada={(ms) => aplicar((m) => removerParada(m, ms))}
+                  />
+                  {url && !meta.erro && (
+                    <MarcacaoAutomatica
+                      url={url} refVideoLeitura={refVideoLeitura} maquina={maquina} retangulo={retangulo}
+                      desenhando={desenhando} automatica={automatica} progresso={progresso}
+                      listaVazia={listaVazia(marcacao)} conferencia={conferencia} agoraMs={agoraMs}
+                      podeDesenhar={Boolean(areaVideo)}
+                      aoDesenhar={desenharRetangulo} aoCancelarDesenho={cancelarDesenho}
+                      aoLer={lerAutomatica} aoParar={() => setAutomatica({ estado: 'parado' })}
+                      aoApagar={apagarAutomatica}
+                      aoIr={(ms) => { refVideo.current?.pause(); irPara(ms); }}
+                    />
+                  )}
+                </div>
               )}
               {etapa === 'revisar' && final?.medicao && (
                 <Revisar
@@ -1265,7 +1304,7 @@ function Acoes({
 
 /** A coluna das marcas: os numeros (os mesmos do tablet) e a lista, em ordem de video. */
 function Marcas({
-  marcacao, numeros, alvo, instante, aoIr, aoRemoverVolume, aoRemoverParada,
+  marcacao, numeros, alvo, instante, produto, agoraMs, takt, marcasMs, aoIr, aoRemoverVolume, aoRemoverParada,
 }) {
   const { largadaMs, toques, paradas, aberta } = marcacao;
   const itens = [
@@ -1276,7 +1315,6 @@ function Marcas({
     ...paradas.map((p) => ({ tipo: 'parada', ms: p.inicioMs, parada: p })),
     ...(aberta ? [{ tipo: 'parada', ms: aberta.inicioMs, parada: aberta }] : []),
   ].sort((a, b) => a.ms - b.ms || (a.tipo === 'parada' ? -1 : 1));
-  const acima = alvo?.alvoMs > 0 && numeros?.porVolume > alvo.alvoMs;
   const lacunas = numeros?.leitura?.suficiente ? numeros.leitura.lacunas.length : null;
   // As paradas daqui sao intervalos do video (inicio/fim), nao duracoes.
   const parado = paradas.reduce((soma, p) => soma + (p.fimMs - p.inicioMs), 0);
@@ -1285,17 +1323,27 @@ function Marcas({
   // do tablet (nao e' velocimetro: so' muda quando se marca).
   const volHora = toques.length >= 2 && ultimo > largadaMs ? Math.round((toques.length * 3600000) / (ultimo - largadaMs)) : null;
   const quando = largadaMs != null ? instante(largadaMs) : null;
+  // O ULTIMO do tablet: entre as duas ultimas marcas no relogio da linha
+  // rodando (a parada marcada sai), as mesmas marcas que vao ao sync.
+  const ultimoMs = marcasMs?.length >= 2 ? marcasMs[marcasMs.length - 1] - marcasMs[marcasMs.length - 2] : null;
+  // O TEMPO do tablet: desde a largada, no relogio do video (paradas dentro).
+  const decorridoMs = largadaMs != null ? Math.max(0, agoraMs - largadaMs) : 0;
   return (
-    <aside style={{ ...ev.cartao, position: 'sticky', top: 16 }} aria-label="Marcas da medição">
-      <div style={ev.numeros}>
-        <Numero rotulo="Volumes" valor={String(toques.length)} />
-        <Numero
-          rotulo={acima ? 'Por vol ▲ alvo' : 'Por volume'}
-          valor={numeros?.porVolume ? `${formatarSegundos(numeros.porVolume)} s` : '—'}
-          atencao={acima}
+    /* Sem o "sticky" de antes: com a marcacao automatica embaixo, a lista
+       grudada no topo correria por cima dela. */
+    <aside style={ev.cartao} aria-label="Marcas da medição">
+      {/* A MESMA VISAO DO CRONOMETRO DO TABLET (v2.108.0): o tempo por volume
+          contra o tempo-alvo, vermelho ▲ acima e verde ✓ dentro, e o apoio.
+          As letras saem do tamanho da caixa (ver PainelTakt). */}
+      <style>{ESTILO_TAKT}</style>
+      <div style={ev.painelTablet}>
+        <PainelTakt
+          produto={produto} decorridoMs={decorridoMs} volumes={toques.length} unidade={VOLUME}
+          porVolumeMs={numeros?.porVolume || null} alvoMs={alvo?.alvoMs > 0 ? alvo.alvoMs : null}
+          volHora={volHora} ultimoMs={ultimoMs} semana={alvo?.semana || null} taktMs={takt?.taktMs || null}
         />
-        <Numero rotulo="Tempo-alvo" valor={alvo?.alvoMs > 0 ? `${formatarSegundos(alvo.alvoMs)} s` : '—'} />
-        <Numero rotulo="Vol/h período" valor={volHora != null ? String(volHora) : '—'} sub="até o último volume" />
+      </div>
+      <div style={ev.numeros}>
         <Numero rotulo="Lacunas" valor={lacunas != null ? String(lacunas) : '—'} />
         <Numero rotulo="Parado" valor={parado > 0 ? duracaoCurta(parado) : '—'} />
       </div>

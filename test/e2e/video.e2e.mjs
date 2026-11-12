@@ -226,9 +226,35 @@ await p.evaluate(() => {
 });
 checar(/VOLUMES 8/i.test((await marcas.innerText()).replace(/\s+/g, ' ')), 'tecla segurada: a repeticao nao apaga nem marca volume');
 const numeros = (await marcas.innerText()).replace(/\s+/g, ' ');
-checar(/VOLUMES 8/i.test(numeros) && /POR VOL ▲ ALVO 12.9 s/i.test(numeros) && /TEMPO-ALVO 10.0 s/i.test(numeros) && /PARADO 15 s/i.test(numeros),
+// O painel do tablet (v2.108.0) escreve o "s" colado no numero ("12.9s").
+checar(/VOLUMES 8/i.test(numeros) && /POR VOL ▲ ALVO 12\.9 ?s/i.test(numeros) && /TEMPO-ALVO 10\.0 ?s/i.test(numeros) && /PARADO 15 s/i.test(numeros),
   `os numeros enquanto marca: 8 volumes, 12.9 s por volume (90 s / 7) acima do alvo de 10.0 s, 15 s parado (${numeros.slice(0, 200)})`);
+// A mesma visao do cronometro do tablet: o TEMPO desde a largada no relogio
+// do video (1:52 - 0:10), o vol/h do periodo ate' o ultimo volume (8 em
+// 100 s) e o ULTIMO intervalo (1:50 - 1:40), contas feitas a' mao.
+checar(/TEMPO 01:42\.0/.test(numeros) && /VOL\/H PERÍODO 288/i.test(numeros) && /ÚLTIMO 10\.0 ?s/i.test(numeros)
+  && /Rack Sirius 1\.6 TEMPO/.test(numeros),
+  `o painel do tablet no PC: produto, tempo 01:42.0 desde a largada, 288 vol/h, ultimo 10.0 s (${numeros.slice(0, 200)})`);
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-marcar.png` });
+
+/* ------------------- voltar ao preparo no meio da marcacao (v2.108.0) */
+{
+  const video = p.getByRole('region', { name: 'Vídeo' });
+  checar(/EMBALAGEM 01 · Rack Sirius 1\.6/.test(await video.innerText()),
+    'marcando: o video diz a maquina e o produto da medicao');
+  await video.getByRole('button', { name: '← Voltar ao preparo' }).click();
+  await preparar.waitFor({ timeout: 4000 });
+  checar(/As marcas deste vídeo continuam aqui \(8 volumes, mais a largada e as paradas\)/.test(await preparar.innerText()),
+    'voltar ao preparo: a tela diz que as marcas continuam');
+  // No preparo as teclas nao marcam: o Enter nao vira volume escondido.
+  await p.evaluate(() => document.activeElement?.blur());
+  await p.keyboard.press('Enter');
+  await preparar.getByRole('button', { name: 'Continuar a marcação' }).click();
+  await marcas.waitFor({ timeout: 4000 });
+  const depois = (await marcas.innerText()).replace(/\s+/g, ' ');
+  checar(/VOLUMES 8/i.test(depois) && /PARADO 15 s/i.test(depois) && /POR VOL ▲ ALVO 12\.9 ?s/i.test(depois),
+    `continuar a marcacao: os 8 volumes e a parada continuam, sem nada a mais (${depois.slice(0, 160)})`);
+}
 
 /* --------------------------------------- o F5 nao leva a marcacao */
 await p.reload();
@@ -632,7 +658,7 @@ await ctx.close();
     await teclaEm(w, 100, 'Enter');
     const painel = (await w.locator('[aria-label="Marcas da medição"]').innerText()).replace(/\s+/g, ' ');
     // (100 - 20) / 2 = 40.0 s com o setup dentro; descontando os 40 s de setup, (80 - 40) / 2 = 20.0 s.
-    checar(new RegExp(`POR VOLUME ${esperado.replace('.', '\\.')} s`, 'i').test(painel), `${rotulo} (${painel.slice(0, 80)})`);
+    checar(new RegExp(`POR VOLUME ${esperado.replace('.', '\\.')} ?s`, 'i').test(painel), `${rotulo} (${painel.slice(0, 80)})`);
     await c5.close();
   }
 }
