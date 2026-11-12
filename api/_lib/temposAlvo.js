@@ -87,6 +87,9 @@ export function semanasDoPainel(lista) {
     .map((w) => ({
       de: String(w.de), ate: String(w.ate), atual: w.atual === true,
       sUep: positivo(w.sUep), pede: positivo(w.pede), uep: naoNegativo(w.uep), nUteis: naoNegativo(w.nUteis),
+      // As caixas sem UEP ficam fora da UEP programada: a semana parece mais
+      // leve do que e' — o app nao pode dizer "cabe" com elas (revisao de 12/11).
+      cxSemUep: naoNegativo(w.cxSemUep),
     }));
 }
 

@@ -13,8 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.107.1',
+    data: '2026-11-12',
+    titulo: 'Embalagem: "a semana pede" sem cortar no celular deitado',
+    itens: [
+      'NO CELULAR DEITADO (667 × 325 e parecidos), OS QUATRO NÚMEROS DE BAIXO DO CRONÔMETRO CABEM. Com A SEMANA PEDE, o rótulo quebrava em duas linhas e cortava uns pixels dos números. Agora, no painel estreito, o rótulo fica numa linha só, com a letra um pouco menor. No tablet nada muda.',
+      'A SEMANA COM CAIXA SEM UEP NÃO DIZ MAIS "CABE". A caixa de produto sem UEP fica fora da UEP programada, e a semana parece mais leve do que é. Quando a programação pede até a média da linha e há caixa sem UEP, a frase diz "sem contar N caixas sem UEP, que ficam fora da conta". "Não fecha" continua igual. No quadro do PC, sem o % da semana, a frase não dá veredito.',
+    ],
+  },
+  {
     versao: '2.107.0',
-    data: '2026-11-11',
+    data: '2026-11-12',
     titulo: 'Embalagem: a linha da carga diz o que a semana pede NESTE produto',
     itens: [
       'A LINHA DA CARGA PASSA A SER DO PRODUTO. Ela mostrava o takt por volume (as horas da semana ÷ os volumes programados), o mesmo número para qualquer produto: com 16.4 s, a MESA CABECEIRA SLEEP no tempo-alvo (8.9 s) parecia folgada, quando a semana pede 8.5 s nela. Agora a linha diz "A semana pede 8.5 s neste produto: a programação da semana de 09/11 pede 105.1% da média da linha — no tempo-alvo, ela não fecha." É o mesmo número da coluna PELO TAKT do TAKT DA SEMANA do painel: os segundos por UEP que a programação da semana pede × a UEP do produto. Vale no cartão antes de medir, no resumo, na medição salva, no volume a volume do PC, na folha impressa e no Cronometrar por vídeo. NO CRONÔMETRO É UM NÚMERO: "A SEMANA PEDE 8.5 s", sem cor, ao lado de volumes, vol/h e último — a frase escrita, pequena, não se via de longe.',

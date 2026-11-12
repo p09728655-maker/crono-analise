@@ -106,9 +106,23 @@ export function semanaDaData(lido, data = new Date()) {
 export function semanaDoProduto(w, uep) {
   if (!w || !(w.sUep > 0) || !(uep > 0)) return null;
   return {
-    de: w.de, ate: w.ate, sUep: w.sUep, pede: w.pede ?? null,
+    de: w.de, ate: w.ate, sUep: w.sUep, pede: w.pede ?? null, cxSemUep: w.cxSemUep ?? null,
     taktMs: Math.round(w.sUep * uep * 100) * 10,
   };
+}
+
+/**
+ * O VEREDITO DA SEMANA no tempo-alvo, em palavras (revisao de 12/11): "não
+ * fecha" quando a programacao pede mais que a media; "cabe" so' quando pede
+ * ate' a media E todas as caixas tem UEP — caixa sem UEP fica fora da UEP
+ * programada e a semana parece mais leve do que e'. Sem o % (pede null), nada.
+ */
+export function vereditoDaSemana(w) {
+  if (!(w?.pede > 0)) return '';
+  if (w.pede > 100) return 'no tempo-alvo, ela não fecha';
+  const n = Number(w.cxSemUep) || 0;
+  if (n > 0) return `sem contar ${n.toLocaleString('pt-BR')} ${n === 1 ? 'caixa' : 'caixas'} sem UEP, que ficam fora da conta`;
+  return 'no tempo-alvo, ela cabe';
 }
 
 /**
@@ -203,7 +217,7 @@ export function fraseDaSemana(alvo, { curta = false } = {}) {
   if (curta) return `a semana pede ${s} s${pct ? ` (${pct} da média)` : ''}`;
   if (!pct) return `A semana pede ${s} s neste produto (a programação da semana de ${String(w.de).slice(0, 5)}).`;
   return `A semana pede ${s} s neste produto: a programação da semana de ${String(w.de).slice(0, 5)} pede ${pct} `
-    + `da média da linha — no tempo-alvo, ela ${w.pede > 100 ? 'não fecha' : 'cabe'}.`;
+    + `da média da linha — ${vereditoDaSemana(w)}.`;
 }
 
 /** A partir de quantas horas a leitura do painel e' "velha" e a tela diz a idade. */
