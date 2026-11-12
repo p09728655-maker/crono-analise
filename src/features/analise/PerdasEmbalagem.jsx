@@ -174,7 +174,8 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
               <p style={{ ...ep.secaoDica, marginBottom: 12 }} aria-label="Base do relatório">
                 {total.medicoes} medições · {nVolumes(total.volumes)} volumes · {horas(total.horasMedidas)} de linha
                 medida nos últimos {dias} dias
-                {r.sobrepostas > 0 && ` · ${r.sobrepostas} medição(ões) do mesmo trecho (tablet e vídeo) contada(s) uma vez só`}
+                {r.sobrepostas === 1 && ' · 1 medição do mesmo trecho (tablet e vídeo) contada uma vez só'}
+                {r.sobrepostas > 1 && ` · ${r.sobrepostas} medições do mesmo trecho (tablet e vídeo) contadas uma vez só`}
                 {total.setupMs > 0 && ` · ${formatarDuracao(total.setupMs)} de setup planejado no trecho fica fora da conta, como no takt`}
               </p>
               {truncado && (
@@ -354,6 +355,10 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   <li>
                     As paradas por motivo incluem as marcadas antes do 1º volume ou depois do último; por isso a soma delas
                     pode ficar um pouco diferente das paradas do resumo.
+                  </li>
+                  <li>
+                    O setup planejado que sai da conta é o marcado no cronômetro entre os volumes. O setup anotado depois
+                    (no resultado ou no PC) fica como parada, como no volume a volume.
                   </li>
                   <li>
                     O mesmo produto com nomes diferentes (digitado à mão) aparece em linhas separadas: corrija o produto na

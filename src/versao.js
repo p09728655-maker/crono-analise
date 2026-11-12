@@ -13,11 +13,22 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.110.3',
+    data: '2026-11-12',
+    titulo: 'Perdas da embalagem: a parada anotada não esconde mais a lacuna que ninguém marcou',
+    itens: [
+      'A PARADA ANOTADA DEPOIS NÃO APAGA MAIS A LACUNA CURTA QUE NINGUÉM MARCOU. Na 2.110.2, numa medição com uma parada anotada depois, uma lacuna curta sem marca podia sumir junto e o cartão dizia "0 lacunas" — por exemplo, 5 min anotados e 1 min parado sem marca davam 6 min anotados e nenhuma lacuna. Agora o tempo da largada até o 1º volume é o que a própria medição registrou (não uma estimativa), e a anotada só cobre a lacuna que ela abriu: 5 min anotados e 1 lacuna de 1 min.',
+      'NO QUADRO "POR QUE A LINHA PAROU", a troca antes do 1º volume não aparece mais como "2×" quando houve outro setup no trecho: o setup que sai da conta é abatido da troca do tamanho dele.',
+      'O "COMO LER" E A FOLHA DIZEM que o setup anotado depois (no resultado ou no PC) conta como parada, como no volume a volume: só o setup marcado no cronômetro entre os volumes sai da conta.',
+      'Na base do relatório, "1 medição do mesmo trecho contada uma vez só" (estava "medição(ões)").',
+    ],
+  },
+  {
     versao: '2.110.2',
     data: '2026-11-12',
     titulo: 'Perdas da embalagem: setup, paradas e hora extra acertados',
     itens: [
-      'O SETUP SEGUE O CADASTRO DO GRUPO, DOS DOIS LADOS DA CONTA. Na 2.110.1 o setup saía da medição pela regra do tempo-alvo do produto, e as horas da linha pela do cadastro: num grupo com setup cadastrado e produto com tempo-alvo sem setup, ele ainda contava duas vezes (13,8 h de hora extra onde eram 2,5 h); no contrário, sumia dos dois lados (nenhuma hora extra onde eram 11,3 h). Agora vale o cadastro do grupo, a mesma regra do takt: com setup planejado (setups por dia, minutos e dias da semana preenchidos), ele sai das horas E das medições; sem, ele é perda nas medições e as horas são a jornada inteira. O "por volume no período" do resumo e o da hora extra são sempre o mesmo.',
+      'O SETUP SEGUE O CADASTRO DO GRUPO, DOS DOIS LADOS DA CONTA. Na 2.110.1 o setup saía da medição pela regra do tempo-alvo do produto, e as horas da linha pela do cadastro: num grupo com setup cadastrado e produto com tempo-alvo sem setup, ele ainda contava duas vezes (13,8 h de hora extra onde eram 2,5 h); no contrário, sumia dos dois lados (nenhuma hora extra onde eram 11,3 h). Agora vale o cadastro do grupo, a mesma regra do takt: com setup planejado (setups por dia, minutos e dias da semana preenchidos), ele sai das horas E das medições; sem, ele é perda nas medições e as horas são a jornada inteira. Com um grupo só, o "por volume no período" do resumo e o da hora extra são o mesmo; com mais de um, cada coluna usa o ritmo do próprio grupo.',
       'O SETUP QUE SAI DA CONTA SAI TAMBÉM DE "POR QUE A LINHA PAROU". O quadro dizia 12 min de paradas com o cartão em 2 min, e o "Outro" aparecia menor do que é. Sai o setup marcado no cronômetro entre os volumes — o mesmo que sai da conta; o setup antes do 1º volume ou anotado depois continua no quadro, como continua na conta. A tela e a folha dizem quanto ficou fora.',
       'PARADA ANTES DO 1º VOLUME NÃO É MAIS "ANOTADA DEPOIS". A parada marcada entre a largada e o 1º volume (ou a aberta no Encerrar) está fora do trecho medido; na 2.110.1 ela tirava tempo das lacunas, e a lacuna que ninguém marcou sumia. Também não conta mais como anotada a diferença de arredondamento da lista (décimos de segundo por parada). Na dúvida, fica lacuna, como no volume a volume. E a parada anotada de verdade sai da lacuna inteira: o tempo da largada até o 1º volume é trabalho, não folga, e a lacuna que ela cobre deixa de ser contada.',
       'O TABLET E O VÍDEO DO MESMO TRECHO CONTAM UMA VEZ SÓ mesmo com o nome da máquina escrito com acento ou espaço diferente ("Embalagem Rápida 01" e "EMBALAGEM RAPIDA 01").',

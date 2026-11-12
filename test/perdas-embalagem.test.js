@@ -24,6 +24,19 @@ const medicao = (over) => ({
   id: over.id || 'x', maquina: 'EMBALAGEM 01', peca: 'Rack', pecas: (over.marcas_ms || []).length,
   iniciado_em: '2026-11-10T10:00:00Z', duracao_ms: 600000, paradas: [], ...over,
 });
+/**
+ * Uma medicao COMO O TABLET GRAVA: as marcas contam da largada e ja' vem sem
+ * as paradas ao vivo (marcas_ms[0] e' o trabalho ate' o 1o volume); o
+ * relogio entre o 1o e o ultimo volume soma as paradas ao vivo do trecho; a
+ * duracao e' o relogio de parede da largada ao Encerrar.
+ */
+const comoOTablet = ({ v1, intervalos, antesVivo = 0, noTrecho = 0, depois = 0, ...over }) => {
+  const marcas = marcasDe(intervalos, v1);
+  const soma = marcas[marcas.length - 1] - marcas[0];
+  return medicao({
+    marcas_ms: marcas, marcas_relogio_ms: soma + s(noTrecho), duracao_ms: s(antesVivo) + s(v1) + soma + s(noTrecho) + s(depois), ...over,
+  });
+};
 
 describe('uma medicao', () => {
   it('fecha: relogio = (N-1) x normal + lacunas + paradas', () => {
@@ -177,10 +190,7 @@ describe('revisao da v2.110.0', () => {
   it('PARADA ANOTADA DEPOIS sai das lacunas e vai para as marcadas (o total nao muda)', () => {
     // 20 min de "falta de material" anotados no resultado: o cronometro nao
     // tirou nada das marcas, e o intervalo de 20 min ficou dentro delas.
-    const marcas = marcasDe([...Array(6).fill(20), 1220, ...Array(6).fill(20)]);
-    const soma = marcas[marcas.length - 1] - marcas[0];
-    // Como no tablet: o 1o volume sai 20 s (um volume) depois da largada.
-    const c = medicao({ marcas_ms: marcas, marcas_relogio_ms: soma, duracao_ms: soma + s(20),
+    const c = comoOTablet({ v1: 20, intervalos: [...Array(6).fill(20), 1220, ...Array(6).fill(20)],
       paradas: [{ motivo: 'falta_material', duracaoMs: s(1200) }] });
     const p = perdasDaMedicao(c);
     expect(p.anotadasMs).toBe(s(1200));
@@ -191,9 +201,7 @@ describe('revisao da v2.110.0', () => {
     expect(p.intervalos * p.normalMs + p.lacunasMs + p.paradasMs).toBe(p.relogioMs);
   });
   it('a anotada depois maior que as lacunas so tira o que as lacunas tem', () => {
-    const marcas = marcasDe([...Array(6).fill(20), 120, ...Array(6).fill(20)]);
-    const soma = marcas[marcas.length - 1] - marcas[0];
-    const p = perdasDaMedicao(medicao({ marcas_ms: marcas, marcas_relogio_ms: soma, duracao_ms: soma,
+    const p = perdasDaMedicao(comoOTablet({ v1: 20, intervalos: [...Array(6).fill(20), 120, ...Array(6).fill(20)],
       paradas: [{ motivo: 'outro', duracaoMs: s(300) }] }));
     expect(p.lacunasMs).toBe(0);
     expect(p.anotadasMs).toBe(s(100));
@@ -215,30 +223,28 @@ describe('revisao da v2.110.1', () => {
   const min = 60000;
   // 61 volumes a 60 s, com UMA lacuna de 9 min que ninguem marcou (8 min de
   // excesso sobre o normal).
-  const comLacuna = marcasDe([...Array(30).fill(60), 540, ...Array(30).fill(60)]);
-  const somaLacuna = comLacuna[comLacuna.length - 1] - comLacuna[0];
+  const comLacunaIntervalos = [...Array(30).fill(60), 540, ...Array(30).fill(60)];
 
   it('PARADA ANTES DO 1o VOLUME nao vira "anotada depois": a lacuna continua lacuna', () => {
     // 15 min de falta de material entre a largada e o 1o volume (fora dos
     // toques, fora do relogio do trecho).
-    const p = perdasDaMedicao(medicao({ marcas_ms: comLacuna, marcas_relogio_ms: somaLacuna,
-      duracao_ms: somaLacuna + 16 * min, paradas: [{ motivo: 'falta_material', duracaoMs: 15 * min }] }));
+    const p = perdasDaMedicao(comoOTablet({ v1: 60, antesVivo: 15 * 60, intervalos: comLacunaIntervalos,
+      paradas: [{ motivo: 'falta_material', duracaoMs: 15 * min }] }));
     expect(p.anotadasMs).toBe(0);
     expect(p.lacunasMs).toBe(8 * min);
     expect(p.nLacunas).toBe(1);
     expect(p.paradasMs).toBe(0);
   });
   it('a anotada depois de verdade (sem folga fora dos toques) ainda sai da lacuna', () => {
-    const p = perdasDaMedicao(medicao({ marcas_ms: comLacuna, marcas_relogio_ms: somaLacuna,
-      duracao_ms: somaLacuna, paradas: [{ motivo: 'falta_material', duracaoMs: 9 * min }] }));
+    const p = perdasDaMedicao(comoOTablet({ v1: 60, intervalos: comLacunaIntervalos,
+      paradas: [{ motivo: 'falta_material', duracaoMs: 9 * min }] }));
     expect(p.anotadasMs).toBe(8 * min);
     expect(p.lacunasMs).toBe(0);
   });
   it('o ARREDONDAMENTO DA LISTA (minutos com 2 casas) nao inventa parada anotada', () => {
     // Paradas ao vivo de 45.4 s e 61.7 s (o relogio tirou 107.1 s), gravadas
     // como 45.6 s e 61.8 s: 0.3 s a mais na lista.
-    const rel = somaLacuna + 107100;
-    const p = perdasDaMedicao(medicao({ marcas_ms: comLacuna, marcas_relogio_ms: rel, duracao_ms: rel,
+    const p = perdasDaMedicao(comoOTablet({ v1: 60, intervalos: comLacunaIntervalos, noTrecho: 107.1,
       paradas: [{ motivo: 'outro', duracaoMs: 45600 }, { motivo: 'outro', duracaoMs: 61800 }] }));
     expect(p.anotadasMs).toBe(0);
     expect(p.lacunasMs).toBe(8 * min);
@@ -318,18 +324,41 @@ describe('revisao da v2.110.2', () => {
   it('TABLET COM ANOTACAO: o volume da largada nao e' + "' folga fora dos toques", () => {
     // 1o volume 20 s apos a largada (o volume, nao uma parada) e 20 min de
     // falta de material anotados depois: tudo sai da lacuna.
-    const marcas = marcasDe([...Array(10).fill(20), 1220, ...Array(10).fill(20)]);
-    const soma = marcas[marcas.length - 1] - marcas[0];
-    const p = perdasDaMedicao(medicao({ marcas_ms: marcas, marcas_relogio_ms: soma, duracao_ms: soma + s(20),
+    const p = perdasDaMedicao(comoOTablet({ v1: 20, intervalos: [...Array(10).fill(20), 1220, ...Array(10).fill(20)],
       paradas: [{ motivo: 'falta_material', duracaoMs: 20 * min }] }));
     expect(p.anotadasMs).toBe(20 * min);
     expect(p.lacunasMs).toBe(0);
     expect(p.nLacunas).toBe(0);
+    // O 1o volume lento (35 s, nao 20) tambem nao vira folga.
+    const lento = perdasDaMedicao(comoOTablet({ v1: 35, depois: 5, intervalos: [...Array(10).fill(20), 1220, ...Array(10).fill(20)],
+      paradas: [{ motivo: 'falta_material', duracaoMs: 20 * min }] }));
+    expect(lento.lacunasMs).toBe(0);
+    expect(lento.nLacunas).toBe(0);
+  });
+  it('A ANOTADA NAO ESCONDE A LACUNA CURTA que ninguem marcou na mesma medicao', () => {
+    // 5 min de falta de material anotados depois (intervalo de 350 s) e ~1
+    // min parado sem marca (intervalo de 125 s); normal de 60 s. 1o volume
+    // em 45 s, Encerrar 5 s depois do ultimo (revisao da v2.110.2, caso C).
+    const intervalos = [...Array(15).fill(60), 350, ...Array(10).fill(60), 125, ...Array(10).fill(60)];
+    for (const v1 of [45, 60]) {
+      const p = perdasDaMedicao(comoOTablet({ v1, depois: 5, intervalos,
+        paradas: [{ motivo: 'falta_material', duracaoMs: s(300) }] }));
+      expect(p.anotadasMs).toBe(s(290));
+      expect(p.lacunasMs).toBe(s(65));
+      expect(p.nLacunas).toBe(1);
+    }
+  });
+  it('setup ao vivo antes do 1o volume e uma parada curta anotada fora de lacuna: a lacuna continua', () => {
+    // Caso B: 20 min de setup ao vivo; 50 s anotados num intervalo de 110 s
+    // (nao e' lacuna); 2 min parados sem marca.
+    const p = perdasDaMedicao(comoOTablet({ v1: 40, antesVivo: 1200, depois: 5,
+      intervalos: [...Array(15).fill(60), 110, ...Array(10).fill(60), 180, ...Array(10).fill(60)],
+      paradas: [{ motivo: 'setup', duracaoMs: s(1200) }, { motivo: 'outro', duracaoMs: s(50) }] }));
+    expect(p.anotadasMs).toBe(0);
+    expect(p.nLacunas).toBe(1);
   });
   it('o Encerrar uns segundos depois do ultimo volume nao deixa "1 lacuna" de sobra', () => {
-    const marcas = marcasDe([...Array(10).fill(20), 1220, ...Array(10).fill(20)]);
-    const soma = marcas[marcas.length - 1] - marcas[0];
-    const p = perdasDaMedicao(medicao({ marcas_ms: marcas, marcas_relogio_ms: soma, duracao_ms: soma + s(25),
+    const p = perdasDaMedicao(comoOTablet({ v1: 20, depois: 5, intervalos: [...Array(10).fill(20), 1220, ...Array(10).fill(20)],
       paradas: [{ motivo: 'falta_material', duracaoMs: 20 * min }] }));
     expect(p.anotadasMs).toBe(20 * min);
     expect(p.lacunasMs).toBe(0);
@@ -338,9 +367,7 @@ describe('revisao da v2.110.2', () => {
   it('parada ao vivo ANTES do 1o volume, com o volume saindo rapido, nao inventa anotada', () => {
     // 15 min de falta de material ao vivo; o 1o volume sai 30 s depois
     // (o normal e' 60 s): a conta fora dos toques fica 30 s curta.
-    const comLacuna = marcasDe([...Array(30).fill(60), 540, ...Array(30).fill(60)]);
-    const soma = comLacuna[comLacuna.length - 1] - comLacuna[0];
-    const p = perdasDaMedicao(medicao({ marcas_ms: comLacuna, marcas_relogio_ms: soma, duracao_ms: soma + 15 * min + s(30),
+    const p = perdasDaMedicao(comoOTablet({ v1: 30, antesVivo: 15 * 60, intervalos: [...Array(30).fill(60), 540, ...Array(30).fill(60)],
       paradas: [{ motivo: 'falta_material', duracaoMs: 15 * min }] }));
     expect(p.anotadasMs).toBe(0);
     expect(p.lacunasMs).toBe(8 * min);
@@ -357,16 +384,27 @@ describe('revisao da v2.110.2', () => {
     expect(ra.total.setupMs).toBe(0);
     expect(ra.setupForaMs).toBe(0);
     expect(ra.porMotivo).toEqual([{ motivo: 'setup', ms: 20 * min, vezes: 1, pct: 100 }]);
-    // 1 min de setup ao vivo no trecho e a mesma troca anotada depois com 12
-    // min: so' o 1 min saiu do relogio; os outros 11 min estao nas paradas
-    // do cartao e ficam no quadro tambem.
-    const anotado = medicao({ id: 'b', marcas_ms: marcas, marcas_relogio_ms: soma + min, marcas_setup_ms: min,
-      duracao_ms: soma + min + s(60), paradas: [{ motivo: 'setup', duracaoMs: 12 * min }] });
+    // 1 min de setup ao vivo no trecho, e a mesma troca anotada depois com
+    // 12 min (a lacuna de 11 min que ela abriu): so' o 1 min saiu do relogio;
+    // os outros 11 min sao parada marcada no cartao E no quadro.
+    const anotado = comoOTablet({ id: 'b', v1: 60, noTrecho: 60, marcas_setup_ms: min,
+      intervalos: [...Array(20).fill(60), 60 + 11 * 60, ...Array(18).fill(60)],
+      paradas: [{ motivo: 'setup', duracaoMs: 12 * min }] });
     const rb = relatorioDePerdas([anotado], { descontarSetupDe: () => true });
     expect(rb.total.setupMs).toBe(min);
     expect(rb.setupForaMs).toBe(min);
+    expect(rb.total.paradasMs).toBe(11 * min);
     expect(rb.porMotivo[0].ms).toBe(11 * min);
     expect(rb.totalMotivosMs).toBe(11 * min);
+  });
+  it('o setup que saiu e' + "' abatido da troca do trecho, nao da primeira da lista (nada de \"2×\")", () => {
+    // 20 min de troca ao vivo antes do 1o volume e 5 min ao vivo no trecho.
+    const c = comoOTablet({ v1: 60, antesVivo: 1200, noTrecho: 300, marcas_setup_ms: 5 * min,
+      intervalos: Array(39).fill(60),
+      paradas: [{ motivo: 'setup', duracaoMs: 20 * min }, { motivo: 'setup', duracaoMs: 5 * min }] });
+    const r = relatorioDePerdas([c], { descontarSetupDe: () => true });
+    expect(r.setupForaMs).toBe(5 * min);
+    expect(r.porMotivo).toEqual([{ motivo: 'setup', ms: 20 * min, vezes: 1, pct: 100 }]);
   });
 
   describe('a regua do setup e' + "' a do takt", () => {

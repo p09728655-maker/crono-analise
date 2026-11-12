@@ -185,7 +185,7 @@ export default function ImpressaoPerdas({
           {[
             ['Medição', 'um trecho da linha medido no tablet ou no Cronometrar por vídeo, volume a volume.'],
             ['Sem produzir', 'paradas marcadas + lacunas, sobre o tempo do 1º ao último volume de cada medição. O setup planejado no cadastro do grupo fica fora, como nas horas da linha.'],
-            ['Paradas marcadas', 'tempo parado com motivo, no tablet, no vídeo ou anotado depois no resultado.'],
+            ['Paradas marcadas', 'tempo parado com motivo, no tablet, no vídeo ou anotado depois no resultado. O setup anotado depois fica aqui: só o marcado no cronômetro entre os volumes sai da conta.'],
             ['Lacunas', 'intervalos entre volumes acima do dobro do normal: paradas que ninguém marcou. Conta só o excesso.'],
             ['Período', 'tempo por volume com tudo dentro — o que a linha entregou.'],
             ['Rodando', 'tempo por volume da linha rodando, sem paradas e sem lacunas — o ritmo que ela provou.'],

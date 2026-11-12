@@ -23,11 +23,10 @@
  *    nada das marcas: ela esta' dentro dos intervalos e cairia como lacuna,
  *    "ninguem marcou" — e foi marcada. O que a lista de paradas tem a mais
  *    que o relogio tirou E que nao cabe fora dos toques (antes do 1o volume
- *    e depois do ultimo: duracao − relogio − o volume da largada, como no
- *    deixouDeEmbalar) sai das lacunas, ate' o tempo delas, e vai para as
- *    marcadas; a lacuna que ela cobre inteira deixa de contar. Menos de
- *    um volume (ou da folga do arredondamento da lista) nao e' anotada: e'
- *    a incerteza do volume da largada, ou arredondamento.
+ *    e depois do ultimo: duracao − relogio − o trabalho ate' o 1o volume,
+ *    marcas_ms[0]) sai das lacunas, ate' o tempo delas, e vai para as
+ *    marcadas; a lacuna que ela cobre inteira deixa de contar. Abaixo da
+ *    folga do arredondamento da lista nao e' anotada: e' arredondamento.
  *    O total sem produzir nao muda.
  *
  * Tudo puro: recebe as medicoes como a API manda (snake_case, com
@@ -120,27 +119,30 @@ export function perdasDaMedicao(c, { descontarSetup = false } = {}) {
   const normalMs = suficiente ? leitura.normalMs : somaMs / intervalos;
   // As anotadas depois: o que a lista tem alem do que o relogio tirou e do
   // que cabe fora dos toques (a parada antes do 1o volume, a aberta no
-  // Encerrar) — menos o volume da largada ao 1o toque, que e' trabalho.
-  // Na duvida fica lacuna, como no volume a volume.
+  // Encerrar). Fora dos toques, o trabalho da largada ao 1o volume e'
+  // marcas_ms[0] — a marca ja' vem sem as paradas ao vivo, no tablet e no
+  // video (revisao da v2.110.2: trocar esse numero pelo normal errava em
+  // ate' um volume, e a tolerancia para compensar escondia lacuna).
   const paradas = Array.isArray(c.paradas) ? c.paradas : [];
   const listadasMs = paradas.reduce((a, x) => a + duracaoDa(x), 0);
   const dur = Number(c.duracao_ms);
-  const foraDosToquesMs = dur > 0 ? Math.max(0, dur - relogioBrutoMs - normalMs) : 0;
+  const foraDosToquesMs = dur > 0 ? Math.max(0, dur - relogioBrutoMs - Math.max(0, marcas[0])) : 0;
   const alemMs = listadasMs - noTrechoMs - foraDosToquesMs;
-  // O volume da largada e' a incerteza desta conta: quanto dele foi parada
-  // fora dos toques nao se sabe. Por isso, a menos de UM VOLUME (o normal)
-  // nada e' anotado, e a lacuna que a anotada cobre ate' um volume de
-  // diferenca sai inteira — a maior primeiro (a parada longa anotada e' a
-  // que abriu a lacuna longa). O que sobra, de um volume para cima, tira da
-  // lacuna que ela nao cobre inteira. Na duvida fica lacuna.
+  // A anotada cobre a lacuna inteira — a maior primeiro (a parada longa
+  // anotada e' a que abriu a lacuna longa), com um volume de tolerancia
+  // (o volume daquele intervalo andou mais devagar ou mais rapido) — SO'
+  // enquanto o que resta dela for de pelo menos um volume: segundos de
+  // sobra nao cobrem a lacuna curta que ninguem marcou. O que sobra, de um
+  // volume para cima, tira da lacuna que ela nao cobre. Na duvida fica
+  // lacuna.
   let anotadasMs = 0;
   let cobertas = 0;
-  if (lacunasBrutasMs > 0 && alemMs >= Math.max(folgaDaLista(paradas.length), normalMs)) {
+  if (lacunasBrutasMs > 0 && alemMs >= folgaDaLista(paradas.length)) {
     let resta = alemMs;
     let descobertoMs = 0;
     const excessos = leitura.lacunas.map((x) => x.ms - normalMs).sort((a, b) => b - a);
     for (const e of excessos) {
-      if (resta + normalMs >= e) {
+      if (resta >= normalMs && resta + normalMs >= e) {
         anotadasMs += e;
         resta = Math.max(0, resta - e);
         cobertas += 1;
@@ -252,16 +254,28 @@ export function relatorioDePerdas(medicoes, { descontarSetupDe = () => false } =
   const motivosMapa = new Map();
   let setupForaMs = 0;
   for (const x of lidas) {
+    const lista = x.medicao.paradas || [];
+    // O setup que saiu do relogio sai do quadro abatido das paradas "setup"
+    // da medicao, a de duracao mais proxima primeiro: a lista nao diz o
+    // horario, e a troca que caiu no trecho e' a que tem o tamanho dele (a de
+    // 20 min antes do 1o volume nao vira "2×").
+    const abate = new Map();
     let setupATirar = x.setupMs;
-    for (const p of x.medicao.paradas || []) {
+    const setups = lista.filter((p) => String(p?.motivo) === MOTIVO_SETUP && duracaoDa(p) > 0)
+      .sort((a, b) => Math.abs(duracaoDa(a) - setupATirar) - Math.abs(duracaoDa(b) - setupATirar));
+    for (const p of setups) {
+      if (setupATirar <= 0) break;
+      const tira = Math.min(duracaoDa(p), setupATirar);
+      abate.set(p, tira);
+      setupATirar -= tira;
+      setupForaMs += tira;
+    }
+    for (const p of lista) {
       let ms = duracaoDa(p);
       if (ms <= 0) continue;
       const codigo = String(p.motivo || MOTIVO_SEM_DEFINICAO);
-      if (codigo === MOTIVO_SETUP && setupATirar > 0) {
-        const tira = Math.min(ms, setupATirar);
-        setupATirar -= tira;
-        setupForaMs += tira;
-        ms -= tira;
+      if (abate.has(p)) {
+        ms -= abate.get(p);
         // O que sobrou dela e' arredondamento da lista, nao parada.
         if (ms < folgaDaLista(1)) continue;
       }
