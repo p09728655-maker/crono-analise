@@ -1,17 +1,13 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { VERSAO } from '../../versao.js';
 import { formatarDuracao, formatarSegundos, unidadeDoPosto } from '../../domain/cronoanalise.js';
-import { taktDaMedicao } from '../../domain/demandaSemanal.js';
 import { rotuloMotivo } from '../../domain/crono/paradas.js';
-import { alvoDoProduto, descontaSetup } from '../../domain/tempoAlvo.js';
 import {
-  MOTIVO_SEM_DEFINICAO, horaExtraDaSemana, relatorioDePerdas,
+  MOTIVO_SEM_DEFINICAO, horaExtraDosGrupos, relatorioDePerdas, setupPlanejadoDoCadastro,
 } from '../../domain/perdasEmbalagem.js';
 import { lerDemanda, listarCadastroMaquinas, listarMedicoesDoGrupo } from '../../lib/api.js';
 import { carregarMotivos } from '../../lib/motivosParada.js';
-import { useTemposAlvo } from '../../lib/temposAlvo.js';
 import { dataDoArquivo, imprimirComo, nomeDoArquivo } from '../../lib/impressao.js';
-import { motivoSemTakt } from '../coleta/embalagem/motivoSemTakt.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
@@ -22,24 +18,10 @@ import ImpressaoPerdas from './embalagem/ImpressaoPerdas.jsx';
 const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume';
 const PERIODOS = [7, 30, 90];
 const PRIMEIROS = 15;
-const DIA_MS = 86400000;
 const nVolumes = (n) => Math.round(n).toLocaleString('pt-BR');
 const pct = (n) => `${Number(n).toFixed(1)}%`;
 const horas = (h) => formatarDuracao(h * 3600000);
 const nomeDoGrupo = (g) => [g.codigo, g.nome].filter(Boolean).join(' · ');
-
-/** O takt do grupo numa data: as horas, o programa e o setup planejado dela. */
-function taktDoGrupo({ grupo: g, ativas, demandas }, data, pecas = 1, duracaoMs = 3600000) {
-  return taktDaMedicao({
-    demandas,
-    horas: g.horas_semana,
-    maquinas: ativas,
-    setup: { setupsDia: g.setups_dia, dias: g.dias_semana, minutos: g.setup_min },
-    data,
-    pecas,
-    duracaoMs,
-  });
-}
 
 /**
  * PERDAS DA EMBALAGEM (v2.110.0) — onde a linha deixa de produzir e o que
@@ -48,17 +30,16 @@ function taktDoGrupo({ grupo: g, ativas, demandas }, data, pecas = 1, duracaoMs 
  * Primeiro o que pede atencao: quanto do tempo medido ficou sem produzir e
  * a hora extra que isso explica; depois POR QUE parou (os motivos marcados,
  * com o "Outro" apontado) e ONDE (os produtos, do que mais perdeu ao que
- * menos). As contas sao as do volume a volume (ver perdasEmbalagem.js) —
- * com o setup planejado pela MESMA regua da lista (descontaSetup: com
- * tempo-alvo, o setup do painel; sem, o do takt da semana da medicao).
+ * menos). As contas sao as do volume a volume (ver perdasEmbalagem.js). O
+ * setup planejado fica fora pela regua das HORAS DA LINHA (o cadastro do
+ * grupo), nao pela do tempo-alvo: o relatorio compara com as horas, e as
+ * duas pontas precisam da mesma regra (revisao da v2.110.1).
  */
 export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [dias, setDias] = useState(30);
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [todos, setTodos] = useState(false);
-  const alvos = useTemposAlvo();
-  const alvosLido = alvos.lido;
 
   useEffect(() => {
     let vivo = true;
@@ -89,67 +70,27 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
     return () => { vivo = false; };
   }, [dias]);
 
-  /* O SETUP PLANEJADO de cada medicao sai do trecho pela regua da lista:
-     sem o programa, o setup do cadastro do grupo decide. */
+  /* O SETUP PLANEJADO de cada medicao sai do trecho quando o cadastro do
+     grupo dela tem setup planejado — a mesma condicao que tira o setup das
+     horas da linha. */
   const descontarSetupDe = useMemo(() => {
     if (carga.estado !== 'pronto') return () => false;
     const doGrupo = new Map();
-    for (const x of carga.grupos) for (const c of x.medicoes) doGrupo.set(c.id, x);
-    return (c) => {
-      const x = doGrupo.get(c.id);
-      if (!x) return false;
-      const takt = x.demandas
-        ? taktDoGrupo(x, c.iniciado_em || c.salvo_em, c.pecas, Number(c.duracao_ms))
-        : { setupPlanejado: Number(x.grupo.setups_dia) > 0 && Number(x.grupo.setup_min) > 0 };
-      return descontaSetup(alvoDoProduto(alvosLido, c.peca), takt);
-    };
-  }, [carga, alvosLido]);
+    for (const x of carga.grupos) for (const c of x.medicoes) doGrupo.set(c.id, x.grupo);
+    return (c) => setupPlanejadoDoCadastro(doGrupo.get(c.id));
+  }, [carga]);
 
   const r = useMemo(() => {
     if (carga.estado !== 'pronto') return null;
     return relatorioDePerdas(carga.grupos.flatMap((x) => x.medicoes), { descontarSetupDe });
   }, [carga, descontarSetupDe]);
 
-  /* A HORA EXTRA de CADA GRUPO com o ritmo DELE (misturar linhas dava a
-     uma o ritmo da outra), esta semana e a proxima. Semana sem conta vira
-     um aviso com o porque — nunca some calada. */
+  /* A HORA EXTRA de CADA GRUPO com o ritmo DELE, esta semana e a proxima
+     (horaExtraDosGrupos). Semana sem conta vira aviso com o porque. */
   const horaExtra = useMemo(() => {
-    const colunas = [];
-    const avisos = [];
-    if (carga.estado !== 'pronto' || !r?.total) return { colunas, avisos };
-    const varios = carga.grupos.length > 1;
-    for (const x of carga.grupos) {
-      const prefixo = varios ? `${x.grupo.nome} · ` : '';
-      if (x.erroPrograma) {
-        avisos.push(`${prefixo}não deu para ler o programa da semana (${x.erroPrograma}).`);
-        continue;
-      }
-      const rg = relatorioDePerdas(x.medicoes, { descontarSetupDe }).total;
-      if (!rg) {
-        avisos.push(`${prefixo}sem medição com volumes marcados no período.`);
-        continue;
-      }
-      for (const somar of [0, 7]) {
-        const takt = taktDoGrupo(x, new Date(Date.now() + somar * DIA_MS).toISOString());
-        const rotulo = `${prefixo}${somar ? 'Próxima semana' : 'Esta semana'}${takt.semana ? ` (${takt.semana})` : ''}`;
-        const conta = horaExtraDaSemana({
-          demanda: takt.demanda,
-          horasPorMaquina: takt.horasPorMaquina,
-          maquinas: x.ativas,
-          periodoMs: rg.periodoMs,
-          normalMs: rg.normalMs,
-        });
-        if (conta) {
-          colunas.push({
-            chave: `${x.grupo.id}-${somar}`, rotulo, conta, ativas: x.ativas, periodoMs: rg.periodoMs, normalMs: rg.normalMs,
-          });
-        } else {
-          avisos.push(`${rotulo}: ${motivoSemTakt(takt.estado) || 'não há programa colado para esta semana.'}`);
-        }
-      }
-    }
-    return { colunas, avisos };
-  }, [carga, r, descontarSetupDe]);
+    if (carga.estado !== 'pronto' || !r?.total) return { colunas: [], avisos: [] };
+    return horaExtraDosGrupos(carga.grupos);
+  }, [carga, r]);
 
   const total = r?.total;
   const produtos = r ? (todos ? r.porProduto : r.porProduto.slice(0, PRIMEIROS)) : [];
@@ -323,6 +264,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   <p style={ep.secaoDica}>
                     {formatarDuracao(r.totalMotivosMs)} de paradas marcadas, os maiores motivos primeiro. As lacunas
                     ({formatarDuracao(total.lacunasMs)}) não têm motivo: ninguém marcou a parada.
+                    {r.setupForaMs > 0 && ` O setup planejado marcado entre os volumes (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
                   </p>
                   {r.semDefinicaoPct >= 20 && (
                     <p style={ep.avisoOutro} role="status">
@@ -411,7 +353,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   </li>
                   <li>
                     As paradas por motivo incluem as marcadas antes do 1º volume ou depois do último; por isso a soma delas
-                    pode passar um pouco das paradas do resumo.
+                    pode ficar um pouco diferente das paradas do resumo.
                   </li>
                   <li>
                     O mesmo produto com nomes diferentes (digitado à mão) aparece em linhas separadas: corrija o produto na
@@ -419,8 +361,9 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   </li>
                   {total.curtas > 0 && (
                     <li>
-                      {total.curtas} medição(ões) com menos de 10 intervalos não separam lacuna: nelas só as paradas
-                      marcadas contam.
+                      {total.curtas === 1
+                        ? '1 medição com menos de 10 intervalos não separa lacuna: nela só as paradas marcadas contam.'
+                        : `${total.curtas} medições com menos de 10 intervalos não separam lacuna: nelas só as paradas marcadas contam.`}
                     </li>
                   )}
                 </ul>
@@ -432,7 +375,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
       {total && (
         <ImpressaoPerdas
           dias={dias} r={r} colunas={horaExtra.colunas} avisos={horaExtra.avisos} periodo={periodo} grupos={nomesGrupos}
-          porMaquina={porMaquina} umRitmo={umRitmo}
+          porMaquina={porMaquina} umRitmo={umRitmo} truncado={truncado}
         />
       )}
       {verVersoes && <HistoricoVersoes modo="analise" aoFechar={() => setVerVersoes(false)} />}

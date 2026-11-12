@@ -20,7 +20,7 @@ const horas = (h) => formatarDuracao(h * 3600000);
  * semanas da hora extra: o que esta' na tela e' o que sai no papel.
  */
 export default function ImpressaoPerdas({
-  dias, r, colunas = [], avisos = [], periodo, grupos = [], porMaquina = false, umRitmo = true,
+  dias, r, colunas = [], avisos = [], periodo, grupos = [], porMaquina = false, umRitmo = true, truncado = false,
 }) {
   const total = r.total;
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -55,6 +55,13 @@ export default function ImpressaoPerdas({
           </div>
         ))}
       </section>
+      {/* A ressalva da tela vai para o papel: a folha circula sem a tela. */}
+      {truncado && (
+        <p style={{ ...imp.comparativoCaixaDestaque, fontSize: 9.5, fontWeight: 700, margin: '0 0 10px' }}>
+          Atenção: o período tem mais medições do que o relatório lê de uma vez (1.000). Os números são das mais
+          recentes, não do período inteiro.
+        </p>
+      )}
 
       {(colunas.length > 0 || avisos.length > 0) && (
         <section style={imp.comparativo}>
@@ -122,13 +129,17 @@ export default function ImpressaoPerdas({
           <p style={imp.comparativoNota}>
             {formatarDuracao(r.totalMotivosMs)} de paradas marcadas. As lacunas ({formatarDuracao(total.lacunasMs)}) não
             têm motivo: ninguém marcou a parada.
+            {r.setupForaMs > 0 && ` O setup planejado marcado entre os volumes (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
             {r.semDefinicaoPct >= 20 && ` ${pct(r.semDefinicaoPct)} do tempo parado está em “${rotuloMotivo(MOTIVO_SEM_DEFINICAO)}”: sem o motivo, não dá para atacar a causa.`}
           </p>
         </section>
       )}
 
       <h2 style={imp.tituloSecao}>Onde a linha mais perde tempo — por produto</h2>
-      <table style={imp.tabela}>
+      {/* TODOS os produtos: a tabela pode passar de uma pagina, e a regra
+          geral (nao quebrar tabela) a jogaria inteira para a seguinte,
+          deixando meia pagina em branco. O cabecalho se repete (thead). */}
+      <table style={{ ...imp.tabela, breakInside: 'auto', pageBreakInside: 'auto' }}>
         <thead>
           <tr>
             <th style={imp.th}>Produto</th>
@@ -158,6 +169,13 @@ export default function ImpressaoPerdas({
           ))}
         </tbody>
       </table>
+      {total.curtas > 0 && (
+        <p style={imp.comparativoNota}>
+          {total.curtas === 1
+            ? '1 medição com menos de 10 intervalos não separa lacuna: nela só as paradas marcadas contam.'
+            : `${total.curtas} medições com menos de 10 intervalos não separam lacuna: nelas só as paradas marcadas contam.`}
+        </p>
+      )}
 
       {/* Legenda em PALAVRAS: a folha circula na reuniao e nao pode
           depender de quem a emitiu para ser entendida. */}
@@ -166,7 +184,7 @@ export default function ImpressaoPerdas({
         <div style={imp.gradeLegenda}>
           {[
             ['Medição', 'um trecho da linha medido no tablet ou no Cronometrar por vídeo, volume a volume.'],
-            ['Sem produzir', 'paradas marcadas + lacunas, sobre o tempo do 1º ao último volume de cada medição. O setup planejado fica fora, como no takt.'],
+            ['Sem produzir', 'paradas marcadas + lacunas, sobre o tempo do 1º ao último volume de cada medição. O setup planejado no cadastro do grupo fica fora, como nas horas da linha.'],
             ['Paradas marcadas', 'tempo parado com motivo, no tablet, no vídeo ou anotado depois no resultado.'],
             ['Lacunas', 'intervalos entre volumes acima do dobro do normal: paradas que ninguém marcou. Conta só o excesso.'],
             ['Período', 'tempo por volume com tudo dentro — o que a linha entregou.'],

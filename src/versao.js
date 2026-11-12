@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.110.2',
+    data: '2026-11-12',
+    titulo: 'Perdas da embalagem: setup, paradas e hora extra acertados',
+    itens: [
+      'O SETUP SEGUE O CADASTRO DO GRUPO, DOS DOIS LADOS DA CONTA. Na 2.110.1 o setup saía da medição pela regra do tempo-alvo do produto, e as horas da linha pela do cadastro: num grupo com setup cadastrado e produto com tempo-alvo sem setup, ele ainda contava duas vezes (13,8 h de hora extra onde eram 2,5 h); no contrário, sumia dos dois lados (nenhuma hora extra onde eram 11,3 h). Agora vale o cadastro do grupo, a mesma regra do takt: com setup planejado (setups por dia, minutos e dias da semana preenchidos), ele sai das horas E das medições; sem, ele é perda nas medições e as horas são a jornada inteira. O "por volume no período" do resumo e o da hora extra são sempre o mesmo.',
+      'O SETUP QUE SAI DA CONTA SAI TAMBÉM DE "POR QUE A LINHA PAROU". O quadro dizia 12 min de paradas com o cartão em 2 min, e o "Outro" aparecia menor do que é. Sai o setup marcado no cronômetro entre os volumes — o mesmo que sai da conta; o setup antes do 1º volume ou anotado depois continua no quadro, como continua na conta. A tela e a folha dizem quanto ficou fora.',
+      'PARADA ANTES DO 1º VOLUME NÃO É MAIS "ANOTADA DEPOIS". A parada marcada entre a largada e o 1º volume (ou a aberta no Encerrar) está fora do trecho medido; na 2.110.1 ela tirava tempo das lacunas, e a lacuna que ninguém marcou sumia. Também não conta mais como anotada a diferença de arredondamento da lista (décimos de segundo por parada). Na dúvida, fica lacuna, como no volume a volume. E a parada anotada de verdade sai da lacuna inteira: o tempo da largada até o 1º volume é trabalho, não folga, e a lacuna que ela cobre deixa de ser contada.',
+      'O TABLET E O VÍDEO DO MESMO TRECHO CONTAM UMA VEZ SÓ mesmo com o nome da máquina escrito com acento ou espaço diferente ("Embalagem Rápida 01" e "EMBALAGEM RAPIDA 01").',
+      'QUANDO A SEMANA NÃO TEM CONTA, O AVISO DIZ POR QUÊ, sem falar em "esta semana" na próxima: "o programa do grupo não cobre a semana", "não há programa de produção do grupo cadastrado" ou, na semana com zero volumes (feriado), "o programa da semana não tem volumes para o grupo". O rótulo traz o dia em que a semana começa ("de 09/11"), nunca o código do PCP.',
+      'NA FOLHA IMPRESSA: a ressalva em destaque quando o período passa de 1.000 medições (os números são das mais recentes), a nota das medições curtas, e a tabela dos produtos começa logo abaixo do título — com muitos produtos ela continua na página seguinte, em vez de pular inteira e deixar meia página em branco.',
+    ],
+  },
+  {
     versao: '2.110.1',
     data: '2026-11-12',
     titulo: 'Perdas da embalagem: impressão e correções das contas',
