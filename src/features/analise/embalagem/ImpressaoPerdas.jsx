@@ -109,7 +109,7 @@ export default function ImpressaoPerdas({
               <tr>
                 <th style={imp.th}>Motivo</th>
                 <th style={imp.thNum}>Tempo</th>
-                <th style={imp.thNum}>% das paradas</th>
+                <th style={imp.thNum}>% do tempo</th>
                 <th style={imp.thNum}>Vezes</th>
               </tr>
             </thead>
@@ -131,7 +131,7 @@ export default function ImpressaoPerdas({
             de antes do 1º volume e depois do último. As lacunas ({formatarDuracao(total.lacunasMs)}) são as paradas que o
             cronômetro não tirou: a anotada depois que caiu entre os volumes e abriu uma lacuna tem o tempo lá e o motivo aqui.
             {r.setupForaMs > 0 && ` O setup planejado marcado entre os volumes (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
-            {r.semDefinicaoPct >= 20 && ` ${pct(r.semDefinicaoPct)} das paradas da lista estão em “${rotuloMotivo(MOTIVO_SEM_DEFINICAO)}”: sem o motivo, não dá para atacar a causa.`}
+            {r.semDefinicaoPct >= 20 && ` ${pct(r.semDefinicaoPct)} do tempo das paradas da lista está em “${rotuloMotivo(MOTIVO_SEM_DEFINICAO)}”: sem o motivo, não dá para atacar a causa.`}
           </p>
         </section>
       )}
@@ -148,7 +148,7 @@ export default function ImpressaoPerdas({
             <th style={imp.thNum}>Vol.</th>
             <th style={imp.thNum}>Período</th>
             <th style={imp.thNum}>Rodando</th>
-            <th style={imp.thNum}>Cronômetro</th>
+            <th style={imp.thNum}>Parado no cronômetro</th>
             <th style={imp.thNum}>Lacunas</th>
             <th style={imp.thNum}>Sem produzir</th>
             <th style={imp.thNum}>Vol. perd.</th>
@@ -186,7 +186,7 @@ export default function ImpressaoPerdas({
           {[
             ['Medição', 'um trecho da linha medido no tablet ou no Cronometrar por vídeo, volume a volume.'],
             ['Sem produzir', 'paradas no cronômetro + lacunas, sobre o tempo do 1º ao último volume de cada medição. O setup planejado no cadastro do grupo fica fora, como nas horas da linha.'],
-            ['Paradas no cronômetro', 'o tempo que o cronômetro tirou entre os volumes: cada parada marcada ao vivo (tablet ou vídeo), com motivo. Na tabela dos produtos, coluna “Cronômetro”.'],
+            ['Paradas no cronômetro', 'o tempo que o cronômetro tirou entre os volumes: cada parada marcada ao vivo (tablet ou vídeo). Na tabela dos produtos, coluna “Parado no cronômetro”.'],
             ['Lacunas', 'intervalos entre volumes acima do dobro do normal: paradas que o cronômetro não tirou — também a anotada só depois, se caiu entre os volumes e abriu uma lacuna (o motivo dela está no quadro dos motivos). Conta só o excesso.'],
             ['Setup', 'com setup planejado no cadastro do grupo, sai da conta o setup marcado no cronômetro entre os volumes; o anotado depois fica.'],
             ['Período', 'tempo por volume com tudo dentro — o que a linha entregou.'],

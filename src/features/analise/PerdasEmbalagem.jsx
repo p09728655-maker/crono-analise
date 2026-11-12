@@ -269,7 +269,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   </p>
                   {r.semDefinicaoPct >= 20 && (
                     <p style={ep.avisoOutro} role="status">
-                      <b>{pct(r.semDefinicaoPct)} das paradas da lista estão em “{rotuloMotivo(MOTIVO_SEM_DEFINICAO)}”.</b> Sem
+                      <b>{pct(r.semDefinicaoPct)} do tempo das paradas da lista está em “{rotuloMotivo(MOTIVO_SEM_DEFINICAO)}”.</b> Sem
                       o motivo não dá para atacar a causa: cadastre os motivos que aparecem (Motivos de parada) e
                       escolha-os no tablet.
                     </p>
@@ -311,7 +311,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                       <th style={est.thNum}>Volumes</th>
                       <th style={est.thNum}>Por vol. período</th>
                       <th style={est.thNum}>Por vol. rodando</th>
-                      <th style={est.thNum}>Cronômetro</th>
+                      <th style={est.thNum}>Parado no cronômetro</th>
                       <th style={est.thNum}>Lacunas</th>
                       <th style={est.thNum}>Sem produzir</th>
                       <th style={est.thNum}>Vol. perdidos</th>
@@ -354,7 +354,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   </li>
                   <li>
                     O quadro dos motivos soma toda a lista de paradas, inclusive as de antes do 1º volume e depois do último
-                    e as anotadas depois. O cartão “Paradas no cronômetro” (e a coluna “Cronômetro” dos produtos) só tem as
+                    e as anotadas depois. O cartão “Paradas no cronômetro” (e a coluna “Parado no cronômetro” dos produtos) só tem as
                     que o cronômetro tirou entre os volumes. Os dois podem ser bem diferentes.
                   </li>
                   <li>

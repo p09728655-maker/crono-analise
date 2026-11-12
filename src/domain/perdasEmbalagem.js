@@ -6,8 +6,8 @@
  * volume a volume (leituraPecaAPeca), em tres camadas:
  *  - PERIODO: o relogio do 1o ao ultimo volume / (N-1), tudo dentro — o que
  *    sai de verdade;
- *  - NORMAL: o ritmo da linha quando roda, sem as paradas marcadas e sem as
- *    lacunas — a capacidade que ela provou;
+ *  - NORMAL: o ritmo da linha quando roda, sem as paradas do cronometro e
+ *    sem as lacunas — a capacidade que ela provou;
  *  - SEM PRODUZIR = paradas marcadas no cronometro (o relogio menos as
  *    marcas, que ja' vem sem elas) + lacunas (o excesso dos intervalos acima
  *    do dobro do normal: paradas que o cronometro nao tirou).
@@ -163,8 +163,8 @@ function somar(lidas) {
     nLacunas: s.nLacunas,
     semProduzirMs,
     perdaPct: s.relogioMs > 0 ? (100 * semProduzirMs) / s.relogioMs : null,
-    // O que daria para ter saido no tempo parado, no ritmo que a propria
-    // linha provou.
+    // O que daria para ter saido no tempo sem produzir, no ritmo que a
+    // propria linha provou.
     volumesPerdidos: normalMs > 0 ? semProduzirMs / normalMs : null,
     curtas: s.curtas,
     // O setup planejado tirado do trecho (fora da conta): a tela o diz.

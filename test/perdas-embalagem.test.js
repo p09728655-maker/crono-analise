@@ -359,6 +359,14 @@ describe('revisao da v2.110.2', () => {
       { descontarSetupDe: () => true });
     expect(sobra.porMotivo).toEqual([{ motivo: 'setup', ms: s(5), vezes: 1, pct: 100 }]);
   });
+  it('a folga do arredondamento cresce com as trocas abatidas (4 trocas, 0.25 s cada)', () => {
+    const c = comoOTablet({ v1: 60, noTrecho: 2400, marcas_setup_ms: s(2400), intervalos: Array(39).fill(60),
+      paradas: Array(4).fill(null).map(() => ({ motivo: 'setup', duracaoMs: 600250 })) });
+    const r = relatorioDePerdas([c], { descontarSetupDe: () => true });
+    expect(r.setupForaMs).toBe(s(2400));
+    // 1 s de sobra acumulada na ultima: arredondamento, nao "Setup 1 s".
+    expect(r.porMotivo).toEqual([]);
+  });
   it('o setup que saiu e' + "' abatido da troca do trecho, nao da primeira da lista (nada de \"2×\")", () => {
     // 20 min de troca ao vivo antes do 1o volume e 5 min ao vivo no trecho.
     const c = comoOTablet({ v1: 60, antesVivo: 1200, noTrecho: 300, marcas_setup_ms: 5 * min,

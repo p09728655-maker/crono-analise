@@ -143,7 +143,7 @@ checar(/O que as perdas custam 12 h/.test(textoHora), 'o que as perdas custam: ~
 /* ---------------------------------------------------------- os motivos */
 const motivos = p.getByRole('region', { name: 'Paradas por motivo' });
 const textoMotivos = (await motivos.innerText()).replace(/\s+/g, ' ');
-checar(/71\.4% das paradas da lista estão em “Outro”/.test(textoMotivos),
+checar(/71\.4% do tempo das paradas da lista está em “Outro”/.test(textoMotivos),
   `o "Outro" apontado: 50 s de 70 s sem motivo (${textoMotivos.slice(0, 200)})`);
 checar(textoMotivos.indexOf('Outro') < textoMotivos.indexOf('Troca Plástico') && /2×/.test(textoMotivos),
   'os motivos, o maior primeiro, com quantas vezes');
@@ -151,6 +151,9 @@ checar(textoMotivos.indexOf('Outro') < textoMotivos.indexOf('Troca Plástico') &
 /* ---------------------------------------------------------- os produtos */
 const tabela = p.getByRole('region', { name: 'Perdas por produto' });
 const linhas = await tabela.locator('tbody tr').allInnerTexts();
+const cabeca = (await tabela.locator('thead').innerText()).replace(/\s+/g, ' ');
+checar(/Parado no cronômetro/i.test(cabeca) && !/\bParadas\b/i.test(cabeca) && /no tempo sem produzir/i.test(textoResumo),
+  `a coluna dos produtos e' "Parado no cronometro", e os volumes perdidos sao do tempo sem produzir (${cabeca})`);
 checar(linhas.length === 2 && /^RACK FLIP 2\.2/.test(linhas[0]) && /^MESA SLEEP/.test(linhas[1]),
   `o rack com e sem codigo vira um produto so, e vem primeiro (mais tempo parado): ${linhas.map((l) => l.split('\t')[0]).join(' | ')}`);
 checar(/\t2\t/.test(linhas[0]) && /7\s*$/.test(linhas[0]), `rack: 2 medicoes, 140 s parado = 7 volumes no normal de 20 s (${linhas[0].replace(/\t/g, ' | ')})`);
@@ -184,6 +187,9 @@ await p.getByRole('button', { name: 'Imprimir' }).click();
     `a folha traz o resumo, a hora extra, os motivos, TODOS os produtos e as assinaturas (${folha.texto.slice(0, 160)})`);
   checar(/Paradas no cronômetro/i.test(folha.texto) && /Lacunas/.test(folha.texto) && !/Paradas (não )?marcadas/i.test(folha.texto),
     'a folha usa os nomes novos (Paradas no cronometro, Lacunas), nenhum "Paradas marcadas"');
+  checar(/as paradas da lista, por motivo/.test(folha.texto) && /% do tempo/.test(folha.texto)
+    && /Vol\. Período Rodando Parado no cronômetro Lacunas/.test(folha.texto),
+    'a folha: o quadro sao as paradas da lista (% do tempo), e a coluna dos produtos se chama Parado no cronometro');
   await p.emulateMedia({ media: 'screen' });
 }
 
