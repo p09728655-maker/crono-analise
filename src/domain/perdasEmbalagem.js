@@ -13,6 +13,16 @@
  *    paradas que ninguem marcou).
  * relogio = (N-1) x normal + lacunas + paradas, exato.
  *
+ * Duas regras da revisao da v2.110.0:
+ *  - o SETUP PLANEJADO marcado no trecho sai do relogio, como no volume a
+ *    volume (periodoPorPeca + descontaSetup): ele ja' saiu das horas da
+ *    linha, e contado de novo inventava hora extra;
+ *  - a PARADA ANOTADA DEPOIS (no resultado do tablet ou no PC) nao tirou
+ *    nada das marcas: ela esta' dentro dos intervalos e cairia como lacuna,
+ *    "ninguem marcou" — e foi marcada. O que a lista de paradas tem a mais
+ *    que o relogio tirou sai das lacunas (ate' o tempo delas) e vai para as
+ *    marcadas. O total sem produzir nao muda.
+ *
  * Tudo puro: recebe as medicoes como a API manda (snake_case, com
  * `marcas_ms` e `paradas`) e devolve numeros. A tela so' desenha.
  */
@@ -72,22 +82,31 @@ export function semSobreposicao(medicoes) {
  * separa lacuna (a mesma regra do volume a volume): o normal e' a media e
  * as lacunas ficam zero — `suficiente: false`.
  */
-export function perdasDaMedicao(c) {
+export function perdasDaMedicao(c, { descontarSetup = false } = {}) {
   const marcas = (Array.isArray(c?.marcas_ms) ? c.marcas_ms : []).map(Number).filter(Number.isFinite);
   if (marcas.length < 2) return null;
   const intervalos = marcas.length - 1;
   const somaMs = marcas[marcas.length - 1] - marcas[0];
   if (!(somaMs > 0)) return null;
   const rel = Number(c.marcas_relogio_ms);
-  const relogioMs = rel > 0 ? Math.max(rel, somaMs) : somaMs;
+  const relogioBrutoMs = rel > 0 ? Math.max(rel, somaMs) : somaMs;
+  // O que o cronometro tirou das marcas entre o 1o e o ultimo volume.
+  const noTrechoMs = relogioBrutoMs - somaMs;
+  const setupMs = descontarSetup ? Math.min(Math.max(0, Number(c.marcas_setup_ms) || 0), noTrechoMs) : 0;
   const leitura = leituraPecaAPeca({ marcasMs: marcas });
   const suficiente = Boolean(leitura?.suficiente);
+  const lacunasBrutasMs = suficiente ? leitura.excessoMs : 0;
+  // As anotadas depois: o que a lista tem alem do que o relogio tirou.
+  const listadasMs = (c.paradas || []).reduce((a, x) => a + (Number(x?.duracaoMs ?? x?.duracao_ms) || 0), 0);
+  const anotadasMs = Math.min(Math.max(0, listadasMs - noTrechoMs), lacunasBrutasMs);
   return {
     intervalos,
     volumes: Number(c.pecas) || marcas.length,
-    relogioMs,
-    paradasMs: relogioMs - somaMs,
-    lacunasMs: suficiente ? leitura.excessoMs : 0,
+    relogioMs: relogioBrutoMs - setupMs,
+    setupMs,
+    paradasMs: noTrechoMs - setupMs + anotadasMs,
+    anotadasMs,
+    lacunasMs: lacunasBrutasMs - anotadasMs,
     normalMs: suficiente ? leitura.normalMs : somaMs / intervalos,
     nLacunas: suficiente ? leitura.lacunas.length : 0,
     suficiente,
@@ -106,8 +125,11 @@ function somar(lidas) {
     normalXint: a.normalXint + x.normalMs * x.intervalos,
     nLacunas: a.nLacunas + x.nLacunas,
     curtas: a.curtas + (x.suficiente ? 0 : 1),
+    setupMs: a.setupMs + x.setupMs,
+    anotadasMs: a.anotadasMs + x.anotadasMs,
   }), {
     medicoes: 0, volumes: 0, intervalos: 0, relogioMs: 0, paradasMs: 0, lacunasMs: 0, normalXint: 0, nLacunas: 0, curtas: 0,
+    setupMs: 0, anotadasMs: 0,
   });
   const normalMs = s.intervalos > 0 ? s.normalXint / s.intervalos : null;
   const semProduzirMs = s.paradasMs + s.lacunasMs;
@@ -128,6 +150,10 @@ function somar(lidas) {
     // linha provou.
     volumesPerdidos: normalMs > 0 ? semProduzirMs / normalMs : null,
     curtas: s.curtas,
+    // O setup planejado tirado do trecho (fora da conta) e as paradas
+    // anotadas depois que sairam das lacunas — a tela diz os dois.
+    setupMs: s.setupMs,
+    anotadasMs: s.anotadasMs,
   };
 }
 
@@ -140,15 +166,22 @@ function somar(lidas) {
  * relogio do trecho: a soma delas pode passar um pouco das "paradas" do
  * total, e a tela diz isso.
  */
-export function relatorioDePerdas(medicoes) {
-  const { mantidas, descartadas } = semSobreposicao(medicoes);
-  const lidas = [];
+export function relatorioDePerdas(medicoes, { descontarSetupDe = () => false } = {}) {
+  // SEM MARCAS SAI ANTES da sobreposicao: a medicao por horarios (ou com a
+  // contagem corrigida a' mao) ganhava a disputa pelos volumes e depois era
+  // descartada — e a medicao boa sumia junto (revisao da v2.110.0).
+  const comMarcas = [];
   let semMarcas = 0;
-  for (const c of mantidas) {
-    const p = perdasDaMedicao(c);
-    if (p) lidas.push({ ...p, produto: chaveDoProduto(c.peca), medicao: c });
+  for (const c of medicoes || []) {
+    if (perdasDaMedicao(c)) comMarcas.push(c);
     else semMarcas += 1;
   }
+  const { mantidas, descartadas } = semSobreposicao(comMarcas);
+  const lidas = mantidas.map((c) => ({
+    ...perdasDaMedicao(c, { descontarSetup: Boolean(descontarSetupDe(c)) }),
+    produto: chaveDoProduto(c.peca),
+    medicao: c,
+  }));
   const porProdutoMapa = new Map();
   for (const x of lidas) {
     if (!porProdutoMapa.has(x.produto)) porProdutoMapa.set(x.produto, []);

@@ -147,3 +147,55 @@ describe('a hora extra da semana', () => {
     expect(horaExtraDaSemana({ demanda: 100, horasPorMaquina: null, periodoMs: 20000, normalMs: 15000 })).toBeNull();
   });
 });
+
+describe('revisao da v2.110.0', () => {
+  it('SETUP PLANEJADO no trecho sai do relogio (ja saiu das horas da linha): 60.0 s, nao 75.4 s', () => {
+    // 40 volumes a 60 s e 10 min de setup marcado entre eles.
+    const marcas = marcasDe(Array(39).fill(60));
+    const c = medicao({ marcas_ms: marcas, marcas_relogio_ms: s(39 * 60 + 600), marcas_setup_ms: s(600),
+      paradas: [{ motivo: 'setup', duracaoMs: s(600) }] });
+    const com = perdasDaMedicao(c, { descontarSetup: true });
+    expect(com.relogioMs / com.intervalos).toBe(s(60));
+    expect(com.setupMs).toBe(s(600));
+    expect(com.paradasMs).toBe(0);
+    // Sem setup planejado (grupo sem setup no cadastro), ele e' parada.
+    const sem = perdasDaMedicao(c);
+    expect(sem.relogioMs / sem.intervalos / 1000).toBeCloseTo(75.4, 1);
+    expect(sem.paradasMs).toBe(s(600));
+    const r = relatorioDePerdas([c], { descontarSetupDe: () => true });
+    expect(r.total.periodoMs).toBe(s(60));
+    expect(r.total.setupMs).toBe(s(600));
+  });
+  it('PARADA ANOTADA DEPOIS sai das lacunas e vai para as marcadas (o total nao muda)', () => {
+    // 20 min de "falta de material" anotados no resultado: o cronometro nao
+    // tirou nada das marcas, e o intervalo de 20 min ficou dentro delas.
+    const marcas = marcasDe([...Array(6).fill(20), 1220, ...Array(6).fill(20)]);
+    const soma = marcas[marcas.length - 1] - marcas[0];
+    const c = medicao({ marcas_ms: marcas, marcas_relogio_ms: soma,
+      paradas: [{ motivo: 'falta_material', duracaoMs: s(1200) }] });
+    const p = perdasDaMedicao(c);
+    expect(p.anotadasMs).toBe(s(1200));
+    expect(p.lacunasMs).toBe(0);
+    expect(p.paradasMs).toBe(s(1200));
+    expect(p.intervalos * p.normalMs + p.lacunasMs + p.paradasMs).toBe(p.relogioMs);
+  });
+  it('a anotada depois maior que as lacunas so tira o que as lacunas tem', () => {
+    const marcas = marcasDe([...Array(6).fill(20), 120, ...Array(6).fill(20)]);
+    const soma = marcas[marcas.length - 1] - marcas[0];
+    const p = perdasDaMedicao(medicao({ marcas_ms: marcas, marcas_relogio_ms: soma,
+      paradas: [{ motivo: 'outro', duracaoMs: s(300) }] }));
+    expect(p.lacunasMs).toBe(0);
+    expect(p.anotadasMs).toBe(s(100));
+    expect(p.paradasMs).toBe(s(100));
+  });
+  it('MEDICAO SEM MARCAS nao ganha a disputa de sobreposicao e leva a boa junto', () => {
+    const porHorario = medicao({ id: 'h', pecas: 300, marcas_ms: null,
+      iniciado_em: '2026-11-12T12:00:00Z', finalizado_em: '2026-11-12T16:00:00Z' });
+    const video = medicao({ id: 'v', marcas_ms: marcasDe(Array(12).fill(20)),
+      iniciado_em: '2026-11-12T13:00:00Z', finalizado_em: '2026-11-12T13:10:00Z' });
+    const r = relatorioDePerdas([porHorario, video]);
+    expect(r.total.medicoes).toBe(1);
+    expect(r.semMarcas).toBe(1);
+    expect(r.sobrepostas).toBe(0);
+  });
+});

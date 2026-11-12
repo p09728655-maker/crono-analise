@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.110.1',
+    data: '2026-11-12',
+    titulo: 'Perdas da embalagem: impressão e correções das contas',
+    itens: [
+      'IMPRIMIR O RELATÓRIO DE PERDAS. Na lateral, "Imprimir" gera uma folha A4 para a reunião: o grupo e o período, o resumo (sem produzir, paradas marcadas e não marcadas, tempo por volume no período e rodando, volumes que deixaram de sair), o quadro da hora extra, as paradas por motivo, TODOS os produtos (a tela mostra 15) e a legenda em palavras, com as assinaturas do analista e do coordenador. O arquivo sai com o nome "Perdas da embalagem - últimos 30 dias - data e hora". Imprimir pelo Ctrl+P sai a mesma folha.',
+      'O SETUP PLANEJADO NÃO CONTA DUAS VEZES. O setup marcado no cronômetro já sai das horas da linha (jornada menos setup planejado); antes ele também entrava como parada, e a hora extra saía maior do que é. Agora fica fora da conta, como no takt e no volume a volume, e a tela diz quanto foi tirado.',
+      'PARADA ANOTADA DEPOIS CONTA COMO MARCADA. A parada lançada no resultado (no tablet ou no PC), depois da medição, caía em "lacunas — ninguém marcou". Agora ela sai das lacunas e entra nas paradas marcadas, com o motivo. O total sem produzir não muda.',
+      'HORA EXTRA POR GRUPO. Com mais de um grupo de embalagem, cada um tem a própria coluna, no ritmo das próprias medições: antes o ritmo de um grupo entrava na conta do outro.',
+      'QUANDO NÃO DÁ PARA FAZER A CONTA DA HORA EXTRA, A TELA DIZ POR QUÊ: o programa não foi colado ou não cobre a semana, faltam as horas ou os dias da semana no cadastro do grupo, ou não deu para ler o programa. Antes a semana só sumia.',
+      'Medição sem marcas (por horários) não tira mais do relatório a medição com marcas do mesmo trecho. O nome do produto aparece inteiro na tabela. A máquina casa pelo nome também com acento e espaço diferentes, e, se o período tiver medições demais para uma ida (mais de 1.000), a tela avisa em vez de mostrar a conta pela metade.',
+    ],
+  },
+  {
     versao: '2.110.0',
     data: '2026-11-12',
     titulo: 'Perdas da embalagem: onde a linha deixa de produzir e quanto isso custa em horas',
