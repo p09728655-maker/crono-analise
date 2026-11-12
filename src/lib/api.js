@@ -105,6 +105,14 @@ export const listarConferenciasServidor = ({ maquina, arquivadas = false } = {})
   return requisitar(`/conferencias${busca ? `?${busca}` : ''}`);
 };
 /**
+ * As medicoes de UM GRUPO de maquinas nos ultimos `dias`, COM as marcas — o
+ * relatorio de perdas da embalagem (v2.110.0). Ver ?marcas=1 em
+ * api/conferencias.js.
+ */
+export const listarMedicoesDoGrupo = ({ grupoId, dias = 30 }) => requisitar(
+  `/conferencias?${new URLSearchParams({ grupo: grupoId, marcas: '1', dias: String(dias) })}`,
+);
+/**
  * So' os contadores das medicoes de ritmo — o Inicio nao precisa da lista.
  * Ver o ?resumo=1 em api/conferencias.js: dois counts, sem trazer as
  * medicoes nem as paradas de cada uma.

@@ -46,7 +46,7 @@ import { autenticar, exigirPapel } from './_lib/auth.js';
 import {
   ErroHttp, erroValidacao, handler, json, lerCorpo, naoEncontrado, permitir, proibido,
 } from './_lib/http.js';
-import { lista, paradasDaConferencia, texto, uuid } from './_lib/validar.js';
+import { inteiro, lista, paradasDaConferencia, texto, uuid } from './_lib/validar.js';
 import { listar as listarDemandas } from './_lib/demanda.js';
 import {
   MENSAGEM_DESLIGADO, MENSAGEM_NAO_CONFIRMADO, MENSAGEM_PRODUTO_MUDOU, NO_PAINEL, chamarPainel, grupoDaMedicao,
@@ -148,6 +148,42 @@ export default handler(async (req, res) => {
            WHERE c.id = ${id} AND c.empresa_id = ${empresaId}`;
         if (!linha) throw naoEncontrado('Medição não encontrada');
         return json(res, 200, { conferencia: linha });
+      });
+    }
+
+    /**
+     * ?grupo=<id>&marcas=1[&dias=30] — AS PERDAS DA EMBALAGEM (v2.110.0): as
+     * medicoes das maquinas DE UM GRUPO, dos ultimos `dias` (1 a 90), COM as
+     * marcas. A lista comum nao traz marcas (ver o ?id= acima); aqui o grupo
+     * e o periodo limitam o volume — na embalagem sao ~60 marcas por
+     * medicao. A maquina casa pelo nome sem diferenca de maiuscula, como a
+     * tela faz.
+     */
+    if (String(req.query?.marcas ?? '') === '1') {
+      const grupo = uuid(req.query?.grupo, 'grupo');
+      const dias = inteiro(req.query?.dias, 'dias', { min: 1, max: 90, padrao: 30 });
+      return auth.rls(async (db) => {
+        const linhas = await db`
+          SELECT c.id, c.maquina, c.peca, c.iniciado_em, c.finalizado_em, c.duracao_ms, c.pecas, c.salvo_em, c.origem,
+                 c.marcas_ms, c.marcas_relogio_ms, c.marcas_setup_ms,
+                 coalesce((
+                   SELECT jsonb_agg(jsonb_build_object(
+                            'motivo', p.motivo,
+                            'duracaoMs', p.duracao_ms,
+                            'observacao', p.observacao
+                          ) ORDER BY p.iniciado_em, p.criado_em)
+                     FROM paradas p WHERE p.conferencia_id = c.id
+                 ), '[]'::jsonb) AS paradas
+            FROM conferencias c
+           WHERE c.empresa_id = ${empresaId}
+             AND c.arquivada = false
+             AND c.salvo_em >= now() - (${dias} * interval '1 day')
+             AND lower(trim(c.maquina)) IN (
+               SELECT lower(trim(m.nome)) FROM maquinas m
+                WHERE m.empresa_id = ${empresaId} AND m.grupo_id = ${grupo})
+           ORDER BY c.salvo_em DESC
+           LIMIT ${MAX_LINHAS}`;
+        return json(res, 200, { conferencias: linhas, dias });
       });
     }
 

@@ -6,6 +6,7 @@ import ConferenciaRapida from './features/coleta/ConferenciaRapida.jsx';
 import EmbalagemTaktTime from './features/coleta/EmbalagemTaktTime.jsx';
 import EmbalagemTaktTimePc from './features/analise/EmbalagemTaktTimePc.jsx';
 import EmbalagemPorVideo from './features/analise/video/EmbalagemPorVideo.jsx';
+import PerdasEmbalagem from './features/analise/PerdasEmbalagem.jsx';
 import PainelAnalise from './features/analise/PainelAnalise.jsx';
 import RelatorioConferencias from './features/analise/RelatorioConferencias.jsx';
 import PainelFabrica from './features/painel/PainelFabrica.jsx';
@@ -202,6 +203,7 @@ export default function App() {
           aoAbrirEstudos={irParaLista}
           aoAbrirRelatorio={() => navegar(caminhos.conferencias())}
           aoAbrirEmbalagem={() => navegar(caminhos.embalagemPc())}
+          aoAbrirPerdasEmbalagem={() => navegar(caminhos.embalagemPerdas())}
           aoNovoEstudo={() => navegar(`${caminhos.lista('analise')}?novo=1`)}
           aoMedir={medirEstudo}
           aoAnalisar={abrirEstudo}
@@ -247,9 +249,17 @@ export default function App() {
         />
       )}
 
+      {tela === 'embalagem-perdas' && (
+        <PerdasEmbalagem
+          aoVoltar={() => navegar(caminhos.embalagemPc())}
+          aoVerInicio={irParaInicio}
+        />
+      )}
+
       {tela === 'embalagem-pc' && (
         <EmbalagemTaktTimePc
           aoCronometrarVideo={() => navegar(caminhos.embalagemVideo())}
+          aoVerPerdas={() => navegar(caminhos.embalagemPerdas())}
           aoVoltar={() => navegar(caminhos.lista('analise'))}
           aoVerInicio={irParaInicio}
         />

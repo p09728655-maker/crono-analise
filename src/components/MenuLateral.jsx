@@ -45,7 +45,7 @@ export default function MenuLateral({
   // marcam onde se esta': a lateral e' o menu do sistema, e menu que nao
   // diz onde voce esta' obriga a olhar o conteudo para descobrir.
   aoVerInicio, inicioAtivo, aoVerEstudos, estudosAtivo,
-  aoNovoEstudo, aoImportar, aoVerConferencias, aoVerEmbalagem, aoVerArquivados, arquivados = 0,
+  aoNovoEstudo, aoImportar, aoVerConferencias, aoVerEmbalagem, aoVerPerdasEmbalagem, aoVerArquivados, arquivados = 0,
   aoVerChaveIa, aoVerMotivos, aoVerMaquinas, aoVerProdutos, aoVerDemanda, aoVerPainel, aoVerAnalistas, usuario, aoTrocarModo,
 }) {
   const total = grupos.reduce((acc, g) => acc + g.estudos.length, 0);
@@ -316,6 +316,15 @@ export default function MenuLateral({
               <span style={est.itemTexto}>Embalagem Takt Time</span>
             </span>
           </button>
+          {/* v2.110.0: onde a linha deixa de produzir, por motivo e produto. */}
+          {aoVerPerdasEmbalagem && (
+            <button type="button" className="menu-lateral-item" style={est.item} onClick={aoVerPerdasEmbalagem}>
+              <span style={est.itemComIcone}>
+                <IconeRitmo />
+                <span style={est.itemTexto}>Perdas da embalagem</span>
+              </span>
+            </button>
+          )}
         </div>
       )}
 
