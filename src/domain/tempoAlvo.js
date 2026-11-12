@@ -18,6 +18,17 @@
  *    o motivo — nunca o takt no lugar, senao a tela teria duas reguas
  *    conforme o produto.
  *
+ * A SEMANA PEDE (v2.107.0, PPCP 11/11/2026, com a MESA CABECEIRA SLEEP na
+ * tela: takt 8,5 s, tempo-alvo 8,9 s — "quem vê a tela acha que está tudo
+ * bem"). A linha da carga era o takt POR VOLUME do app (jornada ÷ volumes,
+ * 16.4 s para todo produto): no produto leve a medicao no alvo parecia
+ * folgada. Agora a linha e' a do PRODUTO: os segundos por UEP que a semana
+ * pede (o painel manda junto, .gs v5.63, a mesma conta do TAKT DA SEMANA) ×
+ * a UEP dele — a coluna PELO TAKT do painel. A cor continua do alvo: 0,4 s
+ * (5%) entre os dois e' do tamanho do erro de uma medicao, e a cor trocaria
+ * por acaso. Sem a semana no painel (.gs antes da v5.63, semana sem UEP
+ * programada, medicao de mais de 6 semanas), a linha de antes.
+ *
  * O alvo e' o de HOJE (o cadastro do painel agora): uma medicao antiga e'
  * lida com a UEP e a meta de hoje. O volume a volume, a folha e o resultado
  * salvo do tablet dizem isso quando a medicao nao e' de hoje, e dizem a
@@ -50,7 +61,7 @@ function mapaDe(lido) {
  *   ok · sem-produto · fora-da-lista · sem-uep · carregando · sem-rede ·
  *   desligado · gs-antigo · erro
  */
-export function alvoDoProduto(lido, peca, { semRede = false } = {}) {
+export function alvoDoProduto(lido, peca, { semRede = false, data = null } = {}) {
   if (!lido) return { alvoMs: null, estado: semRede ? 'sem-rede' : 'carregando' };
   if (lido.estado !== 'ok') return { alvoMs: null, estado: lido.estado || 'erro', mensagem: lido.mensagem || null };
   const nome = String(peca ?? '').trim();
@@ -62,6 +73,41 @@ export function alvoDoProduto(lido, peca, { semRede = false } = {}) {
     alvoMs: p.alvoMs, estado: 'ok', rot: p.rot, uep: p.uep,
     sUep: lido.ref?.sUep ?? null, metaUep: lido.ref?.metaUep ?? null, setupDia: lido.ref?.setupDia ?? null,
     minDia: lido.ref?.minDia ?? null, lidoEm: lido.lidoEm ?? null,
+    semana: semanaDoProduto(semanaDaData(lido, data ?? new Date()), p.uep),
+  };
+}
+
+/** dd/mm/aaaa → aaaammdd (0 se nao for data). */
+const numBR = (s) => {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s ?? '').trim());
+  return m ? Number(m[3] + m[2] + m[1]) : 0;
+};
+
+/**
+ * A SEMANA de uma data (a do dia em Sao Paulo), na lista que o painel mandou
+ * (.gs v5.63: a semana de hoje e as 5 anteriores, segunda a domingo). null
+ * sem a lista (painel antigo) ou fora dela.
+ */
+export function semanaDaData(lido, data = new Date()) {
+  const lista = lido?.semanas;
+  if (!Array.isArray(lista) || !lista.length) return null;
+  const quando = data instanceof Date ? data : new Date(data);
+  if (Number.isNaN(quando.getTime())) return null;
+  const [d, m, a] = diaSp(quando).split('/');
+  const n = Number(a + m + d);
+  return lista.find((w) => numBR(w.de) <= n && n <= numBR(w.ate)) || null;
+}
+
+/**
+ * O QUE A SEMANA PEDE NESTE PRODUTO: os segundos por UEP da semana × a UEP
+ * dele, com duas casas como o alvo (em ms). null sem o takt da semana (sem
+ * UEP programada) ou sem a UEP do produto.
+ */
+export function semanaDoProduto(w, uep) {
+  if (!w || !(w.sUep > 0) || !(uep > 0)) return null;
+  return {
+    de: w.de, ate: w.ate, sUep: w.sUep, pede: w.pede ?? null,
+    taktMs: Math.round(w.sUep * uep * 100) * 10,
   };
 }
 
@@ -142,6 +188,24 @@ export function explicacaoDaRegua(ref) {
     + `${inteiro(ref.metaUep)} UEP por dia, a média da linha sem hora extra.`;
 }
 
+/**
+ * A LINHA DA CARGA, por produto (ver o cabecalho). Sem cor e sem julgar:
+ *   "A semana pede 8.5 s neste produto: a programação da semana de 09/11
+ *    pede 105.1% da média da linha — no tempo-alvo, ela não fecha."
+ * `curta` (cronometro, subtitulo de cartao): "a semana pede 8.5 s (105.1% da
+ * média)". '' sem a semana — quem chama escreve a linha de antes.
+ */
+export function fraseDaSemana(alvo, { curta = false } = {}) {
+  const w = alvo?.semana;
+  if (!(w?.taktMs > 0)) return '';
+  const s = num(w.taktMs / 1000, 1);
+  const pct = w.pede > 0 ? `${num(w.pede, 1)}%` : null;
+  if (curta) return `a semana pede ${s} s${pct ? ` (${pct} da média)` : ''}`;
+  if (!pct) return `A semana pede ${s} s neste produto (a programação da semana de ${String(w.de).slice(0, 5)}).`;
+  return `A semana pede ${s} s neste produto: a programação da semana de ${String(w.de).slice(0, 5)} pede ${pct} `
+    + `da média da linha — no tempo-alvo, ela ${w.pede > 100 ? 'não fecha' : 'cabe'}.`;
+}
+
 /** A partir de quantas horas a leitura do painel e' "velha" e a tela diz a idade. */
 export const ALVO_VELHO_MS = 2 * 3600000;
 const FUSO = 'America/Sao_Paulo';
@@ -189,7 +253,7 @@ export function idadeDoAlvo(lidoEm, agora = new Date()) {
  * pede atencao. Medicao com produto fora da lista (texto livre) e' contada,
  * nao some calada.
  */
-export function medidoXAlvo(lido, medicoes, periodoDe) {
+export function medidoXAlvo(lido, medicoes, periodoDe, agora = new Date()) {
   if (!lido || lido.estado !== 'ok') return null;
   const mapa = mapaDe(lido);
   const ultima = new Map();
@@ -206,18 +270,20 @@ export function medidoXAlvo(lido, medicoes, periodoDe) {
     const atual = ultima.get(chave);
     if (!atual || new Date(quando) > new Date(atual.quando)) ultima.set(chave, { periodoMs, quando, id: c.id });
   }
+  // v2.107.0: o que ESTA semana pede em cada produto (a coluna PELO TAKT do painel)
+  const semana = semanaDaData(lido, agora);
   const todos = (lido.produtos || []).map((p) => {
     const chave = nomeChave(p.rot);
     const m = ultima.get(chave) || null;
     return {
-      rot: p.rot, uep: p.uep, alvoMs: p.alvoMs,
+      rot: p.rot, uep: p.uep, alvoMs: p.alvoMs, semanaMs: semanaDoProduto(semana, p.uep)?.taktMs ?? null,
       medicao: m ? { ...m, n: quantas.get(chave) } : null,
       difPct: m && p.alvoMs > 0 ? ((m.periodoMs / p.alvoMs) - 1) * 100 : null,
     };
   });
   const medidos = todos.filter((l) => l.medicao)
     .sort((a, b) => (b.difPct ?? -Infinity) - (a.difPct ?? -Infinity) || a.rot.localeCompare(b.rot));
-  return { medidos, todos, foraDaLista };
+  return { medidos, todos, foraDaLista, semana: semana && semana.sUep > 0 ? semana : null };
 }
 
 /** O alvo em segundos, como o takt: "26,6 s". */

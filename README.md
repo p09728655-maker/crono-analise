@@ -178,6 +178,27 @@ do produto dele**.
     (`medidoXAlvo`, pela mesma conta do volume a volume: `periodoPorPeca`
     com o `marcas_relogio_ms` que a lista passou a trazer) e a diferença, do
     mais acima do alvo para o mais abaixo.
+  - **A SEMANA PEDE — a carga por PRODUTO (v2.107.0 / painel `.gs` v5.63).**
+    PPCP, com a MESA CABECEIRA SLEEP na tela (tempo-alvo 8,9 s, a semana
+    pede 8,5 s): *"quem vê a tela acha que está tudo bem"*. A linha da carga
+    era o takt POR VOLUME (16.4 s, igual para todo produto) e o produto leve
+    no alvo parecia folgado. O painel manda, junto com os alvos, o takt de
+    cada semana em s por UEP (`semanas`: a de hoje e as 5 anteriores, `sUep`
+    e `pede` = % da média que a programação pede; `semanasDoPainel` confere no
+    servidor). `alvoDoProduto(lido, peca, { data })` acha a semana da DATA da
+    medição (`semanaDaData`, o dia em São Paulo) e leva `semana = { taktMs =
+    sUep × UEP, pede }` (`semanaDoProduto`); `fraseDaSemana` escreve *"A semana
+    pede 8.5 s neste produto: a programação da semana de 09/11 pede 105.1% da
+    média da linha — no tempo-alvo, ela não fecha."* — no cartão, no resumo, na
+    medição salva, no volume a volume (`carga`), na folha e no vídeo. No
+    cronômetro é um NÚMERO na fileira de apoio (A SEMANA PEDE, sem cor). No PC,
+    a coluna *Esta semana pede* no quadro do tempo-alvo e o cartão *Tempo-alvo
+    · por UEP*.
+    - **A cor continua pelo tempo-alvo**: entre os dois vão ~5% (0.4 s na
+      SLEEP), o erro de uma medição — uma faixa âmbar trocaria de cor por
+      acaso (proposta e retirada com o PPCP).
+    - Sem a semana (painel antes da v5.63, semana sem UEP programada, medição
+      de mais de 6 semanas): a linha do takt por volume de antes.
   - O alvo é o **de hoje**: medição antiga é lida com a UEP e a meta de
     agora. O que segue abaixo sobre "▲ takt" e "linha do takt" no veredito
     vale hoje para o tempo-alvo ("▲ alvo", "linha do tempo-alvo"); o takt

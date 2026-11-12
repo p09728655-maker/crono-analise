@@ -22,7 +22,7 @@ import Historico from './rapida/Historico.jsx';
 import { useTaktDaSemana } from '../../lib/taktDaSemana.js';
 import { useTemposAlvo } from '../../lib/temposAlvo.js';
 import {
-  descontaSetup, explicacaoDoAlvo, idadeDoAlvo, semAlvo,
+  descontaSetup, explicacaoDoAlvo, fraseDaSemana, idadeDoAlvo, semAlvo,
 } from '../../domain/tempoAlvo.js';
 import { motivoSemTakt } from './embalagem/motivoSemTakt.js';
 import ResultadoSalvo from './embalagem/ResultadoSalvo.jsx';
@@ -276,7 +276,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
         <ResultadoSalvo
           registro={vendo}
           takt={taktDaSalva.naData(inicioDaSalva(vendo))}
-          alvo={alvos.alvoDe(vendo.peca)}
+          alvo={alvos.alvoDe(vendo.peca, inicioDaSalva(vendo))}
           unidade={VOLUME}
           mostrarMaquina={maquinas.length > 1}
           aoVoltar={fecharSalva}
@@ -348,6 +348,7 @@ export default function EmbalagemTaktTime({ aoSair }) {
           unidade={VOLUME}
           modoTakt
           taktMs={takt.taktMs}
+          semana={alvo.semana}
           alvoMs={alvo.alvoMs}
           porVolumeMs={porVolumeAoVivo}
           produto={produto}
@@ -424,11 +425,13 @@ function CartaoAlvo({ alvo, takt }) {
         <span style={est.sufixoRitmo}>Tempo-alvo: {semAlvo(alvo.estado, alvo.mensagem)}</span>
       )}
       <span style={est.linhaCarga}>
-        {takt.taktMs > 0
+        {/* v2.107.0: o que a semana pede NESTE produto (o takt por volume,
+            igual para todo produto, fazia o leve parecer folgado). */}
+        {fraseDaSemana(alvo) || (takt.taktMs > 0
           ? <>Carga da semana {takt.semana}: takt {formatarSegundos(takt.taktMs)} s por volume
             {diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''}
             {takt.semRede ? ' (programa guardado neste aparelho)' : ''} — não julga o produto</>
-          : motivoTakt ? `Takt da semana: ${motivoTakt}` : null}
+          : motivoTakt ? `Takt da semana: ${motivoTakt}` : null)}
       </span>
     </div>
   );
@@ -482,11 +485,13 @@ function ResumoTakt({
       {!(alvo.alvoMs > 0) && (
         <section style={est.aviso} role="status">Sem tempo-alvo para comparar: {semAlvo(alvo.estado, alvo.mensagem)}</section>
       )}
-      {takt.taktMs > 0 && (
-        <p style={est.linhaCarga}>
-          Carga da semana: takt {formatarSegundos(takt.taktMs)} s por volume — igual para todo volume; não julga o produto.
-        </p>
-      )}
+      {fraseDaSemana(alvo)
+        ? <p style={est.linhaCarga}>{fraseDaSemana(alvo)}</p>
+        : takt.taktMs > 0 && (
+          <p style={est.linhaCarga}>
+            Carga da semana: takt {formatarSegundos(takt.taktMs)} s por volume — igual para todo volume; não julga o produto.
+          </p>
+        )}
     </>
   );
 }

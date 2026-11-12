@@ -46,6 +46,12 @@ export default function TempoAlvoDosProdutos({
   const linhas = verTodos ? [...m.medidos, ...semMedicao] : m.medidos;
   const sUep = lido.ref.sUep.toFixed(2);
   const idade = idadeDoAlvo(lido.lidoEm);
+  // v2.107.0: o que ESTA semana pede em cada produto (a coluna PELO TAKT do painel)
+  const sem = m.semana;
+  const semTit = sem
+    ? `O que a programação da semana de ${sem.de.slice(0, 5)} pede no produto: ${sem.sUep.toFixed(2)} s por UEP × a UEP dele. `
+      + `A programação pede ${sem.pede != null ? `${sem.pede.toFixed(1)}%` : '—'} da média da linha. É a carga, não julga o produto.`
+    : '';
 
   /* Recolhido, com a regua no titulo: aberto, a tabela empurrava a lista de
      medicoes e o detalhe (o trabalho do dia nesta tela) para baixo. */
@@ -62,6 +68,14 @@ export default function TempoAlvoDosProdutos({
         dos volumes). É o tempo que cada volume pode levar para a linha fazer a média sem hora extra.
         {' '}É o de hoje: a medição antiga é lida com a UEP e a média de agora.{idade ? ` ${idade}` : ''}
       </p>
+      {sem && (
+        <p style={est.painelDica}>
+          <strong>Esta semana pede {sem.sUep.toFixed(2)} s por UEP</strong> (a programação da semana de {sem.de.slice(0, 5)} pede
+          {' '}{sem.pede != null ? `${sem.pede.toFixed(1)}%` : '—'} da média da linha
+          {sem.pede > 100 ? ': no tempo-alvo, ela não fecha' : ': no tempo-alvo, ela cabe'}). A coluna ao lado do tempo-alvo é
+          o que ela pede em cada produto — a carga, sem cor: quem julga a medição é o tempo-alvo.
+        </p>
+      )}
       <p style={est.painelDica}>
         {m.medidos.length > 0
           ? `Os ${m.medidos.length === 1 ? 'produto medido' : `${m.medidos.length} produtos medidos`} no app nos últimos ${dias} dias, `
@@ -78,6 +92,7 @@ export default function TempoAlvoDosProdutos({
                 <th style={est.th}>Produto</th>
                 <th style={est.thNum}>UEP</th>
                 <th style={est.thNum}>Tempo-alvo</th>
+                {sem && <th style={est.thNum} title={semTit}>Esta semana pede</th>}
                 <th style={est.thNum}>Última medição</th>
                 <th style={est.thNum}>Diferença</th>
                 <th style={est.th}>Medições</th>
@@ -93,6 +108,11 @@ export default function TempoAlvoDosProdutos({
                     <td style={est.tdNum} title={l.alvoMs ? `${uep(l.uep)} UEP × ${sUep} s` : 'sem UEP no painel'}>
                       {l.alvoMs ? `${formatarSegundos(l.alvoMs)} s` : 'sem UEP'}
                     </td>
+                    {sem && (
+                      <td style={{ ...est.tdNum, color: claro.textoFraco }} title={semTit}>
+                        {l.semanaMs ? `${formatarSegundos(l.semanaMs)} s` : '—'}
+                      </td>
+                    )}
                     <td style={est.tdNum}>{l.medicao ? `${formatarSegundos(l.medicao.periodoMs)} s` : '—'}</td>
                     <td
                       style={{

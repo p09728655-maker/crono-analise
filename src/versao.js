@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.107.0',
+    data: '2026-11-11',
+    titulo: 'Embalagem: a linha da carga diz o que a semana pede NESTE produto',
+    itens: [
+      'A LINHA DA CARGA PASSA A SER DO PRODUTO. Ela mostrava o takt por volume (as horas da semana ÷ os volumes programados), o mesmo número para qualquer produto: com 16.4 s, a MESA CABECEIRA SLEEP no tempo-alvo (8.9 s) parecia folgada, quando a semana pede 8.5 s nela. Agora a linha diz "A semana pede 8.5 s neste produto: a programação da semana de 09/11 pede 105.1% da média da linha — no tempo-alvo, ela não fecha." É o mesmo número da coluna PELO TAKT do TAKT DA SEMANA do painel: os segundos por UEP que a programação da semana pede × a UEP do produto. Vale no cartão antes de medir, no resumo, na medição salva, no volume a volume do PC, na folha impressa e no Cronometrar por vídeo. NO CRONÔMETRO É UM NÚMERO: "A SEMANA PEDE 8.5 s", sem cor, ao lado de volumes, vol/h e último — a frase escrita, pequena, não se via de longe.',
+      'A COR CONTINUA PELO TEMPO-ALVO. Entre o tempo-alvo e o que a semana pede vão uns 5% (0.4 s na SLEEP), do tamanho do erro de uma medição: a cor trocaria por acaso. O tempo-alvo diz se o produto rodou no ritmo normal da linha; a linha da carga diz se a semana fecha nesse ritmo.',
+      'A MEDIÇÃO É LIDA COM A SEMANA DELA: a de semanas passadas, pelo que aquela semana pedia (o painel manda a semana de hoje e as 5 anteriores). Sem o takt da semana no painel (o Apps Script antes da v5.63, semana sem UEP programada ou medição mais antiga), a linha continua sendo o takt por volume, como antes.',
+      'NO PC, O QUADRO "TEMPO-ALVO DE CADA PRODUTO" GANHA A COLUNA "ESTA SEMANA PEDE", sem cor, e o cartão "Tempo-alvo · por UEP" diz quantos segundos por UEP esta semana pede e quanto ela pede da média da linha.',
+    ],
+  },
+  {
     versao: '2.106.0',
     data: '2026-11-11',
     titulo: 'Embalagem: cada volume contra o tempo-alvo do produto',

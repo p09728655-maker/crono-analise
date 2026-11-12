@@ -16,6 +16,9 @@
  * (10 min; 1 min depois de falha), como o programa da planilha
  * (programaEmbalagem.js): o tablet pergunta muito, o painel e' lento.
  *
+ * v2.107.0: junto vem o takt de cada semana em segundos por UEP (.gs v5.63),
+ * para a linha "a semana pede X s" de cada produto (ver domain/tempoAlvo.js).
+ *
  * Mora em /maquinas (?alvo=1) pela mesma razao da demanda: o plano Hobby da
  * Vercel aceita 12 funcoes e o projeto esta' nelas. Qualquer usuario logado
  * le (o tablet da embalagem precisa); nada e' gravado.
@@ -62,12 +65,29 @@ export function respostaDosAlvos(corpo) {
         const alvo = positivo(p.alvo);
         return { rot: p.rot.trim().replace(/\s+/g, ' '), uep: positivo(p.uep), alvoMs: alvo ? Math.round(alvo * 1000) : null };
       });
-    return { estado: 'ok', ref, produtos };
+    return { estado: 'ok', ref, produtos, semanas: semanasDoPainel(corpo.semanas) };
   }
   if (objeto && corpo.ok === false && corpo.erro) {
     return { estado: 'erro', mensagem: `O painel não montou os tempos-alvo: ${String(corpo.erro).slice(0, 300)}` };
   }
   return { estado: 'gs-antigo', mensagem: MENSAGEM_ALVO_GS_ANTIGO };
+}
+
+/**
+ * O TAKT DE CADA SEMANA (.gs v5.63): a semana de hoje e as anteriores, com os
+ * segundos por UEP que a programacao pede (sUep) e o quanto ela pede da media
+ * (pede, %). Conferido: data dd/mm/aaaa, sUep > 0 ou null. O painel antes da
+ * v5.63 nao manda: lista vazia, e a tela fica com o takt por volume de antes.
+ */
+const DATA_BR = /^\d{2}\/\d{2}\/\d{4}$/;
+export function semanasDoPainel(lista) {
+  if (!Array.isArray(lista)) return [];
+  return lista.slice(0, 26)
+    .filter((w) => w && DATA_BR.test(String(w.de ?? '')) && DATA_BR.test(String(w.ate ?? '')))
+    .map((w) => ({
+      de: String(w.de), ate: String(w.ate), atual: w.atual === true,
+      sUep: positivo(w.sUep), pede: positivo(w.pede), uep: naoNegativo(w.uep), nUteis: naoNegativo(w.nUteis),
+    }));
 }
 
 /** Uma ida ao painel. Nunca lanca. */

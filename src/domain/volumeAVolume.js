@@ -11,7 +11,9 @@
  */
 import { conferenciaRapida, potencialSemParada } from './crono/conferencia.js';
 import { formatarSegundos } from './crono/formato.js';
-import { contaDoAlvo, semAlvo, semAlvoCurto } from './tempoAlvo.js';
+import {
+  contaDoAlvo, fraseDaSemana, semAlvo, semAlvoCurto,
+} from './tempoAlvo.js';
 
 /** Takt e intervalo em SEGUNDOS, sempre: "72.0 s", nunca "1min12s". */
 const seg = (ms) => (Number.isFinite(ms) && ms > 0 ? `${formatarSegundos(ms)} s` : '—');
@@ -120,9 +122,11 @@ export function frasesVolumeAVolume({
   // semana: sem cor e sem julgar (ver o cabecalho). A' parte das linhas do
   // veredito: a tela a escreve menor, e o papel nao — la' a conta do tempo
   // da semana ja' diz o takt, e uma linha a mais empurra o grafico.
-  const carga = leitura.taktMs
+  // v2.107.0: com o takt da semana do painel, o que a semana pede NESTE
+  // produto (a coluna PELO TAKT do painel); sem ele, o takt por volume.
+  const carga = fraseDaSemana(alvo) || (leitura.taktMs
     ? `Takt da semana: ${seg(leitura.taktMs)} por ${singular} — a carga da semana, igual para todo ${singular}; não julga o produto.`
-    : null;
+    : null);
 
   if (temLacuna) {
     const n = leitura.lacunas.length;
@@ -180,7 +184,8 @@ export function numerosDaLeitura(leitura, alvo = {}, unidade, { juncao = false }
       // De onde sai (UEP × s por UEP) e o takt da semana como carga, sem
       // julgar. Sem alvo, o porque, curto.
       sub: leitura.alvoMs
-        ? [contaDoAlvo(alvo), leitura.taktMs ? `takt da semana ${seg(leitura.taktMs)}` : ''].filter(Boolean).join(' · ') || `por ${unidade.singular}`
+        ? [contaDoAlvo(alvo), fraseDaSemana(alvo, { curta: true }) || (leitura.taktMs ? `takt da semana ${seg(leitura.taktMs)}` : '')]
+          .filter(Boolean).join(' · ') || `por ${unidade.singular}`
         : semAlvoCurto(alvo.estado),
     },
     {

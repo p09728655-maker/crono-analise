@@ -61,6 +61,16 @@ const ALVOS = {
     .map((rot) => ({ rot, uep: 2.48, alvoMs: 72000 }))
     .concat([{ rot: 'Produto sem UEP', uep: null, alvoMs: null }]),
 };
+/* A SEMANA DE HOJE (v2.107.0), segunda a domingo em Sao Paulo, como o painel
+   (.gs v5.63) manda junto com os alvos: o takt dela em s por UEP. */
+const SEMANA_HOJE = (() => {
+  const [a, m, d] = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()).split('-').map(Number);
+  const seg = new Date(Date.UTC(a, m - 1, d));
+  seg.setUTCDate(seg.getUTCDate() - ((seg.getUTCDay() + 6) % 7));
+  const br = (x) => `${String(x.getUTCDate()).padStart(2, '0')}/${String(x.getUTCMonth() + 1).padStart(2, '0')}/${x.getUTCFullYear()}`;
+  const dom = new Date(seg); dom.setUTCDate(dom.getUTCDate() + 6);
+  return { de: br(seg), ate: br(dom) };
+})();
 const rotaDosAlvos = (rota, alvos = ALVOS) => (/[?&]alvo=1/.test(rota.request().url())
   ? rota.fulfill({ json: alvos }) : null);
 
@@ -2024,7 +2034,12 @@ for (const v of [
   await simularServidor(v, {
     demandas: [{ ...DEMANDAS[0], pecas: 158400 }],
     aoSincronizar: (c) => subiram.push(...(c.conferencias || [])),
-    alvos: { ...ALVOS, produtos: [...ALVOS.produtos, { rot: 'Painel Teste', uep: 0.07, alvoMs: 2000 }] },
+    // v2.107.0: o painel manda o takt da semana — 20 s por UEP × 0,07 = 1,4 s neste produto
+    alvos: {
+      ...ALVOS,
+      produtos: [...ALVOS.produtos, { rot: 'Painel Teste', uep: 0.07, alvoMs: 2000 }],
+      semanas: [{ ...SEMANA_HOJE, atual: true, sUep: 20, pede: 105.1, uep: 1, nUteis: 5 }],
+    },
   });
   await v.goto(`${BASE}/coleta`);
   await v.getByRole('button', { name: /Embalagem Takt Time/ }).tap();
@@ -2032,6 +2047,12 @@ for (const v of [
   await v.locator('[aria-label="Tempo-alvo do produto"]').getByText(/takt 1\.0/).waitFor({ timeout: 8000 });
   await v.locator('input[aria-label="Produto embalado"]').fill('Painel Teste');
   await v.locator('[aria-label="Tempo-alvo do produto"]').getByText('TEMPO-ALVO DO PRODUTO').waitFor({ timeout: 4000 });
+  {
+    const cartaoV = await v.locator('[aria-label="Tempo-alvo do produto"]').innerText();
+    checar(/A semana pede 1\.4 s neste produto: a programação da semana de \d{2}\/\d{2} pede 105\.1% da média da linha — no tempo-alvo, ela não fecha\./.test(cartaoV)
+      && !/Carga da semana/.test(cartaoV),
+    'cartao: com o takt da semana do painel, a linha da carga e\' o que a semana pede NESTE produto (nao o takt por volume)');
+  }
   await v.getByRole('button', { name: /INICIAR/ }).click();
   const largadaV = v.getByRole('button', { name: /Largada/ });
   await largadaV.waitFor({ timeout: 4000 });
@@ -2043,8 +2064,15 @@ for (const v of [
   const quadro = painelV.locator('[data-tom]');
 
   /* ---- o quadro do takt e o do tempo por volume */
-  checar(/TEMPO-ALVO/i.test(await painelV.innerText()) && /carga da semana: takt 1\.0 s — não julga o produto/i.test(await painelV.innerText()),
-    'rodando: o quadro grande e\' o TEMPO-ALVO; o takt da semana vai numa linha, como carga');
+  {
+    const txt = await painelV.innerText();
+    checar(/TEMPO-ALVO/i.test(txt) && /A SEMANA PEDE\s*1\.4\s*s/i.test(txt)
+      && /a programação da semana pede 105\.1% da média da linha: no tempo-alvo, ela não fecha — não julga o produto/.test(txt)
+      && !/takt 1\.0/.test(txt),
+    'rodando: o quadro grande e\' o TEMPO-ALVO; o que a semana pede no produto e\' um numero na fileira de apoio, sem cor');
+    const semCor = await painelV.locator('[data-tom]').filter({ hasText: /semana pede/i }).count();
+    checar(semCor === 0, 'rodando: "A semana pede" nao tem cor (a cor e\' do tempo-alvo)');
+  }
   checar(await quadro.count() === 0, 'antes do 2o volume nao ha tempo por volume: o quadro nao tem cor');
   // ~1,5 s por volume: acima do TAKT (1,0 s), dentro do TEMPO-ALVO (2,0 s).
   for (let i = 0; i < 3; i++) { await v.waitForTimeout(1500); await alvoV.dispatchEvent('pointerdown'); }
@@ -2150,8 +2178,9 @@ for (const v of [
   await folhaV.getByRole('button', { name: 'Setup / Troca' }).click();
   const resumoV = v.locator('[aria-label="Resultado da conferência"]');
   await resumoV.waitFor({ timeout: 4000 });
-  checar(/TEMPO-ALVO/i.test(await resumoV.innerText()) && /Carga da semana: takt 1\.0 s por volume/.test(await resumoV.innerText()),
-    'resultado: o quadro e\' o TEMPO-ALVO, e o takt vai como a carga da semana');
+  checar(/TEMPO-ALVO/i.test(await resumoV.innerText()) && /A semana pede 1\.4 s neste produto/.test(await resumoV.innerText())
+    && !/Carga da semana: takt/.test(await resumoV.innerText()),
+    'resultado: o quadro e\' o TEMPO-ALVO, e o que a semana pede no produto vai como a carga');
 
   /* ---- resultado ainda nao salvo: o Voltar tambem pergunta */
   await v.goBack();

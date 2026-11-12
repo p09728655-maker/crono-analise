@@ -429,6 +429,10 @@ export const est = {
   // Em cima, o que decide (tempo por volume contra o takt); embaixo, o apoio.
   gradeTaktPrincipal: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: espaco.md, width: '100%' },
   gradeTaktApoio: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: espaco.md, width: '100%' },
+  // v2.107.0: com "A semana pede", quatro numeros na fileira de apoio — com
+  // o espaco menor entre eles (deitado, no celular, cada um tem ~70 px; ver
+  // .takt-apoio4 no ESTILO_TAKT do CronometroAoVivo).
+  gradeTaktApoio4: { gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: espaco.sm },
   parcialRotuloTela: {
     fontSize: 'clamp(10px, min(3cqh, 2.4cqw), 16px)', letterSpacing: 0.8, color: cores.textoFraco,
     textTransform: 'uppercase', whiteSpace: 'nowrap',
