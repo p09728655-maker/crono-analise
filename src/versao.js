@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.109.0',
+    data: '2026-11-12',
+    titulo: 'Marcação automática no mesmo instante do Enter: o fim da caixa sai do rolete',
+    itens: [
+      'A MARCAÇÃO AUTOMÁTICA MARCA NO MESMO INSTANTE QUE VOCÊ. O padrão de marcação é o fim da caixa saindo do rolete e entrando no tapete — o toque do tablet e o Enter. A automática marcava quando a frente da caixa entrava no retângulo: o tempo por volume batia (num teste de 30 volumes, 24,33 s à mão contra 24,38 s na automática), mas volume a volume as duas diferiam 2 a 3 s, porque a caixa nem sempre leva o mesmo tempo para atravessar. Agora a marca é quando a caixa SAI do retângulo.',
+      'DESENHE O RETÂNGULO COMO UMA FAIXA FINA SOBRE A PASSAGEM DO ROLETE PARA O TAPETE, atravessando todo o caminho da caixa. A caixa sai da faixa exatamente quando o fim dela passa. O retângulo guardado antes desta versão foi desenhado para a entrada embaixo do filme: a tela avisa e pede para redesenhar.',
+      'A CAIXA QUE JÁ ESTAVA NA FAIXA NO COMEÇO DA LEITURA AGORA CONTA (a saída dela foi filmada) e vem apontada para conferir — pode ser uma mão. A que entrou e o vídeo acabou antes de ela sair não conta, e a tela diz onde ela está.',
+      'A dica do Enter na tela de marcar diz o padrão: "Enter quando o fim da caixa sai do rolete e entra no tapete". O leitor de câmera da envolvedora (fora do app) segue o mesmo padrão: o intervalo da planilha passa a ser de saída a saída.',
+    ],
+  },
+  {
     versao: '2.108.1',
     data: '2026-11-12',
     titulo: 'Cronometrar por vídeo: correções da tela nova',

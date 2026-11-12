@@ -11,7 +11,7 @@ import {
   marcacaoDasEntradas, marcacaoVazia, marcarToque, marcasGuardadas, medicaoDoVideo, removerParada, removerVolume,
 } from '../../../domain/medicaoPorVideo.js';
 import {
-  areaDaImagem, detectarVolumes, intervalosLongos, pontoNaImagem, retanguloEntre, retanguloValido,
+  areaDaImagem, detectarVolumes, intervalosLongos, pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes,
 } from '../../../domain/deteccaoVolumes.js';
 import { analisarVideo } from '../../../lib/analisarVideo.js';
 import {
@@ -182,8 +182,9 @@ function paraCampoLocal(d) {
  * tablet (v2.99.0). Nada do tablet muda.
  *
  * Alguem filma a linha com o celular num tripe' (app de camera do proprio
- * aparelho) e, depois, no PC, o analista assiste e marca: Enter a cada
- * volume que fecha, P para Parou/Voltou, F para Encerrar. A marca sai do
+ * aparelho) e, depois, no PC, o analista assiste e marca: Enter quando o
+ * fim da caixa sai do rolete e entra no tapete (o padrao do PPCP, o mesmo
+ * do tablet), P para Parou/Voltou, F para Encerrar. A marca sai do
  * TEMPO DO VIDEO — pausar, voltar, ver em 2x ou quadro a quadro nao mexe
  * nos numeros. O video fica no PC: nada dele sobe para o servidor.
  *
@@ -550,11 +551,15 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const terminarDesenho = (r) => {
     setArrasto(null);
     if (!retanguloValido(r)) {
-      setAviso('O retângulo ficou pequeno demais para ler. Arraste de novo, cobrindo a caixa inteira sobre o tapete verde.');
+      setAviso('O retângulo ficou pequeno demais para ler. Arraste de novo, atravessando todo o caminho da caixa na passagem do rolete para o tapete.');
       return;
     }
-    setRetangulo(r);
-    gravarRetangulo(maquina?.id, r);
+    // `evento: 'saida'` (v2.109.0): desenhado ja' para a marca na saida. O
+    // guardado antes, sem ele, foi feito para a entrada embaixo do filme —
+    // a tela pede para redesenhar (ver MarcacaoAutomatica).
+    const novo = { ...r, evento: 'saida' };
+    setRetangulo(novo);
+    gravarRetangulo(maquina?.id, novo);
     setDesenhando(false);
     setAviso(null);
     if (automatica.estado === 'erro') setAutomatica({ estado: 'parado' });
@@ -580,23 +585,26 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
         estado: 'erro',
         erro: `Não deu para marcar: no trecho lido (${trecho}) o retângulo não mostrou diferença entre caixa e `
           + 'esteira vazia. Se nenhuma caixa passou nesse trecho, volte o vídeo para antes e leia de novo. Se passaram '
-          + 'caixas, o retângulo não está sobre o tapete verde onde a caixa passa: redesenhe.',
+          + 'caixas, o retângulo não está sobre a passagem do rolete para o tapete, onde a caixa passa: redesenhe.',
       });
       return;
     }
     if (r.motivo) { setAutomatica({ estado: 'erro', erro: `Não deu para marcar: ${r.motivo}.` }); return; }
-    if (!r.volumes.length) {
+    // A MARCA E' NA SAIDA (v2.109.0): o fim da caixa sai do rolete e entra no
+    // tapete — o mesmo instante do Enter manual e do toque do tablet.
+    const s = saidasDosVolumes(r);
+    if (!s.marcasMs.length) {
       setAutomatica({
         estado: 'erro',
-        erro: `Nenhuma caixa entrou no retângulo ${trecho}. Se passaram caixas nesse trecho, confira se o retângulo `
-          + 'está sobre o tapete verde, onde a caixa passa embaixo do filme. Se não, volte o vídeo para antes e leia de novo.',
+        erro: `Nenhuma caixa passou pelo retângulo ${trecho}. Se passaram caixas nesse trecho, confira se o retângulo `
+          + 'atravessa a passagem do rolete para o tapete, onde a caixa passa. Se não, volte o vídeo para antes e leia de novo.',
       });
       return;
     }
-    if (r.volumes.length === 1) {
+    if (s.marcasMs.length === 1) {
       setAutomatica({
         estado: 'erro',
-        erro: `Só uma caixa entrou no retângulo ${trecho}: ela seria a largada, e não sobra volume para medir. `
+        erro: `Só uma caixa passou pelo retângulo ${trecho}: ela seria a largada, e não sobra volume para medir. `
           + 'Volte o vídeo para antes e leia um trecho maior.',
       });
       return;
@@ -605,8 +613,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       setAutomatica({ estado: 'erro', erro: 'A lista ganhou marcas durante a leitura: apague-as e leia de novo.' });
       return;
     }
-    // Pelo mesmo caminho do Enter: a primeira entrada e' a largada.
-    const m = marcacaoDasEntradas(r.volumes.map((v) => v.entrouMs));
+    // Pelo mesmo caminho do Enter: a primeira saida e' a largada.
+    const m = marcacaoDasEntradas(s.marcasMs);
     refMarcacao.current = m;
     setMarcacao(m);
     setAviso(null);
@@ -615,11 +623,14 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       estado: 'pronto',
       resultado: {
         volumes: m.toques.length,
-        comCaixaNoInicio: r.comCaixaNoInicio,
-        suspeitos: r.suspeitos.map((v) => v.entrouMs),
+        evento: 'saida',
+        // A que ja' estava na faixa no comeco conta (a saida foi filmada) e
+        // vem para conferir; a que o video cortou antes de sair nao conta.
+        jaEstava: s.jaEstava,
+        semSaida: s.semSaida,
+        suspeitos: s.suspeitos,
         descartados: r.descartados.map((v) => v.entrouMs),
-        longos: intervalosLongos(r.volumes.map((v) => v.entrouMs)),
-        cortadoNoFim: r.cortadoNoFim ? r.cortadoNoFim.entrouMs : null,
+        longos: intervalosLongos(s.marcasMs),
       },
     });
   };
@@ -1295,8 +1306,8 @@ function Acoes({
       {aviso && <p style={ev.aviso} role="alert">{aviso}</p>}
       <p style={ev.teclas}>
         {largada
-          ? 'Assista até um volume fechar e aperte Enter: é a largada — ela abre o período e não conta volume, como no tablet. '
-          : 'Enter a cada volume que fecha; ⌫ desfaz o último volume marcado (parada sai pelo × da lista). '}
+          ? 'Assista até o fim de uma caixa sair do rolete e entrar no tapete e aperte Enter: é a largada — ela abre o período e não conta volume, como no tablet. '
+          : 'Enter quando o fim da caixa sai do rolete e entra no tapete; ⌫ desfaz o último volume marcado (parada sai pelo × da lista). '}
         Espaço pausa · ← → 5 s · , . um quadro · 1 2 3 velocidade 1×, 1,5×, 2× · clique numa marca para voltar a ela.
       </p>
     </>
@@ -1585,8 +1596,9 @@ function MarcacaoAutomatica({
       {desenhando && (
         <>
           <p style={ev.aviso} role="status">
-            Clique e arraste sobre o vídeo, cobrindo o tapete verde onde a caixa passa embaixo do filme. Para
-            conferir, deixe o vídeo parado num ponto com caixa no tapete. Esc cancela.
+            Clique e arraste sobre o vídeo fazendo uma faixa fina sobre a passagem do rolete para o tapete verde,
+            atravessando todo o caminho da caixa. A marca é quando o fim da caixa sai dela. Para conferir, deixe o
+            vídeo parado num ponto com caixa passando. Esc cancela.
           </p>
           <div style={ev.linhaBotoes}>
             <button type="button" style={est.botaoSecundario} onClick={aoCancelarDesenho}>Cancelar o desenho</button>
@@ -1619,8 +1631,9 @@ function MarcacaoAutomatica({
       {!desenhando && estado !== 'lendo' && !retangulo && (
         <>
           <p style={ev.dica}>
-            O app marca os volumes sozinho e você só confere. Desenhe um retângulo sobre o tapete verde da
-            envolvedora, onde a caixa passa embaixo do filme: cada caixa que entra nele vira uma marca.
+            O app marca os volumes sozinho e você só confere. Desenhe uma faixa fina sobre a passagem do rolete para o
+            tapete verde da envolvedora: cada caixa vira uma marca quando o fim dela sai do rolete e entra no tapete — o
+            mesmo instante do Enter e do tablet.
           </p>
           <div style={ev.linhaBotoes}>
             <button type="button" style={est.botaoSecundario} onClick={aoDesenhar} disabled={!podeDesenhar}>
@@ -1635,6 +1648,15 @@ function MarcacaoAutomatica({
 
       {!desenhando && estado !== 'lendo' && retangulo && listaVazia && (
         <>
+          {/* Guardado antes da v2.109.0: desenhado para a ENTRADA embaixo do
+              filme. Lido pela saida, marcaria outro instante, calado. */}
+          {retangulo.evento !== 'saida' && (
+            <p style={ev.aviso} role="status">
+              Este retângulo foi desenhado antes da versão 2.109.0, para a entrada da caixa embaixo do filme. A marca
+              agora é quando o fim da caixa sai do rolete e entra no tapete, como no Enter: redesenhe uma faixa fina
+              sobre essa passagem.
+            </p>
+          )}
           <p style={ev.dica}>
             Retângulo da {maquina?.nome || 'máquina'}, guardado neste PC. A leitura vai de {emRelogio(agoraMs)} até o
             fim do vídeo, roda neste PC e leva alguns minutos.
@@ -1665,8 +1687,15 @@ function MarcacaoAutomatica({
           )}
           {estado === 'pronto' && resultado && (
             <p style={ev.dica}>
-              Mão ou braço parado no retângulo também tem cor de papelão: se uma marca não mostra caixa entrando,
-              apague-a.
+              Mão ou braço parado no retângulo também tem cor de papelão: se uma marca não mostra o fim de uma caixa
+              saindo do rolete, apague-a.
+            </p>
+          )}
+          {/* Leitura de antes da v2.109.0 (rascunho guardado): marcada na ENTRADA. */}
+          {resultado && resultado.evento !== 'saida' && (
+            <p style={ev.aviso}>
+              Esta marcação automática foi feita na entrada da caixa embaixo do filme (antes da versão 2.109.0), não no
+              instante do Enter. Para marcar igual ao Enter, apague as marcas, redesenhe o retângulo e leia de novo.
             </p>
           )}
           {resultado?.cortadoNoFim != null && (
@@ -1676,9 +1705,22 @@ function MarcacaoAutomatica({
               <Tempos lista={[resultado.cortadoNoFim]} aoIr={aoIr} />
             </p>
           )}
-          {resultado?.comCaixaNoInicio && (
+          {resultado?.comCaixaNoInicio && resultado.evento !== 'saida' && (
             <p style={ev.dica}>
               A caixa que já estava embaixo do filme no começo da leitura não foi marcada: a entrada dela não foi filmada.
+            </p>
+          )}
+          {resultado?.jaEstava != null && (
+            <p style={ev.aviso}>
+              Confira a primeira: algo já estava no retângulo quando a leitura começou, e foi marcado quando saiu.
+              Se não era o fim de uma caixa, apague a marca:{' '}
+              <Tempos lista={[resultado.jaEstava]} aoIr={aoIr} />
+            </p>
+          )}
+          {resultado?.semSaida != null && (
+            <p style={ev.dica}>
+              A caixa que entrou no retângulo em <Tempos lista={[resultado.semSaida]} aoIr={aoIr} /> não foi marcada:
+              o vídeo acabou antes de ela sair.
             </p>
           )}
           {resultado?.suspeitos.length > 0 && (

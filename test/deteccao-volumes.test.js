@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   areaDaImagem, detectarVolumes, fracaoPapelao, intervalosLongos, limiaresDoSinal, pontoNaImagem, retanguloEntre,
-  retanguloValido,
+  retanguloValido, saidasDosVolumes,
 } from '../src/domain/deteccaoVolumes.js';
 import {
   conferirAutomatica, marcacaoDasEntradas, marcacaoVazia, marcarToque, medicaoDoVideo, removerVolume,
@@ -252,5 +252,39 @@ describe('das entradas a' + "' marcacao do Enter", () => {
     });
     expect(conferirAutomatica([], m)).toBeNull();
     expect(conferirAutomatica(null, m)).toBeNull();
+  });
+});
+
+describe('as marcas pela SAIDA da caixa (v2.109.0): o fim sai do rolete e entra no tapete', () => {
+  const seg = (xs) => xs.map((ms) => ms / 1000);
+  it('cada caixa vira uma marca no instante em que sai da faixa', () => {
+    const r = saidasDosVolumes(detectarVolumes(sinal({ caixas: [[5, 12], [20, 27], [40, 47]] })));
+    expect(r.marcasMs).toHaveLength(3);
+    seg(r.marcasMs).forEach((t, i) => expect(Math.abs(t - [12, 27, 47][i])).toBeLessThan(0.3));
+    expect(r.jaEstava).toBeNull();
+    expect(r.semSaida).toBeNull();
+  });
+  it('a caixa que ja estava na faixa no comeco CONTA: a saida dela foi filmada', () => {
+    const d = detectarVolumes(sinal({ caixas: [[0, 4], [20, 27], [40, 47]] }));
+    const r = saidasDosVolumes(d);
+    expect(d.comCaixaNoInicio).toBe(true);
+    expect(Math.abs(r.jaEstava / 1000 - 4)).toBeLessThan(0.3);
+    expect(r.marcasMs[0]).toBe(r.jaEstava);
+    seg(r.marcasMs).forEach((t, i) => expect(Math.abs(t - [4, 27, 47][i])).toBeLessThan(0.3));
+  });
+  it('a que entrou e o video acabou antes de ela sair NAO conta: a saida nao foi filmada', () => {
+    const r = saidasDosVolumes(detectarVolumes(sinal({ duracao: 60, caixas: [[10, 17], [30, 37], [56.5, 61]] })));
+    expect(r.marcasMs).toHaveLength(2);
+    expect(Math.abs(r.semSaida / 1000 - 56.5)).toBeLessThan(0.3);
+  });
+  it('a caixa suspeita (duas encostadas) e' + "' apontada no instante da marca, a saida", () => {
+    const r = saidasDosVolumes(detectarVolumes(sinal({
+      duracao: 90, caixas: [[5, 12], [20, 27], [35, 49], [60, 67], [75, 82]],
+    })));
+    expect(r.suspeitos).toHaveLength(1);
+    expect(Math.abs(r.suspeitos[0] / 1000 - 49)).toBeLessThan(0.3);
+  });
+  it('sem leitura (motivo), nenhuma marca', () => {
+    expect(saidasDosVolumes({ motivo: 'x' })).toEqual({ marcasMs: [], jaEstava: null, semSaida: null, suspeitos: [] });
   });
 });

@@ -4,12 +4,14 @@
  * confere e corrige com as teclas de sempre: isto so' poupa o trabalho de
  * assistir e apertar Enter a cada volume.
  *
- * COMO: o analista desenha um retangulo sobre o tapete verde da
- * envolvedora, onde a caixa passa embaixo do filme. Em cada quadro, mede-se
- * quanto do retangulo tem COR DE PAPELAO. Esteira vazia: quase nada. Caixa
- * passando: o retangulo enche. Cada enche-esvazia e' um volume, e a marca e'
- * o instante em que a caixa ENTRA no retangulo — a frente da caixa chegando
- * ao tapete, a mesma regra de marcacao do analista.
+ * COMO: o analista desenha um retangulo — uma faixa fina — sobre a
+ * passagem do rolete para o tapete verde da envolvedora. Em cada quadro,
+ * mede-se quanto do retangulo tem COR DE PAPELAO. Esteira vazia: quase
+ * nada. Caixa passando: o retangulo enche. Cada enche-esvazia e' um volume.
+ * Desde a v2.109.0 a marca e' o instante em que a caixa SAI do retangulo —
+ * o fim da caixa sai do rolete e entra no tapete, o padrao de marcacao do
+ * PPCP no Enter e no tablet (saidasDosVolumes). Ate' a v2.108 era a entrada
+ * (a frente da caixa), e o volume a volume nao batia com o do analista.
  *
  * A mesma conta do leitor de camera (ferramentas/leitor-camera), validada
  * quadro a quadro num video real da envolvedora — com uma diferenca: aqui
@@ -136,9 +138,10 @@ const mediana = (xs) => {
  *   retangulo, em qualquer ordem e com qualquer espacamento.
  *
  * Devolve { volumes: [{ entrouMs, saiuMs }], descartados, suspeitos,
- * comCaixaNoInicio, limiares } ou { motivo }.
- *  - A caixa que JA' ESTAVA no retangulo no comeco do video nao vira marca:
- *    a entrada dela nao foi filmada (comCaixaNoInicio).
+ * comCaixaNoInicio, saidaDaQueJaEstava, limiares } ou { motivo }.
+ *  - A caixa que JA' ESTAVA no retangulo no comeco do video nao entra em
+ *    `volumes`: a entrada dela nao foi filmada (comCaixaNoInicio). A SAIDA
+ *    foi, e vem em `saidaDaQueJaEstava` (v2.109.0, a marca pela saida).
  *  - Passagem curta demais (pessoa, reflexo) vai para `descartados`.
  *  - A que entrou e o video acabou com ela no retangulo vale, com saiuMs
  *    null — a entrada foi filmada. Se ficou menos que a permanencia minima,
@@ -163,6 +166,7 @@ export function detectarVolumes(amostras, {
   const comCaixaNoInicio = sinal[0].v > limiares.entra;
   let dentro = comCaixaNoInicio;
   let entrou = null;
+  let saidaDaQueJaEstava = null;
   for (let i = 1; i < sinal.length; i++) {
     const a = sinal[i - 1];
     const b = sinal[i];
@@ -176,6 +180,8 @@ export function detectarVolumes(amostras, {
         const volume = { entrouMs: Math.round(entrou), saiuMs: Math.round(saiu) };
         if (saiu - entrou < permanenciaMinimaMs) descartados.push(volume);
         else volumes.push(volume);
+      } else {
+        saidaDaQueJaEstava = Math.round(saiu);
       }
       entrou = null;
     }
@@ -198,7 +204,35 @@ export function detectarVolumes(amostras, {
     (v) => v.saiuMs != null && v.saiuMs - v.entrouMs > FATOR_SUSPEITO * tipica,
   );
   return {
-    volumes, descartados, suspeitos, cortadoNoFim, comCaixaNoInicio, limiares,
+    volumes, descartados, suspeitos, cortadoNoFim, comCaixaNoInicio, saidaDaQueJaEstava, limiares,
+  };
+}
+
+/**
+ * AS MARCAS PELA SAIDA DA CAIXA (v2.109.0) — o mesmo instante do Enter
+ * manual: o FIM da caixa sai do rolete e entra no tapete (o padrao do PPCP,
+ * 12/11/2026). Com o retangulo como uma faixa fina sobre essa passagem, a
+ * caixa sai dele exatamente quando o fim dela passa.
+ *
+ * As pontas do video se invertem em relacao a' entrada:
+ *  - a caixa que JA' ESTAVA na faixa no comeco conta: a saida foi filmada
+ *    (`jaEstava`, para conferir — pode ser uma mao que estava ali);
+ *  - a que entrou e o video acabou antes de ela sair NAO conta: a saida nao
+ *    foi filmada (`semSaida`, o instante em que ela entrou).
+ *
+ * @param r o resultado de detectarVolumes
+ * @returns { marcasMs, jaEstava, semSaida, suspeitos } — suspeitos na saida
+ */
+export function saidasDosVolumes(r) {
+  const comSaida = (r?.volumes || []).filter((v) => v.saiuMs != null);
+  const jaEstava = Number.isFinite(r?.saidaDaQueJaEstava) ? r.saidaDaQueJaEstava : null;
+  const semSaida = (r?.volumes || []).find((v) => v.saiuMs == null)?.entrouMs ?? null;
+  const marcasMs = [...(jaEstava != null ? [jaEstava] : []), ...comSaida.map((v) => v.saiuMs)];
+  return {
+    marcasMs,
+    jaEstava,
+    semSaida,
+    suspeitos: (r?.suspeitos || []).filter((v) => v.saiuMs != null).map((v) => v.saiuMs),
   };
 }
 

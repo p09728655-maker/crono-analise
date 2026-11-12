@@ -406,6 +406,19 @@ do produto dele**.
   e `test/e2e/video-automatico.e2e.mjs` (vídeo sintético
   `test/fixtures/caixas-60s.webm`: fundo verde e caixa parda em horários
   conhecidos — nenhuma imagem da fábrica no repositório).
+- **A marcação automática marca na SAÍDA da caixa** (v2.109.0): o padrão de
+  marcação do PPCP é o fim da caixa saindo do rolete e entrando no tapete (o
+  toque do tablet e o Enter). O retângulo passa a ser uma faixa fina sobre essa
+  passagem, e a marca é o instante em que a caixa sai dele
+  (`saidasDosVolumes` em `src/domain/deteccaoVolumes.js`, sobre o `saiuMs` que
+  `detectarVolumes` já calculava). As pontas se invertem: a caixa que já
+  estava na faixa no começo conta (a saída foi filmada; `saidaDaQueJaEstava`,
+  apontada para conferir) e a que o vídeo cortou antes de sair não conta
+  (`semSaida`). O retângulo guardado por máquina ganha `evento: 'saida'`; o de
+  antes (sem ele, desenhado para a entrada embaixo do filme) faz a tela pedir
+  para redesenhar, e a conferência de uma leitura antiga avisa que foi na
+  entrada. O leitor de câmera segue o mesmo padrão: intervalo de saída a saída
+  e validação pela coluna `saiu`.
 - **A tela de marcar por vídeo com a visão do tablet** (v2.108.0): o painel do
   topo da coluna da direita é o `PainelTakt` do cronômetro do tablet
   (exportado de `src/features/coleta/rapida/CronometroAoVivo.jsx`, que o usa
@@ -427,7 +440,8 @@ do produto dele**.
   o `converter.bat` da mesma pasta (arrastar o `.dav` em cima) gera um MP4
   H.264 com a data do arquivo acertada para o "Cronometrar por vídeo" sugerir
   o início certo da filmagem (data do arquivo − duração). Detecta pela fração de cor de papelão
-  num retângulo fixo sobre o tapete verde, com dois limiares para o filme
+  num retângulo fixo — uma faixa fina sobre a passagem do rolete para o tapete
+  verde; a hora do volume é a saída, desde a v2.109.0 —, com dois limiares para o filme
   balançando não duplicar a caixa. Não usa IA nem internet e não guarda imagem.
   Ainda **não manda nada ao app**: primeiro valida contra a marcação manual por
   vídeo (critérios e passo a passo em `ferramentas/leitor-camera/LEIA-ME.md`).

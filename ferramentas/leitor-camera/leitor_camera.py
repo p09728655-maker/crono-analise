@@ -409,7 +409,8 @@ class Registro:
         else:
             self.pendentes.append((arq, linha, False))
             self.gravar_pendentes()
-        print(f'  volume  entrou {"   ?    " if entrou is None else hora(entrou)}'
+        # A marca e' a SAIDA (o fim da caixa sai do rolete): e' ela que aparece.
+        print(f'  volume  saiu {hora(saiu)}'
               + ('' if desde_anterior is None else f'   ciclo {num(desde_anterior)} s')
               + (f'   ({obs})' if obs else ''), flush=True)
 
@@ -515,7 +516,7 @@ class Detector:
         # A média atrasa a leitura em meia janela; desconta isso da hora.
         self.atraso = timedelta(seconds=(self.janela.maxlen - 1) / 2 / cfg['quadros_por_segundo'])
         self.pausa_maxima_s = cfg.get('pausa_maxima_min', PAUSA_MAXIMA_MIN) * 60
-        self.ultima_entrada = None
+        self.ultima_saida = None
         self.reiniciar(apos_queda=False)
 
     def reiniciar(self, apos_queda):
@@ -524,7 +525,7 @@ class Detector:
         self.dentro, self.entrou, self.parcial = False, None, False
         self.primeira_leitura = True
         if apos_queda:
-            self.ultima_entrada = None  # o intervalo atravessaria a queda: não é ciclo
+            self.ultima_saida = None  # o intervalo atravessaria a queda: não é ciclo
 
     def quadro(self, momento, fracao):
         self.janela.append(fracao)
@@ -556,20 +557,21 @@ class Detector:
 
     def _registrar(self, entrou, saiu, obs):
         """
-        O intervalo é de ENTRADA a ENTRADA: a mesma marca que o analista usa
-        (frente da caixa tocando o tapete verde) e que a validação confere.
+        O intervalo é de SAÍDA a SAÍDA (v2.109.0 do app): a mesma marca que o
+        analista usa — o fim da caixa sai do rolete e entra no tapete — com o
+        retângulo como uma faixa fina sobre essa passagem. É a coluna `saiu`
+        que a validação confere. Até então era de entrada a entrada.
         """
         desde = None
-        if entrou is not None and self.ultima_entrada is not None:
-            desde = (entrou - self.ultima_entrada).total_seconds()
+        if self.ultima_saida is not None:
+            desde = (saiu - self.ultima_saida).total_seconds()
             if desde > self.pausa_maxima_s:
                 # Noite, fim de semana, turno parado — por tempo, não por data:
                 # turno que atravessa a meia-noite continua com o ciclo certo.
                 obs = obs or f'{desde / 3600:.1f} h sem volume antes deste: não é ciclo'
                 desde = None
         self.reg.volume(entrou, saiu, desde, obs)
-        if entrou is not None:
-            self.ultima_entrada = entrou
+        self.ultima_saida = saiu
 
     def fim(self, momento):
         if self.dentro:

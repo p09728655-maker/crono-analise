@@ -4,9 +4,11 @@ Lê a câmera Intelbras da envolvedora e grava **uma planilha por dia com a hora
 de cada volume**. Roda num PC da fábrica. Não usa internet nem IA e **não
 guarda imagem nenhuma**, só as horas.
 
-Como funciona: um retângulo fixo na imagem, em cima do tapete verde embaixo do
-filme. Quando a caixa passa, o retângulo enche de cor de papelão; quando sai,
-esvazia. Cada enche-esvazia é um volume.
+Como funciona: um retângulo fixo na imagem — uma faixa fina sobre a passagem
+do rolete para o tapete verde da envolvedora. Quando a caixa passa, a faixa
+enche de cor de papelão; quando sai, esvazia. Cada enche-esvazia é um volume, e
+a hora dele é a **saída**: o fim da caixa sai do rolete e entra no tapete — o
+mesmo instante em que o analista toca no tablet ou aperta Enter no app.
 
 > Isto mede **vazão** (volumes por hora, intervalo entre volumes, tempo
 > parado). Não é tempo padrão: não tem fator de ritmo nem tolerância.
@@ -52,8 +54,9 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    ```
    python leitor_camera.py --arquivo video.mp4 --foto --momento 30
    ```
-   Abra `foto_camera.jpg`. O retângulo vermelho tem que cobrir a caixa no
-   tapete verde. Cada linha branca da grade é 10% da imagem; as amarelas são o
+   Abra `foto_camera.jpg`. O retângulo vermelho tem que ser uma faixa fina
+   sobre a passagem do rolete para o tapete verde, atravessando todo o caminho
+   da caixa. Cada linha branca da grade é 10% da imagem; as amarelas são o
    meio (50%). Ajuste no `config.json`: `x` e `y` = canto de cima à esquerda,
    `largura` e `altura` = tamanho, tudo em fração (0,30 = 30%, escrito `0.30`).
 3. Veja o sinal:
@@ -91,22 +94,24 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    ([seção 7](#7-marcar-no-app-um-vídeo-do-gravador)). O MP4 começa no mesmo
    quadro do `.dav`: o segundo *t* do vídeo no app é o início lido pelo
    leitor + *t*. Marque no MP4, rode o leitor no `.dav`.
-   A tela diz "Enter a cada volume que fecha"; para esta validação — e para
-   todos os analistas, sempre — **"fecha" = a frente da caixa toca o tapete
-   verde**. É o instante que o leitor grava na coluna `entrou`, e o intervalo
-   da planilha é de entrada a entrada: a validação confere a mesma marca que
-   vira o número.
+   Para esta validação — e para todos os analistas, sempre — a marca é **o
+   fim da caixa sai do rolete e entra no tapete** (é o que o app pede no Enter
+   e o que se toca no tablet). É o instante que o leitor grava na coluna
+   `saiu`, e o intervalo da planilha é de saída a saída: a validação confere a
+   mesma marca que vira o número. A marcação automática do app (v2.109.0)
+   marca o mesmo instante.
 6. Compare **volume a volume**, não pela média. A média do intervalo só
    depende do primeiro e do último volume: um volume perdido e um falso se
    anulam e ela continua igual. Mande o CSV do leitor e a lista "volume a
    volume" da medição manual para fazer o pareamento:
    - **entram** todas as marcas manuais, inclusive a 1ª (a largada também é
-     uma caixa tocando o tapete);
-   - **ficam de fora** as linhas do leitor com `entrou` vazio e as que caem
-     antes da largada ou depois do Encerrar (com 3 s de folga);
+     uma caixa saindo do rolete);
+   - **ficam de fora** as linhas do leitor que caem antes da largada ou
+     depois do Encerrar (com 3 s de folga). A linha "já estava no filme" tem
+     `entrou` vazio, mas a saída dela foi filmada: ela entra;
    - desconta-se a diferença fixa entre as duas marcações (a mediana de
-     `entrou` − marca manual): o leitor marca quando a caixa já cobriu parte
-     do retângulo, um pouco depois do toque;
+     `saiu` − marca manual): o leitor marca quando a caixa já saiu de quase
+     toda a faixa, um pouco depois do toque;
    - cada marca procura a do outro lado mais próxima, **a até 3 s**.
 
    **Passa se:**
@@ -154,7 +159,7 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
 | `entrou` | caixa começou a entrar no retângulo (hora com décimo de segundo) |
 | `saiu` | caixa saiu do retângulo |
 | `segundos_no_filme` | de `entrou` a `saiu` — tempo de máquina, deve ser quase constante |
-| `segundos_desde_anterior` | intervalo entre este volume e o anterior (**entrada a entrada**) |
+| `segundos_desde_anterior` | intervalo entre este volume e o anterior (**saída a saída**, desde a v2.109.0 do app; antes era de entrada a entrada) |
 | `observacao` | por que algum campo ficou vazio |
 
 - **Intervalo vazio não é erro**: é o 1º volume depois de **mais de 2 h sem
