@@ -1,10 +1,12 @@
 """
 Leitor de câmera da envolvedora — conta volumes pela cor de papelão.
 
-Olha um retângulo fixo da imagem (a esteira embaixo do rolo de filme) e mede
-quanto dele está coberto de papelão. Volume passando = o retângulo enche de
-papelão; esteira vazia = quase nada. Cada passagem vira uma linha no CSV do
-dia, com a hora em que o volume entrou e saiu do filme.
+Olha um retângulo fixo da imagem — uma faixa fina sobre a passagem do rolete
+para o tapete verde — e mede quanto dele está coberto de papelão. Volume
+passando = a faixa enche de papelão; vazia = quase nada. Cada passagem vira
+uma linha no CSV do dia. A hora que vale é a SAÍDA (coluna `saiu`): o fim da
+caixa sai do rolete e entra no tapete — o instante do toque no tablet e do
+Enter no app (v2.109.0 do app). O intervalo é de saída a saída.
 
 Não usa IA nem internet: só ffmpeg + Python, no PC da fábrica. Nenhuma imagem
 é guardada — só as horas.
@@ -409,7 +411,8 @@ class Registro:
         else:
             self.pendentes.append((arq, linha, False))
             self.gravar_pendentes()
-        print(f'  volume  entrou {"   ?    " if entrou is None else hora(entrou)}'
+        # A marca e' a SAIDA (o fim da caixa sai do rolete): e' ela que aparece.
+        print(f'  volume  saiu {hora(saiu)}'
               + ('' if desde_anterior is None else f'   ciclo {num(desde_anterior)} s')
               + (f'   ({obs})' if obs else ''), flush=True)
 
@@ -515,7 +518,7 @@ class Detector:
         # A média atrasa a leitura em meia janela; desconta isso da hora.
         self.atraso = timedelta(seconds=(self.janela.maxlen - 1) / 2 / cfg['quadros_por_segundo'])
         self.pausa_maxima_s = cfg.get('pausa_maxima_min', PAUSA_MAXIMA_MIN) * 60
-        self.ultima_entrada = None
+        self.ultima_saida = None
         self.reiniciar(apos_queda=False)
 
     def reiniciar(self, apos_queda):
@@ -524,7 +527,7 @@ class Detector:
         self.dentro, self.entrou, self.parcial = False, None, False
         self.primeira_leitura = True
         if apos_queda:
-            self.ultima_entrada = None  # o intervalo atravessaria a queda: não é ciclo
+            self.ultima_saida = None  # o intervalo atravessaria a queda: não é ciclo
 
     def quadro(self, momento, fracao):
         self.janela.append(fracao)
@@ -536,7 +539,7 @@ class Detector:
         if self.primeira_leitura:
             self.primeira_leitura = False
             if media > self.cfg['limiar_entra']:
-                # Já havia volume embaixo do filme quando o leitor começou:
+                # Já havia volume na faixa quando o leitor começou:
                 # ele conta quando sair, mas a hora de entrada é desconhecida.
                 self.dentro, self.parcial = True, True
                 return
@@ -546,7 +549,7 @@ class Detector:
         elif self.dentro and media < self.cfg['limiar_sai']:
             self.dentro = False
             if self.parcial:
-                self._registrar(None, agora, 'já estava no filme quando a leitura começou')
+                self._registrar(None, agora, 'já estava na faixa quando a leitura começou')
             elif (agora - self.entrou).total_seconds() < self.cfg['permanencia_minima_s']:
                 self.reg.log(f'descartado: papelão por só {(agora - self.entrou).total_seconds():.1f} s '
                              f'às {agora:%H:%M:%S} (pessoa ou reflexo?)')
@@ -556,24 +559,25 @@ class Detector:
 
     def _registrar(self, entrou, saiu, obs):
         """
-        O intervalo é de ENTRADA a ENTRADA: a mesma marca que o analista usa
-        (frente da caixa tocando o tapete verde) e que a validação confere.
+        O intervalo é de SAÍDA a SAÍDA (v2.109.0 do app): a mesma marca que o
+        analista usa — o fim da caixa sai do rolete e entra no tapete — com o
+        retângulo como uma faixa fina sobre essa passagem. É a coluna `saiu`
+        que a validação confere. Até então era de entrada a entrada.
         """
         desde = None
-        if entrou is not None and self.ultima_entrada is not None:
-            desde = (entrou - self.ultima_entrada).total_seconds()
+        if self.ultima_saida is not None:
+            desde = (saiu - self.ultima_saida).total_seconds()
             if desde > self.pausa_maxima_s:
                 # Noite, fim de semana, turno parado — por tempo, não por data:
                 # turno que atravessa a meia-noite continua com o ciclo certo.
                 obs = obs or f'{desde / 3600:.1f} h sem volume antes deste: não é ciclo'
                 desde = None
         self.reg.volume(entrou, saiu, desde, obs)
-        if entrou is not None:
-            self.ultima_entrada = entrou
+        self.ultima_saida = saiu
 
     def fim(self, momento):
         if self.dentro:
-            self.reg.log(f'volume embaixo do filme quando o leitor parou ({momento:%H:%M:%S}): não contado')
+            self.reg.log(f'volume na faixa quando o leitor parou ({momento:%H:%M:%S}): não contado')
 
 
 def tirar_foto(cfg, arquivo, momento):
@@ -703,6 +707,13 @@ def main():
         parar('ffmpeg não encontrado. Instale (LEIA-ME.md, passo 1) e abra um Prompt novo, '
               'ou copie o ffmpeg.exe para esta pasta.')
     cfg = ler_config()
+    if cfg.get('marca') != 'saida':
+        # config.json de antes: o retangulo era embaixo do filme, para a
+        # ENTRADA. Pela saida ele marcaria outro instante que o do tablet.
+        print('ATENÇÃO: este config.json é de antes da marca na saída. A hora do volume agora é quando o fim\n'
+              'da caixa sai do rolete e entra no tapete: refaça o retângulo como uma faixa fina sobre essa\n'
+              'passagem (LEIA-ME, passo 2.2), ponha "permanencia_minima_s": 1.5 e acrescente "marca": "saida".\n',
+              flush=True)
     if not args.arquivo and any(p in cfg['camera'] for p in ('USUARIO:SENHA', 'IP_DO_GRAVADOR')):
         parar('A câmera ainda não está no config.json: troque USUARIO, SENHA e IP_DO_GRAVADOR '
               '(LEIA-ME, passo 3).\nPara testar com um vídeo, no Prompt de Comando:\n'

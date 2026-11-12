@@ -4,9 +4,11 @@ Lê a câmera Intelbras da envolvedora e grava **uma planilha por dia com a hora
 de cada volume**. Roda num PC da fábrica. Não usa internet nem IA e **não
 guarda imagem nenhuma**, só as horas.
 
-Como funciona: um retângulo fixo na imagem, em cima do tapete verde embaixo do
-filme. Quando a caixa passa, o retângulo enche de cor de papelão; quando sai,
-esvazia. Cada enche-esvazia é um volume.
+Como funciona: um retângulo fixo na imagem — uma faixa fina sobre a passagem
+do rolete para o tapete verde da envolvedora. Quando a caixa passa, a faixa
+enche de cor de papelão; quando sai, esvazia. Cada enche-esvazia é um volume, e
+a hora dele é a **saída**: o fim da caixa sai do rolete e entra no tapete — o
+mesmo instante em que o analista toca no tablet ou aperta Enter no app.
 
 > Isto mede **vazão** (volumes por hora, intervalo entre volumes, tempo
 > parado). Não é tempo padrão: não tem fator de ritmo nem tolerância.
@@ -48,12 +50,19 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    próprio gravador, num horário de produção normal (sem almoço no meio).
    **Prefira o `.dav`**: o leitor abre direto e ele traz a hora gravada
    (passo 4). Se não abrir, exporte em MP4/AVI.
-2. Confira o retângulo num momento em que tem caixa embaixo do filme:
+2. Confira o retângulo num momento em que tem caixa passando do rolete para o tapete:
    ```
    python leitor_camera.py --arquivo video.mp4 --foto --momento 30
    ```
-   Abra `foto_camera.jpg`. O retângulo vermelho tem que cobrir a caixa no
-   tapete verde. Cada linha branca da grade é 10% da imagem; as amarelas são o
+   Abra `foto_camera.jpg`. O retângulo vermelho tem que ser uma faixa fina
+   sobre a passagem do rolete para o tapete verde, atravessando todo o caminho
+   da caixa. **Os números do `config.exemplo.json` são só um ponto de partida:**
+   a posição certa depende da câmera. Com a faixa fina a caixa leva uns 2 s
+   para atravessar, e o leitor mede a passagem uns 0,3 s mais longa que a real:
+   `permanencia_minima_s` é 1.5 (o vulto de 1 s, lido como 1,3 s, fica de fora).
+   Se o `--diagnostico` mostrar caixa passando mais rápido, baixe.
+   `config.json` antigo (sem `"marca": "saida"`) faz o leitor avisar ao abrir.
+   Cada linha branca da grade é 10% da imagem; as amarelas são o
    meio (50%). Ajuste no `config.json`: `x` e `y` = canto de cima à esquerda,
    `largura` e `altura` = tamanho, tudo em fração (0,30 = 30%, escrito `0.30`).
 3. Veja o sinal:
@@ -91,22 +100,24 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    ([seção 7](#7-marcar-no-app-um-vídeo-do-gravador)). O MP4 começa no mesmo
    quadro do `.dav`: o segundo *t* do vídeo no app é o início lido pelo
    leitor + *t*. Marque no MP4, rode o leitor no `.dav`.
-   A tela diz "Enter a cada volume que fecha"; para esta validação — e para
-   todos os analistas, sempre — **"fecha" = a frente da caixa toca o tapete
-   verde**. É o instante que o leitor grava na coluna `entrou`, e o intervalo
-   da planilha é de entrada a entrada: a validação confere a mesma marca que
-   vira o número.
+   Para esta validação — e para todos os analistas, sempre — a marca é **o
+   fim da caixa sai do rolete e entra no tapete** (é o que o app pede no Enter
+   e o que se toca no tablet). É o instante que o leitor grava na coluna
+   `saiu`, e o intervalo da planilha é de saída a saída: a validação confere a
+   mesma marca que vira o número. A marcação automática do app (v2.109.0)
+   marca o mesmo instante.
 6. Compare **volume a volume**, não pela média. A média do intervalo só
    depende do primeiro e do último volume: um volume perdido e um falso se
    anulam e ela continua igual. Mande o CSV do leitor e a lista "volume a
    volume" da medição manual para fazer o pareamento:
    - **entram** todas as marcas manuais, inclusive a 1ª (a largada também é
-     uma caixa tocando o tapete);
-   - **ficam de fora** as linhas do leitor com `entrou` vazio e as que caem
-     antes da largada ou depois do Encerrar (com 3 s de folga);
+     uma caixa saindo do rolete);
+   - **ficam de fora** as linhas do leitor que caem antes da largada ou
+     depois do Encerrar (com 3 s de folga). A linha "já estava na faixa" tem
+     `entrou` vazio, mas a saída dela foi filmada: ela entra;
    - desconta-se a diferença fixa entre as duas marcações (a mediana de
-     `entrou` − marca manual): o leitor marca quando a caixa já cobriu parte
-     do retângulo, um pouco depois do toque;
+     `saiu` − marca manual): o leitor marca quando a caixa já saiu de quase
+     toda a faixa, um pouco depois do toque;
    - cada marca procura a do outro lado mais próxima, **a até 3 s**.
 
    **Passa se:**
@@ -154,12 +165,12 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
 | `entrou` | caixa começou a entrar no retângulo (hora com décimo de segundo) |
 | `saiu` | caixa saiu do retângulo |
 | `segundos_no_filme` | de `entrou` a `saiu` — tempo de máquina, deve ser quase constante |
-| `segundos_desde_anterior` | intervalo entre este volume e o anterior (**entrada a entrada**) |
+| `segundos_desde_anterior` | intervalo entre este volume e o anterior (**saída a saída**, desde a v2.109.0 do app; antes era de entrada a entrada) |
 | `observacao` | por que algum campo ficou vazio |
 
 - **Intervalo vazio não é erro**: é o 1º volume depois de **mais de 2 h sem
   volume** (noite, fim de semana, turno parado), o 1º depois de uma queda da
-  câmera, ou o que já estava no filme quando a leitura começou. Esses buracos
+  câmera, ou o que já estava na faixa quando a leitura começou. Esses buracos
   **não** viram ciclo. As 2 h podem ser mudadas com `"pausa_maxima_min"` no
   `config.json`. Turno que atravessa a meia-noite continua com o ciclo certo.
 - **O intervalo inclui as paradas** (almoço, falta de caixa, setup): a
@@ -178,7 +189,7 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
   outro, o segundo avisa e fecha — dois juntos contariam cada volume duas
   vezes. O `--diagnostico` pode rodar junto, para conferir a câmera.
 - `dados\leitor.log` registra quedas de câmera, papelão descartado (passou
-  menos de 2 s no retângulo: pessoa ou reflexo) e erro inesperado. A senha da
+  menos que `permanencia_minima_s` no retângulo: pessoa ou reflexo) e erro inesperado. A senha da
   câmera nunca aparece nele.
 - Não clique dentro da janela preta para selecionar texto: o leitor desliga
   esse modo, mas se a janela "congelar", aperte Esc.

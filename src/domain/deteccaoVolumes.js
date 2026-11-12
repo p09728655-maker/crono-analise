@@ -4,12 +4,14 @@
  * confere e corrige com as teclas de sempre: isto so' poupa o trabalho de
  * assistir e apertar Enter a cada volume.
  *
- * COMO: o analista desenha um retangulo sobre o tapete verde da
- * envolvedora, onde a caixa passa embaixo do filme. Em cada quadro, mede-se
- * quanto do retangulo tem COR DE PAPELAO. Esteira vazia: quase nada. Caixa
- * passando: o retangulo enche. Cada enche-esvazia e' um volume, e a marca e'
- * o instante em que a caixa ENTRA no retangulo — a frente da caixa chegando
- * ao tapete, a mesma regra de marcacao do analista.
+ * COMO: o analista desenha um retangulo — uma faixa fina — sobre a
+ * passagem do rolete para o tapete verde da envolvedora. Em cada quadro,
+ * mede-se quanto do retangulo tem COR DE PAPELAO. Esteira vazia: quase
+ * nada. Caixa passando: o retangulo enche. Cada enche-esvazia e' um volume.
+ * Desde a v2.109.0 a marca e' o instante em que a caixa SAI do retangulo —
+ * o fim da caixa sai do rolete e entra no tapete, o padrao de marcacao do
+ * PPCP no Enter e no tablet (saidasDosVolumes). Ate' a v2.108 era a entrada
+ * (a frente da caixa), e o volume a volume nao batia com o do analista.
  *
  * A mesma conta do leitor de camera (ferramentas/leitor-camera), validada
  * quadro a quadro num video real da envolvedora — com uma diferenca: aqui
@@ -24,8 +26,20 @@
 export const CONTRASTE_MINIMO = 0.15;
 /** Media de meio segundo: o filme balancando em cima da caixa nao vira duas marcas. */
 export const JANELA_MS = 500;
-/** Caixa que passa menos que isso no retangulo e' pessoa ou reflexo, nao volume. */
-export const PERMANENCIA_MINIMA_MS = 2000;
+/**
+ * PASSAGEM CURTA = PESSOA OU REFLEXO. Desde a v2.109.0 o limite sai do
+ * PROPRIO video: metade do percentil 75 das passagens dele. O percentil 75,
+ * e nao a mediana: com uma mao em todo ciclo as passagens curtas sao metade
+ * da lista, a mediana caia no meio delas e as maos viravam volume (revisao
+ * de 12/11: o ritmo quase dobrava, sem aviso).
+ * Com a faixa fina sobre a passagem do rolete, a caixa leva so' o tempo de
+ * atravessar — 2 a 3 s na envolvedora —, e o minimo fixo de 2 s de antes
+ * descartava caixa de verdade (revisao da v2.109.0: 3 de 9 sumiam e o ritmo
+ * caia 33% sem aviso). Mao e reflexo passam bem mais rapido que uma caixa.
+ * Abaixo do PISO nada e' caixa (a media de 0,5 s ja' apaga quase tudo).
+ */
+export const PISO_PERMANENCIA_MS = 600;
+export const FATOR_PERMANENCIA = 0.5;
 /** Retangulo menor que isso (fracao da imagem, em cada lado) le' poucos pontos e erra. */
 export const LADO_MINIMO = 0.02;
 /** Volume que demora isto vezes o tipico no retangulo pode ser duas caixas encostadas. */
@@ -122,6 +136,14 @@ function cruzamento(a, b, limiar) {
   return a.ms + ((limiar - a.v) / (b.v - a.v)) * (b.ms - a.ms);
 }
 
+/** O percentil `q` (0 a 1), interpolado entre os vizinhos. */
+function percentil(xs, q) {
+  const o = [...xs].sort((a, b) => a - b);
+  const pos = (o.length - 1) * q;
+  const base = Math.floor(pos);
+  return o[base] + (o[Math.min(base + 1, o.length - 1)] - o[base]) * (pos - base);
+}
+
 const mediana = (xs) => {
   if (!xs.length) return null;
   const o = [...xs].sort((a, b) => a - b);
@@ -136,9 +158,10 @@ const mediana = (xs) => {
  *   retangulo, em qualquer ordem e com qualquer espacamento.
  *
  * Devolve { volumes: [{ entrouMs, saiuMs }], descartados, suspeitos,
- * comCaixaNoInicio, limiares } ou { motivo }.
- *  - A caixa que JA' ESTAVA no retangulo no comeco do video nao vira marca:
- *    a entrada dela nao foi filmada (comCaixaNoInicio).
+ * comCaixaNoInicio, saidaDaQueJaEstava, limiares } ou { motivo }.
+ *  - A caixa que JA' ESTAVA no retangulo no comeco do video nao entra em
+ *    `volumes`: a entrada dela nao foi filmada (comCaixaNoInicio). A SAIDA
+ *    foi, e vem em `saidaDaQueJaEstava` (v2.109.0, a marca pela saida).
  *  - Passagem curta demais (pessoa, reflexo) vai para `descartados`.
  *  - A que entrou e o video acabou com ela no retangulo vale, com saiuMs
  *    null — a entrada foi filmada. Se ficou menos que a permanencia minima,
@@ -148,7 +171,7 @@ const mediana = (xs) => {
  *    confere esses pontos.
  */
 export function detectarVolumes(amostras, {
-  janelaMs = JANELA_MS, permanenciaMinimaMs = PERMANENCIA_MINIMA_MS,
+  janelaMs = JANELA_MS, permanenciaMinimaMs = null,
 } = {}) {
   const lista = (amostras || [])
     .filter((a) => a && Number.isFinite(a.ms) && Number.isFinite(a.fracao))
@@ -158,11 +181,11 @@ export function detectarVolumes(amostras, {
   const limiares = limiaresDoSinal(sinal.map((s) => s.v));
   if (limiares.motivo) return { motivo: limiares.motivo, semContraste: Boolean(limiares.semContraste) };
 
-  const volumes = [];
-  const descartados = [];
+  const passagens = [];
   const comCaixaNoInicio = sinal[0].v > limiares.entra;
   let dentro = comCaixaNoInicio;
   let entrou = null;
+  let saidaDaQueJaEstava = null;
   for (let i = 1; i < sinal.length; i++) {
     const a = sinal[i - 1];
     const b = sinal[i];
@@ -173,13 +196,20 @@ export function detectarVolumes(amostras, {
       dentro = false;
       const saiu = cruzamento(a, b, limiares.sai);
       if (entrou != null) {
-        const volume = { entrouMs: Math.round(entrou), saiuMs: Math.round(saiu) };
-        if (saiu - entrou < permanenciaMinimaMs) descartados.push(volume);
-        else volumes.push(volume);
+        passagens.push({ entrouMs: Math.round(entrou), saiuMs: Math.round(saiu) });
+      } else {
+        saidaDaQueJaEstava = Math.round(saiu);
       }
       entrou = null;
     }
   }
+  // O limite da passagem curta: o dado (testes) ou o do proprio video.
+  const longas = passagens.map((x) => x.saiuMs - x.entrouMs).filter((d) => d >= PISO_PERMANENCIA_MS);
+  const limite = Number.isFinite(permanenciaMinimaMs) ? permanenciaMinimaMs
+    : longas.length >= 3 ? Math.max(PISO_PERMANENCIA_MS, FATOR_PERMANENCIA * percentil(longas, 0.75)) : PISO_PERMANENCIA_MS;
+  const volumes = passagens.filter((x) => x.saiuMs - x.entrouMs >= limite);
+  const descartados = passagens.filter((x) => x.saiuMs - x.entrouMs < limite);
+
   // O video acabou com algo no retangulo. A ENTRADA foi filmada: conta como
   // volume. Se ficou menos que a permanencia minima, nao deu para ver se era
   // caixa (o fim cortou) — conta e vai apontado para conferir, em vez de
@@ -189,7 +219,7 @@ export function detectarVolumes(amostras, {
     const ultimo = sinal[sinal.length - 1].ms;
     const volume = { entrouMs: Math.round(entrou), saiuMs: null };
     volumes.push(volume);
-    if (ultimo - entrou < permanenciaMinimaMs) cortadoNoFim = volume;
+    if (ultimo - entrou < limite) cortadoNoFim = volume;
   }
 
   const permanencias = volumes.filter((v) => v.saiuMs != null).map((v) => v.saiuMs - v.entrouMs);
@@ -198,7 +228,40 @@ export function detectarVolumes(amostras, {
     (v) => v.saiuMs != null && v.saiuMs - v.entrouMs > FATOR_SUSPEITO * tipica,
   );
   return {
-    volumes, descartados, suspeitos, cortadoNoFim, comCaixaNoInicio, limiares,
+    volumes, descartados, suspeitos, cortadoNoFim, comCaixaNoInicio, saidaDaQueJaEstava, limiares,
+    permanenciaMinimaMs: Math.round(limite),
+  };
+}
+
+/**
+ * AS MARCAS PELA SAIDA DA CAIXA (v2.109.0) — o mesmo instante do Enter
+ * manual: o FIM da caixa sai do rolete e entra no tapete (o padrao do PPCP,
+ * 12/11/2026). Com o retangulo como uma faixa fina sobre essa passagem, a
+ * caixa sai dele exatamente quando o fim dela passa.
+ *
+ * So' conta a caixa que passou INTEIRA pela faixa durante a leitura:
+ *  - a que JA' ESTAVA na faixa no comeco nao conta (`jaEstava`, o instante
+ *    em que ela saiu). Podia ser uma mao, e como primeira marca ela viraria
+ *    a largada, que a lista nao deixa apagar (revisao da v2.109.0). Nao
+ *    conta-la nao muda o tempo por volume: a medicao so' comeca uma caixa
+ *    depois;
+ *  - a que entrou e o video acabou antes de ela sair nao conta (`semSaida`,
+ *    o instante em que ela entrou): a saida nao foi filmada.
+ *
+ * @param r o resultado de detectarVolumes
+ * @returns { marcasMs, jaEstava, semSaida, suspeitos, descartados } — os
+ *   suspeitos e os descartados no instante da SAIDA, onde o Enter marcaria
+ */
+export function saidasDosVolumes(r) {
+  const comSaida = (r?.volumes || []).filter((v) => v.saiuMs != null);
+  const jaEstava = Number.isFinite(r?.saidaDaQueJaEstava) ? r.saidaDaQueJaEstava : null;
+  const semSaida = (r?.volumes || []).find((v) => v.saiuMs == null)?.entrouMs ?? null;
+  return {
+    marcasMs: comSaida.map((v) => v.saiuMs),
+    jaEstava,
+    semSaida,
+    suspeitos: (r?.suspeitos || []).filter((v) => v.saiuMs != null).map((v) => v.saiuMs),
+    descartados: (r?.descartados || []).map((v) => v.saiuMs),
   };
 }
 

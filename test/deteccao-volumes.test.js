@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   areaDaImagem, detectarVolumes, fracaoPapelao, intervalosLongos, limiaresDoSinal, pontoNaImagem, retanguloEntre,
-  retanguloValido,
+  retanguloValido, saidasDosVolumes,
 } from '../src/domain/deteccaoVolumes.js';
 import {
   conferirAutomatica, marcacaoDasEntradas, marcacaoVazia, marcarToque, medicaoDoVideo, removerVolume,
@@ -124,8 +124,9 @@ describe('os volumes no sinal', () => {
     // A menos de 2 s do fim: nao da' para ver se era caixa, mas a entrada
     // foi filmada — conta, e vem apontada para conferir. Descartada, a
     // medicao ficava com um volume a menos (revisao de 11/11).
-    const curta = detectarVolumes(sinal({ duracao: 60, caixas: [[10, 17], [30, 37], [59, 61]] }));
-    expect(entradas(curta)).toHaveLength(3);
+    // Tres caixas inteiras antes: o limite da passagem curta sai delas (3,5 s).
+    const curta = detectarVolumes(sinal({ duracao: 60, caixas: [[5, 12], [20, 27], [35, 42], [59, 61]] }));
+    expect(entradas(curta)).toHaveLength(4);
     expect(curta.descartados).toEqual([]);
     expect(Math.abs(curta.cortadoNoFim.entrouMs / 1000 - 59)).toBeLessThan(0.3);
   });
@@ -252,5 +253,73 @@ describe('das entradas a' + "' marcacao do Enter", () => {
     });
     expect(conferirAutomatica([], m)).toBeNull();
     expect(conferirAutomatica(null, m)).toBeNull();
+  });
+});
+
+describe('as marcas pela SAIDA da caixa (v2.109.0): o fim sai do rolete e entra no tapete', () => {
+  const seg = (xs) => xs.map((ms) => ms / 1000);
+  it('cada caixa vira uma marca no instante em que sai da faixa', () => {
+    const r = saidasDosVolumes(detectarVolumes(sinal({ caixas: [[5, 12], [20, 27], [40, 47]] })));
+    expect(r.marcasMs).toHaveLength(3);
+    seg(r.marcasMs).forEach((t, i) => expect(Math.abs(t - [12, 27, 47][i])).toBeLessThan(0.3));
+    expect(r.jaEstava).toBeNull();
+    expect(r.semSaida).toBeNull();
+  });
+  it('a caixa que ja estava na faixa no comeco NAO conta (podia ser uma mao, e viraria a largada)', () => {
+    const d = detectarVolumes(sinal({ caixas: [[0, 4], [20, 27], [40, 47]] }));
+    const r = saidasDosVolumes(d);
+    expect(d.comCaixaNoInicio).toBe(true);
+    expect(Math.abs(r.jaEstava / 1000 - 4)).toBeLessThan(0.3);
+    expect(r.marcasMs).toHaveLength(2);
+    seg(r.marcasMs).forEach((t, i) => expect(Math.abs(t - [27, 47][i])).toBeLessThan(0.3));
+  });
+  it('FAIXA FINA: caixa que atravessa em 1,8 a 2,8 s conta; a mao de 0,7 s nao (revisao da v2.109.0)', () => {
+    // Ciclo de 24 s; com o minimo fixo de 2 s de antes, 3 destas caixas sumiam.
+    const travessias = [1.8, 2.3, 1.9, 2.8, 2.1, 1.95, 2.6, 2.2, 2.4, 2.0];
+    const caixas = travessias.map((t, i) => [10 + 24 * i, 10 + 24 * i + t]);
+    const mao = [10 + 24 * 4 + 12, 10 + 24 * 4 + 12.7];
+    const d = detectarVolumes(sinal({ duracao: 260, caixas: [...caixas, mao] }));
+    const r = saidasDosVolumes(d);
+    expect(r.marcasMs).toHaveLength(10);
+    seg(r.marcasMs).forEach((t, i) => expect(Math.abs(t - caixas[i][1])).toBeLessThan(0.35));
+    expect(r.descartados).toHaveLength(1);
+    expect(Math.abs(r.descartados[0] / 1000 - mao[1])).toBeLessThan(0.35);
+    // O limite saiu do video: metade da travessia tipica (~2,2 s).
+    expect(d.permanenciaMinimaMs).toBeGreaterThan(800);
+    expect(d.permanenciaMinimaMs).toBeLessThan(1400);
+  });
+  it('uma MAO EM TODO CICLO (tantas passagens curtas quanto caixas) nao vira volume', () => {
+    // Com a mediana, o limite caia para 0,88 s e as 10 maos de 0,9 s viravam
+    // volume — o ritmo quase dobrava (revisao de 12/11). Com o percentil 75, nao.
+    const caixas = Array.from({ length: 10 }, (_, i) => [10 + 24 * i, 12.5 + 24 * i]);
+    const maos = Array.from({ length: 10 }, (_, i) => [22 + 24 * i, 22.9 + 24 * i]);
+    const d = detectarVolumes(sinal({ duracao: 260, caixas: [...caixas, ...maos] }));
+    const r = saidasDosVolumes(d);
+    expect(r.marcasMs).toHaveLength(10);
+    expect(r.descartados).toHaveLength(10);
+    expect(d.permanenciaMinimaMs).toBeGreaterThan(1000);
+  });
+  it('retangulo grande (caixas de 7 s): o vulto de 1 s continua descartado pelo limite do proprio video', () => {
+    const d = detectarVolumes(sinal({ caixas: [[5, 12], [20, 21], [30, 37], [45, 52]] }));
+    expect(d.volumes).toHaveLength(3);
+    expect(d.descartados).toHaveLength(1);
+    expect(d.permanenciaMinimaMs).toBeGreaterThan(3000);
+  });
+  it('a que entrou e o video acabou antes de ela sair NAO conta: a saida nao foi filmada', () => {
+    const r = saidasDosVolumes(detectarVolumes(sinal({ duracao: 60, caixas: [[10, 17], [30, 37], [56.5, 61]] })));
+    expect(r.marcasMs).toHaveLength(2);
+    expect(Math.abs(r.semSaida / 1000 - 56.5)).toBeLessThan(0.3);
+  });
+  it('a caixa suspeita (duas encostadas) e' + "' apontada no instante da marca, a saida", () => {
+    const r = saidasDosVolumes(detectarVolumes(sinal({
+      duracao: 90, caixas: [[5, 12], [20, 27], [35, 49], [60, 67], [75, 82]],
+    })));
+    expect(r.suspeitos).toHaveLength(1);
+    expect(Math.abs(r.suspeitos[0] / 1000 - 49)).toBeLessThan(0.3);
+  });
+  it('sem leitura (motivo), nenhuma marca', () => {
+    expect(saidasDosVolumes({ motivo: 'x' })).toEqual({
+      marcasMs: [], jaEstava: null, semSaida: null, suspeitos: [], descartados: [],
+    });
   });
 });

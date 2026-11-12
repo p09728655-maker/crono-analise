@@ -406,6 +406,26 @@ do produto dele**.
   e `test/e2e/video-automatico.e2e.mjs` (vídeo sintético
   `test/fixtures/caixas-60s.webm`: fundo verde e caixa parda em horários
   conhecidos — nenhuma imagem da fábrica no repositório).
+- **A marcação automática marca na SAÍDA da caixa** (v2.109.0): o padrão de
+  marcação do PPCP é o fim da caixa saindo do rolete e entrando no tapete (o
+  toque do tablet e o Enter). O retângulo passa a ser uma faixa fina sobre essa
+  passagem, e a marca é o instante em que a caixa sai dele
+  (`saidasDosVolumes` em `src/domain/deteccaoVolumes.js`, sobre o `saiuMs` que
+  `detectarVolumes` já calculava). Só conta a caixa que passou inteira pela
+  faixa durante a leitura: a que já estava no começo (`saidaDaQueJaEstava`)
+  não conta — viraria a largada, que a lista não deixa apagar — e a que o vídeo
+  cortou antes de sair também não (`semSaida`). A passagem curta (pessoa ou
+  reflexo) é a que dura menos de `FATOR_PERMANENCIA` (0,5) × o percentil 75 das
+  passagens do próprio vídeo (a mediana caía no meio das mãos quando havia uma
+  por ciclo), com piso de 0,6 s: o mínimo fixo de 2 s descartava
+  caixa de verdade com a faixa fina (a caixa atravessa em 2 a 3 s). O retângulo
+  guardado por máquina ganha `evento: 'saida'`; com o de antes (sem ele,
+  desenhado para a entrada embaixo do filme) a tela só deixa redesenhar, e a
+  conferência de uma leitura antiga avisa que foi na entrada. O leitor de
+  câmera segue o mesmo padrão: intervalo de saída a saída, validação pela
+  coluna `saiu`, `permanencia_minima_s` 1.5 no exemplo (o leitor lê a passagem
+  ~0,3 s mais longa) e aviso ao abrir com
+  `config.json` sem `"marca": "saida"`.
 - **A tela de marcar por vídeo com a visão do tablet** (v2.108.0): o painel do
   topo da coluna da direita é o `PainelTakt` do cronômetro do tablet
   (exportado de `src/features/coleta/rapida/CronometroAoVivo.jsx`, que o usa
@@ -427,7 +447,8 @@ do produto dele**.
   o `converter.bat` da mesma pasta (arrastar o `.dav` em cima) gera um MP4
   H.264 com a data do arquivo acertada para o "Cronometrar por vídeo" sugerir
   o início certo da filmagem (data do arquivo − duração). Detecta pela fração de cor de papelão
-  num retângulo fixo sobre o tapete verde, com dois limiares para o filme
+  num retângulo fixo — uma faixa fina sobre a passagem do rolete para o tapete
+  verde; a hora do volume é a saída, desde a v2.109.0 —, com dois limiares para o filme
   balançando não duplicar a caixa. Não usa IA nem internet e não guarda imagem.
   Ainda **não manda nada ao app**: primeiro valida contra a marcação manual por
   vídeo (critérios e passo a passo em `ferramentas/leitor-camera/LEIA-ME.md`).
