@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.108.0',
+    data: '2026-11-12',
+    titulo: 'Cronometrar por vídeo: a mesma visão do cronômetro do tablet',
+    itens: [
+      'NO CRONOMETRAR POR VÍDEO, O PAINEL É O DO TABLET. Em cima da lista das marcas, o mesmo quadro do cronômetro da embalagem: o produto, o TEMPO desde a largada, o POR VOLUME grande contra o TEMPO-ALVO (vermelho com ▲ acima do alvo, verde com ✓ dentro), e embaixo VOLUMES, VOL/H PERÍODO, ÚLTIMO e A SEMANA PEDE. Os números são os mesmos do tablet, na mesma conta; o TEMPO anda com o vídeo, não com o relógio. Lacunas e parado continuam logo abaixo.',
+      'A MARCAÇÃO AUTOMÁTICA FICA AO LADO DO VÍDEO, embaixo da lista, e não mais embaixo do vídeo. Numa tela de PC (1920 × 1080) o vídeo, o painel, a lista e a marcação automática cabem sem rolar: dá para acompanhar a leitura e conferir as marcas olhando o vídeo. Em tela menor (notebook), a marcação automática fica embaixo da lista, um pouco de rolagem.',
+      'A lista das marcas ficou mais baixa (rola sozinha, como antes) para tudo caber.',
+      'DÁ PARA VOLTAR AO PREPARO NO MEIO DA MARCAÇÃO. Em cima do vídeo, "← Voltar ao preparo", com o arquivo, a máquina e o produto da medição ao lado. As marcas continuam: troque a máquina, o produto ou o início da filmagem e clique em "Continuar a marcação". Serve, por exemplo, quando o vídeo é de outra câmera: o retângulo da marcação automática é guardado por máquina, e com a máquina certa vem o retângulo dela (ou nenhum, para desenhar). Durante a leitura automática o botão fica travado.',
+    ],
+  },
+  {
     versao: '2.107.1',
     data: '2026-11-12',
     titulo: 'Embalagem: "a semana pede" sem cortar no celular deitado',

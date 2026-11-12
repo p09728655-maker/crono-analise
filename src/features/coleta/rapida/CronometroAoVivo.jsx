@@ -30,107 +30,18 @@ export default function CronometroAoVivo({
     contarPeca, desfazer, iniciarParada, encerrarParada, encerrar, ultimoIntervaloMs,
     aguardandoLargada, escolherMotivo, adiarMotivo, cancelarParada,
   } = crono;
-  /* O aviso vai no tempo por volume do PERIODO, nao no ultimo intervalo: o
-     rack de dois volumes sai com os dois colados (25 s, 100 s...), e o
-     ultimo passaria do takt a cada dois volumes numa linha que atende. E
-     com as paradas dentro: marcar "Parou" nao pode apagar o aviso.
-     O QUADRO fica VERMELHO acima do alvo e VERDE quando chega nele (pedido
-     do PPCP, 05/11): o fundo ambar claro de antes nao se via de longe. A
-     regua e' o TEMPO-ALVO DO PRODUTO (v2.106.0, PPCP 11/11): com o takt, um
-     numero so' para todo volume, o produto pesado ficava sempre vermelho.
-     Sem alvo (produto sem UEP) ou sem tempo por volume ainda (menos de 2
-     volumes), nem um nem outro: nao ha' o que comparar — e o takt NUNCA
-     entra no lugar do alvo. */
-  const semanaMs = semana?.taktMs > 0 ? semana.taktMs : null;
-  const comparaAlvo = modoTakt && alvoMs > 0 && porVolumeMs > 0;
-  const acimaDoAlvo = comparaAlvo && porVolumeMs > alvoMs;
-  const tomPorVolume = comparaAlvo ? (acimaDoAlvo ? 'foraDoTakt' : 'noTakt') : null;
-  const nomeProduto = String(produto || '').trim();
   // Na embalagem a barra de baixo cresce junto com o painel (v2.98.1):
   // com o resto grande, os 64 px de Desfazer, Parou e Encerrar ficaram miudos.
   const barra = modoTakt ? { ...est.botaoBarra, ...est.botaoBarraTakt } : est.botaoBarra;
   const icone = modoTakt ? est.iconeBarraTakt : est.iconeBarra;
 
   const painel = modoTakt ? (
-    /* EMBALAGEM: os numeros grandes e o alvo menor (v2.98.0, ver
-       painelTempoTakt). Em cima o que decide — o tempo por volume
-       contra o takt —, embaixo o apoio. O parado sai daqui (a parada
-       em curso ocupa o alvo inteiro) e volta no resultado. */
-    <section style={est.painelTempoTakt} aria-label="Tempo decorrido">
-      {/* O QUE ESTA' SENDO MEDIDO, no topo: quem passa pela linha (ou o
-          tablet preso nela) ve' de longe se o produto na esteira ainda e'
-          o da medicao — trocou o produto, e' hora de encerrar, senao o
-          tempo por volume sai misturado de dois produtos sob o nome de um.
-          Sem produto, diz isso: ele ainda pode ser informado no resultado,
-          antes de salvar. Painel baixo: uma linha, depois some (ESTILO_TAKT). */}
-      <span
-        className="takt-produto"
-        style={{ ...est.produtoTela, ...(nomeProduto ? {} : est.produtoTelaVazio) }}
-        title={nomeProduto || undefined}
-      >
-        {nomeProduto || 'Produto não informado'}
-      </span>
-      <span className="takt-rotulo-tempo" style={est.rotuloTempoTela}>TEMPO</span>
-      <span className="takt-tempo" style={est.tempoCorridoTela}>{formatarCronometro(decorrido)}</span>
-      <div style={est.gradeTaktPrincipal}>
-        {/* Acima do alvo, o quadro fica vermelho E o rotulo ganha a SETA:
-            a cor sozinha nao serve a quem nao distingue vermelho de verde,
-            nem a quem olha de longe, de luva, com sol. Dentro, o ✓. */}
-        <Parcial
-          escala="grande"
-          rotulo={acimaDoAlvo ? 'Por vol ▲ alvo' : comparaAlvo ? 'Por volume ✓ alvo' : 'Por volume'}
-          valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
-          sufixo="s"
-          tom={tomPorVolume}
-        />
-        {/* O TEMPO-ALVO do produto: o que ele pode levar para a linha fazer
-            a media sem hora extra (UEP × segundos por UEP). */}
-        <Parcial escala="grande" rotulo="Tempo-alvo" valor={alvoMs > 0 ? formatarSegundos(alvoMs) : '—'} sufixo="s" />
-      </div>
-      <div
-        className={semanaMs > 0 ? 'takt-apoio4' : undefined}
-        style={semanaMs > 0 ? { ...est.gradeTaktApoio, ...est.gradeTaktApoio4 } : est.gradeTaktApoio}
-      >
-        {/* Na embalagem o toque conta VOLUME — e a tela diz isso, porque
-            o programa da embalagem tambem vem em volumes. */}
-        <Parcial escala="media" rotulo={maiuscula(unidade.plural)} valor={String(pecas)} />
-        {/* Volumes/hora do PERIODO ate' o ultimo toque, paradas dentro
-            (a conta do resultado e da lista do PC, ate' o ultimo volume
-            em vez de ate' o Encerrar). Parado entre um toque e outro:
-            nao e' velocimetro. O rotulo diz "periodo" porque nao e' o da
-            linha rodando — com parada marcada, os dois diferem. Com um
-            volume so', o "por volume" ainda espera; este tambem. */}
-        <Parcial
-          escala="media"
-          rotulo={`${unidade.abrev}/h período`}
-          valor={parcial && pecas >= 2 ? String(Math.round(parcial.pecasPorHoraBruto)) : '—'}
-        />
-        <Parcial
-          escala="media"
-          rotulo="Último"
-          valor={ultimoIntervaloMs ? formatarSegundos(ultimoIntervaloMs) : '—'}
-          sufixo="s"
-        />
-        {/* O que a semana pede NESTE produto: a carga, sem cor — a cor e' do
-            tempo-alvo (os dois ficam a ~5%, o erro de uma medicao). */}
-        {semanaMs > 0 && (
-          <Parcial escala="media" rotulo="A semana pede" valor={formatarSegundos(semanaMs)} sufixo="s" />
-        )}
-      </div>
-      {/* O takt da semana: a CARGA, igual para todo volume — escrito, sem
-          cor e sem julgar. Some no painel baixo (ESTILO_TAKT). */}
-      {semanaMs > 0 ? (
-        <span className="takt-carga" style={est.linhaCarga}>
-          {semana.pede > 0
-            ? `a programação da semana pede ${Number(semana.pede).toFixed(1)}% da média da linha${semana.pede > 100 ? ': no tempo-alvo, ela não fecha' : ''}`
-            : 'o que a programação da semana pede neste produto'} — não julga o produto
-        </span>
-      ) : taktMs > 0 && (
-        <span className="takt-carga" style={est.linhaCarga}>
-          carga da semana: takt {formatarSegundos(taktMs)} s — não julga o produto
-        </span>
-      )}
-    </section>
+    <PainelTakt
+      produto={produto} decorridoMs={decorrido} volumes={pecas} unidade={unidade}
+      porVolumeMs={porVolumeMs} alvoMs={alvoMs}
+      volHora={parcial && pecas >= 2 ? Math.round(parcial.pecasPorHoraBruto) : null}
+      ultimoMs={ultimoIntervaloMs} semana={semana} taktMs={taktMs}
+    />
   ) : (
     <section style={est.painelTempo} aria-label="Tempo decorrido">
       <span style={est.rotuloTempo}>TEMPO</span>
@@ -280,6 +191,123 @@ export default function CronometroAoVivo({
 const maiuscula = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
+ * O PAINEL DA EMBALAGEM RODANDO: o produto, o tempo, o tempo por volume
+ * contra o tempo-alvo (o que decide) e o apoio. Usado pelo cronometro do
+ * tablet e, desde a v2.108.0, pelo Cronometrar por video do PC, com o
+ * relogio do video — a mesma visao nos dois, para quem mede ler igual.
+ *
+ * O tamanho das letras sai do PROPRIO painel (containerType 'size', ver
+ * painelTempoTakt): quem o usa da' a ele uma altura definida. No tablet,
+ * o corpo da tela; no PC, uma caixa de altura fixa.
+ *
+ * volHora: volumes/hora do periodo ate' o ultimo volume, ja' arredondado
+ * (null com menos de 2 volumes). ultimoMs: o intervalo entre as duas
+ * ultimas marcas, no relogio da linha rodando.
+ */
+export function PainelTakt({
+  produto = '', decorridoMs, volumes, unidade, porVolumeMs = null, alvoMs = null,
+  volHora = null, ultimoMs = null, semana = null, taktMs = null,
+}) {
+  /* O aviso vai no tempo por volume do PERIODO, nao no ultimo intervalo: o
+     rack de dois volumes sai com os dois colados (25 s, 100 s...), e o
+     ultimo passaria do takt a cada dois volumes numa linha que atende. E
+     com as paradas dentro: marcar "Parou" nao pode apagar o aviso.
+     O QUADRO fica VERMELHO acima do alvo e VERDE quando chega nele (pedido
+     do PPCP, 05/11): o fundo ambar claro de antes nao se via de longe. A
+     regua e' o TEMPO-ALVO DO PRODUTO (v2.106.0, PPCP 11/11): com o takt, um
+     numero so' para todo volume, o produto pesado ficava sempre vermelho.
+     Sem alvo (produto sem UEP) ou sem tempo por volume ainda (menos de 2
+     volumes), nem um nem outro: nao ha' o que comparar — e o takt NUNCA
+     entra no lugar do alvo. */
+  const semanaMs = semana?.taktMs > 0 ? semana.taktMs : null;
+  const comparaAlvo = alvoMs > 0 && porVolumeMs > 0;
+  const acimaDoAlvo = comparaAlvo && porVolumeMs > alvoMs;
+  const tomPorVolume = comparaAlvo ? (acimaDoAlvo ? 'foraDoTakt' : 'noTakt') : null;
+  const nomeProduto = String(produto || '').trim();
+  return (
+    /* EMBALAGEM: os numeros grandes e o alvo menor (v2.98.0, ver
+       painelTempoTakt). Em cima o que decide — o tempo por volume
+       contra o takt —, embaixo o apoio. O parado sai daqui (a parada
+       em curso ocupa o alvo inteiro) e volta no resultado. */
+    <section style={est.painelTempoTakt} aria-label="Tempo decorrido">
+      {/* O QUE ESTA' SENDO MEDIDO, no topo: quem passa pela linha (ou o
+          tablet preso nela) ve' de longe se o produto na esteira ainda e'
+          o da medicao — trocou o produto, e' hora de encerrar, senao o
+          tempo por volume sai misturado de dois produtos sob o nome de um.
+          Sem produto, diz isso: ele ainda pode ser informado no resultado,
+          antes de salvar. Painel baixo: uma linha, depois some (ESTILO_TAKT). */}
+      <span
+        className="takt-produto"
+        style={{ ...est.produtoTela, ...(nomeProduto ? {} : est.produtoTelaVazio) }}
+        title={nomeProduto || undefined}
+      >
+        {nomeProduto || 'Produto não informado'}
+      </span>
+      <span className="takt-rotulo-tempo" style={est.rotuloTempoTela}>TEMPO</span>
+      <span className="takt-tempo" style={est.tempoCorridoTela}>{formatarCronometro(decorridoMs)}</span>
+      <div style={est.gradeTaktPrincipal}>
+        {/* Acima do alvo, o quadro fica vermelho E o rotulo ganha a SETA:
+            a cor sozinha nao serve a quem nao distingue vermelho de verde,
+            nem a quem olha de longe, de luva, com sol. Dentro, o ✓. */}
+        <Parcial
+          escala="grande"
+          rotulo={acimaDoAlvo ? 'Por vol ▲ alvo' : comparaAlvo ? 'Por volume ✓ alvo' : 'Por volume'}
+          valor={porVolumeMs ? formatarSegundos(porVolumeMs) : '—'}
+          sufixo="s"
+          tom={tomPorVolume}
+        />
+        {/* O TEMPO-ALVO do produto: o que ele pode levar para a linha fazer
+            a media sem hora extra (UEP × segundos por UEP). */}
+        <Parcial escala="grande" rotulo="Tempo-alvo" valor={alvoMs > 0 ? formatarSegundos(alvoMs) : '—'} sufixo="s" />
+      </div>
+      <div
+        className={semanaMs > 0 ? 'takt-apoio4' : undefined}
+        style={semanaMs > 0 ? { ...est.gradeTaktApoio, ...est.gradeTaktApoio4 } : est.gradeTaktApoio}
+      >
+        {/* Na embalagem o toque conta VOLUME — e a tela diz isso, porque
+            o programa da embalagem tambem vem em volumes. */}
+        <Parcial escala="media" rotulo={maiuscula(unidade.plural)} valor={String(volumes)} />
+        {/* Volumes/hora do PERIODO ate' o ultimo toque, paradas dentro
+            (a conta do resultado e da lista do PC, ate' o ultimo volume
+            em vez de ate' o Encerrar). Parado entre um toque e outro:
+            nao e' velocimetro. O rotulo diz "periodo" porque nao e' o da
+            linha rodando — com parada marcada, os dois diferem. Com um
+            volume so', o "por volume" ainda espera; este tambem. */}
+        <Parcial
+          escala="media"
+          rotulo={`${unidade.abrev}/h período`}
+          valor={volHora != null ? String(volHora) : '—'}
+        />
+        <Parcial
+          escala="media"
+          rotulo="Último"
+          valor={ultimoMs ? formatarSegundos(ultimoMs) : '—'}
+          sufixo="s"
+        />
+        {/* O que a semana pede NESTE produto: a carga, sem cor — a cor e' do
+            tempo-alvo (os dois ficam a ~5%, o erro de uma medicao). */}
+        {semanaMs > 0 && (
+          <Parcial escala="media" rotulo="A semana pede" valor={formatarSegundos(semanaMs)} sufixo="s" />
+        )}
+      </div>
+      {/* O takt da semana: a CARGA, igual para todo volume — escrito, sem
+          cor e sem julgar. Some no painel baixo (ESTILO_TAKT). */}
+      {semanaMs > 0 ? (
+        <span className="takt-carga" style={est.linhaCarga}>
+          {semana.pede > 0
+            ? `a programação da semana pede ${Number(semana.pede).toFixed(1)}% da média da linha${semana.pede > 100 ? ': no tempo-alvo, ela não fecha' : ''}`
+            : 'o que a programação da semana pede neste produto'} — não julga o produto
+        </span>
+      ) : taktMs > 0 && (
+        <span className="takt-carga" style={est.linhaCarga}>
+          carga da semana: takt {formatarSegundos(taktMs)} s — não julga o produto
+        </span>
+      )}
+    </section>
+  );
+}
+
+/**
  * BOTAO DA LISTA DE MOTIVOS: so' vale o toque que COMECOU nele.
  *
  * O VOLTOU sem motivo abre a lista no pointerdown; o click do mesmo toque,
@@ -329,7 +357,7 @@ function BotaoDaFolha({ aoTocar, style, children }) {
  *    baixa ou em pe' quase quadrada, sai (@supports) — ele identifica,
  *    nao decide, e nao pode empurrar os numeros para fora.
  */
-const ESTILO_TAKT = `
+export const ESTILO_TAKT = `
   .tela-takt { height: 100vh; }
   .takt-tempo { font-size: clamp(40px, 9vw, 72px); }
   .takt-grande { font-size: clamp(36px, 10vw, 84px); }

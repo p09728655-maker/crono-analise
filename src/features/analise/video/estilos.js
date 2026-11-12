@@ -5,6 +5,7 @@
  * o player, a barra de controles, as teclas e a lista das marcas.
  */
 import { claro } from '../../../theme/tokensAnalise.js';
+import { cores as coresTablet } from '../../../theme/tokens.js';
 import {
   elevacao, espaco, numeros, raio, rotulo, tipo,
 } from '../../../theme/escala.js';
@@ -86,9 +87,19 @@ export const ev = {
   numeroAtencao: { background: t.atencaoFundo, borderRadius: raio.sm, padding: '0 4px', alignSelf: 'flex-start' },
   numeroSub: { ...tipo('legenda'), color: t.textoFraco },
 
-  // A lista das marcas: rola sozinha; clicar leva o video ao ponto.
+  // O PAINEL DO TABLET (v2.108.0, ver PainelTakt): as letras dele saem do
+  // tamanho da caixa (container query), entao ela precisa de altura definida.
+  // O texto claro vem do tablet (no tablet ele vem da tela inteira): herdado
+  // daqui, o numero escuro sumia no fundo escuro do painel.
+  painelTablet: {
+    height: 260, display: 'flex', flexDirection: 'column', flexShrink: 0, color: coresTablet.texto,
+  },
+
+  // A lista das marcas: rola sozinha; clicar leva o video ao ponto. Mais
+  // baixa desde a v2.108.0: com o painel do tablet em cima e a marcacao
+  // automatica embaixo, a coluna cabe na tela do PC sem rolar.
   lista: {
-    maxHeight: '46dvh', overflowY: 'auto', margin: 0, padding: 0, listStyle: 'none',
+    maxHeight: '26dvh', overflowY: 'auto', margin: 0, padding: 0, listStyle: 'none',
     borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
   },
   item: {
