@@ -57,8 +57,9 @@ export default function ImpressaoPerdas({
       </section>
       {/* A ressalva da tela vai para o papel: a folha circula sem a tela. */}
       {truncado && (
-        <p style={{ ...imp.comparativoNota, fontWeight: 700 }}>
-          O período tem mais medições do que o relatório lê de uma vez (1.000): os números são das mais recentes.
+        <p style={{ ...imp.comparativoCaixaDestaque, fontSize: 9.5, fontWeight: 700, margin: '0 0 10px' }}>
+          Atenção: o período tem mais medições do que o relatório lê de uma vez (1.000). Os números são das mais
+          recentes, não do período inteiro.
         </p>
       )}
 
@@ -128,7 +129,7 @@ export default function ImpressaoPerdas({
           <p style={imp.comparativoNota}>
             {formatarDuracao(r.totalMotivosMs)} de paradas marcadas. As lacunas ({formatarDuracao(total.lacunasMs)}) não
             têm motivo: ninguém marcou a parada.
-            {r.setupForaMs > 0 && ` O setup planejado (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
+            {r.setupForaMs > 0 && ` O setup planejado marcado entre os volumes (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
             {r.semDefinicaoPct >= 20 && ` ${pct(r.semDefinicaoPct)} do tempo parado está em “${rotuloMotivo(MOTIVO_SEM_DEFINICAO)}”: sem o motivo, não dá para atacar a causa.`}
           </p>
         </section>
@@ -170,7 +171,9 @@ export default function ImpressaoPerdas({
       </table>
       {total.curtas > 0 && (
         <p style={imp.comparativoNota}>
-          {total.curtas} medição(ões) com menos de 10 intervalos não separam lacuna: nelas só as paradas marcadas contam.
+          {total.curtas === 1
+            ? '1 medição com menos de 10 intervalos não separa lacuna: nela só as paradas marcadas contam.'
+            : `${total.curtas} medições com menos de 10 intervalos não separam lacuna: nelas só as paradas marcadas contam.`}
         </p>
       )}
 

@@ -16,15 +16,18 @@
  * Duas regras da revisao da v2.110.0 (acertadas na v2.110.2):
  *  - o SETUP PLANEJADO marcado no trecho sai do relogio quando quem chama
  *    diz que ele ja' saiu das horas da linha (`descontarSetup`) — contado
- *    de novo inventava hora extra. Sai tambem do quadro dos motivos: fora
- *    da conta e' fora de tudo;
+ *    de novo inventava hora extra. Sai do quadro dos motivos o MESMO tempo
+ *    (nao toda parada "setup" da lista): fora da conta e' fora de tudo, e
+ *    so' isso;
  *  - a PARADA ANOTADA DEPOIS (no resultado do tablet ou no PC) nao tirou
  *    nada das marcas: ela esta' dentro dos intervalos e cairia como lacuna,
  *    "ninguem marcou" — e foi marcada. O que a lista de paradas tem a mais
  *    que o relogio tirou E que nao cabe fora dos toques (antes do 1o volume
- *    e depois do ultimo: duracao − relogio) sai das lacunas, ate' o tempo
- *    delas, e vai para as marcadas. Abaixo da folga do arredondamento da
- *    lista (a mesma do volume a volume) nao e' anotada: e' arredondamento.
+ *    e depois do ultimo: duracao − relogio − o volume da largada, como no
+ *    deixouDeEmbalar) sai das lacunas, ate' o tempo delas, e vai para as
+ *    marcadas; a lacuna que ela cobre inteira deixa de contar. Menos de
+ *    um volume (ou da folga do arredondamento da lista) nao e' anotada: e'
+ *    a incerteza do volume da largada, ou arredondamento.
  *    O total sem produzir nao muda.
  *
  * Tudo puro: recebe as medicoes como a API manda (snake_case, com
@@ -33,6 +36,7 @@
 import { leituraPecaAPeca } from './crono/intervalos.js';
 import { nomeChave } from './crono/conferencia.js';
 import { taktDaMedicao } from './demandaSemanal.js';
+import { horasDeSetup } from './demanda/capacidade.js';
 
 /** O motivo que nao diz o motivo: a tela aponta quanto da parada esta' nele. */
 export const MOTIVO_SEM_DEFINICAO = 'outro';
@@ -113,15 +117,39 @@ export function perdasDaMedicao(c, { descontarSetup = false } = {}) {
   const leitura = leituraPecaAPeca({ marcasMs: marcas });
   const suficiente = Boolean(leitura?.suficiente);
   const lacunasBrutasMs = suficiente ? leitura.excessoMs : 0;
+  const normalMs = suficiente ? leitura.normalMs : somaMs / intervalos;
   // As anotadas depois: o que a lista tem alem do que o relogio tirou e do
   // que cabe fora dos toques (a parada antes do 1o volume, a aberta no
-  // Encerrar). Na duvida fica lacuna, como no volume a volume.
+  // Encerrar) — menos o volume da largada ao 1o toque, que e' trabalho.
+  // Na duvida fica lacuna, como no volume a volume.
   const paradas = Array.isArray(c.paradas) ? c.paradas : [];
   const listadasMs = paradas.reduce((a, x) => a + duracaoDa(x), 0);
   const dur = Number(c.duracao_ms);
-  const foraDosToquesMs = dur > 0 ? Math.max(0, dur - relogioBrutoMs) : 0;
+  const foraDosToquesMs = dur > 0 ? Math.max(0, dur - relogioBrutoMs - normalMs) : 0;
   const alemMs = listadasMs - noTrechoMs - foraDosToquesMs;
-  const anotadasMs = alemMs >= folgaDaLista(paradas.length) ? Math.min(alemMs, lacunasBrutasMs) : 0;
+  // O volume da largada e' a incerteza desta conta: quanto dele foi parada
+  // fora dos toques nao se sabe. Por isso, a menos de UM VOLUME (o normal)
+  // nada e' anotado, e a lacuna que a anotada cobre ate' um volume de
+  // diferenca sai inteira — a maior primeiro (a parada longa anotada e' a
+  // que abriu a lacuna longa). O que sobra, de um volume para cima, tira da
+  // lacuna que ela nao cobre inteira. Na duvida fica lacuna.
+  let anotadasMs = 0;
+  let cobertas = 0;
+  if (lacunasBrutasMs > 0 && alemMs >= Math.max(folgaDaLista(paradas.length), normalMs)) {
+    let resta = alemMs;
+    let descobertoMs = 0;
+    const excessos = leitura.lacunas.map((x) => x.ms - normalMs).sort((a, b) => b - a);
+    for (const e of excessos) {
+      if (resta + normalMs >= e) {
+        anotadasMs += e;
+        resta = Math.max(0, resta - e);
+        cobertas += 1;
+      } else {
+        descobertoMs += e;
+      }
+    }
+    if (resta >= normalMs) anotadasMs += Math.min(resta, descobertoMs);
+  }
   return {
     intervalos,
     volumes: Number(c.pecas) || marcas.length,
@@ -130,8 +158,8 @@ export function perdasDaMedicao(c, { descontarSetup = false } = {}) {
     paradasMs: noTrechoMs - setupMs + anotadasMs,
     anotadasMs,
     lacunasMs: lacunasBrutasMs - anotadasMs,
-    normalMs: suficiente ? leitura.normalMs : somaMs / intervalos,
-    nLacunas: suficiente ? leitura.lacunas.length : 0,
+    normalMs,
+    nLacunas: suficiente ? leitura.lacunas.length - cobertas : 0,
     suficiente,
   };
 }
@@ -187,8 +215,10 @@ function somar(lidas) {
  * As paradas por motivo vem da lista de cada medicao — inclusive as
  * marcadas antes do 1o volume ou depois do ultimo, que ficam fora do
  * relogio do trecho: a soma delas pode passar um pouco das "paradas" do
- * total, e a tela diz isso. Na medicao com o setup fora da conta, o setup
- * sai tambem daqui (`setupForaMs` diz quanto).
+ * total, e a tela diz isso. Na medicao com o setup fora da conta, o MESMO
+ * setup que saiu do relogio (o marcado ao vivo entre os volumes) sai daqui
+ * tambem — `setupForaMs` diz quanto. O setup antes do 1o volume ou anotado
+ * depois fica no quadro: nao saiu da conta.
  */
 export function relatorioDePerdas(medicoes, { descontarSetupDe = () => false } = {}) {
   // SEM MARCAS SAI ANTES da sobreposicao: a medicao por horarios (ou com a
@@ -222,13 +252,18 @@ export function relatorioDePerdas(medicoes, { descontarSetupDe = () => false } =
   const motivosMapa = new Map();
   let setupForaMs = 0;
   for (const x of lidas) {
+    let setupATirar = x.setupMs;
     for (const p of x.medicao.paradas || []) {
-      const ms = duracaoDa(p);
+      let ms = duracaoDa(p);
       if (ms <= 0) continue;
       const codigo = String(p.motivo || MOTIVO_SEM_DEFINICAO);
-      if (x.descontouSetup && codigo === MOTIVO_SETUP) {
-        setupForaMs += ms;
-        continue;
+      if (codigo === MOTIVO_SETUP && setupATirar > 0) {
+        const tira = Math.min(ms, setupATirar);
+        setupATirar -= tira;
+        setupForaMs += tira;
+        ms -= tira;
+        // O que sobrou dela e' arredondamento da lista, nao parada.
+        if (ms < folgaDaLista(1)) continue;
       }
       const m = motivosMapa.get(codigo) || { motivo: codigo, ms: 0, vezes: 0 };
       m.ms += ms;
@@ -295,7 +330,12 @@ export function horaExtraDaSemana({
  * (revisao da v2.110.1).
  */
 export function setupPlanejadoDoCadastro(grupo) {
-  return Number(grupo?.setups_dia) > 0 && Number(grupo?.setup_min) > 0;
+  // A MESMA condicao do takt (setupDescontado em demanda/programa.js): as
+  // horas de setup maiores que zero. Sem os dias da semana no cadastro, o
+  // takt nao tira o setup das horas — e o resumo tambem nao o tira das
+  // medicoes (revisao da v2.110.2).
+  const horas = horasDeSetup({ setupsDia: grupo?.setups_dia, dias: grupo?.dias_semana, minutos: grupo?.setup_min });
+  return (horas ?? 0) > 0;
 }
 
 /** O takt do grupo numa data: as horas, o programa e o setup planejado dela. */
@@ -315,11 +355,14 @@ export function taktDoGrupo({ grupo: g, ativas, demandas }, data) {
 /** Por que a semana nao tem conta, sem dizer "esta semana" (vale para a proxima). */
 function porQueSemConta(estado) {
   switch (estado) {
-    case 'sem-demanda': return 'não há programa colado.';
-    case 'sem-semana': return 'o programa colado não cobre a semana.';
+    case 'sem-demanda': return 'não há programa de produção do grupo cadastrado.';
+    case 'sem-semana': return 'o programa do grupo não cobre a semana.';
     case 'sem-horas': return 'faltam as horas da semana no cadastro do grupo.';
     case 'sem-dias': return 'faltam os dias de produção da semana no cadastro do grupo.';
     case 'setup-excede': return 'o setup cadastrado passa da jornada.';
+    // Semana do programa com zero volumes para o grupo (feriado, parada):
+    // sem volume nao ha' takt, e a leitura diz 'sem-ritmo'.
+    case 'sem-ritmo':
     case 'pronto': return 'o programa da semana não tem volumes para o grupo.';
     default: return 'sem conta para a semana.';
   }

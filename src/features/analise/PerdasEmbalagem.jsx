@@ -264,7 +264,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   <p style={ep.secaoDica}>
                     {formatarDuracao(r.totalMotivosMs)} de paradas marcadas, os maiores motivos primeiro. As lacunas
                     ({formatarDuracao(total.lacunasMs)}) não têm motivo: ninguém marcou a parada.
-                    {r.setupForaMs > 0 && ` O setup planejado (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
+                    {r.setupForaMs > 0 && ` O setup planejado marcado entre os volumes (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
                   </p>
                   {r.semDefinicaoPct >= 20 && (
                     <p style={ep.avisoOutro} role="status">
@@ -361,8 +361,9 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   </li>
                   {total.curtas > 0 && (
                     <li>
-                      {total.curtas} medição(ões) com menos de 10 intervalos não separam lacuna: nelas só as paradas
-                      marcadas contam.
+                      {total.curtas === 1
+                        ? '1 medição com menos de 10 intervalos não separa lacuna: nela só as paradas marcadas contam.'
+                        : `${total.curtas} medições com menos de 10 intervalos não separam lacuna: nelas só as paradas marcadas contam.`}
                     </li>
                   )}
                 </ul>
