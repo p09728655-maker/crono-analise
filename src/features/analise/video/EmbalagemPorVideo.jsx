@@ -8,7 +8,7 @@ import {
 import { diasProgramados, taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
   conferirAutomatica, desfazerUltimo, emRelogio, encerrarParadaNoVideo, iniciarParadaNoVideo, inicioSugerido,
-  marcacaoDasEntradas, marcacaoVazia, marcarToque, medicaoDoVideo, removerParada, removerVolume,
+  marcacaoDasEntradas, marcacaoVazia, marcarToque, marcasGuardadas, medicaoDoVideo, removerParada, removerVolume,
 } from '../../../domain/medicaoPorVideo.js';
 import {
   areaDaImagem, detectarVolumes, intervalosLongos, pontoNaImagem, retanguloEntre, retanguloValido,
@@ -59,6 +59,7 @@ const MAX_GUARDADOS = 10;
 /** Duracao de parada: no video se marca no segundo, e "< 1 min" esconderia isso. */
 const duracaoCurta = (ms) => (ms < 60000 ? `${Math.round(ms / 1000)} s` : formatarDuracao(ms));
 const volumes = (n) => `${n} ${n === 1 ? 'volume' : 'volumes'}`;
+
 const chaveDoArquivo = (f) => (f ? `${f.name}|${f.size}|${f.lastModified}` : null);
 /** A lista da Embalagem Takt Time mostra os ultimos 30 dias (DIAS em EmbalagemTaktTimePc). */
 const DIAS_DA_LISTA = 30;
@@ -317,6 +318,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     if (!f) return;
     setArquivo(f);
     setMeta({ duracaoS: null, erro: null, pronto: false });
+    // O video novo abre no segundo 0: a posicao do anterior ficava no
+    // relogio da tela (1:25 / 1:00) e o "+5 s" saltava dela (revisao v2.108.0).
+    setAgoraMs(0);
     setUrl(URL.createObjectURL(f));
     // O inicio era do arquivo anterior: o deste vem dos metadados dele. Sem
     // isto, trocar o arquivo errado pelo certo mantinha a data do errado — e
@@ -423,10 +427,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     refVideo.current?.pause();
     setAviso(null);
     setRetomando(true);
-    const m = refMarcacao.current;
-    setAvisoPreparar(`As marcas deste vídeo continuam aqui (${volumes(m.toques.length)}`
-      + `${m.largadaMs != null ? ', mais a largada' : ''}${m.paradas.length || m.aberta ? ' e as paradas' : ''}). `
-      + 'Troque o que precisar e clique em “Continuar a marcação”.');
+    setAvisoPreparar(`${marcasGuardadas(refMarcacao.current)} Troque o que precisar e clique em “Continuar a marcação”.`);
     setEtapa('preparar');
   };
 
@@ -1341,6 +1342,9 @@ function Marcas({
           produto={produto} decorridoMs={decorridoMs} volumes={toques.length} unidade={VOLUME}
           porVolumeMs={numeros?.porVolume || null} alvoMs={alvo?.alvoMs > 0 ? alvo.alvoMs : null}
           volHora={volHora} ultimoMs={ultimoMs} semana={alvo?.semana || null} taktMs={takt?.taktMs || null}
+          // A lista logo abaixo mostra o intervalo COM a parada dentro; este,
+          // como o do tablet, e' sem ela — o rotulo diz de que tempo sai.
+          rotuloUltimo="Último rodando"
         />
       </div>
       <div style={ev.numeros}>

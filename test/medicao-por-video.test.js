@@ -10,7 +10,9 @@
  * virar null em lugar nenhum.
  */
 import { describe, expect, it } from 'vitest';
-import { emRelogio, inicioSugerido, medicaoDoVideo } from '../src/domain/medicaoPorVideo.js';
+import {
+  emRelogio, inicioSugerido, marcasGuardadas, medicaoDoVideo,
+} from '../src/domain/medicaoPorVideo.js';
 import { conferenciaRapida, leituraPecaAPeca, periodoPorPeca } from '../src/domain/cronoanalise.js';
 import {
   marcasDaConferencia, paradasDaConferencia, relogioDasMarcas, setupDasMarcas,
@@ -203,5 +205,27 @@ describe('as teclas da marcacao', () => {
     const r = iniciarParadaNoVideo(m, 'outro', 500000);
     expect(r.aviso).toMatch(/Já são 50 paradas, o máximo numa medição/);
     expect(r.marcacao.aberta).toBeNull();
+  });
+});
+
+describe('marcasGuardadas — o aviso ao voltar ao preparo (v2.108.1)', () => {
+  const vazia = { largadaMs: null, toques: [], paradas: [], aberta: null, ordem: 0 };
+  const toques = (n) => Array.from({ length: n }, (_, i) => ({ ms: (i + 2) * 10000, ordem: i }));
+  it('sem nada marcado, nao promete marca nenhuma', () => {
+    expect(marcasGuardadas(vazia)).toBe('Nenhuma marca ainda neste vídeo.');
+  });
+  it('so a largada', () => {
+    expect(marcasGuardadas({ ...vazia, largadaMs: 10000 })).toBe('As marcas deste vídeo continuam aqui: a largada.');
+  });
+  it('singular e plural, com a parada aberta contando como parada', () => {
+    expect(marcasGuardadas({ ...vazia, largadaMs: 10000, toques: toques(1), aberta: { motivo: null, inicioMs: 25000 } }))
+      .toBe('As marcas deste vídeo continuam aqui: a largada, 1 volume e 1 parada.');
+    expect(marcasGuardadas({
+      ...vazia, largadaMs: 10000, toques: toques(8), paradas: [{ motivo: 'setup', inicioMs: 45000, fimMs: 60000 }],
+    })).toBe('As marcas deste vídeo continuam aqui: a largada, 8 volumes e 1 parada.');
+    expect(marcasGuardadas({
+      ...vazia, largadaMs: 10000, toques: toques(3),
+      paradas: [{ motivo: 'setup', inicioMs: 45000, fimMs: 60000 }], aberta: { motivo: null, inicioMs: 90000 },
+    })).toBe('As marcas deste vídeo continuam aqui: a largada, 3 volumes e 2 paradas.');
   });
 });

@@ -290,3 +290,22 @@ export function removerParada(m, inicioMs) {
   if (m.aberta && m.aberta.inicioMs === inicioMs) return { marcacao: { ...m, aberta: null } };
   return { marcacao: { ...m, paradas: m.paradas.filter((p) => p.inicioMs !== inicioMs) } };
 }
+
+/**
+ * O que fica guardado ao VOLTAR AO PREPARO no meio da marcacao (v2.108.1):
+ * "a largada, 8 volumes e 1 parada". Sem nada marcado, diz isso — "as
+ * marcas continuam (0 volumes)" prometia o que nao havia. A parada aberta
+ * conta como parada.
+ */
+export function marcasGuardadas(m) {
+  const nVolumes = m.toques.length;
+  const nParadas = m.paradas.length + (m.aberta ? 1 : 0);
+  const itens = [
+    m.largadaMs != null ? 'a largada' : null,
+    nVolumes ? `${nVolumes} ${nVolumes === 1 ? 'volume' : 'volumes'}` : null,
+    nParadas ? `${nParadas} ${nParadas === 1 ? 'parada' : 'paradas'}` : null,
+  ].filter(Boolean);
+  if (!itens.length) return 'Nenhuma marca ainda neste vídeo.';
+  const lista = itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}` : itens[0];
+  return `As marcas deste vídeo continuam aqui: ${lista}.`;
+}

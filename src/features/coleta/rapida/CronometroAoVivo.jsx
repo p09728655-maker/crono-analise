@@ -202,11 +202,13 @@ const maiuscula = (s) => s.charAt(0).toUpperCase() + s.slice(1);
  *
  * volHora: volumes/hora do periodo ate' o ultimo volume, ja' arredondado
  * (null com menos de 2 volumes). ultimoMs: o intervalo entre as duas
- * ultimas marcas, no relogio da linha rodando.
+ * ultimas marcas, no relogio da linha rodando. rotuloUltimo: no PC, a
+ * lista ao lado mostra o intervalo COM a parada; la' o rotulo diz que este
+ * e' sem ela ("Último rodando"), para os dois numeros nao brigarem.
  */
 export function PainelTakt({
   produto = '', decorridoMs, volumes, unidade, porVolumeMs = null, alvoMs = null,
-  volHora = null, ultimoMs = null, semana = null, taktMs = null,
+  volHora = null, ultimoMs = null, semana = null, taktMs = null, rotuloUltimo = 'Último',
 }) {
   /* O aviso vai no tempo por volume do PERIODO, nao no ultimo intervalo: o
      rack de dois volumes sai com os dois colados (25 s, 100 s...), e o
@@ -280,7 +282,7 @@ export function PainelTakt({
         />
         <Parcial
           escala="media"
-          rotulo="Último"
+          rotulo={rotuloUltimo}
           valor={ultimoMs ? formatarSegundos(ultimoMs) : '—'}
           sufixo="s"
         />

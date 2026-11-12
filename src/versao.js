@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.108.1',
+    data: '2026-11-12',
+    titulo: 'Cronometrar por vídeo: correções da tela nova',
+    itens: [
+      'NO PAINEL DO PC, "ÚLTIMO" VIROU "ÚLTIMO RODANDO". Ele é o do tablet: o intervalo do último volume sem a parada marcada no meio. A lista logo abaixo mostra o mesmo intervalo com a parada dentro. Com uma parada de 15 s antes do último volume, o painel diz 15.0 s e a lista 30.0 s: os dois estão certos, e agora o rótulo diz de que tempo cada um sai. No tablet o rótulo continua "Último".',
+      'VOLTAR AO PREPARO E ESCOLHER OUTRO VÍDEO: O RELÓGIO COMEÇA DO ZERO. Antes, a posição do vídeo anterior ficava na tela (1:25.0 / 1:00.0) e o "+5 s" saltava dela, levando o vídeo novo direto ao fim.',
+      'O AVISO DO PREPARO CONTA CERTO o que ficou guardado: "a largada, 8 volumes e 1 parada". Sem nenhuma marca, diz "Nenhuma marca ainda neste vídeo" (dizia "0 volumes"); com uma parada só, não diz mais "as paradas".',
+    ],
+  },
+  {
     versao: '2.108.0',
     data: '2026-11-12',
     titulo: 'Cronometrar por vídeo: a mesma visão do cronômetro do tablet',
