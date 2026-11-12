@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.111.1',
+    data: '2026-11-12',
+    titulo: 'Tempo-alvo pela esteira: a conta com o resultado e os textos da régua nova',
+    itens: [
+      'O CARTÃO DO TEMPO-ALVO DIZ O RESULTADO DA CONTA: "esteira 16.5 s ÷ 85% de eficiência = 19.4 s". Antes dizia só "16.51 s de esteira ÷ 85%", e o 16,51 parecia ser o alvo. O alvo é o 19,4; o 16,5 é o tempo que a esteira leva para passar a caixa.',
+      'OS TEXTOS DE APOIO FALAM DA RÉGUA NOVA quando o alvo vem pela esteira: o "Como ler estes números" do PC e a nota da folha impressa explicam a esteira ÷ a eficiência (antes ainda falavam da UEP × segundos por UEP); a medição antiga avisa que foi lida com a caixa, a velocidade e a eficiência de agora; e, quando a linha fica acima do alvo mesmo sem parada nem lacuna, o veredito diz que o passo não acompanha a esteira e manda conferir a medida da caixa, a velocidade e o entre-peças no cadastro — não mais "a UEP dele está baixa".',
+    ],
+  },
+  {
     versao: '2.111.0',
     data: '2026-11-12',
     titulo: 'Embalagem: o tempo-alvo passa a ser pela esteira',

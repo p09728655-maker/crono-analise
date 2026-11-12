@@ -187,6 +187,17 @@ describe('o veredito julga pelo alvo do produto, não pelo takt', () => {
     const f = frasesVolumeAVolume({ leitura, alvo: { alvoMs: 8900 }, unidade: VOLUME });
     expect(f.tom).toBe('falha');
     expect(f.manchete).toBe('No período, saiu um volume a cada 11.0 s, paradas dentro — 24% acima do tempo-alvo do produto, 8.9 s.');
+    expect(f.linhas.join(' ')).toMatch(/ou a UEP dele está baixa/);
+  });
+  it('pela esteira, acima mesmo sem parada: aponta o passo contra a esteira e o cadastro da caixa — não a UEP', () => {
+    const leitura = leituraPecaAPeca({
+      marcasMs: marcas(11, 20), taktMs: 16400, alvoMs: 8900, periodoPorPecaMs: 11000,
+    });
+    const f = frasesVolumeAVolume({ leitura, alvo: { alvoMs: 8900, metodo: 'esteira' }, unidade: VOLUME });
+    const txt = f.linhas.join(' ');
+    expect(txt).toMatch(/não acompanha a esteira/);
+    expect(txt).toMatch(/medida da caixa, a velocidade ou o entre-peças/);
+    expect(txt).not.toMatch(/UEP/);
   });
 });
 
@@ -397,7 +408,8 @@ describe('o tempo-alvo pela esteira (.gs v5.65)', () => {
     const a = alvoDoProduto(L, '501151 · RACK MOVE 1.6', { data: QUINTA });
     expect(a).toMatchObject({ estado: 'ok', alvoMs: 19420, metodo: 'esteira', eficiencia: 85, esteiraMs: 16510, medida: 2076 });
     expect(alvoEmSegundos(a)).toBe('19.4 s');
-    expect(contaDoAlvo(a)).toBe('16.51 s de esteira ÷ 85%');
+    // com o resultado (PPCP: "16,51 é o alvo ou 19,4?")
+    expect(contaDoAlvo(a)).toBe('esteira 16.5 s ÷ 85% de eficiência = 19.4 s');
     expect(explicacaoDoAlvo(a)).toBe('Tempo-alvo = (2076 + 400) mm ÷ 9 m/min = 16.5 s de esteira, ÷ 85% = 19.4 s por volume. '
       + 'Os 85% são a eficiência da embalagem do painel: a linha com o produto rodando, paradas e lacunas dentro.');
     // o produto inteiro com volumes de caixas diferentes: a esteira média, sem a medida
@@ -405,7 +417,10 @@ describe('o tempo-alvo pela esteira (.gs v5.65)', () => {
       .toMatch(/^Tempo-alvo = 12\.8 s de esteira \(a média por caixa dos volumes\), ÷ 85% = 15\.1 s por volume\./);
     // eficiência com casa
     const L825 = respostaDosAlvos({ ...PAINEL_ESTEIRA, ref: { ...PAINEL_ESTEIRA.ref, eficiencia: 82.5 } });
-    expect(contaDoAlvo(alvoDoProduto(L825, '501151 · RACK MOVE 1.6'))).toBe('16.51 s de esteira ÷ 82.5%');
+    expect(contaDoAlvo(alvoDoProduto(L825, '501151 · RACK MOVE 1.6'))).toBe('esteira 16.5 s ÷ 82.5% de eficiência = 19.4 s');
+    // a medição antiga é lida com a caixa e a eficiência de agora (não "a UEP e a média")
+    expect(avisoDoAlvo(a, { data: '2026-11-01T12:00:00Z', agora: QUINTA }))
+      .toBe('Medição de 01/11 lida com o tempo-alvo de hoje (a caixa, a velocidade e a eficiência de agora).');
   });
 
   it('sem medida da caixa (mesmo com UEP): sem alvo, com o motivo da esteira — nunca a UEP no lugar', () => {

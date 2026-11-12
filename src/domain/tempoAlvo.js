@@ -201,11 +201,17 @@ const inteiro = (v) => String(Math.round(Number(v)));
 /** A eficiencia sem casa quando inteira: "85", "82.5". */
 const pct = (v) => num(v, Number(v) % 1 ? 1 : 0);
 
-/** "2.48 UEP × 10.74 s" (pela esteira: "16.51 s de esteira ÷ 85%") — de onde o alvo sai, em uma linha. */
+/**
+ * "2.48 UEP × 10.74 s" — de onde o alvo sai, em uma linha. Pela esteira, com
+ * o resultado (PPCP, 12/11: "16,51 é o alvo ou 19,4?" — sem o "= 19.4 s" a
+ * esteira parecia o alvo): "esteira 16.5 s ÷ 85% de eficiência = 19.4 s".
+ */
 export function contaDoAlvo(alvo) {
   if (!(alvo?.alvoMs > 0)) return '';
   if (alvo.metodo === 'esteira') {
-    return alvo.esteiraMs > 0 && alvo.eficiencia > 0 ? `${num(alvo.esteiraMs / 1000, 2)} s de esteira ÷ ${pct(alvo.eficiencia)}%` : '';
+    return alvo.esteiraMs > 0 && alvo.eficiencia > 0
+      ? `esteira ${num(alvo.esteiraMs / 1000, 1)} s ÷ ${pct(alvo.eficiencia)}% de eficiência = ${num(alvo.alvoMs / 1000, 1)} s`
+      : '';
   }
   if (!(alvo.uep > 0) || !(alvo.sUep > 0)) return '';
   return `${num(alvo.uep, 2)} UEP × ${num(alvo.sUep, 2)} s`;
@@ -318,7 +324,9 @@ export function avisoDoAlvo(alvo, { data = null, agora = new Date() } = {}) {
   const partes = [];
   const quando = data ? new Date(data) : null;
   if (quando && !Number.isNaN(quando.getTime()) && diaSp(quando) !== diaSp(agora)) {
-    partes.push(`Medição de ${ddmm(quando)} lida com o tempo-alvo de hoje (a UEP e a média de agora).`);
+    partes.push(alvo.metodo === 'esteira'
+      ? `Medição de ${ddmm(quando)} lida com o tempo-alvo de hoje (a caixa, a velocidade e a eficiência de agora).`
+      : `Medição de ${ddmm(quando)} lida com o tempo-alvo de hoje (a UEP e a média de agora).`);
   }
   const idade = idadeDoAlvo(alvo.lidoEm, agora);
   if (idade) partes.push(idade);

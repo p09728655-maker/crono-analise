@@ -110,7 +110,11 @@ export function frasesVolumeAVolume({
       } else {
         // Sem parada e sem lacuna e ainda acima: o passo da linha neste
         // produto e' mais lento que o da media — ou a UEP dele esta' baixa.
-        linhas.push(`Mesmo sem parada nenhuma (${normalTxt} por ${singular}), a linha não chega ao tempo-alvo: o passo neste produto está mais lento que o da média da linha — ou a UEP dele está baixa (confira na cronoanálise).`);
+        // Pela esteira (v2.111.1): o passo nao acompanha a esteira — o
+        // trabalho na caixa nao cabe no posto, ou o cadastro nao bate.
+        linhas.push(alvo.metodo === 'esteira'
+          ? `Mesmo sem parada nenhuma (${normalTxt} por ${singular}), a linha não chega ao tempo-alvo: o passo neste produto não acompanha a esteira — o trabalho na caixa não cabe no tempo dela, ou a medida da caixa, a velocidade ou o entre-peças do cadastro do painel não batem com a linha.`
+          : `Mesmo sem parada nenhuma (${normalTxt} por ${singular}), a linha não chega ao tempo-alvo: o passo neste produto está mais lento que o da média da linha — ou a UEP dele está baixa (confira na cronoanálise).`);
       }
     }
   } else {
