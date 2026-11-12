@@ -13,6 +13,19 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.111.0',
+    data: '2026-11-12',
+    titulo: 'Embalagem: o tempo-alvo passa a ser pela esteira',
+    itens: [
+      'O TEMPO-ALVO DE CADA PRODUTO SAI DA ESTEIRA. Era a UEP do produto × 10,74 s por UEP, e saía 1,6 vez o trabalho limpo: a UEP é medida contra os 6,7 s limpos da MADERO, e os 10,74 s são a média do dia, com as paradas, as trocas e as esperas dentro. O RACK MOVE 1.6 tinha 32,3 s de alvo e foi medido em 25,2 s com as paradas — verde com folga. Agora: tempo-alvo = (medida da caixa + entre-peças) ÷ velocidade da esteira ÷ a eficiência da embalagem. RACK MOVE 1.6: (2076 + 400) mm ÷ 9 m/min = 16,5 s de esteira; ÷ 85% = 19,4 s. Nas 69 medições já feitas, o tempo sem as lacunas dá, em média, o tempo da esteira.',
+      'A EFICIÊNCIA (85%) É DA LINHA COM O PRODUTO RODANDO: paradas, lacunas e fadiga dentro. Ela fica no ⚙ do painel (EFICIÊNCIA DA EMBALAGEM) e vale para o painel e para o app. A medida da caixa, a velocidade e o entre-peças são de cada código, na aba PRODUTO_CODIGO do painel. Produto sem medida ou velocidade fica sem tempo-alvo, com o motivo — nunca com a UEP no lugar.',
+      'A CONTA VAI ESCRITA onde o alvo aparece (tablet, PC, folha e vídeo): "Tempo-alvo = (2076 + 400) mm ÷ 9 m/min = 16.5 s de esteira, ÷ 85% = 19.4 s por volume." No PC, o cartão diz a eficiência e o quadro "Tempo-alvo de cada produto" mostra a esteira de cada um.',
+      'A CARGA DA SEMANA VIRA SÓ O %: "a programação da semana de 09/11 pede 105,8% da média da linha — acima do que a linha entrega em média". O "a semana pede X s neste produto" saiu: ele era da média do dia e, ao lado de um alvo com o produto rodando, pareceria folga.',
+      'O SETUP MARCADO ENTRE OS VOLUMES SAI SEMPRE do tempo por volume que é comparado com o alvo: a troca de produto não é o produto rodando.',
+      'ATENÇÃO: o alvo de todo produto muda, e quase sempre cai. Muitas medições que estavam verdes passam a vermelho (nas 68 já feitas, 38 ficam acima do alvo novo; antes eram 6). Não é a linha que piorou: a régua deixou de ter as perdas do dia dentro. Até o painel ser atualizado (Apps Script v5.65), o app continua com o alvo pela UEP.',
+    ],
+  },
+  {
     versao: '2.110.2',
     data: '2026-11-12',
     titulo: 'Perdas da embalagem: setup, paradas e hora extra acertados',

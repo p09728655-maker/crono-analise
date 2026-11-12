@@ -300,6 +300,12 @@ export function PainelTakt({
             ? `a programação da semana pede ${Number(semana.pede).toFixed(1)}% da média da linha${semana.pede > 100 ? ': no tempo-alvo, ela não fecha' : ''}`
             : 'o que a programação da semana pede neste produto'} — não julga o produto
         </span>
+      ) : semana?.esteira && semana.pede > 0 ? (
+        /* Alvo pela esteira (v2.111.0): a carga so' em % da media — os segundos
+           por UEP da semana sao da media do dia e nao se comparam com o alvo. */
+        <span className="takt-carga" style={est.linhaCarga}>
+          {`a programação da semana pede ${Number(semana.pede).toFixed(1)}% da média da linha${semana.pede > 100 ? ': acima do que a linha entrega em média' : ''}`} — não julga o produto
+        </span>
       ) : taktMs > 0 && (
         <span className="takt-carga" style={est.linhaCarga}>
           carga da semana: takt {formatarSegundos(taktMs)} s — não julga o produto
