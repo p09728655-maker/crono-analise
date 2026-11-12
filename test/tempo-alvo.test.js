@@ -10,6 +10,7 @@ import {
 import {
   alvoDaJuncao, alvoDoProduto, alvoEmSegundos, avisoDoAlvo, contaDoAlvo, descontaSetup, explicacaoDaRegua,
   explicacaoDoAlvo, fraseDaSemana, idadeDoAlvo, medidoXAlvo, semAlvo, semAlvoCurto, semanaDaData, semanaDoProduto,
+  vereditoDaSemana,
 } from '../src/domain/tempoAlvo.js';
 import {
   _esquecer, lerTemposAlvo, MENSAGEM_ALVO_GS_ANTIGO, respostaDosAlvos, semanasDoPainel, temposAlvo,
@@ -207,10 +208,10 @@ describe('a semana pede — o takt da semana no produto (v2.107.0)', () => {
 
   it('o servidor confere as semanas: data dd/mm/aaaa, sUep > 0 ou null; o painel antigo não manda: lista vazia', () => {
     expect(L.semanas).toHaveLength(3);
-    expect(L.semanas[1]).toEqual({ de: '09/11/2026', ate: '15/11/2026', atual: true, sUep: 10.222, pede: 105.1, uep: 14504, nUteis: 5 });
+    expect(L.semanas[1]).toEqual({ de: '09/11/2026', ate: '15/11/2026', atual: true, sUep: 10.222, pede: 105.1, uep: 14504, nUteis: 5, cxSemUep: null });
     expect(L.semanas[2]).toMatchObject({ sUep: null, pede: null });
     expect(semanasDoPainel([{ de: '9/11', ate: '15/11/2026', sUep: 10 }, null, { de: '09/11/2026', ate: '15/11/2026', sUep: 0 }]))
-      .toEqual([{ de: '09/11/2026', ate: '15/11/2026', atual: false, sUep: null, pede: null, uep: null, nUteis: null }]);
+      .toEqual([{ de: '09/11/2026', ate: '15/11/2026', atual: false, sUep: null, pede: null, uep: null, nUteis: null, cxSemUep: null }]);
     expect(LIDO.semanas).toEqual([]);
   });
 
@@ -225,7 +226,7 @@ describe('a semana pede — o takt da semana no produto (v2.107.0)', () => {
   it('a SLEEP: o alvo 8,9 s, a semana pede 8,5 s (10,222 × 0,83) — a coluna PELO TAKT do painel', () => {
     const a = alvoDoProduto(L, '501094 · MESA CABECEIRA SLEEP', { data: QUARTA });
     expect(a.alvoMs).toBe(8910);
-    expect(a.semana).toEqual({ de: '09/11/2026', ate: '15/11/2026', sUep: 10.222, pede: 105.1, taktMs: 8480 });
+    expect(a.semana).toEqual({ de: '09/11/2026', ate: '15/11/2026', sUep: 10.222, pede: 105.1, cxSemUep: null, taktMs: 8480 });
     expect(fraseDaSemana(a)).toBe('A semana pede 8.5 s neste produto: a programação da semana de 09/11 pede 105.1% da média da linha — no tempo-alvo, ela não fecha.');
     expect(fraseDaSemana(a, { curta: true })).toBe('a semana pede 8.5 s (105.1% da média)');
   });
@@ -238,6 +239,17 @@ describe('a semana pede — o takt da semana no produto (v2.107.0)', () => {
     expect(alvoDoProduto(LIDO, '501149 · MESA CABECEIRA MADERO', { data: QUARTA }).semana).toBeNull();   // painel antigo
     expect(fraseDaSemana(alvoDoProduto(LIDO, '501149 · MESA CABECEIRA MADERO'))).toBe('');
     expect(semanaDoProduto(L.semanas[1], null)).toBeNull();
+  });
+
+  it('caixa sem UEP na semana: "cabe" não é dito (a semana parece mais leve do que é); "não fecha" continua; sem o %, sem veredito', () => {
+    const comSemUep = { ...L, semanas: [{ ...L.semanas[1], sUep: 11.5, pede: 93.4, cxSemUep: 1200 }] };
+    expect(semanasDoPainel([{ de: '09/11/2026', ate: '15/11/2026', sUep: 11.5, pede: 93.4, cxSemUep: 1200 }])[0].cxSemUep).toBe(1200);
+    expect(fraseDaSemana(alvoDoProduto(comSemUep, '501149 · MESA CABECEIRA MADERO', { data: QUARTA })))
+      .toBe('A semana pede 11.5 s neste produto: a programação da semana de 09/11 pede 93.4% da média da linha — sem contar 1.200 caixas sem UEP, que ficam fora da conta.');
+    expect(vereditoDaSemana({ pede: 105.1, cxSemUep: 1200 })).toBe('no tempo-alvo, ela não fecha');
+    expect(vereditoDaSemana({ pede: 93.4, cxSemUep: 1 })).toBe('sem contar 1 caixa sem UEP, que ficam fora da conta');
+    expect(vereditoDaSemana({ pede: 93.4, cxSemUep: 0 })).toBe('no tempo-alvo, ela cabe');
+    expect(vereditoDaSemana({ pede: null })).toBe('');
   });
 
   it('a medição é lida com a semana DELA: a da semana passada, pelo takt da semana passada', () => {

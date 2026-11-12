@@ -352,11 +352,13 @@ const ESTILO_TAKT = `
   @container (max-height: 230px) { .takt-carga { display: none; } }
   /* v2.107.0: quatro numeros de apoio (com A SEMANA PEDE). Medido deitado no
      celular (740 x 360): cada celula com 72 px e o rotulo "VOL/H PERIODO" com
-     77 — menos espaco entre as letras; no painel estreito (640 x 300) o
-     rotulo quebra em duas linhas em vez de passar da celula. */
+     77 — menos espaco entre as letras; no painel estreito (ate' 340 px: 667 x
+     325, 640 x 300, 360 x 740) a letra do rotulo desce a 9 px, sem espaco
+     entre as letras, e o rotulo fica numa linha. Quebrar em duas (v2.107.0
+     antes da revisao) cortava 5 px dos numeros de baixo a 667 x 325. */
   .takt-apoio4 .takt-rotulo { letter-spacing: 0.2px !important; }
   @container (max-width: 340px) {
-    .takt-apoio4 .takt-rotulo { white-space: normal !important; line-height: 1.1; }
+    .takt-apoio4 .takt-rotulo { font-size: 9px !important; letter-spacing: 0 !important; }
   }
   @container (max-height: 185px) { .takt-produto { -webkit-line-clamp: 1; } }
   @container (max-height: 175px) { .takt-rotulo-tempo { display: none; } }

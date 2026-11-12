@@ -194,6 +194,15 @@ do produto dele**.
     cronômetro é um NÚMERO na fileira de apoio (A SEMANA PEDE, sem cor). No PC,
     a coluna *Esta semana pede* no quadro do tempo-alvo e o cartão *Tempo-alvo
     · por UEP*.
+    - **"Cabe" só com todas as caixas com UEP** (`vereditoDaSemana`, v2.107.1):
+      caixa sem UEP fica fora da UEP programada e a semana parece mais leve;
+      com ela, a frase diz "sem contar N caixas sem UEP". "Não fecha" vale
+      sempre (erra a favor). Sem o % (pede null), sem veredito.
+    - **Cronômetro com 4 números** (`.takt-apoio4`): menos espaço entre as
+      células e as letras; no painel estreito (container até 340 px: 667 ×
+      325, 640 × 300, 360 × 740) o rótulo desce a 9 px numa linha. Quebrar o
+      rótulo em duas cortava os números de baixo a 667 × 325 (revisão de
+      12/11); o e2e da varredura deitada roda também com a semana.
     - **A cor continua pelo tempo-alvo**: entre os dois vão ~5% (0.4 s na
       SLEEP), o erro de uma medição — uma faixa âmbar trocaria de cor por
       acaso (proposta e retirada com o PPCP).

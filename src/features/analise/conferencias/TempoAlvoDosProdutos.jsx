@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { formatarSegundos } from '../../../domain/cronoanalise.js';
 import {
-  explicacaoDaRegua, idadeDoAlvo, medidoXAlvo, semAlvo,
+  explicacaoDaRegua, idadeDoAlvo, medidoXAlvo, semAlvo, vereditoDaSemana,
 } from '../../../domain/tempoAlvo.js';
 import { claro } from '../../../theme/tokensAnalise.js';
 import { est } from './estilos.js';
@@ -70,9 +70,9 @@ export default function TempoAlvoDosProdutos({
       </p>
       {sem && (
         <p style={est.painelDica}>
-          <strong>Esta semana pede {sem.sUep.toFixed(2)} s por UEP</strong> (a programação da semana de {sem.de.slice(0, 5)} pede
-          {' '}{sem.pede != null ? `${sem.pede.toFixed(1)}%` : '—'} da média da linha
-          {sem.pede > 100 ? ': no tempo-alvo, ela não fecha' : ': no tempo-alvo, ela cabe'}). A coluna ao lado do tempo-alvo é
+          <strong>Esta semana pede {sem.sUep.toFixed(2)} s por UEP</strong> (a programação da semana de {sem.de.slice(0, 5)}
+          {sem.pede != null ? ` pede ${sem.pede.toFixed(1)}% da média da linha` : ''}
+          {vereditoDaSemana(sem) ? `: ${vereditoDaSemana(sem)}` : ''}). A coluna ao lado do tempo-alvo é
           o que ela pede em cada produto — a carga, sem cor: quem julga a medição é o tempo-alvo.
         </p>
       )}

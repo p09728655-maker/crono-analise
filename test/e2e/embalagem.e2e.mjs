@@ -1307,15 +1307,22 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
      ficam lado a lado. Com o produto no topo (v2.99.3), o painel baixo o
      poe numa linha so' — 740x290 e 667x325 cortavam os numeros de baixo
      com o nome em duas. */
-  for (const nome of ['', NOME_LONGO]) {
+  // v2.107.0 (revisao de 12/11): com a semana do painel, a fileira de apoio
+  // tem 4 numeros (A SEMANA PEDE) — produto da lista, para o alvo e a semana valerem.
+  const COM_SEMANA = {
+    ...ALVOS, semanas: [{ ...SEMANA_HOJE, atual: true, sUep: 27.6, pede: 105.1, uep: 1, nUteis: 5 }],
+  };
+  for (const nome of ['', NOME_LONGO, 'Rack Sirius 1.6']) {
+    const semana = nome === 'Rack Sirius 1.6';
     for (const [largura, altura] of [[1024, 552], [640, 360], [740, 300], [740, 290], [667, 325]]) {
-      const tela = `deitado ${largura}x${altura}${nome ? ', nome longo' : ''}`;
+      const tela = `deitado ${largura}x${altura}${semana ? ', com a semana pede' : nome ? ', nome longo' : ''}`;
       const ctx = await navegador.newContext({ viewport: { width: largura, height: altura }, hasTouch: true });
       const s = await ctx.newPage();
       await semearSessao(s);
-      await simularServidor(s, {});
+      await simularServidor(s, semana ? { alvos: COM_SEMANA } : {});
       await s.goto(`${BASE}/coleta/embalagem`);
       if (nome) await s.locator('input[aria-label="Produto embalado"]').fill(nome);
+      if (semana) await s.locator('[aria-label="Tempo-alvo do produto"]').getByText('TEMPO-ALVO DO PRODUTO').waitFor({ timeout: 8000 });
       await s.getByRole('button', { name: /INICIAR/ }).click();
       const largadaD = s.getByRole('button', { name: /Largada/ });
       await largadaD.waitFor({ timeout: 4000 });
@@ -1336,7 +1343,13 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
       const fatiados = await fatiadosNoPainel(s);
       checar(fatiados.length === 0, `${tela}: nada cortado no painel${fatiados.length ? ` (${fatiados.join(', ')})` : ''}`);
       const produtoD = await linhasDoProduto(s);
-      if (!nome) {
+      if (semana) {
+        checar(/A SEMANA PEDE\s*68\.5\s*s/i.test(await s.locator('[aria-label="Tempo decorrido"]').innerText()),
+          `${tela}: o quarto numero (A SEMANA PEDE 68.5 s) esta' no painel`);
+        const rotulos = await s.evaluate(() => [...document.querySelectorAll('.takt-apoio4 .takt-rotulo')]
+          .filter((e) => e.scrollWidth > e.parentElement.clientWidth + 1).map((e) => e.innerText));
+        checar(rotulos.length === 0, `${tela}: nenhum rotulo passa da celula${rotulos.length ? ` (${rotulos.join(', ')})` : ''}`);
+      } else if (!nome) {
         // Sem produto escolhido, o painel diz isso — nao fica um vazio mudo.
         checar(await s.locator('[aria-label="Tempo decorrido"]').getByText('Produto não informado').isVisible(),
           `${tela}: sem produto, o painel diz "Produto não informado"`);
