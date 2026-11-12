@@ -12,8 +12,9 @@
  * faixa preta do enquadramento); retangulo pequeno e retangulo sem caixa
  * sao recusados com o porque; a leitura marca cada caixa na SAIDA dela
  * (v2.109.0: o fim da caixa sai do rolete — o instante do Enter), ignora o
- * vulto, e conta a caixa que ja' estava (a saida dela foi filmada), que vira
- * a largada, como o primeiro Enter; as teclas ficam travadas durante a
+ * vulto (o limite sai do proprio video) e a caixa que ja' estava (diz onde);
+ * a primeira saida vira a largada, como o primeiro Enter; as teclas ficam
+ * travadas durante a
  * leitura; a conferencia conta o que o analista mexeu; o retangulo fica
  * guardado para a maquina e a conferencia sobrevive ao F5; e a medicao
  * salva e' a de sempre, com origem 'video'.
@@ -34,11 +35,11 @@ const CAIXA = {
   x: 300 / 640, y: 150 / 360, largura: 200 / 640, altura: 150 / 360,
 };
 const ENTRADAS = [4, 15, 26, 40, 52];
-// A marca e' na SAIDA (v2.109.0): a caixa que ja' estava sai em 2 s e as
-// outras, 7 s depois de entrar — menos a ultima, que sai em ~58 s (medido
-// pela leitura do app, 57,9 s, e pelo leitor de camera, 58,2 s: no arquivo
-// ela fica uns 6 s).
-const SAIDAS = [2, 11, 22, 33, 47, 58];
+// A marca e' na SAIDA (v2.109.0), 7 s depois de a caixa entrar — menos a
+// ultima, que sai em ~58 s (medido pela leitura do app, 57,9 s, e pelo leitor
+// de camera, 58,2 s: no arquivo ela fica uns 6 s). A que ja' estava no comeco
+// (sai em 2 s) nao conta.
+const SAIDAS = [11, 22, 33, 47, 58];
 
 let falhas = 0;
 const checar = (ok, msg) => { console.log(`${ok ? 'OK  ' : 'FALHA'} ${msg}`); if (!ok) falhas++; };
@@ -198,20 +199,21 @@ const lista = await marcas.innerText();
 const largada = tempos(lista, 'Largada');
 const volumes = tempos(lista, 'Volume \\d+');
 checar(largada.length === 1 && Math.abs(largada[0] - SAIDAS[0]) < 0.4,
-  `a caixa que ja' estava conta na saida (filmada) e vira a largada, como o primeiro Enter (${largada})`);
-checar(volumes.length === 5 && volumes.every((t, i) => Math.abs(t - SAIDAS[i + 1]) < 0.4),
+  `a primeira caixa que passa inteira vira a largada, na saida dela, como o primeiro Enter (${largada})`);
+checar(volumes.length === 4 && volumes.every((t, i) => Math.abs(t - SAIDAS[i + 1]) < 0.4),
   `um volume por caixa, na SAIDA dela: ${volumes.join(', ')} (esperado ${SAIDAS.slice(1).join(', ')})`);
 const texto = await auto.innerText();
-checar(/A leitura marcou 5 volumes, mais a largada/.test(texto), 'o resumo diz quantos volumes marcou');
-checar(/Confira a primeira: algo já estava no retângulo[\s\S]*0:0[12]\.\d/.test(texto),
-  'a caixa que ja\' estava no comeco: marcada na saida e apontada para conferir, com o ponto');
-checar(/Passagens curtas ignoradas[\s\S]*0:3[56]\.\d/.test(texto), 'o vulto de 1 s em ~0:36 e\' ignorado, e a tela mostra onde');
-checar(/das 6 marcas que ela pôs, 6 ficaram/.test(texto), 'conferencia: 6 de 6 marcas mantidas antes de mexer');
+checar(/A leitura marcou 4 volumes, mais a largada/.test(texto), 'o resumo diz quantos volumes marcou');
+checar(/Algo já estava no retângulo quando a leitura começou e não foi marcado[\s\S]*0:0[12]\.\d/.test(texto),
+  'a caixa que ja\' estava no comeco nao conta (podia ser uma mao), e a tela diz onde ela saiu');
+checar(/Passagens curtas ignoradas \(menos de [\d.]+ s[\s\S]*0:3[67]\.\d/.test(texto),
+  'o vulto de 1 s em ~0:36 e\' ignorado pelo limite do proprio video, e a tela mostra onde (na saida)');
+checar(/das 5 marcas que ela pôs, 5 ficaram/.test(texto), 'conferencia: 5 de 5 marcas mantidas antes de mexer');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-auto-pronto.png` });
 
 /* ------------------------- lista esvaziada: a marcacao automatica sai */
 await p.evaluate(() => document.activeElement?.blur());
-for (let i = 0; i < 6; i++) await p.keyboard.press('Backspace');
+for (let i = 0; i < 5; i++) await p.keyboard.press('Backspace');
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).waitFor({ timeout: 4000 });
 // Espera a tela assentar: o botao aparece um render antes de o efeito sobre
 // a marcacao limpar o resumo, e ler o cartao uma vez so' caia nesse meio
@@ -223,7 +225,7 @@ const limpou = await p.waitForFunction(() => {
 checar(limpou, 'desfeita a lista inteira (⌫), o resumo e a conferencia saem e o botao de marcar volta');
 await irPara(p, 0);
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).click();
-await auto.getByText(/A leitura marcou 5 volumes/).waitFor({ timeout: 120000 });
+await auto.getByText(/A leitura marcou 4 volumes/).waitFor({ timeout: 120000 });
 // As marcas gravadas no fim sao as DESTA leitura, nao as da primeira: duas
 // leituras do mesmo video diferem em decimos (o quadro lido a 8x nao e'
 // sempre o mesmo). Comparar com a primeira dava falha intermitente de ~0,25 s.
@@ -237,8 +239,8 @@ await marcas.getByRole('button', { name: /Remover o volume 2/ }).click();
 await irPara(p, 56);
 await p.evaluate(() => document.activeElement?.blur());
 await p.keyboard.press('Enter');
-checar(/das 6 marcas que ela pôs, 5 ficaram, 1 foi apagada e 1 foi acrescentada/.test(await auto.innerText()),
-  'conferencia conta o que o analista mexeu: 5 ficaram, 1 apagada, 1 acrescentada');
+checar(/das 5 marcas que ela pôs, 4 ficaram, 1 foi apagada e 1 foi acrescentada/.test(await auto.innerText()),
+  'conferencia conta o que o analista mexeu: 4 ficaram, 1 apagada, 1 acrescentada');
 
 /* ------------------------------------------------------------- o F5 */
 await p.reload();
@@ -246,9 +248,9 @@ await preparar.waitFor({ timeout: 8000 });
 await p.locator('input[type="file"]').setInputFiles(VIDEO);
 await p.getByRole('button', { name: 'Continuar de onde parou' }).click({ timeout: 8000 });
 await auto.waitFor({ timeout: 4000 });
-checar(/das 6 marcas que ela pôs, 5 ficaram, 1 foi apagada e 1 foi acrescentada/.test(await auto.innerText()),
+checar(/das 5 marcas que ela pôs, 4 ficaram, 1 foi apagada e 1 foi acrescentada/.test(await auto.innerText()),
   'F5: a conferencia volta com a marcacao guardada');
-checar(/Passagens curtas ignoradas[\s\S]*0:3[56]\.\d/.test(await auto.innerText()),
+checar(/Passagens curtas ignoradas[\s\S]*0:3[67]\.\d/.test(await auto.innerText()),
   'F5: o que a leitura apontou para conferir volta junto (passagem curta ignorada)');
 await p.waitForFunction(() => document.querySelector('[aria-hidden="true"][style*="dashed"]'), null, { timeout: 4000 })
   .then(() => checar(true, 'F5: o retangulo da maquina volta desenhado sobre o video'))
@@ -260,12 +262,12 @@ await p.evaluate(() => document.activeElement?.blur());
 await p.keyboard.press('f');
 const revisar = p.getByRole('region', { name: 'Revisar a medição' });
 await revisar.waitFor({ timeout: 4000 });
-checar(/Conferência da marcação automática: das 6 marcas que ela pôs, 5 ficaram/.test(await revisar.innerText()),
+checar(/Conferência da marcação automática: das 5 marcas que ela pôs, 4 ficaram/.test(await revisar.innerText()),
   'Revisar: a conferencia da marcacao automatica aparece antes de salvar');
 await revisar.getByRole('button', { name: 'Salvar medição' }).click();
 await p.getByText(/Medição salva/).waitFor({ timeout: 8000 });
 const enviada = enviados[enviados.length - 1];
-checar(enviada?.origem === 'video' && enviada?.pecas === 5 && enviada?.marcasMs?.length === 5,
+checar(enviada?.origem === 'video' && enviada?.pecas === 4 && enviada?.marcasMs?.length === 4,
   `a medicao salva e' a de sempre, com origem video (${enviada?.pecas} volumes, ${enviada?.marcasMs?.length} marcas)`);
 {
   // Os NUMEROS gravados, nao so' as quantidades: tirado o volume 2 e
@@ -273,7 +275,7 @@ checar(enviada?.origem === 'video' && enviada?.pecas === 5 && enviada?.marcasMs?
   // periodo vai da largada ao Encerrar (59,5 s). Tolerancia de 0,2 s: a
   // lista mostra decimos.
   const L = largadaGravada;
-  const esperadas = [volumesGravados[0], volumesGravados[2], volumesGravados[3], 56, volumesGravados[4]]
+  const esperadas = [volumesGravados[0], volumesGravados[2], 56, volumesGravados[3]]
     .map((t) => (t - L) * 1000);
   const perto = (a, b) => Math.abs(a - b) <= 200;
   checar(enviada?.marcasMs?.every((ms, i) => perto(ms, esperadas[i])),
@@ -304,6 +306,9 @@ checar(enviada?.origem === 'video' && enviada?.pecas === 5 && enviada?.marcasMs?
   await autoAntigo.waitFor({ timeout: 4000 });
   checar(/desenhado antes da versão 2\.109\.0[\s\S]*redesenhe uma faixa fina/.test(await autoAntigo.innerText()),
     'retangulo guardado antes da v2.109.0 (para a entrada): a tela pede para redesenhar na passagem do rolete');
+  checar(!(await autoAntigo.getByRole('button', { name: 'Marcar volumes automaticamente' }).count())
+    && (await autoAntigo.getByRole('button', { name: 'Redesenhar o retângulo' }).count()) === 1,
+    'com o retangulo antigo nao da para ler (marcaria outro instante): so redesenhar');
   await c2.close();
 }
 

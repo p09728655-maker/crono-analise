@@ -566,7 +566,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   };
 
   const lerAutomatica = () => {
-    if (!retangulo || !listaVazia(refMarcacao.current)) return;
+    // Retangulo de antes da v2.109.0 (para a entrada embaixo do filme): lido
+    // pela saida, marcaria outro instante, carimbado como o do Enter.
+    if (!retangulo || retangulo.evento !== 'saida' || !listaVazia(refMarcacao.current)) return;
     refVideo.current?.pause();
     refUltimoProgresso.current = 0;
     setProgresso(null);
@@ -624,12 +626,15 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       resultado: {
         volumes: m.toques.length,
         evento: 'saida',
-        // A que ja' estava na faixa no comeco conta (a saida foi filmada) e
-        // vem para conferir; a que o video cortou antes de sair nao conta.
+        // So' conta a caixa que passou inteira pela faixa durante a leitura:
+        // a que ja' estava no comeco e a que o video cortou antes de sair
+        // ficam de fora, e a tela diz onde estao.
         jaEstava: s.jaEstava,
         semSaida: s.semSaida,
         suspeitos: s.suspeitos,
-        descartados: r.descartados.map((v) => v.entrouMs),
+        // Na SAIDA: se era caixa, o Enter ali marca o instante certo.
+        descartados: s.descartados,
+        limiteCurtaMs: r.permanenciaMinimaMs,
         longos: intervalosLongos(s.marcasMs),
       },
     });
@@ -1657,16 +1662,28 @@ function MarcacaoAutomatica({
               sobre essa passagem.
             </p>
           )}
-          <p style={ev.dica}>
-            Retângulo da {maquina?.nome || 'máquina'}, guardado neste PC. A leitura vai de {emRelogio(agoraMs)} até o
-            fim do vídeo, roda neste PC e leva alguns minutos.
-          </p>
-          <div style={ev.linhaBotoes}>
-            <button type="button" style={est.botaoImprimir} onClick={aoLer}>
-              {estado === 'erro' ? 'Ler o vídeo de novo' : 'Marcar volumes automaticamente'}
-            </button>
-            {botaoDesenhar('Redesenhar o retângulo')}
-          </div>
+          {retangulo.evento === 'saida' ? (
+            <>
+              <p style={ev.dica}>
+                Retângulo da {maquina?.nome || 'máquina'}, guardado neste PC. A leitura vai de {emRelogio(agoraMs)} até o
+                fim do vídeo, roda neste PC e leva alguns minutos.
+              </p>
+              <div style={ev.linhaBotoes}>
+                <button type="button" style={est.botaoImprimir} onClick={aoLer}>
+                  {estado === 'erro' ? 'Ler o vídeo de novo' : 'Marcar volumes automaticamente'}
+                </button>
+                {botaoDesenhar('Redesenhar o retângulo')}
+              </div>
+            </>
+          ) : (
+            /* Sem o botao de ler: com o retangulo antigo a leitura marcaria
+               outro instante (revisao da v2.109.0). Redesenhar e' o caminho. */
+            <div style={ev.linhaBotoes}>
+              <button type="button" style={est.botaoImprimir} onClick={aoDesenhar} disabled={!podeDesenhar}>
+                Redesenhar o retângulo
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -1711,10 +1728,10 @@ function MarcacaoAutomatica({
             </p>
           )}
           {resultado?.jaEstava != null && (
-            <p style={ev.aviso}>
-              Confira a primeira: algo já estava no retângulo quando a leitura começou, e foi marcado quando saiu.
-              Se não era o fim de uma caixa, apague a marca:{' '}
-              <Tempos lista={[resultado.jaEstava]} aoIr={aoIr} />
+            <p style={ev.dica}>
+              Algo já estava no retângulo quando a leitura começou e não foi marcado (pode ter sido uma mão): saiu em{' '}
+              <Tempos lista={[resultado.jaEstava]} aoIr={aoIr} />. A largada é a primeira caixa que passou inteira — o
+              tempo por volume não muda.
             </p>
           )}
           {resultado?.semSaida != null && (
@@ -1738,7 +1755,10 @@ function MarcacaoAutomatica({
           )}
           {resultado?.descartados.length > 0 && (
             <p style={ev.dica}>
-              Passagens curtas ignoradas (pessoa ou reflexo): <Tempos lista={resultado.descartados} aoIr={aoIr} />
+              Passagens curtas ignoradas
+              {resultado.limiteCurtaMs ? ` (menos de ${formatarSegundos(resultado.limiteCurtaMs)} s no retângulo, metade do que as caixas deste vídeo levaram)` : ''}
+              : pessoa ou reflexo. Se alguma era caixa, marque com Enter no ponto:{' '}
+              <Tempos lista={resultado.descartados} aoIr={aoIr} />
             </p>
           )}
           <p style={ev.dica}><TextoConferencia c={conferencia} /></p>

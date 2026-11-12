@@ -1,10 +1,12 @@
 """
 Leitor de câmera da envolvedora — conta volumes pela cor de papelão.
 
-Olha um retângulo fixo da imagem (a esteira embaixo do rolo de filme) e mede
-quanto dele está coberto de papelão. Volume passando = o retângulo enche de
-papelão; esteira vazia = quase nada. Cada passagem vira uma linha no CSV do
-dia, com a hora em que o volume entrou e saiu do filme.
+Olha um retângulo fixo da imagem — uma faixa fina sobre a passagem do rolete
+para o tapete verde — e mede quanto dele está coberto de papelão. Volume
+passando = a faixa enche de papelão; vazia = quase nada. Cada passagem vira
+uma linha no CSV do dia. A hora que vale é a SAÍDA (coluna `saiu`): o fim da
+caixa sai do rolete e entra no tapete — o instante do toque no tablet e do
+Enter no app (v2.109.0 do app). O intervalo é de saída a saída.
 
 Não usa IA nem internet: só ffmpeg + Python, no PC da fábrica. Nenhuma imagem
 é guardada — só as horas.
@@ -705,6 +707,13 @@ def main():
         parar('ffmpeg não encontrado. Instale (LEIA-ME.md, passo 1) e abra um Prompt novo, '
               'ou copie o ffmpeg.exe para esta pasta.')
     cfg = ler_config()
+    if cfg.get('marca') != 'saida':
+        # config.json de antes: o retangulo era embaixo do filme, para a
+        # ENTRADA. Pela saida ele marcaria outro instante que o do tablet.
+        print('ATENÇÃO: este config.json é de antes da marca na saída. A hora do volume agora é quando o fim\n'
+              'da caixa sai do rolete e entra no tapete: refaça o retângulo como uma faixa fina sobre essa\n'
+              'passagem (LEIA-ME, passo 2.2), ponha "permanencia_minima_s": 1.0 e acrescente "marca": "saida".\n',
+              flush=True)
     if not args.arquivo and any(p in cfg['camera'] for p in ('USUARIO:SENHA', 'IP_DO_GRAVADOR')):
         parar('A câmera ainda não está no config.json: troque USUARIO, SENHA e IP_DO_GRAVADOR '
               '(LEIA-ME, passo 3).\nPara testar com um vídeo, no Prompt de Comando:\n'

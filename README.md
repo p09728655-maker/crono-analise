@@ -411,14 +411,19 @@ do produto dele**.
   toque do tablet e o Enter). O retângulo passa a ser uma faixa fina sobre essa
   passagem, e a marca é o instante em que a caixa sai dele
   (`saidasDosVolumes` em `src/domain/deteccaoVolumes.js`, sobre o `saiuMs` que
-  `detectarVolumes` já calculava). As pontas se invertem: a caixa que já
-  estava na faixa no começo conta (a saída foi filmada; `saidaDaQueJaEstava`,
-  apontada para conferir) e a que o vídeo cortou antes de sair não conta
-  (`semSaida`). O retângulo guardado por máquina ganha `evento: 'saida'`; o de
-  antes (sem ele, desenhado para a entrada embaixo do filme) faz a tela pedir
-  para redesenhar, e a conferência de uma leitura antiga avisa que foi na
-  entrada. O leitor de câmera segue o mesmo padrão: intervalo de saída a saída
-  e validação pela coluna `saiu`.
+  `detectarVolumes` já calculava). Só conta a caixa que passou inteira pela
+  faixa durante a leitura: a que já estava no começo (`saidaDaQueJaEstava`)
+  não conta — viraria a largada, que a lista não deixa apagar — e a que o vídeo
+  cortou antes de sair também não (`semSaida`). A passagem curta (pessoa ou
+  reflexo) é a que dura menos de `FATOR_PERMANENCIA` (0,5) × a mediana das
+  passagens do próprio vídeo, com piso de 0,6 s: o mínimo fixo de 2 s descartava
+  caixa de verdade com a faixa fina (a caixa atravessa em 2 a 3 s). O retângulo
+  guardado por máquina ganha `evento: 'saida'`; com o de antes (sem ele,
+  desenhado para a entrada embaixo do filme) a tela só deixa redesenhar, e a
+  conferência de uma leitura antiga avisa que foi na entrada. O leitor de
+  câmera segue o mesmo padrão: intervalo de saída a saída, validação pela
+  coluna `saiu`, `permanencia_minima_s` 1.0 no exemplo e aviso ao abrir com
+  `config.json` sem `"marca": "saida"`.
 - **A tela de marcar por vídeo com a visão do tablet** (v2.108.0): o painel do
   topo da coluna da direita é o `PainelTakt` do cronômetro do tablet
   (exportado de `src/features/coleta/rapida/CronometroAoVivo.jsx`, que o usa

@@ -56,7 +56,12 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    ```
    Abra `foto_camera.jpg`. O retângulo vermelho tem que ser uma faixa fina
    sobre a passagem do rolete para o tapete verde, atravessando todo o caminho
-   da caixa. Cada linha branca da grade é 10% da imagem; as amarelas são o
+   da caixa. **Os números do `config.exemplo.json` são só um ponto de partida:**
+   a posição certa depende da câmera. Com a faixa fina a caixa leva uns 2 s
+   para atravessar, então `permanencia_minima_s` é 1.0 (abaixo disso é mão ou
+   reflexo); se o `--diagnostico` mostrar caixa passando mais rápido, baixe.
+   `config.json` antigo (sem `"marca": "saida"`) faz o leitor avisar ao abrir.
+   Cada linha branca da grade é 10% da imagem; as amarelas são o
    meio (50%). Ajuste no `config.json`: `x` e `y` = canto de cima à esquerda,
    `largura` e `altura` = tamanho, tudo em fração (0,30 = 30%, escrito `0.30`).
 3. Veja o sinal:
