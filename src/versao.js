@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.110.0',
+    data: '2026-11-12',
+    titulo: 'Perdas da embalagem: onde a linha deixa de produzir e quanto isso custa em horas',
+    itens: [
+      'RELATÓRIO NOVO: PERDAS DA EMBALAGEM. Na Embalagem Takt Time do PC, o botão "Perdas da embalagem" (também no menu do Início). A partir das medições do tablet e do Cronometrar por vídeo, dos últimos 7, 30 ou 90 dias: quanto do tempo medido a linha ficou SEM PRODUZIR — as paradas marcadas e as lacunas (intervalos acima do dobro do normal: paradas que ninguém marcou) —, o tempo por volume no período (o que saiu) e rodando (o ritmo normal), e quantos volumes deixaram de sair no tempo parado.',
+      'POR QUE AINDA PRECISA DE HORA EXTRA: o programa da semana (esta e a próxima) feito no ritmo medido, contra as horas da linha — jornada menos o setup planejado, as mesmas do takt — e o mesmo programa no ritmo normal. A diferença é o que as paradas e as lacunas custam em horas. É estimativa: o ritmo é o das medições, com o mix de produtos delas.',
+      'POR QUE A LINHA PAROU: as paradas marcadas por motivo, a maior primeiro, com quantas vezes. Quando "Outro" passa de 20% do tempo parado, a tela aponta: sem o motivo, não dá para atacar a causa.',
+      'ONDE A LINHA MAIS PERDE TEMPO: por produto, do que mais ficou sem produzir ao que menos, com o tempo por volume no período e rodando, as paradas, as lacunas e os volumes perdidos. O produto com e sem o código na frente vira uma linha só; nome digitado diferente fica separado (corrija em Editar produto).',
+      'As contas são as mesmas do volume a volume. O tablet e o vídeo do mesmo trecho contam uma vez só. As medições são amostras escolhidas por quem mede, e a curta costuma pegar o trecho em que a linha roda bem: a perda real do dia tende a ser maior que a do relatório.',
+    ],
+  },
+  {
     versao: '2.109.0',
     data: '2026-11-12',
     titulo: 'Marcação automática no mesmo instante do Enter: o fim da caixa sai do rolete',

@@ -120,7 +120,9 @@ function acharAberta(id, medicoes) {
 const seletorDaLinha = (id) => `[data-medicao="${id}"]`;
 /** O botao da vista que esta' na tela: o foco cai nele quando a linha nao esta'. */
 const VISTA_NA_TELA = '[data-vista][aria-pressed="true"]';
-export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometrarVideo }) {
+export default function EmbalagemTaktTimePc({
+  aoVoltar, aoVerInicio, aoCronometrarVideo, aoVerPerdas,
+}) {
   const [verVersoes, setVerVersoes] = useState(false);
   /* OS TEMPOS-ALVO DO PAINEL (v2.106.0): lidos uma vez aqui e passados ao
      volume a volume — a regua do veredito de cada medicao. */
@@ -572,6 +574,12 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
                 {aoCronometrarVideo && (
                   <button type="button" style={est.botaoLinha} onClick={cliqueSimples(() => sairDaTela(aoCronometrarVideo))}>
                     Cronometrar por vídeo
+                  </button>
+                )}
+                {/* v2.110.0: o relatorio de onde a linha deixa de produzir. */}
+                {aoVerPerdas && (
+                  <button type="button" style={est.botaoLinha} onClick={cliqueSimples(() => sairDaTela(aoVerPerdas))}>
+                    Perdas da embalagem
                   </button>
                 )}
               </div>

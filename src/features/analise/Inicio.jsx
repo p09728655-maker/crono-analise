@@ -39,7 +39,7 @@ import Analistas from './Analistas.jsx';
  * lista usa (proximasAcoes, situacao).
  */
 export default function Inicio({
-  aoAbrirEstudos, aoAbrirRelatorio, aoAbrirEmbalagem, aoNovoEstudo, aoMedir, aoAnalisar, aoTrocarModo,
+  aoAbrirEstudos, aoAbrirRelatorio, aoAbrirEmbalagem, aoAbrirPerdasEmbalagem, aoNovoEstudo, aoMedir, aoAnalisar, aoTrocarModo,
 }) {
   const [estudos, setEstudos] = useState(null);
   const [erro, setErro] = useState(null);
@@ -93,6 +93,7 @@ export default function Inicio({
         aoVerEstudos={aoAbrirEstudos}
         aoVerConferencias={aoAbrirRelatorio}
         aoVerEmbalagem={aoAbrirEmbalagem}
+        aoVerPerdasEmbalagem={aoAbrirPerdasEmbalagem}
         /* SEM acao primaria aqui — de proposito. O botao vermelho da lateral
            e' "a acao desta tela": na lista e' criar estudo, no relatorio e'
            imprimir. No Inicio nao ha' UMA acao — ha' duas, e o unico

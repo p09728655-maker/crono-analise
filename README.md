@@ -406,6 +406,23 @@ do produto dele**.
   e `test/e2e/video-automatico.e2e.mjs` (vídeo sintético
   `test/fixtures/caixas-60s.webm`: fundo verde e caixa parda em horários
   conhecidos — nenhuma imagem da fábrica no repositório).
+- **Perdas da embalagem** (`/analise/embalagem/perdas`, v2.110.0): relatório
+  de onde a linha deixa de produzir. Os dados vêm de
+  `GET /api/conferencias?grupo=<id>&marcas=1&dias=<1..90>` — as medições das
+  máquinas do grupo (nome sem diferença de maiúscula), do período, COM as
+  marcas e as paradas (a lista comum não traz marcas; aqui o grupo e o período
+  limitam o volume). As contas, puras, em `src/domain/perdasEmbalagem.js`: cada
+  medição pelas camadas do volume a volume (`leituraPecaAPeca`) — relógio do 1º
+  ao último volume = (N−1) × normal + lacunas (excesso acima do dobro do
+  normal) + paradas marcadas (relógio − marcas) —; medições sobrepostas da
+  mesma máquina contam uma vez (a de mais volumes); o produto junta sem o código
+  na frente e sem diferença de maiúscula; agregados ponderados pelo tempo; as
+  paradas por motivo vêm da lista de cada medição. A hora extra
+  (`horaExtraDaSemana`) usa as horas por máquina do `taktDaMedicao` (jornada
+  menos setup planejado) e o programa da semana: necessárias no ritmo do
+  período e no normal; a diferença é o custo das perdas. Testes:
+  `test/perdas-embalagem.test.js` (inclui uma medição real, só números, que bate
+  com a mesma conta feita em SQL no banco) e `test/e2e/perdas.e2e.mjs`.
 - **A marcação automática marca na SAÍDA da caixa** (v2.109.0): o padrão de
   marcação do PPCP é o fim da caixa saindo do rolete e entrando no tapete (o
   toque do tablet e o Enter). O retângulo passa a ser uma faixa fina sobre essa

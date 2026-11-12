@@ -969,6 +969,26 @@ rodar('API — integracao com Postgres', () => {
     expect(detalhe.corpo.conferencia.marcas_ms).toEqual(marcasMs);
     expect(detalhe.corpo.conferencia.marcas_relogio_ms).toBe(260000);
     expect(detalhe.corpo.conferencia.marcas_setup_ms).toBe(15000);
+
+    // As PERDAS DA EMBALAGEM (v2.110.0): ?grupo&marcas=1 traz as marcas, so'
+    // das maquinas do grupo (o nome casa sem diferenca de maiuscula).
+    const [grupo] = await sql`
+      INSERT INTO grupos_maquina (empresa_id, codigo, nome) VALUES (${EMPRESA}, '0905', 'EMBALAGEM PERDAS')
+      RETURNING id`;
+    await sql`INSERT INTO maquinas (empresa_id, nome, ativa, grupo_id) VALUES (${EMPRESA}, 'Embalagem 01', true, ${grupo.id})`;
+    const doGrupo = fingirRes();
+    await conferenciasApi(fingirReq({ query: { grupo: grupo.id, marcas: '1', dias: '7' } }), doGrupo);
+    expect(doGrupo.statusCode).toBe(200);
+    expect(doGrupo.corpo.dias).toBe(7);
+    const dela = doGrupo.corpo.conferencias.find((c) => c.id === linha.id);
+    expect(dela.marcas_ms).toEqual(marcasMs);
+    expect(Array.isArray(dela.paradas)).toBe(true);
+    // Maquina de fora do grupo (a Furadeira dos outros testes) nao vem.
+    expect(doGrupo.corpo.conferencias.every((c) => c.maquina.toLowerCase() === 'embalagem 01')).toBe(true);
+    // Sem grupo valido, recusa — a lista com marcas nunca sai sem limite.
+    const semGrupo = fingirRes();
+    await conferenciasApi(fingirReq({ query: { marcas: '1' } }), semGrupo);
+    expect(semGrupo.statusCode).toBe(400);
   });
 
   it('setup no trecho maior que o que o trecho parou vira null — o relogio fica', async () => {
