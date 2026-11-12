@@ -13,7 +13,8 @@ Uso (ver LEIA-ME.md):
   python leitor_camera.py --foto                 confere onde está o retângulo
   python leitor_camera.py --diagnostico          mostra o % de papelão a cada segundo
   python leitor_camera.py                        roda na câmera, sem parar
-  python leitor_camera.py --arquivo v.mp4 --inicio 10:01:06   processa vídeo exportado
+  python leitor_camera.py --arquivo v.dav        vídeo do gravador: a hora vem do próprio .dav
+  python leitor_camera.py --arquivo v.mp4 --inicio 10:01:06   outro vídeo: a hora vem da imagem
 """
 import argparse
 import json
@@ -26,7 +27,7 @@ import sys
 import threading
 import time
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote, unquote
 
@@ -183,6 +184,32 @@ def entrada_ffmpeg(cfg, arquivo):
     # TCP em vez de UDP: na rede da fábrica perde menos pacote, e pacote
     # perdido vira borrão na imagem — que pode parecer papelão.
     return ['-rtsp_transport', 'tcp', '-timeout', str(15_000_000), '-i', cfg['camera']]
+
+
+def inicio_gravado(arquivo):
+    """Data e hora do 1º quadro, gravadas pelo gravador dentro do .dav.
+
+    O .dav (Intelbras/Dahua) guarda o relógio do gravador, sem fuso; o ffmpeg
+    o devolve como se fosse UTC, então lido como UTC volta a hora da parede.
+    Conferido num vídeo da envolvedora: o 1º quadro bate com a hora escrita na
+    imagem, e daí em diante o .dav fica até 1 s à frente dela — a mesma
+    precisão de ler a hora na tela, e diferença fixa, que a validação desconta.
+    O NOME do arquivo exportado não serve: veio 3 s depois do 1º quadro.
+
+    None quando não é .dav (MP4 não traz hora) ou a hora é impossível
+    (gravador com relógio zerado): aí vale o --inicio."""
+    r = subprocess.run([FFMPEG, '-nostdin', '-hide_banner', '-i', str(arquivo)],
+                       stdin=subprocess.DEVNULL, capture_output=True,
+                       text=True, encoding='utf-8', errors='replace')
+    if not re.search(r'Input #0, dhav,', r.stderr):
+        return None
+    m = re.search(r'start: (\d+(?:\.\d+)?)', r.stderr)
+    if not m:
+        return None
+    t = datetime.fromtimestamp(float(m.group(1)), timezone.utc).replace(tzinfo=None)
+    if not datetime(2015, 1, 1) <= t <= datetime.now() + timedelta(days=1):
+        return None
+    return t
 
 
 def filtro_retangulo(cfg):
@@ -644,6 +671,7 @@ def main():
     if not args.arquivo and any(p in cfg['camera'] for p in ('USUARIO:SENHA', 'IP_DO_GRAVADOR')):
         parar('A câmera ainda não está no config.json: troque USUARIO, SENHA e IP_DO_GRAVADOR '
               '(LEIA-ME, passo 3).\nPara testar com um vídeo, no Prompt de Comando:\n'
+              '  python leitor_camera.py --arquivo video.dav   (exportado do gravador)\n'
               '  python leitor_camera.py --arquivo video.mp4 --inicio HH:MM:SS')
     if args.arquivo and not Path(args.arquivo).exists():
         parar(f'Arquivo não encontrado: {args.arquivo}')
@@ -657,6 +685,16 @@ def main():
         except ValueError:
             parar('--inicio tem que ser HH:MM:SS, a hora que aparece na imagem da câmera.')
         inicio = datetime.combine(datetime.now().date(), h)
+    elif args.arquivo:
+        gravado = inicio_gravado(args.arquivo)
+        if gravado:
+            inicio = gravado
+            print(f'Início lido do .dav: {gravado:%d/%m/%Y %H:%M:%S} '
+                  '(a hora escrita na imagem pode estar até 1 s atrás).')
+        else:
+            print('Este vídeo não traz a hora (só o .dav do gravador traz): as horas '
+                  'contam a partir de 00:00:00.\nPara a hora real, use --inicio HH:MM:SS '
+                  'com a hora que aparece na imagem no 1º segundo.')
     desligar_selecao_do_console()
     try:
         rodar(cfg, args.arquivo, inicio, args.diagnostico)

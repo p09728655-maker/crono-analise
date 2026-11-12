@@ -409,7 +409,9 @@ do produto dele**.
 - **Leitor de câmera da envolvedora** (`ferramentas/leitor-camera/`, **fora do
   app**, em validação): programa Python + ffmpeg que roda num PC da fábrica,
   lê a câmera Intelbras da envolvedora (RTSP) ou um vídeo exportado e grava um
-  CSV por dia com a hora de cada volume. Detecta pela fração de cor de papelão
+  CSV por dia com a hora de cada volume. Do `.dav` exportado (SIM Play ou
+  gravador) a hora de início vem do próprio arquivo; o app não abre `.dav`, e
+  para a marcação manual ele é convertido em MP4 (comando no LEIA-ME). Detecta pela fração de cor de papelão
   num retângulo fixo sobre o tapete verde, com dois limiares para o filme
   balançando não duplicar a caixa. Não usa IA nem internet e não guarda imagem.
   Ainda **não manda nada ao app**: primeiro valida contra a marcação manual por

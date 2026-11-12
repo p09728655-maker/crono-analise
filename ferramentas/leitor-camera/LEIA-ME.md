@@ -43,8 +43,11 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
 
 ## 2. Validar com vídeo exportado — antes de ligar na câmera
 
-1. Exporte do gravador **30 a 60 minutos** da câmera da envolvedora (canal 5).
-   Arquivo `.dav` normalmente abre direto; se não abrir, exporte em MP4/AVI.
+1. Exporte **30 a 60 minutos** seguidos da câmera da envolvedora (canal 5),
+   pelo SIM Play (reprodução da câmera Embalagem → baixar o período) ou no
+   próprio gravador, num horário de produção normal (sem almoço no meio).
+   **Prefira o `.dav`**: o leitor abre direto e ele traz a hora gravada
+   (passo 4). Se não abrir, exporte em MP4/AVI.
 2. Confira o retângulo num momento em que tem caixa embaixo do filme:
    ```
    python leitor_camera.py --arquivo video.mp4 --foto --momento 30
@@ -59,13 +62,34 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    ```
    Sem caixa o % fica baixo; com caixa, alto. `limiar_entra` e `limiar_sai`
    (no `config.json`) têm que ficar **entre** os dois, com `limiar_sai` menor.
-4. Rode a contagem. `--inicio` é a hora que aparece na imagem no 1º segundo:
-   ```
-   python leitor_camera.py --arquivo video.mp4 --inicio 10:01:06
-   ```
+4. Rode a contagem.
+   - **`.dav` do gravador:** não precisa de hora. O leitor lê a data e a hora
+     gravadas no arquivo e mostra na tela (`Início lido do .dav: ...`).
+     Confira com a hora escrita na imagem no começo do vídeo: pode estar até
+     1 s atrás, não mais.
+     ```
+     python leitor_camera.py --arquivo video.dav
+     ```
+   - **MP4/AVI:** não trazem hora. `--inicio` é a hora que aparece na imagem
+     no 1º segundo:
+     ```
+     python leitor_camera.py --arquivo video.mp4 --inicio 10:01:06
+     ```
+
+   **Nunca use a hora do nome do arquivo** que o SIM Play dá: o gravador
+   entrega a partir de um quadro antes do pedido (no teste, o nome dizia
+   10:29:56 e o vídeo começava em 10:29:53).
+
    O resultado fica em `dados\videos\video.csv` (pasta separada: nunca se
    mistura com as planilhas do dia).
 5. Um analista marca **o mesmo vídeo** à mão no app (Cronometrar por vídeo).
+   **O app não abre `.dav`** (o navegador não lê esse formato). Converta antes,
+   no Prompt, dentro desta pasta (sai sem som e menor; dá uns 600 MB por hora):
+   ```
+   ffmpeg -i video.dav -an -vf scale=960:-2 -c:v libx264 -preset veryfast -crf 26 -pix_fmt yuv420p video.mp4
+   ```
+   O MP4 começa no mesmo quadro do `.dav`: o segundo *t* do vídeo no app é o
+   início lido pelo leitor + *t*. Marque no MP4, rode o leitor no `.dav`.
    A tela diz "Enter a cada volume que fecha"; para esta validação — e para
    todos os analistas, sempre — **"fecha" = a frente da caixa toca o tapete
    verde**. É o instante que o leitor grava na coluna `entrou`, e o intervalo
