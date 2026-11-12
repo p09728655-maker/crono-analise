@@ -70,6 +70,10 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
      ```
      python leitor_camera.py --arquivo video.dav
      ```
+     Se no fim aparecer **"salto no relógio"**, a gravação foi interrompida no
+     meio do trecho (ou o relógio do gravador foi acertado): as horas depois
+     do salto saem erradas. Não use esse vídeo; exporte outro trecho sem
+     interrupção.
    - **MP4/AVI:** não trazem hora. `--inicio` é a hora que aparece na imagem
      no 1º segundo:
      ```

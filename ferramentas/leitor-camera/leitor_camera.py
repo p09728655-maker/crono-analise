@@ -186,30 +186,53 @@ def entrada_ffmpeg(cfg, arquivo):
     return ['-rtsp_transport', 'tcp', '-timeout', str(15_000_000), '-i', cfg['camera']]
 
 
-def inicio_gravado(arquivo):
-    """Data e hora do 1º quadro, gravadas pelo gravador dentro do .dav.
+def ler_dav(arquivo):
+    """O que o .dav diz de si: (início, duração em s), ou None se não é .dav.
 
-    O .dav (Intelbras/Dahua) guarda o relógio do gravador, sem fuso; o ffmpeg
-    o devolve como se fosse UTC, então lido como UTC volta a hora da parede.
-    Conferido num vídeo da envolvedora: o 1º quadro bate com a hora escrita na
-    imagem, e daí em diante o .dav fica até 1 s à frente dela — a mesma
-    precisão de ler a hora na tela, e diferença fixa, que a validação desconta.
-    O NOME do arquivo exportado não serve: veio 3 s depois do 1º quadro.
+    Início: data e hora do 1º quadro. O .dav (Intelbras/Dahua) guarda o relógio
+    do gravador, sem fuso; o ffmpeg o devolve como se fosse UTC, então lido
+    como UTC volta a hora da parede. Conferido num vídeo da envolvedora: o 1º
+    quadro bate com a hora escrita na imagem, e daí em diante o .dav fica até
+    1 s à frente dela — a mesma precisão de ler a hora na tela, e diferença
+    fixa, que a validação desconta. O NOME do arquivo exportado não serve:
+    veio 3 s depois do 1º quadro. None se a hora é impossível (gravador com
+    relógio zerado): aí vale o --inicio.
 
-    None quando não é .dav (MP4 não traz hora) ou a hora é impossível
-    (gravador com relógio zerado): aí vale o --inicio."""
+    Duração: do 1º ao último pacote, pelo relógio do gravador (None se ele
+    volta para trás). Serve para achar salto no relógio — ver aviso_de_salto."""
     r = subprocess.run([FFMPEG, '-nostdin', '-hide_banner', '-i', str(arquivo)],
                        stdin=subprocess.DEVNULL, capture_output=True,
                        text=True, encoding='utf-8', errors='replace')
     if not re.search(r'Input #0, dhav,', r.stderr):
         return None
+    inicio = None
     m = re.search(r'start: (\d+(?:\.\d+)?)', r.stderr)
-    if not m:
+    if m:
+        t = datetime.fromtimestamp(float(m.group(1)), timezone.utc).replace(tzinfo=None)
+        if datetime(2015, 1, 1) <= t <= datetime.now() + timedelta(days=1):
+            inicio = t
+    d = re.search(r'Duration: (\d+):(\d\d):(\d\d(?:\.\d+)?)', r.stderr)
+    duracao = int(d.group(1)) * 3600 + int(d.group(2)) * 60 + float(d.group(3)) if d else None
+    return inicio, duracao
+
+
+def aviso_de_salto(duracao_dav, video_s):
+    """Aviso quando o relógio do .dav e o vídeo lido não batem, ou None.
+
+    Gravação interrompida no meio do .dav (por movimento, queda, dois trechos
+    juntados) ou relógio acertado para trás: o ffmpeg emenda as duas pontas
+    (salto para frente de mais de 10 s, qualquer volta para trás) e só avisa
+    num nível que o leitor não mostra. As horas depois do salto saem erradas
+    e o intervalo que o atravessa também. Sem salto a diferença fica abaixo
+    de 1 s (o relógio do .dav anda de segundo em segundo); 3 s de folga."""
+    if duracao_dav is not None and abs(duracao_dav - video_s) <= 3:
         return None
-    t = datetime.fromtimestamp(float(m.group(1)), timezone.utc).replace(tzinfo=None)
-    if not datetime(2015, 1, 1) <= t <= datetime.now() + timedelta(days=1):
-        return None
-    return t
+    relogio = ('o relógio do gravador volta para trás' if duracao_dav is None
+               else f'{duracao_dav:.0f} s pelo relógio do gravador')
+    return (f'ATENÇÃO: este .dav tem um salto no relógio ({relogio}, {video_s:.0f} s de '
+            'vídeo): gravação interrompida ou relógio acertado. As horas depois do salto '
+            'estão erradas, e o intervalo que o atravessa também. Exporte um trecho sem '
+            'interrupção.')
 
 
 def filtro_retangulo(cfg):
@@ -569,7 +592,8 @@ def tirar_foto(cfg, arquivo, momento):
           'Para mudar: no config.json, x e y = canto de cima à esquerda; largura e altura = tamanho.')
 
 
-def rodar(cfg, arquivo, inicio, diagnostico):
+def rodar(cfg, arquivo, inicio, diagnostico, dav=None):
+    # dav: o que ler_dav devolveu (None se não é .dav ou é a câmera ao vivo).
     # Ao vivo grava a planilha do dia e a fila: só um leitor por vez. O
     # diagnóstico só olha (não recupera fila nem grava volume) e pode rodar
     # junto, para conferir a câmera sem parar a contagem.
@@ -588,14 +612,14 @@ def rodar(cfg, arquivo, inicio, diagnostico):
         if saida.exists():
             saida.unlink()  # reprocessar o mesmo vídeo substitui, não soma
     try:
-        _rodar(cfg, arquivo, inicio, diagnostico, reg)
+        _rodar(cfg, arquivo, inicio, diagnostico, reg, dav)
     finally:
         reg.fechar()  # nenhum volume guardado fica para trás, saia como sair
         if trava:
             trava.close()
 
 
-def _rodar(cfg, arquivo, inicio, diagnostico, reg):
+def _rodar(cfg, arquivo, inicio, diagnostico, reg, dav):
     det = Detector(cfg, reg)
     fps = cfg['quadros_por_segundo']
     espera = 5
@@ -644,6 +668,9 @@ def _rodar(cfg, arquivo, inicio, diagnostico, reg):
                 parar('Não li nenhum quadro do arquivo: ' + cam.erro())
             det.fim(momento)
             reg.log(f'fim do arquivo: {n / fps:.0f} s processados')
+            aviso = dav and aviso_de_salto(dav[1], n / fps)
+            if aviso:
+                reg.log(aviso)
             if not diagnostico:
                 print(f'Resultado em {reg.pasta / reg.nome_fixo}')
             return
@@ -679,6 +706,7 @@ def main():
         return tirar_foto(cfg, args.arquivo, args.momento)
 
     inicio = datetime.combine(datetime.now().date(), datetime.min.time())
+    dav = ler_dav(args.arquivo) if args.arquivo else None
     if args.inicio:
         try:
             h = datetime.strptime(args.inicio, '%H:%M:%S').time()
@@ -686,18 +714,19 @@ def main():
             parar('--inicio tem que ser HH:MM:SS, a hora que aparece na imagem da câmera.')
         inicio = datetime.combine(datetime.now().date(), h)
     elif args.arquivo:
-        gravado = inicio_gravado(args.arquivo)
-        if gravado:
-            inicio = gravado
-            print(f'Início lido do .dav: {gravado:%d/%m/%Y %H:%M:%S} '
+        sem_hora = ('as horas contam a partir de 00:00:00.\nPara a hora real, use --inicio '
+                    'HH:MM:SS com a hora que aparece na imagem no 1º segundo.')
+        if dav and dav[0]:
+            inicio = dav[0]
+            print(f'Início lido do .dav: {inicio:%d/%m/%Y %H:%M:%S} '
                   '(a hora escrita na imagem pode estar até 1 s atrás).')
+        elif dav:
+            print('O .dav traz uma hora impossível (relógio do gravador zerado?): ' + sem_hora)
         else:
-            print('Este vídeo não traz a hora (só o .dav do gravador traz): as horas '
-                  'contam a partir de 00:00:00.\nPara a hora real, use --inicio HH:MM:SS '
-                  'com a hora que aparece na imagem no 1º segundo.')
+            print('Este vídeo não traz a hora (só o .dav do gravador traz): ' + sem_hora)
     desligar_selecao_do_console()
     try:
-        rodar(cfg, args.arquivo, inicio, args.diagnostico)
+        rodar(cfg, args.arquivo, inicio, args.diagnostico, dav)
     except KeyboardInterrupt:
         print('\nLeitor parado.')
     except Exception:
