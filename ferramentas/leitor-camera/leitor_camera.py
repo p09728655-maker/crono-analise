@@ -223,16 +223,24 @@ def aviso_de_salto(duracao_dav, video_s):
     juntados) ou relógio acertado para trás: o ffmpeg emenda as duas pontas
     (salto para frente de mais de 10 s, qualquer volta para trás) e só avisa
     num nível que o leitor não mostra. As horas depois do salto saem erradas
-    e o intervalo que o atravessa também. Sem salto a diferença fica abaixo
-    de 1 s (o relógio do .dav anda de segundo em segundo); 3 s de folga."""
+    e, num buraco, o intervalo que o atravessa encurta. Sem salto a diferença
+    fica abaixo de 1 s (o relógio do .dav anda de segundo em segundo); 3 s de
+    folga."""
     if duracao_dav is not None and abs(duracao_dav - video_s) <= 3:
         return None
-    relogio = ('o relógio do gravador volta para trás' if duracao_dav is None
-               else f'{duracao_dav:.0f} s pelo relógio do gravador')
-    return (f'ATENÇÃO: este .dav tem um salto no relógio ({relogio}, {video_s:.0f} s de '
-            'vídeo): gravação interrompida ou relógio acertado. As horas depois do salto '
-            'estão erradas, e o intervalo que o atravessa também. Exporte um trecho sem '
-            'interrupção.')
+    if duracao_dav is not None and duracao_dav > video_s:
+        buraco = duracao_dav - video_s
+        oque = f'buraco de uns {buraco / 60:.0f} min' if buraco >= 90 else f'buraco de uns {buraco:.0f} s'
+        oque += ' sem gravação'
+        mais_curto = True
+    else:
+        # Relógio acertado para trás ou trechos juntados: o vídeo segue
+        # contínuo e as durações ficam certas; só a hora deixa de bater.
+        oque, mais_curto = 'relógio voltando para trás: acerto de relógio ou trechos juntados', False
+    return (f'ATENÇÃO: salto no relógio do .dav ({oque}). As horas depois do salto não '
+            'batem com a hora da imagem'
+            + (', e o intervalo que atravessa o buraco sai mais curto do que foi' if mais_curto else '')
+            + '. Exporte um trecho sem interrupção.')
 
 
 def filtro_retangulo(cfg):

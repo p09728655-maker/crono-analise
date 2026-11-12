@@ -208,7 +208,14 @@ transforma o `.dav` em MP4 que o app abre.
    gravada no `.dav`: o conversor acerta a data do arquivo para isso. Confira
    com a hora escrita na imagem no começo do vídeo; a imagem pode estar até 1 s
    atrás. **Se o MP4 foi copiado por WhatsApp, e-mail ou download**, a data do
-   arquivo se perde e a sugestão sai errada: corrija o campo pela imagem.
+   arquivo se perde e a sugestão sai errada: corrija o campo pela imagem. Por
+   pen drive ela pode variar 1–2 s.
+5. Se a janela disser **"salto no relógio"**, a gravação foi interrompida no
+   meio do trecho (ou o relógio do gravador foi acertado). No app, tudo o que
+   vem depois do salto fica com a hora errada, e uma medição que o atravessa
+   sai mais curta do que foi: 1 h com 20 min sem gravação viraria 40 min, com
+   o ritmo 1,5× maior. Meça só até o salto (a hora escrita na imagem pula) ou
+   exporte outro trecho sem interrupção.
 
 - MP4 que já existe não é convertido de novo (a marcação em andamento no app
   está presa àquele arquivo). Para refazer, apague o `.mp4`.

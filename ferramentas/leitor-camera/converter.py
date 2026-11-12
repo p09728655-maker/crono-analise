@@ -59,6 +59,32 @@ def inicio_gravado(texto):
     return t if datetime(2015, 1, 1) <= t <= datetime.now() + timedelta(days=1) else None
 
 
+def aviso_de_salto(duracao_dav, video_s):
+    """Mesma regra de leitor_camera.aviso_de_salto. Gravação interrompida no
+    meio do .dav, dois trechos juntados ou relógio acertado: o ffmpeg emenda
+    as pontas (salto para frente de mais de 10 s, qualquer volta para trás) e
+    o MP4 fica mais curto que o relógio. No app, o que vem depois do salto
+    ganha hora errada, e a medição que o atravessa perde o buraco: 1 h com
+    20 min sem gravação seria medida como 40 min. Sem salto a diferença fica
+    abaixo de 1 s; 3 s de folga."""
+    if duracao_dav is not None and abs(duracao_dav - video_s) <= 3:
+        return None
+    if duracao_dav is not None and duracao_dav > video_s:
+        buraco = duracao_dav - video_s
+        oque = f'buraco de uns {buraco / 60:.0f} min' if buraco >= 90 else f'buraco de uns {buraco:.0f} s'
+        oque += ' sem gravação'
+        mais_curto = True
+    else:
+        # Relógio acertado para trás ou trechos juntados: o vídeo segue
+        # contínuo e as durações ficam certas; só a hora deixa de bater.
+        oque, mais_curto = 'relógio voltando para trás: acerto de relógio ou trechos juntados', False
+    return (f'ATENÇÃO: salto no relógio do .dav ({oque}). No app, o que vem depois do '
+            'salto fica com a hora errada'
+            + (', e a medição que atravessa o buraco sai mais curta do que foi' if mais_curto else '')
+            + '. Meça só até o salto (a hora escrita na imagem pula) ou exporte outro '
+            'trecho sem interrupção.')
+
+
 def desligar_selecao_do_console():
     """Um clique na janela do Prompt pausa o programa até alguém apertar uma
     tecla — e a conversão pararia junto, sem aviso. Desliga esse modo."""
@@ -143,21 +169,25 @@ def converter(origem):
         parcial.unlink(missing_ok=True)
         print('  A conversão falhou: ' + (' | '.join(avisos)[-300:] or f'código {codigo}'))
         return False
-    os.replace(parcial, mp4)
-    tamanho = f'{mp4.stat().st_size / 1e6:.0f} MB'
-    duracao_mp4 = duracao_s(cabecalho(mp4))
+    duracao_mp4 = duracao_s(cabecalho(parcial))
     if inicio and duracao_mp4:
         # +0,5 s: o campo do app corta os milésimos, e a duração lida pelo
         # navegador difere da do ffmpeg em milésimos. Sem a folga, o início
         # saía 10:29:52,999 e o campo mostrava 10:29:52 — 1 s antes.
+        # A data vai no arquivo parcial, ANTES do nome final: interrompido
+        # entre os dois, sobraria um MP4 "pronto" com a data da conversão.
         fim = inicio + timedelta(seconds=duracao_mp4 + 0.5)
-        os.utime(mp4, (time.time(), fim.timestamp()))
-        print(f'  Pronto: {mp4.name} ({tamanho}).\n'
-              f'  No app, o início sugerido será {inicio:%d/%m/%Y %H:%M:%S}: confira com a '
+        os.utime(parcial, (time.time(), fim.timestamp()))
+    os.replace(parcial, mp4)  # renomear mantém a data
+    print(f'  Pronto: {mp4.name} ({mp4.stat().st_size / 1e6:.0f} MB).')
+    salto = duracao_mp4 is not None and aviso_de_salto(total, duracao_mp4)
+    if salto:
+        print('  ' + salto)
+    if inicio and duracao_mp4:
+        print(f'  No app, o início sugerido será {inicio:%d/%m/%Y %H:%M:%S}: confira com a '
               'hora escrita na imagem no começo do vídeo (pode estar até 1 s atrás).')
     else:
-        print(f'  Pronto: {mp4.name} ({tamanho}).\n'
-              '  ATENÇÃO: este .dav não trouxe hora válida (relógio do gravador?). No app, '
+        print('  ATENÇÃO: este .dav não trouxe hora válida (relógio do gravador?). No app, '
               'troque o início da filmagem pela hora escrita na imagem no começo do vídeo.')
     if avisos:
         print('  O ffmpeg avisou (quadro estragado costuma ser só isso): ' + ' | '.join(avisos)[-200:])
