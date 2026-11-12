@@ -818,6 +818,7 @@ export default function VolumeAVolume({
                   leitura={r.leitura} unidade={unidade} juncao={ehJuncao} roubo={r.roubo?.roubados > 0}
                   lacunas={roubadosPelasLacunas(r.leitura)?.roubados > 0} deixou={r.deixou?.total > 0}
                   motivos={somarParadas(conferencia.paradas).totalMs > 0}
+                  esteira={r.alvo?.metodo === 'esteira'}
                 />
               )}
             </>
@@ -999,7 +1000,7 @@ function ValorComUnidade({ valor }) {
  * alvo ja' vem sem o setup (descontaSetup) — exatamente periodoPorPeca.
  */
 function definicoes(leitura, unidade, {
-  juncao = false, roubo: roubo0 = false, lacunas: lacunas0 = false, deixou = false, motivos = false,
+  juncao = false, roubo: roubo0 = false, lacunas: lacunas0 = false, deixou = false, motivos = false, esteira = false,
 } = {}) {
   // Com o total num passo so', ele substitui as duas contas separadas.
   const roubo = roubo0 && !deixou;
@@ -1013,9 +1014,16 @@ function definicoes(leitura, unidade, {
     ...(motivos ? [['Por que a linha parou', `as paradas marcadas ${juncao ? 'nas medições inteiras' : 'na medição inteira'}, por motivo: as do cronômetro e as anotadas depois (no resultado do tablet ou aqui no PC), também as de antes do 1º e depois do último ${unidade.singular}. O total é o do cartão Paradas marcadas. O "Paradas marcadas" do De onde veio conta só o que o cronômetro tirou entre o 1º e o último ${unidade.singular}, e por isso pode dar outro número. A parada anotada depois fica dentro dos intervalos: quando o intervalo passou de ${leitura.criterios.fatorLacuna}× o normal, ela aparece também como lacuna — é a mesma parada, agora com motivo. Em tempo, e não em ${unidade.plural}: convertidas, essas partes não fechariam com o total do De onde veio.`]] : []),
     ...(lacunas ? [[`${capital(unidade.plural)} roubados pelas lacunas`, `o tempo das lacunas além do normal, dividido pelo passo sem as lacunas: o que daria para ter saído nesse tempo, no passo da própria linha.${juncao ? ' Na junção, contra o normal da junção.' : ''} Não soma com os roubados pelas paradas: a parada anotada depois (no tablet ou aqui no PC) continua dentro dos intervalos e pode virar lacuna — somando, contaria duas vezes.`]] : []),
     ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo: o intervalo vai de um toque ao seguinte, e o tempo antes do primeiro toque não entra.`],
-    [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, quando o tempo-alvo já vem sem o setup do painel (sem tempo-alvo: quando o grupo tem setup planejado no takt). É o que vai contra o tempo-alvo do produto.'],
-    ['Tempo-alvo do produto', 'a UEP do produto × os segundos por UEP da média da linha sem hora extra: (jornada − setup do painel) × 60 ÷ a META UEP do painel. É o tempo que cada volume pode levar para a linha fazer a média sem hora extra. É o de hoje (o cadastro do painel agora): a medição antiga é lida com a UEP e a média de agora. Produto sem UEP no painel fica sem tempo-alvo e sem veredito.'],
-    ['A semana pede', 'o que a programação da semana da medição pede NESTE produto: os segundos por UEP da semana × a UEP do produto. Os segundos por UEP vêm do painel: dias úteis × (jornada − setup) × 60 ÷ a UEP programada (a conta do TAKT DA SEMANA de lá). É a carga e não julga o produto: a cor é do tempo-alvo. Quando a programação pede mais que a média da linha, a semana pede menos tempo que o tempo-alvo, e no tempo-alvo ela não fecha. Sem o takt da semana do painel, vale o takt por volume: as horas da semana (sem o setup planejado) ÷ os volumes programados, igual para todo volume.'],
+    ...(esteira ? [
+      // v2.111.1: pela esteira (o painel .gs v5.65), a regua escrita e' a da esteira
+      [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio: o tempo-alvo é com o produto rodando, e a troca de produto não é o produto rodando. É o que vai contra o tempo-alvo do produto.'],
+      ['Tempo-alvo do produto', 'a esteira do produto ÷ a eficiência da embalagem do painel. A esteira = (medida da caixa + entre-peças) ÷ velocidade, do cadastro do painel (PRODUTO_CODIGO): o tempo que a esteira leva para passar uma caixa, o limite físico. A eficiência (⚙ do painel, padrão 85%) é a folga da linha com o produto rodando: paradas, lacunas e fadiga dentro. É o de hoje: a medição antiga é lida com a caixa e a eficiência de agora. Produto sem a medida da caixa ou a velocidade fica sem tempo-alvo e sem veredito.'],
+      ['A semana pede', 'quanto a programação da semana da medição pede da média da linha (a UEP programada contra a META UEP do painel), em %. É a carga e não julga o produto: a cor é do tempo-alvo. Não vira segundos no produto: a média do dia tem as trocas e as esperas dentro, e o tempo-alvo é com o produto rodando. Sem a semana do painel, vale o takt por volume: as horas da semana (sem o setup planejado) ÷ os volumes programados, igual para todo volume.'],
+    ] : [
+      [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, quando o tempo-alvo já vem sem o setup do painel (sem tempo-alvo: quando o grupo tem setup planejado no takt). É o que vai contra o tempo-alvo do produto.'],
+      ['Tempo-alvo do produto', 'a UEP do produto × os segundos por UEP da média da linha sem hora extra: (jornada − setup do painel) × 60 ÷ a META UEP do painel. É o tempo que cada volume pode levar para a linha fazer a média sem hora extra. É o de hoje (o cadastro do painel agora): a medição antiga é lida com a UEP e a média de agora. Produto sem UEP no painel fica sem tempo-alvo e sem veredito.'],
+      ['A semana pede', 'o que a programação da semana da medição pede NESTE produto: os segundos por UEP da semana × a UEP do produto. Os segundos por UEP vêm do painel: dias úteis × (jornada − setup) × 60 ÷ a UEP programada (a conta do TAKT DA SEMANA de lá). É a carga e não julga o produto: a cor é do tempo-alvo. Quando a programação pede mais que a média da linha, a semana pede menos tempo que o tempo-alvo, e no tempo-alvo ela não fecha. Sem o takt da semana do painel, vale o takt por volume: as horas da semana (sem o setup planejado) ÷ os volumes programados, igual para todo volume.'],
+    ]),
     [`Por ${unidade.singular} com a linha rodando`, 'soma dos intervalos dividida pela quantidade de intervalos.'],
     [`Por ${unidade.singular} sem as lacunas`, `a média dos intervalos que não são lacuna: o passo da linha, sem parada marcada nem lacuna. A diferença para o "com a linha rodando" são as paradas que ninguém marcou.`],
     ['Lacuna', `intervalo maior que ${fatorLacuna}× o normal — o "por ${unidade.singular} sem as lacunas". Parada marcada e passo lento não viram lacuna.`],
@@ -1025,14 +1033,14 @@ function definicoes(leitura, unidade, {
 }
 
 function ComoLer({
-  leitura, unidade, juncao, roubo, lacunas, deixou, motivos,
+  leitura, unidade, juncao, roubo, lacunas, deixou, motivos, esteira,
 }) {
   return (
     <section aria-label="Como ler estes números">
       <h3 style={est.vavSecaoTitulo}>Como ler estes números</h3>
       <dl style={est.vavComoLer}>
         {definicoes(leitura, unidade, {
-          juncao, roubo, lacunas, deixou, motivos,
+          juncao, roubo, lacunas, deixou, motivos, esteira,
         }).map(([termo, texto]) => (
           <div key={termo} style={est.vavComoLerItem}>
             <dt style={{ display: 'inline', ...est.vavComoLerTermo }}>{termo}: </dt>
@@ -1045,7 +1053,7 @@ function ComoLer({
 }
 
 function notaDoCriterio(leitura, unidade, {
-  juncao = false, roubo: roubo0 = false, lacunas: lacunas0 = false, deixou = false,
+  juncao = false, roubo: roubo0 = false, lacunas: lacunas0 = false, deixou = false, esteira = false,
 } = {}) {
   const roubo = roubo0 && !deixou;
   const lacunas = lacunas0 && !deixou;
@@ -1069,7 +1077,10 @@ function notaDoCriterio(leitura, unidade, {
     + 'as paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) '
     + 'continuam dentro dos intervalos. O primeiro toque não tem intervalo: o intervalo vai de um toque ao '
     + 'seguinte, e o tempo antes do primeiro toque não entra. Contra o tempo-alvo do produto vai o relógio do primeiro ao último toque ÷ intervalos, com as paradas dentro '
-    + '(sem o setup marcado entre os toques, quando o tempo-alvo já vem sem o setup). O que a semana pede no produto (os segundos por UEP da semana × a UEP dele) é a carga: não julga o produto. '
+    + (esteira
+      // v2.111.1: pela esteira — o alvo e' esteira ÷ eficiencia; a semana so' em %
+      ? '(sem o setup marcado entre os toques: o tempo-alvo é com o produto rodando). Tempo-alvo = (medida da caixa + entre-peças) ÷ velocidade, do cadastro do painel, ÷ a eficiência da embalagem do painel. O que a semana pede, em % da média da linha, é a carga: não julga o produto. '
+      : '(sem o setup marcado entre os toques, quando o tempo-alvo já vem sem o setup). O que a semana pede no produto (os segundos por UEP da semana × a UEP dele) é a carga: não julga o produto. ')
     + 'Com a linha rodando = soma dos intervalos ÷ quantidade. '
     + `Sem as lacunas = a média dos intervalos que não são lacuna: o passo da linha. `
     + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal (o sem as lacunas). `
@@ -1853,6 +1864,7 @@ function FolhaVolumeAVolume({
       <p style={impF.nota}>
         {notaDoCriterio(leitura, unidade, {
           juncao: Boolean(juncao), roubo: roubo?.roubados > 0, lacunas: lacunasRoubo?.roubados > 0, deixou: deixou?.total > 0,
+          esteira: alvo?.metodo === 'esteira',
         })}
       </p>
     </div>,

@@ -141,6 +141,11 @@ do produto dele**.
     tudo como antes), `ref.eficiencia` e, por produto, `esteira`, `medida`,
     `vel`, `entre` (`respostaDosAlvos`). Produto sem medida ou velocidade:
     `sem-esteira`, sem alvo e sem cor — nunca a UEP no lugar.
+  - **A conta curta** (`contaDoAlvo`, subtítulo do cartão e folha, v2.111.1) vai
+    com o resultado: *"esteira 16.5 s ÷ 85% de eficiência = 19.4 s"* — sem ele,
+    o 16,51 parecia ser o alvo (PPCP: *"16,51 é o alvo ou 19,4?"*). O *Como ler*
+    do PC, a nota da folha, o `avisoDoAlvo` (medição antiga) e o veredito acima
+    do alvo sem parada (`frasesVolumeAVolume`) falam da esteira, não da UEP.
   - **A conta escrita** (`explicacaoDoAlvo`): *"Tempo-alvo = (2076 + 400) mm ÷ 9
     m/min = 16.5 s de esteira, ÷ 85% = 19.4 s por volume. Os 85% são a
     eficiência da embalagem do painel: a linha com o produto rodando, paradas e
