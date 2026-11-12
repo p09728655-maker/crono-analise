@@ -206,11 +206,23 @@ if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-auto-pronto.png` });
 await p.evaluate(() => document.activeElement?.blur());
 for (let i = 0; i < 5; i++) await p.keyboard.press('Backspace');
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).waitFor({ timeout: 4000 });
-checar(!/A leitura marcou/.test(await auto.innerText()) && !/Conferência/.test(await auto.innerText()),
-  'desfeita a lista inteira (⌫), o resumo e a conferencia saem e o botao de marcar volta');
+// Espera a tela assentar: o botao aparece um render antes de o efeito sobre
+// a marcacao limpar o resumo, e ler o cartao uma vez so' caia nesse meio
+// (falha intermitente, vista na revisao da v2.108.0).
+const limpou = await p.waitForFunction(() => {
+  const texto = document.querySelector('section[aria-label="Marcação automática"]')?.innerText || '';
+  return !/A leitura marcou/.test(texto) && !/Conferência/.test(texto);
+}, null, { timeout: 4000 }).then(() => true, () => false);
+checar(limpou, 'desfeita a lista inteira (⌫), o resumo e a conferencia saem e o botao de marcar volta');
 await irPara(p, 0);
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).click();
 await auto.getByText(/A leitura marcou 4 volumes/).waitFor({ timeout: 120000 });
+// As marcas gravadas no fim sao as DESTA leitura, nao as da primeira: duas
+// leituras do mesmo video diferem em decimos (o quadro lido a 8x nao e'
+// sempre o mesmo). Comparar com a primeira dava falha intermitente de ~0,25 s.
+const listaGravada = await marcas.innerText();
+const largadaGravada = tempos(listaGravada, 'Largada')[0];
+const volumesGravados = tempos(listaGravada, 'Volume \\d+');
 
 /* --------------------------------------------- a conferencia do analista */
 // Apaga um volume e acrescenta outro com o Enter de sempre.
@@ -253,8 +265,8 @@ checar(enviada?.origem === 'video' && enviada?.pecas === 4 && enviada?.marcasMs?
   // acrescentado o de 59 s, as marcas sao os volumes menos a largada, e o
   // periodo vai da largada ao Encerrar (59,5 s). Tolerancia de 0,2 s: a
   // lista mostra decimos.
-  const L = largada[0];
-  const esperadas = [volumes[0], volumes[2], volumes[3], 59].map((t) => (t - L) * 1000);
+  const L = largadaGravada;
+  const esperadas = [volumesGravados[0], volumesGravados[2], volumesGravados[3], 59].map((t) => (t - L) * 1000);
   const perto = (a, b) => Math.abs(a - b) <= 200;
   checar(enviada?.marcasMs?.every((ms, i) => perto(ms, esperadas[i])),
     `marcas gravadas ${JSON.stringify(enviada?.marcasMs)} ≈ ${JSON.stringify(esperadas.map(Math.round))}`);

@@ -232,7 +232,7 @@ checar(/VOLUMES 8/i.test(numeros) && /POR VOL ▲ ALVO 12\.9 ?s/i.test(numeros) 
 // A mesma visao do cronometro do tablet: o TEMPO desde a largada no relogio
 // do video (1:52 - 0:10), o vol/h do periodo ate' o ultimo volume (8 em
 // 100 s) e o ULTIMO intervalo (1:50 - 1:40), contas feitas a' mao.
-checar(/TEMPO 01:42\.0/.test(numeros) && /VOL\/H PERÍODO 288/i.test(numeros) && /ÚLTIMO 10\.0 ?s/i.test(numeros)
+checar(/TEMPO 01:42\.0/.test(numeros) && /VOL\/H PERÍODO 288/i.test(numeros) && /ÚLTIMO RODANDO 10\.0 ?s/i.test(numeros)
   && /Rack Sirius 1\.6 TEMPO/.test(numeros),
   `o painel do tablet no PC: produto, tempo 01:42.0 desde a largada, 288 vol/h, ultimo 10.0 s (${numeros.slice(0, 200)})`);
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-marcar.png` });
@@ -244,7 +244,7 @@ if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-marcar.png` });
     'marcando: o video diz a maquina e o produto da medicao');
   await video.getByRole('button', { name: '← Voltar ao preparo' }).click();
   await preparar.waitFor({ timeout: 4000 });
-  checar(/As marcas deste vídeo continuam aqui \(8 volumes, mais a largada e as paradas\)/.test(await preparar.innerText()),
+  checar(/As marcas deste vídeo continuam aqui: a largada, 8 volumes e 1 parada\./.test(await preparar.innerText()),
     'voltar ao preparo: a tela diz que as marcas continuam');
   // No preparo as teclas nao marcam: o Enter nao vira volume escondido.
   await p.evaluate(() => document.activeElement?.blur());
@@ -661,6 +661,45 @@ await ctx.close();
     checar(new RegExp(`POR VOLUME ${esperado.replace('.', '\\.')} ?s`, 'i').test(painel), `${rotulo} (${painel.slice(0, 80)})`);
     await c5.close();
   }
+}
+
+/* ---- voltar ao preparo e trocar de video (v2.108.1): o relogio volta ao 0 ---- */
+{
+  const OUTRO = fileURLToPath(new URL('../fixtures/caixas-60s.webm', import.meta.url));
+  const c6 = await navegador.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: FUSO });
+  const q = await c6.newPage();
+  await semearSessao(q);
+  q.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(q, { enviados: [] });
+  await q.goto(`${BASE}/analise/embalagem/video`);
+  const prep = q.getByRole('region', { name: 'Preparar a medição por vídeo' });
+  await q.locator('input[type="file"]').setInputFiles(VIDEO);
+  await q.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  await q.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+  await q.getByRole('button', { name: 'Começar a marcar' }).click();
+  // Sem marca nenhuma, o aviso nao promete marca.
+  await q.getByRole('button', { name: '← Voltar ao preparo' }).click();
+  await prep.waitFor({ timeout: 4000 });
+  checar(/Nenhuma marca ainda neste vídeo\./.test(await prep.innerText()) && !/0 volumes/.test(await prep.innerText()),
+    'voltar sem marca nenhuma: o aviso diz que nao ha marca, sem "0 volumes"');
+  await q.getByRole('button', { name: 'Continuar a marcação' }).click();
+  await q.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  await q.evaluate(() => document.activeElement?.blur());
+  await teclaEm(q, 80, 'Enter');
+  await teclaEm(q, 85, 'Enter');
+  await q.getByRole('button', { name: '← Voltar ao preparo' }).click();
+  await prep.waitFor({ timeout: 4000 });
+  await q.locator('input[type="file"]').setInputFiles(OUTRO);
+  await q.getByText(/1 min de vídeo/).waitFor({ timeout: 8000 });
+  await q.getByRole('button', { name: 'Começar a marcar' }).click();
+  const relogio = q.locator('[aria-label="Tempo do vídeo"]');
+  await relogio.waitFor({ timeout: 4000 });
+  checar(/^0:00\.0 \/ 1:00\.0$/.test((await relogio.innerText()).trim()),
+    `outro video depois de voltar: o relogio comeca em 0, nao na posicao do anterior (${await relogio.innerText()})`);
+  await q.getByRole('button', { name: '+5 s' }).click();
+  const pos = await q.evaluate(() => document.querySelector('video').currentTime);
+  checar(Math.abs(pos - 5) < 0.1, `"+5 s" no video novo leva a 0:05, nao ao fim (${pos})`);
+  await c6.close();
 }
 
 checar(erros.length === 0, `sem erro de pagina${erros.length ? `: ${erros[0]}` : ''}`);
