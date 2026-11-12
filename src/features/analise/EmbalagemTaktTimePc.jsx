@@ -23,7 +23,7 @@ import { est } from './conferencias/estilos.js';
 import { quandoLida, textoDaFalha } from './demanda/planilha.js';
 import { useTemposAlvo } from '../../lib/temposAlvo.js';
 import {
-  alvoDoProduto, descontaSetup, idadeDoAlvo, semAlvo,
+  alvoDoProduto, descontaSetup, idadeDoAlvo, semAlvo, semanaDaData,
 } from '../../domain/tempoAlvo.js';
 import TempoAlvoDosProdutos from './conferencias/TempoAlvoDosProdutos.jsx';
 
@@ -126,6 +126,8 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
      volume a volume — a regua do veredito de cada medicao. */
   const alvos = useTemposAlvo();
   const alvosLido = alvos.lido;
+  // v2.107.0: o takt desta semana em s por UEP, do painel (.gs v5.63); null sem ele
+  const semanaAgora = (() => { const w = semanaDaData(alvosLido); return w && w.sUep > 0 ? w : null; })();
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [aberta, setAberta] = useState(null);
   // 'fila' (as nao analisadas), 'analisadas' ou 'outras' (sem intervalos).
@@ -616,7 +618,9 @@ export default function EmbalagemTaktTimePc({ aoVoltar, aoVerInicio, aoCronometr
                   </div>
                   <div style={est.kpiSub}>
                     {alvos.lido?.estado === 'ok'
-                      ? `× a UEP do produto · média da linha ${Math.round(alvos.lido.ref.metaUep)} UEP/dia, sem o setup (${alvos.lido.ref.setupDia} min/dia) · do painel${idadeDoAlvo(alvos.lido.lidoEm) ? ` · ${idadeDoAlvo(alvos.lido.lidoEm)}` : ''}`
+                      ? `× a UEP do produto · média da linha ${Math.round(alvos.lido.ref.metaUep)} UEP/dia, sem o setup (${alvos.lido.ref.setupDia} min/dia) · do painel`
+                        + `${semanaAgora ? ` · esta semana pede ${semanaAgora.sUep.toFixed(2)} s por UEP (${semanaAgora.pede != null ? `${semanaAgora.pede.toFixed(1)}%` : '—'} da média)` : ''}`
+                        + `${idadeDoAlvo(alvos.lido.lidoEm) ? ` · ${idadeDoAlvo(alvos.lido.lidoEm)}` : ''}`
                       : semAlvo(alvos.lido ? alvos.lido.estado : alvos.semRede ? 'sem-rede' : 'carregando', alvos.lido?.mensagem)}
                   </div>
                 </div>

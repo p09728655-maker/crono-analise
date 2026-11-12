@@ -7,7 +7,7 @@ import {
 } from '../../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
-  alvoDaJuncao, alvoDoProduto, avisoDoAlvo, descontaSetup, explicacaoDoAlvo,
+  alvoDaJuncao, alvoDoProduto, avisoDoAlvo, descontaSetup, explicacaoDoAlvo, fraseDaSemana,
 } from '../../../domain/tempoAlvo.js';
 import {
   deixaramDe, deixouDeEmbalar, frasesDasParadas, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, pctDoParado,
@@ -124,7 +124,9 @@ export function useVolumeAVolume({
         }));
     /* O TEMPO-ALVO do produto de cada medicao (v2.106.0): a regua do
        veredito. O de HOJE (o cadastro do painel agora) — a tela diz. */
-    const alvoDe = (c) => alvoDoProduto(alvos?.lido ?? null, c.peca, { semRede: Boolean(alvos?.semRede) });
+    const alvoDe = (c) => alvoDoProduto(alvos?.lido ?? null, c.peca, {
+      semRede: Boolean(alvos?.semRede), data: c.iniciado_em || c.salvo_em || null,   // a semana DELA (v2.107.0)
+    });
     if (conferencia.juncao) {
       // O takt de CADA medicao: semanas do programa diferentes deixam a
       // junção sem a carga, com o setup planejado (ver taktDaJuncao). O
@@ -1013,7 +1015,7 @@ function definicoes(leitura, unidade, {
     ['Intervalo', `tempo de um ${toque} até o seguinte, com a linha rodando. As paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) continuam dentro. O primeiro toque não tem intervalo: o intervalo vai de um toque ao seguinte, e o tempo antes do primeiro toque não entra.`],
     [`Por ${unidade.singular} no período`, 'relógio do primeiro ao último toque, com as paradas dentro, dividido pelo número de intervalos. Só o setup marcado entre os toques sai do relógio, quando o tempo-alvo já vem sem o setup do painel (sem tempo-alvo: quando o grupo tem setup planejado no takt). É o que vai contra o tempo-alvo do produto.'],
     ['Tempo-alvo do produto', 'a UEP do produto × os segundos por UEP da média da linha sem hora extra: (jornada − setup do painel) × 60 ÷ a META UEP do painel. É o tempo que cada volume pode levar para a linha fazer a média sem hora extra. É o de hoje (o cadastro do painel agora): a medição antiga é lida com a UEP e a média de agora. Produto sem UEP no painel fica sem tempo-alvo e sem veredito.'],
-    ['Takt da semana', 'as horas da semana (sem o setup planejado) ÷ os volumes programados: a carga da semana, igual para todo volume. Não julga o produto: o pesado leva mais que o takt e o leve menos, pelo peso.'],
+    ['A semana pede', 'o que a programação da semana da medição pede NESTE produto: os segundos por UEP da semana × a UEP do produto. Os segundos por UEP vêm do painel: dias úteis × (jornada − setup) × 60 ÷ a UEP programada (a conta do TAKT DA SEMANA de lá). É a carga e não julga o produto: a cor é do tempo-alvo. Quando a programação pede mais que a média da linha, a semana pede menos tempo que o tempo-alvo, e no tempo-alvo ela não fecha. Sem o takt da semana do painel, vale o takt por volume: as horas da semana (sem o setup planejado) ÷ os volumes programados, igual para todo volume.'],
     [`Por ${unidade.singular} com a linha rodando`, 'soma dos intervalos dividida pela quantidade de intervalos.'],
     [`Por ${unidade.singular} sem as lacunas`, `a média dos intervalos que não são lacuna: o passo da linha, sem parada marcada nem lacuna. A diferença para o "com a linha rodando" são as paradas que ninguém marcou.`],
     ['Lacuna', `intervalo maior que ${fatorLacuna}× o normal — o "por ${unidade.singular} sem as lacunas". Parada marcada e passo lento não viram lacuna.`],
@@ -1067,7 +1069,7 @@ function notaDoCriterio(leitura, unidade, {
     + 'as paradas marcadas no cronômetro já saíram; as marcadas depois (no resultado do tablet ou aqui no PC) '
     + 'continuam dentro dos intervalos. O primeiro toque não tem intervalo: o intervalo vai de um toque ao '
     + 'seguinte, e o tempo antes do primeiro toque não entra. Contra o tempo-alvo do produto vai o relógio do primeiro ao último toque ÷ intervalos, com as paradas dentro '
-    + '(sem o setup marcado entre os toques, quando o tempo-alvo já vem sem o setup). O takt da semana é a carga: não julga o produto. '
+    + '(sem o setup marcado entre os toques, quando o tempo-alvo já vem sem o setup). O que a semana pede no produto (os segundos por UEP da semana × a UEP dele) é a carga: não julga o produto. '
     + 'Com a linha rodando = soma dos intervalos ÷ quantidade. '
     + `Sem as lacunas = a média dos intervalos que não são lacuna: o passo da linha. `
     + `Lacuna = intervalo maior que ${leitura.criterios.fatorLacuna}× o normal (o sem as lacunas). `
@@ -1727,7 +1729,11 @@ function FolhaVolumeAVolume({
             {avisoDoAlvo(alvo, { data: quando }) && ` ${avisoDoAlvo(alvo, { data: quando })}`}
           </p>
         )}
-        {tempo?.texto && <p style={impF.tempoSemana} data-conta-semana>{tempo.texto}</p>}
+        {/* v2.107.0: o que a semana pede NESTE produto; sem o takt da semana
+            do painel, a conta do takt por volume de antes. */}
+        {(fraseDaSemana(alvo) || tempo?.texto) && (
+          <p style={impF.tempoSemana} data-conta-semana>{fraseDaSemana(alvo) || tempo.texto}</p>
+        )}
         {medicoes.filter((c) => c.observacao).map((c) => (
           <p key={c.id} style={{ margin: '0 0 10px' }}>
             <strong>Obs. do analista{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {c.observacao}

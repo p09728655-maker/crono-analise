@@ -17,6 +17,11 @@ export default function CronometroAoVivo({
   // em segundos; e, de apoio, volumes, volumes/hora e o ULTIMO intervalo. O
   // takt da semana fica numa linha, sem cor: a carga, nao o veredito.
   modoTakt = false, taktMs = null, alvoMs = null, porVolumeMs = null,
+  // v2.107.0: o que a semana pede NESTE produto ({ taktMs, pede }, de
+  // alvoDoProduto) — um NUMERO na fileira de apoio, sem cor (PPCP: a linha
+  // escrita, pequena, nao se via de longe e o verde parecia "tudo bem").
+  // Sem ela, a linha do takt por volume de antes.
+  semana = null,
   // O produto escolhido antes do INICIAR, no topo do painel da embalagem.
   produto = '',
 }) {
@@ -36,6 +41,7 @@ export default function CronometroAoVivo({
      Sem alvo (produto sem UEP) ou sem tempo por volume ainda (menos de 2
      volumes), nem um nem outro: nao ha' o que comparar — e o takt NUNCA
      entra no lugar do alvo. */
+  const semanaMs = semana?.taktMs > 0 ? semana.taktMs : null;
   const comparaAlvo = modoTakt && alvoMs > 0 && porVolumeMs > 0;
   const acimaDoAlvo = comparaAlvo && porVolumeMs > alvoMs;
   const tomPorVolume = comparaAlvo ? (acimaDoAlvo ? 'foraDoTakt' : 'noTakt') : null;
@@ -81,7 +87,10 @@ export default function CronometroAoVivo({
             a media sem hora extra (UEP × segundos por UEP). */}
         <Parcial escala="grande" rotulo="Tempo-alvo" valor={alvoMs > 0 ? formatarSegundos(alvoMs) : '—'} sufixo="s" />
       </div>
-      <div style={est.gradeTaktApoio}>
+      <div
+        className={semanaMs > 0 ? 'takt-apoio4' : undefined}
+        style={semanaMs > 0 ? { ...est.gradeTaktApoio, ...est.gradeTaktApoio4 } : est.gradeTaktApoio}
+      >
         {/* Na embalagem o toque conta VOLUME — e a tela diz isso, porque
             o programa da embalagem tambem vem em volumes. */}
         <Parcial escala="media" rotulo={maiuscula(unidade.plural)} valor={String(pecas)} />
@@ -102,10 +111,21 @@ export default function CronometroAoVivo({
           valor={ultimoIntervaloMs ? formatarSegundos(ultimoIntervaloMs) : '—'}
           sufixo="s"
         />
+        {/* O que a semana pede NESTE produto: a carga, sem cor — a cor e' do
+            tempo-alvo (os dois ficam a ~5%, o erro de uma medicao). */}
+        {semanaMs > 0 && (
+          <Parcial escala="media" rotulo="A semana pede" valor={formatarSegundos(semanaMs)} sufixo="s" />
+        )}
       </div>
       {/* O takt da semana: a CARGA, igual para todo volume — escrito, sem
           cor e sem julgar. Some no painel baixo (ESTILO_TAKT). */}
-      {taktMs > 0 && (
+      {semanaMs > 0 ? (
+        <span className="takt-carga" style={est.linhaCarga}>
+          {semana.pede > 0
+            ? `a programação da semana pede ${Number(semana.pede).toFixed(1)}% da média da linha${semana.pede > 100 ? ': no tempo-alvo, ela não fecha' : ''}`
+            : 'o que a programação da semana pede neste produto'} — não julga o produto
+        </span>
+      ) : taktMs > 0 && (
         <span className="takt-carga" style={est.linhaCarga}>
           carga da semana: takt {formatarSegundos(taktMs)} s — não julga o produto
         </span>
@@ -330,6 +350,14 @@ const ESTILO_TAKT = `
     .takt-produto { font-size: clamp(14px, min(2.6vw, 6vh), 34px); }
   }
   @container (max-height: 230px) { .takt-carga { display: none; } }
+  /* v2.107.0: quatro numeros de apoio (com A SEMANA PEDE). Medido deitado no
+     celular (740 x 360): cada celula com 72 px e o rotulo "VOL/H PERIODO" com
+     77 — menos espaco entre as letras; no painel estreito (640 x 300) o
+     rotulo quebra em duas linhas em vez de passar da celula. */
+  .takt-apoio4 .takt-rotulo { letter-spacing: 0.2px !important; }
+  @container (max-width: 340px) {
+    .takt-apoio4 .takt-rotulo { white-space: normal !important; line-height: 1.1; }
+  }
   @container (max-height: 185px) { .takt-produto { -webkit-line-clamp: 1; } }
   @container (max-height: 175px) { .takt-rotulo-tempo { display: none; } }
   @container (max-height: 140px) { .takt-tempo { display: none; } }

@@ -26,7 +26,9 @@ import EstadoVazio from '../../../components/EstadoVazio.jsx';
 import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import { motivoSemTakt } from '../../coleta/embalagem/motivoSemTakt.js';
 import { useTemposAlvo } from '../../../lib/temposAlvo.js';
-import { descontaSetup, explicacaoDoAlvo, semAlvo } from '../../../domain/tempoAlvo.js';
+import {
+  descontaSetup, explicacaoDoAlvo, fraseDaSemana, semAlvo,
+} from '../../../domain/tempoAlvo.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
 import { est } from '../conferencias/estilos.js';
 import { ev } from './estilos.js';
@@ -301,7 +303,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   /* O TEMPO-ALVO do produto (v2.106.0): a regua do "▲ alvo", como no tablet
      e no volume a volume. O takt fica como a carga da semana, sem cor. */
   const alvos = useTemposAlvo();
-  const alvo = alvos.alvoDe(campos.produto);
+  // A semana da filmagem decide a linha "a semana pede" (v2.107.0).
+  const alvo = alvos.alvoDe(campos.produto, inicioValido ? inicioData : null);
 
   /* --------------------------------------------------------- arquivo */
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -1151,7 +1154,9 @@ function Preparar({
         {alvo.alvoMs > 0
           ? <>Tempo-alvo do produto: <strong>{formatarSegundos(alvo.alvoMs)} s por volume</strong>. {explicacaoDoAlvo(alvo)}{' '}</>
           : `Sem tempo-alvo: ${semAlvo(alvo.estado, alvo.mensagem)} `}
-        {inicioValido && takt?.taktMs > 0 && (
+        {/* A carga da semana NESTE PRODUTO (v2.107.0); sem a semana no painel, o takt por volume. */}
+        {inicioValido && fraseDaSemana(alvo) && <>{fraseDaSemana(alvo)}{' '}</>}
+        {inicioValido && !fraseDaSemana(alvo) && takt?.taktMs > 0 && (
           <>
             Carga da semana {takt.semana}: takt de {formatarSegundos(takt.taktMs)} s por volume
             {diasProgramados(takt.dias) ? ` · ${diasProgramados(takt.dias)}` : ''} — não julga o produto.{' '}

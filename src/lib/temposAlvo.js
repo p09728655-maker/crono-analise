@@ -36,7 +36,7 @@ const janelaAtual = () => Math.floor(Date.now() / 1800000);
 const NOVA_TENTATIVA_MS = 60000;
 
 /**
- * `alvoDe(peca)` devolve o alvo do produto (alvoDoProduto); `lido` e' o que
+ * `alvoDe(peca, data)` devolve o alvo do produto (alvoDoProduto); `lido` e' o que
  * vale agora (o guardado ou a resposta), `semRede` diz que a ultima busca
  * nao chegou ao servidor.
  */
@@ -82,5 +82,6 @@ export function useTemposAlvo({ ativo = true } = {}) {
       });
     return () => { vivo = false; if (espera) clearTimeout(espera); };
   }, [ativo, janela, tentativa]);
-  return { lido, semRede, alvoDe: (peca) => alvoDoProduto(lido, peca, { semRede }) };
+  // `data` (v2.107.0): a semana da medicao, para a linha "a semana pede" — sem ela, a de agora.
+  return { lido, semRede, alvoDe: (peca, data = null) => alvoDoProduto(lido, peca, { semRede, data }) };
 }

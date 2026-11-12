@@ -9,10 +9,10 @@ import {
 } from 'vitest';
 import {
   alvoDaJuncao, alvoDoProduto, alvoEmSegundos, avisoDoAlvo, contaDoAlvo, descontaSetup, explicacaoDaRegua,
-  explicacaoDoAlvo, idadeDoAlvo, medidoXAlvo, semAlvo, semAlvoCurto,
+  explicacaoDoAlvo, fraseDaSemana, idadeDoAlvo, medidoXAlvo, semAlvo, semAlvoCurto, semanaDaData, semanaDoProduto,
 } from '../src/domain/tempoAlvo.js';
 import {
-  _esquecer, lerTemposAlvo, MENSAGEM_ALVO_GS_ANTIGO, respostaDosAlvos, temposAlvo,
+  _esquecer, lerTemposAlvo, MENSAGEM_ALVO_GS_ANTIGO, respostaDosAlvos, semanasDoPainel, temposAlvo,
 } from '../api/_lib/temposAlvo.js';
 import { frasesVolumeAVolume } from '../src/domain/volumeAVolume.js';
 import { leituraPecaAPeca, periodoPorPeca } from '../src/domain/crono/intervalos.js';
@@ -186,6 +186,84 @@ describe('o veredito julga pelo alvo do produto, não pelo takt', () => {
     const f = frasesVolumeAVolume({ leitura, alvo: { alvoMs: 8900 }, unidade: VOLUME });
     expect(f.tom).toBe('falha');
     expect(f.manchete).toBe('No período, saiu um volume a cada 11.0 s, paradas dentro — 24% acima do tempo-alvo do produto, 8.9 s.');
+  });
+});
+
+/*
+ * A SEMANA PEDE (v2.107.0, PPCP 11/11/2026, com a MESA CABECEIRA SLEEP na
+ * tela: takt 8,5 s, tempo-alvo 8,9 s — "quem vê a tela acha que está tudo
+ * bem"). O painel (.gs v5.63) manda o takt de cada semana em s por UEP; a
+ * linha da carga passa a ser o que a semana pede NO PRODUTO.
+ */
+describe('a semana pede — o takt da semana no produto (v2.107.0)', () => {
+  // A semana de 09/11/2026 do painel: 14.504 UEP em 5 dias úteis, 494,2 min → 10,222 s por UEP, 105,1% da média
+  const SEMANAS = [
+    { de: '02/11/2026', ate: '08/11/2026', atual: false, sUep: 9.411, pede: 114.1, uep: 12600, nUteis: 4 },
+    { de: '09/11/2026', ate: '15/11/2026', atual: true, sUep: 10.222, pede: 105.1, uep: 14504, nUteis: 5 },
+    { de: '26/10/2026', ate: '01/11/2026', atual: false, sUep: null, pede: null, uep: 0, nUteis: 5 },
+  ];
+  const L = respostaDosAlvos({ ...DO_PAINEL, produtos: [...DO_PAINEL.produtos, { rot: '501094 · MESA CABECEIRA SLEEP', uep: 0.83, alvo: 8.91 }], semanas: SEMANAS });
+  const QUARTA = '2026-11-11T15:00:00Z';
+
+  it('o servidor confere as semanas: data dd/mm/aaaa, sUep > 0 ou null; o painel antigo não manda: lista vazia', () => {
+    expect(L.semanas).toHaveLength(3);
+    expect(L.semanas[1]).toEqual({ de: '09/11/2026', ate: '15/11/2026', atual: true, sUep: 10.222, pede: 105.1, uep: 14504, nUteis: 5 });
+    expect(L.semanas[2]).toMatchObject({ sUep: null, pede: null });
+    expect(semanasDoPainel([{ de: '9/11', ate: '15/11/2026', sUep: 10 }, null, { de: '09/11/2026', ate: '15/11/2026', sUep: 0 }]))
+      .toEqual([{ de: '09/11/2026', ate: '15/11/2026', atual: false, sUep: null, pede: null, uep: null, nUteis: null }]);
+    expect(LIDO.semanas).toEqual([]);
+  });
+
+  it('a semana de uma data é a do dia em São Paulo (domingo 23:30 ainda é a semana anterior); fora da lista, null', () => {
+    expect(semanaDaData(L, new Date(QUARTA)).de).toBe('09/11/2026');
+    expect(semanaDaData(L, '2026-11-09T02:30:00Z').de).toBe('02/11/2026');   // 08/11 23:30 em São Paulo
+    expect(semanaDaData(L, '2026-10-01T12:00:00Z')).toBeNull();
+    expect(semanaDaData(LIDO, new Date(QUARTA))).toBeNull();
+    expect(semanaDaData(L, 'não é data')).toBeNull();
+  });
+
+  it('a SLEEP: o alvo 8,9 s, a semana pede 8,5 s (10,222 × 0,83) — a coluna PELO TAKT do painel', () => {
+    const a = alvoDoProduto(L, '501094 · MESA CABECEIRA SLEEP', { data: QUARTA });
+    expect(a.alvoMs).toBe(8910);
+    expect(a.semana).toEqual({ de: '09/11/2026', ate: '15/11/2026', sUep: 10.222, pede: 105.1, taktMs: 8480 });
+    expect(fraseDaSemana(a)).toBe('A semana pede 8.5 s neste produto: a programação da semana de 09/11 pede 105.1% da média da linha — no tempo-alvo, ela não fecha.');
+    expect(fraseDaSemana(a, { curta: true })).toBe('a semana pede 8.5 s (105.1% da média)');
+  });
+
+  it('semana programada abaixo da média: no tempo-alvo, ela cabe; sem UEP programada ou sem a semana, nada (a linha de antes)', () => {
+    const leve = { ...L, semanas: [{ ...L.semanas[1], sUep: 11.5, pede: 93.4 }] };
+    expect(fraseDaSemana(alvoDoProduto(leve, '501149 · MESA CABECEIRA MADERO', { data: QUARTA })))
+      .toBe('A semana pede 11.5 s neste produto: a programação da semana de 09/11 pede 93.4% da média da linha — no tempo-alvo, ela cabe.');
+    expect(alvoDoProduto(L, '501149 · MESA CABECEIRA MADERO', { data: '2026-10-28T12:00:00Z' }).semana).toBeNull();   // semana sem UEP
+    expect(alvoDoProduto(LIDO, '501149 · MESA CABECEIRA MADERO', { data: QUARTA }).semana).toBeNull();   // painel antigo
+    expect(fraseDaSemana(alvoDoProduto(LIDO, '501149 · MESA CABECEIRA MADERO'))).toBe('');
+    expect(semanaDoProduto(L.semanas[1], null)).toBeNull();
+  });
+
+  it('a medição é lida com a semana DELA: a da semana passada, pelo takt da semana passada', () => {
+    const a = alvoDoProduto(L, '501149 · MESA CABECEIRA MADERO', { data: '2026-11-04T12:00:00Z' });
+    expect(a.semana).toMatchObject({ de: '02/11/2026', taktMs: 9410 });
+  });
+
+  it('o veredito continua pelo alvo; a linha da carga vira a do produto (sem ela, a do takt por volume)', () => {
+    const VOLUME = unidadeDoPosto('EMBALAGEM');
+    const marcas = Array.from({ length: 31 }, (_, i) => i * 8700);
+    const a = alvoDoProduto(L, '501094 · MESA CABECEIRA SLEEP', { data: QUARTA });
+    const leitura = leituraPecaAPeca({ marcasMs: marcas, taktMs: 16400, alvoMs: a.alvoMs, periodoPorPecaMs: 8700 });
+    const f = frasesVolumeAVolume({ leitura, alvo: a, unidade: VOLUME });
+    expect(f.tom).toBe('atende');   // 8,7 s: dentro do alvo de 8,9 s — a cor não é do takt
+    expect(f.carga).toBe(fraseDaSemana(a));
+    expect(f.carga).not.toMatch(/16\.4/);
+  });
+
+  it('a junção leva a semana das medições; medido × alvo traz o que ESTA semana pede em cada produto', () => {
+    const a = alvoDoProduto(L, '501094 · MESA CABECEIRA SLEEP', { data: QUARTA });
+    expect(alvoDaJuncao([a, a]).semana).toEqual(a.semana);
+    const m = medidoXAlvo(L, [], () => null, new Date(QUARTA));
+    expect(m.semana).toMatchObject({ de: '09/11/2026', sUep: 10.222 });
+    expect(m.todos.find((l) => l.rot === '501094 · MESA CABECEIRA SLEEP').semanaMs).toBe(8480);
+    expect(m.todos.find((l) => l.rot === '501160 · BERCO ALGODAO DOCE · VOL 1/2').semanaMs).toBeNull();
+    expect(medidoXAlvo(LIDO, [], () => null, new Date(QUARTA)).semana).toBeNull();
   });
 });
 
