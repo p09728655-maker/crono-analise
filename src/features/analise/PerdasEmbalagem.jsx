@@ -3,16 +3,21 @@ import { VERSAO } from '../../versao.js';
 import { formatarDuracao, formatarSegundos, unidadeDoPosto } from '../../domain/cronoanalise.js';
 import { taktDaMedicao } from '../../domain/demandaSemanal.js';
 import { rotuloMotivo } from '../../domain/crono/paradas.js';
+import { alvoDoProduto, descontaSetup } from '../../domain/tempoAlvo.js';
 import {
   MOTIVO_SEM_DEFINICAO, horaExtraDaSemana, relatorioDePerdas,
 } from '../../domain/perdasEmbalagem.js';
 import { lerDemanda, listarCadastroMaquinas, listarMedicoesDoGrupo } from '../../lib/api.js';
 import { carregarMotivos } from '../../lib/motivosParada.js';
+import { useTemposAlvo } from '../../lib/temposAlvo.js';
+import { dataDoArquivo, imprimirComo, nomeDoArquivo } from '../../lib/impressao.js';
+import { motivoSemTakt } from '../coleta/embalagem/motivoSemTakt.js';
 import MenuLateral from '../../components/MenuLateral.jsx';
 import HistoricoVersoes from '../../components/HistoricoVersoes.jsx';
 import EstadoVazio from '../../components/EstadoVazio.jsx';
 import { est } from './conferencias/estilos.js';
 import { ep } from './embalagem/estilos.js';
+import ImpressaoPerdas from './embalagem/ImpressaoPerdas.jsx';
 
 const ehEmbalagem = (grupo) => unidadeDoPosto(grupo?.nome).singular === 'volume';
 const PERIODOS = [7, 30, 90];
@@ -21,6 +26,20 @@ const DIA_MS = 86400000;
 const nVolumes = (n) => Math.round(n).toLocaleString('pt-BR');
 const pct = (n) => `${Number(n).toFixed(1)}%`;
 const horas = (h) => formatarDuracao(h * 3600000);
+const nomeDoGrupo = (g) => [g.codigo, g.nome].filter(Boolean).join(' · ');
+
+/** O takt do grupo numa data: as horas, o programa e o setup planejado dela. */
+function taktDoGrupo({ grupo: g, ativas, demandas }, data, pecas = 1, duracaoMs = 3600000) {
+  return taktDaMedicao({
+    demandas,
+    horas: g.horas_semana,
+    maquinas: ativas,
+    setup: { setupsDia: g.setups_dia, dias: g.dias_semana, minutos: g.setup_min },
+    data,
+    pecas,
+    duracaoMs,
+  });
+}
 
 /**
  * PERDAS DA EMBALAGEM (v2.110.0) — onde a linha deixa de produzir e o que
@@ -29,13 +48,17 @@ const horas = (h) => formatarDuracao(h * 3600000);
  * Primeiro o que pede atencao: quanto do tempo medido ficou sem produzir e
  * a hora extra que isso explica; depois POR QUE parou (os motivos marcados,
  * com o "Outro" apontado) e ONDE (os produtos, do que mais perdeu ao que
- * menos). As contas sao as do volume a volume (ver perdasEmbalagem.js).
+ * menos). As contas sao as do volume a volume (ver perdasEmbalagem.js) —
+ * com o setup planejado pela MESMA regua da lista (descontaSetup: com
+ * tempo-alvo, o setup do painel; sem, o do takt da semana da medicao).
  */
 export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
   const [verVersoes, setVerVersoes] = useState(false);
   const [dias, setDias] = useState(30);
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [todos, setTodos] = useState(false);
+  const alvos = useTemposAlvo();
+  const alvosLido = alvos.lido;
 
   useEffect(() => {
     let vivo = true;
@@ -43,62 +66,107 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
     (async () => {
       // Os rotulos dos motivos cadastrados (o rotuloMotivo le' o catalogo).
       const [cadastro] = await Promise.all([listarCadastroMaquinas(), carregarMotivos().catch(() => null)]);
+      const maquinas = cadastro.maquinas || [];
       const grupos = (cadastro.grupos || []).filter(ehEmbalagem);
       const porGrupo = await Promise.all(grupos.map(async (g) => {
         const [lista, programa] = await Promise.all([
           listarMedicoesDoGrupo({ grupoId: g.id, dias }),
-          // Sem o programa, o relatorio sai sem a hora extra — nao sem tudo.
-          lerDemanda(g.id).catch(() => null),
+          // Sem o programa, o relatorio sai sem a hora extra — nao sem tudo;
+          // e a tela diz POR QUE ela nao saiu (revisao da v2.110.0).
+          lerDemanda(g.id).then((x) => ({ demandas: x.demandas }), (e) => ({ erro: e.message || 'erro' })),
         ]);
-        return { grupo: g, medicoes: lista.conferencias || [], demandas: programa?.demandas ?? null };
+        return {
+          grupo: g,
+          ativas: maquinas.filter((m) => m.grupo_id === g.id && m.ativa).length || 1,
+          medicoes: lista.conferencias || [],
+          truncado: Boolean(lista.truncado),
+          demandas: programa.demandas ?? null,
+          erroPrograma: programa.erro || null,
+        };
       }));
-      if (vivo) setCarga({ estado: 'pronto', cadastro, grupos: porGrupo });
+      if (vivo) setCarga({ estado: 'pronto', grupos: porGrupo });
     })().catch((e) => { if (vivo) setCarga({ estado: 'erro', erro: e.message }); });
     return () => { vivo = false; };
   }, [dias]);
 
+  /* O SETUP PLANEJADO de cada medicao sai do trecho pela regua da lista:
+     sem o programa, o setup do cadastro do grupo decide. */
+  const descontarSetupDe = useMemo(() => {
+    if (carga.estado !== 'pronto') return () => false;
+    const doGrupo = new Map();
+    for (const x of carga.grupos) for (const c of x.medicoes) doGrupo.set(c.id, x);
+    return (c) => {
+      const x = doGrupo.get(c.id);
+      if (!x) return false;
+      const takt = x.demandas
+        ? taktDoGrupo(x, c.iniciado_em || c.salvo_em, c.pecas, Number(c.duracao_ms))
+        : { setupPlanejado: Number(x.grupo.setups_dia) > 0 && Number(x.grupo.setup_min) > 0 };
+      return descontaSetup(alvoDoProduto(alvosLido, c.peca), takt);
+    };
+  }, [carga, alvosLido]);
+
   const r = useMemo(() => {
     if (carga.estado !== 'pronto') return null;
-    return relatorioDePerdas(carga.grupos.flatMap((x) => x.medicoes));
-  }, [carga]);
+    return relatorioDePerdas(carga.grupos.flatMap((x) => x.medicoes), { descontarSetupDe });
+  }, [carga, descontarSetupDe]);
 
-  /* A HORA EXTRA de cada grupo, esta semana e a proxima: o programa no
-     ritmo medido contra as horas da linha (as do takt: jornada menos o
-     setup planejado), e o mesmo programa no ritmo normal. */
-  const semanas = useMemo(() => {
-    if (carga.estado !== 'pronto' || !r?.total) return [];
-    const maquinas = carga.cadastro.maquinas || [];
-    return carga.grupos.flatMap(({ grupo: g, demandas }) => {
-      if (!demandas) return [];
-      const ativas = maquinas.filter((m) => m.grupo_id === g.id && m.ativa).length || 1;
-      return [0, 7].map((somar) => {
-        const takt = taktDaMedicao({
-          demandas,
-          horas: g.horas_semana,
-          maquinas: ativas,
-          setup: { setupsDia: g.setups_dia, dias: g.dias_semana, minutos: g.setup_min },
-          data: new Date(Date.now() + somar * DIA_MS).toISOString(),
-          pecas: 1,
-          duracaoMs: 3600000,
+  /* A HORA EXTRA de CADA GRUPO com o ritmo DELE (misturar linhas dava a
+     uma o ritmo da outra), esta semana e a proxima. Semana sem conta vira
+     um aviso com o porque — nunca some calada. */
+  const horaExtra = useMemo(() => {
+    const colunas = [];
+    const avisos = [];
+    if (carga.estado !== 'pronto' || !r?.total) return { colunas, avisos };
+    const varios = carga.grupos.length > 1;
+    for (const x of carga.grupos) {
+      const prefixo = varios ? `${x.grupo.nome} · ` : '';
+      if (x.erroPrograma) {
+        avisos.push(`${prefixo}não deu para ler o programa da semana (${x.erroPrograma}).`);
+        continue;
+      }
+      const rg = relatorioDePerdas(x.medicoes, { descontarSetupDe }).total;
+      if (!rg) {
+        avisos.push(`${prefixo}sem medição com volumes marcados no período.`);
+        continue;
+      }
+      for (const somar of [0, 7]) {
+        const takt = taktDoGrupo(x, new Date(Date.now() + somar * DIA_MS).toISOString());
+        const rotulo = `${prefixo}${somar ? 'Próxima semana' : 'Esta semana'}${takt.semana ? ` (${takt.semana})` : ''}`;
+        const conta = horaExtraDaSemana({
+          demanda: takt.demanda,
+          horasPorMaquina: takt.horasPorMaquina,
+          maquinas: x.ativas,
+          periodoMs: rg.periodoMs,
+          normalMs: rg.normalMs,
         });
-        return {
-          chave: `${g.id}-${somar}`,
-          rotulo: `${somar ? 'Próxima semana' : 'Esta semana'}${takt.semana ? ` (${takt.semana})` : ''}`,
-          estado: takt.estado,
-          conta: horaExtraDaSemana({
-            demanda: takt.demanda,
-            horasPorMaquina: takt.horasPorMaquina,
-            maquinas: ativas,
-            periodoMs: r.total.periodoMs,
-            normalMs: r.total.normalMs,
-          }),
-        };
-      }).filter((s) => s.conta);
-    });
-  }, [carga, r]);
+        if (conta) {
+          colunas.push({
+            chave: `${x.grupo.id}-${somar}`, rotulo, conta, ativas: x.ativas, periodoMs: rg.periodoMs, normalMs: rg.normalMs,
+          });
+        } else {
+          avisos.push(`${rotulo}: ${motivoSemTakt(takt.estado) || 'não há programa colado para esta semana.'}`);
+        }
+      }
+    }
+    return { colunas, avisos };
+  }, [carga, r, descontarSetupDe]);
 
   const total = r?.total;
   const produtos = r ? (todos ? r.porProduto : r.porProduto.slice(0, PRIMEIROS)) : [];
+  const truncado = carga.estado === 'pronto' && carga.grupos.some((x) => x.truncado);
+  // Para a folha: de que dias sao as medicoes (nao so' a janela) e o grupo.
+  const periodo = useMemo(() => {
+    if (carga.estado !== 'pronto') return null;
+    const ts = carga.grupos.flatMap((x) => x.medicoes)
+      .map((c) => new Date(c.iniciado_em || c.salvo_em).getTime()).filter(Number.isFinite);
+    if (!ts.length) return null;
+    const dia = (t) => new Date(t).toLocaleDateString('pt-BR');
+    return `${dia(Math.min(...ts))} a ${dia(Math.max(...ts))}`;
+  }, [carga]);
+  const nomesGrupos = carga.estado === 'pronto' ? carga.grupos.map((x) => nomeDoGrupo(x.grupo)) : [];
+  const porMaquina = horaExtra.colunas.some((c) => c.ativas > 1);
+  // Uma regua so' por linha da grade: com um grupo, o ritmo dele no rotulo.
+  const umRitmo = horaExtra.colunas.length > 0 && horaExtra.colunas.every((c) => c.periodoMs === horaExtra.colunas[0].periodoMs);
 
   return (
     <div style={est.tela}>
@@ -114,6 +182,14 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
             titulo: 'Perdas da embalagem',
             subtitulo: 'Onde a linha deixa de produzir e quanto isso custa em horas',
           }}
+          // v2.110.1: a folha A4 (ImpressaoPerdas), com o nome do arquivo
+          // dizendo o que e' e de quando — o PDF nao sai "RitmoPatrimar.pdf".
+          acaoPrimaria={total ? {
+            rotulo: 'Imprimir',
+            aoClicar: () => imprimirComo(nomeDoArquivo(
+              'Perdas da embalagem', `últimos ${dias} dias`, dataDoArquivo(new Date().toISOString()),
+            )),
+          } : undefined}
         />
         <main style={est.conteudoLateral}>
           <div style={ep.topo}>
@@ -158,7 +234,14 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                 {total.medicoes} medições · {nVolumes(total.volumes)} volumes · {horas(total.horasMedidas)} de linha
                 medida nos últimos {dias} dias
                 {r.sobrepostas > 0 && ` · ${r.sobrepostas} medição(ões) do mesmo trecho (tablet e vídeo) contada(s) uma vez só`}
+                {total.setupMs > 0 && ` · ${formatarDuracao(total.setupMs)} de setup planejado no trecho fica fora da conta, como no takt`}
               </p>
+              {truncado && (
+                <div style={est.faixaErro} role="alert">
+                  O período tem mais medições do que o relatório lê de uma vez (1.000): os números são das mais recentes.
+                  Escolha um período menor.
+                </div>
+              )}
 
               <section style={est.kpis} aria-label="Resumo das perdas">
                 <div style={{ ...est.kpi, ...ep.kpiDestaque }}>
@@ -179,7 +262,11 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                 <div style={est.kpi}>
                   <div style={est.kpiRotulo}>Paradas marcadas</div>
                   <div style={est.kpiValor}>{formatarDuracao(total.paradasMs)}</div>
-                  <div style={est.kpiSub}>com motivo no tablet ou no vídeo</div>
+                  <div style={est.kpiSub}>
+                    {total.anotadasMs > 0
+                      ? `com motivo; ${formatarDuracao(total.anotadasMs)} anotadas depois, no resultado`
+                      : 'com motivo, no tablet ou no vídeo'}
+                  </div>
                 </div>
                 <div style={est.kpi}>
                   <div style={est.kpiRotulo}>Paradas não marcadas</div>
@@ -193,7 +280,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                 </div>
               </section>
 
-              {semanas.length > 0 && (
+              {(horaExtra.colunas.length > 0 || horaExtra.avisos.length > 0) && (
                 <section style={{ ...est.painelMiolo, marginBottom: 24 }} aria-label="Hora extra da semana">
                   <h2 style={ep.secaoTitulo}>Por que ainda precisa de hora extra</h2>
                   <p style={ep.secaoDica}>
@@ -201,29 +288,32 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                     planejado — as mesmas do takt). E o mesmo programa no ritmo normal: a diferença é o que as paradas
                     e as lacunas custam. Estimativa: o ritmo é o das medições, com o mix de produtos delas.
                   </p>
-                  {/* Uma coluna de rotulo e UMA POR SEMANA, fixas: com auto-fit, uma
-                      semana so' espalhava rotulo e valor pelas colunas. */}
-                  <div
-                    style={{ ...ep.horaGrade, gridTemplateColumns: `minmax(240px, max-content) repeat(${semanas.length}, minmax(170px, max-content))` }}
-                    role="table"
-                  >
-                    <span style={ep.horaRotulo} />
-                    {semanas.map((s) => <span key={s.chave} style={ep.horaCabeca}>{s.rotulo}</span>)}
-                    <span style={ep.horaRotulo}>Programa</span>
-                    {semanas.map((s) => <span key={s.chave} style={ep.horaValor}>{nVolumes(s.conta.demanda)} volumes</span>)}
-                    <span style={ep.horaRotulo}>Horas da linha</span>
-                    {semanas.map((s) => <span key={s.chave} style={ep.horaValor}>{horas(s.conta.horasDisponiveis)}</span>)}
-                    <span style={ep.horaRotulo}>Precisa no ritmo medido ({formatarSegundos(total.periodoMs)} s)</span>
-                    {semanas.map((s) => <span key={s.chave} style={ep.horaValor}>{horas(s.conta.precisaPeriodo)}</span>)}
-                    <span style={ep.horaRotulo}>Hora extra estimada</span>
-                    {semanas.map((s) => <span key={s.chave} style={ep.horaValorForte}>{s.conta.horaExtra > 0 ? horas(s.conta.horaExtra) : 'nenhuma'}</span>)}
-                    <span style={ep.horaRotulo}>Precisa no ritmo normal ({formatarSegundos(total.normalMs)} s)</span>
-                    {semanas.map((s) => <span key={s.chave} style={ep.horaValor}>{horas(s.conta.precisaNormal)}</span>)}
-                    <span style={ep.horaRotulo}>Hora extra sem as perdas</span>
-                    {semanas.map((s) => <span key={s.chave} style={ep.horaValor}>{s.conta.horaExtraSemPerdas > 0 ? horas(s.conta.horaExtraSemPerdas) : 'nenhuma'}</span>)}
-                    <span style={ep.horaRotulo}>O que as perdas custam</span>
-                    {semanas.map((s) => <span key={s.chave} style={ep.horaValorForte}>{horas(s.conta.custoDasPerdas)}</span>)}
-                  </div>
+                  {horaExtra.colunas.length > 0 && (
+                    /* Uma coluna de rotulo e UMA POR SEMANA, fixas: com auto-fit, uma
+                       semana so' espalhava rotulo e valor pelas colunas. */
+                    <div
+                      style={{ ...ep.horaGrade, gridTemplateColumns: `minmax(240px, max-content) repeat(${horaExtra.colunas.length}, minmax(170px, max-content))` }}
+                      role="table"
+                    >
+                      <span style={ep.horaRotulo} />
+                      {horaExtra.colunas.map((s) => <span key={s.chave} style={ep.horaCabeca}>{s.rotulo}</span>)}
+                      <span style={ep.horaRotulo}>Programa</span>
+                      {horaExtra.colunas.map((s) => <span key={s.chave} style={ep.horaValor}>{nVolumes(s.conta.demanda)} volumes</span>)}
+                      <span style={ep.horaRotulo}>{porMaquina ? 'Horas de cada máquina' : 'Horas da linha'}</span>
+                      {horaExtra.colunas.map((s) => <span key={s.chave} style={ep.horaValor}>{horas(s.conta.horasDisponiveis)}</span>)}
+                      <span style={ep.horaRotulo}>Precisa no ritmo medido{umRitmo ? ` (${formatarSegundos(horaExtra.colunas[0].periodoMs)} s)` : ''}</span>
+                      {horaExtra.colunas.map((s) => <span key={s.chave} style={ep.horaValor}>{horas(s.conta.precisaPeriodo)}</span>)}
+                      <span style={ep.horaRotulo}>Hora extra estimada</span>
+                      {horaExtra.colunas.map((s) => <span key={s.chave} style={ep.horaValorForte}>{s.conta.horaExtra > 0 ? horas(s.conta.horaExtra) : 'nenhuma'}</span>)}
+                      <span style={ep.horaRotulo}>Precisa no ritmo normal{umRitmo ? ` (${formatarSegundos(horaExtra.colunas[0].normalMs)} s)` : ''}</span>
+                      {horaExtra.colunas.map((s) => <span key={s.chave} style={ep.horaValor}>{horas(s.conta.precisaNormal)}</span>)}
+                      <span style={ep.horaRotulo}>Hora extra sem as perdas</span>
+                      {horaExtra.colunas.map((s) => <span key={s.chave} style={ep.horaValor}>{s.conta.horaExtraSemPerdas > 0 ? horas(s.conta.horaExtraSemPerdas) : 'nenhuma'}</span>)}
+                      <span style={ep.horaRotulo}>O que as perdas custam</span>
+                      {horaExtra.colunas.map((s) => <span key={s.chave} style={ep.horaValorForte}>{horas(s.conta.custoDasPerdas)}</span>)}
+                    </div>
+                  )}
+                  {horaExtra.avisos.map((a) => <p key={a} style={ep.avisoOutro} role="status">{a}</p>)}
                 </section>
               )}
 
@@ -287,7 +377,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   <tbody>
                     {produtos.map((p) => (
                       <tr key={p.produto}>
-                        <td style={est.tdCurto} title={p.produto}>{p.produto}</td>
+                        <td style={ep.tdProduto}>{p.produto}</td>
                         <td style={est.tdNum}>{p.medicoes}</td>
                         <td style={est.tdNum}>{nVolumes(p.volumes)}</td>
                         <td style={est.tdNum}>{formatarSegundos(p.periodoMs)} s</td>
@@ -339,6 +429,12 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
           )}
         </main>
       </div>
+      {total && (
+        <ImpressaoPerdas
+          dias={dias} r={r} colunas={horaExtra.colunas} avisos={horaExtra.avisos} periodo={periodo} grupos={nomesGrupos}
+          porMaquina={porMaquina} umRitmo={umRitmo}
+        />
+      )}
       {verVersoes && <HistoricoVersoes modo="analise" aoFechar={() => setVerVersoes(false)} />}
     </div>
   );

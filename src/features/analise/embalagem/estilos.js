@@ -40,6 +40,12 @@ export const ep = {
     padding: `${espaco.sm}px ${espaco.md}px`, textAlign: 'right', borderBottom: `1px solid ${t.borda}`,
     whiteSpace: 'nowrap', fontWeight: 700, color: t.texto,
   },
+  // O nome inteiro: cortado, "HOME RIPADO SUPREMO 2.3 VOL 1/3" e "2/3"
+  // viravam a mesma linha (revisao da v2.110.0).
+  tdProduto: {
+    padding: espaco.lg, ...tipo('corpo'), color: t.textoMedio, borderBottom: `1px solid ${t.borda}`,
+    minWidth: 220, maxWidth: 360, overflowWrap: 'anywhere',
+  },
   notas: { ...tipo('legenda'), color: t.textoMedio, lineHeight: 1.6, margin: 0, paddingLeft: espaco.lg },
   verTodos: {
     margin: `${espaco.md}px ${espaco.lg}px`, padding: 0, background: 'transparent', border: 'none',

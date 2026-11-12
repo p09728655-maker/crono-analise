@@ -66,6 +66,9 @@
 
         .somente-tela { display: none !important; }
         .somente-impressao { display: block !important; }
+        /* O invólucro da tela tem fundo cinza e altura de tela cheia: no papel
+           sobrava um bloco cinza abaixo da folha. */
+        :has(> .somente-impressao) { background: #fff !important; min-height: 0 !important; }
 
         /* Nada de sombra ou canto arredondado no papel. */
         * { box-shadow: none !important; }

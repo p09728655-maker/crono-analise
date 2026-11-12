@@ -154,6 +154,35 @@ checar(linhas.length === 2 && /^RACK FLIP 2\.2/.test(linhas[0]) && /^MESA SLEEP/
 checar(/\t2\t/.test(linhas[0]) && /7\s*$/.test(linhas[0]), `rack: 2 medicoes, 140 s parado = 7 volumes no normal de 20 s (${linhas[0].replace(/\t/g, ' | ')})`);
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/perdas.png`, fullPage: true });
 
+/* ---------------------------------------------------- a impressao (v2.110.1) */
+await p.evaluate(() => {
+  window.__impressoes = 0;
+  window.__titulo = null;
+  window.print = () => { window.__impressoes += 1; window.__titulo = document.title; };
+});
+await p.getByRole('button', { name: 'Imprimir' }).click();
+{
+  const imp = await p.evaluate(() => ({ n: window.__impressoes, t: window.__titulo }));
+  checar(imp.n === 1 && /^Perdas da embalagem - últimos 30 dias - \d\d-\d\d-\d{4} \d\dh\d\d$/.test(imp.t || ''),
+    `Imprimir: uma vez, com o nome do arquivo dizendo o que e' e de quando (${imp.t})`);
+  await p.emulateMedia({ media: 'print' });
+  const folha = await p.evaluate(() => {
+    const el = document.querySelector('.somente-impressao');
+    const tela = document.querySelector('.somente-tela');
+    return {
+      visivel: Boolean(el) && getComputedStyle(el).display !== 'none',
+      telaOculta: Boolean(tela) && getComputedStyle(tela).display === 'none',
+      texto: (el?.innerText || '').replace(/\s+/g, ' '),
+    };
+  });
+  checar(folha.visivel && folha.telaOculta, 'no papel sai a folha, e a interface some');
+  checar(/Perdas da Embalagem/.test(folha.texto) && /22\.7%/.test(folha.texto) && /9 h 14 min/.test(folha.texto)
+    && /Outro/.test(folha.texto) && /RACK FLIP 2\.2/.test(folha.texto) && /MESA SLEEP/.test(folha.texto)
+    && /Coordenador PPCP/.test(folha.texto),
+    `a folha traz o resumo, a hora extra, os motivos, TODOS os produtos e as assinaturas (${folha.texto.slice(0, 160)})`);
+  await p.emulateMedia({ media: 'screen' });
+}
+
 /* --------------------------------------------------------- o periodo */
 await p.locator('select').first().selectOption('7');
 await p.waitForFunction(() => document.querySelector('[aria-label="Base do relatório"]')?.innerText.includes('últimos 7 dias'), null, { timeout: 4000 })
@@ -166,6 +195,22 @@ await p.getByRole('button', { name: 'Perdas da embalagem' }).first().click({ tim
 await p.waitForURL(/\/analise\/embalagem\/perdas$/, { timeout: 4000 })
   .then(() => checar(true, 'o Inicio tambem leva ao relatorio, pelo menu da Embalagem'))
   .catch(() => checar(false, 'o Inicio tambem leva ao relatorio, pelo menu da Embalagem'));
+
+/* ---- o programa nao carregou: a tela diz, em vez de sumir com a hora extra ---- */
+{
+  const c2 = await navegador.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: FUSO });
+  const q = await c2.newPage();
+  await semearSessao(q);
+  q.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(q);
+  await q.route('**/api/maquinas?demanda=1**', (rota) => rota.fulfill({ status: 500, json: { erro: 'planilha fora do ar' } }));
+  await q.goto(`${BASE}/analise/embalagem/perdas`);
+  const horaQ = q.getByRole('region', { name: 'Hora extra da semana' });
+  await horaQ.waitFor({ timeout: 8000 });
+  checar(/não deu para ler o programa da semana/.test(await horaQ.innerText()),
+    'programa fora do ar: o quadro da hora extra diz por que nao ha conta');
+  await c2.close();
+}
 
 checar(!erros.length, `sem erro no console da pagina${erros.length ? `: ${erros.join(' | ')}` : ''}`);
 await navegador.close();

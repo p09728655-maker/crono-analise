@@ -54,6 +54,11 @@ import {
 } from './_lib/painel.js';
 
 const MAX_LINHAS = 1000;
+// O nome da maquina sem acento, para casar como a tela (nomeChave): o
+// translate troca letra por letra, antes do lower — que, no locale C do
+// banco, nao baixaria a letra acentuada.
+const COM_ACENTO = 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç';
+const SEM_ACENTO = 'AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc';
 // Teto do lote: uma maquina com mais medicoes que isto arquiva em duas
 // idas. O limite existe para uma requisicao nao virar uma transacao longa.
 const MAX_LOTE = 500;
@@ -156,8 +161,12 @@ export default handler(async (req, res) => {
      * medicoes das maquinas DE UM GRUPO, dos ultimos `dias` (1 a 90), COM as
      * marcas. A lista comum nao traz marcas (ver o ?id= acima); aqui o grupo
      * e o periodo limitam o volume — na embalagem sao ~60 marcas por
-     * medicao. A maquina casa pelo nome sem diferenca de maiuscula, como a
-     * tela faz.
+     * medicao. So' as que TEM marcas (a lista com marcas e' para isso; e o
+     * limite de linhas nao se gasta com medicao por horarios). A maquina
+     * casa pelo nome como a tela casa (nomeChave): sem acento, sem diferenca
+     * de maiuscula e com os espacos juntados. `truncado` diz quando o limite
+     * cortou — a tela avisa em vez de mostrar numero de um periodo pela
+     * metade (revisao da v2.110.0).
      */
     if (String(req.query?.marcas ?? '') === '1') {
       const grupo = uuid(req.query?.grupo, 'grupo');
@@ -177,13 +186,15 @@ export default handler(async (req, res) => {
             FROM conferencias c
            WHERE c.empresa_id = ${empresaId}
              AND c.arquivada = false
+             AND c.marcas_ms IS NOT NULL
              AND c.salvo_em >= now() - (${dias} * interval '1 day')
-             AND lower(trim(c.maquina)) IN (
-               SELECT lower(trim(m.nome)) FROM maquinas m
+             AND lower(translate(regexp_replace(trim(c.maquina), '\\s+', ' ', 'g'), ${COM_ACENTO}, ${SEM_ACENTO})) IN (
+               SELECT lower(translate(regexp_replace(trim(m.nome), '\\s+', ' ', 'g'), ${COM_ACENTO}, ${SEM_ACENTO}))
+                 FROM maquinas m
                 WHERE m.empresa_id = ${empresaId} AND m.grupo_id = ${grupo})
            ORDER BY c.salvo_em DESC
            LIMIT ${MAX_LINHAS}`;
-        return json(res, 200, { conferencias: linhas, dias });
+        return json(res, 200, { conferencias: linhas, dias, truncado: linhas.length >= MAX_LINHAS });
       });
     }
 
