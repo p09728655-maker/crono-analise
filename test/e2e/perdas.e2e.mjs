@@ -125,7 +125,7 @@ const textoResumo = (await resumo.innerText()).replace(/\s+/g, ' ');
 checar(/SEM PRODUZIR 22\.7%/i.test(textoResumo), `sem produzir: 150 s de 660 s = 22.7% (${textoResumo.slice(0, 160)})`);
 checar(/POR VOLUME NO PERÍODO 21\.3 s/i.test(textoResumo) && /POR VOLUME RODANDO 16\.5 s/i.test(textoResumo),
   'por volume: 21.3 s no periodo (660/31) e 16.5 s rodando ((200+220+90)/31)');
-checar(/PARADAS NÃO MARCADAS 1 min[\s\S]*1 lacuna entre/i.test(textoResumo), 'paradas nao marcadas: a lacuna de 80 s (no singular)');
+checar(/LACUNAS 1 min[\s\S]*1 lacuna entre volumes/i.test(textoResumo), 'lacunas: a lacuna de 80 s (no singular)');
 const base = await p.getByLabel('Base do relatório').innerText();
 checar(/3 medições/.test(base) && /1 medição do mesmo trecho \(tablet e vídeo\) contada uma vez só/.test(base),
   `o tablet no mesmo trecho do video conta uma vez so (${base})`);

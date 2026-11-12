@@ -430,10 +430,12 @@ do produto dele**.
   tirou das horas (`takt.setupPlanejado`) — as duas pontas com a mesma regra.
   O mesmo setup que saiu do relógio sai das paradas por motivo (`setupForaMs`);
   o de antes do 1º volume ou anotado depois fica. A parada anotada depois fica
-  na lacuna, como no volume a volume (`deixouDeEmbalar`), e o motivo dela vai
-  para o quadro: a lista não tem horário, e as v2.110.1 a 2.110.2 tentaram
-  separá-la pela soma da lista — cada regra escondia lacuna sem marca em algum
-  caso real (v2.110.3 voltou à regra do app). O setup que saiu do relógio sai
+  onde o cronômetro a deixou, como no volume a volume (`deixouDeEmbalar`): se
+  caiu entre os volumes e abriu uma lacuna, na lacuna; o motivo dela vai para o
+  quadro. A lista não tem horário, e as v2.110.1 e 2.110.2 tentaram separá-la
+  pela soma da lista — cada regra escondia lacuna sem marca em algum caso real
+  (v2.110.3 voltou à regra do app). Na tela: "Paradas no cronômetro" (o que o
+  cronômetro tirou), "Lacunas" e o quadro com todas as paradas com motivo. O setup que saiu do relógio sai
   do quadro abatido da troca de duração mais próxima; medição sem
   marcas sai antes da sobreposição, e a sobreposição casa a máquina por
   `nomeChave`. A hora extra é por grupo, no ritmo do próprio grupo

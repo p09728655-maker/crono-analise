@@ -202,16 +202,16 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   <div style={est.kpiSub}>o ritmo normal, sem paradas e lacunas</div>
                 </div>
                 <div style={est.kpi}>
-                  <div style={est.kpiRotulo}>Paradas marcadas</div>
+                  <div style={est.kpiRotulo}>Paradas no cronômetro</div>
                   <div style={est.kpiValor}>{formatarDuracao(total.paradasMs)}</div>
-                  <div style={est.kpiSub}>
-                    no cronômetro, com motivo (tablet ou vídeo)
-                  </div>
+                  <div style={est.kpiSub}>marcadas ao vivo entre os volumes (tablet ou vídeo)</div>
                 </div>
                 <div style={est.kpi}>
-                  <div style={est.kpiRotulo}>Paradas não marcadas</div>
+                  <div style={est.kpiRotulo}>Lacunas</div>
                   <div style={est.kpiValor}>{formatarDuracao(total.lacunasMs)}</div>
-                  <div style={est.kpiSub}>{total.nLacunas} {total.nLacunas === 1 ? 'lacuna' : 'lacunas'} entre volumes</div>
+                  <div style={est.kpiSub}>
+                    {total.nLacunas} {total.nLacunas === 1 ? 'lacuna' : 'lacunas'} entre volumes: paradas que o cronômetro não tirou
+                  </div>
                 </div>
                 <div style={est.kpi}>
                   <div style={est.kpiRotulo}>Volumes que deixaram de sair</div>
@@ -261,9 +261,10 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                 <section style={{ ...est.painelMiolo, marginBottom: 24 }} aria-label="Paradas por motivo">
                   <h2 style={ep.secaoTitulo}>Por que a linha parou</h2>
                   <p style={ep.secaoDica}>
-                    {formatarDuracao(r.totalMotivosMs)} de paradas marcadas, os maiores motivos primeiro. As lacunas
-                    ({formatarDuracao(total.lacunasMs)}) são as paradas que o cronômetro não tirou: a anotada depois, no
-                    resultado, aparece aqui com o motivo, mas o tempo dela está nas lacunas.
+                    {formatarDuracao(r.totalMotivosMs)} de paradas com motivo, os maiores primeiro: as marcadas no cronômetro
+                    e as anotadas depois, também as de antes do 1º volume e depois do último. As lacunas
+                    ({formatarDuracao(total.lacunasMs)}) são as paradas que o cronômetro não tirou: a anotada depois que caiu
+                    entre os volumes e abriu uma lacuna tem o tempo lá e o motivo aqui.
                     {r.setupForaMs > 0 && ` O setup planejado marcado entre os volumes (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
                   </p>
                   {r.semDefinicaoPct >= 20 && (
@@ -344,7 +345,7 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                 <ul style={ep.notas}>
                   <li>
                     O tempo de cada medição vai do 1º ao último volume. Ele se divide em três: os volumes no ritmo normal,
-                    as paradas marcadas e as lacunas. As contas são as do volume a volume da Embalagem Takt Time.
+                    as paradas no cronômetro e as lacunas. As contas são as do volume a volume da Embalagem Takt Time.
                   </li>
                   <li>
                     As medições são amostras escolhidas por quem mediu, e a medição curta costuma pegar o trecho em que a
@@ -352,13 +353,15 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                     trecho, é o que mais se aproxima do dia.
                   </li>
                   <li>
-                    As paradas por motivo incluem as marcadas antes do 1º volume ou depois do último; por isso a soma delas
-                    pode ficar um pouco diferente das paradas do resumo.
+                    O quadro dos motivos soma toda a lista de paradas — as de antes do 1º volume e depois do último, e as
+                    anotadas depois —; o cartão “Paradas no cronômetro” só tem as que o cronômetro tirou entre os volumes. Os
+                    dois podem ser bem diferentes.
                   </li>
                   <li>
-                    A parada anotada depois, no resultado ou no PC, não foi tirada pelo cronômetro: o tempo dela fica nas
-                    lacunas, como no volume a volume, e o motivo aparece em “Por que a linha parou”. Pelo mesmo motivo, o
-                    setup anotado depois não sai da conta: só o marcado no cronômetro entre os volumes sai.
+                    A parada anotada depois, no resultado ou no PC, não foi tirada pelo cronômetro: se caiu entre os volumes
+                    e abriu uma lacuna, o tempo dela está nas lacunas, como no volume a volume; o motivo aparece em “Por que
+                    a linha parou”. Com setup planejado no cadastro do grupo, só o setup marcado no cronômetro entre os
+                    volumes sai da conta; o anotado depois fica.
                   </li>
                   <li>
                     O mesmo produto com nomes diferentes (digitado à mão) aparece em linhas separadas: corrija o produto na
@@ -367,8 +370,8 @@ export default function PerdasEmbalagem({ aoVoltar, aoVerInicio }) {
                   {total.curtas > 0 && (
                     <li>
                       {total.curtas === 1
-                        ? '1 medição com menos de 10 intervalos não separa lacuna: nela só as paradas marcadas contam.'
-                        : `${total.curtas} medições com menos de 10 intervalos não separam lacuna: nelas só as paradas marcadas contam.`}
+                        ? '1 medição com menos de 10 intervalos não separa lacuna: nela só as paradas do cronômetro contam.'
+                        : `${total.curtas} medições com menos de 10 intervalos não separam lacuna: nelas só as paradas do cronômetro contam.`}
                     </li>
                   )}
                 </ul>

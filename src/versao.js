@@ -15,12 +15,13 @@ export const HISTORICO = [
   {
     versao: '2.110.3',
     data: '2026-11-12',
-    titulo: 'Perdas da embalagem: a parada anotada depois volta para as lacunas, como no volume a volume',
+    titulo: 'Perdas da embalagem: a parada anotada depois volta a ficar onde o cronômetro a deixou',
     itens: [
-      'A PARADA ANOTADA DEPOIS (no resultado ou no PC) FICA NAS LACUNAS, COMO NO VOLUME A VOLUME, e o motivo dela aparece em "Por que a linha parou". As versões 2.110.1 e 2.110.2 tentavam passá-la para "Paradas marcadas" pela soma da lista; como a lista não tem o horário da parada, em alguns casos reais uma lacuna que ninguém marcou sumia junto — por exemplo, 5 min anotados e 1 min parado sem marca davam "6 min anotados · 0 lacunas", e a troca do começo esquecida no cronômetro e anotada depois apagava lacunas do meio da medição. O "sem produzir" e a hora extra não mudam: a parada anotada sempre esteve no total.',
-      '"PARADAS MARCADAS" é o que o cronômetro tirou (tablet ou vídeo); "lacunas" é o que ele não tirou. O setup anotado depois também não sai da conta: só o setup marcado no cronômetro entre os volumes sai. A tela e a folha dizem isso.',
+      'A PARADA ANOTADA DEPOIS (no resultado ou no PC) FICA ONDE O CRONÔMETRO A DEIXOU, COMO NO VOLUME A VOLUME: se caiu entre os volumes e abriu uma lacuna, o tempo dela está em "Lacunas"; o motivo aparece em "Por que a linha parou". As versões 2.110.1 e 2.110.2 tentavam passá-la para as paradas marcadas pela soma da lista; como a lista não tem o horário da parada, em alguns casos reais uma lacuna que ninguém marcou sumia junto — por exemplo, 5 min anotados e 1 min parado sem marca davam "6 min anotados · 0 lacunas", e a troca do começo esquecida no cronômetro e anotada depois apagava lacunas do meio da medição. O "sem produzir" e a hora extra não mudam: a separação só mudava a parcela.',
+      'OS NOMES DIZEM DE ONDE VEM CADA PARTE: "Paradas no cronômetro" é o que o cronômetro tirou entre os volumes (tablet ou vídeo); "Lacunas" é o que ele não tirou; "Por que a linha parou" soma todas as paradas com motivo da lista, também as de antes do 1º volume e as anotadas depois. Com setup planejado no cadastro do grupo, só o setup marcado no cronômetro entre os volumes sai da conta; o anotado depois fica.',
       'NO QUADRO "POR QUE A LINHA PAROU", a troca antes do 1º volume não aparece mais como "2×" quando houve outro setup no trecho: o setup que sai da conta é abatido da troca do tamanho dele.',
       'Plurais: "1 medição", "1 medição do mesmo trecho contada uma vez só" (estavam "1 medições" e "medição(ões)").',
+      'Correção de texto da 2.110.2: o "por volume no período" do resumo e o da hora extra são o mesmo com um grupo só; com mais de um, cada coluna da hora extra usa o ritmo do próprio grupo e o resumo junta todos.',
     ],
   },
   {

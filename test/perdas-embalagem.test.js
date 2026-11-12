@@ -190,7 +190,7 @@ describe('revisao da v2.110.0', () => {
   it('PARADA ANOTADA DEPOIS fica na lacuna, como no volume a volume (o total nao muda)', () => {
     // 20 min de "falta de material" anotados no resultado: o cronometro nao
     // tirou nada das marcas, e o intervalo de 20 min ficou dentro delas. A
-    // lista nao tem horario: a v2.110.1 a 2.110.3 tentaram separar e cada
+    // lista nao tem horario: as v2.110.1 e 2.110.2 tentaram separar e cada
     // regra escondia lacuna sem marca em algum caso.
     const c = comoOTablet({ v1: 20, intervalos: [...Array(6).fill(20), 1220, ...Array(6).fill(20)],
       paradas: [{ motivo: 'falta_material', duracaoMs: s(1200) }] });
@@ -345,6 +345,18 @@ describe('revisao da v2.110.2', () => {
     expect(rb.total.lacunasMs).toBe(11 * min);
     expect(rb.porMotivo[0].ms).toBe(11 * min);
     expect(rb.totalMotivosMs).toBe(11 * min);
+  });
+  it('a sobra do setup abatido: arredondamento da lista some, segundos de verdade ficam', () => {
+    const base = { v1: 60, noTrecho: 600, marcas_setup_ms: s(600), intervalos: Array(39).fill(60) };
+    // Gravada em minutos com 2 casas: 600.3 s na lista, 600 s no relogio.
+    const arredondada = relatorioDePerdas([comoOTablet({ ...base, paradas: [{ motivo: 'setup', duracaoMs: 600300 }] })],
+      { descontarSetupDe: () => true });
+    expect(arredondada.setupForaMs).toBe(s(600));
+    expect(arredondada.porMotivo).toEqual([]);
+    // 5 s a mais de verdade (a troca foi editada no resultado): ficam, 1 vez.
+    const sobra = relatorioDePerdas([comoOTablet({ ...base, paradas: [{ motivo: 'setup', duracaoMs: s(605) }] })],
+      { descontarSetupDe: () => true });
+    expect(sobra.porMotivo).toEqual([{ motivo: 'setup', ms: s(5), vezes: 1, pct: 100 }]);
   });
   it('o setup que saiu e' + "' abatido da troca do trecho, nao da primeira da lista (nada de \"2×\")", () => {
     // 20 min de troca ao vivo antes do 1o volume e 5 min ao vivo no trecho.

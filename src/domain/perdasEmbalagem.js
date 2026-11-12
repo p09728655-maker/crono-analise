@@ -13,19 +13,21 @@
  *    do dobro do normal: paradas que o cronometro nao tirou).
  * relogio = (N-1) x normal + lacunas + paradas, exato.
  *
- * Duas regras da revisao da v2.110.0 (acertadas na v2.110.2):
+ * Duas regras da revisao da v2.110.0 (acertadas ate' a v2.110.3):
  *  - o SETUP PLANEJADO marcado no trecho sai do relogio quando quem chama
  *    diz que ele ja' saiu das horas da linha (`descontarSetup`) — contado
  *    de novo inventava hora extra. Sai do quadro dos motivos o MESMO tempo
  *    (nao toda parada "setup" da lista): fora da conta e' fora de tudo, e
  *    so' isso;
  *  - a PARADA ANOTADA DEPOIS (no resultado do tablet ou no PC) nao tirou
- *    nada das marcas: o tempo dela FICA NA LACUNA, como no volume a volume
- *    (deixouDeEmbalar), e o motivo dela aparece no quadro dos motivos. A
+ *    nada das marcas: fica onde o cronometro a deixou, como no volume a
+ *    volume (deixouDeEmbalar) — se caiu entre os volumes e abriu uma
+ *    lacuna, na lacuna; o motivo dela aparece no quadro dos motivos. A
  *    lista nao tem horario: nao se sabe se a anotada caiu no trecho ou
- *    antes do 1o volume. As v2.110.1 a 2.110.3 tentaram separar pela soma
- *    da lista, e cada regra escondia lacuna sem marca em algum caso real (a
- *    troca do comeco anotada depois, a anotada junto de uma lacuna curta).
+ *    antes do 1o volume. As v2.110.1 e 2.110.2 tentaram separar pela soma
+ *    da lista (e uma tentativa da 2.110.3, que nao foi ao ar), e cada regra
+ *    escondia lacuna sem marca em algum caso real (a troca do comeco
+ *    anotada depois, a anotada junto de uma lacuna curta).
  *    O total sem produzir e a hora extra nunca dependeram disso.
  *
  * Tudo puro: recebe as medicoes como a API manda (snake_case, com
