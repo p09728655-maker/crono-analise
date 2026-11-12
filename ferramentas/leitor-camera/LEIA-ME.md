@@ -43,8 +43,11 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
 
 ## 2. Validar com vídeo exportado — antes de ligar na câmera
 
-1. Exporte do gravador **30 a 60 minutos** da câmera da envolvedora (canal 5).
-   Arquivo `.dav` normalmente abre direto; se não abrir, exporte em MP4/AVI.
+1. Exporte **30 a 60 minutos** seguidos da câmera da envolvedora (canal 5),
+   pelo SIM Play (reprodução da câmera Embalagem → baixar o período) ou no
+   próprio gravador, num horário de produção normal (sem almoço no meio).
+   **Prefira o `.dav`**: o leitor abre direto e ele traz a hora gravada
+   (passo 4). Se não abrir, exporte em MP4/AVI.
 2. Confira o retângulo num momento em que tem caixa embaixo do filme:
    ```
    python leitor_camera.py --arquivo video.mp4 --foto --momento 30
@@ -59,13 +62,35 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    ```
    Sem caixa o % fica baixo; com caixa, alto. `limiar_entra` e `limiar_sai`
    (no `config.json`) têm que ficar **entre** os dois, com `limiar_sai` menor.
-4. Rode a contagem. `--inicio` é a hora que aparece na imagem no 1º segundo:
-   ```
-   python leitor_camera.py --arquivo video.mp4 --inicio 10:01:06
-   ```
+4. Rode a contagem.
+   - **`.dav` do gravador:** não precisa de hora. O leitor lê a data e a hora
+     gravadas no arquivo e mostra na tela (`Início lido do .dav: ...`).
+     Confira com a hora escrita na imagem no começo do vídeo: pode estar até
+     1 s atrás, não mais.
+     ```
+     python leitor_camera.py --arquivo video.dav
+     ```
+     Se no fim aparecer **"salto no relógio"**, a gravação foi interrompida no
+     meio do trecho (ou o relógio do gravador foi acertado): as horas depois
+     do salto saem erradas. Não use esse vídeo; exporte outro trecho sem
+     interrupção.
+   - **MP4/AVI:** não trazem hora. `--inicio` é a hora que aparece na imagem
+     no 1º segundo:
+     ```
+     python leitor_camera.py --arquivo video.mp4 --inicio 10:01:06
+     ```
+
+   **Nunca use a hora do nome do arquivo** que o SIM Play dá: o gravador
+   entrega a partir de um quadro antes do pedido (no teste, o nome dizia
+   10:29:56 e o vídeo começava em 10:29:53).
+
    O resultado fica em `dados\videos\video.csv` (pasta separada: nunca se
    mistura com as planilhas do dia).
 5. Um analista marca **o mesmo vídeo** à mão no app (Cronometrar por vídeo).
+   **O app não abre `.dav`**: converta antes com o `converter.bat`
+   ([seção 7](#7-marcar-no-app-um-vídeo-do-gravador)). O MP4 começa no mesmo
+   quadro do `.dav`: o segundo *t* do vídeo no app é o início lido pelo
+   leitor + *t*. Marque no MP4, rode o leitor no `.dav`.
    A tela diz "Enter a cada volume que fecha"; para esta validação — e para
    todos os analistas, sempre — **"fecha" = a frente da caixa toca o tapete
    verde**. É o instante que o leitor grava na coluna `entrou`, e o intervalo
@@ -163,6 +188,40 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
 - `python leitor_camera.py --foto` — alguém mexeu na câmera?
 - **Total de volumes da semana × ERP.** Diferença acima de 2%: investigar
   antes de usar o número.
+
+## 7. Marcar no app um vídeo do gravador
+
+O "Cronometrar por vídeo" do app não abre `.dav`: o navegador não lê esse
+formato, e muitos PCs não tocam o H.265 que vem dentro dele. O `converter.bat`
+transforma o `.dav` em MP4 que o app abre.
+
+1. No PC precisa ter **Python** e **ffmpeg** (passo 1; o `numpy` não é
+   necessário para converter). Copie para ele, no mínimo, `converter.bat` e
+   `converter.py` (e o `ffmpeg.exe`, se o ffmpeg foi copiado em vez de
+   instalado).
+2. Exporte o período pelo SIM Play (passo 2.1).
+3. **Arraste o `.dav` (um ou vários) em cima do `converter.bat`.** O `.mp4` sai
+   na mesma pasta do `.dav`, com o mesmo nome. A janela mostra a porcentagem e
+   quanto falta; o tempo depende do PC, e 1 hora de vídeo pode levar vários
+   minutos. O MP4 sai sem som e com 960 de largura (uns 600 MB por hora).
+4. No app, abra o `.mp4`. O **início da filmagem** já vem preenchido com a hora
+   gravada no `.dav`: o conversor acerta a data do arquivo para isso. Confira
+   com a hora escrita na imagem no começo do vídeo; a imagem pode estar até 1 s
+   atrás. **Se o MP4 foi copiado por WhatsApp, e-mail ou download**, a data do
+   arquivo se perde e a sugestão sai errada: corrija o campo pela imagem. Por
+   pen drive ela pode variar 1–2 s.
+5. Se a janela disser **"salto no relógio"**, a gravação foi interrompida no
+   meio do trecho (ou o relógio do gravador foi acertado). No app, tudo o que
+   vem depois do salto fica com a hora errada, e uma medição que o atravessa
+   sai mais curta do que foi: 1 h com 20 min sem gravação viraria 40 min, com
+   o ritmo 1,5× maior. Meça só até o salto (a hora escrita na imagem pula) ou
+   exporte outro trecho sem interrupção.
+
+- MP4 que já existe não é convertido de novo (a marcação em andamento no app
+  está presa àquele arquivo). Para refazer, apague o `.mp4`.
+- Fechar a janela no meio não deixa MP4 pela metade com cara de pronto: o
+  arquivo só ganha o nome final quando termina. Sobra um `.convertendo.mp4`,
+  que pode ser apagado (a próxima conversão também o substitui).
 
 ## Limites — o que ele NÃO vê
 
