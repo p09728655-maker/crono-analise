@@ -352,3 +352,99 @@ describe('a leitura no painel, pelo servidor', () => {
     expect(idas).toBe(4); // voltou ok: 10 min de novo
   });
 });
+
+/**
+ * PELA ESTEIRA (v2.111.0, .gs v5.65). PPCP, 12/11/2026, com o RACK MOVE 1.6
+ * na tela (alvo 32,3 s pela UEP; medido 25,2 s com as paradas, 18,2 s sem as
+ * lacunas): "tempo alvo está equivocado" → "hoje temos tamanho da caixa,
+ * velocidade da esteira" → "85 ok".
+ *   esteira = (medida + entre-peças) ÷ velocidade · alvo = esteira ÷ 85%
+ */
+describe('o tempo-alvo pela esteira (.gs v5.65)', () => {
+  const PAINEL_ESTEIRA = {
+    ok: true,
+    ref: {
+      metodo: 'esteira', eficiencia: 85, eficienciaOrigem: 'planilha',
+      metaUep: 2761, metaOrigem: 'planilha', minDia: 527, setupsDia: 4, setupMin: 8.2, setupOrigem: 'planilha',
+      setupDia: 32.8, minProd: 494.2, sUep: 10.739,
+    },
+    produtos: [
+      { rot: '501151 · RACK MOVE 1.6', uep: 3.01, esteira: 16.51, alvo: 19.42, medida: 2076, vel: 9, entre: 400 },
+      { rot: '501059 · PENTEADEIRA CAMARIM STRASS', uep: 1.63, esteira: 12.83, alvo: 15.09, medida: null, vel: null, entre: null },
+      { rot: '501160 · BERCO ALGODAO DOCE · VOL 1/2', uep: 1.5, esteira: null, alvo: null, medida: null, vel: null, entre: null },
+    ],
+    semanas: [{ de: '09/11/2026', ate: '15/11/2026', atual: true, sUep: 10.15, pede: 105.8, uep: 14504, nUteis: 5 }],
+  };
+  const L = respostaDosAlvos(PAINEL_ESTEIRA);
+  const QUINTA = new Date('2026-11-12T17:42:00Z');
+
+  it('o servidor lê o método, a eficiência e, por produto, a esteira e a caixa (só com os três)', () => {
+    expect(L.ref).toMatchObject({ metodo: 'esteira', eficiencia: 85, eficienciaOrigem: 'planilha' });
+    expect(L.produtos[0]).toEqual({
+      rot: '501151 · RACK MOVE 1.6', uep: 3.01, alvoMs: 19420, esteiraMs: 16510, medida: 2076, vel: 9, entre: 400,
+    });
+    expect(L.produtos[1]).toMatchObject({ esteiraMs: 12830, medida: null, vel: null, entre: null });
+    expect(L.produtos[2]).toMatchObject({ alvoMs: null, esteiraMs: null });
+    // o painel antigo (sem metodo) continua pela UEP, sem os campos novos
+    expect(LIDO.ref.metodo).toBe('uep');
+    expect(LIDO.produtos[0]).not.toHaveProperty('esteiraMs');
+    // pela esteira sem a eficiência: erro com o motivo, nunca um alvo sem régua
+    const semEf = respostaDosAlvos({ ...PAINEL_ESTEIRA, ref: { ...PAINEL_ESTEIRA.ref, eficiencia: null } });
+    expect(semEf).toEqual({ estado: 'erro', mensagem: 'O painel mandou os tempos-alvo pela esteira sem a eficiência da embalagem.' });
+  });
+
+  it('o RACK MOVE 1.6: 19.4 s, e a conta por extenso — a mesma frase no tablet, no PC e na folha', () => {
+    const a = alvoDoProduto(L, '501151 · RACK MOVE 1.6', { data: QUINTA });
+    expect(a).toMatchObject({ estado: 'ok', alvoMs: 19420, metodo: 'esteira', eficiencia: 85, esteiraMs: 16510, medida: 2076 });
+    expect(alvoEmSegundos(a)).toBe('19.4 s');
+    expect(contaDoAlvo(a)).toBe('16.51 s de esteira ÷ 85%');
+    expect(explicacaoDoAlvo(a)).toBe('Tempo-alvo = (2076 + 400) mm ÷ 9 m/min = 16.5 s de esteira, ÷ 85% = 19.4 s por volume. '
+      + 'Os 85% são a eficiência da embalagem do painel: a linha com o produto rodando, paradas e lacunas dentro.');
+    // o produto inteiro com volumes de caixas diferentes: a esteira média, sem a medida
+    expect(explicacaoDoAlvo(alvoDoProduto(L, '501059 · PENTEADEIRA CAMARIM STRASS', { data: QUINTA })))
+      .toMatch(/^Tempo-alvo = 12\.8 s de esteira \(a média por caixa dos volumes\), ÷ 85% = 15\.1 s por volume\./);
+    // eficiência com casa
+    const L825 = respostaDosAlvos({ ...PAINEL_ESTEIRA, ref: { ...PAINEL_ESTEIRA.ref, eficiencia: 82.5 } });
+    expect(contaDoAlvo(alvoDoProduto(L825, '501151 · RACK MOVE 1.6'))).toBe('16.51 s de esteira ÷ 82.5%');
+  });
+
+  it('sem medida da caixa (mesmo com UEP): sem alvo, com o motivo da esteira — nunca a UEP no lugar', () => {
+    const a = alvoDoProduto(L, '501160 · BERCO ALGODAO DOCE · VOL 1/2');
+    expect(a).toEqual({ alvoMs: null, estado: 'sem-esteira', rot: '501160 · BERCO ALGODAO DOCE · VOL 1/2' });
+    expect(semAlvo('sem-esteira')).toMatch(/medida da caixa ou a velocidade da esteira/);
+    expect(semAlvoCurto('sem-esteira')).toBe('produto sem medida da caixa no painel');
+  });
+
+  it('a semana: só a carga em % da média, sem segundos no produto (a média do dia não se compara com o alvo rodando)', () => {
+    const a = alvoDoProduto(L, '501151 · RACK MOVE 1.6', { data: QUINTA });
+    expect(a.semana).toMatchObject({ de: '09/11/2026', pede: 105.8, taktMs: null, esteira: true });
+    expect(fraseDaSemana(a)).toBe('A programação da semana de 09/11 pede 105.8% da média da linha — '
+      + 'acima do que a linha entrega em média. É a carga da semana: não julga o produto.');
+    expect(fraseDaSemana(a, { curta: true })).toBe('a semana pede 105.8% da média');
+    expect(vereditoDaSemana({ pede: 95, cxSemUep: 0 }, { esteira: true })).toBe('dentro do que a linha entrega em média');
+    expect(vereditoDaSemana({ pede: 95, cxSemUep: 3 }, { esteira: true })).toMatch(/^sem contar 3 caixas sem UEP/);
+    // nunca "no tempo-alvo, ela não fecha": o alvo rodando não diz quanto o dia entrega
+    expect(fraseDaSemana(a)).not.toMatch(/no tempo-alvo/);
+    expect(semanaDoProduto({ de: '09/11/2026', ate: '15/11/2026', sUep: null, pede: null }, 3.01, { esteira: true })).toBeNull();
+  });
+
+  it('medido × alvo: a esteira de cada produto e nenhuma coluna de segundos da semana', () => {
+    const m = medidoXAlvo(L, [], () => 0, QUINTA);
+    expect(m.esteira).toBe(true);
+    expect(m.semana).toMatchObject({ pede: 105.8, esteira: true });
+    expect(m.todos.find((l) => l.rot === '501151 · RACK MOVE 1.6')).toMatchObject({ alvoMs: 19420, esteiraMs: 16510, semanaMs: null });
+  });
+
+  it('o setup marcado entre os toques sai do período sempre (o alvo é com o produto rodando), mesmo com o ⚙ sem setup', () => {
+    const a = alvoDoProduto(L, '501151 · RACK MOVE 1.6');
+    expect(descontaSetup(a, { setupPlanejado: false })).toBe(true);
+    expect(descontaSetup({ ...a, setupDia: 0 }, null)).toBe(true);
+    // pela UEP, como antes: segue o setup do painel
+    expect(descontaSetup({ ...alvoDoProduto(LIDO, '501149 · MESA CABECEIRA MADERO'), setupDia: 0 }, { setupPlanejado: true })).toBe(false);
+  });
+
+  it('a régua de todos os alvos, por extenso, para o quadro do PC', () => {
+    expect(explicacaoDaRegua(L.ref)).toBe('Tempo-alvo de cada produto = a esteira dele — (medida da caixa + entre-peças) ÷ velocidade, '
+      + 'do cadastro do painel — ÷ 85%. Os 85% são a eficiência da embalagem do painel: a linha com o produto rodando, paradas e lacunas dentro.');
+  });
+});

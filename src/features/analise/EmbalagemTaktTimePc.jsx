@@ -129,7 +129,7 @@ export default function EmbalagemTaktTimePc({
   const alvos = useTemposAlvo();
   const alvosLido = alvos.lido;
   // v2.107.0: o takt desta semana em s por UEP, do painel (.gs v5.63); null sem ele
-  const semanaAgora = (() => { const w = semanaDaData(alvosLido); return w && w.sUep > 0 ? w : null; })();
+  const semanaAgora = (() => { const w = semanaDaData(alvosLido); return w && (w.sUep > 0 || w.pede > 0) ? w : null; })();
   const [carga, setCarga] = useState({ estado: 'carregando' });
   const [aberta, setAberta] = useState(null);
   // 'fila' (as nao analisadas), 'analisadas' ou 'outras' (sem intervalos).
@@ -619,6 +619,20 @@ export default function EmbalagemTaktTimePc({
                 {/* A REGUA DO VEREDITO (v2.106.0): o tempo-alvo de cada produto
                     = estes segundos por UEP × a UEP dele. O takt, ao lado, e' a
                     carga da semana. */}
+                {/* v2.111.0 (.gs v5.65): pela ESTEIRA — o cartao diz a eficiencia (o ⚙ do
+                    painel) e a carga da semana em %, sem segundos por UEP. */}
+                {alvos.lido?.estado === 'ok' && alvos.lido.ref.metodo === 'esteira' ? (
+                  <div style={est.kpi}>
+                    <div style={est.kpiRotulo}>Tempo-alvo · esteira ÷ eficiência</div>
+                    <div style={est.kpiValor}>{alvos.lido.ref.eficiencia}%</div>
+                    <div style={est.kpiSub}>
+                      {'(medida da caixa + entre-peças) ÷ velocidade, de cada produto · ÷ a eficiência da embalagem do ⚙ do painel'}
+                      {alvos.lido.ref.eficienciaOrigem === 'padrao' ? ' (o padrão: o ⚙ ainda não tem)' : ''}
+                      {semanaAgora?.pede > 0 ? ` · esta semana pede ${semanaAgora.pede.toFixed(1)}% da média da linha` : ''}
+                      {idadeDoAlvo(alvos.lido.lidoEm) ? ` · ${idadeDoAlvo(alvos.lido.lidoEm)}` : ''}
+                    </div>
+                  </div>
+                ) : (
                 <div style={est.kpi}>
                   <div style={est.kpiRotulo}>Tempo-alvo · por UEP</div>
                   <div style={est.kpiValor}>
@@ -627,11 +641,12 @@ export default function EmbalagemTaktTimePc({
                   <div style={est.kpiSub}>
                     {alvos.lido?.estado === 'ok'
                       ? `× a UEP do produto · média da linha ${Math.round(alvos.lido.ref.metaUep)} UEP/dia, sem o setup (${alvos.lido.ref.setupDia} min/dia) · do painel`
-                        + `${semanaAgora ? ` · esta semana pede ${semanaAgora.sUep.toFixed(2)} s por UEP (${semanaAgora.pede != null ? `${semanaAgora.pede.toFixed(1)}%` : '—'} da média)` : ''}`
+                        + `${semanaAgora?.sUep > 0 ? ` · esta semana pede ${semanaAgora.sUep.toFixed(2)} s por UEP (${semanaAgora.pede != null ? `${semanaAgora.pede.toFixed(1)}%` : '—'} da média)` : ''}`
                         + `${idadeDoAlvo(alvos.lido.lidoEm) ? ` · ${idadeDoAlvo(alvos.lido.lidoEm)}` : ''}`
                       : semAlvo(alvos.lido ? alvos.lido.estado : alvos.semRede ? 'sem-rede' : 'carregando', alvos.lido?.mensagem)}
                   </div>
                 </div>
+                )}
                 <div style={est.kpi}>
                   <div style={est.kpiRotulo}>Medições em {DIAS} dias</div>
                   <div style={est.kpiValor}>{leitura.medicoes.length}</div>
@@ -706,12 +721,22 @@ export default function EmbalagemTaktTimePc({
                 </div>
               )}
 
-              <p style={est.painelDica}>
-                Cada medição é julgada contra o TEMPO-ALVO do produto: os segundos por UEP da média
-                da linha sem hora extra (a META UEP do painel, já sem o setup) × a UEP do volume, do
-                cadastro do painel. É o de hoje: medição antiga é lida com a UEP e a meta de agora.
-                Produto sem UEP fica sem veredito.
-              </p>
+              {alvosLido?.estado === 'ok' && alvosLido.ref.metodo === 'esteira' ? (
+                <p style={est.painelDica}>
+                  Cada medição é julgada contra o TEMPO-ALVO do produto: a esteira dele — (medida da
+                  caixa + entre-peças) ÷ velocidade, do cadastro do painel — ÷ a eficiência da embalagem
+                  do ⚙ do painel ({alvosLido.ref.eficiencia}%). É o de hoje: medição antiga é lida com a
+                  caixa e a eficiência de agora. Produto sem a medida da caixa ou a velocidade fica sem
+                  veredito.
+                </p>
+              ) : (
+                <p style={est.painelDica}>
+                  Cada medição é julgada contra o TEMPO-ALVO do produto: os segundos por UEP da média
+                  da linha sem hora extra (a META UEP do painel, já sem o setup) × a UEP do volume, do
+                  cadastro do painel. É o de hoje: medição antiga é lida com a UEP e a meta de agora.
+                  Produto sem UEP fica sem veredito.
+                </p>
+              )}
               <p style={est.painelDica}>
                 O takt é a carga da semana, igual para todo volume, e não julga o produto: é o
                 programa da semana do grupo EMBALAGEM — em VOLUMES, não em produtos,

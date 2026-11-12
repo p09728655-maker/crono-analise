@@ -120,6 +120,44 @@ Função própria, separada do ritmo por máquina: na embalagem a pergunta não 
 quantas peças por hora, é **se cada volume embalado sai dentro do tempo-alvo
 do produto dele**.
 
+- **DESDE A v2.111.0 (painel `.gs` v5.65) O TEMPO-ALVO É PELA ESTEIRA.** PPCP,
+  12/11/2026, com o RACK MOVE 1.6 na tela (alvo 32,3 s pela UEP; medido 25,2 s
+  com as paradas e 18,2 s sem as lacunas): *"tempo alvo está equivocado"* →
+  *"hoje temos tamanho da caixa, velocidade da esteira"* → *"85 ok"* → *"no
+  painel, onde eu possa atualizar"*.
+
+  ```
+  esteira    = (MEDIDA DA CAIXA + ENTRE_PECAS) mm ÷ VELOCIDADE m/min   (PRODUTO_CODIGO do painel)
+  tempo-alvo = esteira ÷ EFICIÊNCIA DA EMBALAGEM                        (⚙ do painel, EFICIENCIA_EMB, padrão 85%)
+  ```
+
+  - **Por quê:** a UEP é medida contra os 6,7 s LIMPOS da MADERO e os 10,74 s
+    por UEP são a MÉDIA do dia (perdas dentro): o alvo saía 1,6 × o trabalho
+    limpo, e 62 de 68 medições ficavam abaixo dele. Nas 69 medições da aba
+    CRONOANALISE do painel, o *sem as lacunas* dá 0,99 × a esteira, sem ajuste.
+  - **Os 85% são da linha com o produto rodando** (paradas, lacunas e fadiga
+    dentro), não a meta do dia. A conta mora no painel (`_temposAlvoMontar`);
+    o servidor lê `ref.metodo` (`esteira`; sem ele, o painel antigo: `uep`,
+    tudo como antes), `ref.eficiencia` e, por produto, `esteira`, `medida`,
+    `vel`, `entre` (`respostaDosAlvos`). Produto sem medida ou velocidade:
+    `sem-esteira`, sem alvo e sem cor — nunca a UEP no lugar.
+  - **A conta escrita** (`explicacaoDoAlvo`): *"Tempo-alvo = (2076 + 400) mm ÷ 9
+    m/min = 16.5 s de esteira, ÷ 85% = 19.4 s por volume. Os 85% são a
+    eficiência da embalagem do painel: a linha com o produto rodando, paradas e
+    lacunas dentro."* Produto inteiro com volumes de caixas diferentes: a
+    esteira média por caixa, sem a medida.
+  - **A carga da semana fica só em %** (`fraseDaSemana`, `semanaDoProduto(…,
+    { esteira: true })` com `taktMs` null): *"A programação da semana de 09/11
+    pede 105.8% da média da linha — acima do que a linha entrega em média."*
+    Os segundos por UEP da semana são da média do dia; ao lado de um alvo com o
+    produto rodando, "a semana pede X s" pareceria folga. O cronômetro volta a
+    3 números e escreve o % na linha da carga; o PC tira a coluna *Esta semana
+    pede* e mostra a esteira de cada produto no lugar da UEP.
+  - **O setup marcado entre os toques sai sempre** (`descontaSetup`): a troca
+    de produto não é o produto rodando.
+  - O que segue abaixo sobre a régua da UEP (10,74 s por UEP, "a semana pede X
+    s") vale para o painel antes da v5.65.
+
 - **A RÉGUA DO VEREDITO É O TEMPO-ALVO (v2.106.0)**, não mais o takt da semana.
   PPCP, 11/11/2026: o takt (horas da semana ÷ volumes programados) é um número
   só para todo volume — o produto pesado saía sempre vermelho e o leve sempre

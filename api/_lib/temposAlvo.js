@@ -19,6 +19,13 @@
  * v2.107.0: junto vem o takt de cada semana em segundos por UEP (.gs v5.63),
  * para a linha "a semana pede X s" de cada produto (ver domain/tempoAlvo.js).
  *
+ * v2.111.0 (.gs v5.65, PPCP 12/11/2026: "tempo alvo está equivocado" →
+ * "tamanho da caixa, velocidade da esteira" → "85 ok"): o alvo passa a ser
+ * PELA ESTEIRA — (medida da caixa + entre-peças) ÷ velocidade ÷ a eficiência
+ * da embalagem do ⚙ do painel. A ref diz o metodo ('esteira'; sem ele, o
+ * painel antigo: 'uep') e a eficiencia; cada produto traz a esteira e a caixa
+ * (medida, velocidade, entre-peças) para a tela escrever a conta.
+ *
  * Mora em /maquinas (?alvo=1) pela mesma razao da demanda: o plano Hobby da
  * Vercel aceita 12 funcoes e o projeto esta' nelas. Qualquer usuario logado
  * le (o tablet da embalagem precisa); nada e' gravado.
@@ -45,7 +52,12 @@ export function respostaDosAlvos(corpo) {
   const objeto = corpo && typeof corpo === 'object' && !Array.isArray(corpo);
   if (objeto && corpo.ok === true && Array.isArray(corpo.produtos) && corpo.ref && typeof corpo.ref === 'object') {
     const r = corpo.ref;
+    const ef = positivo(r.eficiencia);
     const ref = {
+      // .gs v5.65: o alvo pela esteira; sem o campo, o painel antigo (pela UEP)
+      metodo: r.metodo === 'esteira' ? 'esteira' : 'uep',
+      eficiencia: ef && ef <= 100 ? ef : null,
+      eficienciaOrigem: r.eficienciaOrigem === 'planilha' ? 'planilha' : 'padrao',
       metaUep: positivo(r.metaUep),
       metaOrigem: r.metaOrigem === 'planilha' ? 'planilha' : 'padrao',
       setupsDia: naoNegativo(r.setupsDia),
@@ -59,11 +71,22 @@ export function respostaDosAlvos(corpo) {
     if (!ref.metaUep || !ref.sUep) {
       return { estado: 'erro', mensagem: 'O painel mandou os tempos-alvo sem a régua (META UEP e segundos por UEP).' };
     }
+    if (ref.metodo === 'esteira' && !ref.eficiencia) {
+      return { estado: 'erro', mensagem: 'O painel mandou os tempos-alvo pela esteira sem a eficiência da embalagem.' };
+    }
     const produtos = corpo.produtos.slice(0, MAX_PRODUTOS)
       .filter((p) => p && typeof p.rot === 'string' && p.rot.trim())
       .map((p) => {
         const alvo = positivo(p.alvo);
-        return { rot: p.rot.trim().replace(/\s+/g, ' '), uep: positivo(p.uep), alvoMs: alvo ? Math.round(alvo * 1000) : null };
+        const linha = { rot: p.rot.trim().replace(/\s+/g, ' '), uep: positivo(p.uep), alvoMs: alvo ? Math.round(alvo * 1000) : null };
+        if (ref.metodo !== 'esteira') return linha;
+        // a caixa so' com os tres: sem um deles, a tela escreve so' a esteira (o jogo, a media por caixa)
+        const esteira = positivo(p.esteira), medida = positivo(p.medida), vel = positivo(p.vel), entre = naoNegativo(p.entre);
+        const caixa = medida && vel && entre != null;
+        return {
+          ...linha, esteiraMs: esteira ? Math.round(esteira * 1000) : null,
+          medida: caixa ? medida : null, vel: caixa ? vel : null, entre: caixa ? entre : null,
+        };
       });
     return { estado: 'ok', ref, produtos, semanas: semanasDoPainel(corpo.semanas) };
   }
