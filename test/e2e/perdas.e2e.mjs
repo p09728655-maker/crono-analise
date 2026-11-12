@@ -126,6 +126,8 @@ checar(/SEM PRODUZIR 22\.7%/i.test(textoResumo), `sem produzir: 150 s de 660 s =
 checar(/POR VOLUME NO PERÍODO 21\.3 s/i.test(textoResumo) && /POR VOLUME RODANDO 16\.5 s/i.test(textoResumo),
   'por volume: 21.3 s no periodo (660/31) e 16.5 s rodando ((200+220+90)/31)');
 checar(/LACUNAS 1 min[\s\S]*1 lacuna entre volumes/i.test(textoResumo), 'lacunas: a lacuna de 80 s (no singular)');
+checar(/PARADAS NO CRONÔMETRO 1 min/i.test(textoResumo) && !/PARADAS (NÃO )?MARCADAS/i.test(textoResumo),
+  'o cartao do cronometro com o nome novo (70 s), nenhum "Paradas marcadas"/"nao marcadas"');
 const base = await p.getByLabel('Base do relatório').innerText();
 checar(/3 medições/.test(base) && /1 medição do mesmo trecho \(tablet e vídeo\) contada uma vez só/.test(base),
   `o tablet no mesmo trecho do video conta uma vez so (${base})`);
@@ -141,7 +143,7 @@ checar(/O que as perdas custam 12 h/.test(textoHora), 'o que as perdas custam: ~
 /* ---------------------------------------------------------- os motivos */
 const motivos = p.getByRole('region', { name: 'Paradas por motivo' });
 const textoMotivos = (await motivos.innerText()).replace(/\s+/g, ' ');
-checar(/71\.4% do tempo parado está em “Outro”/.test(textoMotivos),
+checar(/71\.4% das paradas da lista estão em “Outro”/.test(textoMotivos),
   `o "Outro" apontado: 50 s de 70 s sem motivo (${textoMotivos.slice(0, 200)})`);
 checar(textoMotivos.indexOf('Outro') < textoMotivos.indexOf('Troca Plástico') && /2×/.test(textoMotivos),
   'os motivos, o maior primeiro, com quantas vezes');
@@ -180,6 +182,8 @@ await p.getByRole('button', { name: 'Imprimir' }).click();
     && /Outro/.test(folha.texto) && /RACK FLIP 2\.2/.test(folha.texto) && /MESA SLEEP/.test(folha.texto)
     && /Coordenador PPCP/.test(folha.texto),
     `a folha traz o resumo, a hora extra, os motivos, TODOS os produtos e as assinaturas (${folha.texto.slice(0, 160)})`);
+  checar(/Paradas no cronômetro/i.test(folha.texto) && /Lacunas/.test(folha.texto) && !/Paradas (não )?marcadas/i.test(folha.texto),
+    'a folha usa os nomes novos (Paradas no cronometro, Lacunas), nenhum "Paradas marcadas"');
   await p.emulateMedia({ media: 'screen' });
 }
 

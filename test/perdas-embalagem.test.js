@@ -348,7 +348,8 @@ describe('revisao da v2.110.2', () => {
   });
   it('a sobra do setup abatido: arredondamento da lista some, segundos de verdade ficam', () => {
     const base = { v1: 60, noTrecho: 600, marcas_setup_ms: s(600), intervalos: Array(39).fill(60) };
-    // Gravada em minutos com 2 casas: 600.3 s na lista, 600 s no relogio.
+    // 0.3 s a mais na lista que no relogio (o arredondamento em minutos com
+    // 2 casas: ate' 0.3 s por parada).
     const arredondada = relatorioDePerdas([comoOTablet({ ...base, paradas: [{ motivo: 'setup', duracaoMs: 600300 }] })],
       { descontarSetupDe: () => true });
     expect(arredondada.setupForaMs).toBe(s(600));

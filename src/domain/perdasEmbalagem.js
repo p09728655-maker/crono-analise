@@ -174,12 +174,12 @@ function somar(lidas) {
 
 /**
  * O RELATORIO: total, por produto (do que mais perdeu tempo ao que menos) e
- * as paradas marcadas por motivo.
+ * as paradas da lista por motivo.
  *
- * As paradas por motivo vem da lista de cada medicao — inclusive as
- * marcadas antes do 1o volume ou depois do ultimo, que ficam fora do
- * relogio do trecho: a soma delas pode passar um pouco das "paradas" do
- * total, e a tela diz isso. Na medicao com o setup fora da conta, o MESMO
+ * O quadro dos motivos vem da LISTA de cada medicao — inclusive as paradas
+ * antes do 1o volume ou depois do ultimo e as anotadas depois, que nao
+ * estao nas "paradas" do cronometro: a soma pode ser bem diferente delas,
+ * e a tela diz isso. Na medicao com o setup fora da conta, o MESMO
  * setup que saiu do relogio (o marcado ao vivo entre os volumes) sai daqui
  * tambem — `setupForaMs` diz quanto. O setup antes do 1o volume ou anotado
  * depois fica no quadro: nao saiu da conta.
@@ -222,6 +222,8 @@ export function relatorioDePerdas(medicoes, { descontarSetupDe = () => false } =
     // horario, e a troca que caiu no trecho e' a que tem o tamanho dele (a de
     // 20 min antes do 1o volume nao vira "2×").
     const abate = new Map();
+    // A folga do arredondamento cresce com as trocas abatidas: o erro de
+    // cada uma se acumula na ultima.
     let setupATirar = x.setupMs;
     const setups = lista.filter((p) => String(p?.motivo) === MOTIVO_SETUP && duracaoDa(p) > 0)
       .sort((a, b) => Math.abs(duracaoDa(a) - setupATirar) - Math.abs(duracaoDa(b) - setupATirar));
@@ -239,7 +241,7 @@ export function relatorioDePerdas(medicoes, { descontarSetupDe = () => false } =
       if (abate.has(p)) {
         ms -= abate.get(p);
         // O que sobrou dela e' arredondamento da lista, nao parada.
-        if (ms < folgaDaLista(1)) continue;
+        if (ms < folgaDaLista(abate.size)) continue;
       }
       const m = motivosMapa.get(codigo) || { motivo: codigo, ms: 0, vezes: 0 };
       m.ms += ms;

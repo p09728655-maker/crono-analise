@@ -103,7 +103,7 @@ export default function ImpressaoPerdas({
 
       {r.porMotivo.length > 0 && (
         <section style={imp.comparativo}>
-          <h2 style={imp.tituloSecao}>Por que a linha parou — paradas com motivo</h2>
+          <h2 style={imp.tituloSecao}>Por que a linha parou — as paradas da lista, por motivo</h2>
           <table style={imp.tabela}>
             <thead>
               <tr>
@@ -127,11 +127,11 @@ export default function ImpressaoPerdas({
             </tbody>
           </table>
           <p style={imp.comparativoNota}>
-            {formatarDuracao(r.totalMotivosMs)} de paradas com motivo: as marcadas no cronômetro e as anotadas depois, também as
+            {formatarDuracao(r.totalMotivosMs)} de paradas na lista: as marcadas no cronômetro e as anotadas depois, também as
             de antes do 1º volume e depois do último. As lacunas ({formatarDuracao(total.lacunasMs)}) são as paradas que o
             cronômetro não tirou: a anotada depois que caiu entre os volumes e abriu uma lacuna tem o tempo lá e o motivo aqui.
             {r.setupForaMs > 0 && ` O setup planejado marcado entre os volumes (${formatarDuracao(r.setupForaMs)}) fica fora, como na conta.`}
-            {r.semDefinicaoPct >= 20 && ` ${pct(r.semDefinicaoPct)} do tempo parado está em “${rotuloMotivo(MOTIVO_SEM_DEFINICAO)}”: sem o motivo, não dá para atacar a causa.`}
+            {r.semDefinicaoPct >= 20 && ` ${pct(r.semDefinicaoPct)} das paradas da lista estão em “${rotuloMotivo(MOTIVO_SEM_DEFINICAO)}”: sem o motivo, não dá para atacar a causa.`}
           </p>
         </section>
       )}
@@ -148,7 +148,7 @@ export default function ImpressaoPerdas({
             <th style={imp.thNum}>Vol.</th>
             <th style={imp.thNum}>Período</th>
             <th style={imp.thNum}>Rodando</th>
-            <th style={imp.thNum}>Paradas</th>
+            <th style={imp.thNum}>Cronômetro</th>
             <th style={imp.thNum}>Lacunas</th>
             <th style={imp.thNum}>Sem produzir</th>
             <th style={imp.thNum}>Vol. perd.</th>
@@ -186,12 +186,12 @@ export default function ImpressaoPerdas({
           {[
             ['Medição', 'um trecho da linha medido no tablet ou no Cronometrar por vídeo, volume a volume.'],
             ['Sem produzir', 'paradas no cronômetro + lacunas, sobre o tempo do 1º ao último volume de cada medição. O setup planejado no cadastro do grupo fica fora, como nas horas da linha.'],
-            ['Paradas no cronômetro', 'tempo parado marcado ao vivo entre os volumes (tablet ou vídeo), com motivo.'],
-            ['Lacunas', 'intervalos entre volumes acima do dobro do normal: paradas que o cronômetro não tirou — também a anotada só depois, se caiu entre os volumes (o motivo dela está no quadro dos motivos). Conta só o excesso.'],
+            ['Paradas no cronômetro', 'o tempo que o cronômetro tirou entre os volumes: cada parada marcada ao vivo (tablet ou vídeo), com motivo. Na tabela dos produtos, coluna “Cronômetro”.'],
+            ['Lacunas', 'intervalos entre volumes acima do dobro do normal: paradas que o cronômetro não tirou — também a anotada só depois, se caiu entre os volumes e abriu uma lacuna (o motivo dela está no quadro dos motivos). Conta só o excesso.'],
             ['Setup', 'com setup planejado no cadastro do grupo, sai da conta o setup marcado no cronômetro entre os volumes; o anotado depois fica.'],
             ['Período', 'tempo por volume com tudo dentro — o que a linha entregou.'],
-            ['Rodando', 'tempo por volume da linha rodando, sem paradas e sem lacunas — o ritmo que ela provou.'],
-            ['Vol. perdidos', 'volumes que teriam saído no tempo parado, no ritmo rodando do próprio produto.'],
+            ['Rodando', 'tempo por volume da linha rodando, sem as paradas do cronômetro e sem as lacunas — o ritmo que ela provou.'],
+            ['Vol. perdidos', 'volumes que teriam saído no tempo sem produzir, no ritmo rodando do próprio produto.'],
             ['Hora extra', 'o programa da semana no ritmo medido contra as horas da linha (as do takt). No ritmo rodando, a mesma conta mostra o que as perdas custam.'],
             ['Amostra', 'as medições são escolhidas por quem mede; a curta costuma pegar o trecho bom. A perda real do dia tende a ser maior.'],
             ['Produto', 'nomes iguais com e sem o código juntam; nome digitado diferente fica separado.'],
