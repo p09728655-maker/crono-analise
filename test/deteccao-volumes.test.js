@@ -288,6 +288,17 @@ describe('as marcas pela SAIDA da caixa (v2.109.0): o fim sai do rolete e entra 
     expect(d.permanenciaMinimaMs).toBeGreaterThan(800);
     expect(d.permanenciaMinimaMs).toBeLessThan(1400);
   });
+  it('uma MAO EM TODO CICLO (tantas passagens curtas quanto caixas) nao vira volume', () => {
+    // Com a mediana, o limite caia para 0,88 s e as 10 maos de 0,9 s viravam
+    // volume — o ritmo quase dobrava (revisao de 12/11). Com o percentil 75, nao.
+    const caixas = Array.from({ length: 10 }, (_, i) => [10 + 24 * i, 12.5 + 24 * i]);
+    const maos = Array.from({ length: 10 }, (_, i) => [22 + 24 * i, 22.9 + 24 * i]);
+    const d = detectarVolumes(sinal({ duracao: 260, caixas: [...caixas, ...maos] }));
+    const r = saidasDosVolumes(d);
+    expect(r.marcasMs).toHaveLength(10);
+    expect(r.descartados).toHaveLength(10);
+    expect(d.permanenciaMinimaMs).toBeGreaterThan(1000);
+  });
   it('retangulo grande (caixas de 7 s): o vulto de 1 s continua descartado pelo limite do proprio video', () => {
     const d = detectarVolumes(sinal({ caixas: [[5, 12], [20, 21], [30, 37], [45, 52]] }));
     expect(d.volumes).toHaveLength(3);

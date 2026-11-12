@@ -539,7 +539,7 @@ class Detector:
         if self.primeira_leitura:
             self.primeira_leitura = False
             if media > self.cfg['limiar_entra']:
-                # Já havia volume embaixo do filme quando o leitor começou:
+                # Já havia volume na faixa quando o leitor começou:
                 # ele conta quando sair, mas a hora de entrada é desconhecida.
                 self.dentro, self.parcial = True, True
                 return
@@ -549,7 +549,7 @@ class Detector:
         elif self.dentro and media < self.cfg['limiar_sai']:
             self.dentro = False
             if self.parcial:
-                self._registrar(None, agora, 'já estava no filme quando a leitura começou')
+                self._registrar(None, agora, 'já estava na faixa quando a leitura começou')
             elif (agora - self.entrou).total_seconds() < self.cfg['permanencia_minima_s']:
                 self.reg.log(f'descartado: papelão por só {(agora - self.entrou).total_seconds():.1f} s '
                              f'às {agora:%H:%M:%S} (pessoa ou reflexo?)')
@@ -577,7 +577,7 @@ class Detector:
 
     def fim(self, momento):
         if self.dentro:
-            self.reg.log(f'volume embaixo do filme quando o leitor parou ({momento:%H:%M:%S}): não contado')
+            self.reg.log(f'volume na faixa quando o leitor parou ({momento:%H:%M:%S}): não contado')
 
 
 def tirar_foto(cfg, arquivo, momento):
@@ -712,7 +712,7 @@ def main():
         # ENTRADA. Pela saida ele marcaria outro instante que o do tablet.
         print('ATENÇÃO: este config.json é de antes da marca na saída. A hora do volume agora é quando o fim\n'
               'da caixa sai do rolete e entra no tapete: refaça o retângulo como uma faixa fina sobre essa\n'
-              'passagem (LEIA-ME, passo 2.2), ponha "permanencia_minima_s": 1.0 e acrescente "marca": "saida".\n',
+              'passagem (LEIA-ME, passo 2.2), ponha "permanencia_minima_s": 1.5 e acrescente "marca": "saida".\n',
               flush=True)
     if not args.arquivo and any(p in cfg['camera'] for p in ('USUARIO:SENHA', 'IP_DO_GRAVADOR')):
         parar('A câmera ainda não está no config.json: troque USUARIO, SENHA e IP_DO_GRAVADOR '

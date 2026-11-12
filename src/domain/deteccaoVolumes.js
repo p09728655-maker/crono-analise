@@ -28,7 +28,10 @@ export const CONTRASTE_MINIMO = 0.15;
 export const JANELA_MS = 500;
 /**
  * PASSAGEM CURTA = PESSOA OU REFLEXO. Desde a v2.109.0 o limite sai do
- * PROPRIO video: metade da passagem tipica (a mediana) das caixas dele.
+ * PROPRIO video: metade do percentil 75 das passagens dele. O percentil 75,
+ * e nao a mediana: com uma mao em todo ciclo as passagens curtas sao metade
+ * da lista, a mediana caia no meio delas e as maos viravam volume (revisao
+ * de 12/11: o ritmo quase dobrava, sem aviso).
  * Com a faixa fina sobre a passagem do rolete, a caixa leva so' o tempo de
  * atravessar — 2 a 3 s na envolvedora —, e o minimo fixo de 2 s de antes
  * descartava caixa de verdade (revisao da v2.109.0: 3 de 9 sumiam e o ritmo
@@ -133,6 +136,14 @@ function cruzamento(a, b, limiar) {
   return a.ms + ((limiar - a.v) / (b.v - a.v)) * (b.ms - a.ms);
 }
 
+/** O percentil `q` (0 a 1), interpolado entre os vizinhos. */
+function percentil(xs, q) {
+  const o = [...xs].sort((a, b) => a - b);
+  const pos = (o.length - 1) * q;
+  const base = Math.floor(pos);
+  return o[base] + (o[Math.min(base + 1, o.length - 1)] - o[base]) * (pos - base);
+}
+
 const mediana = (xs) => {
   if (!xs.length) return null;
   const o = [...xs].sort((a, b) => a - b);
@@ -195,7 +206,7 @@ export function detectarVolumes(amostras, {
   // O limite da passagem curta: o dado (testes) ou o do proprio video.
   const longas = passagens.map((x) => x.saiuMs - x.entrouMs).filter((d) => d >= PISO_PERMANENCIA_MS);
   const limite = Number.isFinite(permanenciaMinimaMs) ? permanenciaMinimaMs
-    : longas.length >= 3 ? Math.max(PISO_PERMANENCIA_MS, FATOR_PERMANENCIA * mediana(longas)) : PISO_PERMANENCIA_MS;
+    : longas.length >= 3 ? Math.max(PISO_PERMANENCIA_MS, FATOR_PERMANENCIA * percentil(longas, 0.75)) : PISO_PERMANENCIA_MS;
   const volumes = passagens.filter((x) => x.saiuMs - x.entrouMs >= limite);
   const descartados = passagens.filter((x) => x.saiuMs - x.entrouMs < limite);
 

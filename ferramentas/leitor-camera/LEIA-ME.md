@@ -50,7 +50,7 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    próprio gravador, num horário de produção normal (sem almoço no meio).
    **Prefira o `.dav`**: o leitor abre direto e ele traz a hora gravada
    (passo 4). Se não abrir, exporte em MP4/AVI.
-2. Confira o retângulo num momento em que tem caixa embaixo do filme:
+2. Confira o retângulo num momento em que tem caixa passando do rolete para o tapete:
    ```
    python leitor_camera.py --arquivo video.mp4 --foto --momento 30
    ```
@@ -58,8 +58,9 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    sobre a passagem do rolete para o tapete verde, atravessando todo o caminho
    da caixa. **Os números do `config.exemplo.json` são só um ponto de partida:**
    a posição certa depende da câmera. Com a faixa fina a caixa leva uns 2 s
-   para atravessar, então `permanencia_minima_s` é 1.0 (abaixo disso é mão ou
-   reflexo); se o `--diagnostico` mostrar caixa passando mais rápido, baixe.
+   para atravessar, e o leitor mede a passagem uns 0,3 s mais longa que a real:
+   `permanencia_minima_s` é 1.5 (o vulto de 1 s, lido como 1,3 s, fica de fora).
+   Se o `--diagnostico` mostrar caixa passando mais rápido, baixe.
    `config.json` antigo (sem `"marca": "saida"`) faz o leitor avisar ao abrir.
    Cada linha branca da grade é 10% da imagem; as amarelas são o
    meio (50%). Ajuste no `config.json`: `x` e `y` = canto de cima à esquerda,
@@ -112,7 +113,7 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    - **entram** todas as marcas manuais, inclusive a 1ª (a largada também é
      uma caixa saindo do rolete);
    - **ficam de fora** as linhas do leitor que caem antes da largada ou
-     depois do Encerrar (com 3 s de folga). A linha "já estava no filme" tem
+     depois do Encerrar (com 3 s de folga). A linha "já estava na faixa" tem
      `entrou` vazio, mas a saída dela foi filmada: ela entra;
    - desconta-se a diferença fixa entre as duas marcações (a mediana de
      `saiu` − marca manual): o leitor marca quando a caixa já saiu de quase
@@ -169,7 +170,7 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
 
 - **Intervalo vazio não é erro**: é o 1º volume depois de **mais de 2 h sem
   volume** (noite, fim de semana, turno parado), o 1º depois de uma queda da
-  câmera, ou o que já estava no filme quando a leitura começou. Esses buracos
+  câmera, ou o que já estava na faixa quando a leitura começou. Esses buracos
   **não** viram ciclo. As 2 h podem ser mudadas com `"pausa_maxima_min"` no
   `config.json`. Turno que atravessa a meia-noite continua com o ciclo certo.
 - **O intervalo inclui as paradas** (almoço, falta de caixa, setup): a
@@ -188,7 +189,7 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
   outro, o segundo avisa e fecha — dois juntos contariam cada volume duas
   vezes. O `--diagnostico` pode rodar junto, para conferir a câmera.
 - `dados\leitor.log` registra quedas de câmera, papelão descartado (passou
-  menos de 2 s no retângulo: pessoa ou reflexo) e erro inesperado. A senha da
+  menos que `permanencia_minima_s` no retângulo: pessoa ou reflexo) e erro inesperado. A senha da
   câmera nunca aparece nele.
 - Não clique dentro da janela preta para selecionar texto: o leitor desliga
   esse modo, mas se a janela "congelar", aperte Esc.

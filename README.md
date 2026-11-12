@@ -415,14 +415,16 @@ do produto dele**.
   faixa durante a leitura: a que já estava no começo (`saidaDaQueJaEstava`)
   não conta — viraria a largada, que a lista não deixa apagar — e a que o vídeo
   cortou antes de sair também não (`semSaida`). A passagem curta (pessoa ou
-  reflexo) é a que dura menos de `FATOR_PERMANENCIA` (0,5) × a mediana das
-  passagens do próprio vídeo, com piso de 0,6 s: o mínimo fixo de 2 s descartava
+  reflexo) é a que dura menos de `FATOR_PERMANENCIA` (0,5) × o percentil 75 das
+  passagens do próprio vídeo (a mediana caía no meio das mãos quando havia uma
+  por ciclo), com piso de 0,6 s: o mínimo fixo de 2 s descartava
   caixa de verdade com a faixa fina (a caixa atravessa em 2 a 3 s). O retângulo
   guardado por máquina ganha `evento: 'saida'`; com o de antes (sem ele,
   desenhado para a entrada embaixo do filme) a tela só deixa redesenhar, e a
   conferência de uma leitura antiga avisa que foi na entrada. O leitor de
   câmera segue o mesmo padrão: intervalo de saída a saída, validação pela
-  coluna `saiu`, `permanencia_minima_s` 1.0 no exemplo e aviso ao abrir com
+  coluna `saiu`, `permanencia_minima_s` 1.5 no exemplo (o leitor lê a passagem
+  ~0,3 s mais longa) e aviso ao abrir com
   `config.json` sem `"marca": "saida"`.
 - **A tela de marcar por vídeo com a visão do tablet** (v2.108.0): o painel do
   topo da coluna da direita é o `PainelTakt` do cronômetro do tablet

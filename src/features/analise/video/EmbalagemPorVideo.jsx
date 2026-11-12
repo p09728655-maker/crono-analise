@@ -11,7 +11,8 @@ import {
   marcacaoDasEntradas, marcacaoVazia, marcarToque, marcasGuardadas, medicaoDoVideo, removerParada, removerVolume,
 } from '../../../domain/medicaoPorVideo.js';
 import {
-  areaDaImagem, detectarVolumes, intervalosLongos, pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes,
+  PISO_PERMANENCIA_MS, areaDaImagem, detectarVolumes, intervalosLongos, pontoNaImagem, retanguloEntre,
+  retanguloValido, saidasDosVolumes,
 } from '../../../domain/deteccaoVolumes.js';
 import { analisarVideo } from '../../../lib/analisarVideo.js';
 import {
@@ -1756,7 +1757,11 @@ function MarcacaoAutomatica({
           {resultado?.descartados.length > 0 && (
             <p style={ev.dica}>
               Passagens curtas ignoradas
-              {resultado.limiteCurtaMs ? ` (menos de ${formatarSegundos(resultado.limiteCurtaMs)} s no retângulo, metade do que as caixas deste vídeo levaram)` : ''}
+              {/* O limite sai das passagens deste video; no piso (poucas
+                  passagens, ou todas rapidas) ele e' so' o minimo. */}
+              {resultado.limiteCurtaMs > PISO_PERMANENCIA_MS
+                ? ` (menos de ${formatarSegundos(resultado.limiteCurtaMs)} s no retângulo — o limite sai das passagens deste vídeo)`
+                : resultado.limiteCurtaMs ? ` (menos de ${formatarSegundos(resultado.limiteCurtaMs)} s no retângulo, o mínimo)` : ''}
               : pessoa ou reflexo. Se alguma era caixa, marque com Enter no ponto:{' '}
               <Tempos lista={resultado.descartados} aoIr={aoIr} />
             </p>
