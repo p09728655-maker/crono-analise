@@ -83,13 +83,10 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
    O resultado fica em `dados\videos\video.csv` (pasta separada: nunca se
    mistura com as planilhas do dia).
 5. Um analista marca **o mesmo vídeo** à mão no app (Cronometrar por vídeo).
-   **O app não abre `.dav`** (o navegador não lê esse formato). Converta antes,
-   no Prompt, dentro desta pasta (sai sem som e menor; dá uns 600 MB por hora):
-   ```
-   ffmpeg -i video.dav -an -vf scale=960:-2 -c:v libx264 -preset veryfast -crf 26 -pix_fmt yuv420p video.mp4
-   ```
-   O MP4 começa no mesmo quadro do `.dav`: o segundo *t* do vídeo no app é o
-   início lido pelo leitor + *t*. Marque no MP4, rode o leitor no `.dav`.
+   **O app não abre `.dav`**: converta antes com o `converter.bat`
+   ([seção 7](#7-marcar-no-app-um-vídeo-do-gravador)). O MP4 começa no mesmo
+   quadro do `.dav`: o segundo *t* do vídeo no app é o início lido pelo
+   leitor + *t*. Marque no MP4, rode o leitor no `.dav`.
    A tela diz "Enter a cada volume que fecha"; para esta validação — e para
    todos os analistas, sempre — **"fecha" = a frente da caixa toca o tapete
    verde**. É o instante que o leitor grava na coluna `entrou`, e o intervalo
@@ -187,6 +184,33 @@ Todos os comandos abaixo são rodados **dentro da pasta** (`cd C:\leitor-camera`
 - `python leitor_camera.py --foto` — alguém mexeu na câmera?
 - **Total de volumes da semana × ERP.** Diferença acima de 2%: investigar
   antes de usar o número.
+
+## 7. Marcar no app um vídeo do gravador
+
+O "Cronometrar por vídeo" do app não abre `.dav`: o navegador não lê esse
+formato, e muitos PCs não tocam o H.265 que vem dentro dele. O `converter.bat`
+transforma o `.dav` em MP4 que o app abre.
+
+1. No PC precisa ter **Python** e **ffmpeg** (passo 1; o `numpy` não é
+   necessário para converter). Copie para ele, no mínimo, `converter.bat` e
+   `converter.py` (e o `ffmpeg.exe`, se o ffmpeg foi copiado em vez de
+   instalado).
+2. Exporte o período pelo SIM Play (passo 2.1).
+3. **Arraste o `.dav` (um ou vários) em cima do `converter.bat`.** O `.mp4` sai
+   na mesma pasta do `.dav`, com o mesmo nome. A janela mostra a porcentagem e
+   quanto falta; o tempo depende do PC, e 1 hora de vídeo pode levar vários
+   minutos. O MP4 sai sem som e com 960 de largura (uns 600 MB por hora).
+4. No app, abra o `.mp4`. O **início da filmagem** já vem preenchido com a hora
+   gravada no `.dav`: o conversor acerta a data do arquivo para isso. Confira
+   com a hora escrita na imagem no começo do vídeo; a imagem pode estar até 1 s
+   atrás. **Se o MP4 foi copiado por WhatsApp, e-mail ou download**, a data do
+   arquivo se perde e a sugestão sai errada: corrija o campo pela imagem.
+
+- MP4 que já existe não é convertido de novo (a marcação em andamento no app
+  está presa àquele arquivo). Para refazer, apague o `.mp4`.
+- Fechar a janela no meio não deixa MP4 pela metade com cara de pronto: o
+  arquivo só ganha o nome final quando termina. Sobra um `.convertendo.mp4`,
+  que pode ser apagado (a próxima conversão também o substitui).
 
 ## Limites — o que ele NÃO vê
 
