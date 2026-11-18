@@ -417,23 +417,37 @@ do produto dele**.
   marcada antes de corrigir as caixas, congelaria um passo errado e barraria a
   caixa que faltou. Não propor de novo sem tratar esses três pontos.
 - **Velocidade e entre-peças pelas linhas A e B** (v2.113.0, PPCP 18/11/2026:
-  *"ponta A e B"*). A linha A é o retângulo de sempre; a B (`retangulo.b`, com
-  `distanciaMm` e `caixaMm`, no mesmo `ritmopatrimar.video.retangulos` da
-  máquina) é medida no MESMO quadro (`analisarVideo` com `retanguloB` → amostras
-  com `fracaoB`). `atrasoEntreFaixas` (domínio): correlação dos dois sinais numa
-  grade de 40 ms, busca até meio intervalo típico (`linhaBDaLeitura`; mais que
-  isso se confunde com a caixa seguinte — `noLimite`), pico refinado pela
-  parábola; abaixo de `CORRELACAO_MINIMA` (0,4) é recusado. `esteiraPelasLinhas`:
-  velocidade = distância ÷ atraso; caixa + vão = velocidade × intervalo típico;
-  entre-peças = isso − a caixa. Tela: `LinhaB` (desenhar, distância, caixa,
-  tirar) e `EsteiraAB` (no teste e na leitura, ao lado do cadastro, sem
-  veredito). ⚠ Testado antes, e NÃO publicado: a velocidade pela própria caixa
-  (comprimento ÷ tempo na faixa, uma linha só) — na Emb início deu de 8,5 a
-  12,3 m/min conforme a faixa, porque as peças em cima da chapa cobrem o
-  papelão; o desenho do sinal nas duas linhas não sofre disso. Testes:
+  *"ponta A e B"*). A linha A é o retângulo de sempre; a B (`retangulo.b`) e a
+  `distanciaMm` ficam no mesmo `ritmopatrimar.video.retangulos` da máquina —
+  redesenhar A ou B apaga a distância (é entre as duas). A caixa NÃO fica na
+  máquina: é a do cadastro do produto (`alvo.medida`), trocável só no cartão.
+  A B é medida no MESMO quadro (`analisarVideo` com `retanguloB` → `fracaoB`).
+  `atrasoEntreFaixas`: o período sai da AUTOCORRELAÇÃO da A (`periodoDoSinal`,
+  o menor deslocamento que chega a 85% do melhor; nunca das marcas, que dobram
+  quando a A perde caixas); correlação A×B numa grade de 40 ms em ±0,4 período
+  (`FRACAO_DO_PERIODO`), teto de 10 s (`JANELA_MAXIMA_MS`), pico pela parábola.
+  ⚠ O sinal é periódico: atraso real além de meio período aparece como a cópia
+  NEGATIVA — como a B fica adiante da A, `invertido` recusa; perto do limite,
+  `noLimite`; abaixo de 0,4 s, `pertoDemais`; correlação < 0,4, `fraca`
+  (`linhaBValida`). Atraso de mais de um período inteiro volta positivo e não é
+  detectável pelo sinal: a tela avisa quando a velocidade passa de ±50% do
+  cadastro. `linhaBDaLeitura`: intervalo típico = o período; a faixa p25–p75
+  das marcas só quando elas concordam com ele (±15%). `esteiraPelasLinhas`:
+  velocidade, caixa + vão e entre-peças (com a faixa). As linhas e a distância
+  da leitura vão congeladas no `linhaB` (`congelarLinhaB`: F5, outra máquina).
+  Desenho: `CamadaDesenho` com a `Lupa` (5×, sem suavizar); a linha fina vale
+  (`LADO_MINIMO` 0,4% + `AREA_MINIMA` 0,0003 — antes 2% de cada lado). ⚠ O
+  entre-peças é o que a linha PRATICA no vídeo, não um padrão: levado ao
+  cadastro, o tempo-alvo vira o ritmo do vídeo ÷ a eficiência. Testado antes e
+  NÃO publicado: a velocidade pela própria caixa (comprimento ÷ tempo na faixa)
+  — na Emb início deu de 8,5 a 12,3 m/min conforme a faixa (as peças em cima da
+  chapa cobrem o papelão). No vídeo real (Emb início, 960×540), as linhas na
+  zona das operadoras correlacionam só 0,46–0,59 e os pares de linhas não fecham
+  entre si por ~15%: fita longe das mãos e vídeo em resolução cheia. Testes:
   `test/deteccao-volumes.test.js` e `test/e2e/video-esteira.e2e.mjs` (vídeo
-  sintético `test/fixtures/esteira-ab-40s.webm`: caixa de 200 px andando a
-  100 px/s, uma a cada 8 s — 6,0 m/min e 600 mm com A e B a 100 px).
+  sintético `test/fixtures/esteira-ab-40s.webm`: caixa de 200 px a 100 px/s,
+  uma a cada 8 s — 6,0 m/min e 600 mm com A e B a 100 px; B a 500 px da A,
+  recusada).
 - **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão
   mostram o `normalMs` da `leituraPecaAPeca` — o "por volume sem as lacunas"
   do Volume a volume, o passo da linha —, com "—" abaixo de 10 intervalos. A medição vai direto ao `/sync`, sem a fila

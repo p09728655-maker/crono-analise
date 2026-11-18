@@ -14,8 +14,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  CORRELACAO_MINIMA, TESTE_MINIMO_MS, TESTE_MS, areaDaImagem, atrasoEntreFaixas, esteiraPelasLinhas, intervaloTipico,
-  linhaBDaLeitura, avaliarTeste, detectarVolumes, ehPapelao, fracaoPapelao, intervalosLongos,
+  AREA_MINIMA, ATRASO_MINIMO_MS, CORRELACAO_MINIMA, JANELA_MAXIMA_MS, LADO_MINIMO, TESTE_MINIMO_MS, TESTE_MS, areaDaImagem,
+  atrasoEntreFaixas, esteiraPelasLinhas, intervaloTipico, linhaBDaLeitura, linhaBValida, periodoDoSinal, avaliarTeste, detectarVolumes, ehPapelao, fracaoPapelao, intervalosLongos,
   limiaresDoSinal, pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
 } from '../src/domain/deteccaoVolumes.js';
 import {
@@ -208,8 +208,10 @@ describe('o retangulo desenhado na tela', () => {
     expect(r.largura).toBeCloseTo(0.2);
     expect(r.altura).toBeCloseTo(0.4);
     expect(retanguloValido(r)).toBe(true);
+    // Desde a v2.113.0 a linha fina vale (0,4% de lado e area minima): a de
+    // 1% × 30% passou a valer; abaixo de 0,4% de um lado, nao.
     expect(retanguloValido({
-      x: 0.5, y: 0.5, largura: 0.01, altura: 0.3,
+      x: 0.5, y: 0.5, largura: 0.003, altura: 0.3,
     })).toBe(false);
     expect(retanguloValido({
       x: 0.9, y: 0.5, largura: 0.2, altura: 0.3,
@@ -473,12 +475,14 @@ describe('TESTAR O RETANGULO (v2.112.0): o trecho curto diz se pegou, antes de l
 });
 
 describe('A ESTEIRA PELAS LINHAS A E B (v2.113.0): velocidade e entre-pecas medidos no video', () => {
-  // A caixa passa na linha A (2 s cobrindo, a cada 8 s) e o MESMO desenho
-  // aparece na B `atraso` ms depois; amostras a cada ~130 ms, como a 8x.
-  const duasLinhas = ({ atraso = 1000, duracao = 40000, ruido = 0.03, bIndependente = false } = {}) => {
+  // A caixa passa na linha A (2 s cobrindo, a cada `periodo` ms) e o MESMO
+  // desenho aparece na B `atraso` ms depois; amostras a cada ~130 ms, como a 8x.
+  const duasLinhas = ({
+    atraso = 1000, periodo = 8000, duracao = 120000, ruido = 0.03, bIndependente = false,
+  } = {}) => {
     let semente = 11;
     const r = () => { semente = (semente * 16807) % 2147483647; return semente / 2147483647; };
-    const pulso = (t) => { const m = ((t % 8000) + 8000) % 8000; return m >= 3000 && m < 5000 ? 0.9 : 0.05; };
+    const pulso = (t) => { const m = ((t % periodo) + periodo) % periodo; return m >= 3000 && m < 5000 ? 0.9 : 0.05; };
     const am = [];
     for (let ms = 0; ms < duracao; ms += 110 + Math.round(r() * 40)) {
       am.push({
@@ -490,61 +494,117 @@ describe('A ESTEIRA PELAS LINHAS A E B (v2.113.0): velocidade e entre-pecas medi
     return am;
   };
 
-  it('o atraso de A para B sai do sinal inteiro, com erro menor que 5%', () => {
-    const a = atrasoEntreFaixas(duasLinhas({ atraso: 1000 }), { limiteMs: 4000 });
+  it('o atraso de A para B sai do sinal inteiro, com erro menor que 5%, e o periodo sai do proprio sinal', () => {
+    const a = atrasoEntreFaixas(duasLinhas({ atraso: 1000 }));
     expect(Math.abs(a.atrasoMs - 1000)).toBeLessThan(50);
+    expect(a.periodoMs).toBe(8000);
+    expect(a.limiteMs).toBe(3200); // 0,4 periodo
     expect(a.correlacao).toBeGreaterThan(0.9);
-    expect(a.fraca).toBe(false);
-    expect(a.noLimite).toBe(false);
+    expect(linhaBValida(a)).toBe(true);
   });
 
-  it('a caixa que passa primeiro em B da atraso negativo (as linhas desenhadas ao contrario)', () => {
-    const a = atrasoEntreFaixas(duasLinhas({ atraso: -1500 }), { limiteMs: 4000 });
+  it('A E B LONGE DEMAIS (revisao): o atraso alem de meio periodo aparece como a copia NEGATIVA — recusado', () => {
+    // 5 s com periodo de 8 s: a copia em −3 s cai dentro da busca.
+    const a5 = atrasoEntreFaixas(duasLinhas({ atraso: 5000 }));
+    expect(Math.abs(a5.atrasoMs + 3000)).toBeLessThan(100);
+    expect(a5.invertido).toBe(true);
+    expect(linhaBValida(a5)).toBe(false);
+    // 7 s: a copia em −1 s.
+    const a7 = atrasoEntreFaixas(duasLinhas({ atraso: 7000 }));
+    expect(a7.invertido).toBe(true);
+    expect(linhaBValida(a7)).toBe(false);
+    // 3,5 s: passa de 0,4 periodo (3,2 s) — o pico fica no limite da busca.
+    const a35 = atrasoEntreFaixas(duasLinhas({ atraso: 3500 }));
+    expect(a35.noLimite).toBe(true);
+    expect(linhaBValida(a35)).toBe(false);
+  });
+
+  it('linhas trocadas (a caixa chega antes na B): invertido, recusado', () => {
+    const a = atrasoEntreFaixas(duasLinhas({ atraso: -1500 }));
     expect(Math.abs(a.atrasoMs + 1500)).toBeLessThan(75);
+    expect(a.invertido).toBe(true);
+    expect(linhaBValida(a)).toBe(false);
   });
 
-  it('linhas que nao veem a mesma coisa: correlacao fraca, recusada', () => {
-    const a = atrasoEntreFaixas(duasLinhas({ bIndependente: true }), { limiteMs: 4000 });
-    expect(a.fraca).toBe(true);
-    expect(a.correlacao).toBeLessThan(CORRELACAO_MINIMA);
+  it('perto demais (menos que o atraso minimo): recusado; linhas que nao veem a mesma coisa: fraca', () => {
+    const perto = atrasoEntreFaixas(duasLinhas({ atraso: 200 }));
+    expect(perto.pertoDemais).toBe(true);
+    expect(linhaBValida(perto)).toBe(false);
+    expect(ATRASO_MINIMO_MS).toBe(400);
+    const fraca = atrasoEntreFaixas(duasLinhas({ bIndependente: true }));
+    expect(fraca.fraca || fraca.motivo).toBeTruthy();
+    expect(linhaBValida(fraca)).toBe(false);
   });
 
-  it('A e B longe demais (atraso alem de meio intervalo): o pico fica no limite e e recusado', () => {
-    const a = atrasoEntreFaixas(duasLinhas({ atraso: 3500 }), { limiteMs: 2000 });
-    expect(a.noLimite).toBe(true);
+  it('a janela de busca tem teto (o video longo nao trava a tela) e o periodo, limite', () => {
+    // Periodo de 40 s: 0,4 × 40 = 16 s, mas a busca para em 10 s.
+    const a = atrasoEntreFaixas(duasLinhas({ atraso: 2000, periodo: 40000, duracao: 400000 }));
+    expect(a.periodoMs).toBe(40000);
+    expect(a.limiteMs).toBe(JANELA_MAXIMA_MS);
+    expect(Math.abs(a.atrasoMs - 2000)).toBeLessThan(100);
   });
 
-  it('sem a linha B nas amostras, a leitura nao tem linha B; com ela, o limite e meio intervalo tipico', () => {
-    expect(linhaBDaLeitura([{ ms: 0, fracao: 0.1 }], [1000, 9000])).toBeNull();
-    const l = linhaBDaLeitura(duasLinhas({ atraso: 1000 }), [5000, 13000, 21000, 29000, 37000]);
+  it('o periodo do sinal nao depende das marcas: a linha A que perde caixas nao dobra o intervalo', () => {
+    const am = duasLinhas({ atraso: 1000 });
+    // So' metade das caixas marcadas (a cada 16 s em vez de 8).
+    const l = linhaBDaLeitura(am, [5000, 21000, 37000, 53000, 69000, 85000]);
     expect(l.intervaloTipicoMs).toBe(8000);
-    expect(l.limiteMs).toBe(4000);
-    expect(Math.abs(l.atrasoMs - 1000)).toBeLessThan(50);
+    // As marcas nao concordam com o periodo: sem a faixa dos quartis.
+    expect(l.intervaloP25Ms).toBeNull();
+    // Com as marcas certas, a faixa vem.
+    const certas = linhaBDaLeitura(am, Array.from({ length: 14 }, (_, i) => 5000 + 8000 * i));
+    expect(certas.intervaloP25Ms).toBe(8000);
+    expect(certas.intervaloP75Ms).toBe(8000);
+    expect(linhaBDaLeitura([{ ms: 0, fracao: 0.1 }], [1000, 9000])).toBeNull();
+  });
+
+  it('periodoDoSinal: o menor que se repete (nao o dobro), e null sem repeticao', () => {
+    const am = duasLinhas({ atraso: 1000 });
+    const sinal = am.map((x) => x.fracao);
+    // A grade nao importa aqui: as amostras sao ~130 ms; o teste so' quer
+    // ver que nao devolve o dobro. Pela leitura inteira:
+    expect(atrasoEntreFaixas(am).periodoMs).toBe(8000);
+    expect(periodoDoSinal(new Float64Array(2000).fill(0.1))).toBeNull();
+    expect(sinal.length).toBeGreaterThan(100);
   });
 
   it('a conta: 360 mm em 2,4 s = 9 m/min; uma caixa a cada 6,5 s = 975 mm de caixa + vao; com a caixa de 825, 150 mm', () => {
-    const r = esteiraPelasLinhas({ atrasoMs: 2400, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825 });
+    const r = esteiraPelasLinhas({
+      atrasoMs: 2400, distanciaMm: 360, intervaloTipicoMs: 6500, intervaloP25Ms: 6000, intervaloP75Ms: 7000, comprimentoMm: 825,
+    });
     expect(r.velocidadeMMin).toBeCloseTo(9, 6);
     expect(r.passoMm).toBeCloseTo(975, 6);
     expect(r.entrePecasMm).toBeCloseTo(150, 6);
-    // O sentido nao muda a velocidade; sem distancia, sem conta; sem caixa, sem entre-pecas.
-    expect(esteiraPelasLinhas({ atrasoMs: -2400, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825 }).velocidadeMMin)
-      .toBeCloseTo(9, 6);
+    expect(r.entreDeMm).toBeCloseTo(75, 6);
+    expect(r.entreAteMm).toBeCloseTo(225, 6);
+    // Atraso que nao vale (negativo, abaixo do minimo) ou sem distancia: sem conta; sem caixa, sem entre-pecas.
+    expect(esteiraPelasLinhas({ atrasoMs: -2400, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825 })).toBeNull();
+    expect(esteiraPelasLinhas({ atrasoMs: 200, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825 })).toBeNull();
     expect(esteiraPelasLinhas({ atrasoMs: 2400, distanciaMm: null, intervaloTipicoMs: 6500 })).toBeNull();
     expect(esteiraPelasLinhas({ atrasoMs: 2400, distanciaMm: 360, intervaloTipicoMs: 6500 }).entrePecasMm).toBeNull();
   });
 
-  it('o intervalo tipico e a mediana dos intervalos entre as marcas (a parada nao o estica)', () => {
+  it('o intervalo tipico das marcas e a mediana (a parada nao o estica)', () => {
     expect(intervaloTipico([0, 6500, 13000, 80000, 86500, 93000])).toBe(6500);
     expect(intervaloTipico([1000])).toBeNull();
   });
 
   it('o teste do retangulo devolve a linha B quando ela foi lida', () => {
-    const am = duasLinhas({ atraso: 1000, duracao: 120000 });
+    const am = duasLinhas({ atraso: 1000 });
     const t = avaliarTeste(am, { inicioMs: 0, fimMs: 120000 });
     expect(t.linhaB).not.toBeNull();
     expect(Math.abs(t.linhaB.atrasoMs - 1000)).toBeLessThan(60);
-    expect(Math.abs(t.linhaB.intervaloTipicoMs - 8000)).toBeLessThan(300);
+    expect(t.linhaB.intervaloTipicoMs).toBe(8000);
     expect(avaliarTeste(am.map(({ ms, fracao }) => ({ ms, fracao }))).linhaB).toBeNull();
+  });
+
+  it('a linha fina sobre a fita: lado minimo de 0,4% e area minima (a de 2% de cada lado nao deixava desenhar A e B)', () => {
+    // 6% da largura × 0,6% da altura: uma linha atravessando a esteira.
+    expect(retanguloValido({ x: 0.4, y: 0.5, largura: 0.06, altura: 0.006 })).toBe(true);
+    // Fina demais, ou pequena demais nos dois lados.
+    expect(retanguloValido({ x: 0.4, y: 0.5, largura: 0.06, altura: 0.003 })).toBe(false);
+    expect(retanguloValido({ x: 0.6, y: 0.6, largura: 0.005, altura: 0.01 })).toBe(false);
+    expect(LADO_MINIMO).toBe(0.004);
+    expect(AREA_MINIMA).toBe(0.0003);
   });
 });

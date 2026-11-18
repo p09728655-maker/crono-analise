@@ -13,11 +13,13 @@
  * caixa de 200 mm: 1,0 s de A ate' B, 6,0 m/min, caixa + vao 800 mm e
  * entre-pecas 600 mm.
  *
- * O que se prova: a linha B se desenha e fica guardada com a maquina (com a
- * distancia e a caixa); o leitor mostra o que a B ve' (ao vivo); o teste e a
- * leitura inteira dao a velocidade, a caixa + vao e o entre-pecas certos;
- * trocar a distancia refaz a conta sem ler de novo; tirar a B apaga o teste
- * velho e a leitura volta a ser so' com a A.
+ * O que se prova: a linha B se desenha (com a lupa) e fica guardada com a
+ * maquina, com a distancia — a caixa NAO (e' do produto); o leitor mostra o
+ * que a B ve' (ao vivo); o teste e a leitura inteira dao a velocidade, a
+ * caixa + vao e o entre-pecas certos; trocar a distancia refaz a conta sem
+ * ler de novo; redesenhar uma linha apaga a distancia; a B longe demais
+ * (a caixa se confunde com a seguinte) e' recusada, sem numero; tirar a B
+ * apaga o teste velho.
  *
  * Uso: npm run dev -- --port 5199 e depois node test/e2e/video-esteira.e2e.mjs
  */
@@ -96,7 +98,7 @@ async function numerosDaEsteira(bloco) {
   const t = (await bloco.innerText()).replace(/\s+/g, ' ');
   return {
     vel: Number(t.match(/VELOCIDADE ([\d.]+) m\/min/i)?.[1]),
-    entre: Number(t.match(/ENTRE-PEÇAS (-?\d+) mm/i)?.[1]),
+    entre: Number(t.match(/ENTRE-PEÇAS ≈ (-?\d+) mm/i)?.[1]),
     passo: Number(t.match(/CAIXA \+ VÃO (\d+) mm/i)?.[1]),
     texto: t,
   };
@@ -131,6 +133,12 @@ await linhaB.waitFor({ timeout: 4000 });
 checar(/Uma segunda faixa, B/.test(await linhaB.innerText()), 'sem a linha B, a tela diz o que ela mede e como');
 await linhaB.getByRole('button', { name: 'Desenhar a linha B' }).click();
 checar(/Linha B: clique e arraste/.test(await auto.innerText()), 'desenhar a B: a instrucao da linha B aparece no lugar');
+{
+  // A lupa: o video ampliado em volta do ponteiro, para cravar a linha no centro da fita.
+  const box = await p.locator('[aria-label="Desenhar o retângulo: clique e arraste sobre o vídeo"]').boundingBox();
+  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  checar(await p.getByLabel('Lupa: o vídeo ampliado em volta do ponteiro').count() === 1, 'desenhando, a lupa aparece');
+}
 await arrastar(p, { x: 0.61, y: 0.40 }, { x: 0.64, y: 0.60 });
 await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).waitFor({ timeout: 4000 });
 {
@@ -148,7 +156,8 @@ await linhaB.getByRole('spinbutton', { name: /Comprimento da caixa/ }).press('Ta
 {
   const g = await p.evaluate(() => JSON.parse(localStorage.getItem('ritmopatrimar.video.retangulos') || '{}'));
   const r = g['00000000-0000-0000-0000-0000000000a1'];
-  checar(r?.distanciaMm === 100 && r?.caixaMm === 200, `a distancia e a caixa ficam guardadas (${r?.distanciaMm} · ${r?.caixaMm})`);
+  checar(r?.distanciaMm === 100 && r?.caixaMm === undefined,
+    `a distancia fica guardada com a maquina; a caixa nao, ela e do produto (${r?.distanciaMm} · ${r?.caixaMm})`);
 }
 
 /* ------------------------------------------------------------ o teste */
@@ -172,11 +181,44 @@ await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).pr
   checar(Math.abs(n.vel - 12) <= 0.6, `trocar a distancia (200 mm) refaz a conta na hora: ${n.vel} m/min (12,0)`);
 }
 
+/* ------------------- redesenhar uma linha apaga a distancia (revisao) */
+// A vai para x ~100 px (o cenario da revisao: A em ~100 e B em ~600).
+await irPara(p, 2);
+await auto.getByRole('button', { name: 'Redesenhar o retângulo' }).click();
+await arrastar(p, { x: 0.14, y: 0.40 }, { x: 0.17, y: 0.60 });
+{
+  const g = await p.evaluate(() => JSON.parse(localStorage.getItem('ritmopatrimar.video.retangulos') || '{}'));
+  const r = g['00000000-0000-0000-0000-0000000000a1'];
+  checar(r?.b && r?.distanciaMm === undefined && /a distância de A até B foi apagada/.test(await p.getByRole('alert').first().innerText()),
+    'redesenhar a A mantem a B mas apaga a distancia, e diz por que (mover uma linha muda a distancia)');
+}
+
+/* ------------- a B longe demais: a caixa se confunde com a seguinte */
+// B em x ~600 (de 640): 500 px da A em ~100, 5 s com uma caixa a cada 8 s
+// — a copia da caixa anterior aparece 3 s ANTES. Antes da revisao, a tela
+// dava 10 m/min "com 100%"; agora recusa, sem numero.
+await linhaB.getByRole('button', { name: 'Redesenhar a linha B' }).click();
+await arrastar(p, { x: 0.925, y: 0.40 }, { x: 0.955, y: 0.60 });
+await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).fill('500');
+await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).press('Enter');
+await irPara(p, 0);
+await auto.getByRole('button', { name: /Testar/ }).click();
+await auto.getByText(/O retângulo pegou \d+ caixas?/).waitFor({ timeout: 90000 });
+{
+  const bloco = p.locator('[aria-label="Esteira medida pelas linhas A e B"]');
+  const t = (await bloco.innerText()).replace(/\s+/g, ' ');
+  checar(/A caixa apareceu na B antes da A/.test(t) && !/m\/min/.test(t.replace(/cadastro: [\d.]+ m\/min/g, '')),
+    `B longe demais: recusada, sem velocidade (${t.slice(0, 110)}…)`);
+}
+
 /* ---------------------------------------- tirar a B e desenhar de novo */
 await linhaB.getByRole('button', { name: 'Tirar a linha B' }).click();
 checar(!(await blocoTeste.count()) && (await linhaB.getByRole('button', { name: 'Desenhar a linha B' }).count()) === 1,
   'tirar a B apaga o resultado do teste velho e volta ao "Desenhar a linha B"');
+// A e B de volta a x ~300 e ~400 (100 px), para a leitura inteira.
 await irPara(p, 4);
+await auto.getByRole('button', { name: 'Redesenhar o retângulo' }).click();
+await arrastar(p, { x: 0.455, y: 0.40 }, { x: 0.485, y: 0.60 });
 await linhaB.getByRole('button', { name: 'Desenhar a linha B' }).click();
 await arrastar(p, { x: 0.61, y: 0.40 }, { x: 0.64, y: 0.60 });
 await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).fill('100');

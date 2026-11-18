@@ -177,6 +177,12 @@ export const ev = {
   // A LINHA B e a esteira medida (v2.113.0). B em ciano: nao se confunde com
   // a A (amarela), nem com o papelao, nem com o tapete verde.
   retanguloB: { borderColor: '#22D3EE' },
+  // A lupa do desenho: no canto do video, fora do caminho do ponteiro.
+  lupa: {
+    position: 'absolute', top: 8, left: 8, width: 200, height: 200, pointerEvents: 'none',
+    borderWidth: 2, borderStyle: 'solid', borderColor: '#22D3EE', borderRadius: raio.sm,
+    boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.7)', imageRendering: 'pixelated', background: '#000',
+  },
   esteira: {
     display: 'flex', flexDirection: 'column', gap: espaco.sm, padding: espaco.md, borderRadius: raio.md,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, background: t.fundo,
