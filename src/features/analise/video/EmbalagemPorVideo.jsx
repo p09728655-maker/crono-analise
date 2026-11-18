@@ -8,8 +8,8 @@ import {
 import { diasProgramados, taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
   conferirAutomatica, desfazerUltimo, emRelogio, encerrarParadaNoVideo, iniciarParadaNoVideo, inicioSugerido,
-  marcacaoDasEntradas, marcacaoVazia, marcarToque, marcasEmPalavras, marcasGuardadas, medicaoDoVideo, removerParada,
-  removerVolume, semMarcas,
+  OBS_LACUNA, lacunasDoVideo, marcacaoDasEntradas, marcacaoVazia, marcarLacunasComoParada, marcarToque, marcasEmPalavras,
+  marcasGuardadas, medicaoDoVideo, removerParada, removerVolume, semMarcas,
 } from '../../../domain/medicaoPorVideo.js';
 import {
   PISO_PERMANENCIA_MS, TESTE_MS, areaDaImagem, avaliarTeste, detectarVolumes, ehPapelao, intervalosLongos,
@@ -777,6 +777,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setAviso(null);
   };
   const conferencia = useMemo(() => conferirAutomatica(automaticas, marcacao), [automaticas, marcacao]);
+  // AS LACUNAS (v2.112.2): a regra do indicador, recontada a cada marca.
+  const lacunasVideo = useMemo(() => lacunasDoVideo(marcacao), [marcacao]);
   // Lista esvaziada (⌫ ate' o fim): a marcacao automatica foi desfeita
   // inteira. Sem isto, o resumo "a leitura marcou 4 volumes" ficava na tela
   // ao lado de uma lista vazia e do botao de marcar de novo.
@@ -1148,7 +1150,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                       listaVazia={listaVazia(marcacao)} conferencia={conferencia} agoraMs={agoraMs}
                       podeDesenhar={Boolean(areaVideo)} teste={teste} inicioLeituraMs={inicioDaLeitura(agoraMs)}
                       aoDesenhar={desenharRetangulo} aoCancelarDesenho={cancelarDesenho}
-                      aoTestar={testarRetangulo}
+                      aoTestar={testarRetangulo} lacunasVideo={lacunasVideo}
+                      aoMarcarLacunas={() => aplicar(marcarLacunasComoParada)}
                       aoLer={lerAutomatica} aoParar={() => setAutomatica({ estado: 'parado' })}
                       aoApagar={apagarAutomatica}
                       aoIr={(ms) => { refVideo.current?.pause(); irPara(ms); }}
@@ -1514,7 +1517,7 @@ function Marcas({
               {it.tipo === 'volume' && `Volume ${it.n}`}
               {it.tipo === 'parada' && (
                 <>
-                  Parada · {rotuloMotivo(it.parada.motivo)}
+                  Parada · {rotuloMotivo(it.parada.motivo)}{it.parada.observacao === OBS_LACUNA ? ' (lacuna, motivo a informar)' : ''}
                   {it.parada.fimMs != null
                     ? ` até ${emRelogio(it.parada.fimMs)} (${duracaoCurta(it.parada.fimMs - it.parada.inicioMs)})`
                     : ' — aberta'}
@@ -1817,7 +1820,7 @@ function Tempos({ lista, aoIr, rotulo = (ms) => emRelogio(ms) }) {
 function MarcacaoAutomatica({
   url, refVideoLeitura, maquina, retangulo, desenhando, automatica, progresso, listaVazia, conferencia,
   agoraMs, podeDesenhar, teste, inicioLeituraMs, aoDesenhar, aoCancelarDesenho, aoTestar, aoLer, aoParar, aoApagar,
-  aoIr,
+  aoIr, lacunasVideo, aoMarcarLacunas,
 }) {
   const [confirmarApagar, setConfirmarApagar] = useState(false);
   const { estado, resultado } = automatica;
@@ -2006,7 +2009,7 @@ function MarcacaoAutomatica({
               <Tempos lista={resultado.suspeitos} aoIr={aoIr} />
             </p>
           )}
-          {resultado?.longos.length > 0 && (
+          {resultado?.longos.length > 0 && !lacunasVideo?.suficiente && (
             <p style={ev.aviso}>
               Intervalos longos, onde a linha pode ter parado. Se parou, marque a parada com P:{' '}
               <Tempos lista={resultado.longos} aoIr={aoIr} rotulo={(x) => `${emRelogio(x.deMs)}–${emRelogio(x.ateMs)}`} />
@@ -2046,7 +2049,48 @@ function MarcacaoAutomatica({
           </div>
         </>
       )}
+      {!desenhando && estado !== 'lendo' && lacunasVideo?.suficiente && lacunasVideo.lacunas.length > 0 && (
+        <LacunasDaMarcacao r={lacunasVideo} aoIr={aoIr} aoMarcar={aoMarcarLacunas} />
+      )}
     </section>
+  );
+}
+
+/**
+ * AS LACUNAS DA MARCACAO (v2.112.2): os intervalos maiores que o dobro do
+ * passo da linha — a regra do indicador —, clicaveis, e o botao que as marca
+ * como parada sem motivo (Outro, "motivo a informar"). Quem souber o motivo
+ * marca com P; o × da lista desfaz a que foi marcada daqui.
+ */
+function LacunasDaMarcacao({ r, aoIr, aoMarcar }) {
+  const livres = r.lacunas.filter((l) => l.parada);
+  const ocupadas = r.lacunas.length - livres.length;
+  const excesso = r.lacunas.reduce((soma, l) => soma + l.excessoMs, 0);
+  return (
+    <div style={ev.resultadoTeste}>
+      <p style={ev.aviso}>
+        {r.lacunas.length === 1 ? 'Uma lacuna' : `${r.lacunas.length} lacunas`}: intervalo maior que o dobro do passo da
+        linha ({formatarSegundos(r.normalMs)} s por volume) — a linha parou e ninguém marcou. Somam{' '}
+        {duracaoCurta(excesso)} além do passo:{' '}
+        <Tempos
+          lista={r.lacunas.map((l) => ({ deMs: l.deMs, ateMs: l.ateMs }))} aoIr={aoIr}
+          rotulo={(x) => `${emRelogio(x.deMs)}–${emRelogio(x.ateMs)}`}
+        />
+      </p>
+      {livres.length > 0 && (
+        <div style={ev.linhaBotoes}>
+          <button type="button" style={est.botaoSecundario} onClick={aoMarcar}>
+            {livres.length === 1 ? 'Marcar a lacuna como parada sem motivo' : `Marcar as ${livres.length} lacunas como parada sem motivo`}
+          </button>
+        </div>
+      )}
+      <p style={ev.dica}>
+        Cada uma vira parada "Outro" com a observação "motivo a informar", do volume anterior + o passo da linha até o
+        volume seguinte: o intervalo volta ao passo, e o tempo parado é o que passou dele. No relatório de perdas,
+        entra como parada sem motivo definido. Sabendo o motivo, marque com P; o × da lista desfaz uma.
+        {ocupadas > 0 && ` ${ocupadas === 1 ? 'Uma lacuna já tem' : `${ocupadas} lacunas já têm`} parada marcada dentro e não entra: confira.`}
+      </p>
+    </div>
   );
 }
 

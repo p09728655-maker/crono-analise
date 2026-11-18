@@ -675,7 +675,8 @@ await ctx.close();
   const w = await c8.newPage();
   await semearSessao(w);
   w.on('pageerror', (e) => erros.push(e.message));
-  await simularServidor(w, { enviados: [] });
+  const enviados8 = [];
+  await simularServidor(w, { enviados: enviados8 });
   await w.goto(`${BASE}/analise/embalagem/video`);
   await w.locator('input[type="file"]').setInputFiles(VIDEO);
   await w.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
@@ -690,11 +691,30 @@ await ctx.close();
   const numerosTxt = (await painel.innerText()).replace(/\s+/g, ' ');
   checar(/SEM AS LACUNAS 5\.0 s/i.test(numerosTxt) && /LACUNAS 1 /i.test(numerosTxt),
     `o painel do video mostra o passo da linha sem as lacunas (5.0 s) e a lacuna (${numerosTxt.match(/SEM AS LACUNAS[^]{0,60}/i)?.[0]})`);
+  // AS LACUNAS (v2.112.2): listadas e marcadas como parada sem motivo.
+  const autoCartao = w.getByRole('region', { name: 'Marcação automática' });
+  checar(/Uma lacuna: intervalo maior que o dobro do passo da\s+linha \(5\.0 s por volume\)[\s\S]*Somam 15 s além do passo:[\s\S]*0:52\.0–1:12\.0/
+    .test(await autoCartao.innerText()), 'a lacuna aparece listada, com o passo, o excesso e o trecho clicavel');
+  await autoCartao.getByRole('button', { name: 'Marcar a lacuna como parada sem motivo' }).click();
+  {
+    const depois = (await painel.innerText()).replace(/\s+/g, ' ');
+    checar(/0:57\.0 Parada · Outro \(lacuna, motivo a informar\) até 1:12\.0 \(15 s\)/.test(depois)
+      && /LACUNAS 0 /i.test(depois) && /SEM AS LACUNAS 5\.0 s/i.test(depois) && /PARADO 15 s/i.test(depois),
+    `marcada: vira parada Outro de 0:57 a 1:12 (15 s), a lacuna sai e o passo fica (${depois.match(/SEM AS LACUNAS[^]{0,80}/i)?.[0]})`);
+    checar(!/Marcar a lacuna como parada/.test(await autoCartao.innerText()), 'marcada, a lacuna sai da lista e o botao some');
+  }
   await teclaEm(w, 75, 'f');
   const revisar = w.getByRole('region', { name: 'Revisar a medição' });
   await revisar.waitFor({ timeout: 4000 });
   checar(/POR VOL\. SEM AS LACUNAS 5\.0 s/i.test((await revisar.innerText()).replace(/\s+/g, ' ')),
     'a revisao antes de salvar mostra o mesmo por volume sem as lacunas');
+  await revisar.getByRole('button', { name: 'Salvar medição' }).click();
+  await w.getByText(/Medição salva/).waitFor({ timeout: 8000 });
+  {
+    const enviada = enviados8[enviados8.length - 1];
+    checar(JSON.stringify(enviada?.paradas) === JSON.stringify([{ motivo: 'outro', duracaoMs: 15000, observacao: 'Lacuna marcada pela leitura do vídeo: motivo a informar.' }]),
+      `vai ao servidor como parada Outro de 15 s com a observacao (${JSON.stringify(enviada?.paradas)})`);
+  }
   await c8.close();
 }
 

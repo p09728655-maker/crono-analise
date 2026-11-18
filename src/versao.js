@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.112.2',
+    data: '2026-11-18',
+    titulo: 'Cronometrar por vídeo: as lacunas listadas e marcadas como parada sem motivo',
+    itens: [
+      'AS LACUNAS APARECEM NA MARCAÇÃO AUTOMÁTICA: cada intervalo maior que o dobro do passo da linha (a mesma regra do indicador e do Volume a volume, a partir de 10 intervalos), com o trecho clicável e quanto tempo elas somam além do passo. Substituem os "intervalos longos", que usavam outra régua (3× o intervalo típico). Valem também para a marcação no Enter.',
+      'MARCAR AS LACUNAS COMO PARADA SEM MOTIVO: um botão transforma as lacunas em paradas "Outro", com a observação "Lacuna marcada pela leitura do vídeo: motivo a informar." Cada uma vai do volume anterior + o passo da linha até o volume seguinte: o intervalo volta ao passo e o tempo parado é só o que passou dele. Na lista aparecem como "Parada · Outro (lacuna, motivo a informar)" e o × desfaz. Lacuna que já tem parada marcada dentro não entra (fica para conferir).',
+      'ATENÇÃO: a lacuna marcada deixa de ser lacuna. O número de lacunas (o que ninguém apontou) cai sem ninguém ter apontado o motivo, e o tempo vai para "Outro" — no relatório de perdas, parada sem motivo definido. Sabendo o motivo, marque com P em vez do botão.',
+    ],
+  },
+  {
     versao: '2.112.1',
     data: '2026-11-18',
     titulo: 'Cronometrar por vídeo: o tempo sem as lacunas e a lista das marcações guardadas só com o que tem marca',
