@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.113.0',
+    data: '2026-11-18',
+    titulo: 'Cronometrar por vídeo: velocidade da esteira e entre-peças pelas linhas A e B',
+    itens: [
+      'A LINHA B: além do retângulo de sempre (a linha A, que marca as caixas), dá para desenhar uma segunda faixa, B, no mesmo corredor da caixa e ADIANTE da A (no sentido em que a caixa anda), e digitar a distância real entre as duas. Como medir: duas fitas na lateral fixa da esteira (nunca na lona, que anda), a até 1/3 de caixa + vão uma da outra (uns 30 cm na Mesa Cabeceira), de centro a centro; cada linha vai no centro de uma fita. A distância fica guardada com a máquina; mover qualquer uma das linhas a apaga (a distância é entre as duas). Sobre o vídeo, a B aparece em azul, com o que o leitor vê nela.',
+      'PARA DESENHAR A LINHA NO CENTRO DA FITA: uma LUPA mostra o vídeo ampliado 5 vezes em volta do ponteiro, e a faixa pode ser bem fina (desde 0,4% da imagem num lado). Até aqui o mínimo era 2% de cada lado, e duas fitas a 30 cm, vistas de lado pela câmera, ficam a poucos pixels uma da outra.',
+      'O TESTE E A LEITURA MEDEM A ESTEIRA: velocidade (m/min), caixa + vão e entre-peças (mm), ao lado do cadastro do painel. Velocidade = a distância ÷ o tempo que a ponta da caixa leva de A até B; caixa + vão = a velocidade × o intervalo entre as caixas (o do vídeo, com as pausas de cada ciclo, se houver); entre-peças = isso − a caixa. A caixa vem do cadastro do produto e pode ser trocada só naquela tela (no fim da linha, na seladora, ela passa fechada). Trocar a distância ou a caixa refaz a conta na hora, sem ler o vídeo de novo.',
+      'O TEMPO DE A ATÉ B SAI DO VÍDEO INTEIRO, não de caixa a caixa: no começo da linha as peças postas em cima da chapa cobrem o papelão. O sinal se repete a cada caixa, então a tela RECUSA, sem dar número, quando a caixa aparece primeiro na B (linhas trocadas, ou longe demais: a B viu a caixa anterior), quando o tempo chega perto de meio intervalo entre as caixas, quando as duas linhas estão perto demais (menos de 0,4 s) e quando não viram a mesma coisa passar. Velocidade muito longe do cadastro vem com aviso para conferir.',
+      'O ENTRE-PEÇAS É O QUE A LINHA PRATICA NAQUELE VÍDEO, NÃO UM PADRÃO: vem com "≈" e a faixa dos intervalos, porque é a diferença de dois números próximos (caixa + vão − caixa). Levá-lo ao cadastro faz o tempo-alvo virar o ritmo daquele vídeo ÷ a eficiência — o padrão é decisão do PPCP. Estes números não vão com a medição salva: anote o que precisar.',
+    ],
+  },
+  {
     versao: '2.112.2',
     data: '2026-11-18',
     titulo: 'Cronometrar por vídeo: as lacunas listadas para conferir',

@@ -80,6 +80,8 @@ function esperar(video, evento, prazoMs) {
  * @param video     um <video> NA TELA (o navegador so' entrega quadros de
  *                  video que esta' na pagina), com o arquivo ja' carregado
  * @param retangulo { x, y, largura, altura } em fracao da imagem
+ * @param retanguloB a linha B (v2.113.0), medida no MESMO quadro: as amostras
+ *                  ganham `fracaoB` — o atraso de A para B da' a velocidade
  * @param fimMs     para aqui (o teste); sem ele, vai ate' o fim do video
  * @param aoProgresso ({ ms, duracaoMs, velocidade, pausado }) a cada quadro
  *
@@ -87,9 +89,10 @@ function esperar(video, evento, prazoMs) {
  * cancelado } e rejeita com um Error de mensagem em portugues.
  */
 export function analisarVideo({
-  video, retangulo, inicioMs = 0, fimMs = null, aoProgresso = () => {},
+  video, retangulo, retanguloB = null, inicioMs = 0, fimMs = null, aoProgresso = () => {},
 }) {
   const medidor = criarMedidor();
+  const medidorB = retanguloB ? criarMedidor() : null;
   const amostras = [];
   const passos = [];
   let velocidade = VELOCIDADE;
@@ -112,7 +115,8 @@ export function analisarVideo({
     if (ms <= ultimoMs) return; // o mesmo quadro de novo
     const medida = medidor(video, retangulo);
     if (!medida) return; // sem imagem ainda
-    amostras.push({ ms, fracao: medida.fracao });
+    const medidaB = medidorB ? medidorB(video, retanguloB) : null;
+    amostras.push(medidaB ? { ms, fracao: medida.fracao, fracaoB: medidaB.fracao } : { ms, fracao: medida.fracao });
     if (ultimoMs >= 0) {
       passos.push(ms - ultimoMs);
       // A cada ~30 amostras: o PC acompanha esta velocidade? Se as amostras
