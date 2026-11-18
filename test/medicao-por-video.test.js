@@ -11,10 +11,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  MAX_PARADAS, OBS_LACUNA, emRelogio, inicioSugerido, lacunasDoVideo, marcarLacunasComoParada, marcasEmPalavras,
-  marcasGuardadas, medicaoDoVideo, semMarcas,
+  emRelogio, inicioSugerido, lacunasDoVideo, marcasEmPalavras, marcasGuardadas, medicaoDoVideo, semMarcas,
 } from '../src/domain/medicaoPorVideo.js';
-import { leituraPecaAPeca } from '../src/domain/crono/intervalos.js';
 import { conferenciaRapida, leituraPecaAPeca, periodoPorPeca } from '../src/domain/cronoanalise.js';
 import {
   marcasDaConferencia, paradasDaConferencia, relogioDasMarcas, setupDasMarcas,
@@ -250,17 +248,28 @@ describe('as marcacoes guardadas no PC (v2.112.1): so a que tem marca', () => {
   });
 });
 
-describe('as LACUNAS do video e marcar sem motivo (v2.112.2)', () => {
+describe('as LACUNAS do video (v2.112.2): so lista, no tempo do video', () => {
   const seg = (x) => x * 1000;
-  // Largada em 2 s, volumes a cada 5 s e um 20 s depois do anterior: 11 intervalos.
+  // Largada em 2 s, volumes a cada 5 s e um 20 s depois do anterior: 10
+  // intervalos, exatamente o minimo da leitura.
   const toques = [7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 72].map((x, i) => ({ ms: seg(x), ordem: i + 1 }));
   const m = { largadaMs: seg(2), toques, paradas: [], aberta: null, ordem: 11 };
 
-  it('a lacuna e a do indicador (mais que o dobro do passo), no tempo do video', () => {
+  it('a lacuna e a do indicador (mais que o dobro do passo), com o excesso, no tempo do video', () => {
     const r = lacunasDoVideo(m);
-    expect(r.suficiente).toBe(true);
-    expect(r.normalMs).toBe(5000);
-    expect(r.lacunas).toEqual([{ deMs: 52000, ateMs: 72000, excessoMs: 15000, parada: { inicioMs: 57000, fimMs: 72000 } }]);
+    expect(r).toEqual({ suficiente: true, normalMs: 5000, lacunas: [{ deMs: 52000, ateMs: 72000, excessoMs: 15000 }] });
+    // A mesma conta do Volume a volume, sobre as marcas que vao ao servidor.
+    const med = medicaoDoVideo({
+      largadaMs: m.largadaMs, toquesMs: toques.map((t) => t.ms), paradas: [], fimMs: seg(75), inicioFilmagem: '2026-11-18T08:00:00Z',
+    }).medicao;
+    const leitura = leituraPecaAPeca({ marcasMs: med.marcasMs });
+    expect(leitura.lacunas).toHaveLength(1);
+    expect(leitura.normalMs).toBe(r.normalMs);
+  });
+
+  it('a parada marcada sai do intervalo (relogio rodando): marcada com P, a lacuna deixa de ser lacuna', () => {
+    const comParada = { ...m, paradas: [{ motivo: 'setup', inicioMs: seg(57), fimMs: seg(72) }] };
+    expect(lacunasDoVideo(comParada).lacunas).toEqual([]);
   });
 
   it('menos de 10 intervalos: sem leitura, sem lacuna (como o Volume a volume)', () => {
@@ -268,41 +277,5 @@ describe('as LACUNAS do video e marcar sem motivo (v2.112.2)', () => {
     expect(r.suficiente).toBe(false);
     expect(r.lacunas).toEqual([]);
     expect(lacunasDoVideo({ ...m, largadaMs: null })).toBeNull();
-  });
-
-  it('marcada sem motivo: parada OUTRO com a observacao; o intervalo volta ao passo e a lacuna some', () => {
-    const r = marcarLacunasComoParada(m);
-    expect(r.marcadas).toBe(1);
-    expect(r.aviso).toBeNull();
-    expect(r.marcacao.paradas).toEqual([{ motivo: 'outro', inicioMs: 57000, fimMs: 72000, observacao: OBS_LACUNA }]);
-    expect(lacunasDoVideo(r.marcacao).lacunas).toEqual([]);
-    const med = medicaoDoVideo({
-      largadaMs: m.largadaMs, toquesMs: toques.map((t) => t.ms), paradas: r.marcacao.paradas, fimMs: seg(75),
-      inicioFilmagem: '2026-11-18T08:00:00Z',
-    }).medicao;
-    // O que vai ao servidor: a parada com o excesso (15 s) e a observacao.
-    expect(med.paradas).toEqual([{ motivo: 'outro', duracaoMs: 15000, observacao: OBS_LACUNA }]);
-    // Nas marcas da linha rodando, o ultimo intervalo e' o passo (5 s): o
-    // "sem as lacunas" nao muda e o "com a linha rodando" cai para ele.
-    const leitura = leituraPecaAPeca({ marcasMs: med.marcasMs });
-    expect(leitura.normalMs).toBe(5000);
-    expect(leitura.mediaMs).toBe(5000);
-    expect(leitura.lacunas).toEqual([]);
-  });
-
-  it('lacuna que ja tem parada marcada dentro nao e marcada de novo (fica para conferir)', () => {
-    const comParada = { ...m, paradas: [{ motivo: 'setup', inicioMs: 60000, fimMs: 65000 }] };
-    const r = lacunasDoVideo(comParada);
-    expect(r.lacunas).toHaveLength(1);
-    expect(r.lacunas[0].parada).toBeNull();
-    const x = marcarLacunasComoParada(comParada);
-    expect(x.marcadas).toBe(0);
-    expect(x.marcacao).toBe(comParada);
-  });
-
-  it('com parada aberta, ou sem vaga (50 paradas), nao marca e diz por que', () => {
-    expect(marcarLacunasComoParada({ ...m, aberta: { motivo: null, inicioMs: 73000 } }).aviso).toMatch(/parada aberta/);
-    const cheias = Array.from({ length: MAX_PARADAS }, (_, i) => ({ motivo: 'outro', inicioMs: 80000 + i * 10, fimMs: 80005 + i * 10 }));
-    expect(marcarLacunasComoParada({ ...m, paradas: cheias }).aviso).toMatch(/máximo/);
   });
 });

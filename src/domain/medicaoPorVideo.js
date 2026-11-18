@@ -48,8 +48,6 @@ const finito = (v) => v != null && v !== '' && Number.isFinite(Number(v));
 function paradasDoVideo(paradas, largadaMs, fimMs) {
   const lista = (paradas || []).map((p) => ({
     motivo: p.motivo, inicioMs: inteiro(p.inicioMs), fimMs: p.fimMs == null ? null : inteiro(p.fimMs),
-    // A observacao da parada (v2.112.2: a que veio de uma lacuna diz isso).
-    ...(p.observacao ? { observacao: String(p.observacao) } : {}),
   }));
   if (lista.some((p) => p.fimMs == null)) return { motivo: 'há uma parada sem o "Voltou" — encerre a parada antes' };
   if (lista.some((p) => !p.motivo)) return { motivo: 'há uma parada sem motivo' };
@@ -122,9 +120,7 @@ export function medicaoDoVideo({
       // Com um volume so' nao ha' trecho entre o primeiro e o ultimo.
       marcasRelogioMs: toques.length >= 2 ? ultimo - primeiro : null,
       marcasSetupMs: toques.length >= 2 ? setupNoTrecho : null,
-      paradas: lista.map((p) => ({
-        motivo: p.motivo, duracaoMs: p.fimMs - p.inicioMs, ...(p.observacao ? { observacao: p.observacao } : {}),
-      })),
+      paradas: lista.map((p) => ({ motivo: p.motivo, duracaoMs: p.fimMs - p.inicioMs })),
       salvoEm: new Date(inicio.getTime() + fim).toISOString(),
       iniciadoEm: new Date(inicio.getTime() + largada).toISOString(),
     },
@@ -338,89 +334,41 @@ export function semMarcas(m) {
 
 /* ------------------------------------------------- as lacunas (v2.112.2)
  * LACUNA e' o intervalo entre dois volumes maior que o DOBRO do passo da
- * linha (o "sem as lacunas"): a linha parou e ninguem marcou. A regra e' a
- * do indicador (leituraPecaAPeca, com os 10 intervalos minimos), aplicada as
- * marcas no relogio da linha rodando — as mesmas que vao ao sync.
+ * linha (o "sem as lacunas"). A regra e' a do indicador (leituraPecaAPeca,
+ * com os 10 intervalos minimos), aplicada as marcas no relogio da linha
+ * rodando — as mesmas que vao ao sync —, e devolvida no TEMPO DO VIDEO, para
+ * a tela levar o analista ate' cada uma.
  *
- * MARCAR SEM MOTIVO (PPCP, 18/11/2026: "pode fazer listar as lacunas e
- * marcar sem motivo"): a lacuna vira parada com o motivo OUTRO — o que o
- * relatorio de perdas ja' trata como "sem motivo definido" (MOTIVO_SEM_
- * DEFINICAO em perdasEmbalagem.js) — e a observacao diz de onde veio. O
- * banco exige motivo em toda parada; "a informar" fica na observacao.
- * ⚠ O preco, avisado antes: a lacuna marcada deixa de ser lacuna, e o
- * indicador de lacunas (o que ninguem apontou) cai sem ninguem ter apontado.
+ * SO' LISTA, NAO MARCA (PPCP, 18/11/2026, depois da revisao): marcar a
+ * lacuna como parada sem motivo fazia a medicao passar na TRAVA DA UEP do
+ * painel (lacunas ate' 15% = 1 − sem as lacunas ÷ rodando: a parada iguala
+ * os dois), punha o tempo como "parada com motivo" no relatorio de perdas e,
+ * marcada antes de corrigir as caixas, congelava um passo errado e barrava a
+ * caixa que faltou. Na lacuna, ou a linha parou (P, com o motivo) ou a
+ * leitura nao pegou uma caixa (Enter) — so' quem olha o video sabe qual.
  */
-
-/** O motivo da parada marcada a partir de uma lacuna: o que nao diz o motivo. */
-export const MOTIVO_LACUNA = 'outro';
-/** A observacao dela: no relatorio, da' para separar estas das paradas vistas. */
-export const OBS_LACUNA = 'Lacuna marcada pela leitura do vídeo: motivo a informar.';
-
-/** Os volumes no tempo do video e as marcas no relogio da linha rodando (paradas fechadas fora). */
-function marcasRodando(m) {
-  const toques = (m?.toques || []).map((t) => inteiro(t.ms)).sort((a, b) => a - b);
-  const fechadas = (m?.paradas || []).filter((p) => p.fimMs != null);
-  const paradaAte = (t) => fechadas.reduce((soma, p) => soma + (p.fimMs <= t ? p.fimMs - p.inicioMs : 0), 0);
-  return { toques, fechadas, marcasMs: toques.map((t) => (t - m.largadaMs) - paradaAte(t)) };
-}
 
 /**
  * AS LACUNAS da marcacao, no tempo do video.
  *
  * @returns null sem largada ou com menos de 2 volumes; { suficiente: false,
  *   motivo } com menos intervalos que a leitura pede; senao { suficiente:
- *   true, normalMs, lacunas: [{ deMs, ateMs, excessoMs, parada }] } — de/ate'
- *   sao os dois volumes (tempo do video); `parada` e' a que a marcaria
- *   ({ inicioMs, fimMs }: do volume anterior + o passo normal ate' o volume
- *   seguinte, a duracao do excesso — o intervalo volta ao passo da linha),
- *   ou null quando ja' ha' parada marcada dentro dela (fica para conferir).
+ *   true, normalMs, lacunas: [{ deMs, ateMs, excessoMs }] } — de/ate' sao os
+ *   dois volumes (tempo do video) e o excesso, o que passou do passo.
  */
 export function lacunasDoVideo(m) {
   if (!m || m.largadaMs == null || (m.toques || []).length < 2) return null;
-  const { toques, fechadas, marcasMs } = marcasRodando(m);
-  const leitura = leituraPecaAPeca({ marcasMs });
+  const toques = m.toques.map((t) => inteiro(t.ms)).sort((a, b) => a - b);
+  const fechadas = (m.paradas || []).filter((p) => p.fimMs != null);
+  const paradaAte = (t) => fechadas.reduce((soma, p) => soma + (p.fimMs <= t ? p.fimMs - p.inicioMs : 0), 0);
+  const leitura = leituraPecaAPeca({ marcasMs: toques.map((t) => (t - m.largadaMs) - paradaAte(t)) });
   if (!leitura) return null;
   if (!leitura.suficiente) return { suficiente: false, motivo: leitura.motivo, normalMs: null, lacunas: [] };
-  const normalMs = leitura.normalMs;
-  const lacunas = leitura.lacunas.map(({ indice, ms }) => {
-    const deMs = toques[indice];
-    const ateMs = toques[indice + 1];
-    const comParada = fechadas.some((p) => p.inicioMs < ateMs && p.fimMs > deMs)
-      || (m.aberta != null && m.aberta.inicioMs < ateMs);
-    const inicioMs = Math.round(deMs + normalMs);
-    return {
-      deMs,
-      ateMs,
-      excessoMs: Math.round(ms - normalMs),
-      parada: !comParada && ateMs > inicioMs ? { inicioMs, fimMs: ateMs } : null,
-    };
-  });
-  return { suficiente: true, normalMs, lacunas };
-}
-
-/**
- * MARCA AS LACUNAS COMO PARADA SEM MOTIVO (motivo OUTRO, observacao "motivo
- * a informar"). So' as livres (sem parada marcada dentro), ate' o teto de
- * paradas da medicao. Devolve { marcacao, aviso?, marcadas }.
- */
-export function marcarLacunasComoParada(m) {
-  if (m.aberta) return { marcacao: m, marcadas: 0, aviso: 'Há uma parada aberta: aperte P (Voltou) antes de marcar as lacunas.' };
-  const r = lacunasDoVideo(m);
-  const livres = (r?.lacunas || []).filter((l) => l.parada);
-  if (!livres.length) return { marcacao: m, marcadas: 0, aviso: 'Nenhuma lacuna para marcar.' };
-  const vagas = MAX_PARADAS - m.paradas.length;
-  if (vagas <= 0) {
-    return { marcacao: m, marcadas: 0, aviso: `Já são ${MAX_PARADAS} paradas, o máximo numa medição: nenhuma lacuna foi marcada.` };
-  }
-  const novas = livres.slice(0, vagas).map((l) => ({
-    motivo: MOTIVO_LACUNA, inicioMs: l.parada.inicioMs, fimMs: l.parada.fimMs, observacao: OBS_LACUNA,
-  }));
-  const paradas = [...m.paradas, ...novas].sort((a, b) => a.inicioMs - b.inicioMs);
   return {
-    marcacao: { ...m, paradas },
-    marcadas: novas.length,
-    aviso: livres.length > vagas
-      ? `Só ${vagas} das ${livres.length} lacunas couberam: o máximo é ${MAX_PARADAS} paradas numa medição.`
-      : null,
+    suficiente: true,
+    normalMs: leitura.normalMs,
+    lacunas: leitura.lacunas.map(({ indice, ms }) => ({
+      deMs: toques[indice], ateMs: toques[indice + 1], excessoMs: Math.round(ms - leitura.normalMs),
+    })),
   };
 }
