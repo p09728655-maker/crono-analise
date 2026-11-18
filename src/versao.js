@@ -15,10 +15,12 @@ export const HISTORICO = [
   {
     versao: '2.112.1',
     data: '2026-11-18',
-    titulo: 'Cronometrar por vídeo: a lista das marcações guardadas só com o que tem marca',
+    titulo: 'Cronometrar por vídeo: o tempo sem as lacunas e a lista das marcações guardadas só com o que tem marca',
     itens: [
+      'O TEMPO POR VOLUME SEM AS LACUNAS APARECE NO VÍDEO: no painel ao lado do vídeo ("Sem as lacunas", ao lado de Lacunas e Parado) e na revisão antes de salvar ("Por vol. sem as lacunas"). É o passo da linha — sem parada marcada nem lacuna —, o mesmo número do Volume a volume no PC e a régua da UEP. Antes, a tela do vídeo mostrava quantas lacunas havia, mas não esse tempo. Aparece a partir de 10 intervalos marcados, como no Volume a volume.',
       'ABRIR UM VÍDEO E NÃO MARCAR NADA NÃO FICA MAIS GUARDADO. Antes, todo vídeo em que se clicava "Começar a marcar" virava uma "marcação em andamento", mesmo sem nenhuma marca: a tela do preparo enchia de vídeos com 0 volumes, e reabrir um deles pedia para continuar ou descartar uma marcação vazia. Agora só fica guardada a marcação com alguma marca (largada, volume ou parada) — ou a que pode já estar no sistema (tentou salvar). As vazias que já estavam guardadas neste PC somem sozinhas.',
-      'A LISTA DAS MARCAÇÕES GUARDADAS FICOU UMA POR LINHA: o vídeo, a máquina, o produto, o que tem marcado ("a largada e 8 volumes") e quando foi guardada. Cada uma tem o seu Descartar, que pergunta antes ("Descartar as marcas deste vídeo (a largada e 8 volumes)? Não dá para desfazer.") — dá para limpar o que não serve mais sem abrir o vídeo.',
+      'A LISTA DAS MARCAÇÕES GUARDADAS FICOU UMA POR LINHA: o vídeo, a máquina, o produto, o que tem marcado ("a largada e 8 volumes") e quando foi guardada — e, se for o caso, que ela "pode já estar no sistema" (tentou salvar sem resposta) ou "já está no sistema". Cada uma tem o seu Descartar, que pergunta antes ("Descartar as marcas deste vídeo (a largada e 8 volumes)? Não dá para desfazer.") — dá para limpar o que não serve mais sem abrir o vídeo. A que pode estar no sistema, descartada, deixa o aviso no vídeo, para o mesmo trecho não ser salvo duas vezes.',
+      'O aviso de marcação guardada, ao abrir o vídeo, diz o que tem marcado ("a largada, 8 volumes e 1 parada"), não só os volumes — "0 volumes" escondia a largada e as paradas.',
     ],
   },
   {

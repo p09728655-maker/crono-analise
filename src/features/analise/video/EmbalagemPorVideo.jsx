@@ -574,7 +574,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   /* ------------------------------------------- marcacao automatica */
   // A marcacao automatica comeca com a lista vazia: pondo marcas por cima
   // das do analista, nao daria para saber o que conferir.
-  const listaVazia = (m) => m.largadaMs == null && !m.toques.length && !m.paradas.length && !m.aberta;
+  // A MESMA regra do rascunho (semMarcas): "sem marca" para a automatica e
+  // para o que se guarda no PC nao pode discordar.
+  const listaVazia = semMarcas;
   const lendo = automatica.estado === 'lendo';
 
   const desenharRetangulo = () => {
@@ -1243,7 +1245,12 @@ function Preparar({
             {outras.map((r) => (
               <MarcacaoGuardada
                 key={r.arquivo} r={r} quando={quando}
-                aoDescartar={() => { descartarGuardada(r); setDescartadas((n) => n + 1); }}
+                // O de AGORA no PC, nao o de quando a lista foi desenhada:
+                // outra aba pode ter tentado salvar este video nesse meio.
+                aoDescartar={() => {
+                  descartarGuardada(lerMapa(CHAVE_RASCUNHOS)[r.arquivo] || r);
+                  setDescartadas((n) => n + 1);
+                }}
               />
             ))}
           </ul>
@@ -1253,7 +1260,7 @@ function Preparar({
       {jaSalvo && (
         <div style={ev.aviso} role="status">
           {jaSalvo.chegou && `Uma marcação deste vídeo foi descartada neste PC em ${quando(jaSalvo.em)}, e uma versão dela já está no sistema: confira ${ondeConferir(jaSalvo.inicio)}. Salvar de novo o mesmo trecho cria outra medição: o takt e a junção contariam os mesmos volumes duas vezes. `}
-          {jaSalvo.incerto && `Uma marcação deste vídeo (${volumes(jaSalvo.volumes)}) foi descartada neste PC em ${quando(jaSalvo.em)} depois de uma tentativa de salvar sem resposta: ela pode ter chegado. Confira ${ondeConferir(jaSalvo.inicio)} antes de marcar o mesmo trecho — se ela estiver lá, salvar de novo cria outra medição, e o takt e a junção contariam os mesmos volumes duas vezes. `}
+          {jaSalvo.incerto && `Uma marcação deste vídeo${jaSalvo.volumes ? ` (${volumes(jaSalvo.volumes)})` : ''} foi descartada neste PC em ${quando(jaSalvo.em)} depois de uma tentativa de salvar sem resposta: ela pode ter chegado. Confira ${ondeConferir(jaSalvo.inicio)} antes de marcar o mesmo trecho — se ela estiver lá, salvar de novo cria outra medição, e o takt e a junção contariam os mesmos volumes duas vezes. `}
           {!jaSalvo.chegou && !jaSalvo.incerto && `Este vídeo já foi salvo neste PC em ${quando(jaSalvo.em)} (${volumes(jaSalvo.volumes)}). Salvar de novo o mesmo trecho cria outra medição: o takt e a junção contariam os mesmos volumes duas vezes. `}
           Outro trecho do vídeo pode ser salvo sem problema.
         </div>
@@ -1261,8 +1268,8 @@ function Preparar({
 
       {rascunho && (
         <div style={ev.aviso} role="status">
-          Há uma marcação em andamento deste vídeo ({volumes(rascunho.marcacao.toques.length)}, guardada neste PC
-          em {quando(rascunho.atualizadoEm)}). Continuar usa o que foi guardado com ela:{' '}
+          Há uma marcação em andamento deste vídeo ({marcasEmPalavras(rascunho.marcacao) || 'nenhuma marca'} —
+          guardada neste PC em {quando(rascunho.atualizadoEm)}). Continuar usa o que foi guardado com ela:{' '}
           {[rascunho.maquinaNome, rascunho.campos.produto || 'sem produto',
             rascunho.campos.inicio ? `início ${new Date(rascunho.campos.inicio).toLocaleString('pt-BR')}` : null]
             .filter(Boolean).join(' · ')}.{' '}
@@ -1451,6 +1458,10 @@ function Marcas({
     ...(aberta ? [{ tipo: 'parada', ms: aberta.inicioMs, parada: aberta }] : []),
   ].sort((a, b) => a.ms - b.ms || (a.tipo === 'parada' ? -1 : 1));
   const lacunas = numeros?.leitura?.suficiente ? numeros.leitura.lacunas.length : null;
+  // O PASSO DA LINHA (v2.112.1): por volume sem parada marcada nem lacuna, o
+  // mesmo "sem as lacunas" do Volume a volume (normalMs) — a regua da UEP.
+  // Sem os 10 intervalos da leitura, nao ha' passo: "—".
+  const semLacunasMs = numeros?.leitura?.suficiente ? numeros.leitura.normalMs : null;
   // As paradas daqui sao intervalos do video (inicio/fim), nao duracoes.
   const parado = paradas.reduce((soma, p) => soma + (p.fimMs - p.inicioMs), 0);
   const ultimo = toques.length ? toques[toques.length - 1].ms : null;
@@ -1482,6 +1493,7 @@ function Marcas({
         />
       </div>
       <div style={ev.numeros}>
+        <Numero rotulo="Sem as lacunas" valor={semLacunasMs > 0 ? `${formatarSegundos(semLacunasMs)} s` : '—'} sub="por volume: o passo da linha" />
         <Numero rotulo="Lacunas" valor={lacunas != null ? String(lacunas) : '—'} />
         <Numero rotulo="Parado" valor={parado > 0 ? duracaoCurta(parado) : '—'} />
       </div>
@@ -1567,6 +1579,11 @@ function Revisar({
         />
         <Numero rotulo="Tempo-alvo" valor={alvo?.alvoMs > 0 ? `${formatarSegundos(alvo.alvoMs)} s` : '—'} />
         <Numero
+          rotulo="Por vol. sem as lacunas"
+          valor={leitura?.suficiente && leitura.normalMs > 0 ? `${formatarSegundos(leitura.normalMs)} s` : '—'}
+          sub="o passo da linha: sem parada marcada nem lacuna"
+        />
+        <Numero
           rotulo="Volumes/hora" valor={calc ? String(Math.round(calc.pecasPorHoraBruto)) : '—'}
           sub="da largada ao Encerrar, paradas dentro"
         />
@@ -1574,7 +1591,7 @@ function Revisar({
         <Numero rotulo="Parado (marcado)" valor={calc?.paradaMs > 0 ? duracaoCurta(calc.paradaMs) : '—'} />
       </div>
       {leitura && !leitura.suficiente && (
-        <p style={ev.dica}>Poucos volumes para ler o intervalo: {leitura.motivo}. O tempo por volume vale; as lacunas, ainda não.</p>
+        <p style={ev.dica}>Poucos volumes para ler o intervalo: {leitura.motivo}. O tempo por volume vale; as lacunas e o sem as lacunas, ainda não.</p>
       )}
       {conferencia && <p style={ev.dica}><TextoConferencia c={conferencia} /></p>}
       {leitura && <GraficoIntervalos leitura={leitura} unidade={VOLUME} altura={240} />}
@@ -2171,19 +2188,22 @@ function GraficoTeste({ r, aoIr }) {
 function MarcacaoGuardada({ r, quando, aoDescartar }) {
   const [confirmar, setConfirmar] = useState(false);
   const marcas = marcasEmPalavras(r.marcacao);
-  const talvezNoSistema = Boolean(r.envioTentado || r.incerto || r.mexida);
+  // A que chegou e foi mexida no PC JA' ESTA' no sistema; a que tentou
+  // salvar sem resposta PODE estar. A linha diz isso antes do Descartar:
+  // "nenhuma marca" sozinho parecia lixo para jogar fora.
+  const noSistema = r.mexida ? 'já está no sistema' : (r.envioTentado || r.incerto) ? 'pode já estar no sistema' : null;
   return (
     <li style={ev.itemGuardada}>
       <div style={ev.itemGuardadaTexto}>
         <span style={ev.itemGuardadaNome}>{r.nome}</span>
         <span style={ev.dica}>
           {[r.maquinaNome, r.campos?.produto || 'sem produto', marcas || 'nenhuma marca',
-            r.atualizadoEm ? `guardada em ${quando(r.atualizadoEm)}` : null].filter(Boolean).join(' · ')}
+            r.atualizadoEm ? `guardada em ${quando(r.atualizadoEm)}` : null, noSistema].filter(Boolean).join(' · ')}
         </span>
         {confirmar && (
           <span style={ev.dica} role="status">
             Descartar as marcas deste vídeo{marcas ? ` (${marcas})` : ''}? Não dá para desfazer.
-            {talvezNoSistema && ' Uma versão dela pode já estar no sistema: o aviso fica no vídeo, para não salvar o mesmo trecho duas vezes.'}
+            {noSistema && ` Uma versão dela ${noSistema}: o aviso fica no vídeo, para não salvar o mesmo trecho duas vezes.`}
           </span>
         )}
       </div>

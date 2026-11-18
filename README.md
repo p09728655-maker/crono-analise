@@ -401,7 +401,12 @@ do produto dele**.
   uma linha por vídeo (`MarcacaoGuardada`: máquina, produto, `marcasEmPalavras`,
   quando) com Descartar que confirma; descartar pela lista é o mesmo
   `descartarGuardada` do vídeo aberto (a que pode estar no servidor deixa o
-  aviso de "já salvo"). A medição vai direto ao `/sync`, sem a fila
+  aviso de "já salvo"), com o rascunho lido do PC na hora do clique (outra aba
+  pode ter tentado salvar), e a linha diz "pode já estar" / "já está no
+  sistema". O `listaVazia` da tela é o próprio `semMarcas` (uma regra só).
+- **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão
+  mostram o `normalMs` da `leituraPecaAPeca` — o "por volume sem as lacunas"
+  do Volume a volume, o passo da linha —, com "—" abaixo de 10 intervalos. A medição vai direto ao `/sync`, sem a fila
   offline, para a recusa aparecer na tela, com `origem: 'video'` (coluna
   `conferencias.origem`, `'tablet'` por padrão; vídeo sem marcas é recusado
   pela API e pelo banco). Lista, volume a volume e folha mostram "por vídeo".

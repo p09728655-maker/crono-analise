@@ -262,7 +262,8 @@ await preparar.waitFor({ timeout: 8000 });
 await p.locator('input[type="file"]').setInputFiles(VIDEO);
 const continuar = p.getByRole('button', { name: 'Continuar de onde parou' });
 await continuar.waitFor({ timeout: 8000 });
-checar(/marcação em andamento deste vídeo \(8 volumes/.test(await preparar.innerText()), 'F5: o PC guardou a marcacao (8 volumes)');
+checar(/marcação em andamento deste vídeo \(a largada, 8 volumes e 1 parada — guardada neste PC/.test(await preparar.innerText()),
+  'F5: o PC guardou a marcacao (a largada, 8 volumes e 1 parada — nao so os volumes)');
 // Com o video ja' aberto: antes disso o botao fica travado por outro motivo.
 await preparar.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
 await p.waitForFunction(() => !document.querySelector('button[disabled]')?.innerText.includes('Continuar'), { timeout: 8000 });
@@ -583,12 +584,29 @@ await ctx.close();
     && depoisDaLimpeza.includes('antigo.mp4|123|456') && /Uma marcação em andamento neste PC/.test(await y.locator('[aria-label="Preparar a medição por vídeo"]').innerText()),
   'marcacao guardada sem nenhuma marca sai do PC e da lista; a que tem marca fica');
 
-  // Abrir um video e nao marcar nada nao vira "marcacao em andamento".
+  // Abrir um video e nao marcar nada nao vira "marcacao em andamento" —
+  // conferido no PC ANTES de qualquer F5: o F5 limpa a vazia de qualquer
+  // jeito e esconderia a volta do defeito (revisao da v2.112.1). Sem isto,
+  // abrir 10 videos sem marcar empurrava para fora uma marcacao de verdade.
+  const CHAVE = 'ritmopatrimar.video.rascunhos';
+  const doVideo = (chave) => Object.keys(JSON.parse(localStorage.getItem(chave) || '{}')).filter((k) => k.startsWith('embalagem-120s.webm|'));
+  const chavesDoVideo = () => y.evaluate(`(${doVideo})('${CHAVE}')`);
+  const esperarChaves = (n) => y.waitForFunction(`(${doVideo})('${CHAVE}').length === ${n}`, null, { timeout: 4000 }).catch(() => {});
   await y.locator('input[type="file"]').setInputFiles(VIDEO);
   await y.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
   await y.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
   await y.getByRole('button', { name: 'Começar a marcar' }).click();
   await y.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  checar(!(await chavesDoVideo()).length, 'comecar a marcar e nao marcar nada: nada guardado no PC (sem F5 no meio)');
+  // Uma marca (a largada): guarda. Desfeita ate' esvaziar: sai do PC.
+  await y.evaluate(() => document.activeElement?.blur());
+  await y.keyboard.press('Enter');
+  await esperarChaves(1);
+  const comLargada = (await chavesDoVideo()).length;
+  await y.keyboard.press('Backspace');
+  await esperarChaves(0);
+  checar(comLargada === 1 && !(await chavesDoVideo()).length,
+    `com a largada a marcacao e guardada; desfeita ate esvaziar, sai do PC (${comLargada} → ${(await chavesDoVideo()).length})`);
   await y.reload();
   await lista.waitFor({ timeout: 8000 });
   checar((await lista.locator('li').count()) === 1 && !/embalagem-120s/.test(await lista.innerText()),
@@ -610,7 +628,74 @@ await ctx.close();
   await lista.getByRole('button', { name: 'Descartar as marcas' }).click();
   const restou = await y.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('ritmopatrimar.video.rascunhos') || '{}')));
   checar(!(await lista.count()) && !restou.length, 'descartada pela lista, a marcacao sai do PC e a lista some');
+
+  // A que TENTOU SALVAR fica guardada mesmo sem marca (pode estar no sistema),
+  // a linha diz isso, e descartada pela lista deixa o aviso no video — senao a
+  // proxima marcacao do mesmo trecho duplicaria calada.
+  await y.locator('input[type="file"]').setInputFiles(VIDEO);
+  await y.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  await y.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+  await y.getByRole('button', { name: 'Começar a marcar' }).click();
+  await y.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  await y.evaluate(() => document.activeElement?.blur());
+  await y.keyboard.press('Enter');
+  await esperarChaves(1);
+  // Como fica depois de um envio sem resposta e das marcas desfeitas: vazia, com envioTentado.
+  await y.evaluate((chave) => {
+    const mapa = JSON.parse(localStorage.getItem(chave) || '{}');
+    const k = Object.keys(mapa).find((x) => x.startsWith('embalagem-120s.webm|'));
+    mapa[k] = {
+      ...mapa[k], envioTentado: true, marcacao: { largadaMs: null, toques: [], paradas: [], aberta: null, ordem: 0 },
+    };
+    localStorage.setItem(chave, JSON.stringify(mapa));
+  }, CHAVE);
+  await y.reload();
+  await lista.waitFor({ timeout: 8000 });
+  checar((await chavesDoVideo()).length === 1
+    && /embalagem-120s\.webm[\s\S]*nenhuma marca · guardada em [^·]+ · pode já estar no sistema/.test(await lista.innerText()),
+  'a vazia que tentou salvar fica guardada, e a linha diz que pode ja estar no sistema');
+  await lista.getByRole('button', { name: /Descartar a marcação de embalagem-120s/ }).click();
+  checar(/Uma versão dela pode já estar no sistema: o aviso fica no vídeo/.test(await lista.innerText()),
+    'a confirmacao do descarte avisa que ela pode ja estar no sistema');
+  await lista.getByRole('button', { name: 'Descartar as marcas' }).click();
+  await y.locator('input[type="file"]').setInputFiles(VIDEO);
+  await y.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  {
+    const texto = await y.locator('[aria-label="Preparar a medição por vídeo"]').innerText();
+    checar(/Uma marcação deste vídeo foi descartada neste PC em .* depois de uma tentativa de salvar sem resposta: ela pode ter chegado/.test(texto)
+      && !/0 volumes/.test(texto),
+    'descartada pela lista, a que tentou salvar deixa o aviso de que pode ter chegado (sem "0 volumes")');
+  }
   await c6.close();
+}
+
+/* ---- o passo da linha: por volume SEM AS LACUNAS (v2.112.1) ---- */
+{
+  const c8 = await navegador.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: FUSO });
+  const w = await c8.newPage();
+  await semearSessao(w);
+  w.on('pageerror', (e) => erros.push(e.message));
+  await simularServidor(w, { enviados: [] });
+  await w.goto(`${BASE}/analise/embalagem/video`);
+  await w.locator('input[type="file"]').setInputFiles(VIDEO);
+  await w.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  await w.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+  await w.getByRole('button', { name: 'Começar a marcar' }).click();
+  const painel = w.locator('[aria-label="Marcas da medição"]');
+  await painel.waitFor({ timeout: 4000 });
+  await w.evaluate(() => document.activeElement?.blur());
+  // A largada em 2 s, dez volumes a cada 5 s e um 20 s depois: 11 intervalos
+  // (a leitura comeca com 10), o normal e' 5 s e o de 20 s e' lacuna (> 2x).
+  for (const s of [2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 72]) await teclaEm(w, s, 'Enter');
+  const numerosTxt = (await painel.innerText()).replace(/\s+/g, ' ');
+  checar(/SEM AS LACUNAS 5\.0 s/i.test(numerosTxt) && /LACUNAS 1 /i.test(numerosTxt),
+    `o painel do video mostra o passo da linha sem as lacunas (5.0 s) e a lacuna (${numerosTxt.match(/SEM AS LACUNAS[^]{0,60}/i)?.[0]})`);
+  await teclaEm(w, 75, 'f');
+  const revisar = w.getByRole('region', { name: 'Revisar a medição' });
+  await revisar.waitFor({ timeout: 4000 });
+  checar(/POR VOL\. SEM AS LACUNAS 5\.0 s/i.test((await revisar.innerText()).replace(/\s+/g, ' ')),
+    'a revisao antes de salvar mostra o mesmo por volume sem as lacunas');
+  await c8.close();
 }
 
 /* ------- rascunho de maquina que saiu do cadastro; video sem duracao ------- */
