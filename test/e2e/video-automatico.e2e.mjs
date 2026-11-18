@@ -251,8 +251,10 @@ checar(!/Largada|Volume 1/.test(await marcas.innerText()), 'teste aprovado tambe
 // Conferir uma caixa do teste leva o video ate' ela; a leitura do video todo
 // continua do comeco do teste (antes comecava dali e perdia o que vinha antes):
 // o "Marcar" logo abaixo parte daqui, com o video em 0:47.
-await auto.getByRole('button', { name: '0:47.0' }).first().click();
-await p.waitForFunction(() => Math.abs(document.querySelector('video').currentTime - 47) < 0.2, null, { timeout: 4000 });
+// A caixa que sai em ~47 s: a leitura a 8x varia uns decimos (46.9, 47.0,
+// 47.1) — o nome exato do botao deixava o teste instavel (revisao da v2.112.2).
+await auto.getByRole('button', { name: /^0:4[67]\.\d$/ }).first().click();
+await p.waitForFunction(() => Math.abs(document.querySelector('video').currentTime - 47) < 0.5, null, { timeout: 4000 });
 checar(/O vídeo\s+todo vai de 0:00\.0 até o fim/.test(await auto.innerText()),
   'depois de conferir uma caixa do teste (0:47), a leitura do video todo continua do comeco do teste');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-auto-teste.png` });

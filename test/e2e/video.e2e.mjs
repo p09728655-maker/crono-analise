@@ -675,7 +675,8 @@ await ctx.close();
   const w = await c8.newPage();
   await semearSessao(w);
   w.on('pageerror', (e) => erros.push(e.message));
-  await simularServidor(w, { enviados: [] });
+  const enviados8 = [];
+  await simularServidor(w, { enviados: enviados8 });
   await w.goto(`${BASE}/analise/embalagem/video`);
   await w.locator('input[type="file"]').setInputFiles(VIDEO);
   await w.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
@@ -684,17 +685,33 @@ await ctx.close();
   const painel = w.locator('[aria-label="Marcas da medição"]');
   await painel.waitFor({ timeout: 4000 });
   await w.evaluate(() => document.activeElement?.blur());
-  // A largada em 2 s, dez volumes a cada 5 s e um 20 s depois: 11 intervalos
-  // (a leitura comeca com 10), o normal e' 5 s e o de 20 s e' lacuna (> 2x).
+  // A largada em 2 s, dez volumes a cada 5 s e um 20 s depois: 10 intervalos
+  // (o minimo da leitura), o normal e' 5 s e o de 20 s e' lacuna (> 2x).
   for (const s of [2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 72]) await teclaEm(w, s, 'Enter');
   const numerosTxt = (await painel.innerText()).replace(/\s+/g, ' ');
   checar(/SEM AS LACUNAS 5\.0 s/i.test(numerosTxt) && /LACUNAS 1 /i.test(numerosTxt),
     `o painel do video mostra o passo da linha sem as lacunas (5.0 s) e a lacuna (${numerosTxt.match(/SEM AS LACUNAS[^]{0,60}/i)?.[0]})`);
+  // AS LACUNAS (v2.112.2): listadas, clicaveis — so' lista, nao marca.
+  const autoCartao = w.getByRole('region', { name: 'Marcação automática' });
+  {
+    const texto = await autoCartao.innerText();
+    checar(/Uma lacuna — intervalo maior que o dobro do passo da linha\s+\(5\.0 s por volume\); soma 15 s além do passo\.[\s\S]*0:52\.0–1:12\.0/.test(texto)
+      && !(await autoCartao.getByRole('button', { name: /Marcar .*lacuna/ }).count()),
+    'a lacuna aparece listada (passo, excesso e o trecho clicavel), sem botao de marcar');
+    await autoCartao.getByRole('button', { name: '0:52.0–1:12.0' }).click();
+    await w.waitForFunction(() => Math.abs(document.querySelector('video').currentTime - 52) < 0.2, null, { timeout: 4000 })
+      .then(() => checar(true, 'clicar na lacuna leva o video ao comeco dela'))
+      .catch(() => checar(false, 'clicar na lacuna leva o video ao comeco dela'));
+  }
   await teclaEm(w, 75, 'f');
   const revisar = w.getByRole('region', { name: 'Revisar a medição' });
   await revisar.waitFor({ timeout: 4000 });
   checar(/POR VOL\. SEM AS LACUNAS 5\.0 s/i.test((await revisar.innerText()).replace(/\s+/g, ' ')),
     'a revisao antes de salvar mostra o mesmo por volume sem as lacunas');
+  await revisar.getByRole('button', { name: 'Salvar medição' }).click();
+  await w.getByText(/Medição salva/).waitFor({ timeout: 8000 });
+  checar(JSON.stringify(enviados8[enviados8.length - 1]?.paradas) === '[]',
+    'listar a lacuna nao cria parada: vai ao servidor sem parada nenhuma (ela continua lacuna)');
   await c8.close();
 }
 

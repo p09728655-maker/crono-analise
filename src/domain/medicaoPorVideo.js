@@ -29,6 +29,7 @@
  * sai ordenada) e o periodo ser o da FILMAGEM, que pode ser de outro dia
  * (salvoEm = inicio da filmagem + Encerrar; o servidor calcula o inicio).
  */
+import { leituraPecaAPeca } from './crono/intervalos.js';
 
 /** Dois toques a menos disto sao o mesmo volume: a tecla repetida, nao dois volumes. */
 export const TOQUE_REPETIDO_MS = 200;
@@ -329,4 +330,45 @@ export function marcasEmPalavras(m) {
  */
 export function semMarcas(m) {
   return !m || (m.largadaMs == null && !m.toques?.length && !m.paradas?.length && !m.aberta);
+}
+
+/* ------------------------------------------------- as lacunas (v2.112.2)
+ * LACUNA e' o intervalo entre dois volumes maior que o DOBRO do passo da
+ * linha (o "sem as lacunas"). A regra e' a do indicador (leituraPecaAPeca,
+ * com os 10 intervalos minimos), aplicada as marcas no relogio da linha
+ * rodando — as mesmas que vao ao sync —, e devolvida no TEMPO DO VIDEO, para
+ * a tela levar o analista ate' cada uma.
+ *
+ * SO' LISTA, NAO MARCA (PPCP, 18/11/2026, depois da revisao): marcar a
+ * lacuna como parada sem motivo fazia a medicao passar na TRAVA DA UEP do
+ * painel (lacunas ate' 15% = 1 − sem as lacunas ÷ rodando: a parada iguala
+ * os dois), punha o tempo como "parada com motivo" no relatorio de perdas e,
+ * marcada antes de corrigir as caixas, congelava um passo errado e barrava a
+ * caixa que faltou. Na lacuna, ou a linha parou (P, com o motivo) ou a
+ * leitura nao pegou uma caixa (Enter) — so' quem olha o video sabe qual.
+ */
+
+/**
+ * AS LACUNAS da marcacao, no tempo do video.
+ *
+ * @returns null sem largada ou com menos de 2 volumes; { suficiente: false,
+ *   motivo } com menos intervalos que a leitura pede; senao { suficiente:
+ *   true, normalMs, lacunas: [{ deMs, ateMs, excessoMs }] } — de/ate' sao os
+ *   dois volumes (tempo do video) e o excesso, o que passou do passo.
+ */
+export function lacunasDoVideo(m) {
+  if (!m || m.largadaMs == null || (m.toques || []).length < 2) return null;
+  const toques = m.toques.map((t) => inteiro(t.ms)).sort((a, b) => a - b);
+  const fechadas = (m.paradas || []).filter((p) => p.fimMs != null);
+  const paradaAte = (t) => fechadas.reduce((soma, p) => soma + (p.fimMs <= t ? p.fimMs - p.inicioMs : 0), 0);
+  const leitura = leituraPecaAPeca({ marcasMs: toques.map((t) => (t - m.largadaMs) - paradaAte(t)) });
+  if (!leitura) return null;
+  if (!leitura.suficiente) return { suficiente: false, motivo: leitura.motivo, normalMs: null, lacunas: [] };
+  return {
+    suficiente: true,
+    normalMs: leitura.normalMs,
+    lacunas: leitura.lacunas.map(({ indice, ms }) => ({
+      deMs: toques[indice], ateMs: toques[indice + 1], excessoMs: Math.round(ms - leitura.normalMs),
+    })),
+  };
 }

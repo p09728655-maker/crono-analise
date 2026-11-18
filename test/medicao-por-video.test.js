@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  emRelogio, inicioSugerido, marcasEmPalavras, marcasGuardadas, medicaoDoVideo, semMarcas,
+  emRelogio, inicioSugerido, lacunasDoVideo, marcasEmPalavras, marcasGuardadas, medicaoDoVideo, semMarcas,
 } from '../src/domain/medicaoPorVideo.js';
 import { conferenciaRapida, leituraPecaAPeca, periodoPorPeca } from '../src/domain/cronoanalise.js';
 import {
@@ -245,5 +245,37 @@ describe('as marcacoes guardadas no PC (v2.112.1): so a que tem marca', () => {
     expect(marcasEmPalavras({ ...vazia, largadaMs: 1000 })).toBe('a largada');
     expect(marcasEmPalavras({ ...vazia, largadaMs: 1000, toques: [{ ms: 3000, ordem: 1 }, { ms: 5000, ordem: 2 }] }))
       .toBe('a largada e 2 volumes');
+  });
+});
+
+describe('as LACUNAS do video (v2.112.2): so lista, no tempo do video', () => {
+  const seg = (x) => x * 1000;
+  // Largada em 2 s, volumes a cada 5 s e um 20 s depois do anterior: 10
+  // intervalos, exatamente o minimo da leitura.
+  const toques = [7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 72].map((x, i) => ({ ms: seg(x), ordem: i + 1 }));
+  const m = { largadaMs: seg(2), toques, paradas: [], aberta: null, ordem: 11 };
+
+  it('a lacuna e a do indicador (mais que o dobro do passo), com o excesso, no tempo do video', () => {
+    const r = lacunasDoVideo(m);
+    expect(r).toEqual({ suficiente: true, normalMs: 5000, lacunas: [{ deMs: 52000, ateMs: 72000, excessoMs: 15000 }] });
+    // A mesma conta do Volume a volume, sobre as marcas que vao ao servidor.
+    const med = medicaoDoVideo({
+      largadaMs: m.largadaMs, toquesMs: toques.map((t) => t.ms), paradas: [], fimMs: seg(75), inicioFilmagem: '2026-11-18T08:00:00Z',
+    }).medicao;
+    const leitura = leituraPecaAPeca({ marcasMs: med.marcasMs });
+    expect(leitura.lacunas).toHaveLength(1);
+    expect(leitura.normalMs).toBe(r.normalMs);
+  });
+
+  it('a parada marcada sai do intervalo (relogio rodando): marcada com P, a lacuna deixa de ser lacuna', () => {
+    const comParada = { ...m, paradas: [{ motivo: 'setup', inicioMs: seg(57), fimMs: seg(72) }] };
+    expect(lacunasDoVideo(comParada).lacunas).toEqual([]);
+  });
+
+  it('menos de 10 intervalos: sem leitura, sem lacuna (como o Volume a volume)', () => {
+    const r = lacunasDoVideo({ ...m, toques: toques.slice(0, 6) });
+    expect(r.suficiente).toBe(false);
+    expect(r.lacunas).toEqual([]);
+    expect(lacunasDoVideo({ ...m, largadaMs: null })).toBeNull();
   });
 });

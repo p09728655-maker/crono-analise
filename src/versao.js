@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.112.2',
+    data: '2026-11-18',
+    titulo: 'Cronometrar por vídeo: as lacunas listadas para conferir',
+    itens: [
+      'AS LACUNAS APARECEM NA TELA DO VÍDEO: cada intervalo maior que o dobro do passo da linha (a mesma regra do indicador e do Volume a volume, a partir de 10 intervalos), com quanto tempo elas somam além do passo e o trecho clicável — clicar leva o vídeo ao começo dela. Substituem os "intervalos longos", que usavam outra régua (3× o intervalo típico). Valem também para a marcação no Enter.',
+      'A TELA SÓ LISTA, NÃO MARCA: em cada lacuna, ou a linha parou (marque com P e o motivo) ou a leitura automática não pegou uma caixa (Enter no ponto) — só quem olha o vídeo sabe qual. Marcar a lacuna sozinho, como parada sem motivo, foi feito e retirado antes de publicar: a medição passaria na trava da UEP do painel (que só aceita lacunas até 15%) sem motivo nenhum apontado, e o relatório de perdas mostraria esse tempo como parada com motivo.',
+    ],
+  },
+  {
     versao: '2.112.1',
     data: '2026-11-18',
     titulo: 'Cronometrar por vídeo: o tempo sem as lacunas e a lista das marcações guardadas só com o que tem marca',

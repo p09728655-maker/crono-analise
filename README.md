@@ -404,6 +404,18 @@ do produto dele**.
   aviso de "já salvo"), com o rascunho lido do PC na hora do clique (outra aba
   pode ter tentado salvar), e a linha diz "pode já estar" / "já está no
   sistema". O `listaVazia` da tela é o próprio `semMarcas` (uma regra só).
+- **Lacunas listadas** (v2.112.2): `lacunasDoVideo` (`medicaoPorVideo.js`) — a
+  regra do indicador (`leituraPecaAPeca`: mais que 2× o normal, mínimo de 10
+  intervalos) sobre as marcas da linha rodando, devolvida no tempo do vídeo,
+  com o excesso. O cartão da marcação automática (que aparece também na
+  marcação manual) lista as lacunas, clicáveis, no lugar dos "intervalos longos"
+  (3× a mediana). ⚠ **Só lista, não marca**: marcar a lacuna como parada sem
+  motivo foi feito e retirado (PPCP, 18/11/2026, depois da revisão) — a parada
+  iguala o "rodando" ao "sem as lacunas" e a medição passaria na TRAVA DA UEP do
+  painel (lacunas até 15% = 1 − sLac ÷ sRod, `api/_lib/painel.js`) sem motivo
+  apontado; o relatório de perdas a contaria como "parada com motivo"; e,
+  marcada antes de corrigir as caixas, congelaria um passo errado e barraria a
+  caixa que faltou. Não propor de novo sem tratar esses três pontos.
 - **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão
   mostram o `normalMs` da `leituraPecaAPeca` — o "por volume sem as lacunas"
   do Volume a volume, o passo da linha —, com "—" abaixo de 10 intervalos. A medição vai direto ao `/sync`, sem a fila
