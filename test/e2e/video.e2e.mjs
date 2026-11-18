@@ -559,9 +559,57 @@ await ctx.close();
     antiga: localStorage.getItem('ritmopatrimar.video.rascunho'),
     mapa: Object.keys(JSON.parse(localStorage.getItem('ritmopatrimar.video.rascunhos') || '{}')),
   }));
+  const lista = y.getByRole('list', { name: 'Marcações em andamento neste PC' });
   checar(guardado.antiga === null && guardado.mapa.includes('antigo.mp4|123|456')
-    && /Marcações em andamento neste PC: antigo\.mp4 \(2 volumes/.test(await y.locator('[aria-label="Preparar a medição por vídeo"]').innerText()),
+    && /antigo\.mp4[\s\S]*Rack Sirius 1\.6 · a largada e 2 volumes · guardada em/.test(await lista.innerText()),
   'a marcacao guardada pela v2.99.0 passa para a lista nova e a vaga antiga e apagada');
+
+  // AS VAZIAS (v2.112.1): guardadas ate' a v2.112.0, uma por video aberto,
+  // saem do PC ao abrir a tela; a que tem marca fica.
+  await y.evaluate(() => {
+    const mapa = JSON.parse(localStorage.getItem('ritmopatrimar.video.rascunhos') || '{}');
+    mapa['vazio.mp4|1|2'] = {
+      arquivo: 'vazio.mp4|1|2', nome: 'vazio.mp4', clientId: '00000000-0000-4000-8000-000000000098',
+      campos: { maquinaId: '00000000-0000-0000-0000-0000000000a1', produto: '', inicio: '' },
+      marcacao: { largadaMs: null, toques: [], paradas: [], aberta: null, ordem: 0 },
+      observacao: '', atualizadoEm: '2026-11-18T12:00:00.000Z',
+    };
+    localStorage.setItem('ritmopatrimar.video.rascunhos', JSON.stringify(mapa));
+  });
+  await y.reload();
+  await lista.waitFor({ timeout: 8000 });
+  const depoisDaLimpeza = await y.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('ritmopatrimar.video.rascunhos') || '{}')));
+  checar(!/vazio\.mp4/.test(await lista.innerText()) && !depoisDaLimpeza.includes('vazio.mp4|1|2')
+    && depoisDaLimpeza.includes('antigo.mp4|123|456') && /Uma marcação em andamento neste PC/.test(await y.locator('[aria-label="Preparar a medição por vídeo"]').innerText()),
+  'marcacao guardada sem nenhuma marca sai do PC e da lista; a que tem marca fica');
+
+  // Abrir um video e nao marcar nada nao vira "marcacao em andamento".
+  await y.locator('input[type="file"]').setInputFiles(VIDEO);
+  await y.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  await y.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+  await y.getByRole('button', { name: 'Começar a marcar' }).click();
+  await y.locator('[aria-label="Marcas da medição"]').waitFor({ timeout: 4000 });
+  await y.reload();
+  await lista.waitFor({ timeout: 8000 });
+  checar((await lista.locator('li').count()) === 1 && !/embalagem-120s/.test(await lista.innerText()),
+    'abrir um video e sair sem marcar nada nao deixa marcacao guardada');
+  await y.locator('input[type="file"]').setInputFiles(VIDEO);
+  await y.getByText(/2 min de vídeo/).waitFor({ timeout: 8000 });
+  checar(!(await y.getByRole('button', { name: 'Continuar de onde parou' }).count()),
+    'reabrir o video sem marca nao pede para continuar ou descartar o nada');
+  await y.reload();
+  await lista.waitFor({ timeout: 8000 });
+
+  // Descartar pela lista: pergunta antes, e Manter nao apaga.
+  await lista.getByRole('button', { name: 'Descartar a marcação de antigo.mp4' }).click();
+  checar(/Descartar as marcas deste vídeo \(a largada e 2 volumes\)\? Não dá para desfazer\./.test(await lista.innerText()),
+    'descartar pela lista pergunta antes, dizendo o que se perde');
+  await lista.getByRole('button', { name: 'Manter' }).click();
+  checar(/antigo\.mp4/.test(await lista.innerText()), 'Manter nao apaga');
+  await lista.getByRole('button', { name: 'Descartar a marcação de antigo.mp4' }).click();
+  await lista.getByRole('button', { name: 'Descartar as marcas' }).click();
+  const restou = await y.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('ritmopatrimar.video.rascunhos') || '{}')));
+  checar(!(await lista.count()) && !restou.length, 'descartada pela lista, a marcacao sai do PC e a lista some');
   await c6.close();
 }
 

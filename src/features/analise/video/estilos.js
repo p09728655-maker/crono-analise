@@ -160,6 +160,20 @@ export const ev = {
   },
   tempos: { display: 'inline-flex', flexWrap: 'wrap', gap: espaco.sm, alignItems: 'baseline' },
 
+  // As marcacoes guardadas neste PC, no preparo (v2.112.1): uma por linha,
+  // com o Descartar ao lado.
+  guardadas: { display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  listaGuardadas: {
+    margin: 0, padding: 0, listStyle: 'none',
+    borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: t.borda,
+  },
+  itemGuardada: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: espaco.md, flexWrap: 'wrap',
+    padding: `${espaco.sm}px 0`, borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: t.borda,
+  },
+  itemGuardadaTexto: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: '1 1 320px' },
+  itemGuardadaNome: { ...tipo('corpoF'), color: t.texto, overflowWrap: 'anywhere' },
+
   // O QUE O LEITOR VE' (v2.112.0): os pontos contados como papelao, em rosa
   // por cima do retangulo — rosa nao se confunde com o pardo da caixa nem
   // com o verde do tapete. Pixelado: cada ponto e' um dos 64x32 que a

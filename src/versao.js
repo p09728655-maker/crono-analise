@@ -13,6 +13,15 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.112.1',
+    data: '2026-11-18',
+    titulo: 'Cronometrar por vídeo: a lista das marcações guardadas só com o que tem marca',
+    itens: [
+      'ABRIR UM VÍDEO E NÃO MARCAR NADA NÃO FICA MAIS GUARDADO. Antes, todo vídeo em que se clicava "Começar a marcar" virava uma "marcação em andamento", mesmo sem nenhuma marca: a tela do preparo enchia de vídeos com 0 volumes, e reabrir um deles pedia para continuar ou descartar uma marcação vazia. Agora só fica guardada a marcação com alguma marca (largada, volume ou parada) — ou a que pode já estar no sistema (tentou salvar). As vazias que já estavam guardadas neste PC somem sozinhas.',
+      'A LISTA DAS MARCAÇÕES GUARDADAS FICOU UMA POR LINHA: o vídeo, a máquina, o produto, o que tem marcado ("a largada e 8 volumes") e quando foi guardada. Cada uma tem o seu Descartar, que pergunta antes ("Descartar as marcas deste vídeo (a largada e 8 volumes)? Não dá para desfazer.") — dá para limpar o que não serve mais sem abrir o vídeo.',
+    ],
+  },
+  {
     versao: '2.112.0',
     data: '2026-11-18',
     titulo: 'Cronometrar por vídeo: testar o retângulo antes de ler o vídeo todo',

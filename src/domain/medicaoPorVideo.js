@@ -298,14 +298,35 @@ export function removerParada(m, inicioMs) {
  * conta como parada.
  */
 export function marcasGuardadas(m) {
-  const nVolumes = m.toques.length;
-  const nParadas = m.paradas.length + (m.aberta ? 1 : 0);
+  const lista = marcasEmPalavras(m);
+  if (!lista) return 'Nenhuma marca ainda neste vídeo.';
+  return `As marcas deste vídeo continuam aqui: ${lista}.`;
+}
+
+/**
+ * O que a marcacao tem, em palavras: "a largada, 8 volumes e 1 parada"
+ * ('' sem nada). A parada aberta conta como parada. Na lista das marcacoes
+ * guardadas (v2.112.1), "0 volumes" escondia que a largada ou uma parada
+ * estavam marcadas.
+ */
+export function marcasEmPalavras(m) {
+  if (!m) return '';
+  const nVolumes = m.toques?.length || 0;
+  const nParadas = (m.paradas?.length || 0) + (m.aberta ? 1 : 0);
   const itens = [
     m.largadaMs != null ? 'a largada' : null,
     nVolumes ? `${nVolumes} ${nVolumes === 1 ? 'volume' : 'volumes'}` : null,
     nParadas ? `${nParadas} ${nParadas === 1 ? 'parada' : 'paradas'}` : null,
   ].filter(Boolean);
-  if (!itens.length) return 'Nenhuma marca ainda neste vídeo.';
-  const lista = itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}` : itens[0];
-  return `As marcas deste vídeo continuam aqui: ${lista}.`;
+  return itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}` : itens[0] || '';
+}
+
+/**
+ * Marcacao SEM NADA marcado: nem largada, nem volume, nem parada (aberta ou
+ * fechada). Nao ha' o que guardar dela (v2.112.1): guardar a vazia enchia a
+ * tela de "marcacoes em andamento" de 0 volumes — uma por video aberto — e
+ * reabrir o video pedia para continuar ou descartar o nada.
+ */
+export function semMarcas(m) {
+  return !m || (m.largadaMs == null && !m.toques?.length && !m.paradas?.length && !m.aberta);
 }

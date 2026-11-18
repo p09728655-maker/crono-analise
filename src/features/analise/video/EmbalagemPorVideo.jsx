@@ -8,7 +8,8 @@ import {
 import { diasProgramados, taktDaMedicao } from '../../../domain/demandaSemanal.js';
 import {
   conferirAutomatica, desfazerUltimo, emRelogio, encerrarParadaNoVideo, iniciarParadaNoVideo, inicioSugerido,
-  marcacaoDasEntradas, marcacaoVazia, marcarToque, marcasGuardadas, medicaoDoVideo, removerParada, removerVolume,
+  marcacaoDasEntradas, marcacaoVazia, marcarToque, marcasEmPalavras, marcasGuardadas, medicaoDoVideo, removerParada,
+  removerVolume, semMarcas,
 } from '../../../domain/medicaoPorVideo.js';
 import {
   PISO_PERMANENCIA_MS, TESTE_MS, areaDaImagem, avaliarTeste, detectarVolumes, ehPapelao, intervalosLongos,
@@ -84,8 +85,23 @@ function gravarMapa(chave, mapa) {
     .slice(0, MAX_GUARDADOS);
   try { localStorage.setItem(chave, JSON.stringify(Object.fromEntries(recentes))); } catch { /* segue sem guardar */ }
 }
-const lerRascunho = (arquivoChave) => lerMapa(CHAVE_RASCUNHOS)[arquivoChave] || null;
-const rascunhosGuardados = () => Object.values(lerMapa(CHAVE_RASCUNHOS));
+/**
+ * O que vale guardar (v2.112.1): marcacao com alguma marca, ou que pode ja'
+ * estar no servidor (tentou salvar, ou chegou e foi mexida no PC) — essa,
+ * mesmo vazia, guarda o aviso de nao salvar o mesmo trecho duas vezes.
+ */
+const rascunhoTemAlgo = (r) => Boolean(r && (r.envioTentado || r.incerto || r.mexida || !semMarcas(r.marcacao)));
+const lerRascunho = (arquivoChave) => {
+  const r = lerMapa(CHAVE_RASCUNHOS)[arquivoChave];
+  return rascunhoTemAlgo(r) ? r : null;
+};
+const rascunhosGuardados = () => Object.values(lerMapa(CHAVE_RASCUNHOS)).filter(rascunhoTemAlgo);
+/** As vazias guardadas ate' a v2.112.0 (uma por video aberto) saem do PC. */
+function limparRascunhosVazios() {
+  const mapa = lerMapa(CHAVE_RASCUNHOS);
+  const comAlgo = Object.fromEntries(Object.entries(mapa).filter(([, r]) => rascunhoTemAlgo(r)));
+  if (Object.keys(comAlgo).length !== Object.keys(mapa).length) gravarMapa(CHAVE_RASCUNHOS, comAlgo);
+}
 function gravarRascunho(r) {
   gravarMapa(CHAVE_RASCUNHOS, { ...lerMapa(CHAVE_RASCUNHOS), [r.arquivo]: r });
 }
@@ -125,6 +141,15 @@ function anotarDescartada(arquivoChave, r, chegou) {
     em: new Date().toISOString(), volumes: r.marcacao.toques.length, incerto: !chegou, chegou,
     inicio: r.campos.inicio || null,
   });
+}
+/**
+ * Descartar uma marcacao guardada — a do video aberto ou, desde a v2.112.1,
+ * uma da lista do preparo. A que pode ja' estar no servidor deixa o aviso
+ * no video, para a marcacao nova do mesmo trecho nao duplicar calada.
+ */
+function descartarGuardada(r) {
+  if (r.envioTentado || r.incerto || r.mexida) anotarDescartada(r.arquivo, r, Boolean(r.mexida));
+  apagarRascunho(r.arquivo);
 }
 /**
  * A marcacao guardada pela v2.99.0, na vaga unica: passa para o mapa (sem
@@ -259,6 +284,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     let vivo = true;
     // Antes do Preparar aparecer (ele so' vem com o cadastro carregado).
     migrarRascunhoAntigo();
+    limparRascunhosVazios();
     carregarMotivos();
     listarCadastroMaquinas()
       .then(async (cadastro) => {
@@ -401,11 +427,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     // Descartar uma marcacao que talvez tenha chegado ao servidor: o aviso
     // de "ja' salvo" fica, para a marcacao nova do mesmo trecho nao duplicar
     // calada.
-    if (rascunho.envioTentado || rascunho.incerto || rascunho.mexida) {
-      anotarDescartada(rascunho.arquivo, rascunho, Boolean(rascunho.mexida));
-      setJaSalvo(lerSalvo(rascunho.arquivo));
-    }
-    apagarRascunho(rascunho.arquivo);
+    descartarGuardada(rascunho);
+    setJaSalvo(lerSalvo(rascunho.arquivo));
     setRascunho(null);
   };
 
@@ -454,7 +477,10 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   });
   useEffect(() => {
     if (!arquivo || !clientId || (etapa !== 'marcar' && etapa !== 'revisar')) return;
-    gravarRascunho(rascunhoAtual());
+    // Sem marca nenhuma (e sem tentativa de salvar), nao ha' o que guardar:
+    // abrir um video e nao marcar nada nao vira "marcacao em andamento".
+    const r = rascunhoAtual();
+    if (rascunhoTemAlgo(r)) gravarRascunho(r); else apagarRascunho(r.arquivo);
   }, [arquivo, clientId, campos, marcacao, observacao, mexida, etapa, automaticas, automatica.resultado]);
 
   /* ---------------------------------------------------------- player */
@@ -1173,7 +1199,9 @@ function Preparar({
 }) {
   const motivoTakt = takt && !(takt.taktMs > 0) ? (motivoSemTakt(takt.estado) || 'sem programa da embalagem para esta semana') : null;
   // As marcacoes guardadas de OUTROS videos: continuam guardadas, e a tela
-  // diz quais — escolher o mesmo arquivo as traz de volta.
+  // diz quais — escolher o mesmo arquivo as traz de volta; a que nao serve
+  // mais se descarta dali (v2.112.1). `descartadas` so' redesenha a lista.
+  const [, setDescartadas] = useState(0);
   const outras = arquivo ? [] : rascunhosGuardados();
   const quando = (iso) => new Date(iso).toLocaleString('pt-BR');
   return (
@@ -1206,11 +1234,20 @@ function Preparar({
       </label>
 
       {outras.length > 0 && (
-        <p style={ev.dica}>
-          Marcações em andamento neste PC:{' '}
-          {outras.map((r) => `${r.nome} (${volumes(r.marcacao.toques.length)}, ${quando(r.atualizadoEm)})`).join('; ')}.
-          Escolha o mesmo arquivo para continuar.
-        </p>
+        <div style={ev.guardadas}>
+          <p style={ev.dica}>
+            {outras.length === 1 ? 'Uma marcação em andamento neste PC' : `${outras.length} marcações em andamento neste PC`}
+            {' '}— para continuar, escolha o mesmo arquivo:
+          </p>
+          <ul style={ev.listaGuardadas} aria-label="Marcações em andamento neste PC">
+            {outras.map((r) => (
+              <MarcacaoGuardada
+                key={r.arquivo} r={r} quando={quando}
+                aoDescartar={() => { descartarGuardada(r); setDescartadas((n) => n + 1); }}
+              />
+            ))}
+          </ul>
+        </div>
       )}
 
       {jaSalvo && (
@@ -2123,5 +2160,48 @@ function GraficoTeste({ r, aoIr }) {
         {r.marcasMs.length ? '; o traço embaixo é a caixa achada (clique para ver)' : ''}.
       </p>
     </figure>
+  );
+}
+
+/**
+ * Uma MARCACAO GUARDADA na lista do preparo (v2.112.1): o video, a maquina,
+ * o produto, o que tem marcado e quando — e o Descartar, que pergunta antes
+ * (uma hora de video marcada nao some num clique errado).
+ */
+function MarcacaoGuardada({ r, quando, aoDescartar }) {
+  const [confirmar, setConfirmar] = useState(false);
+  const marcas = marcasEmPalavras(r.marcacao);
+  const talvezNoSistema = Boolean(r.envioTentado || r.incerto || r.mexida);
+  return (
+    <li style={ev.itemGuardada}>
+      <div style={ev.itemGuardadaTexto}>
+        <span style={ev.itemGuardadaNome}>{r.nome}</span>
+        <span style={ev.dica}>
+          {[r.maquinaNome, r.campos?.produto || 'sem produto', marcas || 'nenhuma marca',
+            r.atualizadoEm ? `guardada em ${quando(r.atualizadoEm)}` : null].filter(Boolean).join(' · ')}
+        </span>
+        {confirmar && (
+          <span style={ev.dica} role="status">
+            Descartar as marcas deste vídeo{marcas ? ` (${marcas})` : ''}? Não dá para desfazer.
+            {talvezNoSistema && ' Uma versão dela pode já estar no sistema: o aviso fica no vídeo, para não salvar o mesmo trecho duas vezes.'}
+          </span>
+        )}
+      </div>
+      <div style={ev.linhaBotoes}>
+        {!confirmar && (
+          <button
+            type="button" style={ev.link} onClick={() => setConfirmar(true)} aria-label={`Descartar a marcação de ${r.nome}`}
+          >
+            Descartar
+          </button>
+        )}
+        {confirmar && (
+          <>
+            <button type="button" style={est.botaoSecundario} onClick={aoDescartar}>Descartar as marcas</button>
+            <button type="button" style={ev.link} onClick={() => setConfirmar(false)}>Manter</button>
+          </>
+        )}
+      </div>
+    </li>
   );
 }
