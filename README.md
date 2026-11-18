@@ -449,6 +449,38 @@ do produto dele**.
   e `test/e2e/video-automatico.e2e.mjs` (vídeo sintético
   `test/fixtures/caixas-60s.webm`: fundo verde e caixa parda em horários
   conhecidos — nenhuma imagem da fábrica no repositório).
+- **Testar o retângulo antes de ler o vídeo todo** (v2.112.0). Até a v2.111 o
+  analista só sabia que o retângulo não pegava DEPOIS da leitura inteira (14 min
+  de vídeo = 2 a 7 min de espera para ouvir "sem diferença entre caixa e esteira
+  vazia"; PPCP, 18/11/2026: *"descobre só depois que não pegou"* — no caso real,
+  um retângulo largo, ~40% da imagem, sobre o filme e uma barra amarela). Duas
+  respostas antes da leitura:
+  - **O que o leitor vê, ao vivo** (`LeituraDoRetangulo`): sobre o vídeo, os
+    pontos do retângulo que contam como papelão ficam rosa e o % vai ao lado.
+    É o MESMO medidor da leitura (`criarMedidor` em `analisarVideo.js`: o quadro
+    recortado e reduzido a 64×32, `ehPapelao` do domínio) — o número da tela é
+    o que a leitura vê. Aparece desenhando (muda com o arrasto) e com a lista
+    vazia; atualiza a cada quadro (`requestVideoFrameCallback`) e no
+    `seeked`/`pause`/`timeupdate`, desenhado pela ref, fora do React.
+  - **Testar o retângulo** (`testarRetangulo`): a leitura com `fimMs` lê 2 min
+    (`TESTE_MS`, `trechoDoTeste`: ou até o fim do vídeo) a partir de onde o vídeo
+    está e para; `avaliarTeste` (domínio, puro) roda o MESMO `detectarVolumes` +
+    `saidasDosVolumes` da leitura inteira e dá o veredito: `ok`, `fraco`
+    (contraste abaixo de `CONTRASTE_BOM`, 2× o mínimo; no sinal real, ~0,5),
+    `nenhuma` (nenhuma caixa inteira), `nada` (o sinal nunca passou de 15%),
+    `sempre` (nunca abaixo de 15%: algo pardo ou amarelo parado dentro),
+    `sem-contraste` ou `curto`. A tela mostra o veredito, o que fazer, o gráfico
+    do sinal (0–100% fixo, o maior valor por faixa de tempo, até 240 pontos) e as
+    caixas clicáveis. O teste NÃO põe marca na lista e não vai no rascunho;
+    redesenhar, trocar de máquina ou de vídeo e ler o vídeo todo o apagam.
+  - ⚠ O amarelo conta como papelão na regra de cor (`r − b > 35`, `r ≥ g`,
+    `r > 90`): não foi mudado. Mudar a regra pede vídeo real que falhe — o único
+    sinal real do repositório (`sinal-envolvedora-87s.json`, faixa de 10% de
+    largura, a caixa embaixo do filme) lê bem, com contraste ~0,5.
+  Testes: `test/deteccao-volumes.test.js` (vereditos, trecho, gráfico e o sinal
+  real) e `test/e2e/video-automatico.e2e.mjs` (o % ao vivo com e sem caixa, o
+  teste reprovando o retângulo fora da caixa e aprovando o certo com as mesmas
+  caixas da leitura inteira, e a leitura com fim parando no fim do trecho).
 - **Perdas da embalagem** (`/analise/embalagem/perdas`, v2.110.0): relatório
   de onde a linha deixa de produzir. Os dados vêm de
   `GET /api/conferencias?grupo=<id>&marcas=1&dias=<1..90>` — as medições das

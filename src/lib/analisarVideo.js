@@ -15,6 +15,8 @@
  * - Aba escondida: o navegador para de desenhar video — a leitura pausa e
  *   continua quando a aba volta.
  * - Video que para de andar por 15 s: falha com o porque, sem travar a tela.
+ * - Com `fimMs` (v2.112.0, o TESTE do retangulo): para no primeiro quadro
+ *   que chega nele — le' so' o trecho.
  */
 import { fracaoPapelao } from '../domain/deteccaoVolumes.js';
 
@@ -26,8 +28,36 @@ const PASSO_MAXIMO_MS = 250;
 /** Sem o video andar por isto (com a aba aberta): desiste e diz por que. */
 const PARADO_MS = 15000;
 /** O retangulo e' reduzido a isto para medir: para saber se ha' papelao, nao precisa de resolucao. */
-const LARGURA = 64;
-const ALTURA = 32;
+export const LARGURA_MEDIDA = 64;
+export const ALTURA_MEDIDA = 32;
+
+/**
+ * O MEDIDOR do retangulo: o quadro atual do video, recortado no retangulo e
+ * reduzido a 64x32, e quanto dele tem cor de papelao. UMA conta para a
+ * leitura, o teste e o que a tela mostra ao vivo sobre o retangulo
+ * (v2.112.0) — o numero na tela e' o que a leitura ve'.
+ *
+ * Devolve medir(video, retangulo) -> { fracao, rgba } ou null quando ainda
+ * nao ha' imagem (ou o retangulo nao tem nem um pixel do video).
+ */
+export function criarMedidor() {
+  const canvas = document.createElement('canvas');
+  canvas.width = LARGURA_MEDIDA;
+  canvas.height = ALTURA_MEDIDA;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  return (video, retangulo) => {
+    const vw = video?.videoWidth;
+    const vh = video?.videoHeight;
+    // readyState < 2: sem o quadro atual, o desenho sai transparente (0%).
+    if (!vw || !vh || video.readyState < 2 || !retangulo) return null;
+    const sw = retangulo.largura * vw;
+    const sh = retangulo.altura * vh;
+    if (!(sw >= 1 && sh >= 1)) return null;
+    ctx.drawImage(video, retangulo.x * vw, retangulo.y * vh, sw, sh, 0, 0, LARGURA_MEDIDA, ALTURA_MEDIDA);
+    const rgba = ctx.getImageData(0, 0, LARGURA_MEDIDA, ALTURA_MEDIDA).data;
+    return { fracao: fracaoPapelao(rgba), rgba };
+  };
+}
 
 const mediana = (xs) => {
   const o = [...xs].sort((a, b) => a - b);
@@ -49,18 +79,16 @@ function esperar(video, evento, prazoMs) {
  * @param video     um <video> NA TELA (o navegador so' entrega quadros de
  *                  video que esta' na pagina), com o arquivo ja' carregado
  * @param retangulo { x, y, largura, altura } em fracao da imagem
+ * @param fimMs     para aqui (o teste); sem ele, vai ate' o fim do video
  * @param aoProgresso ({ ms, duracaoMs, velocidade, pausado }) a cada quadro
  *
  * Devolve { promessa, cancelar }. A promessa resolve com { amostras,
  * cancelado } e rejeita com um Error de mensagem em portugues.
  */
 export function analisarVideo({
-  video, retangulo, inicioMs = 0, aoProgresso = () => {},
+  video, retangulo, inicioMs = 0, fimMs = null, aoProgresso = () => {},
 }) {
-  const canvas = document.createElement('canvas');
-  canvas.width = LARGURA;
-  canvas.height = ALTURA;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const medidor = criarMedidor();
   const amostras = [];
   const passos = [];
   let velocidade = VELOCIDADE;
@@ -80,15 +108,10 @@ export function analisarVideo({
   const duracaoMs = () => (Number.isFinite(video.duration) ? video.duration * 1000 : null);
 
   const medir = (ms) => {
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    if (!vw || !vh || ms <= ultimoMs) return; // sem imagem ainda, ou o mesmo quadro de novo
-    ctx.drawImage(
-      video,
-      retangulo.x * vw, retangulo.y * vh, retangulo.largura * vw, retangulo.altura * vh,
-      0, 0, LARGURA, ALTURA,
-    );
-    amostras.push({ ms, fracao: fracaoPapelao(ctx.getImageData(0, 0, LARGURA, ALTURA).data) });
+    if (ms <= ultimoMs) return; // o mesmo quadro de novo
+    const medida = medidor(video, retangulo);
+    if (!medida) return; // sem imagem ainda
+    amostras.push({ ms, fracao: medida.fracao });
     if (ultimoMs >= 0) {
       passos.push(ms - ultimoMs);
       // A cada ~30 amostras: o PC acompanha esta velocidade? Se as amostras
@@ -106,17 +129,19 @@ export function analisarVideo({
     aoProgresso({
       ms, duracaoMs: duracaoMs(), velocidade, pausado: false,
     });
+    // O teste: chegou ao fim do trecho, encerra como se o video acabasse.
+    if (fimMs != null && ms >= fimMs) aoFim();
   };
 
   const aoQuadro = (_agora, meta) => {
     if (encerrado) return;
     medir(Math.round(meta.mediaTime * 1000));
-    pedido = video.requestVideoFrameCallback(aoQuadro);
+    if (!encerrado) pedido = video.requestVideoFrameCallback(aoQuadro);
   };
   const aoAnimar = () => {
     if (encerrado) return;
     if (!video.paused) medir(Math.round(video.currentTime * 1000));
-    pedido = requestAnimationFrame(aoAnimar);
+    if (!encerrado) pedido = requestAnimationFrame(aoAnimar);
   };
 
   function limpar() {

@@ -11,10 +11,12 @@ import {
   marcacaoDasEntradas, marcacaoVazia, marcarToque, marcasGuardadas, medicaoDoVideo, removerParada, removerVolume,
 } from '../../../domain/medicaoPorVideo.js';
 import {
-  PISO_PERMANENCIA_MS, areaDaImagem, detectarVolumes, intervalosLongos, pontoNaImagem, retanguloEntre,
-  retanguloValido, saidasDosVolumes,
+  PISO_PERMANENCIA_MS, TESTE_MS, areaDaImagem, avaliarTeste, detectarVolumes, ehPapelao, intervalosLongos,
+  pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
 } from '../../../domain/deteccaoVolumes.js';
-import { analisarVideo } from '../../../lib/analisarVideo.js';
+import {
+  ALTURA_MEDIDA, LARGURA_MEDIDA, VELOCIDADE, analisarVideo, criarMedidor,
+} from '../../../lib/analisarVideo.js';
 import {
   ErroApi, arquivarConferencia, enviarMedicaoPorVideo, lerDemanda, listarCadastroMaquinas,
 } from '../../../lib/api.js';
@@ -241,8 +243,15 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const [desenhando, setDesenhando] = useState(false);
   const [arrasto, setArrasto] = useState(null); // { a, b } em fracao da imagem, enquanto arrasta
   const [caixaVideo, setCaixaVideo] = useState(null); // tamanho do <video> na tela, em px
-  // parado | lendo | pronto | erro
+  // parado | lendo | pronto | erro. Lendo, `modo` diz se e' o video todo
+  // ('tudo') ou o TESTE do retangulo ('teste', v2.112.0), que nao mexe na lista.
   const [automatica, setAutomatica] = useState({ estado: 'parado' });
+  // O TESTE do retangulo (v2.112.0): parado | pronto (com o resultado) | erro.
+  // Nao vai no rascunho: vale para o retangulo e o video da tela, agora.
+  const [teste, setTeste] = useState({ estado: 'parado' });
+  // Retangulo recusado no desenho: o porque aparece no cartao do desenho,
+  // ao lado da instrucao — onde se esta' olhando.
+  const [avisoDesenho, setAvisoDesenho] = useState(null);
   const [progresso, setProgresso] = useState(null);
   const [automaticas, setAutomaticas] = useState([]);
   const refVideoLeitura = useRef(null);
@@ -279,8 +288,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     [carga, grupo?.id],
   );
   const motivos = useMotivosDoGrupo(grupo?.id);
-  // O retangulo e' da maquina: trocar a maquina traz o dela (ou nenhum).
-  useEffect(() => { setRetangulo(lerRetangulo(maquina?.id)); }, [maquina?.id]);
+  // O retangulo e' da maquina: trocar a maquina traz o dela (ou nenhum) — e
+  // o teste era do outro retangulo.
+  useEffect(() => { setRetangulo(lerRetangulo(maquina?.id)); setTeste({ estado: 'parado' }); }, [maquina?.id]);
 
   const inicioData = campos.inicio ? new Date(campos.inicio) : null;
   const inicioValido = Boolean(inicioData && !Number.isNaN(inicioData.getTime()));
@@ -330,6 +340,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setCampos((c) => ({ ...c, inicio: '' }));
     setRascunho(lerRascunho(chaveDoArquivo(f)));
     setJaSalvo(lerSalvo(chaveDoArquivo(f)));
+    // O teste era do video anterior.
+    setTeste({ estado: 'parado' });
   };
 
   const aoCarregarMetadados = () => {
@@ -546,13 +558,15 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     refVideo.current?.pause();
     setArrasto(null);
     setAviso(null);
+    setAvisoDesenho(null);
     setDesenhando(true);
   };
-  const cancelarDesenho = () => { setArrasto(null); setDesenhando(false); };
+  const cancelarDesenho = () => { setArrasto(null); setAvisoDesenho(null); setDesenhando(false); };
   const terminarDesenho = (r) => {
     setArrasto(null);
     if (!retanguloValido(r)) {
-      setAviso('O retângulo ficou pequeno demais para ler. Arraste de novo, atravessando todo o caminho da caixa na passagem do rolete para o tapete.');
+      setAvisoDesenho('O retângulo ficou pequeno demais para ler (no mínimo 2% da imagem de cada lado). Arraste de novo, '
+        + 'atravessando todo o caminho da caixa na passagem do rolete para o tapete.');
       return;
     }
     // `evento: 'saida'` (v2.109.0): desenhado ja' para a marca na saida. O
@@ -563,6 +577,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     gravarRetangulo(maquina?.id, novo);
     setDesenhando(false);
     setAviso(null);
+    setAvisoDesenho(null);
+    // O teste e o erro eram do retangulo anterior.
+    setTeste({ estado: 'parado' });
     if (automatica.estado === 'erro') setAutomatica({ estado: 'parado' });
   };
 
@@ -574,7 +591,32 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     refUltimoProgresso.current = 0;
     setProgresso(null);
     setAviso(null);
-    setAutomatica({ estado: 'lendo', inicioMs: tempoDoVideo(), retangulo });
+    // A leitura do video todo responde no lugar do teste.
+    setTeste({ estado: 'parado' });
+    setAutomatica({
+      estado: 'lendo', modo: 'tudo', inicioMs: tempoDoVideo(), fimMs: null, retangulo,
+    });
+  };
+
+  // TESTAR O RETANGULO (v2.112.0): le' 2 min a partir de onde o video esta',
+  // com a mesma conta da leitura inteira, e diz se pegou — em segundos, nao
+  // depois do video todo. Nao poe marca na lista.
+  const testarRetangulo = () => {
+    if (!retangulo || retangulo.evento !== 'saida' || desenhando || automatica.estado === 'lendo') return;
+    refVideo.current?.pause();
+    refUltimoProgresso.current = 0;
+    setProgresso(null);
+    setAviso(null);
+    setTeste({ estado: 'parado' });
+    const v = refVideo.current;
+    const trecho = trechoDoTeste(tempoDoVideo(), v && Number.isFinite(v.duration) ? v.duration * 1000 : null);
+    setAutomatica({
+      estado: 'lendo', modo: 'teste', inicioMs: trecho.inicioMs, fimMs: trecho.fimMs, retangulo,
+    });
+  };
+  const concluirTeste = (amostras, inicioMs, fimMs) => {
+    setAutomatica({ estado: 'parado' });
+    setTeste({ estado: 'pronto', resultado: avaliarTeste(amostras, { inicioMs, fimMs }) });
   };
 
   const concluirLeitura = (amostras, inicioMs) => {
@@ -646,10 +688,12 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   useEffect(() => {
     if (automatica.estado !== 'lendo' || !refVideoLeitura.current) return undefined;
     let vivo = true;
+    const ehTeste = automatica.modo === 'teste';
     const leitura = analisarVideo({
       video: refVideoLeitura.current,
       retangulo: automatica.retangulo,
       inicioMs: automatica.inicioMs,
+      fimMs: ehTeste ? automatica.fimMs : null,
       aoProgresso: (p) => {
         // ~4 vezes por segundo basta para a barra: a cada quadro, a tela
         // inteira se redesenharia 60 vezes por segundo.
@@ -660,8 +704,18 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       },
     });
     leitura.promessa
-      .then(({ amostras, cancelado }) => { if (vivo && !cancelado) concluirLeitura(amostras, automatica.inicioMs); })
-      .catch((e) => { if (vivo) setAutomatica({ estado: 'erro', erro: `Não deu para marcar: ${e.message}.` }); });
+      .then(({ amostras, cancelado }) => {
+        if (!vivo || cancelado) return;
+        if (ehTeste) concluirTeste(amostras, automatica.inicioMs, automatica.fimMs);
+        else concluirLeitura(amostras, automatica.inicioMs);
+      })
+      .catch((e) => {
+        if (!vivo) return;
+        if (ehTeste) {
+          setAutomatica({ estado: 'parado' });
+          setTeste({ estado: 'erro', erro: `Não deu para testar: ${e.message}.` });
+        } else setAutomatica({ estado: 'erro', erro: `Não deu para marcar: ${e.message}.` });
+      });
     return () => { vivo = false; leitura.cancelar(); };
   }, [automatica.estado]);
 
@@ -1001,7 +1055,10 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                     {etapa === 'marcar' && (
                       <CamadaRetangulo
                         area={areaVideo} retangulo={retangulo} arrasto={arrasto} desenhando={desenhando}
-                        aoArrastar={setArrasto} aoTerminar={terminarDesenho}
+                        aoArrastar={setArrasto} aoTerminar={terminarDesenho} refVideo={refVideo}
+                        // O que o leitor ve' (v2.112.0): enquanto se ajusta o
+                        // retangulo — desenhando, ou antes de marcar.
+                        mostrarLeitura={desenhando || listaVazia(marcacao)}
                       />
                     )}
                     </div>
@@ -1039,8 +1096,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                       url={url} refVideoLeitura={refVideoLeitura} maquina={maquina} retangulo={retangulo}
                       desenhando={desenhando} automatica={automatica} progresso={progresso}
                       listaVazia={listaVazia(marcacao)} conferencia={conferencia} agoraMs={agoraMs}
-                      podeDesenhar={Boolean(areaVideo)}
+                      podeDesenhar={Boolean(areaVideo)} avisoDesenho={avisoDesenho} teste={teste}
                       aoDesenhar={desenharRetangulo} aoCancelarDesenho={cancelarDesenho}
+                      aoTestar={testarRetangulo}
                       aoLer={lerAutomatica} aoParar={() => setAutomatica({ estado: 'parado' })}
                       aoApagar={apagarAutomatica}
                       aoIr={(ms) => { refVideo.current?.pause(); irPara(ms); }}
@@ -1511,7 +1569,7 @@ function Revisar({
  * sao do dominio (deteccaoVolumes.js).
  */
 function CamadaRetangulo({
-  area, retangulo, arrasto, desenhando, aoArrastar, aoTerminar,
+  area, retangulo, arrasto, desenhando, aoArrastar, aoTerminar, refVideo, mostrarLeitura,
 }) {
   if (!area) return null;
   const visivel = arrasto ? retanguloEntre(arrasto.a, arrasto.b) : retangulo;
@@ -1521,6 +1579,7 @@ function CamadaRetangulo({
   };
   return (
     <>
+      {visivel && mostrarLeitura && <LeituraDoRetangulo refVideo={refVideo} area={area} retangulo={visivel} />}
       {visivel && (
         <div
           aria-hidden="true"
@@ -1544,8 +1603,102 @@ function CamadaRetangulo({
           }}
           onPointerMove={(e) => { if (arrasto) aoArrastar({ a: arrasto.a, b: ponto(e) }); }}
           onPointerUp={(e) => { if (arrasto) aoTerminar(retanguloEntre(arrasto.a, ponto(e))); }}
+          // O navegador tomou o arrasto (alt-tab, gesto do sistema): sem isto,
+          // o retangulo seguia o mouse com o botao ja' solto.
+          onPointerCancel={() => aoArrastar(null)}
         />
       )}
+    </>
+  );
+}
+
+/**
+ * O QUE O LEITOR VE' NO RETANGULO (v2.112.0), ao vivo, sobre o video: os
+ * pontos que ele conta como papelao pintados de rosa e, ao lado, quanto do
+ * retangulo eles sao. E' o mesmo medidor da leitura (criarMedidor, 64x32,
+ * ehPapelao) — a caixa tem de ficar pintada quando passa, e o resto nao.
+ * Sem isto, o analista so' descobria que o retangulo nao pegava depois de
+ * ler o video inteiro.
+ *
+ * Desenhado por fora do React (canvas e texto pela ref): a cada quadro do
+ * video tocando, so' este pedaco muda.
+ */
+function LeituraDoRetangulo({ refVideo, area, retangulo }) {
+  const refCanvas = useRef(null);
+  const refRotulo = useRef(null);
+  const refRet = useRef(retangulo);
+  refRet.current = retangulo;
+  const medidor = useMemo(() => criarMedidor(), []);
+
+  const desenhar = useCallback(() => {
+    const canvas = refCanvas.current;
+    const rotulo = refRotulo.current;
+    if (!canvas || !rotulo) return;
+    const ctx = canvas.getContext('2d');
+    const m = medidor(refVideo.current, refRet.current);
+    if (!m) {
+      ctx.clearRect(0, 0, LARGURA_MEDIDA, ALTURA_MEDIDA);
+      rotulo.textContent = '— papelão';
+      rotulo.dataset.papelao = '';
+      return;
+    }
+    const img = ctx.createImageData(LARGURA_MEDIDA, ALTURA_MEDIDA);
+    for (let i = 0; i < m.rgba.length; i += 4) {
+      if (ehPapelao(m.rgba[i], m.rgba[i + 1], m.rgba[i + 2])) {
+        img.data[i] = 236; img.data[i + 1] = 72; img.data[i + 2] = 153; img.data[i + 3] = 170;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const pct = Math.round(m.fracao * 100);
+    rotulo.textContent = `${pct}% papelão`;
+    rotulo.dataset.papelao = String(pct);
+  }, [medidor, refVideo]);
+
+  // O retangulo mudou (arrasto, outro desenho): mede de novo, no mesmo quadro.
+  useEffect(() => { desenhar(); }, [desenhar, retangulo.x, retangulo.y, retangulo.largura, retangulo.altura]);
+
+  // O video mudou de quadro: tocando (a cada quadro mostrado), indo a um
+  // ponto, pausando.
+  useEffect(() => {
+    const v = refVideo.current;
+    if (!v) return undefined;
+    let vivo = true;
+    let pedido = null;
+    const temQuadros = typeof v.requestVideoFrameCallback === 'function';
+    const aoQuadro = () => {
+      if (!vivo) return;
+      desenhar();
+      pedido = v.requestVideoFrameCallback(aoQuadro);
+    };
+    if (temQuadros) pedido = v.requestVideoFrameCallback(aoQuadro);
+    const eventos = ['loadeddata', 'seeked', 'pause', 'timeupdate'];
+    eventos.forEach((e) => v.addEventListener(e, desenhar));
+    return () => {
+      vivo = false;
+      if (pedido != null) v.cancelVideoFrameCallback?.(pedido);
+      eventos.forEach((e) => v.removeEventListener(e, desenhar));
+    };
+  }, [desenhar, refVideo]);
+
+  const left = area.x + retangulo.x * area.largura;
+  const top = area.y + retangulo.y * area.altura;
+  const width = retangulo.largura * area.largura;
+  const height = retangulo.altura * area.altura;
+  // O numero em cima do retangulo; colado no alto da imagem, embaixo dele.
+  const topoRotulo = top - area.y >= 26 ? top - 24 : top + height + 4;
+  return (
+    <>
+      <canvas
+        ref={refCanvas} width={LARGURA_MEDIDA} height={ALTURA_MEDIDA} aria-hidden="true"
+        style={{
+          ...ev.mascaraPapelao, left, top, width, height,
+        }}
+      />
+      <span
+        ref={refRotulo} data-leitura-retangulo=""
+        title="Quanto do retângulo o leitor conta como papelão neste quadro (pintado de rosa)"
+        style={{ ...ev.rotuloPapelao, left, top: topoRotulo }}
+      />
     </>
   );
 }
@@ -1587,11 +1740,25 @@ function Tempos({ lista, aoIr, rotulo = (ms) => emRelogio(ms) }) {
  */
 function MarcacaoAutomatica({
   url, refVideoLeitura, maquina, retangulo, desenhando, automatica, progresso, listaVazia, conferencia,
-  agoraMs, podeDesenhar, aoDesenhar, aoCancelarDesenho, aoLer, aoParar, aoApagar, aoIr,
+  agoraMs, podeDesenhar, avisoDesenho, teste, aoDesenhar, aoCancelarDesenho, aoTestar, aoLer, aoParar, aoApagar,
+  aoIr,
 }) {
   const [confirmarApagar, setConfirmarApagar] = useState(false);
   const { estado, resultado } = automatica;
-  const pct = progresso?.duracaoMs ? Math.min(100, Math.round((progresso.ms / progresso.duracaoMs) * 100)) : null;
+  const testando = estado === 'lendo' && automatica.modo === 'teste';
+  // O andamento do teste e' o do TRECHO dele; o da leitura, o do video todo.
+  const pct = (() => {
+    if (!progresso) return null;
+    if (testando) {
+      const total = automatica.fimMs - automatica.inicioMs;
+      return total > 0 ? Math.min(100, Math.max(0, Math.round(((progresso.ms - automatica.inicioMs) / total) * 100))) : null;
+    }
+    return progresso.duracaoMs ? Math.min(100, Math.round((progresso.ms / progresso.duracaoMs) * 100)) : null;
+  })();
+  // O teste que passou muda o botao principal: testou e pegou, o proximo
+  // passo e' marcar o video todo.
+  const testeBom = teste.estado === 'pronto' && ['ok', 'fraco'].includes(teste.resultado.veredito);
+  const segundosTeste = Math.round(TESTE_MS / VELOCIDADE / 1000);
   const botaoDesenhar = (rotulo) => (
     <button type="button" style={ev.link} onClick={aoDesenhar} disabled={!podeDesenhar}>{rotulo}</button>
   );
@@ -1603,9 +1770,11 @@ function MarcacaoAutomatica({
         <>
           <p style={ev.aviso} role="status">
             Clique e arraste sobre o vídeo fazendo uma faixa fina sobre a passagem do rolete para o tapete verde,
-            atravessando todo o caminho da caixa. A marca é quando o fim da caixa sai dela. Para conferir, deixe o
-            vídeo parado num ponto com caixa passando. Esc cancela.
+            atravessando todo o caminho da caixa. A marca é quando o fim da caixa sai dela.
+            Deixe o vídeo parado num ponto com caixa passando: enquanto você arrasta, o que o leitor conta como papelão
+            fica pintado de rosa, com o % ao lado. A caixa tem de ficar quase toda rosa. Esc cancela.
           </p>
+          {avisoDesenho && <p style={ev.aviso} role="alert">{avisoDesenho}</p>}
           <div style={ev.linhaBotoes}>
             <button type="button" style={est.botaoSecundario} onClick={aoCancelarDesenho}>Cancelar o desenho</button>
           </div>
@@ -1615,9 +1784,11 @@ function MarcacaoAutomatica({
       {!desenhando && estado === 'lendo' && (
         <>
           <p style={ev.dica} role="status">
-            {progresso?.pausado
-              ? 'Leitura pausada: esta aba ficou escondida. Volte a ela para continuar.'
-              : `Lendo o vídeo${pct != null ? `: ${pct}%` : ''}${progresso ? ` — ${emRelogio(progresso.ms)}${progresso.duracaoMs ? ` de ${emRelogio(progresso.duracaoMs)}` : ''} · ${String(progresso.velocidade).replace('.', ',')}× ` : '…'}`}
+            {progresso?.pausado && 'Leitura pausada: esta aba ficou escondida. Volte a ela para continuar.'}
+            {!progresso?.pausado && testando
+              && `Testando o retângulo de ${emRelogio(automatica.inicioMs)} a ${emRelogio(automatica.fimMs)}${pct != null ? `: ${pct}%` : '…'}${progresso ? ` · ${String(progresso.velocidade).replace('.', ',')}×` : ''}.`}
+            {!progresso?.pausado && !testando
+              && `Lendo o vídeo${pct != null ? `: ${pct}%` : ''}${progresso ? ` — ${emRelogio(progresso.ms)}${progresso.duracaoMs ? ` de ${emRelogio(progresso.duracaoMs)}` : ''} · ${String(progresso.velocidade).replace('.', ',')}× ` : '…'}`}
             {' '}Deixe esta aba aberta.
           </p>
           {pct != null && (
@@ -1629,7 +1800,9 @@ function MarcacaoAutomatica({
               quadros de video que esta' na pagina. */}
           <video ref={refVideoLeitura} src={url} style={ev.videoLeitura} muted playsInline preload="auto" tabIndex={-1} />
           <div style={ev.linhaBotoes}>
-            <button type="button" style={est.botaoSecundario} onClick={aoParar}>Parar a leitura</button>
+            <button type="button" style={est.botaoSecundario} onClick={aoParar}>
+              {testando ? 'Parar o teste' : 'Parar a leitura'}
+            </button>
           </div>
         </>
       )}
@@ -1666,11 +1839,21 @@ function MarcacaoAutomatica({
           {retangulo.evento === 'saida' ? (
             <>
               <p style={ev.dica}>
-                Retângulo da {maquina?.nome || 'máquina'}, guardado neste PC. A leitura vai de {emRelogio(agoraMs)} até o
-                fim do vídeo, roda neste PC e leva alguns minutos.
+                Retângulo da {maquina?.nome || 'máquina'}, guardado neste PC. Sobre o vídeo, o que o leitor conta como
+                papelão fica rosa, com o % ao lado: caixa passando, quase toda rosa; sem caixa, perto de 0%.
               </p>
+              <p style={ev.dica}>
+                <strong>Teste antes</strong>: lê {Math.round(TESTE_MS / 60000)} min a partir de {emRelogio(agoraMs)} (uns
+                {' '}{segundosTeste} s) e diz se pegou as caixas — deixe o vídeo num trecho com a linha rodando. O vídeo
+                todo vai de {emRelogio(agoraMs)} até o fim e leva alguns minutos.
+              </p>
+              {teste.estado === 'erro' && <div style={est.faixaErro} role="alert">{teste.erro}</div>}
+              {teste.estado === 'pronto' && <ResultadoTeste r={teste.resultado} aoIr={aoIr} />}
               <div style={ev.linhaBotoes}>
-                <button type="button" style={est.botaoImprimir} onClick={aoLer}>
+                <button type="button" style={testeBom ? est.botaoSecundario : est.botaoImprimir} onClick={aoTestar}>
+                  {teste.estado === 'parado' ? 'Testar o retângulo' : 'Testar de novo'} ({Math.round(TESTE_MS / 60000)} min)
+                </button>
+                <button type="button" style={testeBom ? est.botaoImprimir : est.botaoSecundario} onClick={aoLer}>
                   {estado === 'erro' ? 'Ler o vídeo de novo' : 'Marcar volumes automaticamente'}
                 </button>
                 {botaoDesenhar('Redesenhar o retângulo')}
@@ -1789,5 +1972,131 @@ function MarcacaoAutomatica({
         </>
       )}
     </section>
+  );
+}
+
+/** % de papelao para a tela: 0,064 -> "6%". */
+const pctPapelao = (v) => `${Math.round(v * 100)}%`;
+const caixas = (n) => `${n} ${n === 1 ? 'caixa' : 'caixas'}`;
+
+/**
+ * O RESULTADO DO TESTE (v2.112.0): o veredito em palavras, o que fazer, as
+ * caixas achadas (clicaveis, para conferir no video) e o sinal do trecho.
+ * As contas sao de avaliarTeste (dominio).
+ */
+function ResultadoTeste({ r, aoIr }) {
+  const trecho = `de ${emRelogio(r.inicioMs)} a ${emRelogio(r.fimMs ?? r.inicioMs)}`;
+  const niveis = r.base != null ? ` Esteira vazia: ~${pctPapelao(r.base)} de papelão; com caixa: ~${pctPapelao(r.topo)}.` : '';
+  let estilo = est.faixaErro;
+  let papel = 'alert';
+  let texto;
+  let depois = null; // o que fazer, em texto normal, embaixo do veredito
+  switch (r.veredito) {
+    case 'ok':
+      estilo = ev.ok; papel = 'status';
+      texto = `O retângulo pegou ${caixas(r.caixas)} ${trecho}.`;
+      depois = `${niveis.trim()} Confira duas ou três (clique no tempo): cada uma tem de ser o fim de uma caixa saindo do `
+        + 'rolete. Se estiver certo, marque o vídeo todo.';
+      break;
+    case 'fraco':
+      estilo = ev.aviso; papel = 'status';
+      texto = `O retângulo pegou ${caixas(r.caixas)} ${trecho}, mas com pouca margem entre caixa e esteira vazia.${niveis} `
+        + 'Caixa pode passar sem ser marcada. Afine a faixa para ela ficar só no caminho da caixa, onde a caixa fica '
+        + 'quase toda rosa, e teste de novo.';
+      break;
+    case 'nenhuma':
+      texto = `Nenhuma caixa passou inteira pela faixa ${trecho}. Se passaram caixas, a faixa não atravessa todo o caminho `
+        + 'da caixa: redesenhe. Se a linha estava parada, leve o vídeo a um trecho com a linha rodando e teste de novo.';
+      break;
+    case 'nada':
+      texto = `Em nenhum momento ${trecho} o retângulo teve cor de papelão (no máximo ${pctPapelao(r.maximo)}). Ou nenhuma `
+        + 'caixa passou nesse trecho, ou o retângulo está fora do caminho da caixa. Pare o vídeo com uma caixa dentro do '
+        + 'retângulo: se ela não fica rosa, redesenhe a faixa na passagem do rolete para o tapete, onde a caixa passa.';
+      break;
+    case 'sempre':
+      texto = `O retângulo tem cor de papelão o tempo todo ${trecho}, mesmo sem caixa (nunca abaixo de `
+        + `${pctPapelao(r.minimo)}): tem algo pardo ou amarelo parado dentro dele — rolete, barra, chão ou caixa parada. `
+        + 'Pare o vídeo sem caixa, veja o que fica rosa e redesenhe sem pegar isso.';
+      break;
+    case 'sem-contraste':
+      texto = `O retângulo mudou pouco entre caixa e esteira vazia ${trecho} (de ${pctPapelao(r.minimo)} a `
+        + `${pctPapelao(r.maximo)} de papelão): a caixa cobre só uma parte dele. Redesenhe uma faixa fina, só onde a `
+        + 'caixa passa — com a caixa passando, ela tem de ficar quase toda rosa.';
+      break;
+    default:
+      texto = 'O trecho é curto demais para testar: volte o vídeo para antes e teste de novo.';
+  }
+  return (
+    <div style={ev.resultadoTeste}>
+      <p style={estilo} role={papel}>{texto}</p>
+      {depois && <p style={ev.dica}>{depois}</p>}
+      {r.grafico.length > 1 && <GraficoTeste r={r} aoIr={aoIr} />}
+      {r.marcasMs.length > 0 && (
+        <p style={ev.dica}>
+          Caixas que o teste marcaria (o fim saindo do rolete): <Tempos lista={r.marcasMs} aoIr={aoIr} />
+        </p>
+      )}
+      {r.descartados.length > 0 && (
+        <p style={ev.dica}>
+          Passagens curtas que ele ignoraria (mão, reflexo): <Tempos lista={r.descartados} aoIr={aoIr} />
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * O SINAL DO TESTE: o % de papelao no retangulo ao longo do trecho (0 a
+ * 100%, escala fixa — "nunca passou de 9%" tem de se ver), a linha a partir
+ * da qual conta caixa e um traco em cada caixa achada. Cada caixa e' um
+ * morro; esteira vazia, o chao. Clicar num traco leva o video ao ponto.
+ */
+function GraficoTeste({ r, aoIr }) {
+  const L = 300;
+  const A = 60; // o sinal; embaixo dele, a faixa dos tracos das caixas
+  const FAIXA = 12;
+  const ini = r.inicioMs;
+  const fim = Math.max(r.fimMs ?? 0, r.grafico[r.grafico.length - 1].ms, ini + 1);
+  const x = (ms) => ((ms - ini) / (fim - ini)) * L;
+  const y = (v) => A - Math.min(1, Math.max(0, v)) * A;
+  const linha = r.grafico.map((p) => `${x(p.ms).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+  const descricao = `Papelão no retângulo de ${emRelogio(ini)} a ${emRelogio(fim)}: de ${pctPapelao(r.minimo)} a `
+    + `${pctPapelao(r.maximo)}; ${caixas(r.caixas)} achadas.`;
+  return (
+    <figure style={ev.graficoTeste}>
+      <figcaption style={ev.graficoTitulo}>% do retângulo com cor de papelão no trecho testado</figcaption>
+      <div style={ev.graficoArea}>
+        <div style={ev.graficoEixoY} aria-hidden="true"><span>100%</span><span>0%</span></div>
+        <svg
+          viewBox={`0 0 ${L} ${A + FAIXA}`} preserveAspectRatio="none" style={ev.graficoSvg} role="img"
+          aria-label={descricao}
+        >
+          <line x1="0" x2={L} y1={A} y2={A} style={ev.graficoBase} vectorEffect="non-scaling-stroke" />
+          {r.entra != null && (
+            <line x1="0" x2={L} y1={y(r.entra)} y2={y(r.entra)} style={ev.graficoCorte} vectorEffect="non-scaling-stroke">
+              <title>{`Acima de ${pctPapelao(r.entra)}: caixa no retângulo`}</title>
+            </line>
+          )}
+          <polyline points={linha} style={ev.graficoLinha} vectorEffect="non-scaling-stroke" />
+          {r.marcasMs.map((ms) => (
+            <g key={ms} style={ev.graficoAlvo} onClick={() => aoIr(ms)}>
+              <title>{`Caixa saiu em ${emRelogio(ms)} — clique para ver`}</title>
+              <rect x={x(ms) - 3} y="0" width="6" height={A + FAIXA} fill="transparent" />
+              <line
+                x1={x(ms)} x2={x(ms)} y1={A + 3} y2={A + FAIXA} style={ev.graficoMarca} vectorEffect="non-scaling-stroke"
+              />
+            </g>
+          ))}
+        </svg>
+      </div>
+      <div style={ev.graficoEixoX} aria-hidden="true">
+        <span>{emRelogio(ini)}</span>
+        <span>{emRelogio(fim)}</span>
+      </div>
+      <p style={ev.dica}>
+        Cada morro é uma caixa passando{r.entra != null ? '; acima do tracejado, conta caixa' : ''}
+        {r.marcasMs.length ? '; o traço embaixo é a caixa achada (clique para ver)' : ''}.
+      </p>
+    </figure>
   );
 }

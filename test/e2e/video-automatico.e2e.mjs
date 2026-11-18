@@ -19,6 +19,11 @@
  * guardado para a maquina e a conferencia sobrevive ao F5; e a medicao
  * salva e' a de sempre, com origem 'video'.
  *
+ * E o TESTE do retangulo (v2.112.0): sobre o video, o % de papelao que o
+ * leitor ve' no retangulo, ao vivo (alto com caixa, ~0 sem); o teste curto
+ * reprova o retangulo fora da caixa e aprova o certo, com as mesmas caixas
+ * da leitura inteira, sem por marca na lista.
+ *
  * Uso: npm run dev -- --port 5199 e depois node test/e2e/video-automatico.e2e.mjs
  */
 import { fileURLToPath } from 'node:url';
@@ -160,6 +165,28 @@ checar(/pequeno demais/.test(await p.getByRole('alert').first().innerText()), 'r
 // Sobre o fundo, sem caixa: aceito, mas a leitura recusa — o retangulo nao separa caixa de esteira.
 await arrastar(p, { x: 0.05, y: 0.1 }, { x: 0.25, y: 0.4 });
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).waitFor({ timeout: 4000 });
+
+/* -------------------------- o TESTE (v2.112.0): reprova antes da leitura */
+const leituraRet = p.locator('[data-leitura-retangulo]');
+const papelaoNaTela = async () => {
+  await p.waitForFunction(() => document.querySelector('[data-leitura-retangulo]')?.dataset.papelao, null, { timeout: 4000 });
+  return Number(await leituraRet.getAttribute('data-papelao'));
+};
+checar(await papelaoNaTela() <= 5, 'retangulo sobre o fundo: o % de papelao na tela fica perto de 0, mesmo com caixa no video');
+await irPara(p, 0);
+await auto.getByRole('button', { name: /Testar o retângulo/ }).click();
+await auto.getByText(/Testando o retângulo de 0:00\.0 a 1:00\.\d/).waitFor({ timeout: 8000 })
+  .then(() => checar(true, 'Testar: mostra o trecho testado (2 min, ou ate o fim do video de 1 min)'))
+  .catch(() => checar(false, 'Testar: mostra o trecho testado (2 min, ou ate o fim do video de 1 min)'));
+await auto.getByRole('alert').waitFor({ timeout: 90000 });
+{
+  const erro = await auto.getByRole('alert').innerText();
+  checar(/Em nenhum momento de 0:00\.0 a 1:00\.\d o retângulo teve cor de papelão \(no máximo \d+%\)/.test(erro)
+    && /redesenhe/.test(erro), `teste com o retangulo fora da caixa: reprova e diz o que fazer (${erro.slice(0, 90)}…)`);
+}
+checar(!/Largada|Volume 1/.test(await marcas.innerText()), 'o teste nao poe marca nenhuma na lista');
+checar((await auto.getByRole('button', { name: 'Testar de novo (2 min)' }).count()) === 1,
+  'depois do teste, o botao vira "Testar de novo"');
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).click();
 await auto.getByRole('alert').waitFor({ timeout: 90000 });
 {
@@ -176,6 +203,17 @@ await arrastar(
   { x: CAIXA.x + CAIXA.largura * 0.85, y: CAIXA.y + CAIXA.altura * 0.85 },
   { x: CAIXA.x + CAIXA.largura * 0.15, y: CAIXA.y + CAIXA.altura * 0.15 },
 );
+// O que o leitor ve', ao vivo: com a caixa no retangulo (6 s), quase tudo
+// papelao; sem caixa (13 s, ela saiu em 11 s), quase nada.
+await irPara(p, 6);
+const comCaixa = await papelaoNaTela();
+await irPara(p, 13);
+await p.waitForFunction(() => Number(document.querySelector('[data-leitura-retangulo]')?.dataset.papelao) < 50, null, { timeout: 4000 })
+  .catch(() => {});
+const semCaixa = await papelaoNaTela();
+checar(comCaixa >= 80 && semCaixa <= 5,
+  `sobre o video, o % de papelao no retangulo acompanha o quadro: ${comCaixa}% com caixa, ${semCaixa}% sem`);
+checar(await p.locator('canvas[aria-hidden="true"]').count() === 1, 'a mascara do que o leitor conta fica sobre o retangulo');
 const guardado = await p.evaluate(() => JSON.parse(localStorage.getItem('ritmopatrimar.video.retangulos') || '{}'));
 const r = guardado[MAQUINA.id];
 checar(r && Math.abs(r.x - (CAIXA.x + CAIXA.largura * 0.15)) < 0.01 && Math.abs(r.y - (CAIXA.y + CAIXA.altura * 0.15)) < 0.01,
@@ -186,6 +224,24 @@ if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-auto-retangulo.png` });
 await irPara(p, 0);
 // Redesenhar tira o erro da leitura anterior: o botao volta a ser o de marcar.
 checar(!(await auto.getByRole('alert').count()), 'redesenhar o retangulo tira o erro da leitura anterior');
+checar(!/Em nenhum momento/.test(await auto.innerText()), 'redesenhar tira o resultado do teste do retangulo anterior');
+// O teste aprova o retangulo certo: as caixas que a leitura inteira vai marcar.
+await auto.getByRole('button', { name: 'Testar o retângulo (2 min)' }).click();
+await auto.getByText(/O retângulo pegou \d+ caixas?/).waitFor({ timeout: 90000 });
+{
+  const textoTeste = await auto.innerText();
+  const achadas = [...textoTeste.matchAll(/(\d+):(\d{2})\.(\d)/g)]
+    .map((m) => Number(m[1]) * 60 + Number(m[2]) + Number(m[3]) / 10);
+  checar(/O retângulo pegou 5 caixas de 0:00\.0 a 1:00\.\d\.\s+Esteira vazia: ~\d+% de papelão; com caixa: ~\d+%/.test(textoTeste),
+    'teste com o retangulo certo: pegou as 5 caixas que passam inteiras, com o nivel vazio e com caixa');
+  checar(SAIDAS.every((t) => achadas.some((a) => Math.abs(a - t) < 0.4)),
+    `as caixas do teste estao na SAIDA de cada uma, clicaveis (${SAIDAS.join(', ')})`);
+  checar(/Passagens curtas que ele ignoraria[\s\S]*0:3[67]\.\d/.test(textoTeste), 'o teste mostra o vulto ignorado');
+  checar(await auto.getByRole('img', { name: /Papelão no retângulo de 0:00\.0/ }).count() === 1,
+    'o grafico do sinal do trecho aparece, com a descricao');
+}
+checar(!/Largada|Volume 1/.test(await marcas.innerText()), 'teste aprovado tambem nao poe marca: a lista fica para a leitura');
+if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-auto-teste.png` });
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).click();
 await auto.getByText(/Lendo o vídeo/).waitFor({ timeout: 8000 });
 checar(true, 'Marcar: a leitura comeca e mostra o andamento');
@@ -310,6 +366,40 @@ checar(enviada?.origem === 'video' && enviada?.pecas === 4 && enviada?.marcasMs?
     && (await autoAntigo.getByRole('button', { name: 'Redesenhar o retângulo' }).count()) === 1,
     'com o retangulo antigo nao da para ler (marcaria outro instante): so redesenhar');
   await c2.close();
+}
+
+/* --- o TESTE para no fim do trecho (fimMs): nao le' o video todo --- */
+{
+  // O video sintetico tem 1 min, menos que os 2 do teste: aqui a leitura e'
+  // chamada direto, com um trecho de 5 a 20 s, no navegador de verdade.
+  const q = await ctx.newPage();
+  q.on('pageerror', (e) => erros.push(e.message));
+  await q.goto(`${BASE}/analise/embalagem/video`);
+  const r = await q.evaluate(async ({ src, ret }) => {
+    const { analisarVideo } = await import('/src/lib/analisarVideo.js');
+    const v = document.createElement('video');
+    v.muted = true;
+    v.playsInline = true;
+    v.src = src;
+    v.style.cssText = 'position:fixed;left:0;top:0;width:160px;z-index:9999';
+    document.body.appendChild(v);
+    const { promessa } = analisarVideo({
+      video: v, retangulo: ret, inicioMs: 5000, fimMs: 20000,
+    });
+    const { amostras, cancelado } = await promessa;
+    return {
+      cancelado, primeiro: amostras[0]?.ms, ultimo: amostras[amostras.length - 1]?.ms, parouEm: v.currentTime, pausado: v.paused,
+    };
+  }, {
+    src: `/@fs${VIDEO}`,
+    ret: {
+      x: CAIXA.x + CAIXA.largura * 0.15, y: CAIXA.y + CAIXA.altura * 0.15, largura: CAIXA.largura * 0.7, altura: CAIXA.altura * 0.7,
+    },
+  });
+  checar(!r.cancelado && r.primeiro >= 4900 && r.primeiro < 6000 && r.ultimo >= 20000 && r.ultimo < 21500
+    && r.pausado && r.parouEm < 23,
+    `a leitura com fim le' so' o trecho (5 a 20 s) e para o video: ${JSON.stringify(r)}`);
+  await q.close();
 }
 
 checar(!erros.length, `sem erro no console da pagina${erros.length ? `: ${erros.join(' | ')}` : ''}`);

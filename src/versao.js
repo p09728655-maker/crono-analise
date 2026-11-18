@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.112.0',
+    data: '2026-11-18',
+    titulo: 'Cronometrar por vídeo: testar o retângulo antes de ler o vídeo todo',
+    itens: [
+      'VOCÊ VÊ NA HORA O QUE O LEITOR VÊ. Sobre o vídeo, dentro do retângulo, o que o app conta como papelão fica pintado de rosa, com o % ao lado ("64% papelão"). Vale enquanto você desenha (arrastando, o % muda junto) e com o vídeo parado ou tocando, até a primeira marca. Com uma caixa passando, ela tem de ficar quase toda rosa; sem caixa, perto de 0%. Se a caixa não fica rosa, ou se fica rosa o que não é caixa (uma barra amarela, o rolete), o retângulo está no lugar errado — antes você só descobria isso depois de ler o vídeo inteiro.',
+      'TESTAR O RETÂNGULO: lê só 2 minutos a partir de onde o vídeo está (uns 15 s de espera, contra vários minutos do vídeo todo) e diz se pegou: quantas caixas achou, o % de papelão com a esteira vazia e com caixa, e o gráfico do trecho (cada caixa é um morro). As caixas achadas são clicáveis para conferir no vídeo. É a mesma conta da leitura do vídeo todo, então o que o teste acha é o que a leitura acharia nesse trecho. O teste não põe marca na lista.',
+      'QUANDO NÃO PEGA, O TESTE DIZ POR QUÊ: o retângulo nunca viu papelão (nenhuma caixa passou ou ele está fora do caminho dela); vê papelão o tempo todo (algo pardo ou amarelo parado dentro dele); muda pouco (a caixa cobre só uma parte dele — faça uma faixa fina, só onde a caixa passa); ou pega com pouca margem (pode perder caixa). Cada caso diz o que fazer.',
+      'Retângulo recusado no desenho (pequeno demais) avisa no próprio cartão do desenho, ao lado da instrução, e não mais embaixo do vídeo.',
+    ],
+  },
+  {
     versao: '2.111.1',
     data: '2026-11-12',
     titulo: 'Tempo-alvo pela esteira: a conta com o resultado e os textos da régua nova',

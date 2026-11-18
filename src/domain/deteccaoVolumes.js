@@ -54,12 +54,18 @@ export function fracaoPapelao(rgba) {
   if (!total) return 0;
   let papelao = 0;
   for (let i = 0; i < total * 4; i += 4) {
-    const r = rgba[i];
-    const g = rgba[i + 1];
-    const b = rgba[i + 2];
-    if (r - b > 35 && r >= g && r > 90) papelao++;
+    if (ehPapelao(rgba[i], rgba[i + 1], rgba[i + 2])) papelao++;
   }
   return papelao / total;
+}
+
+/**
+ * Um pixel com COR DE PAPELAO — a regra de `fracaoPapelao`, sozinha, para a
+ * tela pintar o que o leitor conta (v2.112.0): a mascara sobre o retangulo
+ * tem de ser a MESMA conta da leitura, senao o teste mostraria outra coisa.
+ */
+export function ehPapelao(r, g, b) {
+  return r - b > 35 && r >= g && r > 90;
 }
 
 /**
@@ -278,6 +284,103 @@ export function intervalosLongos(entradasMs, fator = 3) {
   if (intervalos.length < 4) return [];
   const tipico = mediana(intervalos.map((x) => x.duracaoMs));
   return intervalos.filter((x) => x.duracaoMs > fator * tipico);
+}
+
+/* ------------------------------------------- o teste antes da leitura
+ * TESTAR O RETANGULO (v2.112.0). Antes, o analista so' sabia que o
+ * retangulo nao pegava DEPOIS de ler o video inteiro — 14 min de video
+ * eram de 2 a 7 min de espera para ouvir "sem diferenca entre caixa e
+ * esteira vazia" (PPCP, 18/11/2026: "descobre so' depois que nao pegou").
+ * O teste le' so' um trecho curto, com a MESMA conta da leitura inteira
+ * (detectarVolumes + saidasDosVolumes): o que ele acha e' o que a leitura
+ * do video todo acharia nesse trecho.
+ */
+
+/** O trecho do teste: 2 min de video, uns 15 s de leitura a 8x — tempo para umas 10 caixas. */
+export const TESTE_MS = 120000;
+/**
+ * Diferenca entre caixa e esteira vazia abaixo disto: a leitura funciona,
+ * mas com pouca margem (o dobro do minimo). No sinal real da envolvedora,
+ * com a faixa certa, ela e' de ~0,5.
+ */
+export const CONTRASTE_BOM = 2 * CONTRASTE_MINIMO;
+/** Pontos do grafico do teste: o bastante para ver cada caixa, sem pesar a tela. */
+const PONTOS_GRAFICO = 240;
+
+/** O trecho do teste a partir de `inicioMs`: 2 min, ou ate' o fim do video. */
+export function trechoDoTeste(inicioMs, duracaoMs) {
+  const inicio = Math.max(0, Number(inicioMs) || 0);
+  const fim = inicio + TESTE_MS;
+  return { inicioMs: inicio, fimMs: Number.isFinite(duracaoMs) && duracaoMs > 0 ? Math.min(fim, duracaoMs) : fim };
+}
+
+/** O sinal reduzido para o grafico: o MAIOR valor de cada faixa de tempo (a caixa e' um pico, nao some). */
+function reduzir(sinal, pontos) {
+  if (sinal.length <= pontos) return sinal.map((s) => ({ ms: s.ms, v: s.v }));
+  const ini = sinal[0].ms;
+  const passo = (sinal[sinal.length - 1].ms - ini) / pontos || 1;
+  const faixas = [];
+  for (const s of sinal) {
+    const i = Math.min(pontos - 1, Math.floor((s.ms - ini) / passo));
+    if (!faixas[i] || s.v > faixas[i].v) faixas[i] = { ms: s.ms, v: s.v };
+  }
+  return faixas.filter(Boolean);
+}
+
+/**
+ * O VEREDITO DO TESTE — o que o retangulo fez no trecho e o que fazer:
+ *  - 'ok': separou caixa de esteira vazia com margem e achou caixas;
+ *  - 'fraco': achou caixas, mas a diferenca e' pequena (pode perder caixa);
+ *  - 'nenhuma': separou, mas nenhuma caixa passou INTEIRA pela faixa;
+ *  - 'nada': em nenhum momento o retangulo teve cor de papelao — nenhuma
+ *    caixa passou, ou o retangulo esta' fora do caminho dela;
+ *  - 'sempre': tem cor de papelao o tempo todo, mesmo vazio — algo pardo ou
+ *    amarelo parado dentro dele (rolete, barra, caixa parada);
+ *  - 'sem-contraste': varia, mas pouco: a caixa cobre so' parte dele;
+ *  - 'curto': amostras de menos para ler.
+ *
+ * @param amostras [{ ms, fracao }] do trecho, como as da leitura inteira
+ * @returns { veredito, caixas, marcasMs, descartados, suspeitos, base, topo,
+ *   contraste, minimo, maximo, entra, grafico: [{ ms, v }], inicioMs, fimMs }
+ *   (base/topo/contraste/entra so' quando o sinal separou)
+ */
+export function avaliarTeste(amostras, { inicioMs = 0, fimMs = null } = {}) {
+  const lista = (amostras || [])
+    .filter((a) => a && Number.isFinite(a.ms) && Number.isFinite(a.fracao))
+    .sort((a, b) => a.ms - b.ms);
+  const vazio = {
+    caixas: 0, marcasMs: [], descartados: [], suspeitos: [], base: null, topo: null, contraste: null,
+    entra: null, inicioMs, fimMs,
+  };
+  if (lista.length < 10) return { ...vazio, veredito: 'curto', minimo: null, maximo: null, grafico: [] };
+  const sinal = suavizar(lista, JANELA_MS);
+  let minimo = Infinity;
+  let maximo = -Infinity;
+  for (const s of sinal) { if (s.v < minimo) minimo = s.v; if (s.v > maximo) maximo = s.v; }
+  const comum = { ...vazio, minimo, maximo, grafico: reduzir(sinal, PONTOS_GRAFICO) };
+  const r = detectarVolumes(lista);
+  if (r.motivo) {
+    if (!r.semContraste) return { ...comum, veredito: 'curto' };
+    const veredito = maximo < CONTRASTE_MINIMO ? 'nada' : minimo >= CONTRASTE_MINIMO ? 'sempre' : 'sem-contraste';
+    return { ...comum, veredito };
+  }
+  const s = saidasDosVolumes(r);
+  const contraste = r.limiares.topo - r.limiares.base;
+  let veredito = 'ok';
+  if (!s.marcasMs.length) veredito = 'nenhuma';
+  else if (contraste < CONTRASTE_BOM) veredito = 'fraco';
+  return {
+    ...comum,
+    veredito,
+    caixas: s.marcasMs.length,
+    marcasMs: s.marcasMs,
+    descartados: s.descartados,
+    suspeitos: s.suspeitos,
+    base: r.limiares.base,
+    topo: r.limiares.topo,
+    contraste,
+    entra: r.limiares.entra,
+  };
 }
 
 /* ----------------------------------------------------- o retangulo na tela
