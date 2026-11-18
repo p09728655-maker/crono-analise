@@ -392,7 +392,21 @@ do produto dele**.
   regras de cada tecla são funções puras no mesmo arquivo. O vídeo **não sobe**:
   abre como `blob:` no navegador. A marcação em andamento fica no
   `localStorage` pelo arquivo (nome, tamanho e data), uma por vídeo (as 10 mais
-  recentes), para sobreviver ao F5. A medição vai direto ao `/sync`, sem a fila
+  recentes), para sobreviver ao F5. **Só a que tem marca** (v2.112.1,
+  `rascunhoTemAlgo`: largada, volume ou parada — `semMarcas` em
+  `medicaoPorVideo.js` —, ou a que tentou salvar): até a v2.112.0 todo vídeo
+  aberto com "Começar a marcar" virava rascunho de 0 volumes, a lista do preparo
+  enchia e reabrir o vídeo pedia para continuar ou descartar o nada. As vazias
+  guardadas saem ao abrir a tela (`limparRascunhosVazios`). No preparo, a lista é
+  uma linha por vídeo (`MarcacaoGuardada`: máquina, produto, `marcasEmPalavras`,
+  quando) com Descartar que confirma; descartar pela lista é o mesmo
+  `descartarGuardada` do vídeo aberto (a que pode estar no servidor deixa o
+  aviso de "já salvo"), com o rascunho lido do PC na hora do clique (outra aba
+  pode ter tentado salvar), e a linha diz "pode já estar" / "já está no
+  sistema". O `listaVazia` da tela é o próprio `semMarcas` (uma regra só).
+- **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão
+  mostram o `normalMs` da `leituraPecaAPeca` — o "por volume sem as lacunas"
+  do Volume a volume, o passo da linha —, com "—" abaixo de 10 intervalos. A medição vai direto ao `/sync`, sem a fila
   offline, para a recusa aparecer na tela, com `origem: 'video'` (coluna
   `conferencias.origem`, `'tablet'` por padrão; vídeo sem marcas é recusado
   pela API e pelo banco). Lista, volume a volume e folha mostram "por vídeo".

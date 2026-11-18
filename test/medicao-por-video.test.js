@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  emRelogio, inicioSugerido, marcasGuardadas, medicaoDoVideo,
+  emRelogio, inicioSugerido, marcasEmPalavras, marcasGuardadas, medicaoDoVideo, semMarcas,
 } from '../src/domain/medicaoPorVideo.js';
 import { conferenciaRapida, leituraPecaAPeca, periodoPorPeca } from '../src/domain/cronoanalise.js';
 import {
@@ -227,5 +227,23 @@ describe('marcasGuardadas — o aviso ao voltar ao preparo (v2.108.1)', () => {
       ...vazia, largadaMs: 10000, toques: toques(3),
       paradas: [{ motivo: 'setup', inicioMs: 45000, fimMs: 60000 }], aberta: { motivo: null, inicioMs: 90000 },
     })).toBe('As marcas deste vídeo continuam aqui: a largada, 3 volumes e 2 paradas.');
+  });
+});
+
+describe('as marcacoes guardadas no PC (v2.112.1): so a que tem marca', () => {
+  const vazia = { largadaMs: null, toques: [], paradas: [], aberta: null, ordem: 0 };
+  it('sem nada marcado e vazia; a largada, um volume ou uma parada (aberta ou fechada) ja nao', () => {
+    expect(semMarcas(vazia)).toBe(true);
+    expect(semMarcas(null)).toBe(true);
+    expect(semMarcas({ ...vazia, largadaMs: 0 })).toBe(false);
+    expect(semMarcas({ ...vazia, toques: [{ ms: 5000, ordem: 1 }] })).toBe(false);
+    expect(semMarcas({ ...vazia, paradas: [{ motivo: 'setup', inicioMs: 1, fimMs: 2 }] })).toBe(false);
+    expect(semMarcas({ ...vazia, aberta: { motivo: null, inicioMs: 1 } })).toBe(false);
+  });
+  it('em palavras, sem o "0 volumes" que escondia a largada', () => {
+    expect(marcasEmPalavras(vazia)).toBe('');
+    expect(marcasEmPalavras({ ...vazia, largadaMs: 1000 })).toBe('a largada');
+    expect(marcasEmPalavras({ ...vazia, largadaMs: 1000, toques: [{ ms: 3000, ordem: 1 }, { ms: 5000, ordem: 2 }] }))
+      .toBe('a largada e 2 volumes');
   });
 });
