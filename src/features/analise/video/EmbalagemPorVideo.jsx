@@ -2387,8 +2387,20 @@ function EsteiraAB({
             A ponta da caixa leva {tempo} s de A até B ({n0(distanciaMm)} mm{mesmas ? '' : ', a distância da leitura — as linhas mudaram depois'}):
             velocidade = distância ÷ tempo. Caixa + vão = a velocidade × o intervalo entre as caixas (o do vídeo, com as
             pausas de cada ciclo, se houver); entre-peças = isso − a caixa ({caixaMm > 0 ? `${n0(caixaMm)} mm` : 'sem medida'}).
-            O tempo de A até B sai do vídeo inteiro (correlação {n2(linhaB.correlacao)}, de 0 a 1), não de caixa a caixa.
+            {linhaB.metodo === 'caixa'
+              ? ` O tempo de A até B é o da ponta de cada caixa, caixa a caixa: ${linhaB.caixaACaixa.pares} `
+                + `${linhaB.caixaACaixa.pares === 1 ? 'caixa' : 'caixas'} nas duas linhas, de ${n2(linhaB.caixaACaixa.deMs / 1000)} a `
+                + `${n2(linhaB.caixaACaixa.ateMs / 1000)} s (a mediana).`
+              : ` O tempo de A até B sai do vídeo inteiro (correlação ${n2(linhaB.correlacao)}, de 0 a 1): caixa a caixa não`
+                + ' deu — as duas linhas não pegaram as mesmas caixas por igual (chapa coberta, mão).'}
           </p>
+          {linhaB.metodo === 'caixa' && linhaB.concordam === false && (
+            <p style={ev.aviso} role="status">
+              Pelo vídeo inteiro deu {n2(linhaB.atrasoSinalMs / 1000)} s, mais de 10% diferente do caixa a caixa
+              ({n2(linhaB.atrasoMs / 1000)} s). Com poucas caixas um trecho maior acerta os dois: leia o vídeo todo, ou um
+              trecho de 3 a 5 minutos, antes de usar o número.
+            </p>
+          )}
           <p style={ev.dica}>
             O entre-peças é o vão que a linha PRATICA neste vídeo, não um padrão, e é a diferença de dois números próximos
             (caixa + vão − caixa): por isso o "≈" — ele muda de um trecho para outro do mesmo vídeo; o da leitura inteira vale
