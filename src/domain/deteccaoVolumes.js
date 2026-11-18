@@ -391,7 +391,7 @@ export function avaliarTeste(amostras, { inicioMs = 0, fimMs = null } = {}) {
     veredito,
     // A linha B (v2.113.0): o atraso de A para B e o intervalo tipico — a
     // velocidade e o entre-pecas saem deles e da distancia (esteiraPelasLinhas).
-    linhaB: linhaBDaLeitura(lista, s.marcasMs),
+    linhaB: linhaBDaLeitura(lista, s.marcasMs, { ocupacaoMs: ocupacaoTipica(r.volumes) }),
     caixas: s.marcasMs.length,
     marcasMs: s.marcasMs,
     descartados: s.descartados,
@@ -563,7 +563,7 @@ export function periodoDoSinal(sinal) {
  *   invertido, pertoDemais } ou { motivo } — atrasoMs positivo: a caixa
  *   passa primeiro em A. So' vale com os quatro avisos falsos (linhaBValida).
  */
-export function atrasoEntreFaixas(amostras) {
+export function atrasoEntreFaixas(amostras, { marcasMs = null } = {}) {
   const lista = amostrasAB(amostras);
   if (lista.length < 20) return { motivo: 'poucas amostras das duas linhas' };
   const ini = lista[0].ms;
@@ -571,8 +571,14 @@ export function atrasoEntreFaixas(amostras) {
   const A = naGrade(lista, 'fracao', ini, n);
   const B = naGrade(lista, 'fracaoB', ini, n);
   const periodoMs = periodoDoSinal(A);
-  if (!periodoMs) return { motivo: 'as caixas não se repetem na linha A no trecho lido (passou uma só, ou nenhuma)' };
-  const limiteMs = Math.min(FRACAO_DO_PERIODO * periodoMs, JANELA_MAXIMA_MS);
+  const marcasTipico = intervaloTipico(marcasMs);
+  // A janela sai do MENOR intervalo que se conhece (revisao da 2.113.0): o
+  // sinal da' o dobro quando as caixas se alternam (uma com pecas em cima,
+  // outra sem); as marcas, o dobro quando a A perde caixas; com chegadas
+  // irregulares o sinal nao se repete e so' as marcas dizem.
+  const base = [periodoMs, marcasTipico].filter((x) => x > 0);
+  if (!base.length) return { motivo: 'poucas caixas na linha A no trecho lido para medir' };
+  const limiteMs = Math.min(FRACAO_DO_PERIODO * Math.min(...base), JANELA_MAXIMA_MS);
   const maxLag = Math.max(1, Math.floor(limiteMs / PASSO_GRADE_MS));
   let melhor = -Infinity;
   let lagMelhor = 0;
@@ -594,6 +600,7 @@ export function atrasoEntreFaixas(amostras) {
     atrasoMs,
     correlacao: melhor,
     periodoMs,
+    intervaloMarcasMs: marcasTipico,
     limiteMs: maxLag * PASSO_GRADE_MS,
     noLimite: Math.abs(lagMelhor) >= maxLag,
     fraca: melhor < CORRELACAO_MINIMA,
@@ -615,55 +622,113 @@ export function intervaloTipico(marcasMs) {
   return mediana(o.slice(1).map((ms, i) => ms - o[i]));
 }
 
+/** A ocupacao tipica da linha A: a mediana do tempo de cada caixa na faixa (entrada ate' a saida). */
+export function ocupacaoTipica(volumes) {
+  return mediana((volumes || []).filter((v) => v?.saiuMs != null && v.saiuMs > v.entrouMs).map((v) => v.saiuMs - v.entrouMs));
+}
+
 /**
- * A LINHA B DE UMA LEITURA: o atraso e o intervalo entre as caixas.
- * O intervalo tipico e' o PERIODO do sinal da A (a autocorrelacao): a A que
- * perde caixas dobraria a mediana das marcas — e o caixa + vao junto (no
- * video real, a faixa que pegou 10 de 20 caixas dava 13,2 s em vez de
- * 6,6). A faixa do 1o ao 3o quartil sai das marcas so' quando elas
- * concordam com o periodo (a mediana a ate' 15% dele), sem as paradas (mais
- * que o dobro da mediana). Null sem a linha B nas amostras.
+ * O INTERVALO ENTRE AS CAIXAS, conciliando o sinal e as marcas (revisao da
+ * 2.113.0): cada um erra pelo dobro num caso. Concordam (15%): vale a
+ * mediana das marcas. O sinal da' o dobro: as caixas se alternam (uma com
+ * pecas em cima, outra sem; produto de dois volumes) — vale a mediana. As
+ * marcas dao o dobro: a A perdeu caixas — vale o periodo. Nenhum dos dois:
+ * nao ha' intervalo, e o porque. Um so': ele.
  */
-export function linhaBDaLeitura(amostras, marcasMs) {
+export function intervaloDaLinha({ periodoMs = null, medianaMs = null } = {}) {
+  const p = periodoMs > 0 ? periodoMs : null;
+  const m = medianaMs > 0 ? medianaMs : null;
+  if (p && m) {
+    const r = p / m;
+    if (Math.abs(r - 1) <= 0.15) return { intervaloMs: m, motivo: null };
+    if (Math.abs(r - 2) <= 0.3) return { intervaloMs: m, motivo: null, alternadas: true };
+    if (Math.abs(1 / r - 2) <= 0.3) return { intervaloMs: p, motivo: null, perdidas: true };
+    const s = (x) => (Math.round(x / 100) / 10).toFixed(1);
+    return {
+      intervaloMs: null,
+      motivo: `o intervalo entre as caixas não fecha — pelas marcas da A, ${s(m)} s; pelo sinal, ${s(p)} s`,
+    };
+  }
+  if (m || p) return { intervaloMs: m || p, motivo: null };
+  return { intervaloMs: null, motivo: 'sem caixas bastantes na linha A para o intervalo' };
+}
+
+/**
+ * A LINHA B DE UMA LEITURA: o atraso, o intervalo entre as caixas
+ * (intervaloDaLinha) e a ocupacao tipica da A (a conferencia da velocidade
+ * pela propria caixa). Null sem a linha B nas amostras.
+ */
+export function linhaBDaLeitura(amostras, marcasMs, { ocupacaoMs = null } = {}) {
   if (!(amostras || []).some((a) => Number.isFinite(a?.fracaoB))) return null;
-  const atraso = atrasoEntreFaixas(amostras);
-  const o = (marcasMs || []).filter(Number.isFinite).sort((a, b) => a - b);
-  const todos = o.slice(1).map((ms, i) => ms - o[i]);
-  const dasMarcas = mediana(todos);
-  const periodo = atraso.periodoMs || null;
-  const concordam = periodo > 0 && dasMarcas > 0 && Math.abs(dasMarcas - periodo) <= 0.15 * periodo;
-  const semParada = concordam ? todos.filter((x) => x <= 2 * dasMarcas) : [];
+  const atraso = atrasoEntreFaixas(amostras, { marcasMs });
+  const iv = intervaloDaLinha({ periodoMs: atraso.periodoMs, medianaMs: intervaloTipico(marcasMs) });
   return {
-    intervaloTipicoMs: periodo || null,
-    intervaloP25Ms: semParada.length >= 4 ? percentil(semParada, 0.25) : null,
-    intervaloP75Ms: semParada.length >= 4 ? percentil(semParada, 0.75) : null,
     ...atraso,
+    intervaloTipicoMs: iv.intervaloMs,
+    intervaloMotivo: iv.motivo,
+    ocupacaoMs: ocupacaoMs > 0 ? ocupacaoMs : null,
   };
 }
 
 /**
  * VELOCIDADE E ENTRE-PECAS a partir do atraso de A para B.
  *
+ * A CONFERENCIA (revisao da 2.113.0): um atraso maior que um intervalo
+ * inteiro volta positivo e o sinal nao o distingue. A velocidade pela
+ * propria caixa (comprimento ÷ ocupacao na A) erra uns 20% na Emb inicio
+ * (pecas em cima da chapa) e mais quando duas chapas se juntam na faixa, mas
+ * o atraso trocado da' 3,5 vezes ou mais: mais que o triplo (ou menos que um
+ * terco) e' `suspeito`. Sem a ocupacao, a reserva: entre-pecas negativo ou
+ * maior que 5 caixas.
+ *
  * @returns null sem distancia ou com o atraso que nao vale; senao
- *   { velocidadeMMin, passoMm | null, entrePecasMm | null, entreDeMm,
- *   entreAteMm } — de/ate': o entre-pecas no 1o e no 3o quartil dos
- *   intervalos (null sem eles).
+ *   { velocidadeMMin, velocidadeCaixaMMin | null, passoMm | null,
+ *   entrePecasMm | null, suspeito: null | 'velocidade' | 'entre' }
  */
 export function esteiraPelasLinhas({
-  atrasoMs, distanciaMm, intervaloTipicoMs, intervaloP25Ms = null, intervaloP75Ms = null, comprimentoMm,
+  atrasoMs, distanciaMm, intervaloTipicoMs, comprimentoMm, ocupacaoMs = null,
 } = {}) {
   const d = Number(distanciaMm);
   const dt = Number(atrasoMs);
   if (!(d > 0) || !(dt >= ATRASO_MINIMO_MS)) return null;
   const v = d / dt; // mm por ms
   const L = Number(comprimentoMm);
-  const passo = (t) => (Number(t) > 0 ? v * Number(t) : null);
-  const entre = (t) => (passo(t) != null && L > 0 ? passo(t) - L : null);
+  const passoMm = Number(intervaloTipicoMs) > 0 ? v * Number(intervaloTipicoMs) : null;
+  const entrePecasMm = passoMm != null && L > 0 ? passoMm - L : null;
+  const vCaixa = L > 0 && Number(ocupacaoMs) > 0 ? L / Number(ocupacaoMs) : null;
+  let suspeito = null;
+  if (vCaixa && (v / vCaixa > 3 || v / vCaixa < 1 / 3)) suspeito = 'velocidade';
+  // Reserva, so' sem a ocupacao da A: entre-pecas negativo, ou maior que 5
+  // caixas (caixa pequena com vao grande e' normal — na seladora, por exemplo).
+  else if (!vCaixa && entrePecasMm != null && (entrePecasMm > 5 * L || entrePecasMm < -0.1 * L)) suspeito = 'entre';
   return {
     velocidadeMMin: v * 60,
-    passoMm: passo(intervaloTipicoMs),
-    entrePecasMm: entre(intervaloTipicoMs),
-    entreDeMm: entre(intervaloP25Ms),
-    entreAteMm: entre(intervaloP75Ms),
+    velocidadeCaixaMMin: vCaixa ? vCaixa * 60 : null,
+    passoMm,
+    entrePecasMm,
+    suspeito,
   };
+}
+
+/* As linhas e a distancia de uma leitura (revisao da 2.113.0): o atraso so'
+ * vale para as linhas que o mediram. */
+const LADOS = ['x', 'y', 'largura', 'altura'];
+/** So' a posicao de uma linha (sem a B nem a distancia que andam junto com a A). */
+export const soLinha = (r) => (r ? Object.fromEntries(LADOS.map((k) => [k, r[k]])) : null);
+/** As duas linhas sao a mesma (ou as duas faltam). */
+export const mesmaLinha = (a, b) => (!a && !b) || Boolean(a && b && LADOS.every((k) => Math.abs(a[k] - b[k]) < 1e-9));
+/** A linha B de uma leitura com as linhas e a distancia que a mediram. */
+export function congelarLinhaB(l, lido) {
+  if (!l) return null;
+  return { ...l, linhas: { a: soLinha(lido), b: soLinha(lido?.b) }, distanciaMm: lido?.distanciaMm ?? null };
+}
+/**
+ * A DISTANCIA QUE VALE para uma leitura: a de agora, se as linhas sao as
+ * mesmas (corrigir um numero digitado errado nao pede ler de novo); senao, a
+ * que foi congelada com ela — que pode faltar (a leitura foi feita sem
+ * distancia e as linhas mudaram depois: so' lendo de novo).
+ */
+export function distanciaDaLeitura(linhaB, retangulo) {
+  const mesmas = mesmaLinha(linhaB?.linhas?.a, soLinha(retangulo)) && mesmaLinha(linhaB?.linhas?.b, soLinha(retangulo?.b));
+  return { mesmas, distanciaMm: mesmas ? (retangulo?.distanciaMm ?? null) : (linhaB?.distanciaMm ?? null) };
 }

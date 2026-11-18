@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.113.1',
+    data: '2026-11-18',
+    titulo: 'Linhas A e B: entre-peças certo com caixas alternadas, e mais conferências',
+    itens: [
+      'CAIXAS ALTERNADAS NÃO DOBRAM MAIS O ENTRE-PEÇAS. Quando uma chapa vem com peças em cima e a outra sem (ou o produto tem dois volumes de tamanhos diferentes), o desenho do sinal só se repete a cada DUAS caixas, e a 2.113.0 tomava esse intervalo pelo de uma: caixa + vão e entre-peças saíam várias vezes maiores, sem aviso (990 mm viravam 1975). Agora o intervalo entre as caixas confere o sinal com as marcas da linha A: se um dá o dobro do outro, vale o certo; se não fecham, a tela diz e não dá caixa + vão nem entre-peças (a velocidade continua valendo).',
+      'A VELOCIDADE É CONFERIDA PELA PRÓPRIA CAIXA: o tempo de cada caixa na linha A, com a medida dela, dá uma segunda velocidade. Se a das linhas A e B passa de 3 vezes essa (ou fica abaixo de um terço), a B provavelmente está a mais de uma caixa + vão da A e viu a caixa seguinte: a tela avisa e não mostra os números. Antes, sem cadastro, nada avisava.',
+      'Chegadas irregulares (caixas com intervalos muito diferentes) não são mais recusadas com "não se repetem": a busca usa as marcas da linha A.',
+      'A faixa "de X a Y mm" do entre-peças saiu: ela mostrava só a variação do ritmo, não a precisão da medida, e às vezes nem continha o número. Fica o "≈", com o aviso de que o número muda de um trecho para outro e o da leitura inteira vale mais que o do teste de 2 min.',
+      'Os rótulos "A ·" e "B ·" não se cobrem mais (o da A vai embaixo da linha); desenhando a B, o rosa sai de cima para dar para ver a fita. Linha mais fina que 2 pixels do vídeo é recusada na hora (vídeo de baixa resolução). Os números do quadro da esteira usam ponto, como o resto do app. O conselho de distância passou a 1/4 de caixa + vão (uns 25 cm): com 1/3 a medida ficava perto do limite e às vezes era recusada.',
+    ],
+  },
+  {
     versao: '2.113.0',
     data: '2026-11-18',
     titulo: 'Cronometrar por vídeo: velocidade da esteira e entre-peças pelas linhas A e B',

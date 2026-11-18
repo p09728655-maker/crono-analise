@@ -15,7 +15,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   AREA_MINIMA, ATRASO_MINIMO_MS, CORRELACAO_MINIMA, JANELA_MAXIMA_MS, LADO_MINIMO, TESTE_MINIMO_MS, TESTE_MS, areaDaImagem,
-  atrasoEntreFaixas, esteiraPelasLinhas, intervaloTipico, linhaBDaLeitura, linhaBValida, periodoDoSinal, avaliarTeste, detectarVolumes, ehPapelao, fracaoPapelao, intervalosLongos,
+  atrasoEntreFaixas, congelarLinhaB, distanciaDaLeitura, esteiraPelasLinhas, intervaloDaLinha, intervaloTipico,
+  linhaBDaLeitura, linhaBValida, mesmaLinha, periodoDoSinal, soLinha, avaliarTeste, detectarVolumes, ehPapelao, fracaoPapelao, intervalosLongos,
   limiaresDoSinal, pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
 } from '../src/domain/deteccaoVolumes.js';
 import {
@@ -544,44 +545,127 @@ describe('A ESTEIRA PELAS LINHAS A E B (v2.113.0): velocidade e entre-pecas medi
     expect(Math.abs(a.atrasoMs - 2000)).toBeLessThan(100);
   });
 
-  it('o periodo do sinal nao depende das marcas: a linha A que perde caixas nao dobra o intervalo', () => {
+  it('O INTERVALO ENTRE AS CAIXAS concilia o sinal e as marcas (revisao): cada um erra pelo dobro num caso', () => {
+    expect(intervaloDaLinha({ periodoMs: 6600, medianaMs: 6500 })).toMatchObject({ intervaloMs: 6500, motivo: null });
+    // Caixas alternadas (uma com pecas em cima, outra sem): o sinal da' o dobro — vale a mediana.
+    expect(intervaloDaLinha({ periodoMs: 13200, medianaMs: 6600 })).toMatchObject({ intervaloMs: 6600, alternadas: true });
+    // A linha A perdeu caixas: as marcas dao o dobro — vale o periodo.
+    expect(intervaloDaLinha({ periodoMs: 6600, medianaMs: 13200 })).toMatchObject({ intervaloMs: 6600, perdidas: true });
+    const nao = intervaloDaLinha({ periodoMs: 9900, medianaMs: 6600 });
+    expect(nao.intervaloMs).toBeNull();
+    expect(nao.motivo).toMatch(/não fecha — pelas marcas da A, 6\.6 s; pelo sinal, 9\.9 s/);
+    // Chegadas irregulares (o sinal nao se repete): as marcas.
+    expect(intervaloDaLinha({ periodoMs: null, medianaMs: 6200 })).toMatchObject({ intervaloMs: 6200 });
+  });
+
+  it('caixas ALTERNADAS (a revisao: caixa + vao saia 1975 mm em vez de 990): o intervalo e o das marcas', () => {
+    let semente = 5;
+    const r = () => { semente = (semente * 16807) % 2147483647; return semente / 2147483647; };
+    const ent = Array.from({ length: 40 }, (_, k) => 3000 + 6600 * k);
+    const f = (ms) => {
+      const k = ent.findIndex((e) => ms >= e && ms < e + 2000);
+      if (k < 0) return 0.05;
+      return k % 2 ? 0.45 : 0.9;
+    };
+    const am = [];
+    for (let ms = 0; ms < 270000; ms += 110 + Math.round(r() * 40)) {
+      am.push({ ms, fracao: f(ms) + (r() - 0.5) * 0.06, fracaoB: f(ms - 2000) + (r() - 0.5) * 0.06 });
+    }
+    const l = linhaBDaLeitura(am, ent.map((e) => e + 2000));
+    expect(l.periodoMs).toBe(13200); // o sinal erra pelo dobro...
+    expect(l.intervaloTipicoMs).toBe(6600); // ...e as marcas corrigem
+    const e = esteiraPelasLinhas({ ...l, distanciaMm: 300, comprimentoMm: 825 });
+    expect(Math.abs(e.passoMm - 990)).toBeLessThan(15);
+    expect(Math.abs(e.entrePecasMm - 165)).toBeLessThan(15);
+  });
+
+  it('a linha A que perde caixas nao dobra a janela nem o intervalo: o periodo do sinal manda', () => {
     const am = duasLinhas({ atraso: 1000 });
-    // So' metade das caixas marcadas (a cada 16 s em vez de 8).
     const l = linhaBDaLeitura(am, [5000, 21000, 37000, 53000, 69000, 85000]);
     expect(l.intervaloTipicoMs).toBe(8000);
-    // As marcas nao concordam com o periodo: sem a faixa dos quartis.
-    expect(l.intervaloP25Ms).toBeNull();
-    // Com as marcas certas, a faixa vem.
-    const certas = linhaBDaLeitura(am, Array.from({ length: 14 }, (_, i) => 5000 + 8000 * i));
-    expect(certas.intervaloP25Ms).toBe(8000);
-    expect(certas.intervaloP75Ms).toBe(8000);
+    expect(l.limiteMs).toBe(3200);
     expect(linhaBDaLeitura([{ ms: 0, fracao: 0.1 }], [1000, 9000])).toBeNull();
   });
 
-  it('periodoDoSinal: o menor que se repete (nao o dobro), e null sem repeticao', () => {
-    const am = duasLinhas({ atraso: 1000 });
-    const sinal = am.map((x) => x.fracao);
-    // A grade nao importa aqui: as amostras sao ~130 ms; o teste so' quer
-    // ver que nao devolve o dobro. Pela leitura inteira:
-    expect(atrasoEntreFaixas(am).periodoMs).toBe(8000);
+  it('periodoDoSinal: com caixas quase iguais, o PRIMEIRO pico (8 s), nao o dobro, mesmo o dobro sendo maior', () => {
+    const n = 4000; // 160 s numa grade de 40 ms
+    const sinal = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const t = i * 40;
+      const k = Math.floor(t / 8000);
+      const dentro = t % 8000 >= 3000 && t % 8000 < 5000;
+      sinal[i] = dentro ? (k % 2 ? 0.8 : 0.9) : 0.05;
+    }
+    expect(periodoDoSinal(sinal)).toBe(8000);
     expect(periodoDoSinal(new Float64Array(2000).fill(0.1))).toBeNull();
-    expect(sinal.length).toBeGreaterThan(100);
+  });
+
+  it('chegadas irregulares (o sinal nao se repete): a janela sai das marcas e a medida vale', () => {
+    let semente = 9;
+    const r = () => { semente = (semente * 16807) % 2147483647; return semente / 2147483647; };
+    const ent = [];
+    let t = 3000;
+    for (let k = 0; k < 40; k++) { ent.push(t); t += 6600 + (r() - 0.5) * 6000; }
+    const f = (ms) => (ent.some((e) => ms >= e && ms < e + 2000) ? 0.9 : 0.05);
+    const am = [];
+    for (let ms = 0; ms < t + 3000; ms += 110 + Math.round(r() * 40)) {
+      am.push({ ms, fracao: f(ms) + (r() - 0.5) * 0.06, fracaoB: f(ms - 2000) + (r() - 0.5) * 0.06 });
+    }
+    const l = linhaBDaLeitura(am, ent.map((e) => e + 2000));
+    expect(l.motivo).toBeUndefined();
+    expect(Math.abs(l.atrasoMs - 2000)).toBeLessThan(80);
+    expect(linhaBValida(l)).toBe(true);
   });
 
   it('a conta: 360 mm em 2,4 s = 9 m/min; uma caixa a cada 6,5 s = 975 mm de caixa + vao; com a caixa de 825, 150 mm', () => {
     const r = esteiraPelasLinhas({
-      atrasoMs: 2400, distanciaMm: 360, intervaloTipicoMs: 6500, intervaloP25Ms: 6000, intervaloP75Ms: 7000, comprimentoMm: 825,
+      atrasoMs: 2400, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825, ocupacaoMs: 5500,
     });
     expect(r.velocidadeMMin).toBeCloseTo(9, 6);
+    expect(r.velocidadeCaixaMMin).toBeCloseTo(9, 6); // 825 mm em 5,5 s na faixa
     expect(r.passoMm).toBeCloseTo(975, 6);
     expect(r.entrePecasMm).toBeCloseTo(150, 6);
-    expect(r.entreDeMm).toBeCloseTo(75, 6);
-    expect(r.entreAteMm).toBeCloseTo(225, 6);
-    // Atraso que nao vale (negativo, abaixo do minimo) ou sem distancia: sem conta; sem caixa, sem entre-pecas.
+    expect(r.suspeito).toBeNull();
     expect(esteiraPelasLinhas({ atrasoMs: -2400, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825 })).toBeNull();
     expect(esteiraPelasLinhas({ atrasoMs: 200, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825 })).toBeNull();
     expect(esteiraPelasLinhas({ atrasoMs: 2400, distanciaMm: null, intervaloTipicoMs: 6500 })).toBeNull();
     expect(esteiraPelasLinhas({ atrasoMs: 2400, distanciaMm: 360, intervaloTipicoMs: 6500 }).entrePecasMm).toBeNull();
+  });
+
+  it('ATRASO DE MAIS DE UM INTERVALO (revisao: 83 m/min na tela): a velocidade pela propria caixa o pega, sem cadastro', () => {
+    // Verdade: 9 m/min (150 mm/s), caixa de 825 mm (5,5 s na faixa), uma a
+    // cada 6,5 s; A e B a 1050 mm (7 s): a copia aparece 0,5 s depois.
+    const r = esteiraPelasLinhas({
+      atrasoMs: 500, distanciaMm: 1050, intervaloTipicoMs: 6500, comprimentoMm: 825, ocupacaoMs: 5500,
+    });
+    expect(r.velocidadeMMin).toBeGreaterThan(100);
+    expect(r.suspeito).toBe('velocidade');
+    // Sem a ocupacao, o entre-pecas absurdo (mais que 5 caixas) ainda pega; com
+    // ela, vao grande de caixa pequena (3 caixas) e' normal.
+    expect(esteiraPelasLinhas({
+      atrasoMs: 1000, distanciaMm: 100, intervaloTipicoMs: 8000, comprimentoMm: 200, ocupacaoMs: 2000,
+    })).toMatchObject({ suspeito: null, entrePecasMm: 600 });
+    const semOcupacao = esteiraPelasLinhas({ atrasoMs: 500, distanciaMm: 1050, intervaloTipicoMs: 6500, comprimentoMm: 825 });
+    expect(semOcupacao.suspeito).toBe('entre');
+    // A ocupacao que erra uns 20% (pecas em cima da chapa) nao acusa a medida boa.
+    expect(esteiraPelasLinhas({
+      atrasoMs: 2400, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825, ocupacaoMs: 4400,
+    }).suspeito).toBeNull();
+  });
+
+  it('as linhas e a distancia de uma leitura ficam congeladas; a de agora so vale com as mesmas linhas', () => {
+    const A = { x: 0.4, y: 0.5, largura: 0.06, altura: 0.01 };
+    const B = { x: 0.4, y: 0.55, largura: 0.06, altura: 0.01 };
+    const lido = { ...A, evento: 'saida', b: B, distanciaMm: 300 };
+    const l = congelarLinhaB({ atrasoMs: 2000 }, lido);
+    expect(l.linhas).toEqual({ a: A, b: B });
+    expect(l.distanciaMm).toBe(300);
+    expect(distanciaDaLeitura(l, { ...lido, distanciaMm: 320 })).toEqual({ mesmas: true, distanciaMm: 320 });
+    expect(distanciaDaLeitura(l, { ...lido, b: { ...B, y: 0.6 }, distanciaMm: 500 })).toEqual({ mesmas: false, distanciaMm: 300 });
+    const semD = congelarLinhaB({ atrasoMs: 2000 }, { ...lido, distanciaMm: undefined });
+    expect(distanciaDaLeitura(semD, { ...lido, b: { ...B, y: 0.6 }, distanciaMm: 500 })).toEqual({ mesmas: false, distanciaMm: null });
+    expect(congelarLinhaB(null, lido)).toBeNull();
+    expect(mesmaLinha(soLinha(A), A)).toBe(true);
   });
 
   it('o intervalo tipico das marcas e a mediana (a parada nao o estica)', () => {
@@ -594,7 +678,7 @@ describe('A ESTEIRA PELAS LINHAS A E B (v2.113.0): velocidade e entre-pecas medi
     const t = avaliarTeste(am, { inicioMs: 0, fimMs: 120000 });
     expect(t.linhaB).not.toBeNull();
     expect(Math.abs(t.linhaB.atrasoMs - 1000)).toBeLessThan(60);
-    expect(t.linhaB.intervaloTipicoMs).toBe(8000);
+    expect(Math.abs(t.linhaB.intervaloTipicoMs - 8000)).toBeLessThan(50);
     expect(avaliarTeste(am.map(({ ms, fracao }) => ({ ms, fracao }))).linhaB).toBeNull();
   });
 
