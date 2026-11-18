@@ -429,12 +429,22 @@ do produto dele**.
   ⚠ O sinal é periódico: atraso real além de meio período aparece como a cópia
   NEGATIVA — como a B fica adiante da A, `invertido` recusa; perto do limite,
   `noLimite`; abaixo de 0,4 s, `pertoDemais`; correlação < 0,4, `fraca`
-  (`linhaBValida`). Atraso de mais de um período inteiro volta positivo e não é
-  detectável pelo sinal: a tela avisa quando a velocidade passa de ±50% do
-  cadastro. `linhaBDaLeitura`: intervalo típico = o período; a faixa p25–p75
-  das marcas só quando elas concordam com ele (±15%). `esteiraPelasLinhas`:
-  velocidade, caixa + vão e entre-peças (com a faixa). As linhas e a distância
-  da leitura vão congeladas no `linhaB` (`congelarLinhaB`: F5, outra máquina).
+  (`linhaBValida`). A janela da busca é 0,4 × o MENOR entre o período do sinal
+  e a mediana das marcas da A (v2.113.1: chegadas irregulares não têm período).
+  O intervalo das caixas é `intervaloDaLinha` (v2.113.1): sinal e marcas
+  concordam (15%) → a mediana; o sinal dá o dobro (caixas ALTERNADAS — chapa com
+  e sem peças por cima, ou dois volumes) → a mediana; as marcas dão o dobro (a A
+  perdeu caixas) → o período; senão, sem intervalo e o porquê. Atraso de mais de
+  um intervalo inteiro volta positivo e o sinal não o distingue: a conferência
+  pela própria caixa (`ocupacaoTipica` da A × a medida → `velocidadeCaixaMMin`)
+  marca `suspeito` quando a velocidade das linhas passa de 3× (ou fica abaixo de
+  1/3) dela — o atraso trocado dá ≥ 3,5×; sem ocupação, a reserva é entre-peças
+  negativo ou > 5 caixas. `esteiraPelasLinhas`: velocidade, caixa + vão e
+  entre-peças (sem faixa: a p25–p75 da 2.113.0 só media o ritmo e saiu). As linhas e a distância
+  da leitura vão congeladas no `linhaB` (`congelarLinhaB`, `distanciaDaLeitura`,
+  no domínio: F5, outra máquina; leitura sem distância e linhas mudadas → ler de
+  novo). Conselho de distância: 1/4 de caixa + vão (com 1/3 a medida real
+  ficava a 0,37–0,40 do período, perto do corte de 0,4).
   Desenho: `CamadaDesenho` com a `Lupa` (5×, sem suavizar); a linha fina vale
   (`LADO_MINIMO` 0,4% + `AREA_MINIMA` 0,0003 — antes 2% de cada lado). ⚠ O
   entre-peças é o que a linha PRATICA no vídeo, não um padrão: levado ao

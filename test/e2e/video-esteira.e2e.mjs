@@ -169,7 +169,7 @@ await blocoTeste.waitFor({ timeout: 4000 });
 {
   const n = await numerosDaEsteira(blocoTeste);
   checar(Math.abs(n.vel - 6) <= 0.3 && Math.abs(n.passo - 800) <= 40 && Math.abs(n.entre - 600) <= 40,
-    `o teste mede a esteira: ${n.vel} m/min (6,0), caixa + vao ${n.passo} mm (800), entre-pecas ${n.entre} mm (600)`);
+    `o teste mede a esteira: ${n.vel} m/min (6,0), caixa + vao ${n.passo} mm (800), entre-pecas ${n.entre} mm (600)${Number.isFinite(n.vel) ? "" : ` — TELA: ${n.texto}`}`);
   checar(/A ponta da caixa leva [01]\.\d s de A até B \(100 mm\)/.test(n.texto), 'diz o tempo de A ate B e a distancia usada');
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-esteira-teste.png` });

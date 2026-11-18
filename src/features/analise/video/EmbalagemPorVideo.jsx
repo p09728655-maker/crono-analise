@@ -12,8 +12,8 @@ import {
   removerParada, removerVolume, semMarcas,
 } from '../../../domain/medicaoPorVideo.js';
 import {
-  CORRELACAO_MINIMA, PISO_PERMANENCIA_MS, TESTE_MS, areaDaImagem, avaliarTeste, detectarVolumes, ehPapelao,
-  esteiraPelasLinhas, intervalosLongos, linhaBDaLeitura, linhaBValida,
+  CORRELACAO_MINIMA, PISO_PERMANENCIA_MS, TESTE_MS, areaDaImagem, avaliarTeste, congelarLinhaB, detectarVolumes,
+  distanciaDaLeitura, ehPapelao, esteiraPelasLinhas, intervalosLongos, linhaBDaLeitura, linhaBValida, ocupacaoTipica,
   pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
 } from '../../../domain/deteccaoVolumes.js';
 import {
@@ -609,7 +609,12 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     // O porque fica logo abaixo do video, onde se arrastou: o cartao da
     // marcacao automatica, com a tela estreita, vai para o fim da pagina
     // (revisao da v2.112.0).
-    if (!retanguloValido(r)) {
+    // A regra e' em fracao da imagem; o medidor precisa de pixels do VIDEO:
+    // 2 de cada lado (revisao da 2.113.0 — num video de 240 linhas, 0,4% e'
+    // menos de 1 px, e a leitura dava "curto demais" sem dizer por que).
+    const pixels = !(meta.largura > 0 && meta.altura > 0)
+      || (r.largura * meta.largura >= 2 && r.altura * meta.altura >= 2);
+    if (!retanguloValido(r) || !pixels) {
       setAviso(desenhando === 'B'
         ? 'A linha B ficou pequena demais para ler. Arraste de novo, atravessando o corredor da caixa sobre o centro da fita.'
         : 'O retângulo ficou pequeno demais para ler. Arraste de novo, atravessando todo o caminho da caixa na passagem do '
@@ -764,7 +769,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
         // As linhas e a distancia DESTA leitura vao junto (congelarLinhaB):
         // no F5 ou em outra maquina, o atraso nao e' dividido por outra
         // distancia.
-        linhaB: congelarLinhaB(linhaBDaLeitura(amostras, s.marcasMs), lido),
+        linhaB: congelarLinhaB(linhaBDaLeitura(amostras, s.marcasMs, { ocupacaoMs: ocupacaoTipica(r.volumes) }), lido),
       },
     });
   };
@@ -1706,10 +1711,15 @@ function CamadaRetangulo({
   });
   return (
     <>
-      {visivelA && mostrarLeitura && (
-        <LeituraDoRetangulo refVideo={refVideo} area={area} retangulo={visivelA} prefixo={visivelB ? 'A · ' : ''} />
+      {/* Com A e B perto uma da outra (8 a 18 px), os rotulos se cobriam e
+          tapavam as linhas: o da A vai EMBAIXO dela e o da B, em cima. Desenhando
+          a B, sem a mascara rosa: e' para ver a fita. */}
+      {visivelA && mostrarLeitura && desenhando !== 'B' && (
+        <LeituraDoRetangulo
+          refVideo={refVideo} area={area} retangulo={visivelA} prefixo={visivelB ? 'A · ' : ''} embaixo={Boolean(visivelB)}
+        />
       )}
-      {visivelB && mostrarLeitura && (
+      {visivelB && mostrarLeitura && desenhando !== 'B' && (
         <LeituraDoRetangulo refVideo={refVideo} area={area} retangulo={visivelB} prefixo="B · " linhaB />
       )}
       {visivelA && <div aria-hidden="true" style={{ ...ev.retangulo, ...caixaDe(visivelA) }} />}
@@ -1796,7 +1806,7 @@ function Lupa({ refVideo, mira }) {
  * video tocando, so' este pedaco muda.
  */
 function LeituraDoRetangulo({
-  refVideo, area, retangulo, prefixo = '', linhaB = false,
+  refVideo, area, retangulo, prefixo = '', linhaB = false, embaixo = false,
 }) {
   const refCanvas = useRef(null);
   const refRotulo = useRef(null);
@@ -1859,7 +1869,7 @@ function LeituraDoRetangulo({
   const width = retangulo.largura * area.largura;
   const height = retangulo.altura * area.altura;
   // O numero em cima do retangulo; colado no alto da imagem, embaixo dele.
-  const topoRotulo = top - area.y >= 26 ? top - 24 : top + height + 4;
+  const topoRotulo = !embaixo && top - area.y >= 26 ? top - 24 : top + height + 4;
   return (
     <>
       <canvas
@@ -1948,9 +1958,9 @@ function MarcacaoAutomatica({
       {desenhando === 'B' && (
         <>
           <p style={ev.aviso} role="status">
-            Linha B: clique e arraste uma faixa fina no mesmo corredor da caixa, um pouco adiante da A (até uns 30 a 40
-            cm dela), sobre um ponto fixo da lateral da esteira — a distância real de A até B você mede com trena e
-            digita aqui. Deixe o vídeo parado com uma caixa passando: ela tem de ficar quase toda rosa. Esc cancela.
+            Linha B: clique e arraste uma faixa fina no centro da outra fita, no mesmo corredor da caixa e ADIANTE da A
+            (no sentido em que a caixa anda; uns 25 cm dela). A lupa, no canto do vídeo, mostra a fita ampliada: ponha a
+            mira no meio dela. Depois digite a distância real de A até B, de centro a centro. Esc cancela.
           </p>
           <div style={ev.linhaBotoes}>
             <button type="button" style={est.botaoSecundario} onClick={aoCancelarDesenho}>Cancelar o desenho</button>
@@ -2211,21 +2221,6 @@ function linhaSemDistancia(r) {
   const { distanciaMm: _d, ...resto } = r || {};
   return resto;
 }
-const soLinha = (r) => (r ? {
-  x: r.x, y: r.y, largura: r.largura, altura: r.altura,
-} : null);
-const mesmaLinha = (a, b) => (!a && !b) || Boolean(a && b && ['x', 'y', 'largura', 'altura']
-  .every((k) => Math.abs(a[k] - b[k]) < 1e-9));
-/**
- * As LINHAS E A DISTANCIA DE UMA LEITURA vao com o atraso (revisao da
- * v2.113.0): o atraso so' vale para as linhas que o mediram. Sem isto, no
- * F5 ou em outra maquina, ele era dividido pela distancia de outras linhas.
- */
-function congelarLinhaB(l, lido) {
-  if (!l) return null;
-  return { ...l, linhas: { a: soLinha(lido), b: soLinha(lido?.b) }, distanciaMm: lido?.distanciaMm ?? null };
-}
-
 /**
  * A LINHA B (v2.113.0): desenhar, tirar, a distancia REAL de A ate' B
  * (trena, de centro a centro de duas fitas na lateral fixa da esteira — fica
@@ -2246,8 +2241,9 @@ function LinhaB({
           <p style={ev.dica}>
             Uma segunda faixa, B, no mesmo corredor da caixa e adiante da A (no sentido em que a caixa anda): o tempo que a
             ponta da caixa leva de A até B, com a distância real entre as duas, dá a velocidade da esteira e o vão entre as
-            caixas. Cole duas fitas na lateral fixa da esteira (não na lona), a até 1/3 de caixa + vão uma da outra (uns 30
-            cm), meça de centro a centro e desenhe cada linha no centro de uma fita — a lupa ajuda.
+            caixas. Cole duas fitas pretas na lateral fixa da esteira (não na lona), a até 1/4 de caixa + vão uma da outra
+            (uns 25 cm), meça de centro a centro e desenhe cada linha no centro de uma fita — a lupa ajuda. Exporte o vídeo
+            na resolução cheia (1920×1080): na metade, as fitas somem.
           </p>
           <div style={ev.linhaBotoes}>
             <button type="button" style={est.botaoSecundario} onClick={aoDesenhar} disabled={!podeDesenhar}>
@@ -2301,47 +2297,62 @@ function LinhaB({
 /**
  * A ESTEIRA PELAS LINHAS A E B (v2.113.0): velocidade, caixa + vao e
  * entre-pecas, ao lado do cadastro. Sem veredito. A distancia e' a das
- * linhas que mediram (congelarLinhaB); a de agora so' quando as linhas sao
- * as mesmas (corrigir um numero digitado errado nao pede ler de novo).
+ * linhas que mediram (distanciaDaLeitura). Numeros com ponto, como o resto
+ * do app (revisao da 2.113.0: "2.4 s" e "0,59" na mesma frase).
  */
 function EsteiraAB({
   linhaB, retangulo, caixaMm, alvo,
 }) {
   const n0 = (v) => String(Math.round(v));
   const n1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
-  const n2 = (v) => (Math.round(v * 100) / 100).toFixed(2).replace('.', ',');
-  const mesmas = mesmaLinha(linhaB.linhas?.a, soLinha(retangulo)) && mesmaLinha(linhaB.linhas?.b, soLinha(retangulo?.b));
-  const distanciaMm = mesmas ? (retangulo?.distanciaMm ?? null) : linhaB.distanciaMm;
+  const n2 = (v) => (Math.round(v * 100) / 100).toFixed(2);
+  const { mesmas, distanciaMm } = distanciaDaLeitura(linhaB, retangulo);
   const tempo = n1(Math.abs(linhaB.atrasoMs ?? 0) / 1000);
   let problema = null;
   if (linhaB.motivo) problema = `Não deu para medir a velocidade: ${linhaB.motivo}.`;
   else if (linhaB.fraca) {
     problema = `As linhas A e B não viram a mesma coisa passar (correlação ${n2(linhaB.correlacao)}, o mínimo é `
-      + `${n2(CORRELACAO_MINIMA)}): ponha as duas no mesmo corredor da caixa, longe de mão, filme ou barra.`;
+      + `${n2(CORRELACAO_MINIMA)}): ponha cada uma no centro de uma fita, separadas, no mesmo corredor da caixa, longe de `
+      + 'mão, filme ou barra.';
   } else if (linhaB.invertido) {
     problema = 'A caixa apareceu na B antes da A. Ou as linhas estão trocadas — a B vai ADIANTE da A, no sentido em que a '
-      + 'caixa anda —, ou estão longe demais e a B viu a caixa anterior. Confira o sentido e deixe a B a até 1/3 de caixa + '
+      + 'caixa anda —, ou estão longe demais e a B viu a caixa anterior. Confira o sentido e deixe a B a até 1/4 de caixa + '
       + 'vão da A.';
   } else if (linhaB.noLimite) {
     problema = 'A e B estão longe demais: o tempo entre elas chega perto da metade do intervalo entre as caixas, e a caixa '
-      + 'se confunde com a seguinte. Deixe a B a até 1/3 de caixa + vão da A e teste de novo.';
+      + 'se confunde com a seguinte. Deixe a B a até 1/4 de caixa + vão da A e teste de novo.';
   } else if (linhaB.pertoDemais) {
     problema = `A e B estão perto demais: a ponta da caixa leva só ${tempo} s de uma à outra, e a leitura não tem precisão `
-      + 'para isso. Afaste a B (uns 30 cm) e teste de novo.';
+      + 'para isso. Afaste a B (uns 25 cm) e teste de novo.';
+  } else if (!mesmas && !(distanciaMm > 0)) {
+    problema = 'As linhas mudaram depois desta leitura, e ela foi feita sem a distância: leia (ou teste) de novo para medir '
+      + 'a esteira.';
   }
-  const r = problema || !linhaBValida(linhaB) ? null : esteiraPelasLinhas({ ...linhaB, distanciaMm, comprimentoMm: caixaMm });
-  const longeDoCadastro = r && alvo?.vel > 0 && Math.abs(r.velocidadeMMin / alvo.vel - 1) > 0.5;
+  const r = problema || !linhaBValida(linhaB) ? null : esteiraPelasLinhas({
+    ...linhaB, distanciaMm, comprimentoMm: caixaMm,
+  });
+  // Atraso trocado (mais de um intervalo entre A e B): os numeros nao valem.
+  const suspeita = r?.suspeito === 'velocidade'
+    ? `A velocidade pelas linhas (${n1(r.velocidadeMMin)} m/min) não fecha com o tempo de cada caixa na linha A (dá uns `
+      + `${n1(r.velocidadeCaixaMMin)} m/min com a caixa de ${n0(caixaMm)} mm): a B pode estar a mais de uma caixa + vão da A, `
+      + 'ou a distância ou a caixa estão erradas. Confira e teste de novo.'
+    : r?.suspeito === 'entre'
+      ? `O entre-peças sai ${n0(r.entrePecasMm)} mm com a caixa de ${n0(caixaMm)} mm — não fecha: confira a distância, a caixa `
+        + 'e se a B não está a mais de uma caixa + vão da A.'
+      : null;
+  const longeDoCadastro = r && !suspeita && alvo?.vel > 0 && Math.abs(r.velocidadeMMin / alvo.vel - 1) > 0.5;
   return (
     <div style={ev.esteira} aria-label="Esteira medida pelas linhas A e B">
       <p style={ev.esteiraTitulo}>A esteira, pelas linhas A e B</p>
       {problema && <p style={ev.aviso} role="alert">{problema}</p>}
+      {suspeita && <p style={ev.aviso} role="alert">{suspeita}</p>}
       {!problema && !r && (
         <p style={ev.dica}>
           A ponta da caixa leva {tempo} s de A até B. Digite a distância real entre as duas para ver a velocidade e o
           entre-peças.
         </p>
       )}
-      {r && (
+      {r && !suspeita && (
         <>
           <div style={ev.numeros}>
             <Numero
@@ -2351,8 +2362,8 @@ function EsteiraAB({
             <Numero
               rotulo="Entre-peças" valor={r.entrePecasMm != null ? `≈ ${n0(r.entrePecasMm)} mm` : '—'}
               sub={[
-                r.entreDeMm != null ? `de ${n0(r.entreDeMm)} a ${n0(r.entreAteMm)} mm` : null,
-                caixaMm > 0 ? null : 'falta a medida da caixa',
+                linhaB.intervaloMotivo ? 'o intervalo entre as caixas não fecha' : null,
+                !linhaB.intervaloMotivo && !(caixaMm > 0) ? 'falta a medida da caixa' : null,
                 alvo?.entre != null ? `cadastro: ${n0(alvo.entre)} mm` : null,
               ].filter(Boolean).join(' · ') || null}
             />
@@ -2361,10 +2372,15 @@ function EsteiraAB({
               sub={linhaB.intervaloTipicoMs > 0 ? `uma caixa a cada ${n1(linhaB.intervaloTipicoMs / 1000)} s` : null}
             />
           </div>
+          {linhaB.intervaloMotivo && (
+            <p style={ev.aviso} role="status">
+              Sem caixa + vão e entre-peças: {linhaB.intervaloMotivo}. A velocidade vale; o intervalo, não — confira a linha A
+              (caixas perdidas ou alternadas).
+            </p>
+          )}
           {longeDoCadastro && (
             <p style={ev.aviso} role="status">
-              A velocidade medida está muito longe do cadastro ({n1(alvo.vel)} m/min): confira a distância digitada e se a B
-              não ficou a mais de uma caixa + vão da A — aí a B veria a caixa seguinte e o tempo sairia curto.
+              A velocidade medida está muito longe do cadastro ({n1(alvo.vel)} m/min): confira a distância digitada.
             </p>
           )}
           <p style={ev.dica}>
@@ -2374,9 +2390,10 @@ function EsteiraAB({
             O tempo de A até B sai do vídeo inteiro (correlação {n2(linhaB.correlacao)}, de 0 a 1), não de caixa a caixa.
           </p>
           <p style={ev.dica}>
-            O entre-peças é o vão que a linha PRATICA neste vídeo, não um padrão — e é a diferença de dois números próximos
-            (caixa + vão − caixa): por isso o "≈" e a faixa. Levá-lo ao cadastro faz o tempo-alvo virar o ritmo deste vídeo ÷ a
-            eficiência; o padrão é decisão do PPCP. Estes números não vão com a medição salva: anote o que precisar.
+            O entre-peças é o vão que a linha PRATICA neste vídeo, não um padrão, e é a diferença de dois números próximos
+            (caixa + vão − caixa): por isso o "≈" — ele muda de um trecho para outro do mesmo vídeo; o da leitura inteira vale
+            mais que o do teste de 2 min. Levá-lo ao cadastro faz o tempo-alvo virar o ritmo deste vídeo ÷ a eficiência; o
+            padrão é decisão do PPCP. Estes números não vão com a medição salva: anote o que precisar.
           </p>
         </>
       )}
