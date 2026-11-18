@@ -14,8 +14,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  areaDaImagem, detectarVolumes, fracaoPapelao, intervalosLongos, limiaresDoSinal, pontoNaImagem, retanguloEntre,
-  retanguloValido, saidasDosVolumes,
+  TESTE_MINIMO_MS, TESTE_MS, areaDaImagem, avaliarTeste, detectarVolumes, ehPapelao, fracaoPapelao, intervalosLongos,
+  limiaresDoSinal, pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
 } from '../src/domain/deteccaoVolumes.js';
 import {
   conferirAutomatica, marcacaoDasEntradas, marcacaoVazia, marcarToque, medicaoDoVideo, removerVolume,
@@ -321,5 +321,152 @@ describe('as marcas pela SAIDA da caixa (v2.109.0): o fim sai do rolete e entra 
     expect(saidasDosVolumes({ motivo: 'x' })).toEqual({
       marcasMs: [], jaEstava: null, semSaida: null, suspeitos: [], descartados: [],
     });
+  });
+});
+
+describe('TESTAR O RETANGULO (v2.112.0): o trecho curto diz se pegou, antes de ler o video todo', () => {
+  it('a mascara da tela pinta exatamente o que a leitura conta (a mesma regra, pixel a pixel)', () => {
+    const pxs = [[176, 138, 90], [150, 120, 80], [30, 61, 51], [70, 50, 30], [240, 240, 235], [230, 200, 40]];
+    const dados = Uint8ClampedArray.from(pxs.flatMap(([r, g, b]) => [r, g, b, 255]));
+    const pintados = pxs.filter(([r, g, b]) => ehPapelao(r, g, b)).length;
+    expect(fracaoPapelao(dados)).toBeCloseTo(pintados / pxs.length);
+    // O amarelo (barra de protecao) conta como papelao: e' por isso que a
+    // tela mostra o que fica rosa — para tirar o que nao e' caixa.
+    expect(ehPapelao(230, 200, 40)).toBe(true);
+    expect(ehPapelao(30, 61, 51)).toBe(false);
+  });
+
+  it('o trecho: 2 min a partir de onde o video esta, ou ate o fim do video', () => {
+    expect(TESTE_MS).toBe(120000);
+    expect(trechoDoTeste(60000, 878600)).toEqual({ inicioMs: 60000, fimMs: 180000, curto: false });
+    expect(trechoDoTeste(800000, 878600)).toEqual({ inicioMs: 800000, fimMs: 878600, curto: false });
+    expect(trechoDoTeste(0, null)).toEqual({ inicioMs: 0, fimMs: 120000, curto: false });
+    expect(trechoDoTeste(-5, 60000)).toEqual({ inicioMs: 0, fimMs: 60000, curto: false });
+  });
+
+  it('no fim do video nao ha o que testar (o play voltaria ao comeco e leria o video todo): curto', () => {
+    expect(trechoDoTeste(878600, 878600)).toMatchObject({ curto: true, fimMs: 878600 });
+    expect(trechoDoTeste(878600 - TESTE_MINIMO_MS + 1, 878600).curto).toBe(true);
+    expect(trechoDoTeste(878600 - TESTE_MINIMO_MS, 878600).curto).toBe(false);
+  });
+
+  // 2 min de linha rodando: uma caixa a cada 12 s, 2,5 s na faixa.
+  const caixasDe2Min = Array.from({ length: 9 }, (_, i) => [8 + 12 * i, 10.5 + 12 * i]);
+
+  it('ok: separou caixa de esteira vazia e achou as caixas, na SAIDA de cada uma', () => {
+    const t = avaliarTeste(sinal({ duracao: 120, caixas: caixasDe2Min }), { inicioMs: 0, fimMs: 120000 });
+    expect(t.veredito).toBe('ok');
+    expect(t.caixas).toBe(9);
+    t.marcasMs.forEach((ms, i) => expect(Math.abs(ms / 1000 - caixasDe2Min[i][1])).toBeLessThan(0.4));
+    expect(t.base).toBeLessThan(0.1);
+    expect(t.topo).toBeGreaterThan(0.5);
+    expect(t.inicioMs).toBe(0);
+    expect(t.fimMs).toBe(120000);
+  });
+
+  it('ok tambem com pouca diferenca (0,25): sem evidencia de que perca caixa, nao vira aviso', () => {
+    const t = avaliarTeste(sinal({ duracao: 120, caixas: caixasDe2Min, topo: 0.3, ruido: 0.01 }));
+    expect(t.veredito).toBe('ok');
+    expect(t.caixas).toBe(9);
+    expect(t.contraste).toBeLessThan(0.3);
+  });
+
+  /** O trecho [de, ate) (em s) das amostras de um sinal mais longo, como o teste le. */
+  const trechoDe = (amostras, de, ate) => amostras.filter((a) => a.ms >= de * 1000 && a.ms < ate * 1000);
+  const marcasEntre = (marcasMs, de, ate) => marcasMs.filter((ms) => ms >= de * 1000 && ms < ate * 1000);
+
+  it('mesmo produto e luz o video todo (10 min): o teste de 2 min marca as mesmas caixas que a leitura inteira nesse trecho', () => {
+    const caixas10 = Array.from({ length: 49 }, (_, i) => [5 + 12 * i, 7.5 + 12 * i]);
+    const todas = sinal({ duracao: 600, caixas: caixas10 });
+    const t = avaliarTeste(trechoDe(todas, 120, 240), { inicioMs: 120000, fimMs: 240000 });
+    const inteira = marcasEntre(saidasDosVolumes(detectarVolumes(todas)).marcasMs, 120, 240);
+    expect(t.veredito).toBe('ok');
+    expect(t.marcasMs.length).toBe(inteira.length);
+    // Os niveis saem de amostras diferentes: o instante pode andar uns decimos, a caixa nao.
+    t.marcasMs.forEach((ms, i) => expect(Math.abs(ms - inteira[i])).toBeLessThan(300));
+  });
+
+  it('o LIMITE do teste: se a caixa muda no meio do video, a leitura inteira acha outros niveis e pode marcar diferente', () => {
+    // 2 min de um produto que cobre 45% da faixa, depois 8 min de outro que
+    // cobre 95% (troca de produto, ou de luz). O teste no comeco aprova; a
+    // leitura do video todo, com os niveis do video inteiro, nao marca as do
+    // comeco. Por isso a tela nao promete que a leitura acha o que o teste
+    // achou (revisao da v2.112.0).
+    const a = Array.from({ length: 9 }, (_, i) => [8 + 12 * i, 10.5 + 12 * i]);
+    const b = Array.from({ length: 39 }, (_, i) => [128 + 12 * i, 130.5 + 12 * i]);
+    const comeco = sinal({ duracao: 120, caixas: a, topo: 0.45 });
+    const resto = sinal({ duracao: 480, caixas: b.map(([x, y]) => [x - 120, y - 120]), topo: 0.95 })
+      .map((p) => ({ ...p, ms: p.ms + 120000 + 50 }));
+    const todas = [...comeco, ...resto];
+    const t = avaliarTeste(comeco, { inicioMs: 0, fimMs: 120000 });
+    expect(t.veredito).toBe('ok');
+    expect(t.caixas).toBe(9);
+    const inteira = saidasDosVolumes(detectarVolumes(todas)).marcasMs;
+    expect(marcasEntre(inteira, 0, 120)).toHaveLength(0);
+    expect(marcasEntre(inteira, 120, 600).length).toBeGreaterThan(30);
+  });
+
+  it('uma: so 1 caixa passou inteira — pouco para dizer, e a leitura nao mede com uma caixa so', () => {
+    const t = avaliarTeste(sinal({ duracao: 120, caixas: [[40, 42.5]] }));
+    expect(t.veredito).toBe('uma');
+    expect(t.caixas).toBe(1);
+  });
+
+  it('nada: o retangulo nunca teve cor de papelao (nenhuma caixa passou, ou ele esta fora do caminho)', () => {
+    const t = avaliarTeste(sinal({ duracao: 120, base: 0.04 }));
+    expect(t.veredito).toBe('nada');
+    expect(t.maximo).toBeLessThan(0.15);
+    expect(t.caixas).toBe(0);
+    expect(t.base).toBeNull();
+  });
+
+  it('sempre: cor de papelao o tempo todo, mesmo vazio (algo pardo ou amarelo parado dentro dele)', () => {
+    const t = avaliarTeste(sinal({ duracao: 120, base: 0.4 }));
+    expect(t.veredito).toBe('sempre');
+    expect(t.minimo).toBeGreaterThanOrEqual(0.15);
+  });
+
+  it('sem contraste: varia, mas pouco — a caixa cobre so parte do retangulo', () => {
+    const t = avaliarTeste(sinal({
+      duracao: 120, caixas: caixasDe2Min, base: 0.05, topo: 0.18, ruido: 0.01,
+    }));
+    expect(t.veredito).toBe('sem-contraste');
+    expect(t.minimo).toBeLessThan(0.15);
+    expect(t.maximo).toBeGreaterThanOrEqual(0.15);
+  });
+
+  it('nenhuma: separou, mas nenhuma caixa passou INTEIRA (a que ja estava e a cortada no fim nao contam)', () => {
+    const t = avaliarTeste(sinal({ duracao: 60, caixas: [[0, 5], [57, 61]] }));
+    expect(t.veredito).toBe('nenhuma');
+    expect(t.caixas).toBe(0);
+  });
+
+  it('curto: amostras de menos', () => {
+    expect(avaliarTeste([{ ms: 0, fracao: 0.5 }]).veredito).toBe('curto');
+    expect(avaliarTeste(null).veredito).toBe('curto');
+  });
+
+  it('o grafico: no maximo 240 pontos, e o pico de cada caixa nao some na reducao', () => {
+    const amostras = sinal({ duracao: 120, caixas: caixasDe2Min });
+    const t = avaliarTeste(amostras);
+    expect(amostras.length).toBeGreaterThan(240);
+    expect(t.grafico.length).toBeLessThanOrEqual(240);
+    expect(Math.max(...t.grafico.map((p) => p.v))).toBeCloseTo(t.maximo, 5);
+    expect(t.grafico.every((p, i) => i === 0 || p.ms > t.grafico[i - 1].ms)).toBe(true);
+  });
+
+  it('o SINAL REAL da envolvedora (87 s, faixa certa): ok, 3 caixas, com diferenca de ~0,5 entre vazio e caixa', () => {
+    const real = JSON.parse(readFileSync(new URL('./fixtures/sinal-envolvedora-87s.json', import.meta.url)));
+    const amostras = real.amostras.map(([ms, fracao]) => ({ ms, fracao }));
+    const t = avaliarTeste(amostras, { inicioMs: 0, fimMs: 87000 });
+    expect(t.veredito).toBe('ok');
+    expect(t.caixas).toBe(3);
+    // As saidas: a caixa que ja' estava (sai em ~5 s) nao conta; as tres
+    // que entram em ~26,8, ~58,2 e ~70,5 s saem uns 7 s depois.
+    [26.8, 58.2, 70.5].forEach((entrada, i) => {
+      expect(t.marcasMs[i] / 1000 - entrada).toBeGreaterThan(5);
+      expect(t.marcasMs[i] / 1000 - entrada).toBeLessThan(8);
+    });
+    expect(t.contraste).toBeGreaterThan(0.45);
   });
 });

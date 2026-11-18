@@ -13,6 +13,18 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.112.0',
+    data: '2026-11-18',
+    titulo: 'Cronometrar por vídeo: testar o retângulo antes de ler o vídeo todo',
+    itens: [
+      'VOCÊ VÊ NA HORA O QUE O LEITOR VÊ. Sobre o vídeo, dentro do retângulo, o que o app conta como papelão fica pintado de rosa, com o % ao lado ("64% papelão"). Vale enquanto você desenha (arrastando, o % muda junto) e com o vídeo parado ou tocando, até a primeira marca. Com uma caixa passando, ela tem de ficar quase toda rosa; sem caixa, perto de 0%. Se a caixa não fica rosa, ou se fica rosa o que não é caixa (uma barra amarela, o rolete), o retângulo está no lugar errado — antes você só descobria isso depois de ler o vídeo inteiro.',
+      'TESTAR O RETÂNGULO: lê só 2 minutos a partir de onde o vídeo está (uns 15 s de espera, contra vários minutos do vídeo todo) e diz se pegou: quantas caixas achou, o % de papelão com a esteira vazia e com caixa, e o gráfico do trecho (cada caixa é um morro). As caixas achadas são clicáveis para conferir no vídeo. O teste não põe marca na lista. É a mesma conta da leitura, mas com os níveis de "vazio" e "caixa" do trecho testado; a leitura do vídeo todo acha os níveis de novo com o vídeo inteiro. Com a mesma câmera, luz e produto, dá o mesmo; se o produto ou a luz mudam no meio do vídeo, a leitura pode marcar diferente — teste num trecho típico.',
+      'QUANDO NÃO PEGA, O TESTE DIZ POR QUÊ E O QUE FAZER, sem culpar o retângulo quando pode ter sido a linha: nunca viu papelão (nenhuma caixa passou, ou ele está fora do caminho dela); viu papelão o tempo todo (algo pardo ou amarelo parado dentro dele, ou uma caixa parada com a linha parada); mudou pouco (a caixa cobre só uma parte dele, ou só passou mão ou reflexo); só 1 caixa no trecho (pouco para dizer — e a leitura não mede com uma caixa só).',
+      'DEPOIS DO TESTE, A LEITURA DO VÍDEO TODO COMEÇA NO COMEÇO DO TESTE, mesmo que você tenha clicado numa caixa achada para conferir (o vídeo vai até ela). Antes, ela começaria dali e perderia, sem avisar, o que vinha antes. Voltando o vídeo para antes do teste, ela começa de onde você voltou.',
+      'NO FIM DO VÍDEO, TESTAR E MARCAR RECUSAM e pedem para voltar o vídeo: o navegador volta o vídeo ao começo e a leitura lia o vídeo inteiro dizendo que começou no fim.',
+    ],
+  },
+  {
     versao: '2.111.1',
     data: '2026-11-12',
     titulo: 'Tempo-alvo pela esteira: a conta com o resultado e os textos da régua nova',

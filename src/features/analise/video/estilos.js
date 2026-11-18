@@ -159,4 +159,41 @@ export const ev = {
     width: 240, maxWidth: '100%', background: '#000', borderRadius: raio.sm, display: 'block',
   },
   tempos: { display: 'inline-flex', flexWrap: 'wrap', gap: espaco.sm, alignItems: 'baseline' },
+
+  // O QUE O LEITOR VE' (v2.112.0): os pontos contados como papelao, em rosa
+  // por cima do retangulo — rosa nao se confunde com o pardo da caixa nem
+  // com o verde do tapete. Pixelado: cada ponto e' um dos 64x32 que a
+  // leitura mede.
+  mascaraPapelao: { position: 'absolute', pointerEvents: 'none', imageRendering: 'pixelated' },
+  rotuloPapelao: {
+    position: 'absolute', pointerEvents: 'none', whiteSpace: 'nowrap',
+    padding: '2px 6px', borderRadius: raio.sm, background: 'rgba(0, 0, 0, 0.75)', color: '#fff',
+    ...tipo('legenda'), ...numeros, fontWeight: 700,
+  },
+
+  // O resultado do teste do retangulo e o grafico do sinal.
+  resultadoTeste: { display: 'flex', flexDirection: 'column', gap: espaco.sm },
+  graficoTeste: { margin: 0, display: 'flex', flexDirection: 'column', gap: espaco.xs },
+  graficoTitulo: { ...tipo('legenda'), color: t.textoMedio },
+  graficoArea: { display: 'flex', gap: espaco.xs, alignItems: 'stretch' },
+  // 100% no alto e 0% na linha de base do sinal (acima da faixa dos tracos).
+  graficoEixoY: {
+    display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingBottom: 10,
+    ...tipo('micro'), ...numeros, color: t.textoFraco, textAlign: 'right', minWidth: 32,
+  },
+  graficoSvg: {
+    flex: 1, minWidth: 0, height: 86, display: 'block', overflow: 'visible',
+    background: t.fundo, borderRadius: raio.sm,
+  },
+  graficoBase: { stroke: t.borda, strokeWidth: 1 },
+  graficoCorte: { stroke: t.textoFraco, strokeWidth: 1, strokeDasharray: '4 3' },
+  graficoLinha: {
+    fill: 'none', stroke: '#1D4ED8', strokeWidth: 2, strokeLinejoin: 'round', strokeLinecap: 'round',
+  },
+  graficoAlvo: { cursor: 'pointer' },
+  graficoMarca: { stroke: t.texto, strokeWidth: 2 },
+  graficoEixoX: {
+    display: 'flex', justifyContent: 'space-between', gap: espaco.sm, paddingLeft: 36,
+    ...tipo('micro'), ...numeros, color: t.textoFraco,
+  },
 };
