@@ -465,18 +465,35 @@ do produto dele**.
   - **Testar o retângulo** (`testarRetangulo`): a leitura com `fimMs` lê 2 min
     (`TESTE_MS`, `trechoDoTeste`: ou até o fim do vídeo) a partir de onde o vídeo
     está e para; `avaliarTeste` (domínio, puro) roda o MESMO `detectarVolumes` +
-    `saidasDosVolumes` da leitura inteira e dá o veredito: `ok`, `fraco`
-    (contraste abaixo de `CONTRASTE_BOM`, 2× o mínimo; no sinal real, ~0,5),
-    `nenhuma` (nenhuma caixa inteira), `nada` (o sinal nunca passou de 15%),
-    `sempre` (nunca abaixo de 15%: algo pardo ou amarelo parado dentro),
-    `sem-contraste` ou `curto`. A tela mostra o veredito, o que fazer, o gráfico
-    do sinal (0–100% fixo, o maior valor por faixa de tempo, até 240 pontos) e as
-    caixas clicáveis. O teste NÃO põe marca na lista e não vai no rascunho;
-    redesenhar, trocar de máquina ou de vídeo e ler o vídeo todo o apagam.
+    `saidasDosVolumes` da leitura inteira e dá o veredito: `ok` (2 caixas ou
+    mais), `uma` (a leitura recusa com uma caixa só), `nenhuma` (nenhuma caixa
+    inteira), `nada` (o sinal nunca passou de 15%), `sempre` (nunca abaixo de
+    15%), `sem-contraste` ou `curto`. Os três sem contraste dão as DUAS causas
+    (retângulo errado ou a linha não andou), como o domínio. A tela mostra o
+    veredito, o que fazer, o gráfico do sinal (0–100% fixo, o maior valor por
+    faixa de tempo, até 240 pontos) e as caixas clicáveis. O teste NÃO põe marca
+    na lista e não vai no rascunho; redesenhar, trocar de máquina ou de vídeo e
+    ler o vídeo todo o apagam.
+  - ⚠ **O teste não garante a leitura inteira.** Os níveis (Otsu) e o limite da
+    passagem curta saem das amostras LIDAS: no teste, do trecho; na leitura, do
+    vídeo todo. Mesmo produto e luz: as mesmas caixas no trecho (teste de 10 min
+    de sinal); produto ou luz mudando no meio: a leitura pode não marcar o que o
+    teste achou (o teste do LIMITE prova isso). A tela não promete o contrário.
+  - **De onde a leitura inteira começa** (`inicioDaLeitura`): depois de um
+    teste, do começo dele, ou de antes se o vídeo foi voltado — clicar numa
+    caixa do teste leva o vídeo até ela, e a leitura começaria dali, perdendo o
+    que vinha antes. No fim do vídeo (sobram menos de 30 s para o teste,
+    `TESTE_MINIMO_MS`; 2 s para a leitura), os dois recusam: o `play()` de um
+    vídeo terminado volta ao 0 e leria o vídeo inteiro.
   - ⚠ O amarelo conta como papelão na regra de cor (`r − b > 35`, `r ≥ g`,
     `r > 90`): não foi mudado. Mudar a regra pede vídeo real que falhe — o único
     sinal real do repositório (`sinal-envolvedora-87s.json`, faixa de 10% de
-    largura, a caixa embaixo do filme) lê bem, com contraste ~0,5.
+    largura, a caixa embaixo do filme) lê bem, com contraste ~0,5. Sem evidência
+    de perda com contraste baixo (0,25 achou 9 de 9), não há veredito de "pouca
+    margem" (saiu na revisão).
+  - O aviso de retângulo pequeno fica embaixo do vídeo (`Acoes`), onde se
+    arrastou: o cartão da marcação automática, abaixo de 1100 px, vai para o fim
+    da página.
   Testes: `test/deteccao-volumes.test.js` (vereditos, trecho, gráfico e o sinal
   real) e `test/e2e/video-automatico.e2e.mjs` (o % ao vivo com e sem caixa, o
   teste reprovando o retângulo fora da caixa e aprovando o certo com as mesmas

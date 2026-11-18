@@ -249,9 +249,6 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   // O TESTE do retangulo (v2.112.0): parado | pronto (com o resultado) | erro.
   // Nao vai no rascunho: vale para o retangulo e o video da tela, agora.
   const [teste, setTeste] = useState({ estado: 'parado' });
-  // Retangulo recusado no desenho: o porque aparece no cartao do desenho,
-  // ao lado da instrucao — onde se esta' olhando.
-  const [avisoDesenho, setAvisoDesenho] = useState(null);
   const [progresso, setProgresso] = useState(null);
   const [automaticas, setAutomaticas] = useState([]);
   const refVideoLeitura = useRef(null);
@@ -558,14 +555,16 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     refVideo.current?.pause();
     setArrasto(null);
     setAviso(null);
-    setAvisoDesenho(null);
     setDesenhando(true);
   };
-  const cancelarDesenho = () => { setArrasto(null); setAvisoDesenho(null); setDesenhando(false); };
+  const cancelarDesenho = () => { setArrasto(null); setDesenhando(false); };
   const terminarDesenho = (r) => {
     setArrasto(null);
+    // O porque fica logo abaixo do video, onde se arrastou: o cartao da
+    // marcacao automatica, com a tela estreita, vai para o fim da pagina
+    // (revisao da v2.112.0).
     if (!retanguloValido(r)) {
-      setAvisoDesenho('O retângulo ficou pequeno demais para ler (no mínimo 2% da imagem de cada lado). Arraste de novo, '
+      setAviso('O retângulo ficou pequeno demais para ler (no mínimo 2% da imagem de cada lado). Arraste de novo, '
         + 'atravessando todo o caminho da caixa na passagem do rolete para o tapete.');
       return;
     }
@@ -577,24 +576,39 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     gravarRetangulo(maquina?.id, novo);
     setDesenhando(false);
     setAviso(null);
-    setAvisoDesenho(null);
     // O teste e o erro eram do retangulo anterior.
     setTeste({ estado: 'parado' });
     if (automatica.estado === 'erro') setAutomatica({ estado: 'parado' });
   };
 
+  // DE ONDE A LEITURA INTEIRA COMECA: de onde o video esta' — ou, depois de
+  // um teste, do comeco do teste, se o video estiver depois dele. Conferir
+  // uma caixa do teste leva o video ate' ela; a leitura comecava dali e
+  // perdia, calada, o que vinha antes (revisao da v2.112.0).
+  const inicioDaLeitura = (agora) => (teste.estado === 'pronto' ? Math.min(agora, teste.resultado.inicioMs) : agora);
   const lerAutomatica = () => {
     // Retangulo de antes da v2.109.0 (para a entrada embaixo do filme): lido
     // pela saida, marcaria outro instante, carimbado como o do Enter.
     if (!retangulo || retangulo.evento !== 'saida' || !listaVazia(refMarcacao.current)) return;
     refVideo.current?.pause();
+    const inicioMs = inicioDaLeitura(tempoDoVideo());
+    const v = refVideo.current;
+    // No fim do video o play() volta ao comeco: a leitura leria o video
+    // inteiro dizendo que comecou no fim.
+    if (v && Number.isFinite(v.duration) && inicioMs >= v.duration * 1000 - 2000) {
+      setAutomatica({
+        estado: 'erro',
+        erro: `O vídeo está no fim (${emRelogio(inicioMs)}): volte ao ponto onde a medição começa e marque de novo.`,
+      });
+      return;
+    }
     refUltimoProgresso.current = 0;
     setProgresso(null);
     setAviso(null);
     // A leitura do video todo responde no lugar do teste.
     setTeste({ estado: 'parado' });
     setAutomatica({
-      estado: 'lendo', modo: 'tudo', inicioMs: tempoDoVideo(), fimMs: null, retangulo,
+      estado: 'lendo', modo: 'tudo', inicioMs, fimMs: null, retangulo,
     });
   };
 
@@ -610,6 +624,14 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setTeste({ estado: 'parado' });
     const v = refVideo.current;
     const trecho = trechoDoTeste(tempoDoVideo(), v && Number.isFinite(v.duration) ? v.duration * 1000 : null);
+    if (trecho.curto) {
+      setTeste({
+        estado: 'erro',
+        erro: `A partir de ${emRelogio(trecho.inicioMs)} sobra só ${formatarSegundos(trecho.fimMs - trecho.inicioMs)} s `
+          + `de vídeo: pouco para testar. Volte o vídeo (o teste lê até ${Math.round(TESTE_MS / 60000)} min).`,
+      });
+      return;
+    }
     setAutomatica({
       estado: 'lendo', modo: 'teste', inicioMs: trecho.inicioMs, fimMs: trecho.fimMs, retangulo,
     });
@@ -1096,7 +1118,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                       url={url} refVideoLeitura={refVideoLeitura} maquina={maquina} retangulo={retangulo}
                       desenhando={desenhando} automatica={automatica} progresso={progresso}
                       listaVazia={listaVazia(marcacao)} conferencia={conferencia} agoraMs={agoraMs}
-                      podeDesenhar={Boolean(areaVideo)} avisoDesenho={avisoDesenho} teste={teste}
+                      podeDesenhar={Boolean(areaVideo)} teste={teste} inicioLeituraMs={inicioDaLeitura(agoraMs)}
                       aoDesenhar={desenharRetangulo} aoCancelarDesenho={cancelarDesenho}
                       aoTestar={testarRetangulo}
                       aoLer={lerAutomatica} aoParar={() => setAutomatica({ estado: 'parado' })}
@@ -1740,7 +1762,7 @@ function Tempos({ lista, aoIr, rotulo = (ms) => emRelogio(ms) }) {
  */
 function MarcacaoAutomatica({
   url, refVideoLeitura, maquina, retangulo, desenhando, automatica, progresso, listaVazia, conferencia,
-  agoraMs, podeDesenhar, avisoDesenho, teste, aoDesenhar, aoCancelarDesenho, aoTestar, aoLer, aoParar, aoApagar,
+  agoraMs, podeDesenhar, teste, inicioLeituraMs, aoDesenhar, aoCancelarDesenho, aoTestar, aoLer, aoParar, aoApagar,
   aoIr,
 }) {
   const [confirmarApagar, setConfirmarApagar] = useState(false);
@@ -1757,7 +1779,7 @@ function MarcacaoAutomatica({
   })();
   // O teste que passou muda o botao principal: testou e pegou, o proximo
   // passo e' marcar o video todo.
-  const testeBom = teste.estado === 'pronto' && ['ok', 'fraco'].includes(teste.resultado.veredito);
+  const testeBom = teste.estado === 'pronto' && teste.resultado.veredito === 'ok';
   const segundosTeste = Math.round(TESTE_MS / VELOCIDADE / 1000);
   const botaoDesenhar = (rotulo) => (
     <button type="button" style={ev.link} onClick={aoDesenhar} disabled={!podeDesenhar}>{rotulo}</button>
@@ -1774,7 +1796,6 @@ function MarcacaoAutomatica({
             Deixe o vídeo parado num ponto com caixa passando: enquanto você arrasta, o que o leitor conta como papelão
             fica pintado de rosa, com o % ao lado. A caixa tem de ficar quase toda rosa. Esc cancela.
           </p>
-          {avisoDesenho && <p style={ev.aviso} role="alert">{avisoDesenho}</p>}
           <div style={ev.linhaBotoes}>
             <button type="button" style={est.botaoSecundario} onClick={aoCancelarDesenho}>Cancelar o desenho</button>
           </div>
@@ -1845,7 +1866,7 @@ function MarcacaoAutomatica({
               <p style={ev.dica}>
                 <strong>Teste antes</strong>: lê {Math.round(TESTE_MS / 60000)} min a partir de {emRelogio(agoraMs)} (uns
                 {' '}{segundosTeste} s) e diz se pegou as caixas — deixe o vídeo num trecho com a linha rodando. O vídeo
-                todo vai de {emRelogio(agoraMs)} até o fim e leva alguns minutos.
+                todo vai de {emRelogio(inicioLeituraMs)} até o fim e leva alguns minutos.
               </p>
               {teste.estado === 'erro' && <div style={est.faixaErro} role="alert">{teste.erro}</div>}
               {teste.estado === 'pronto' && <ResultadoTeste r={teste.resultado} aoIr={aoIr} />}
@@ -1996,13 +2017,15 @@ function ResultadoTeste({ r, aoIr }) {
       estilo = ev.ok; papel = 'status';
       texto = `O retângulo pegou ${caixas(r.caixas)} ${trecho}.`;
       depois = `${niveis.trim()} Confira duas ou três (clique no tempo): cada uma tem de ser o fim de uma caixa saindo do `
-        + 'rolete. Se estiver certo, marque o vídeo todo.';
+        + `rolete. Se estiver certo, marque o vídeo todo — a leitura começa em ${emRelogio(r.inicioMs)} (ou antes, se `
+        + 'você voltar o vídeo) e acha os níveis de novo com o vídeo inteiro.';
       break;
-    case 'fraco':
+    case 'uma':
       estilo = ev.aviso; papel = 'status';
-      texto = `O retângulo pegou ${caixas(r.caixas)} ${trecho}, mas com pouca margem entre caixa e esteira vazia.${niveis} `
-        + 'Caixa pode passar sem ser marcada. Afine a faixa para ela ficar só no caminho da caixa, onde a caixa fica '
-        + 'quase toda rosa, e teste de novo.';
+      texto = `Só 1 caixa passou inteira pelo retângulo ${trecho}: pouco para dizer se ele pega (e a leitura não mede `
+        + 'com uma caixa só).';
+      depois = 'Se passaram mais caixas nesse trecho, o retângulo está fora do caminho delas: redesenhe. Se a linha '
+        + 'andou devagar ou parou, teste num trecho com a linha rodando.';
       break;
     case 'nenhuma':
       texto = `Nenhuma caixa passou inteira pela faixa ${trecho}. Se passaram caixas, a faixa não atravessa todo o caminho `
@@ -2014,14 +2037,16 @@ function ResultadoTeste({ r, aoIr }) {
         + 'retângulo: se ela não fica rosa, redesenhe a faixa na passagem do rolete para o tapete, onde a caixa passa.';
       break;
     case 'sempre':
-      texto = `O retângulo tem cor de papelão o tempo todo ${trecho}, mesmo sem caixa (nunca abaixo de `
-        + `${pctPapelao(r.minimo)}): tem algo pardo ou amarelo parado dentro dele — rolete, barra, chão ou caixa parada. `
-        + 'Pare o vídeo sem caixa, veja o que fica rosa e redesenhe sem pegar isso.';
+      texto = `O retângulo teve cor de papelão o tempo todo ${trecho} (nunca abaixo de ${pctPapelao(r.minimo)}). Ou tem `
+        + 'algo pardo ou amarelo parado dentro dele (barra, rolete, chão) — pare o vídeo sem caixa, veja o que fica rosa '
+        + 'e redesenhe sem pegar isso —, ou uma caixa ficou parada nele com a linha parada: teste num trecho com a linha '
+        + 'rodando.';
       break;
     case 'sem-contraste':
-      texto = `O retângulo mudou pouco entre caixa e esteira vazia ${trecho} (de ${pctPapelao(r.minimo)} a `
-        + `${pctPapelao(r.maximo)} de papelão): a caixa cobre só uma parte dele. Redesenhe uma faixa fina, só onde a `
-        + 'caixa passa — com a caixa passando, ela tem de ficar quase toda rosa.';
+      texto = `O retângulo mudou pouco ${trecho} (de ${pctPapelao(r.minimo)} a ${pctPapelao(r.maximo)} de papelão). Ou a `
+        + 'caixa cobre só uma parte dele — redesenhe uma faixa fina, só onde a caixa passa (com ela passando, a faixa '
+        + 'fica quase toda rosa) —, ou nenhuma caixa passou e o que mexeu foi mão ou reflexo: teste num trecho com a '
+        + 'linha rodando.';
       break;
     default:
       texto = 'O trecho é curto demais para testar: volte o vídeo para antes e teste de novo.';
@@ -2061,7 +2086,7 @@ function GraficoTeste({ r, aoIr }) {
   const y = (v) => A - Math.min(1, Math.max(0, v)) * A;
   const linha = r.grafico.map((p) => `${x(p.ms).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
   const descricao = `Papelão no retângulo de ${emRelogio(ini)} a ${emRelogio(fim)}: de ${pctPapelao(r.minimo)} a `
-    + `${pctPapelao(r.maximo)}; ${caixas(r.caixas)} achadas.`;
+    + `${pctPapelao(r.maximo)}; ${caixas(r.caixas)} ${r.caixas === 1 ? 'achada' : 'achadas'}.`;
   return (
     <figure style={ev.graficoTeste}>
       <figcaption style={ev.graficoTitulo}>% do retângulo com cor de papelão no trecho testado</figcaption>

@@ -292,26 +292,33 @@ export function intervalosLongos(entradasMs, fator = 3) {
  * eram de 2 a 7 min de espera para ouvir "sem diferenca entre caixa e
  * esteira vazia" (PPCP, 18/11/2026: "descobre so' depois que nao pegou").
  * O teste le' so' um trecho curto, com a MESMA conta da leitura inteira
- * (detectarVolumes + saidasDosVolumes): o que ele acha e' o que a leitura
- * do video todo acharia nesse trecho.
+ * (detectarVolumes + saidasDosVolumes). Mas os niveis (esteira vazia,
+ * caixa) e o limite da passagem curta saem das amostras LIDAS: no teste,
+ * do trecho; na leitura, do video todo. Com a mesma camera, luz e produto
+ * o video todo, dao o mesmo; se o produto ou a luz mudam no meio do video,
+ * a leitura inteira pode marcar diferente do teste naquele trecho (revisao
+ * da v2.112.0 — o teste prova isso nos dois sentidos).
  */
 
 /** O trecho do teste: 2 min de video, uns 15 s de leitura a 8x — tempo para umas 10 caixas. */
 export const TESTE_MS = 120000;
 /**
- * Diferenca entre caixa e esteira vazia abaixo disto: a leitura funciona,
- * mas com pouca margem (o dobro do minimo). No sinal real da envolvedora,
- * com a faixa certa, ela e' de ~0,5.
+ * Sobrando menos que isto de video a partir de onde ele esta', nao ha' o que
+ * testar: o teste recusa e pede para voltar o video. No fim do video, o
+ * play() volta ao comeco — o "teste" lia o video INTEIRO (revisao da v2.112.0).
  */
-export const CONTRASTE_BOM = 2 * CONTRASTE_MINIMO;
+export const TESTE_MINIMO_MS = 30000;
 /** Pontos do grafico do teste: o bastante para ver cada caixa, sem pesar a tela. */
 const PONTOS_GRAFICO = 240;
 
-/** O trecho do teste a partir de `inicioMs`: 2 min, ou ate' o fim do video. */
+/**
+ * O trecho do teste a partir de `inicioMs`: 2 min, ou ate' o fim do video.
+ * `curto`: sobra menos de TESTE_MINIMO_MS de video — nao da' para testar dali.
+ */
 export function trechoDoTeste(inicioMs, duracaoMs) {
   const inicio = Math.max(0, Number(inicioMs) || 0);
-  const fim = inicio + TESTE_MS;
-  return { inicioMs: inicio, fimMs: Number.isFinite(duracaoMs) && duracaoMs > 0 ? Math.min(fim, duracaoMs) : fim };
+  const fim = Number.isFinite(duracaoMs) && duracaoMs > 0 ? Math.min(inicio + TESTE_MS, duracaoMs) : inicio + TESTE_MS;
+  return { inicioMs: inicio, fimMs: fim, curto: fim - inicio < TESTE_MINIMO_MS };
 }
 
 /** O sinal reduzido para o grafico: o MAIOR valor de cada faixa de tempo (a caixa e' um pico, nao some). */
@@ -329,14 +336,18 @@ function reduzir(sinal, pontos) {
 
 /**
  * O VEREDITO DO TESTE — o que o retangulo fez no trecho e o que fazer:
- *  - 'ok': separou caixa de esteira vazia com margem e achou caixas;
- *  - 'fraco': achou caixas, mas a diferenca e' pequena (pode perder caixa);
+ *  - 'ok': separou caixa de esteira vazia e achou 2 caixas ou mais;
+ *  - 'uma': separou, mas so' 1 caixa passou inteira — pouco para dizer, e a
+ *    leitura recusa com uma caixa so' (ela seria a largada);
  *  - 'nenhuma': separou, mas nenhuma caixa passou INTEIRA pela faixa;
  *  - 'nada': em nenhum momento o retangulo teve cor de papelao — nenhuma
  *    caixa passou, ou o retangulo esta' fora do caminho dela;
- *  - 'sempre': tem cor de papelao o tempo todo, mesmo vazio — algo pardo ou
- *    amarelo parado dentro dele (rolete, barra, caixa parada);
- *  - 'sem-contraste': varia, mas pouco: a caixa cobre so' parte dele;
+ *  - 'sempre': tem cor de papelao o tempo todo — algo pardo ou amarelo
+ *    parado dentro dele (rolete, barra), ou uma caixa parada com a linha;
+ *  - 'sem-contraste': varia, mas pouco — a caixa cobre so' parte dele, ou
+ *    nenhuma caixa passou e o que mexeu foi mao ou reflexo.
+ *  Os tres sem contraste sao neutros como o dominio (limiaresDoSinal): o
+ *  sinal nao diz se o retangulo esta' errado ou se a linha nao andou.
  *  - 'curto': amostras de menos para ler.
  *
  * @param amostras [{ ms, fracao }] do trecho, como as da leitura inteira
@@ -366,9 +377,7 @@ export function avaliarTeste(amostras, { inicioMs = 0, fimMs = null } = {}) {
   }
   const s = saidasDosVolumes(r);
   const contraste = r.limiares.topo - r.limiares.base;
-  let veredito = 'ok';
-  if (!s.marcasMs.length) veredito = 'nenhuma';
-  else if (contraste < CONTRASTE_BOM) veredito = 'fraco';
+  const veredito = s.marcasMs.length >= 2 ? 'ok' : s.marcasMs.length === 1 ? 'uma' : 'nenhuma';
   return {
     ...comum,
     veredito,

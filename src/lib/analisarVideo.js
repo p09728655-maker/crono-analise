@@ -48,7 +48,8 @@ export function criarMedidor() {
   return (video, retangulo) => {
     const vw = video?.videoWidth;
     const vh = video?.videoHeight;
-    // readyState < 2: sem o quadro atual, o desenho sai transparente (0%).
+    // readyState < 2: sem o quadro atual o drawImage nao desenha nada, e o
+    // canvas (reaproveitado) ficaria com o quadro ANTERIOR — medida falsa.
     if (!vw || !vh || video.readyState < 2 || !retangulo) return null;
     const sw = retangulo.largura * vw;
     const sh = retangulo.altura * vh;

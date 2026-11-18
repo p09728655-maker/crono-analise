@@ -173,8 +173,15 @@ const papelaoNaTela = async () => {
   return Number(await leituraRet.getAttribute('data-papelao'));
 };
 checar(await papelaoNaTela() <= 5, 'retangulo sobre o fundo: o % de papelao na tela fica perto de 0, mesmo com caixa no video');
-await irPara(p, 0);
+// No fim do video nao ha' o que testar: recusa sem ler (o play voltaria ao 0
+// e leria o video inteiro).
+await irPara(p, 45);
 await auto.getByRole('button', { name: /Testar o retângulo/ }).click();
+checar(/A partir de 0:45\.0 sobra só 1[45][.,]\d s de vídeo: pouco para testar/.test(await auto.getByRole('alert').innerText())
+  && !(await auto.getByText(/Testando o retângulo/).count()),
+  'testar perto do fim do video recusa na hora e pede para voltar o video');
+await irPara(p, 0);
+await auto.getByRole('button', { name: /Testar de novo/ }).click();
 await auto.getByText(/Testando o retângulo de 0:00\.0 a 1:00\.\d/).waitFor({ timeout: 8000 })
   .then(() => checar(true, 'Testar: mostra o trecho testado (2 min, ou ate o fim do video de 1 min)'))
   .catch(() => checar(false, 'Testar: mostra o trecho testado (2 min, ou ate o fim do video de 1 min)'));
@@ -225,7 +232,7 @@ await irPara(p, 0);
 // Redesenhar tira o erro da leitura anterior: o botao volta a ser o de marcar.
 checar(!(await auto.getByRole('alert').count()), 'redesenhar o retangulo tira o erro da leitura anterior');
 checar(!/Em nenhum momento/.test(await auto.innerText()), 'redesenhar tira o resultado do teste do retangulo anterior');
-// O teste aprova o retangulo certo: as caixas que a leitura inteira vai marcar.
+// O teste aprova o retangulo certo (video de 1 min: o trecho e' o video todo).
 await auto.getByRole('button', { name: 'Testar o retângulo (2 min)' }).click();
 await auto.getByText(/O retângulo pegou \d+ caixas?/).waitFor({ timeout: 90000 });
 {
@@ -241,6 +248,13 @@ await auto.getByText(/O retângulo pegou \d+ caixas?/).waitFor({ timeout: 90000 
     'o grafico do sinal do trecho aparece, com a descricao');
 }
 checar(!/Largada|Volume 1/.test(await marcas.innerText()), 'teste aprovado tambem nao poe marca: a lista fica para a leitura');
+// Conferir uma caixa do teste leva o video ate' ela; a leitura do video todo
+// continua do comeco do teste (antes comecava dali e perdia o que vinha antes):
+// o "Marcar" logo abaixo parte daqui, com o video em 0:47.
+await auto.getByRole('button', { name: '0:47.0' }).first().click();
+await p.waitForFunction(() => Math.abs(document.querySelector('video').currentTime - 47) < 0.2, null, { timeout: 4000 });
+checar(/O vídeo\s+todo vai de 0:00\.0 até o fim/.test(await auto.innerText()),
+  'depois de conferir uma caixa do teste (0:47), a leitura do video todo continua do comeco do teste');
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-auto-teste.png` });
 await auto.getByRole('button', { name: 'Marcar volumes automaticamente' }).click();
 await auto.getByText(/Lendo o vídeo/).waitFor({ timeout: 8000 });
