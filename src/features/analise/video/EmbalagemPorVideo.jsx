@@ -12,7 +12,8 @@ import {
   removerParada, removerVolume, semMarcas,
 } from '../../../domain/medicaoPorVideo.js';
 import {
-  PISO_PERMANENCIA_MS, TESTE_MS, areaDaImagem, avaliarTeste, detectarVolumes, ehPapelao, intervalosLongos,
+  CORRELACAO_MINIMA, PISO_PERMANENCIA_MS, TESTE_MS, areaDaImagem, avaliarTeste, detectarVolumes, ehPapelao,
+  esteiraPelasLinhas, intervalosLongos, linhaBDaLeitura,
   pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
 } from '../../../domain/deteccaoVolumes.js';
 import {
@@ -265,6 +266,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   // sao as marcas que ela pos (largada e volumes, ms do video) — vao no
   // rascunho, para a conferencia sobreviver ao F5.
   const [retangulo, setRetangulo] = useState(null);
+  // false | 'A' (o retangulo que marca as caixas) | 'B' (a linha B da
+  // velocidade, v2.113.0).
   const [desenhando, setDesenhando] = useState(false);
   const [arrasto, setArrasto] = useState(null); // { a, b } em fracao da imagem, enquanto arrasta
   const [caixaVideo, setCaixaVideo] = useState(null); // tamanho do <video> na tela, em px
@@ -579,12 +582,25 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const listaVazia = semMarcas;
   const lendo = automatica.estado === 'lendo';
 
-  const desenharRetangulo = () => {
+  const desenharRetangulo = (qual = 'A') => {
     refVideo.current?.pause();
     setArrasto(null);
     setAviso(null);
-    setDesenhando(true);
+    setDesenhando(qual);
   };
+  /** Grava o retangulo da maquina (A, a linha B e as medidas da esteira) e tira o teste velho. */
+  const guardarRetangulo = (novo, { testeVelho = true } = {}) => {
+    setRetangulo(novo);
+    gravarRetangulo(maquina?.id, novo);
+    if (testeVelho) setTeste({ estado: 'parado' });
+  };
+  // A LINHA B (v2.113.0): tirar volta a' medicao so' com a A.
+  const tirarLinhaB = () => {
+    const { b: _b, ...semB } = retangulo;
+    guardarRetangulo(semB);
+  };
+  // A distancia de A ate' B e a caixa: so' a conta muda, o teste continua valendo.
+  const trocarMedidasEsteira = (campos) => guardarRetangulo({ ...retangulo, ...campos }, { testeVelho: false });
   const cancelarDesenho = () => { setArrasto(null); setDesenhando(false); };
   const terminarDesenho = (r) => {
     setArrasto(null);
@@ -598,14 +614,23 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     }
     // `evento: 'saida'` (v2.109.0): desenhado ja' para a marca na saida. O
     // guardado antes, sem ele, foi feito para a entrada embaixo do filme —
-    // a tela pede para redesenhar (ver MarcacaoAutomatica).
-    const novo = { ...r, evento: 'saida' };
-    setRetangulo(novo);
-    gravarRetangulo(maquina?.id, novo);
+    // a tela pede para redesenhar (ver MarcacaoAutomatica). Redesenhar a A
+    // mantem a linha B e as medidas da esteira (a camera e' a mesma).
+    const linha = {
+      x: r.x, y: r.y, largura: r.largura, altura: r.altura,
+    };
+    const novo = desenhando === 'B'
+      ? { ...retangulo, b: linha }
+      : {
+        ...linha, evento: 'saida',
+        ...(retangulo?.b ? { b: retangulo.b } : {}),
+        ...(retangulo?.distanciaMm ? { distanciaMm: retangulo.distanciaMm } : {}),
+        ...(retangulo?.caixaMm ? { caixaMm: retangulo.caixaMm } : {}),
+      };
+    // O teste e o erro eram do retangulo anterior.
+    guardarRetangulo(novo);
     setDesenhando(false);
     setAviso(null);
-    // O teste e o erro eram do retangulo anterior.
-    setTeste({ estado: 'parado' });
     if (automatica.estado === 'erro') setAutomatica({ estado: 'parado' });
   };
 
@@ -729,6 +754,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
         descartados: s.descartados,
         limiteCurtaMs: r.permanenciaMinimaMs,
         longos: intervalosLongos(s.marcasMs),
+        // A linha B (v2.113.0): o atraso de A para B e o intervalo tipico —
+        // a velocidade e o entre-pecas saem deles e da distancia medida.
+        linhaB: linhaBDaLeitura(amostras, s.marcasMs),
       },
     });
   };
@@ -742,6 +770,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     const leitura = analisarVideo({
       video: refVideoLeitura.current,
       retangulo: automatica.retangulo,
+      retanguloB: retanguloValido(automatica.retangulo?.b) ? automatica.retangulo.b : null,
       inicioMs: automatica.inicioMs,
       fimMs: ehTeste ? automatica.fimMs : null,
       aoProgresso: (p) => {
@@ -1070,8 +1099,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                         {/* Sem foco no botao: o Enter seguinte seria clique nele. */}
                         <button
                           type="button" style={ev.botaoControle} onClick={voltarAoPreparo}
-                          onMouseDown={(e) => e.preventDefault()} disabled={lendo || desenhando}
-                          title={lendo || desenhando ? 'Termine ou pare a leitura (ou o desenho) antes' : undefined}
+                          onMouseDown={(e) => e.preventDefault()} disabled={lendo || Boolean(desenhando)}
+                          title={lendo || Boolean(desenhando) ? 'Termine ou pare a leitura (ou o desenho) antes' : undefined}
                         >
                           ← Voltar ao preparo
                         </button>
@@ -1123,7 +1152,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                     )}
                     {etapa === 'marcar' && (
                       <Acoes
-                        marcacao={marcacao} aviso={aviso} travado={lendo || desenhando}
+                        marcacao={marcacao} aviso={aviso} travado={lendo || Boolean(desenhando)}
                         aoToque={toque} aoDesfazer={desfazer} aoParou={parou} aoEncerrar={encerrar}
                       />
                     )}
@@ -1149,8 +1178,10 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                       desenhando={desenhando} automatica={automatica} progresso={progresso}
                       listaVazia={listaVazia(marcacao)} conferencia={conferencia} agoraMs={agoraMs}
                       podeDesenhar={Boolean(areaVideo)} teste={teste} inicioLeituraMs={inicioDaLeitura(agoraMs)}
-                      aoDesenhar={desenharRetangulo} aoCancelarDesenho={cancelarDesenho}
-                      aoTestar={testarRetangulo} lacunasVideo={lacunasVideo}
+                      aoDesenhar={() => desenharRetangulo('A')} aoCancelarDesenho={cancelarDesenho}
+                      aoDesenharB={() => desenharRetangulo('B')} aoTirarB={tirarLinhaB}
+                      aoMedidasEsteira={trocarMedidasEsteira}
+                      aoTestar={testarRetangulo} lacunasVideo={lacunasVideo} alvo={alvo}
                       aoLer={lerAutomatica} aoParar={() => setAutomatica({ estado: 'parado' })}
                       aoApagar={apagarAutomatica}
                       aoIr={(ms) => { refVideo.current?.pause(); irPara(ms); }}
@@ -1650,26 +1681,31 @@ function CamadaRetangulo({
   area, retangulo, arrasto, desenhando, aoArrastar, aoTerminar, refVideo, mostrarLeitura,
 }) {
   if (!area) return null;
-  const visivel = arrasto ? retanguloEntre(arrasto.a, arrasto.b) : retangulo;
+  const arrastado = arrasto ? retanguloEntre(arrasto.a, arrasto.b) : null;
+  // A (o que marca as caixas) e a linha B (v2.113.0, a velocidade): o que
+  // esta' sendo desenhado aparece no lugar do guardado.
+  const visivelA = arrastado && desenhando === 'A' ? arrastado : retangulo;
+  const visivelB = arrastado && desenhando === 'B' ? arrastado : (retanguloValido(retangulo?.b) ? retangulo.b : null);
   const ponto = (e) => {
     const caixa = e.currentTarget.getBoundingClientRect();
     return pontoNaImagem(e.clientX - caixa.left, e.clientY - caixa.top, area);
   };
+  const caixaDe = (r) => ({
+    left: area.x + r.x * area.largura,
+    top: area.y + r.y * area.altura,
+    width: r.largura * area.largura,
+    height: r.altura * area.altura,
+  });
   return (
     <>
-      {visivel && mostrarLeitura && <LeituraDoRetangulo refVideo={refVideo} area={area} retangulo={visivel} />}
-      {visivel && (
-        <div
-          aria-hidden="true"
-          style={{
-            ...ev.retangulo,
-            left: area.x + visivel.x * area.largura,
-            top: area.y + visivel.y * area.altura,
-            width: visivel.largura * area.largura,
-            height: visivel.altura * area.altura,
-          }}
-        />
+      {visivelA && mostrarLeitura && (
+        <LeituraDoRetangulo refVideo={refVideo} area={area} retangulo={visivelA} prefixo={visivelB ? 'A · ' : ''} />
       )}
+      {visivelB && mostrarLeitura && (
+        <LeituraDoRetangulo refVideo={refVideo} area={area} retangulo={visivelB} prefixo="B · " linhaB />
+      )}
+      {visivelA && <div aria-hidden="true" style={{ ...ev.retangulo, ...caixaDe(visivelA) }} />}
+      {visivelB && <div aria-hidden="true" style={{ ...ev.retangulo, ...ev.retanguloB, ...caixaDe(visivelB) }} />}
       {desenhando && (
         <div
           style={ev.camadaDesenho}
@@ -1701,7 +1737,9 @@ function CamadaRetangulo({
  * Desenhado por fora do React (canvas e texto pela ref): a cada quadro do
  * video tocando, so' este pedaco muda.
  */
-function LeituraDoRetangulo({ refVideo, area, retangulo }) {
+function LeituraDoRetangulo({
+  refVideo, area, retangulo, prefixo = '', linhaB = false,
+}) {
   const refCanvas = useRef(null);
   const refRotulo = useRef(null);
   const refRet = useRef(retangulo);
@@ -1716,7 +1754,7 @@ function LeituraDoRetangulo({ refVideo, area, retangulo }) {
     const m = medidor(refVideo.current, refRet.current);
     if (!m) {
       ctx.clearRect(0, 0, LARGURA_MEDIDA, ALTURA_MEDIDA);
-      rotulo.textContent = '— papelão';
+      rotulo.textContent = `${prefixo}— papelão`;
       rotulo.dataset.papelao = '';
       return;
     }
@@ -1728,9 +1766,9 @@ function LeituraDoRetangulo({ refVideo, area, retangulo }) {
     }
     ctx.putImageData(img, 0, 0);
     const pct = Math.round(m.fracao * 100);
-    rotulo.textContent = `${pct}% papelão`;
+    rotulo.textContent = `${prefixo}${pct}% papelão`;
     rotulo.dataset.papelao = String(pct);
-  }, [medidor, refVideo]);
+  }, [medidor, refVideo, prefixo]);
 
   // O retangulo mudou (arrasto, outro desenho): mede de novo, no mesmo quadro.
   useEffect(() => { desenhar(); }, [desenhar, retangulo.x, retangulo.y, retangulo.largura, retangulo.altura]);
@@ -1773,7 +1811,7 @@ function LeituraDoRetangulo({ refVideo, area, retangulo }) {
         }}
       />
       <span
-        ref={refRotulo} data-leitura-retangulo=""
+        ref={refRotulo} {...(linhaB ? { 'data-leitura-linha-b': '' } : { 'data-leitura-retangulo': '' })}
         title="Quanto do retângulo o leitor conta como papelão neste quadro (pintado de rosa)"
         style={{ ...ev.rotuloPapelao, left, top: topoRotulo }}
       />
@@ -1819,7 +1857,7 @@ function Tempos({ lista, aoIr, rotulo = (ms) => emRelogio(ms) }) {
 function MarcacaoAutomatica({
   url, refVideoLeitura, maquina, retangulo, desenhando, automatica, progresso, listaVazia, conferencia,
   agoraMs, podeDesenhar, teste, inicioLeituraMs, aoDesenhar, aoCancelarDesenho, aoTestar, aoLer, aoParar, aoApagar,
-  aoIr, lacunasVideo,
+  aoIr, lacunasVideo, alvo, aoDesenharB, aoTirarB, aoMedidasEsteira,
 }) {
   const [confirmarApagar, setConfirmarApagar] = useState(false);
   const { estado, resultado } = automatica;
@@ -1844,7 +1882,19 @@ function MarcacaoAutomatica({
     <section style={ev.cartao} aria-label="Marcação automática">
       <h2 style={ev.subtitulo}>Marcação automática</h2>
 
-      {desenhando && (
+      {desenhando === 'B' && (
+        <>
+          <p style={ev.aviso} role="status">
+            Linha B: clique e arraste uma faixa fina no mesmo corredor da caixa, um pouco adiante da A (até uns 30 a 40
+            cm dela), sobre um ponto fixo da lateral da esteira — a distância real de A até B você mede com trena e
+            digita aqui. Deixe o vídeo parado com uma caixa passando: ela tem de ficar quase toda rosa. Esc cancela.
+          </p>
+          <div style={ev.linhaBotoes}>
+            <button type="button" style={est.botaoSecundario} onClick={aoCancelarDesenho}>Cancelar o desenho</button>
+          </div>
+        </>
+      )}
+      {desenhando === 'A' && (
         <>
           <p style={ev.aviso} role="status">
             Clique e arraste sobre o vídeo fazendo uma faixa fina sobre a passagem do rolete para o tapete verde,
@@ -1926,6 +1976,13 @@ function MarcacaoAutomatica({
               </p>
               {teste.estado === 'erro' && <div style={est.faixaErro} role="alert">{teste.erro}</div>}
               {teste.estado === 'pronto' && <ResultadoTeste r={teste.resultado} aoIr={aoIr} />}
+              {teste.estado === 'pronto' && teste.resultado.linhaB && (
+                <EsteiraAB linhaB={teste.resultado.linhaB} retangulo={retangulo} alvo={alvo} />
+              )}
+              <LinhaB
+                retangulo={retangulo} alvo={alvo} podeDesenhar={podeDesenhar}
+                aoDesenhar={aoDesenharB} aoTirar={aoTirarB} aoMedidas={aoMedidasEsteira}
+              />
               <div style={ev.linhaBotoes}>
                 <button type="button" style={testeBom ? est.botaoSecundario : est.botaoImprimir} onClick={aoTestar}>
                   {teste.estado === 'parado' ? 'Testar o retângulo' : 'Testar de novo'} ({Math.round(TESTE_MS / 60000)} min)
@@ -1962,6 +2019,9 @@ function MarcacaoAutomatica({
               A leitura marcou {volumes(resultado.volumes)}, mais a largada. Confira na lista: clique num tempo
               para ver o vídeo nele; × apaga uma marca, Enter acrescenta.
             </p>
+          )}
+          {estado === 'pronto' && resultado?.linhaB && (
+            <EsteiraAB linhaB={resultado.linhaB} retangulo={retangulo} alvo={alvo} />
           )}
           {estado === 'pronto' && resultado && (
             <p style={ev.dica}>
@@ -2075,6 +2135,140 @@ function LacunasDaMarcacao({ r, aoIr }) {
         rotulo={(x) => `${emRelogio(x.deMs)}–${emRelogio(x.ateMs)}`}
       />
     </p>
+  );
+}
+
+/** Numero digitado em mm: inteiro positivo, ou null. */
+const mmDigitado = (texto) => {
+  const n = Math.round(Number(String(texto).replace(',', '.')));
+  return n > 0 && n <= 20000 ? n : null;
+};
+
+/**
+ * A LINHA B (v2.113.0): desenhar, tirar e as duas medidas que a conta pede —
+ * a distancia REAL de A ate' B (trena, entre dois pontos fixos da lateral da
+ * esteira) e a caixa no sentido em que anda (do cadastro; no fim da linha,
+ * fechada, ela e' outra). Guardadas com o retangulo da maquina.
+ */
+function LinhaB({
+  retangulo, alvo, podeDesenhar, aoDesenhar, aoTirar, aoMedidas,
+}) {
+  const temB = retanguloValido(retangulo?.b);
+  const caixaPadrao = alvo?.medida > 0 ? Math.round(alvo.medida) : null;
+  return (
+    <div style={ev.esteira} aria-label="Linha B: velocidade e entre-peças">
+      <p style={ev.esteiraTitulo}>Velocidade e entre-peças (opcional): a linha B</p>
+      {!temB && (
+        <>
+          <p style={ev.dica}>
+            Uma segunda faixa, B, no mesmo corredor da caixa e um pouco adiante da A: o tempo que a ponta da caixa leva de A
+            até B, com a distância real entre as duas (medida uma vez com trena, na lateral da esteira), dá a velocidade da
+            esteira e o entre-peças — para conferir o cadastro.
+          </p>
+          <div style={ev.linhaBotoes}>
+            <button type="button" style={est.botaoSecundario} onClick={aoDesenhar} disabled={!podeDesenhar}>
+              Desenhar a linha B
+            </button>
+          </div>
+        </>
+      )}
+      {temB && (
+        <>
+          <label style={ev.esteiraRegua}>
+            <span style={ev.dica}>Distância real de A até B, na esteira:</span>
+            <input
+              type="number" min="1" step="1" inputMode="numeric" style={ev.esteiraCampo} placeholder="mm"
+              defaultValue={retangulo.distanciaMm ?? ''} key={`d-${retangulo.distanciaMm ?? ''}`}
+              onBlur={(e) => aoMedidas({ distanciaMm: mmDigitado(e.target.value) })}
+              aria-label="Distância real de A até B, em mm"
+            />
+            <span style={ev.dica}>mm (trena)</span>
+          </label>
+          <label style={ev.esteiraRegua}>
+            <span style={ev.dica}>A caixa, no sentido da esteira, tem:</span>
+            <input
+              type="number" min="1" step="1" inputMode="numeric" style={ev.esteiraCampo} placeholder="mm"
+              defaultValue={retangulo.caixaMm ?? caixaPadrao ?? ''} key={`c-${retangulo.caixaMm ?? caixaPadrao ?? ''}`}
+              onBlur={(e) => aoMedidas({ caixaMm: mmDigitado(e.target.value) })}
+              aria-label="Comprimento da caixa no sentido da esteira, em mm"
+            />
+            <span style={ev.dica}>
+              mm{retangulo.caixaMm == null && caixaPadrao ? ' (do cadastro)' : ''} — no fim da linha, fechada, ela é menor.
+            </span>
+          </label>
+          <div style={ev.linhaBotoes}>
+            <button type="button" style={ev.link} onClick={aoDesenhar} disabled={!podeDesenhar}>Redesenhar a linha B</button>
+            <button type="button" style={ev.link} onClick={aoTirar}>Tirar a linha B</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A ESTEIRA PELAS LINHAS A E B (v2.113.0): velocidade, caixa + vao e
+ * entre-pecas, ao lado do cadastro. Sem veredito: e' para conferir o
+ * cadastro (velocidade e entre-pecas fazem o tempo-alvo). As contas sao do
+ * dominio (atrasoEntreFaixas, esteiraPelasLinhas).
+ */
+function EsteiraAB({ linhaB, retangulo, alvo }) {
+  const caixaMm = retangulo?.caixaMm ?? (alvo?.medida > 0 ? alvo.medida : null);
+  const n0 = (v) => String(Math.round(v));
+  const n1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
+  let problema = null;
+  if (linhaB.motivo) problema = `Não deu para medir a velocidade: ${linhaB.motivo}.`;
+  else if (linhaB.noLimite) {
+    problema = 'A e B estão longe demais uma da outra: a caixa leva mais que meio intervalo entre elas e se confunde com a '
+      + 'seguinte. Ponha a B mais perto da A (até uns 30 a 40 cm) e teste de novo.';
+  } else if (linhaB.fraca) {
+    problema = `As linhas A e B não viram a mesma coisa passar (semelhança ${n0(linhaB.correlacao * 100)}%, o mínimo é `
+      + `${n0(CORRELACAO_MINIMA * 100)}%): ponha as duas no mesmo corredor da caixa, sem pegar mão, filme ou barra.`;
+  }
+  const sentido = linhaB.atrasoMs >= 0 ? 'A até B' : 'B até A';
+  const r = problema ? null : esteiraPelasLinhas({
+    atrasoMs: linhaB.atrasoMs, distanciaMm: retangulo?.distanciaMm,
+    intervaloTipicoMs: linhaB.intervaloTipicoMs, comprimentoMm: caixaMm,
+  });
+  return (
+    <div style={ev.esteira} aria-label="Esteira medida pelas linhas A e B">
+      <p style={ev.esteiraTitulo}>A esteira, pelas linhas A e B</p>
+      {problema && <p style={ev.aviso} role="alert">{problema}</p>}
+      {!problema && !r && (
+        <p style={ev.dica}>
+          A ponta da caixa leva {n1(Math.abs(linhaB.atrasoMs) / 1000)} s de {sentido}. Digite a distância real entre as
+          duas para ver a velocidade e o entre-peças.
+        </p>
+      )}
+      {r && (
+        <>
+          <div style={ev.numeros}>
+            <Numero
+              rotulo="Velocidade" valor={`${n1(r.velocidadeMMin)} m/min`}
+              sub={alvo?.vel > 0 ? `cadastro: ${n1(alvo.vel)} m/min` : 'medida no vídeo'}
+            />
+            <Numero
+              rotulo="Entre-peças" valor={r.entrePecasMm != null ? `${n0(r.entrePecasMm)} mm` : '—'}
+              sub={[caixaMm > 0 ? null : 'falta a medida da caixa', alvo?.entre != null ? `cadastro: ${n0(alvo.entre)} mm` : null]
+                .filter(Boolean).join(' · ') || null}
+            />
+            <Numero
+              rotulo="Caixa + vão" valor={r.passoMm != null ? `${n0(r.passoMm)} mm` : '—'}
+              sub={linhaB.intervaloTipicoMs > 0 ? `uma caixa a cada ${n1(linhaB.intervaloTipicoMs / 1000)} s` : null}
+            />
+          </div>
+          <p style={ev.dica}>
+            A ponta da caixa leva {n1(Math.abs(linhaB.atrasoMs) / 1000)} s de {sentido} ({n0(retangulo.distanciaMm)} mm):
+            velocidade = distância ÷ tempo. Caixa + vão = a velocidade × o intervalo típico entre as caixas; entre-peças =
+            isso − a caixa ({caixaMm > 0 ? `${n0(caixaMm)} mm` : 'sem medida'}). O tempo de A até B sai do vídeo inteiro (as
+            duas linhas viram a mesma coisa em {n0(linhaB.correlacao * 100)}%), não de caixa a caixa.
+            {r.entrePecasMm != null && r.entrePecasMm < 0
+              ? ' Entre-peças negativo: a caixa digitada é maior que o passo medido — confira a medida da caixa e a distância.'
+              : ''}
+          </p>
+        </>
+      )}
+    </div>
   );
 }
 

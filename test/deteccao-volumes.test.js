@@ -14,7 +14,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  TESTE_MINIMO_MS, TESTE_MS, areaDaImagem, avaliarTeste, detectarVolumes, ehPapelao, fracaoPapelao, intervalosLongos,
+  CORRELACAO_MINIMA, TESTE_MINIMO_MS, TESTE_MS, areaDaImagem, atrasoEntreFaixas, esteiraPelasLinhas, intervaloTipico,
+  linhaBDaLeitura, avaliarTeste, detectarVolumes, ehPapelao, fracaoPapelao, intervalosLongos,
   limiaresDoSinal, pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
 } from '../src/domain/deteccaoVolumes.js';
 import {
@@ -468,5 +469,82 @@ describe('TESTAR O RETANGULO (v2.112.0): o trecho curto diz se pegou, antes de l
       expect(t.marcasMs[i] / 1000 - entrada).toBeLessThan(8);
     });
     expect(t.contraste).toBeGreaterThan(0.45);
+  });
+});
+
+describe('A ESTEIRA PELAS LINHAS A E B (v2.113.0): velocidade e entre-pecas medidos no video', () => {
+  // A caixa passa na linha A (2 s cobrindo, a cada 8 s) e o MESMO desenho
+  // aparece na B `atraso` ms depois; amostras a cada ~130 ms, como a 8x.
+  const duasLinhas = ({ atraso = 1000, duracao = 40000, ruido = 0.03, bIndependente = false } = {}) => {
+    let semente = 11;
+    const r = () => { semente = (semente * 16807) % 2147483647; return semente / 2147483647; };
+    const pulso = (t) => { const m = ((t % 8000) + 8000) % 8000; return m >= 3000 && m < 5000 ? 0.9 : 0.05; };
+    const am = [];
+    for (let ms = 0; ms < duracao; ms += 110 + Math.round(r() * 40)) {
+      am.push({
+        ms,
+        fracao: pulso(ms) + (r() - 0.5) * 2 * ruido,
+        fracaoB: bIndependente ? r() : pulso(ms - atraso) + (r() - 0.5) * 2 * ruido,
+      });
+    }
+    return am;
+  };
+
+  it('o atraso de A para B sai do sinal inteiro, com erro menor que 5%', () => {
+    const a = atrasoEntreFaixas(duasLinhas({ atraso: 1000 }), { limiteMs: 4000 });
+    expect(Math.abs(a.atrasoMs - 1000)).toBeLessThan(50);
+    expect(a.correlacao).toBeGreaterThan(0.9);
+    expect(a.fraca).toBe(false);
+    expect(a.noLimite).toBe(false);
+  });
+
+  it('a caixa que passa primeiro em B da atraso negativo (as linhas desenhadas ao contrario)', () => {
+    const a = atrasoEntreFaixas(duasLinhas({ atraso: -1500 }), { limiteMs: 4000 });
+    expect(Math.abs(a.atrasoMs + 1500)).toBeLessThan(75);
+  });
+
+  it('linhas que nao veem a mesma coisa: correlacao fraca, recusada', () => {
+    const a = atrasoEntreFaixas(duasLinhas({ bIndependente: true }), { limiteMs: 4000 });
+    expect(a.fraca).toBe(true);
+    expect(a.correlacao).toBeLessThan(CORRELACAO_MINIMA);
+  });
+
+  it('A e B longe demais (atraso alem de meio intervalo): o pico fica no limite e e recusado', () => {
+    const a = atrasoEntreFaixas(duasLinhas({ atraso: 3500 }), { limiteMs: 2000 });
+    expect(a.noLimite).toBe(true);
+  });
+
+  it('sem a linha B nas amostras, a leitura nao tem linha B; com ela, o limite e meio intervalo tipico', () => {
+    expect(linhaBDaLeitura([{ ms: 0, fracao: 0.1 }], [1000, 9000])).toBeNull();
+    const l = linhaBDaLeitura(duasLinhas({ atraso: 1000 }), [5000, 13000, 21000, 29000, 37000]);
+    expect(l.intervaloTipicoMs).toBe(8000);
+    expect(l.limiteMs).toBe(4000);
+    expect(Math.abs(l.atrasoMs - 1000)).toBeLessThan(50);
+  });
+
+  it('a conta: 360 mm em 2,4 s = 9 m/min; uma caixa a cada 6,5 s = 975 mm de caixa + vao; com a caixa de 825, 150 mm', () => {
+    const r = esteiraPelasLinhas({ atrasoMs: 2400, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825 });
+    expect(r.velocidadeMMin).toBeCloseTo(9, 6);
+    expect(r.passoMm).toBeCloseTo(975, 6);
+    expect(r.entrePecasMm).toBeCloseTo(150, 6);
+    // O sentido nao muda a velocidade; sem distancia, sem conta; sem caixa, sem entre-pecas.
+    expect(esteiraPelasLinhas({ atrasoMs: -2400, distanciaMm: 360, intervaloTipicoMs: 6500, comprimentoMm: 825 }).velocidadeMMin)
+      .toBeCloseTo(9, 6);
+    expect(esteiraPelasLinhas({ atrasoMs: 2400, distanciaMm: null, intervaloTipicoMs: 6500 })).toBeNull();
+    expect(esteiraPelasLinhas({ atrasoMs: 2400, distanciaMm: 360, intervaloTipicoMs: 6500 }).entrePecasMm).toBeNull();
+  });
+
+  it('o intervalo tipico e a mediana dos intervalos entre as marcas (a parada nao o estica)', () => {
+    expect(intervaloTipico([0, 6500, 13000, 80000, 86500, 93000])).toBe(6500);
+    expect(intervaloTipico([1000])).toBeNull();
+  });
+
+  it('o teste do retangulo devolve a linha B quando ela foi lida', () => {
+    const am = duasLinhas({ atraso: 1000, duracao: 120000 });
+    const t = avaliarTeste(am, { inicioMs: 0, fimMs: 120000 });
+    expect(t.linhaB).not.toBeNull();
+    expect(Math.abs(t.linhaB.atrasoMs - 1000)).toBeLessThan(60);
+    expect(Math.abs(t.linhaB.intervaloTipicoMs - 8000)).toBeLessThan(300);
+    expect(avaliarTeste(am.map(({ ms, fracao }) => ({ ms, fracao }))).linhaB).toBeNull();
   });
 });

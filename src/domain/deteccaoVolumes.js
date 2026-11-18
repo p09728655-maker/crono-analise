@@ -381,6 +381,9 @@ export function avaliarTeste(amostras, { inicioMs = 0, fimMs = null } = {}) {
   return {
     ...comum,
     veredito,
+    // A linha B (v2.113.0): o atraso de A para B e o intervalo tipico — a
+    // velocidade e o entre-pecas saem deles e da distancia (esteiraPelasLinhas).
+    linhaB: linhaBDaLeitura(lista, s.marcasMs),
     caixas: s.marcasMs.length,
     marcasMs: s.marcasMs,
     descartados: s.descartados,
@@ -432,4 +435,148 @@ export function retanguloValido(r) {
   return Boolean(r && n(r.x) && n(r.y) && n(r.largura) && n(r.altura)
     && r.x >= 0 && r.y >= 0 && r.largura >= LADO_MINIMO && r.altura >= LADO_MINIMO
     && r.x + r.largura <= 1.0001 && r.y + r.altura <= 1.0001);
+}
+
+/* ----------------------- a esteira pelas linhas A e B (v2.113.0)
+ * VELOCIDADE E ENTRE-PECAS MEDIDOS NO VIDEO (PPCP, 18/11/2026: "ponta A e
+ * B"). A linha A e' o retangulo de sempre (o que marca as caixas); a linha
+ * B, uma segunda faixa no mesmo corredor, um pouco adiante. O analista mede
+ * com trena, uma vez, a distancia real entre as duas (dois pontos fixos na
+ * lateral da esteira — nunca na lona, que anda).
+ *  - O ATRASO de A para B sai do SINAL INTEIRO das duas faixas (correlacao):
+ *    e' o deslocamento em que o que a B ve' mais se parece com o que a A viu.
+ *    Chapa a chapa nao serve: na Emb inicio as pecas postas em cima da chapa
+ *    cobrem o papelao e a passagem de cada uma sai torta; o sinal inteiro
+ *    nao se importa (medido no video de 18/11, 14:52–14:55).
+ *  - VELOCIDADE = distancia ÷ atraso. Nao depende do cadastro.
+ *  - CAIXA + VAO = velocidade × o intervalo tipico entre as caixas;
+ *    ENTRE-PECAS = isso − o comprimento da caixa (do cadastro, ou o digitado).
+ * O sinal se repete a cada caixa: um atraso de meio intervalo ou mais se
+ * confunde com a caixa seguinte. Por isso A e B tem de ficar mais perto que
+ * meia (caixa + vao); o atraso no limite da busca e' recusado.
+ * Ate' a v2.112 tentou-se a velocidade pela propria caixa (comprimento ÷
+ * tempo na faixa), sem linha B: na Emb inicio deu de 8,5 a 12,3 m/min
+ * conforme a faixa — as pecas em cima da chapa. Nao foi ao ar.
+ */
+
+/** O passo da grade em que os dois sinais sao comparados. */
+const PASSO_GRADE_MS = 40;
+/** Abaixo disto, as duas linhas nao viram a mesma coisa passar: o atraso nao vale. */
+export const CORRELACAO_MINIMA = 0.4;
+
+/** O sinal na grade fixa (reta entre as amostras vizinhas). */
+function naGrade(lista, campo, ini, n) {
+  const saida = new Float64Array(n);
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    const t = ini + i * PASSO_GRADE_MS;
+    while (j < lista.length - 2 && lista[j + 1].ms < t) j++;
+    const a = lista[j];
+    const b = lista[Math.min(j + 1, lista.length - 1)];
+    saida[i] = b.ms === a.ms || t <= a.ms ? a[campo] : a[campo] + ((t - a.ms) / (b.ms - a.ms)) * (b[campo] - a[campo]);
+  }
+  return saida;
+}
+
+/** Correlacao de A[i] com B[i + lag] (Pearson, so' onde os dois existem). */
+function correlacao(A, B, lag) {
+  let n = 0; let sa = 0; let sb = 0; let saa = 0; let sbb = 0; let sab = 0;
+  const de = Math.max(0, -lag);
+  const ate = Math.min(A.length, B.length - lag);
+  for (let i = de; i < ate; i++) {
+    const x = A[i];
+    const y = B[i + lag];
+    n++; sa += x; sb += y; saa += x * x; sbb += y * y; sab += x * y;
+  }
+  if (n < 10) return -1;
+  const va = saa / n - (sa / n) ** 2;
+  const vb = sbb / n - (sb / n) ** 2;
+  if (!(va > 1e-9) || !(vb > 1e-9)) return -1;
+  return (sab / n - (sa / n) * (sb / n)) / Math.sqrt(va * vb);
+}
+
+/**
+ * O ATRASO DE A PARA B: em quanto tempo o que passa na linha A chega a' B.
+ *
+ * @param amostras [{ ms, fracao, fracaoB }] — as duas linhas medidas no
+ *   mesmo quadro (analisarVideo com retanguloB)
+ * @param limiteMs o maior atraso procurado: meio intervalo tipico entre as
+ *   caixas (mais que isso se confunde com a caixa seguinte)
+ * @returns { atrasoMs, correlacao, limiteMs, noLimite, fraca } ou { motivo }
+ *   — atrasoMs positivo: a caixa passa primeiro em A; negativo: em B.
+ */
+export function atrasoEntreFaixas(amostras, { limiteMs = 3000 } = {}) {
+  const lista = (amostras || [])
+    .filter((a) => a && Number.isFinite(a.ms) && Number.isFinite(a.fracao) && Number.isFinite(a.fracaoB))
+    .sort((a, b) => a.ms - b.ms);
+  if (lista.length < 20) return { motivo: 'poucas amostras das duas linhas' };
+  const ini = lista[0].ms;
+  const n = Math.floor((lista[lista.length - 1].ms - ini) / PASSO_GRADE_MS) + 1;
+  const A = naGrade(lista, 'fracao', ini, n);
+  const B = naGrade(lista, 'fracaoB', ini, n);
+  const maxLag = Math.max(1, Math.floor(limiteMs / PASSO_GRADE_MS));
+  let melhor = -Infinity;
+  let lagMelhor = 0;
+  for (let lag = -maxLag; lag <= maxLag; lag++) {
+    const c = correlacao(A, B, lag);
+    if (c > melhor) { melhor = c; lagMelhor = lag; }
+  }
+  if (!(melhor > -1)) return { motivo: 'uma das linhas nao mudou no trecho (nada passou nela)' };
+  // O pico entre dois pontos da grade (parabola nos tres vizinhos).
+  let ajuste = 0;
+  if (Math.abs(lagMelhor) < maxLag) {
+    const y0 = correlacao(A, B, lagMelhor - 1);
+    const y2 = correlacao(A, B, lagMelhor + 1);
+    const den = y0 - 2 * melhor + y2;
+    if (den < 0) ajuste = Math.max(-0.5, Math.min(0.5, (0.5 * (y0 - y2)) / den));
+  }
+  return {
+    atrasoMs: Math.round((lagMelhor + ajuste) * PASSO_GRADE_MS),
+    correlacao: melhor,
+    limiteMs: maxLag * PASSO_GRADE_MS,
+    noLimite: Math.abs(lagMelhor) >= maxLag,
+    fraca: melhor < CORRELACAO_MINIMA,
+  };
+}
+
+/** O intervalo tipico entre as caixas (a mediana dos intervalos entre as marcas). */
+export function intervaloTipico(marcasMs) {
+  const o = (marcasMs || []).filter(Number.isFinite).sort((a, b) => a - b);
+  return mediana(o.slice(1).map((ms, i) => ms - o[i]));
+}
+
+/**
+ * A LINHA B DE UMA LEITURA: o atraso (com o limite de meio intervalo
+ * tipico) e o intervalo tipico — o que a tela precisa para a velocidade e o
+ * entre-pecas. Null sem a linha B nas amostras.
+ */
+export function linhaBDaLeitura(amostras, marcasMs) {
+  if (!(amostras || []).some((a) => Number.isFinite(a?.fracaoB))) return null;
+  const tipico = intervaloTipico(marcasMs);
+  return {
+    intervaloTipicoMs: tipico,
+    ...atrasoEntreFaixas(amostras, { limiteMs: tipico > 0 ? tipico / 2 : 3000 }),
+  };
+}
+
+/**
+ * VELOCIDADE E ENTRE-PECAS a partir do atraso de A para B.
+ *
+ * @returns null sem distancia ou sem atraso; senao { velocidadeMMin,
+ *   passoMm (caixa + vao) | null, entrePecasMm | null }
+ */
+export function esteiraPelasLinhas({
+  atrasoMs, distanciaMm, intervaloTipicoMs, comprimentoMm,
+} = {}) {
+  const d = Number(distanciaMm);
+  const dt = Math.abs(Number(atrasoMs));
+  if (!(d > 0) || !(dt > 0)) return null;
+  const v = d / dt; // mm por ms
+  const passoMm = Number(intervaloTipicoMs) > 0 ? v * Number(intervaloTipicoMs) : null;
+  const L = Number(comprimentoMm);
+  return {
+    velocidadeMMin: v * 60,
+    passoMm,
+    entrePecasMm: passoMm != null && L > 0 ? passoMm - L : null,
+  };
 }

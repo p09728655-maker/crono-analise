@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.113.0',
+    data: '2026-11-18',
+    titulo: 'Cronometrar por vídeo: velocidade da esteira e entre-peças pelas linhas A e B',
+    itens: [
+      'A LINHA B: além do retângulo de sempre (a linha A, que marca as caixas), dá para desenhar uma segunda faixa, B, no mesmo corredor da caixa e um pouco adiante, e digitar a distância REAL entre as duas — medida uma vez com trena, entre dois pontos fixos da lateral da esteira (nunca na lona, que anda). Fica guardada com a máquina, com o retângulo. Sobre o vídeo, a B aparece em azul, com o que o leitor vê nela ("B · 80% papelão").',
+      'O TESTE E A LEITURA MEDEM A ESTEIRA: velocidade (m/min), caixa + vão e entre-peças (mm), ao lado do cadastro do painel. Velocidade = a distância ÷ o tempo que a ponta da caixa leva de A até B; caixa + vão = a velocidade × o intervalo típico entre as caixas; entre-peças = isso − a caixa (do cadastro, ou a digitada: no fim da linha a caixa passa fechada). Trocar a distância ou a caixa refaz a conta na hora, sem ler o vídeo de novo.',
+      'O TEMPO DE A ATÉ B SAI DO VÍDEO INTEIRO, não de caixa a caixa: no começo da linha as peças postas em cima da chapa cobrem o papelão, e a passagem de cada uma sai torta; o desenho do sinal nas duas linhas, não. Quando as duas linhas não viram a mesma coisa passar, ou estão longe demais (a caixa se confunde com a seguinte — fique até uns 30 a 40 cm), a tela diz e não dá número.',
+      'Para que serve: conferir a velocidade e o entre-peças do cadastro, que fazem o tempo-alvo. Na Mesa Cabeceira Sleep, por exemplo, o cadastro diz 400 mm entre peças, e na linha passam menos de 150 mm.',
+    ],
+  },
+  {
     versao: '2.112.2',
     data: '2026-11-18',
     titulo: 'Cronometrar por vídeo: as lacunas listadas para conferir',

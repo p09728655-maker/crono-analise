@@ -174,6 +174,21 @@ export const ev = {
   itemGuardadaTexto: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: '1 1 320px' },
   itemGuardadaNome: { ...tipo('corpoF'), color: t.texto, overflowWrap: 'anywhere' },
 
+  // A LINHA B e a esteira medida (v2.113.0). B em ciano: nao se confunde com
+  // a A (amarela), nem com o papelao, nem com o tapete verde.
+  retanguloB: { borderColor: '#22D3EE' },
+  esteira: {
+    display: 'flex', flexDirection: 'column', gap: espaco.sm, padding: espaco.md, borderRadius: raio.md,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, background: t.fundo,
+  },
+  esteiraTitulo: { ...tipo('corpoF'), color: t.texto, margin: 0 },
+  esteiraRegua: { display: 'flex', alignItems: 'center', gap: espaco.sm, flexWrap: 'wrap' },
+  esteiraCampo: {
+    width: 90, minHeight: 32, padding: `0 ${espaco.sm}px`, background: t.papel,
+    borderWidth: 1, borderStyle: 'solid', borderColor: t.bordaForte, borderRadius: raio.sm,
+    color: t.texto, ...tipo('corpoF'), ...numeros, fontFamily: 'inherit',
+  },
+
   // O QUE O LEITOR VE' (v2.112.0): os pontos contados como papelao, em rosa
   // por cima do retangulo — rosa nao se confunde com o pardo da caixa nem
   // com o verde do tapete. Pixelado: cada ponto e' um dos 64x32 que a

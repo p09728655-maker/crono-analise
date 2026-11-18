@@ -416,6 +416,24 @@ do produto dele**.
   apontado; o relatório de perdas a contaria como "parada com motivo"; e,
   marcada antes de corrigir as caixas, congelaria um passo errado e barraria a
   caixa que faltou. Não propor de novo sem tratar esses três pontos.
+- **Velocidade e entre-peças pelas linhas A e B** (v2.113.0, PPCP 18/11/2026:
+  *"ponta A e B"*). A linha A é o retângulo de sempre; a B (`retangulo.b`, com
+  `distanciaMm` e `caixaMm`, no mesmo `ritmopatrimar.video.retangulos` da
+  máquina) é medida no MESMO quadro (`analisarVideo` com `retanguloB` → amostras
+  com `fracaoB`). `atrasoEntreFaixas` (domínio): correlação dos dois sinais numa
+  grade de 40 ms, busca até meio intervalo típico (`linhaBDaLeitura`; mais que
+  isso se confunde com a caixa seguinte — `noLimite`), pico refinado pela
+  parábola; abaixo de `CORRELACAO_MINIMA` (0,4) é recusado. `esteiraPelasLinhas`:
+  velocidade = distância ÷ atraso; caixa + vão = velocidade × intervalo típico;
+  entre-peças = isso − a caixa. Tela: `LinhaB` (desenhar, distância, caixa,
+  tirar) e `EsteiraAB` (no teste e na leitura, ao lado do cadastro, sem
+  veredito). ⚠ Testado antes, e NÃO publicado: a velocidade pela própria caixa
+  (comprimento ÷ tempo na faixa, uma linha só) — na Emb início deu de 8,5 a
+  12,3 m/min conforme a faixa, porque as peças em cima da chapa cobrem o
+  papelão; o desenho do sinal nas duas linhas não sofre disso. Testes:
+  `test/deteccao-volumes.test.js` e `test/e2e/video-esteira.e2e.mjs` (vídeo
+  sintético `test/fixtures/esteira-ab-40s.webm`: caixa de 200 px andando a
+  100 px/s, uma a cada 8 s — 6,0 m/min e 600 mm com A e B a 100 px).
 - **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão
   mostram o `normalMs` da `leituraPecaAPeca` — o "por volume sem as lacunas"
   do Volume a volume, o passo da linha —, com "—" abaixo de 10 intervalos. A medição vai direto ao `/sync`, sem a fila
