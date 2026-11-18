@@ -171,6 +171,8 @@ await blocoTeste.waitFor({ timeout: 4000 });
   checar(Math.abs(n.vel - 6) <= 0.3 && Math.abs(n.passo - 800) <= 40 && Math.abs(n.entre - 600) <= 40,
     `o teste mede a esteira: ${n.vel} m/min (6,0), caixa + vao ${n.passo} mm (800), entre-pecas ${n.entre} mm (600)${Number.isFinite(n.vel) ? "" : ` — TELA: ${n.texto}`}`);
   checar(/A ponta da caixa leva [01]\.\d s de A até B \(100 mm\)/.test(n.texto), 'diz o tempo de A ate B e a distancia usada');
+  checar(/caixa a caixa: \d+ caixas nas duas linhas, de \d\.\d\d a \d\.\d\d s/.test(n.texto),
+    'caixas limpas: o tempo de A ate B e o caixa a caixa, e a tela diz quantas caixas e a faixa');
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-esteira-teste.png` });
 // Trocar a distancia refaz a conta, sem ler de novo: o dobro da distancia, o dobro da velocidade.

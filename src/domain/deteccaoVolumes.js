@@ -660,13 +660,100 @@ export function intervaloDaLinha({ periodoMs = null, medianaMs = null } = {}) {
  */
 export function linhaBDaLeitura(amostras, marcasMs, { ocupacaoMs = null } = {}) {
   if (!(amostras || []).some((a) => Number.isFinite(a?.fracaoB))) return null;
-  const atraso = atrasoEntreFaixas(amostras, { marcasMs });
-  const iv = intervaloDaLinha({ periodoMs: atraso.periodoMs, medianaMs: intervaloTipico(marcasMs) });
-  return {
-    ...atraso,
+  const sinal = atrasoEntreFaixas(amostras, { marcasMs });
+  const iv = intervaloDaLinha({ periodoMs: sinal.periodoMs, medianaMs: intervaloTipico(marcasMs) });
+  // CAIXA A CAIXA (v2.114.0): quando as duas linhas pegam as caixas certinho
+  // (a caixa fechada da seladora), o tempo de cada uma de A ate' B e' mais
+  // preciso que o sinal inteiro. Vale so' com caixas bastantes e tempos que
+  // concordam entre si; senao fica o sinal (a Emb inicio, chapa coberta).
+  const limiteMs = sinal.limiteMs || (iv.intervaloMs > 0 ? FRACAO_DO_PERIODO * iv.intervaloMs : null);
+  const caixa = limiteMs ? atrasoCaixaACaixa(amostras, { limiteMs }) : null;
+  const base = {
     intervaloTipicoMs: iv.intervaloMs,
     intervaloMotivo: iv.motivo,
     ocupacaoMs: ocupacaoMs > 0 ? ocupacaoMs : null,
+    atrasoSinalMs: Number.isFinite(sinal.atrasoMs) ? sinal.atrasoMs : null,
+    caixaACaixa: caixa,
+  };
+  if (caixa?.valido) {
+    return {
+      ...sinal,
+      ...base,
+      metodo: 'caixa',
+      atrasoMs: caixa.atrasoMs,
+      // As travas valem para o atraso caixa a caixa: positivo (o par so' casa
+      // B depois de A), dentro da janela (casa so' ate' o limite) e acima do
+      // minimo. A correlacao fraca nao derruba caixas que concordam.
+      motivo: undefined,
+      fraca: false,
+      invertido: false,
+      noLimite: false,
+      pertoDemais: caixa.atrasoMs < ATRASO_MINIMO_MS,
+      concordam: Number.isFinite(sinal.atrasoMs) && sinal.atrasoMs > 0
+        ? Math.abs(sinal.atrasoMs - caixa.atrasoMs) <= 0.1 * caixa.atrasoMs : null,
+    };
+  }
+  return { ...sinal, ...base, metodo: 'sinal' };
+}
+
+/** Caixas casadas de menos, ou tempos que nao concordam: o caixa a caixa nao vale. */
+export const MIN_PARES_CAIXA = 3;
+/** Os tempos de A ate' B variam no maximo isto (do 1o ao 3o quartil, ÷ a mediana). */
+export const DISPERSAO_MAXIMA_CAIXA = 0.15;
+
+/**
+ * O ATRASO CAIXA A CAIXA (v2.114.0): cada caixa da linha A casa com a
+ * primeira da linha B que ENTRA depois dela, ate' `limiteMs` (a mesma
+ * janela do sinal: alem dela a caixa se confunde com a seguinte). O tempo de
+ * cada uma e' o da PONTA (a entrada nas duas linhas — "ponta A e B", PPCP
+ * 18/11). O fim, nao: na seladora a linha B fica na borda do tapete da
+ * envolvedora, e o fim da caixa passa por ela ja' no tapete, que anda em
+ * outra velocidade (no video de 18/11 o tempo pelo fim ia de 1,4 a 2,4 s; pela
+ * ponta, de 1,45 a 1,53). Vale com MIN_PARES_CAIXA pares e os tempos
+ * concordando (DISPERSAO_MAXIMA_CAIXA); caixa que uma linha nao viu fica de
+ * fora, sem casar com a errada.
+ *
+ * @returns { valido, atrasoMs (a mediana), pares, deMs, ateMs, dispersao,
+ *   caixasA } ou null sem caixas nas duas linhas
+ */
+export function atrasoCaixaACaixa(amostras, { limiteMs } = {}) {
+  const lista = amostrasAB(amostras);
+  if (lista.length < 20 || !(limiteMs > 0)) return null;
+  // Na grade fixa, e nao nos quadros que chegaram: na leitura a 8x o
+  // navegador entrega um quadro a cada ~130 ms, e a media de 0,5 s sobre
+  // poucos quadros vira escada — a ponta sai adiantada ou atrasada conforme o
+  // quadro caiu, diferente em cada linha (no video de teste, a 6,0 m/min, o
+  // caixa a caixa dava 5,5). Na grade, a ponta e' a mesma em qualquer ritmo de
+  // quadros.
+  const ini = lista[0].ms;
+  const n = Math.floor((lista[lista.length - 1].ms - ini) / PASSO_GRADE_MS) + 1;
+  const grade = (campo) => Array.from(naGrade(lista, campo, ini, n), (fracao, i) => ({ ms: ini + i * PASSO_GRADE_MS, fracao }));
+  const A = detectarVolumes(grade('fracao'));
+  const B = detectarVolumes(grade('fracaoB'));
+  if (A.motivo || B.motivo || !A.volumes.length || !B.volumes.length) return null;
+  const pontasA = A.volumes.map((v) => v.entrouMs);
+  const pontasB = B.volumes.map((v) => v.entrouMs);
+  const usadas = new Set();
+  const tempos = [];
+  for (const a of pontasA) {
+    const j = pontasB.findIndex((b, k) => !usadas.has(k) && b > a && b - a <= limiteMs);
+    if (j < 0) continue;
+    usadas.add(j);
+    tempos.push(pontasB[j] - a);
+  }
+  if (!tempos.length) return { valido: false, pares: 0, caixasA: A.volumes.length };
+  const m = mediana(tempos);
+  const de = percentil(tempos, 0.25);
+  const ate = percentil(tempos, 0.75);
+  const dispersao = m > 0 ? (ate - de) / m : Infinity;
+  return {
+    valido: tempos.length >= MIN_PARES_CAIXA && dispersao <= DISPERSAO_MAXIMA_CAIXA && m > 0,
+    atrasoMs: Math.round(m),
+    pares: tempos.length,
+    deMs: Math.round(Math.min(...tempos)),
+    ateMs: Math.round(Math.max(...tempos)),
+    dispersao,
+    caixasA: A.volumes.length,
   };
 }
 

@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.114.0',
+    data: '2026-11-18',
+    titulo: 'Linhas A e B: o tempo de A até B pela ponta de cada caixa',
+    itens: [
+      'CAIXA A CAIXA, PELA PONTA: quando as duas linhas pegam as caixas certinho, o tempo de A até B passa a ser o da PONTA de cada caixa — a hora em que ela entra na A e a hora em que entra na B —, com a mediana de todas. O fim da caixa não entra: na seladora a linha B fica na borda do tapete, e o fim da caixa passa por ela já no tapete, que anda em outra velocidade. A tela diz quantas caixas e de quanto a quanto foram os tempos.',
+      'Vale com 3 caixas ou mais vistas nas duas linhas e os tempos parecidos (até 15% de variação no meio deles). Caixa que só uma linha viu fica de fora, sem casar com a errada. Quando não dá — chapa coberta por peças, mão na frente —, continua o tempo pelo vídeo inteiro, como antes, e a tela diz por quê.',
+      'AS DUAS FORMAS SÃO CONFERIDAS: se o tempo pelo vídeo inteiro der mais de 10% diferente do caixa a caixa, a tela avisa para ler um trecho maior (3 a 5 minutos) antes de usar o número. No vídeo da seladora de 18/11 (só 4 caixas), o caixa a caixa deu 1,5 s (12,4 m/min, perto dos 13 que a própria caixa indica) e o vídeo inteiro, 1,67 s (11,1 m/min).',
+    ],
+  },
+  {
     versao: '2.113.1',
     data: '2026-11-18',
     titulo: 'Linhas A e B: entre-peças certo com caixas alternadas, e mais conferências',

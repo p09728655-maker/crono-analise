@@ -457,7 +457,18 @@ do produto dele**.
   `test/deteccao-volumes.test.js` e `test/e2e/video-esteira.e2e.mjs` (vídeo
   sintético `test/fixtures/esteira-ab-40s.webm`: caixa de 200 px a 100 px/s,
   uma a cada 8 s — 6,0 m/min e 600 mm com A e B a 100 px; B a 500 px da A,
-  recusada).
+  recusada). **Caixa a caixa** (v2.114.0, `atrasoCaixaACaixa`): com as caixas
+  limpas nas duas linhas, o tempo é a mediana da PONTA (entrada) de cada caixa
+  de A até B, casando cada caixa da A com a primeira da B dentro da janela do
+  sinal; vale com `MIN_PARES_CAIXA` (3) e dispersão p25–p75 ÷ mediana até
+  `DISPERSAO_MAXIMA_CAIXA` (15%); senão fica o sinal (`metodo`: 'caixa' ou
+  'sinal'; `concordam` = os dois a 10%). O FIM não: na seladora a B fica na borda
+  do tapete e o fim passa por ela já no tapete (no vídeo de 18/11, pelo fim de
+  1,4 a 2,4 s; pela ponta, 1,45 a 1,53). ⚠ As caixas são achadas na GRADE de 40
+  ms (`naGrade`), não nos quadros que chegam: a 8× o navegador entrega ~1 quadro a
+  cada 130 ms, e a média de 0,5 s sobre poucos quadros vira escada — no vídeo de
+  teste a 6,0 m/min o caixa a caixa dava 5,5. Fixture real:
+  `test/fixtures/sinal-seladora-27s.json` (só números: ms, fração A, fração B).
 - **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão
   mostram o `normalMs` da `leituraPecaAPeca` — o "por volume sem as lacunas"
   do Volume a volume, o passo da linha —, com "—" abaixo de 10 intervalos. A medição vai direto ao `/sync`, sem a fila

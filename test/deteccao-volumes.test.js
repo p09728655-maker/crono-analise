@@ -15,8 +15,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   AREA_MINIMA, ATRASO_MINIMO_MS, CORRELACAO_MINIMA, JANELA_MAXIMA_MS, LADO_MINIMO, TESTE_MINIMO_MS, TESTE_MS, areaDaImagem,
-  atrasoEntreFaixas, congelarLinhaB, distanciaDaLeitura, esteiraPelasLinhas, intervaloDaLinha, intervaloTipico,
-  linhaBDaLeitura, linhaBValida, mesmaLinha, periodoDoSinal, soLinha, avaliarTeste, detectarVolumes, ehPapelao, fracaoPapelao, intervalosLongos,
+  DISPERSAO_MAXIMA_CAIXA, MIN_PARES_CAIXA, atrasoCaixaACaixa, atrasoEntreFaixas, congelarLinhaB, distanciaDaLeitura,
+  esteiraPelasLinhas, intervaloDaLinha, intervaloTipico, linhaBDaLeitura, linhaBValida, mesmaLinha, ocupacaoTipica,
+  periodoDoSinal, soLinha, avaliarTeste, detectarVolumes, ehPapelao, fracaoPapelao, intervalosLongos,
   limiaresDoSinal, pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
 } from '../src/domain/deteccaoVolumes.js';
 import {
@@ -690,5 +691,109 @@ describe('A ESTEIRA PELAS LINHAS A E B (v2.113.0): velocidade e entre-pecas medi
     expect(retanguloValido({ x: 0.6, y: 0.6, largura: 0.005, altura: 0.01 })).toBe(false);
     expect(LADO_MINIMO).toBe(0.004);
     expect(AREA_MINIMA).toBe(0.0003);
+  });
+});
+
+describe('O ATRASO CAIXA A CAIXA (v2.114.0): a ponta de cada caixa de A ate B, quando as linhas pegam as caixas certinho', () => {
+  // Caixas limpas: 2 s na faixa, uma a cada 8 s; a B ve' a mesma caixa 1,2 s depois.
+  const limpas = ({ atraso = 1200, extraB = false } = {}) => {
+    let semente = 13;
+    const r = () => { semente = (semente * 16807) % 2147483647; return semente / 2147483647; };
+    const ent = Array.from({ length: 12 }, (_, k) => 3000 + 8000 * k);
+    const naA = (ms) => ent.some((e) => ms >= e && ms < e + 2000);
+    const naB = (ms) => naA(ms - atraso) || (extraB && ms >= 50500 && ms < 52500);
+    const am = [];
+    for (let ms = 0; ms < 100000; ms += 110 + Math.round(r() * 40)) {
+      am.push({ ms, fracao: (naA(ms) ? 0.9 : 0.05) + (r() - 0.5) * 0.06, fracaoB: (naB(ms) ? 0.9 : 0.05) + (r() - 0.5) * 0.06 });
+    }
+    return am;
+  };
+
+  it('caixas limpas: casa uma a uma, mediana certa, e a leitura usa o caixa a caixa', () => {
+    const c = atrasoCaixaACaixa(limpas(), { limiteMs: 3200 });
+    expect(c.valido).toBe(true);
+    expect(c.pares).toBeGreaterThanOrEqual(10);
+    expect(Math.abs(c.atrasoMs - 1200)).toBeLessThan(60);
+    const l = linhaBDaLeitura(limpas(), Array.from({ length: 12 }, (_, k) => 5000 + 8000 * k));
+    expect(l.metodo).toBe('caixa');
+    expect(l.concordam).toBe(true);
+    expect(linhaBValida(l)).toBe(true);
+  });
+
+  it('uma caixa a mais na B (um vulto) nao casa com a errada: fica de fora', () => {
+    const c = atrasoCaixaACaixa(limpas({ extraB: true }), { limiteMs: 3200 });
+    expect(c.valido).toBe(true);
+    expect(Math.abs(c.atrasoMs - 1200)).toBeLessThan(60);
+  });
+
+  it('a B longe demais (alem da janela): nada casa, e a leitura fica no sinal (que recusa a copia negativa)', () => {
+    const am = limpas({ atraso: 5000 });
+    expect(atrasoCaixaACaixa(am, { limiteMs: 3200 }).pares).toBe(0);
+    const l = linhaBDaLeitura(am, Array.from({ length: 12 }, (_, k) => 5000 + 8000 * k));
+    expect(l.metodo).toBe('sinal');
+    expect(linhaBValida(l)).toBe(false);
+  });
+
+  it('o SINAL REAL DA SELADORA (27 s): a ponta leva ~1,5 s, caixa a caixa; o sinal inteiro diverge 11% e a tela avisa', () => {
+    const real = JSON.parse(readFileSync(new URL('./fixtures/sinal-seladora-27s.json', import.meta.url)));
+    const am = real.amostras.map(([ms, fracao, fracaoB]) => ({ ms, fracao, fracaoB }));
+    const r = detectarVolumes(am);
+    const l = linhaBDaLeitura(am, saidasDosVolumes(r).marcasMs, { ocupacaoMs: ocupacaoTipica(r.volumes) });
+    expect(l.metodo).toBe('caixa');
+    expect(l.caixaACaixa.pares).toBe(MIN_PARES_CAIXA);
+    expect(l.caixaACaixa.dispersao).toBeLessThan(DISPERSAO_MAXIMA_CAIXA);
+    expect(Math.abs(l.atrasoMs - 1500)).toBeLessThan(50);
+    expect(l.concordam).toBe(false); // o sinal inteiro deu ~1,67 s
+    const e = esteiraPelasLinhas({ ...l, distanciaMm: real.distanciaMm, comprimentoMm: real.caixaMm });
+    expect(e.velocidadeMMin).toBeGreaterThan(12);
+    expect(e.velocidadeMMin).toBeLessThan(13);
+    expect(e.suspeito).toBeNull(); // a velocidade pela caixa (~13 m/min) concorda
+  });
+
+  it('a ponta nao depende do ritmo de quadros: o mesmo video com 1 quadro a cada 40 ms ou ~130 ms (a leitura a 8x) dá o mesmo tempo', () => {
+    // A v2.114.0 em teste: na media de 0,5 s sobre os quadros que chegavam, a
+    // ponta virava escada e o video de teste a 6,0 m/min dava 5,5.
+    const real = JSON.parse(readFileSync(new URL('./fixtures/sinal-seladora-27s.json', import.meta.url)));
+    const am = real.amostras.map(([ms, fracao, fracaoB]) => ({ ms, fracao, fracaoB }));
+    const cheio = atrasoCaixaACaixa(am, { limiteMs: 2400 }).atrasoMs;
+    for (const passo of [2, 3.33, 4, 5]) {
+      const ralo = am.filter((_, i) => i === 0 || Math.floor(i / passo) !== Math.floor((i - 1) / passo));
+      const c = atrasoCaixaACaixa(ralo, { limiteMs: 2400 });
+      expect(c.valido).toBe(true);
+      expect(Math.abs(c.atrasoMs - cheio) / cheio).toBeLessThan(0.03);
+    }
+    // A ponta leva 190 ms para cobrir a faixa (como no video de teste), e o
+    // navegador entrega 3 quadros a cada 10 (~133 ms): o tempo de cada caixa
+    // fica no lugar, sem a escada (antes: 1,105 s em todas, 10% a mais).
+    const rampa = (t) => {
+      const u = (((t % 8000) + 8000) % 8000) - 2000;
+      if (u < 0 || u > 2190) return 0.05;
+      if (u < 190) return 0.05 + (0.85 * u) / 190;
+      return u > 2000 ? 0.05 + (0.85 * (2190 - u)) / 190 : 0.9;
+    };
+    const quadros = [];
+    for (let i = 0; i * 40 < 60000; i++) {
+      if (i % 10 === 0 || i % 10 === 3 || i % 10 === 7) quadros.push({ ms: i * 40, fracao: rampa(i * 40), fracaoB: rampa(i * 40 - 1000) });
+    }
+    const c = atrasoCaixaACaixa(quadros, { limiteMs: 3200 });
+    expect(Math.abs(c.atrasoMs - 1000)).toBeLessThan(50); // antes, 105 ms (10%)
+    expect(c.ateMs - c.deMs).toBeLessThan(60);
+  });
+
+  it('chapa coberta (como na Emb inicio): os tempos caixa a caixa se espalham e a leitura fica no sinal inteiro', () => {
+    // Reproduzido com sinais sinteticos de casamento ruim: tempos espalhados.
+    let semente = 21;
+    const r = () => { semente = (semente * 16807) % 2147483647; return semente / 2147483647; };
+    const ent = Array.from({ length: 12 }, (_, k) => 3000 + 8000 * k);
+    const desvio = ent.map(() => 600 + r() * 1800); // 0,6 a 2,4 s: nao concordam
+    const naA = (ms) => ent.some((e) => ms >= e && ms < e + 2000);
+    const naB = (ms) => ent.some((e, k) => ms >= e + desvio[k] && ms < e + desvio[k] + 2000);
+    const am = [];
+    for (let ms = 0; ms < 100000; ms += 110 + Math.round(r() * 40)) {
+      am.push({ ms, fracao: (naA(ms) ? 0.9 : 0.05), fracaoB: (naB(ms) ? 0.9 : 0.05) });
+    }
+    const c = atrasoCaixaACaixa(am, { limiteMs: 3200 });
+    expect(c.valido).toBe(false);
+    expect(c.dispersao).toBeGreaterThan(DISPERSAO_MAXIMA_CAIXA);
   });
 });
