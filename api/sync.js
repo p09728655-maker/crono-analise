@@ -14,8 +14,8 @@
 import { autenticar, exigirPapel } from './_lib/auth.js';
 import { ErroHttp, erroValidacao, handler, json, lerCorpo, permitir } from './_lib/http.js';
 import {
-  booleano, dataIso, hora, inteiro, lista, marcasDaConferencia, paradasDaConferencia, relogioDasMarcas,
-  setupDasMarcas, texto, uuid,
+  booleano, dataIso, esteiraDaConferencia, hora, inteiro, lista, marcasDaConferencia, paradasDaConferencia,
+  relogioDasMarcas, setupDasMarcas, texto, uuid,
 } from './_lib/validar.js';
 
 const MAX_ITENS = 500;
@@ -135,6 +135,8 @@ export default handler(async (req, res) => {
       marcasMs,
       marcasRelogioMs,
       marcasSetupMs: setupDasMarcas(conferencias[i].marcasSetupMs, { marcas: marcasMs, relogio: marcasRelogioMs }),
+      // A esteira pelas linhas A e B (v2.115.0): so' por video; o tablet nao manda.
+      esteira: esteiraDaConferencia(conferencias[i].esteira, { origem: c.origem }),
     };
   });
 
@@ -230,13 +232,17 @@ export default handler(async (req, res) => {
         INSERT INTO conferencias
           (client_id, empresa_id, maquina, peca,
            iniciado_em, finalizado_em, duracao_ms, pecas, ciclos_por_peca, furacao_passante, observacao, salvo_em,
-           marcas_ms, marcas_relogio_ms, marcas_setup_ms, origem)
+           marcas_ms, marcas_relogio_ms, marcas_setup_ms, origem,
+           esteira_distancia_mm, esteira_atraso_ms, esteira_metodo, esteira_caixas, esteira_intervalo_ms, esteira_caixa_mm)
         SELECT ${c.clientId}, ${empresaId}, ${c.maquina}, ${c.peca},
                p.ini,
                -- Periodo que atravessa a meia-noite: o fim caiu no dia seguinte.
                CASE WHEN p.fim < p.ini THEN p.fim + interval '1 day' ELSE p.fim END,
                ${c.duracaoMs}, ${c.pecas}, ${c.ciclosPorPeca}, ${c.furacaoPassante}, ${c.observacao}, ${c.salvoEm},
-               ${c.marcasMs}::integer[], ${c.marcasRelogioMs}::integer, ${c.marcasSetupMs}::integer, ${c.origem}
+               ${c.marcasMs}::integer[], ${c.marcasRelogioMs}::integer, ${c.marcasSetupMs}::integer, ${c.origem},
+               ${c.esteira?.distanciaMm ?? null}::integer, ${c.esteira?.atrasoMs ?? null}::integer,
+               ${c.esteira?.metodo ?? null}::text, ${c.esteira?.caixas ?? null}::integer,
+               ${c.esteira?.intervaloMs ?? null}::integer, ${c.esteira?.caixaMm ?? null}::integer
           FROM periodo p
         ${c.origem === 'video' ? tx`
         -- POR VIDEO, salvar de novo SUBSTITUI (v2.99.2). O PC salva direto,
@@ -254,7 +260,10 @@ export default handler(async (req, res) => {
           ciclos_por_peca = EXCLUDED.ciclos_por_peca, furacao_passante = EXCLUDED.furacao_passante,
           observacao = EXCLUDED.observacao, salvo_em = EXCLUDED.salvo_em,
           marcas_ms = EXCLUDED.marcas_ms, marcas_relogio_ms = EXCLUDED.marcas_relogio_ms,
-          marcas_setup_ms = EXCLUDED.marcas_setup_ms
+          marcas_setup_ms = EXCLUDED.marcas_setup_ms,
+          esteira_distancia_mm = EXCLUDED.esteira_distancia_mm, esteira_atraso_ms = EXCLUDED.esteira_atraso_ms,
+          esteira_metodo = EXCLUDED.esteira_metodo, esteira_caixas = EXCLUDED.esteira_caixas,
+          esteira_intervalo_ms = EXCLUDED.esteira_intervalo_ms, esteira_caixa_mm = EXCLUDED.esteira_caixa_mm
           WHERE conferencias.origem = 'video' AND conferencias.empresa_id = EXCLUDED.empresa_id
             AND conferencias.editada_em IS NULL
             -- As de antes da coluna: analisada ou arquivada ja' e' mexida.

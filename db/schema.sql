@@ -447,6 +447,41 @@ ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_origem_chk;
 ALTER TABLE conferencias ADD CONSTRAINT conferencias_origem_chk
   CHECK (origem IN ('tablet', 'video') AND (origem <> 'video' OR marcas_ms IS NOT NULL));
 
+-- A ESTEIRA PELAS LINHAS A E B (v2.115.0, PPCP 19/11/2026: "coloca na
+-- impressao velocidade e entre pecas"). A medicao por video que leu o
+-- video com as duas linhas guarda o que mediu a esteira, e a folha do Takt
+-- Time imprime. Guarda as ENTRADAS da conta, nao o resultado: a velocidade
+-- (distancia / tempo), o caixa + vao (velocidade x intervalo) e o entre-
+-- pecas (caixa + vao - caixa) saem delas pela mesma conta da tela
+-- (esteiraPelasLinhas), e o papel diz de onde veio cada numero.
+--  - distancia_mm: de A ate' B, medida na esteira;
+--  - atraso_ms: o tempo da ponta da caixa de A ate' B (a mediana);
+--  - metodo: 'caixa' (caixa a caixa, pela ponta) ou 'sinal' (o video inteiro);
+--  - caixas: quantas caixas o caixa a caixa casou (so' nele);
+--  - intervalo_ms: o intervalo tipico entre as caixas (sem ele, sem caixa +
+--    vao: o intervalo nao fechou);
+--  - caixa_mm: a medida da caixa usada (sem ela, sem entre-pecas).
+-- E' o que a linha PRATICOU naquele video, nao um padrao: nao entra no
+-- tempo-alvo nem no painel. So' existe na medicao por video, e o tempo e a
+-- distancia andam juntos (um sem o outro nao da' velocidade).
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS esteira_distancia_mm integer;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS esteira_atraso_ms integer;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS esteira_metodo text;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS esteira_caixas integer;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS esteira_intervalo_ms integer;
+ALTER TABLE conferencias ADD COLUMN IF NOT EXISTS esteira_caixa_mm integer;
+ALTER TABLE conferencias DROP CONSTRAINT IF EXISTS conferencias_esteira_chk;
+ALTER TABLE conferencias ADD CONSTRAINT conferencias_esteira_chk CHECK (
+  (esteira_atraso_ms IS NULL AND esteira_distancia_mm IS NULL AND esteira_metodo IS NULL
+    AND esteira_caixas IS NULL AND esteira_intervalo_ms IS NULL AND esteira_caixa_mm IS NULL)
+  -- IS NOT NULL por extenso: num CHECK, NULL > 0 da' NULL, e NULL passa.
+  OR (origem = 'video' AND esteira_atraso_ms IS NOT NULL AND esteira_distancia_mm IS NOT NULL
+    AND esteira_metodo IS NOT NULL AND esteira_atraso_ms > 0 AND esteira_distancia_mm > 0
+    AND esteira_metodo IN ('caixa', 'sinal')
+    AND (esteira_caixas IS NULL OR (esteira_metodo = 'caixa' AND esteira_caixas > 0))
+    AND (esteira_intervalo_ms IS NULL OR esteira_intervalo_ms > 0)
+    AND (esteira_caixa_mm IS NULL OR esteira_caixa_mm > 0)));
+
 -- EDITADA NO PC (v2.99.2): a ultima vez que alguem mexeu na medicao pelo
 -- PC — produto, paradas, analise ou arquivo (api/conferencias.js). NULA =
 -- esta' como chegou do tablet ou do video.

@@ -387,10 +387,16 @@ const medicao = {
   // A lista ja' traz o relogio entre toques (v2.106.0): e' dele que sai o
   // "ultima medicao" da lista de tempos-alvo, sem abrir uma a uma.
   marcas_relogio_ms: marcas.at(-1) - marcas[0],
+  // A esteira pelas linhas A e B (v2.115.0): a folha imprime velocidade e entre-pecas.
+  esteira_distancia_mm: 310, esteira_atraso_ms: 1604, esteira_metodo: 'caixa', esteira_caixas: 51,
+  esteira_intervalo_ms: 6100, esteira_caixa_mm: 440,
 };
 // Uma segunda, mais antiga: para trocar de medicao e salvar a analise.
 const medicao2 = {
   ...medicao, id: '00000000-0000-0000-0000-00000000c0f2', peca: 'Toucador Magic New', observacao: '',
+  // Sem a esteira: so' a primeira foi lida com as linhas A e B.
+  esteira_atraso_ms: null, esteira_distancia_mm: null, esteira_metodo: null, esteira_caixas: null,
+  esteira_intervalo_ms: null, esteira_caixa_mm: null,
   iniciado_em: new Date(hoje.getTime() - 9000000).toISOString(),
   finalizado_em: new Date(hoje.getTime() - 8000000).toISOString(),
   salvo_em: new Date(hoje.getTime() - 8000000).toISOString(),
@@ -572,6 +578,9 @@ checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some 
   checar(/DEIXARAM DE SER EMBALADOS\s*2 · teriam saído 16/i.test(textoFolha) && /DE ONDE VEIO\s*paradas 0 · lacunas 2/i.test(textoFolha),
     'impressao: o total e de onde veio na identificacao');
   checar(!/mesmo da lista/.test(textoFolha), 'impressao: o papel nao fala de uma lista que ele nao tem');
+  const t = textoFolha.replace(/\s+/g, ' ');
+  checar(/Esteira, pelas linhas A e B: velocidade 11\.6 m\/min · caixa \+ vão 1179 mm \(uma caixa a cada 6\.1 s\) · entre-peças ≈ 739 mm \(caixa de 440 mm\)\. A ponta da caixa leva 1\.60 s de A até B \(310 mm\), a mediana de 51 caixas, caixa a caixa\./.test(t),
+    `impressao: a esteira pelas linhas A e B, com velocidade e entre-pecas (${(/Esteira, pelas linhas.{0,120}/.exec(t) || ['nao achou'])[0]})`);
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });

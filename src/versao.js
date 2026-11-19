@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.115.0',
+    data: '2026-11-19',
+    titulo: 'Velocidade e entre-peças na impressão do Takt Time',
+    itens: [
+      'A ESTEIRA VAI COM A MEDIÇÃO SALVA: quando a leitura do vídeo inteiro mediu a esteira pelas linhas A e B, salvar a medição leva junto a distância de A até B, o tempo da ponta da caixa, como ele foi medido (caixa a caixa ou pelo vídeo inteiro), o intervalo entre as caixas e a medida da caixa. Os números do teste de 2 min não vão. Só vai o que o quadro da esteira mostra: com aviso de linhas trocadas, longe ou perto demais, ou com a velocidade que não fecha com a caixa, nada vai.',
+      'NA FOLHA DO TAKT TIME (e no volume a volume da tela) sai a linha "Esteira, pelas linhas A e B": velocidade, caixa + vão, entre-peças e de onde veio cada número (a distância, o tempo da ponta e de quantas caixas). Sem a medida da caixa, o entre-peças sai "—" e a folha diz que falta a caixa. A linha vem depois das contas do tempo-alvo e da semana: o gráfico continua na 1ª página, e ela vai para a 2ª quando a 1ª está cheia.',
+      'A MEDIDA DA CAIXA digitada no quadro da linha B (a fechada, no fim da linha) fica guardada com o rascunho da marcação e vale para a máquina e o produto em que foi digitada.',
+      'Medição salva antes desta versão não tem a esteira. Os números são o que a linha praticou naquele vídeo, não um padrão: não entram no tempo-alvo nem no painel.',
+    ],
+  },
+  {
     versao: '2.114.0',
     data: '2026-11-18',
     titulo: 'Linhas A e B: o tempo de A até B pela ponta de cada caixa',

@@ -13,8 +13,8 @@ import {
 } from '../../../domain/medicaoPorVideo.js';
 import {
   CORRELACAO_MINIMA, PISO_PERMANENCIA_MS, TESTE_MS, areaDaImagem, avaliarTeste, congelarLinhaB, detectarVolumes,
-  distanciaDaLeitura, ehPapelao, esteiraPelasLinhas, intervalosLongos, linhaBDaLeitura, linhaBValida, ocupacaoTipica,
-  pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
+  distanciaDaLeitura, ehPapelao, esteiraParaSalvar, esteiraPelasLinhas, intervalosLongos, linhaBDaLeitura,
+  linhaBValida, ocupacaoTipica, pontoNaImagem, retanguloEntre, retanguloValido, saidasDosVolumes, trechoDoTeste,
 } from '../../../domain/deteccaoVolumes.js';
 import {
   ALTURA_MEDIDA, LARGURA_MEDIDA, VELOCIDADE, analisarVideo, criarMedidor,
@@ -345,6 +345,17 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const alvos = useTemposAlvo();
   // A semana da filmagem decide a linha "a semana pede" (v2.107.0).
   const alvo = alvos.alvoDe(campos.produto, inicioValido ? inicioData : null);
+  /* A CAIXA da conta do entre-pecas: a do cadastro do produto; o analista
+     troca no quadro da linha B quando a camera e' a do fim da linha (a caixa
+     passa fechada). Mora aqui, e nao no quadro, desde a v2.115.0: vai com a
+     medicao salva (esteiraParaSalvar) e com o rascunho. Vale para a maquina
+     e o produto em que foi digitada — no comeco da linha a mesma caixa
+     passa aberta. */
+  const [caixa, setCaixa] = useState(null);
+  const chaveCaixa = `${maquina?.nome || ''}|${campos.produto.trim()}`;
+  const caixaTexto = caixa?.chave === chaveCaixa ? caixa.texto : null;
+  const trocarCaixa = (texto) => setCaixa(texto == null ? null : { chave: chaveCaixa, texto });
+  const caixaMm = caixaTexto != null ? mmDigitado(caixaTexto) : (alvo?.medida > 0 ? alvo.medida : null);
 
   /* --------------------------------------------------------- arquivo */
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -411,6 +422,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     setMexida(r.mexida || null);
     setAutomaticas(r.automaticas || []);
     setAutomatica(r.automaticaResultado ? { estado: 'pronto', resultado: r.automaticaResultado } : { estado: 'parado' });
+    setCaixa(r.caixa || null);
     setFimMs(null);
     setRascunho(null);
     // A maquina guardada tem de estar ativa no cadastro: sem ela, o Salvar
@@ -476,6 +488,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     // O que a leitura apontou para conferir (caixas encostadas, intervalos
     // longos...): sem isto, o F5 voltava com as marcas e sem os avisos.
     automaticaResultado: automatica.resultado || null,
+    // A caixa digitada para o entre-pecas (v2.115.0): vai com a medicao.
+    caixa,
     ...troca,
   });
   useEffect(() => {
@@ -484,7 +498,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
     // abrir um video e nao marcar nada nao vira "marcacao em andamento".
     const r = rascunhoAtual();
     if (rascunhoTemAlgo(r)) gravarRascunho(r); else apagarRascunho(r.arquivo);
-  }, [arquivo, clientId, campos, marcacao, observacao, mexida, etapa, automaticas, automatica.resultado]);
+  }, [arquivo, clientId, campos, marcacao, observacao, mexida, etapa, automaticas, automatica.resultado, caixa]);
 
   /* ---------------------------------------------------------- player */
   useEffect(() => {
@@ -932,6 +946,9 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       observacao: observacao.trim() || null, paradas: med.paradas,
       marcasMs: med.marcasMs, marcasRelogioMs: med.marcasRelogioMs, marcasSetupMs: med.marcasSetupMs,
       salvoEm: med.salvoEm,
+      // A esteira pelas linhas A e B da LEITURA do video (nunca a do teste de
+      // 2 min), so' quando o quadro mostra os numeros (v2.115.0).
+      esteira: esteiraParaSalvar({ linhaB: automatica.resultado?.linhaB, retangulo, caixaMm }),
     };
     // Antes de enviar: se a resposta nao voltar e o PC fechar, o rascunho ja'
     // sabe que esta marcacao pode estar no servidor.
@@ -1195,6 +1212,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                       aoDesenharB={() => desenharRetangulo('B')} aoTirarB={tirarLinhaB}
                       aoDistancia={trocarDistancia}
                       aoTestar={testarRetangulo} lacunasVideo={lacunasVideo} alvo={alvo}
+                      caixaTexto={caixaTexto} caixaMm={caixaMm} aoCaixa={trocarCaixa}
                       aoLer={lerAutomatica} aoParar={() => setAutomatica({ estado: 'parado' })}
                       aoApagar={apagarAutomatica}
                       aoIr={(ms) => { refVideo.current?.pause(); irPara(ms); }}
@@ -1925,13 +1943,8 @@ function Tempos({ lista, aoIr, rotulo = (ms) => emRelogio(ms) }) {
 function MarcacaoAutomatica({
   url, refVideoLeitura, maquina, retangulo, desenhando, automatica, progresso, listaVazia, conferencia,
   agoraMs, podeDesenhar, teste, inicioLeituraMs, aoDesenhar, aoCancelarDesenho, aoTestar, aoLer, aoParar, aoApagar,
-  aoIr, lacunasVideo, alvo, aoDesenharB, aoTirarB, aoDistancia,
+  aoIr, lacunasVideo, alvo, aoDesenharB, aoTirarB, aoDistancia, caixaTexto, caixaMm, aoCaixa,
 }) {
-  // A CAIXA da conta do entre-pecas: a do cadastro do produto; o analista
-  // troca aqui quando a camera e' a do fim da linha (a caixa passa fechada).
-  // Nao e' guardada: e' do produto, e o cartao some ao voltar ao preparo.
-  const [caixaTexto, setCaixaTexto] = useState(null);
-  const caixaMm = caixaTexto != null ? mmDigitado(caixaTexto) : (alvo?.medida > 0 ? alvo.medida : null);
   const [confirmarApagar, setConfirmarApagar] = useState(false);
   const { estado, resultado } = automatica;
   const testando = estado === 'lendo' && automatica.modo === 'teste';
@@ -2054,7 +2067,7 @@ function MarcacaoAutomatica({
               )}
               <LinhaB
                 retangulo={retangulo} alvo={alvo} podeDesenhar={podeDesenhar} caixaTexto={caixaTexto}
-                aoCaixa={setCaixaTexto} aoDesenhar={aoDesenharB} aoTirar={aoTirarB} aoDistancia={aoDistancia}
+                aoCaixa={aoCaixa} aoDesenhar={aoDesenharB} aoTirar={aoTirarB} aoDistancia={aoDistancia}
               />
               <div style={ev.linhaBotoes}>
                 <button type="button" style={testeBom ? est.botaoSecundario : est.botaoImprimir} onClick={aoTestar}>
@@ -2405,7 +2418,8 @@ function EsteiraAB({
             O entre-peças é o vão que a linha PRATICA neste vídeo, não um padrão, e é a diferença de dois números próximos
             (caixa + vão − caixa): por isso o "≈" — ele muda de um trecho para outro do mesmo vídeo; o da leitura inteira vale
             mais que o do teste de 2 min. Levá-lo ao cadastro faz o tempo-alvo virar o ritmo deste vídeo ÷ a eficiência; o
-            padrão é decisão do PPCP. Estes números não vão com a medição salva: anote o que precisar.
+            padrão é decisão do PPCP. Os números da leitura do vídeo inteiro vão com a medição salva e saem na folha do
+            Takt Time; os do teste de 2 min, não.
           </p>
         </>
       )}

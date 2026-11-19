@@ -50,7 +50,13 @@ const [anoSp, mesSp, diaSp] = new Intl.DateTimeFormat('en-CA', { timeZone: FUSO 
 const dois = (n) => String(n).padStart(2, '0');
 const HOJE_8H = `${anoSp}-${dois(mesSp)}-${dois(diaSp)}T08:00`;
 
+const enviados = [];
 async function simularServidor(pagina) {
+  await pagina.route('**/api/sync**', (rota) => {
+    const lote = rota.request().postDataJSON().conferencias || [];
+    enviados.push(...lote);
+    return rota.fulfill({ json: { recebidos: lote.length, novos: lote.length, atualizados: 0, clientIds: lote.map((c) => c.clientId) } });
+  });
   await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas: [] } })
     : rota.fulfill({ json: CADASTRO })));
@@ -237,6 +243,23 @@ await auto.getByText(/A leitura marcou/).waitFor({ timeout: 120000 });
     `a leitura do video todo mede a mesma esteira: ${n.vel} m/min e entre-pecas ${n.entre} mm`);
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-esteira-leitura.png` });
+
+/* ------------------- salvar: a esteira vai com a medicao (v2.115.0) */
+// O que a leitura mediu (100 mm em ~1,0 s, uma caixa a cada 8 s) e a caixa
+// digitada no quadro (200 mm) sobem com a medicao, para a folha do Takt Time.
+await irPara(p, 39);
+await p.evaluate(() => document.activeElement?.blur());
+await p.keyboard.press('f');
+const revisar = p.locator('[aria-label="Revisar a medição"]');
+await revisar.waitFor({ timeout: 6000 });
+await revisar.getByRole('button', { name: 'Salvar medição' }).click();
+await p.locator('[aria-label="Medição salva"]').waitFor({ timeout: 6000 });
+{
+  const e = enviados.at(-1)?.esteira;
+  checar(e?.distanciaMm === 100 && e?.metodo === 'caixa' && e?.caixas >= 3 && e?.caixaMm === 200
+    && Math.abs(e?.atrasoMs - 1000) <= 60 && Math.abs(e?.intervaloMs - 8000) <= 200,
+  `a esteira sobe com a medicao salva: distancia, tempo de A ate B, caixa a caixa, intervalo e a caixa (${JSON.stringify(e)})`);
+}
 
 checar(!erros.length, `sem erro no console da pagina${erros.length ? `: ${erros.join(' | ')}` : ''}`);
 await navegador.close();

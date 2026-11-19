@@ -1218,6 +1218,55 @@ rodar('API — integracao com Postgres', () => {
     expect(doColetor.statusCode).toBe(403);
   });
 
+  it('medicao por video com a ESTEIRA das linhas A e B (v2.115.0): grava, a lista traz, o reenvio troca', async () => {
+    const id = crypto.randomUUID();
+    const base = {
+      clientId: id, maquina: 'EMBALAGEM 01', peca: 'Rack Lua', duracaoMs: 300000, origem: 'video',
+      salvoEm: new Date().toISOString(), pecas: 3, marcasMs: [60000, 120000, 180000],
+    };
+    const enviar = async (extra) => {
+      const res = fingirRes();
+      await sync(fingirReq({ metodo: 'POST', corpo: { conferencias: [{ ...base, ...extra }] } }), res);
+      return res;
+    };
+    const lerLinha = async () => {
+      const lista = fingirRes();
+      await conferenciasApi(fingirReq({ metodo: 'GET' }), lista);
+      // So' esta medicao tem esteira neste banco de teste.
+      return lista.corpo.conferencias.find((x) => x.esteira_atraso_ms != null);
+    };
+    const esteira = { distanciaMm: 310, atrasoMs: 1604, metodo: 'caixa', caixas: 51, intervaloMs: 6100, caixaMm: 440 };
+    const r1 = await enviar({ esteira });
+    expect([r1.statusCode, r1.corpo.novos]).toEqual([200, 1]);
+    expect(await lerLinha()).toMatchObject({
+      esteira_distancia_mm: 310, esteira_atraso_ms: 1604, esteira_metodo: 'caixa', esteira_caixas: 51,
+      esteira_intervalo_ms: 6100, esteira_caixa_mm: 440,
+    });
+
+    // Salvar de novo (sem a caixa, pelo video inteiro): a esteira e' a da versao nova.
+    const r2 = await enviar({ esteira: { distanciaMm: 310, atrasoMs: 1670, metodo: 'sinal', caixas: 7, intervaloMs: 6100 } });
+    expect([r2.statusCode, r2.corpo.atualizados]).toEqual([200, 1]);
+    const [linha] = await sql`
+      SELECT esteira_atraso_ms, esteira_metodo, esteira_caixas, esteira_caixa_mm FROM conferencias WHERE client_id = ${id}`;
+    // O numero de caixas so' existe no caixa a caixa.
+    expect(linha).toEqual({ esteira_atraso_ms: 1670, esteira_metodo: 'sinal', esteira_caixas: null, esteira_caixa_mm: null });
+
+    // Esteira que nao serve nao derruba a medicao: ela salva, sem a esteira.
+    const r3 = await enviar({ esteira: { distanciaMm: -5, atrasoMs: 1600, metodo: 'caixa' } });
+    expect([r3.statusCode, r3.corpo.atualizados]).toEqual([200, 1]);
+    const [semEsteira] = await sql`SELECT esteira_atraso_ms, esteira_distancia_mm FROM conferencias WHERE client_id = ${id}`;
+    expect(semEsteira).toEqual({ esteira_atraso_ms: null, esteira_distancia_mm: null });
+
+    // O banco recusa esteira em medicao do tablet, e o tempo sem a distancia.
+    await expect(sql`
+      INSERT INTO conferencias (client_id, empresa_id, maquina, duracao_ms, pecas, iniciado_em, finalizado_em,
+                                salvo_em, esteira_distancia_mm, esteira_atraso_ms, esteira_metodo)
+      VALUES (${crypto.randomUUID()}, ${EMPRESA}, 'X', 60000, 1, now() - interval '1 minute', now(), now(),
+              310, 1600, 'caixa')`).rejects.toThrow(/conferencias_esteira_chk/);
+    await expect(sql`UPDATE conferencias SET esteira_distancia_mm = NULL, esteira_atraso_ms = 1600,
+      esteira_metodo = 'caixa' WHERE client_id = ${id}`).rejects.toThrow(/conferencias_esteira_chk/);
+  });
+
   it('medicao por video pelo token do ANALISTA (RLS): substitui so\' enquanto ninguem mexeu no PC', async () => {
     // O caminho de producao: JWT de analista, dentro da RLS e da transacao
     // (o token de servico do teste acima nao passa por ela).

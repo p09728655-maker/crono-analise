@@ -211,6 +211,9 @@ export default handler(async (req, res) => {
                -- (dois numeros, v2.106.0): o "por volume no periodo" de cada
                -- medicao na lista de tempos-alvo do PC, sem abrir uma a uma.
                c.marcas_relogio_ms, c.marcas_setup_ms,
+               -- A esteira pelas linhas A e B (v2.115.0), para a folha do Takt Time.
+               c.esteira_distancia_mm, c.esteira_atraso_ms, c.esteira_metodo, c.esteira_caixas,
+               c.esteira_intervalo_ms, c.esteira_caixa_mm,
                coalesce((
                  SELECT jsonb_agg(jsonb_build_object(
                           'motivo', p.motivo,

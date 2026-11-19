@@ -819,3 +819,30 @@ export function distanciaDaLeitura(linhaB, retangulo) {
   const mesmas = mesmaLinha(linhaB?.linhas?.a, soLinha(retangulo)) && mesmaLinha(linhaB?.linhas?.b, soLinha(retangulo?.b));
   return { mesmas, distanciaMm: mesmas ? (retangulo?.distanciaMm ?? null) : (linhaB?.distanciaMm ?? null) };
 }
+
+/**
+ * A ESTEIRA QUE VAI COM A MEDICAO SALVA (v2.115.0, PPCP 19/11: "coloca na
+ * impressao velocidade e entre pecas"): as entradas da conta, so' quando a
+ * tela mostra os numeros — linha B valida, com distancia, sem a suspeita de
+ * atraso trocado. O que a tela recusa, o papel nao imprime. A velocidade e o
+ * resto saem delas na folha (esteiraPelasLinhas), a mesma conta da tela.
+ * Inteiros, como o banco guarda (ver `esteira_*` no schema).
+ *
+ * @returns { distanciaMm, atrasoMs, metodo, caixas, intervaloMs, caixaMm } ou null
+ */
+export function esteiraParaSalvar({ linhaB, retangulo, caixaMm } = {}) {
+  if (!linhaBValida(linhaB)) return null;
+  const { distanciaMm } = distanciaDaLeitura(linhaB, retangulo);
+  const caixa = Number(caixaMm) > 0 ? Math.round(Number(caixaMm)) : null;
+  const r = esteiraPelasLinhas({ ...linhaB, distanciaMm, comprimentoMm: caixa });
+  if (!r || r.suspeito) return null;
+  const metodo = linhaB.metodo === 'caixa' ? 'caixa' : 'sinal';
+  return {
+    distanciaMm: Math.round(Number(distanciaMm)),
+    atrasoMs: Math.round(linhaB.atrasoMs),
+    metodo,
+    caixas: metodo === 'caixa' && linhaB.caixaACaixa?.pares > 0 ? linhaB.caixaACaixa.pares : null,
+    intervaloMs: linhaB.intervaloTipicoMs > 0 ? Math.round(linhaB.intervaloTipicoMs) : null,
+    caixaMm: caixa,
+  };
+}
