@@ -45,6 +45,16 @@ const CADASTRO = {
   maquinas: [MAQUINA], grupos: [GRUPO],
   produtos: [{ id: 'p1', nome: 'Rack Sirius 1.6', codigo: null, grupo_id: GRUPO.id, ativo: true }],
 };
+/* O TEMPO-ALVO pela ESTEIRA, com a caixa do cadastro (v2.115.1). O cadastro
+   tem a caixa ABERTA (300 mm), maior que a do video (200): como na seladora,
+   onde ela passa fechada. Digitar 200 no quadro e' o caminho certo; voltar ao
+   cadastro e' o caso do aviso "Confira a caixa" da revisao.
+   (300 + 500) mm a 6 m/min = 8 s de esteira; ÷ 85%. */
+const ALVOS = {
+  estado: 'ok',
+  ref: { metodo: 'esteira', eficiencia: 85, metaUep: 2761, minDia: 527, sUep: 11.45 },
+  produtos: [{ rot: 'Rack Sirius 1.6', uep: 1, alvoMs: 9412, esteiraMs: 8000, medida: 300, vel: 6, entre: 500 }],
+};
 const hoje = new Date();
 const [anoSp, mesSp, diaSp] = new Intl.DateTimeFormat('en-CA', { timeZone: FUSO }).format(hoje).split('-').map(Number);
 const dois = (n) => String(n).padStart(2, '0');
@@ -57,7 +67,9 @@ async function simularServidor(pagina) {
     enviados.push(...lote);
     return rota.fulfill({ json: { recebidos: lote.length, novos: lote.length, atualizados: 0, clientIds: lote.map((c) => c.clientId) } });
   });
-  await pagina.route('**/api/maquinas**', (rota) => (/demanda=1/.test(rota.request().url())
+  await pagina.route('**/api/maquinas**', (rota) => (/[?&]alvo=1/.test(rota.request().url())
+    ? rota.fulfill({ json: ALVOS })
+    : /demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas: [] } })
     : rota.fulfill({ json: CADASTRO })));
   await pagina.route('**/api/motivos-parada**', (rota) => rota.fulfill({ json: { motivos: [] } }));
@@ -231,6 +243,12 @@ await linhaB.getByRole('button', { name: 'Desenhar a linha B' }).click();
 await arrastar(p, { x: 0.61, y: 0.40 }, { x: 0.64, y: 0.60 });
 await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).fill('100');
 await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).press('Tab');
+// De volta a' caixa do CADASTRO (300 mm, a aberta), sem a digitada: e' o caso
+// do aviso "Confira a caixa" na revisao (v2.115.1). O entre-pecas da leitura
+// passa a ser 800 − 300 = 500 mm.
+await linhaB.getByRole('button', { name: 'voltar ao cadastro (300 mm)' }).click();
+checar(/\(do cadastro do produto\)/.test(await linhaB.innerText()),
+  'voltar ao cadastro: a caixa passa a ser a do produto, e o quadro diz');
 
 /* ---------------------------------------------------- a leitura inteira */
 await irPara(p, 0);
@@ -239,14 +257,14 @@ await auto.getByText(/A leitura marcou/).waitFor({ timeout: 120000 });
 {
   const bloco = p.locator('[aria-label="Esteira medida pelas linhas A e B"]');
   const n = await numerosDaEsteira(bloco);
-  checar(Math.abs(n.vel - 6) <= 0.3 && Math.abs(n.entre - 600) <= 40,
-    `a leitura do video todo mede a mesma esteira: ${n.vel} m/min e entre-pecas ${n.entre} mm`);
+  checar(Math.abs(n.vel - 6) <= 0.3 && Math.abs(n.entre - 500) <= 40,
+    `a leitura do video todo mede a mesma esteira: ${n.vel} m/min e entre-pecas ${n.entre} mm (com a caixa do cadastro, 300 mm)`);
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-esteira-leitura.png` });
 
 /* ------------------- salvar: a esteira vai com a medicao (v2.115.0) */
 // O que a leitura mediu (100 mm em ~1,0 s, uma caixa a cada 8 s) e a caixa
-// (200 mm no quadro, trocada para 250 na revisao) sobem com a medicao, para a
+// (a do cadastro, 300 mm, trocada para 250 na revisao) sobem com a medicao, para a
 // folha do Takt Time.
 await irPara(p, 39);
 await p.evaluate(() => document.activeElement?.blur());
@@ -259,12 +277,18 @@ await revisar.waitFor({ timeout: 6000 });
   const bloco = revisar.locator('[aria-label="Esteira que vai com a medição"]');
   const t = (await bloco.innerText().catch(() => '')).replace(/\s+/g, ' ');
   // A mesma folga da leitura (± 0,3 m/min): o navegador nao entrega sempre os mesmos quadros.
-  checar(/velocidade (5\.[789]|6\.[0123]) m\/min · caixa \+ vão \d+ mm .*entre-peças ≈ \d+ mm \(caixa de 200 mm\).*caixa a caixa/.test(t),
+  checar(/velocidade (5\.[789]|6\.[0123]) m\/min · caixa \+ vão \d+ mm .*entre-peças ≈ \d+ mm \(caixa de 300 mm\).*caixa a caixa/.test(t),
     `revisar: a esteira que vai com a medicao, a mesma frase da folha (${t.slice(0, 160)})`);
+  // A caixa veio do CADASTRO: a revisao avisa que e' a aberta, do comeco da
+  // linha — na seladora ela passa fechada e o entre-pecas sairia errado.
+  checar(/Confira a caixa: 300 mm é a do cadastro, a caixa aberta do começo da linha/.test(t)
+    && /digite a medida dela antes de salvar/.test(t),
+  'revisar: com a caixa do cadastro, o aviso "Confira a caixa" aparece');
   const campo = bloco.getByRole('spinbutton', { name: /Comprimento da caixa para o entre-peças/ });
   await campo.fill('250');
   const t2 = (await bloco.innerText()).replace(/\s+/g, ' ');
   checar(/\(caixa de 250 mm\)/.test(t2), 'revisar: trocar a caixa ali refaz o entre-pecas na hora');
+  checar(!/Confira a caixa/.test(t2), 'revisar: digitada a caixa, o aviso sai');
 }
 await revisar.getByRole('button', { name: 'Salvar medição' }).click();
 await p.locator('[aria-label="Medição salva"]').waitFor({ timeout: 6000 });
