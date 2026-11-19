@@ -60,6 +60,13 @@ depender de cor (a fábrica imprime em P&B): tem que ter borda ou fundo.
   transação, e recusar no meio deixa metade gravada.
 
 ### 5. Testes de verdade
+**Toda mudança leva teste de regressão, no mesmo commit** (PPCP, 19/11/2026:
+*"colocar no md toda vez criar teste de regressão"* — ver `CLAUDE.md`). Diff
+que corrige defeito sem um teste que FALHE com o defeito de volta, ou que cria
+conta, regra ou tela sem teste do comportamento → **BLOQUEIA**. Confira por
+mutação: desfaça a correção e rode o teste; se ele continua passando, não
+prova nada.
+
 Rode, não presuma:
 - `npm test` (unidade + `node test/checar-estilos.mjs`)
 - `npm run build`
@@ -89,7 +96,8 @@ Como falha: entrada concreta → resultado errado.
 ```
 
 - **BLOQUEIA**: número errado, dado perdido, falha silenciosa, teste que não
-  prova o que diz provar. Não pode ser entregue assim.
+  prova o que diz provar, mudança sem o seu teste de regressão. Não pode ser
+  entregue assim.
 - **CORRIGIR**: funciona, mas está errado para o usuário (texto que mente,
   papel desatualizado, plural quebrado).
 - **OBSERVAÇÃO**: melhoria real, sem urgência.
