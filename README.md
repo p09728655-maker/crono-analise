@@ -486,7 +486,15 @@ do produto dele**.
   (`esteiraEmColunas` → `fraseDaEsteira`) com o campo da caixa, e avisa quando a
   caixa é a do cadastro: ⚠ o cadastro tem a caixa ABERTA (825 na Mesa Cabeceira
   Sleep); na seladora ela passa fechada (440), e com a do cadastro o
-  entre-peças sai metade do real. Testes: `test/esteira-na-medicao.test.js`
+  entre-peças sai metade do real. **Na folha, em campos na 1ª página**
+  (v2.116.0, PPCP: *"melhorar a informação na impressão, ela é importante"*):
+  `camposDaEsteira(conferencia, alvo)` — velocidade, caixa + vão, entre-peças e a
+  ponta de A até B, com o cadastro do produto ao lado (`alvo.vel`, `alvo.entre`),
+  numa faixa (`data-esteira-folha`) entre os números e o gráfico; o gráfico
+  mede o que vem antes dele e encolhe. A prioridade da 1ª página fica: gráfico,
+  conta do tempo-alvo, e por último a carga da semana (vai para a 2ª quando
+  aperta). A tela do volume a volume segue com a frase (`fraseDaEsteira`): os
+  mesmos números (`contaDaEsteira`, uma conta para as duas). Testes: `test/esteira-na-medicao.test.js`
   (o caminho inteiro no vídeo real), `test/api.integracao.test.js`, e os e2e
   `video-esteira` (sobe com a medição) e `embalagem` (sai na folha).
 - **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão

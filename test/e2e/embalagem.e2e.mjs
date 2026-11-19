@@ -133,6 +133,7 @@ async function fundoDoGraficoNaFolha(pagina, oQue = 'grafico') {
     const folha = document.querySelector('body > .somente-impressao');
     const alvo = oQue === 'conta' ? folha.querySelector('[data-conta-semana]')
       : oQue === 'alvo' ? folha.querySelector('[data-conta-alvo]')
+        : oQue === 'esteira' ? folha.querySelector('[data-esteira-folha]')
         : folha.querySelector('svg[aria-label^="Intervalo entre"]').closest('figure');
     return alvo ? Math.round(alvo.getBoundingClientRect().bottom - folha.getBoundingClientRect().top) : null;
   }, oQue);
@@ -579,8 +580,10 @@ checar(!(await p.locator('#raiz').isVisible()), 'impressao: o resto do app some 
     'impressao: o total e de onde veio na identificacao');
   checar(!/mesmo da lista/.test(textoFolha), 'impressao: o papel nao fala de uma lista que ele nao tem');
   const t = textoFolha.replace(/\s+/g, ' ');
-  checar(/Esteira, pelas linhas A e B: velocidade 11\.6 m\/min · caixa \+ vão 1179 mm \(uma caixa a cada 6\.1 s\) · entre-peças ≈ 739 mm \(caixa de 440 mm\)\. A ponta da caixa leva 1\.60 s de A até B \(310 mm\), a mediana de 51 caixas, caixa a caixa\./.test(t),
-    `impressao: a esteira pelas linhas A e B, com velocidade e entre-pecas (${(/Esteira, pelas linhas.{0,120}/.exec(t) || ['nao achou'])[0]})`);
+  // A ESTEIRA EM CAMPOS na 1a pagina (v2.116.0); sem o cadastro da esteira
+  // (alvo pela UEP), a velocidade diz "medida no video".
+  checar(/ESTEIRA NO VÍDEO linhas A e B o que a linha praticou, não um padrão VELOCIDADE DA ESTEIRA 11\.6 m\/min medida no vídeo CAIXA \+ VÃO 1179 mm uma caixa a cada 6\.1 s ENTRE-PEÇAS ≈ 739 mm caixa de 440 mm PONTA DA CAIXA DE A ATÉ B 1\.60 s 310 mm · mediana de 51 caixas/i.test(t),
+    `impressao: a esteira pelas linhas A e B em campos, com velocidade e entre-pecas (${(/ESTEIRA NO VÍDEO.{0,260}/i.exec(t) || ['nao achou'])[0]})`);
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/pc-folha.png`, fullPage: true });
 await p.emulateMedia({ media: 'screen' });
@@ -647,11 +650,17 @@ const tamanhoDoPdf = async () => {
   if (FOTOS) writeFileSync(`${FOTOS}/pc-folha.pdf`, pdf);
   const fundo = await fundoDoGraficoNaFolha(p);
   checar(fundo <= 703, `folha deitada: o grafico cabe na 1a pagina (termina em ${fundo} de 703 px)`);
-  /* No caso comum (nome curto), a CONTA do tempo da semana tambem fica na
-     1a pagina: o grafico deixa o espaco dela quando ainda tem a altura
-     preferida (v2.101.2; com a altura toda para as barras, ela ia para a 2a). */
-  const fundoConta = await fundoDoGraficoNaFolha(p, 'conta');
-  checar(fundoConta != null && fundoConta <= 703, `folha deitada: a conta do tempo da semana fica na 1a pagina (termina em ${fundoConta} de 703 px)`);
+  /* COM A ESTEIRA (v2.116.0, PPCP 19/11: "ela e' importante"): a faixa das
+     linhas A e B vem antes do grafico, sempre na 1a pagina; o grafico encolhe
+     o que ela ocupa. A prioridade de sempre fica: grafico, a conta do
+     TEMPO-ALVO e, por ultimo, a carga da semana — esta medicao tem a esteira,
+     e a carga da semana vai para a 2a pagina (o caso sem esteira, com ela na
+     1a, e' o "nome curto" dos piores casos, abaixo). */
+  const fundoEsteira = await fundoDoGraficoNaFolha(p, 'esteira');
+  checar(fundoEsteira != null && fundoEsteira <= 703 && fundoEsteira < fundo,
+    `folha com a esteira: a faixa das linhas A e B fica na 1a pagina, antes do grafico (termina em ${fundoEsteira} de 703 px)`);
+  const fundoAlvo = await fundoDoGraficoNaFolha(p, 'alvo');
+  checar(fundoAlvo == null || fundoAlvo <= 703, `folha com a esteira: a conta do tempo-alvo segue na 1a pagina (${fundoAlvo})`);
 }
 
 const fechar = async () => {

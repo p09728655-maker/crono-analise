@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.116.0',
+    data: '2026-11-19',
+    titulo: 'A esteira em destaque na 1ª página da folha do Takt Time',
+    itens: [
+      'A FAIXA "ESTEIRA NO VÍDEO" NA 1ª PÁGINA: velocidade da esteira, caixa + vão, entre-peças e o tempo da ponta da caixa de A até B saem em campos, no formato dos outros números da folha, logo abaixo deles e antes do gráfico. Na 2.115.0 era uma frase depois das contas, e caía na 2ª página.',
+      'COM O CADASTRO AO LADO: a velocidade e o entre-peças medidos vêm com os do cadastro do produto (os que o tempo-alvo usa), para comparar no papel. Sem veredito: o vídeo mede onde as linhas estão (na seladora a caixa passa fechada), o cadastro é da esteira do produto.',
+      'O gráfico encolhe o que a faixa ocupa e continua na 1ª página, com a conta do tempo-alvo. Quando a folha aperta, a linha da carga da semana ("a programação da semana pede X%") vai para a 2ª — como já ia quando o tempo-alvo é pela esteira.',
+    ],
+  },
+  {
     versao: '2.115.1',
     data: '2026-11-19',
     titulo: 'A revisão mostra a esteira que vai com a medição',

@@ -10,7 +10,7 @@ import {
   alvoDaJuncao, alvoDoProduto, avisoDoAlvo, descontaSetup, explicacaoDoAlvo, fraseDaSemana,
 } from '../../../domain/tempoAlvo.js';
 import {
-  deixaramDe, deixouDeEmbalar, fraseDaEsteira, frasesDasParadas, frasesVolumeAVolume, naoSaiu, numerosDaLeitura,
+  camposDaEsteira, deixaramDe, deixouDeEmbalar, fraseDaEsteira, frasesDasParadas, frasesVolumeAVolume, naoSaiu, numerosDaLeitura,
   pctDoParado, porHoraDaMedicao, qtdParadas, roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
 } from '../../../domain/volumeAVolume.js';
 import {
@@ -1722,6 +1722,31 @@ function FolhaVolumeAVolume({
         })}
       </section>
 
+      {/* A ESTEIRA PELAS LINHAS A E B, EM CAMPOS, NA 1a PAGINA (v2.116.0, PPCP
+          19/11: "melhorar a informacao na impressao, ela e' importante"; na
+          2.115.0 era uma frase depois das contas, e caia na 2a pagina). Uma
+          faixa no formato dos numeros de cima, com o cadastro ao lado; o
+          grafico mede o que vem antes dele e encolhe o que ela ocupa. */}
+      {esteirasDas(medicoes).map(({ c }) => (
+        <section
+          key={`esteira-${c.id}`} data-esteira-folha
+          style={{ ...impF.identificacao, gridTemplateColumns: 'repeat(6, 1fr)' }}
+        >
+          <div style={{ ...imp.campo, borderBottom: '1.5px solid #000' }}>
+            <span style={impF.campoRotulo}>Esteira no vídeo{juncao ? ` · ${horaDaMedicao(c)}` : ''}</span>
+            <span style={impF.campoValor}>linhas A e B</span>
+            <span style={impF.campoSub}>o que a linha praticou, não um padrão</span>
+          </div>
+          {camposDaEsteira(c, alvo).map((k) => (
+            <div key={k.rotulo} style={imp.campo}>
+              <span style={impF.campoRotulo}>{k.rotulo}</span>
+              <span style={impF.campoValor}>{k.valor}</span>
+              {k.sub && <span style={impF.campoSub}>{k.sub}</span>}
+            </div>
+          ))}
+        </section>
+      ))}
+
       <GraficoIntervalos
         leitura={leitura} unidade={unidade} larguraFixa={LARGURA_GRAFICO_PAPEL}
         altura={alturaGrafico}
@@ -1753,16 +1778,6 @@ function FolhaVolumeAVolume({
         {(fraseDaSemana(alvo) || tempo?.texto) && (
           <p style={impF.tempoSemana} data-conta-semana>{fraseDaSemana(alvo) || tempo.texto}</p>
         )}
-        {/* A ESTEIRA PELAS LINHAS A E B (v2.115.0, PPCP 19/11: "coloca na
-            impressao velocidade e entre pecas"): da medicao por video que leu
-            o video com as duas linhas. Depois das contas do alvo e da semana:
-            fora da reserva do grafico, entao cai na 2a pagina quando a 1a
-            nao tem lugar. */}
-        {esteirasDas(medicoes).map(({ c, e }) => (
-          <p key={`esteira-${c.id}`} style={{ margin: '0 0 10px' }}>
-            <strong>{e.rotulo}{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {e.texto}
-          </p>
-        ))}
         {medicoes.filter((c) => c.observacao).map((c) => (
           <p key={c.id} style={{ margin: '0 0 10px' }}>
             <strong>Obs. do analista{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {c.observacao}
