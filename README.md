@@ -420,7 +420,9 @@ do produto dele**.
   *"ponta A e B"*). A linha A é o retângulo de sempre; a B (`retangulo.b`) e a
   `distanciaMm` ficam no mesmo `ritmopatrimar.video.retangulos` da máquina —
   redesenhar A ou B apaga a distância (é entre as duas). A caixa NÃO fica na
-  máquina: é a do cadastro do produto (`alvo.medida`), trocável só no cartão.
+  máquina: é a do cadastro do produto — desde a v2.119.0 a LARGURA da caixa
+  fechada (`caixaDoVideo`, ver *Na medição salva e na folha*), não mais a
+  `alvo.medida` (a aberta) —, trocável só no cartão.
   A B é medida no MESMO quadro (`analisarVideo` com `retanguloB` → `fracaoB`).
   `atrasoEntreFaixas`: o período sai da AUTOCORRELAÇÃO da A (`periodoDoSinal`,
   o menor deslocamento que chega a 85% do melhor; nunca das marcas, que dobram
@@ -483,10 +485,34 @@ do produto dele**.
   semana — fora da reserva do gráfico, então vai para a 2ª página quando a 1ª
   está cheia. A caixa digitada mora no componente que salva (`caixa`, chave
   máquina|produto) e vai no rascunho. A REVISÃO (v2.115.1) mostra a mesma frase
-  (`esteiraEmColunas` → `fraseDaEsteira`) com o campo da caixa, e avisa quando a
-  caixa é a do cadastro: ⚠ o cadastro tem a caixa ABERTA (825 na Mesa Cabeceira
-  Sleep); na seladora ela passa fechada (440), e com a do cadastro o
-  entre-peças sai metade do real. **Na folha, em campos na 1ª página**
+  (`esteiraEmColunas` → `fraseDaEsteira`) com o campo da caixa. ⚠ **A caixa do
+  vídeo é a FECHADA** (v2.119.0 / `.gs` v5.73; PPCP, 19/11/2026: *"PARA VIDEO
+  CRONOANALISE VAMOS USAR LARGURA"*): `caixaDoVideo(alvo)` = a `largura` que o
+  painel manda (coluna `MEDIDA_EXT_LARGURA` da PRODUTO_CODIGO, a medida externa
+  do ERP). A `medida` (MEDIDA DA CAIXA) é a ABERTA, do começo da linha (825 na
+  Mesa Cabeceira Sleep, contra 440 fechada): com ela o entre-peças da seladora
+  saía metade do real — era o aviso *Confira a caixa* da v2.115.1, que saiu.
+  A `medida` fica só na conta do tempo-alvo. Sem a largura: o campo fica vazio
+  e pede a medida, **nunca a aberta no lugar**, e o aviso diz por quê
+  (`avisoSemCaixa`): o painel antes da v5.73 não manda a chave `largura` em
+  produto nenhum (`ref.largura` false no servidor → *"falta reimplantar o .gs
+  v5.73"*); o v5.73 manda sempre (null = falta no cadastro). A largura vem
+  mesmo sem esteira (`alvoDoProduto` a devolve no `sem-esteira`).
+  Revisão da v2.119.0 (antes do merge), três regras:
+  - ⚠ **Sem a caixa, a esteira NÃO vai com a medição** (`esteiraParaSalvar`
+    devolve null): sem o comprimento da caixa a leitura não se confere pela
+    própria caixa (o `suspeito` desliga) e uma velocidade que a tela recusaria
+    ia para o papel (11,6 m/min na leitura de ocupação 200 ms). A revisão
+    mostra o campo da caixa quando ela é a ÚNICA coisa que falta
+    (`exigeCaixa: false` → `soFaltaCaixa`); digitar traz a esteira de volta.
+  - ⚠ **O cadastro vai ao lado do CAIXA + VÃO, não do entre-peças**
+    (`passoDoCadastro` = medida + entre, na tela e na folha): o ENTRE_PECAS do
+    cadastro é o vão com a caixa ABERTA. Na Mesa Cabeceira Sleep, *"≈ 708 mm ·
+    cadastro: 400 mm"* dava a entender 77% a mais de vão numa linha MAIS
+    apertada (caixa + vão 1148 contra 1225 do cadastro). Levar ao cadastro é
+    ENTRE_PECAS = caixa + vão − a MEDIDA DA CAIXA aberta.
+  - Câmera no começo da linha: a caixa passa aberta — o campo diz para
+    digitar a medida dela. **Na folha, em campos na 1ª página**
   (v2.116.0, PPCP: *"melhorar a informação na impressão, ela é importante"*):
   `camposDaEsteira(conferencia, alvo)` — velocidade, caixa + vão, entre-peças e a
   ponta de A até B, com o cadastro do produto ao lado (`alvo.vel`, `alvo.entre`),

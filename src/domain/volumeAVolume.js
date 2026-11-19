@@ -536,13 +536,28 @@ export function fraseDaEsteira(conferencia) {
 }
 
 /**
+ * O CAIXA + VAO do cadastro (v2.119.0): medida da caixa + entre-pecas, a conta
+ * do tempo-alvo — e' o que se compara com o caixa + vao do video. null sem os
+ * dois.
+ */
+export function passoDoCadastro(alvo) {
+  const m = Number(alvo?.medida);
+  const e = alvo?.entre == null ? NaN : Number(alvo.entre);
+  return m > 0 && e >= 0 ? m + e : null;
+}
+
+/**
  * A ESTEIRA NA FOLHA, em campos (v2.116.0, PPCP 19/11: "melhorar a informacao
  * na impressao, ela e' importante"): os mesmos numeros da frase, na 1a pagina,
  * no formato dos outros numeros da folha, com o CADASTRO do produto ao lado —
- * e' contra ele (velocidade e entre-pecas) que o tempo-alvo e' calculado.
- * Medido e cadastro lado a lado, sem veredito: o video mede onde as linhas
- * estao (na seladora a caixa passa fechada), o cadastro e' da esteira do
- * produto.
+ * e' contra ele (velocidade e caixa + vao) que o tempo-alvo e' calculado.
+ * Medido e cadastro lado a lado, sem veredito.
+ * v2.119.0 (revisao): o cadastro vai ao lado do CAIXA + VAO (medida + entre-
+ * pecas do cadastro), nao do entre-pecas. O ENTRE_PECAS do cadastro e' o vao
+ * com a caixa ABERTA (825 + 400 na Mesa Cabeceira Sleep); o video mede com a
+ * FECHADA (440): "≈ 708 mm · cadastro: 400 mm" dava a entender 77% a mais de
+ * vao numa linha que estava MAIS apertada (1148 contra 1225 de caixa + vao).
+ * O caixa + vao nao depende de a caixa estar aberta ou fechada.
  *
  * @returns [{ rotulo, valor, sub }] ou null (medicao sem esteira)
  */
@@ -560,15 +575,15 @@ export function camposDaEsteira(conferencia, alvo = null) {
     {
       rotulo: 'Caixa + vão',
       valor: semPasso ? '—' : `${mm0(e.passoMm)} mm`,
-      sub: semPasso ? 'o intervalo entre as caixas não fechou' : `uma caixa a cada ${dec1(e.intervaloMs / 1000)} s`,
+      sub: [
+        semPasso ? 'o intervalo entre as caixas não fechou' : `uma caixa a cada ${dec1(e.intervaloMs / 1000)} s`,
+        cadastro(passoDoCadastro(alvo), mm0, 'mm'),
+      ].filter(Boolean).join(' · '),
     },
     {
       rotulo: 'Entre-peças',
       valor: e.entrePecasMm != null ? `≈ ${mm0(e.entrePecasMm)} mm` : '—',
-      sub: [
-        semPasso ? 'sem o caixa + vão' : (e.caixaMm ? `caixa de ${mm0(e.caixaMm)} mm` : 'falta a medida da caixa'),
-        cadastro(alvo?.entre, mm0, 'mm'),
-      ].filter(Boolean).join(' · '),
+      sub: semPasso ? 'sem o caixa + vão' : (e.caixaMm ? `caixa de ${mm0(e.caixaMm)} mm` : 'falta a medida da caixa'),
     },
     {
       rotulo: 'Ponta da caixa de A até B',

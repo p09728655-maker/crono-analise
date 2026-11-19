@@ -32,9 +32,9 @@ import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import { motivoSemTakt } from '../../coleta/embalagem/motivoSemTakt.js';
 import { useTemposAlvo } from '../../../lib/temposAlvo.js';
 import {
-  descontaSetup, explicacaoDoAlvo, fraseDaSemana, semAlvo,
+  avisoSemCaixa, caixaDoVideo, descontaSetup, explicacaoDoAlvo, fraseDaSemana, semAlvo,
 } from '../../../domain/tempoAlvo.js';
-import { esteiraEmColunas, fraseDaEsteira } from '../../../domain/volumeAVolume.js';
+import { esteiraEmColunas, fraseDaEsteira, passoDoCadastro } from '../../../domain/volumeAVolume.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
 import { ESTILO_TAKT, PainelTakt } from '../../coleta/rapida/CronometroAoVivo.jsx';
 import { est } from '../conferencias/estilos.js';
@@ -346,21 +346,28 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const alvos = useTemposAlvo();
   // A semana da filmagem decide a linha "a semana pede" (v2.107.0).
   const alvo = alvos.alvoDe(campos.produto, inicioValido ? inicioData : null);
-  /* A CAIXA da conta do entre-pecas: a do cadastro do produto; o analista
-     troca no quadro da linha B quando a camera e' a do fim da linha (a caixa
-     passa fechada). Mora aqui, e nao no quadro, desde a v2.115.0: vai com a
-     medicao salva (esteiraParaSalvar) e com o rascunho. Vale para a maquina
-     e o produto em que foi digitada — no comeco da linha a mesma caixa
-     passa aberta. */
+  /* A CAIXA da conta do entre-pecas: a LARGURA da caixa fechada, do
+     cadastro do painel (v2.119.0, caixaDoVideo — PPCP: "PARA VIDEO
+     CRONOANALISE VAMOS USAR LARGURA"); o analista ainda troca no quadro da
+     linha B. Sem a largura, vazio: nunca a MEDIDA DA CAIXA, que e' a aberta.
+     Mora aqui, e nao no quadro, desde a v2.115.0: vai com a medicao salva
+     (esteiraParaSalvar) e com o rascunho. A digitada vale para a maquina e o
+     produto em que foi digitada. */
   const [caixa, setCaixa] = useState(null);
   const chaveCaixa = `${maquina?.nome || ''}|${campos.produto.trim()}`;
   const caixaTexto = caixa?.chave === chaveCaixa ? caixa.texto : null;
   const trocarCaixa = (texto) => setCaixa(texto == null ? null : { chave: chaveCaixa, texto });
-  const caixaMm = caixaTexto != null ? mmDigitado(caixaTexto) : (alvo?.medida > 0 ? alvo.medida : null);
+  const caixaCadastro = caixaDoVideo(alvo);
+  const caixaMm = caixaTexto != null ? mmDigitado(caixaTexto) : caixaCadastro;
   // A esteira pelas linhas A e B da LEITURA do video (nunca a do teste de
   // 2 min), so' quando o quadro mostra os numeros: o que a revisao mostra e o
   // que o Salvar manda (v2.115.0; na revisao desde a v2.115.1).
   const esteira = esteiraParaSalvar({ linhaB: automatica.resultado?.linhaB, retangulo, caixaMm });
+  // Sem a caixa a esteira nao vai (revisao da v2.119.0): a revisao mostra o
+  // campo dela quando e' a UNICA coisa que falta.
+  const soFaltaCaixa = !(caixaMm > 0) && Boolean(esteiraParaSalvar({
+    linhaB: automatica.resultado?.linhaB, retangulo, caixaMm: null, exigeCaixa: false,
+  }));
 
   /* --------------------------------------------------------- arquivo */
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -1231,8 +1238,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                   salvar={salvar} aoSalvar={() => salvarMedicao()}
                   mexida={mexida} aoArquivarESalvar={arquivarESalvar} aoDescartarMexida={descartarMexida}
                   aoVoltar={() => { setFimMs(null); setEtapa('marcar'); }}
-                  esteira={esteira} temLinhaB={Boolean(automatica.resultado?.linhaB)}
-                  caixaTexto={caixaTexto} caixaCadastro={alvo?.medida > 0 ? Math.round(alvo.medida) : null} aoCaixa={trocarCaixa}
+                  esteira={esteira} temLinhaB={Boolean(automatica.resultado?.linhaB)} soFaltaCaixa={soFaltaCaixa}
+                  caixaTexto={caixaTexto} caixaCadastro={caixaCadastro} avisoCaixa={avisoSemCaixa(alvo)} aoCaixa={trocarCaixa}
                 />
               )}
             </div>
@@ -1627,7 +1634,8 @@ function Numero({
 function Revisar({
   medicao, numeros, alvo, maquina, produto, observacao, aoObservacao, salvar, aoSalvar, aoVoltar,
   mexida, aoArquivarESalvar, aoDescartarMexida, conferencia = null,
-  esteira = null, temLinhaB = false, caixaTexto = null, caixaCadastro = null, aoCaixa,
+  esteira = null, temLinhaB = false, soFaltaCaixa = false, caixaTexto = null, caixaCadastro = null, avisoCaixa = null,
+  aoCaixa,
 }) {
   const { porVolume, leitura, calc } = numeros;
   const fraseEsteira = esteira ? fraseDaEsteira(esteiraEmColunas(esteira)) : null;
@@ -1669,10 +1677,14 @@ function Revisar({
       {/* A ESTEIRA QUE VAI COM A MEDICAO (v2.115.1): a mesma frase que a folha
           do Takt Time imprime, e a caixa do entre-pecas para acertar aqui —
           antes de salvar, que depois nao muda. */}
-      {fraseEsteira && (
+      {(fraseEsteira || soFaltaCaixa) && (
         <div style={ev.esteira} aria-label="Esteira que vai com a medição">
-          <p style={ev.esteiraTitulo}>{fraseEsteira.rotulo} — vai com a medição e sai na folha do Takt Time</p>
-          <p style={{ ...ev.dica, margin: 0 }}>{fraseEsteira.texto}</p>
+          <p style={ev.esteiraTitulo}>
+            {fraseEsteira
+              ? `${fraseEsteira.rotulo} — vai com a medição e sai na folha do Takt Time`
+              : 'Esteira, pelas linhas A e B — falta a caixa'}
+          </p>
+          {fraseEsteira && <p style={{ ...ev.dica, margin: 0 }}>{fraseEsteira.texto}</p>}
           <label style={ev.esteiraRegua}>
             <span style={ev.dica}>Caixa para o entre-peças:</span>
             <input
@@ -1682,23 +1694,23 @@ function Revisar({
               aria-label="Comprimento da caixa para o entre-peças, em mm"
             />
             <span style={ev.dica}>
-              mm{caixaTexto == null && caixaCadastro ? ' (do cadastro do produto)' : ''} — no sentido da esteira; no fim
-              da linha, a caixa fechada.
+              mm{caixaTexto == null && caixaCadastro ? ' (largura da caixa fechada, do cadastro)' : ''} — no sentido da
+              esteira; com a câmera no começo da linha a caixa passa aberta: digite a medida dela.
             </span>
           </label>
-          {/* O cadastro tem a caixa ABERTA (a do comeco da linha, PPCP 18/11:
-              "825 caixa aberta"); na seladora ela passa fechada. Com a do
-              cadastro, o entre-pecas da seladora sai metade do real, calado. */}
-          {caixaTexto == null && caixaCadastro && (
+          {/* A caixa do video e' a FECHADA (v2.119.0): a largura do cadastro.
+              Sem caixa a esteira NAO vai (revisao): a leitura nao se confere
+              pela propria caixa. A MEDIDA DA CAIXA (a aberta, 825 contra 440
+              na Mesa Cabeceira Sleep) nunca entra no lugar. */}
+          {soFaltaCaixa && (
             <p style={ev.aviso} role="status">
-              Confira a caixa: {caixaCadastro} mm é a do cadastro, a caixa aberta do começo da linha. Se as linhas A e B
-              estão no fim da linha (seladora), a caixa passa fechada — digite a medida dela antes de salvar, senão o
-              entre-peças sai errado na folha.
+              Sem a caixa, a esteira não vai com a medição: sem ela a leitura não se confere pela própria caixa e o
+              entre-peças não sai. {avisoCaixa}
             </p>
           )}
         </div>
       )}
-      {!fraseEsteira && temLinhaB && (
+      {!fraseEsteira && !soFaltaCaixa && temLinhaB && (
         <p style={ev.aviso} role="status">
           A esteira das linhas A e B não vai com esta medição: o quadro da esteira não deu os números (falta a distância
           de A até B, ou ele mostrou um aviso). Em “Voltar a marcar” dá para ver o porquê e corrigir.
@@ -2282,14 +2294,17 @@ function linhaSemDistancia(r) {
 /**
  * A LINHA B (v2.113.0): desenhar, tirar, a distancia REAL de A ate' B
  * (trena, de centro a centro de duas fitas na lateral fixa da esteira — fica
- * com a maquina) e a caixa no sentido em que anda (do cadastro do PRODUTO,
- * trocada so' nesta tela: no fim da linha ela passa fechada).
+ * com a maquina) e a caixa no sentido em que anda: desde a v2.119.0, a
+ * LARGURA da caixa FECHADA do cadastro (caixaDoVideo) — a do fim da linha,
+ * onde se filma; com a camera no comeco da linha a caixa passa aberta e o
+ * analista digita. Sem a largura, o campo fica vazio e diz por que
+ * (avisoSemCaixa).
  */
 function LinhaB({
   retangulo, alvo, podeDesenhar, caixaTexto, aoCaixa, aoDesenhar, aoTirar, aoDistancia,
 }) {
   const temB = retanguloValido(retangulo?.b);
-  const caixaCadastro = alvo?.medida > 0 ? Math.round(alvo.medida) : null;
+  const caixaCadastro = caixaDoVideo(alvo);
   const enterAplica = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } };
   return (
     <div style={ev.esteira} aria-label="Linha B: velocidade e entre-peças">
@@ -2335,8 +2350,9 @@ function LinhaB({
               aria-label="Comprimento da caixa no sentido da esteira, em mm"
             />
             <span style={ev.dica}>
-              mm{caixaTexto == null && caixaCadastro ? ' (do cadastro do produto)' : ''} — no fim da linha, fechada, ela é
-              menor.
+              mm{caixaTexto == null && caixaCadastro
+                ? ' (largura da caixa fechada, do cadastro) — com a câmera no começo da linha a caixa passa aberta: digite a medida dela.'
+                : caixaTexto == null ? ` — ${avisoSemCaixa(alvo)}` : ''}
             </span>
             {caixaTexto != null && caixaCadastro && (
               <button type="button" style={ev.link} onClick={() => aoCaixa(null)}>voltar ao cadastro ({caixaCadastro} mm)</button>
@@ -2417,19 +2433,31 @@ function EsteiraAB({
               rotulo="Velocidade" valor={`${n1(r.velocidadeMMin)} m/min`}
               sub={alvo?.vel > 0 ? `cadastro: ${n1(alvo.vel)} m/min` : 'medida no vídeo'}
             />
+            {/* O cadastro vai ao lado do CAIXA + VAO (revisao da v2.119.0): o
+                ENTRE_PECAS do cadastro e' o vao com a caixa ABERTA, e o video
+                mede com a fechada — lado a lado, nao se comparam. */}
             <Numero
               rotulo="Entre-peças" valor={r.entrePecasMm != null ? `≈ ${n0(r.entrePecasMm)} mm` : '—'}
               sub={[
                 linhaB.intervaloMotivo ? 'o intervalo entre as caixas não fecha' : null,
                 !linhaB.intervaloMotivo && !(caixaMm > 0) ? 'falta a medida da caixa' : null,
-                alvo?.entre != null ? `cadastro: ${n0(alvo.entre)} mm` : null,
+                !linhaB.intervaloMotivo && caixaMm > 0 ? `caixa de ${n0(caixaMm)} mm` : null,
               ].filter(Boolean).join(' · ') || null}
             />
             <Numero
               rotulo="Caixa + vão" valor={r.passoMm != null ? `${n0(r.passoMm)} mm` : '—'}
-              sub={linhaB.intervaloTipicoMs > 0 ? `uma caixa a cada ${n1(linhaB.intervaloTipicoMs / 1000)} s` : null}
+              sub={[
+                linhaB.intervaloTipicoMs > 0 ? `uma caixa a cada ${n1(linhaB.intervaloTipicoMs / 1000)} s` : null,
+                passoDoCadastro(alvo) ? `cadastro: ${n0(passoDoCadastro(alvo))} mm` : null,
+              ].filter(Boolean).join(' · ') || null}
             />
           </div>
+          {!(caixaMm > 0) && (
+            <p style={ev.aviso} role="status">
+              Sem a caixa, a esteira não vai com a medição: a velocidade não se confere pela própria caixa e o entre-peças
+              não sai. Digite a caixa no quadro da linha B.
+            </p>
+          )}
           {linhaB.intervaloMotivo && (
             <p style={ev.aviso} role="status">
               Sem caixa + vão e entre-peças: {linhaB.intervaloMotivo}. A velocidade vale; o intervalo, não — confira a linha A
@@ -2462,8 +2490,10 @@ function EsteiraAB({
           <p style={ev.dica}>
             O entre-peças é o vão que a linha PRATICA neste vídeo, não um padrão, e é a diferença de dois números próximos
             (caixa + vão − caixa): por isso o "≈" — ele muda de um trecho para outro do mesmo vídeo; o da leitura inteira vale
-            mais que o do teste de 2 min. Levá-lo ao cadastro faz o tempo-alvo virar o ritmo deste vídeo ÷ a eficiência; o
-            padrão é decisão do PPCP. Os números da leitura do vídeo inteiro vão com a medição salva e saem na folha do
+            mais que o do teste de 2 min. O ENTRE_PECAS do cadastro é o vão com a caixa ABERTA, do começo da linha: o que se
+            compara com o cadastro é o caixa + vão (medida da caixa + entre-peças). Levar ao cadastro o caixa + vão deste
+            vídeo (ENTRE_PECAS = caixa + vão − a MEDIDA DA CAIXA aberta) faz o tempo-alvo virar o ritmo deste vídeo ÷ a
+            eficiência; o padrão é decisão do PPCP. Os números da leitura do vídeo inteiro vão com a medição salva e saem na folha do
             Takt Time; os do teste de 2 min, não.
           </p>
         </>
