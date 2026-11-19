@@ -32,7 +32,7 @@ import SeletorProduto from '../../../components/SeletorProduto.jsx';
 import { motivoSemTakt } from '../../coleta/embalagem/motivoSemTakt.js';
 import { useTemposAlvo } from '../../../lib/temposAlvo.js';
 import {
-  descontaSetup, explicacaoDoAlvo, fraseDaSemana, semAlvo,
+  caixaDoVideo, descontaSetup, explicacaoDoAlvo, fraseDaSemana, semAlvo,
 } from '../../../domain/tempoAlvo.js';
 import { esteiraEmColunas, fraseDaEsteira } from '../../../domain/volumeAVolume.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
@@ -346,17 +346,19 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const alvos = useTemposAlvo();
   // A semana da filmagem decide a linha "a semana pede" (v2.107.0).
   const alvo = alvos.alvoDe(campos.produto, inicioValido ? inicioData : null);
-  /* A CAIXA da conta do entre-pecas: a do cadastro do produto; o analista
-     troca no quadro da linha B quando a camera e' a do fim da linha (a caixa
-     passa fechada). Mora aqui, e nao no quadro, desde a v2.115.0: vai com a
-     medicao salva (esteiraParaSalvar) e com o rascunho. Vale para a maquina
-     e o produto em que foi digitada — no comeco da linha a mesma caixa
-     passa aberta. */
+  /* A CAIXA da conta do entre-pecas: a LARGURA da caixa fechada, do
+     cadastro do painel (v2.119.0, caixaDoVideo — PPCP: "PARA VIDEO
+     CRONOANALISE VAMOS USAR LARGURA"); o analista ainda troca no quadro da
+     linha B. Sem a largura, vazio: nunca a MEDIDA DA CAIXA, que e' a aberta.
+     Mora aqui, e nao no quadro, desde a v2.115.0: vai com a medicao salva
+     (esteiraParaSalvar) e com o rascunho. A digitada vale para a maquina e o
+     produto em que foi digitada. */
   const [caixa, setCaixa] = useState(null);
   const chaveCaixa = `${maquina?.nome || ''}|${campos.produto.trim()}`;
   const caixaTexto = caixa?.chave === chaveCaixa ? caixa.texto : null;
   const trocarCaixa = (texto) => setCaixa(texto == null ? null : { chave: chaveCaixa, texto });
-  const caixaMm = caixaTexto != null ? mmDigitado(caixaTexto) : (alvo?.medida > 0 ? alvo.medida : null);
+  const caixaCadastro = caixaDoVideo(alvo);
+  const caixaMm = caixaTexto != null ? mmDigitado(caixaTexto) : caixaCadastro;
   // A esteira pelas linhas A e B da LEITURA do video (nunca a do teste de
   // 2 min), so' quando o quadro mostra os numeros: o que a revisao mostra e o
   // que o Salvar manda (v2.115.0; na revisao desde a v2.115.1).
@@ -1232,7 +1234,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                   mexida={mexida} aoArquivarESalvar={arquivarESalvar} aoDescartarMexida={descartarMexida}
                   aoVoltar={() => { setFimMs(null); setEtapa('marcar'); }}
                   esteira={esteira} temLinhaB={Boolean(automatica.resultado?.linhaB)}
-                  caixaTexto={caixaTexto} caixaCadastro={alvo?.medida > 0 ? Math.round(alvo.medida) : null} aoCaixa={trocarCaixa}
+                  caixaTexto={caixaTexto} caixaCadastro={caixaCadastro} aoCaixa={trocarCaixa}
                 />
               )}
             </div>
@@ -1682,18 +1684,18 @@ function Revisar({
               aria-label="Comprimento da caixa para o entre-peças, em mm"
             />
             <span style={ev.dica}>
-              mm{caixaTexto == null && caixaCadastro ? ' (do cadastro do produto)' : ''} — no sentido da esteira; no fim
-              da linha, a caixa fechada.
+              mm{caixaTexto == null && caixaCadastro ? ' (largura da caixa fechada, do cadastro)' : ''} — no sentido da
+              esteira.
             </span>
           </label>
-          {/* O cadastro tem a caixa ABERTA (a do comeco da linha, PPCP 18/11:
-              "825 caixa aberta"); na seladora ela passa fechada. Com a do
-              cadastro, o entre-pecas da seladora sai metade do real, calado. */}
-          {caixaTexto == null && caixaCadastro && (
+          {/* A caixa do video e' a FECHADA (v2.119.0): a largura do cadastro.
+              Sem ela, o campo fica vazio e o entre-pecas nao vai na folha —
+              a MEDIDA DA CAIXA (a aberta, 825 contra 440 na Mesa Cabeceira
+              Sleep) daria metade do real, calado. */}
+          {caixaTexto == null && !caixaCadastro && (
             <p style={ev.aviso} role="status">
-              Confira a caixa: {caixaCadastro} mm é a do cadastro, a caixa aberta do começo da linha. Se as linhas A e B
-              estão no fim da linha (seladora), a caixa passa fechada — digite a medida dela antes de salvar, senão o
-              entre-peças sai errado na folha.
+              Sem a largura da caixa fechada no cadastro (MEDIDA_EXT_LARGURA da PRODUTO_CODIGO): digite a medida da
+              caixa antes de salvar, senão o entre-peças não vai na folha.
             </p>
           )}
         </div>
@@ -2289,7 +2291,7 @@ function LinhaB({
   retangulo, alvo, podeDesenhar, caixaTexto, aoCaixa, aoDesenhar, aoTirar, aoDistancia,
 }) {
   const temB = retanguloValido(retangulo?.b);
-  const caixaCadastro = alvo?.medida > 0 ? Math.round(alvo.medida) : null;
+  const caixaCadastro = caixaDoVideo(alvo);
   const enterAplica = (e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } };
   return (
     <div style={ev.esteira} aria-label="Linha B: velocidade e entre-peças">
@@ -2335,8 +2337,9 @@ function LinhaB({
               aria-label="Comprimento da caixa no sentido da esteira, em mm"
             />
             <span style={ev.dica}>
-              mm{caixaTexto == null && caixaCadastro ? ' (do cadastro do produto)' : ''} — no fim da linha, fechada, ela é
-              menor.
+              mm{caixaTexto == null && caixaCadastro
+                ? ' (largura da caixa fechada, do cadastro)'
+                : caixaTexto == null ? ' — sem a largura da caixa fechada no cadastro: digite' : ''}
             </span>
             {caixaTexto != null && caixaCadastro && (
               <button type="button" style={ev.link} onClick={() => aoCaixa(null)}>voltar ao cadastro ({caixaCadastro} mm)</button>

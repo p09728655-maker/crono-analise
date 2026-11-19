@@ -483,10 +483,17 @@ do produto dele**.
   semana — fora da reserva do gráfico, então vai para a 2ª página quando a 1ª
   está cheia. A caixa digitada mora no componente que salva (`caixa`, chave
   máquina|produto) e vai no rascunho. A REVISÃO (v2.115.1) mostra a mesma frase
-  (`esteiraEmColunas` → `fraseDaEsteira`) com o campo da caixa, e avisa quando a
-  caixa é a do cadastro: ⚠ o cadastro tem a caixa ABERTA (825 na Mesa Cabeceira
-  Sleep); na seladora ela passa fechada (440), e com a do cadastro o
-  entre-peças sai metade do real. **Na folha, em campos na 1ª página**
+  (`esteiraEmColunas` → `fraseDaEsteira`) com o campo da caixa. ⚠ **A caixa do
+  vídeo é a FECHADA** (v2.119.0 / `.gs` v5.73; PPCP, 19/11/2026: *"PARA VIDEO
+  CRONOANALISE VAMOS USAR LARGURA"*): `caixaDoVideo(alvo)` = a `largura` que o
+  painel manda (coluna `MEDIDA_EXT_LARGURA` da PRODUTO_CODIGO, a medida externa
+  do ERP). A `medida` (MEDIDA DA CAIXA) é a ABERTA, do começo da linha (825 na
+  Mesa Cabeceira Sleep, contra 440 fechada): com ela o entre-peças da seladora
+  saía metade do real — era o aviso *Confira a caixa* da v2.115.1, que saiu.
+  A `medida` fica só na conta do tempo-alvo. Sem a largura (painel antes da
+  v5.73, código sem a coluna): o campo fica vazio e pede a medida, **nunca a
+  aberta no lugar**; a velocidade vai e o entre-peças não. A largura vem mesmo
+  sem esteira (`alvoDoProduto` a devolve no `sem-esteira`). **Na folha, em campos na 1ª página**
   (v2.116.0, PPCP: *"melhorar a informação na impressão, ela é importante"*):
   `camposDaEsteira(conferencia, alvo)` — velocidade, caixa + vão, entre-peças e a
   ponta de A até B, com o cadastro do produto ao lado (`alvo.vel`, `alvo.entre`),

@@ -45,15 +45,15 @@ const CADASTRO = {
   maquinas: [MAQUINA], grupos: [GRUPO],
   produtos: [{ id: 'p1', nome: 'Rack Sirius 1.6', codigo: null, grupo_id: GRUPO.id, ativo: true }],
 };
-/* O TEMPO-ALVO pela ESTEIRA, com a caixa do cadastro (v2.115.1). O cadastro
-   tem a caixa ABERTA (300 mm), maior que a do video (200): como na seladora,
-   onde ela passa fechada. Digitar 200 no quadro e' o caminho certo; voltar ao
-   cadastro e' o caso do aviso "Confira a caixa" da revisao.
+/* O TEMPO-ALVO pela ESTEIRA, com a caixa do cadastro. A MEDIDA DA CAIXA e'
+   a ABERTA (300 mm, a do comeco da linha); a LARGURA (v2.119.0, .gs v5.73) e'
+   a FECHADA (200), a do video — como na seladora (825 × 440 na Mesa Cabeceira
+   Sleep). A caixa do video vem da largura; a medida fica so' na conta do alvo:
    (300 + 500) mm a 6 m/min = 8 s de esteira; ÷ 85%. */
 const ALVOS = {
   estado: 'ok',
   ref: { metodo: 'esteira', eficiencia: 85, metaUep: 2761, minDia: 527, sUep: 11.45 },
-  produtos: [{ rot: 'Rack Sirius 1.6', uep: 1, alvoMs: 9412, esteiraMs: 8000, medida: 300, vel: 6, entre: 500 }],
+  produtos: [{ rot: 'Rack Sirius 1.6', uep: 1, alvoMs: 9412, esteiraMs: 8000, medida: 300, vel: 6, entre: 500, largura: 200 }],
 };
 const hoje = new Date();
 const [anoSp, mesSp, diaSp] = new Intl.DateTimeFormat('en-CA', { timeZone: FUSO }).format(hoje).split('-').map(Number);
@@ -61,14 +61,14 @@ const dois = (n) => String(n).padStart(2, '0');
 const HOJE_8H = `${anoSp}-${dois(mesSp)}-${dois(diaSp)}T08:00`;
 
 const enviados = [];
-async function simularServidor(pagina) {
+async function simularServidor(pagina, alvos = ALVOS) {
   await pagina.route('**/api/sync**', (rota) => {
     const lote = rota.request().postDataJSON().conferencias || [];
     enviados.push(...lote);
     return rota.fulfill({ json: { recebidos: lote.length, novos: lote.length, atualizados: 0, clientIds: lote.map((c) => c.clientId) } });
   });
   await pagina.route('**/api/maquinas**', (rota) => (/[?&]alvo=1/.test(rota.request().url())
-    ? rota.fulfill({ json: ALVOS })
+    ? rota.fulfill({ json: alvos })
     : /demanda=1/.test(rota.request().url())
     ? rota.fulfill({ json: { demandas: [] } })
     : rota.fulfill({ json: CADASTRO })));
@@ -168,6 +168,10 @@ await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).wa
 await p.waitForFunction(() => /^B · \d+% papelão$/.test(document.querySelector('[data-leitura-linha-b]')?.textContent || ''), null, { timeout: 4000 })
   .then(() => checar(true, 'o que a B ve aparece ao vivo sobre ela ("B · N% papelão")'))
   .catch(() => checar(false, 'o que a B ve aparece ao vivo sobre ela ("B · N% papelão")'));
+// A caixa ja' vem da LARGURA da caixa fechada (200), nao da MEDIDA DA CAIXA (300, a aberta).
+checar(await linhaB.getByRole('spinbutton', { name: /Comprimento da caixa/ }).inputValue() === '200'
+  && /\(largura da caixa fechada, do cadastro\)/.test(await linhaB.innerText()),
+'a caixa do video vem da largura da caixa fechada do cadastro (200 mm), nao da medida aberta (300)');
 await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).fill('100');
 await linhaB.getByRole('spinbutton', { name: /Comprimento da caixa/ }).fill('200');
 await linhaB.getByRole('spinbutton', { name: /Comprimento da caixa/ }).press('Tab');
@@ -243,12 +247,12 @@ await linhaB.getByRole('button', { name: 'Desenhar a linha B' }).click();
 await arrastar(p, { x: 0.61, y: 0.40 }, { x: 0.64, y: 0.60 });
 await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).fill('100');
 await linhaB.getByRole('spinbutton', { name: /Distância real de A até B/ }).press('Tab');
-// De volta a' caixa do CADASTRO (300 mm, a aberta), sem a digitada: e' o caso
-// do aviso "Confira a caixa" na revisao (v2.115.1). O entre-pecas da leitura
-// passa a ser 800 − 300 = 500 mm.
-await linhaB.getByRole('button', { name: 'voltar ao cadastro (300 mm)' }).click();
-checar(/\(do cadastro do produto\)/.test(await linhaB.innerText()),
-  'voltar ao cadastro: a caixa passa a ser a do produto, e o quadro diz');
+// De volta a' caixa do CADASTRO, sem a digitada: a largura da fechada (200 mm,
+// v2.119.0). O entre-pecas da leitura: 800 − 200 = 600 mm (com a aberta, 500).
+await linhaB.getByRole('spinbutton', { name: /Comprimento da caixa/ }).fill('250');
+await linhaB.getByRole('button', { name: 'voltar ao cadastro (200 mm)' }).click();
+checar(/\(largura da caixa fechada, do cadastro\)/.test(await linhaB.innerText()),
+  'voltar ao cadastro: a caixa passa a ser a largura da fechada, e o quadro diz');
 
 /* ---------------------------------------------------- a leitura inteira */
 await irPara(p, 0);
@@ -257,15 +261,15 @@ await auto.getByText(/A leitura marcou/).waitFor({ timeout: 120000 });
 {
   const bloco = p.locator('[aria-label="Esteira medida pelas linhas A e B"]');
   const n = await numerosDaEsteira(bloco);
-  checar(Math.abs(n.vel - 6) <= 0.3 && Math.abs(n.entre - 500) <= 40,
-    `a leitura do video todo mede a mesma esteira: ${n.vel} m/min e entre-pecas ${n.entre} mm (com a caixa do cadastro, 300 mm)`);
+  checar(Math.abs(n.vel - 6) <= 0.3 && Math.abs(n.entre - 600) <= 40,
+    `a leitura do video todo mede a mesma esteira: ${n.vel} m/min e entre-pecas ${n.entre} mm (com a largura da fechada, 200 mm)`);
 }
 if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-esteira-leitura.png` });
 
 /* ------------------- salvar: a esteira vai com a medicao (v2.115.0) */
 // O que a leitura mediu (100 mm em ~1,0 s, uma caixa a cada 8 s) e a caixa
-// (a do cadastro, 300 mm, trocada para 250 na revisao) sobem com a medicao, para a
-// folha do Takt Time.
+// (a largura do cadastro, 200 mm, trocada para 250 na revisao) sobem com a
+// medicao, para a folha do Takt Time.
 await irPara(p, 39);
 await p.evaluate(() => document.activeElement?.blur());
 await p.keyboard.press('f');
@@ -277,18 +281,17 @@ await revisar.waitFor({ timeout: 6000 });
   const bloco = revisar.locator('[aria-label="Esteira que vai com a medição"]');
   const t = (await bloco.innerText().catch(() => '')).replace(/\s+/g, ' ');
   // A mesma folga da leitura (± 0,3 m/min): o navegador nao entrega sempre os mesmos quadros.
-  checar(/velocidade (5\.[789]|6\.[0123]) m\/min · caixa \+ vão \d+ mm .*entre-peças ≈ \d+ mm \(caixa de 300 mm\).*caixa a caixa/.test(t),
+  checar(/velocidade (5\.[789]|6\.[0123]) m\/min · caixa \+ vão \d+ mm .*entre-peças ≈ \d+ mm \(caixa de 200 mm\).*caixa a caixa/.test(t),
     `revisar: a esteira que vai com a medicao, a mesma frase da folha (${t.slice(0, 160)})`);
-  // A caixa veio do CADASTRO: a revisao avisa que e' a aberta, do comeco da
-  // linha — na seladora ela passa fechada e o entre-pecas sairia errado.
-  checar(/Confira a caixa: 300 mm é a do cadastro, a caixa aberta do começo da linha/.test(t)
-    && /digite a medida dela antes de salvar/.test(t),
-  'revisar: com a caixa do cadastro, o aviso "Confira a caixa" aparece');
+  // A caixa veio da LARGURA da fechada (v2.119.0): o campo diz de onde, e o
+  // aviso da caixa aberta (v2.115.1) nao existe mais — nem o de "sem largura".
+  checar(/\(largura da caixa fechada, do cadastro\)/.test(t) && !/Confira a caixa|caixa aberta|Sem a largura/.test(t),
+    'revisar: a caixa e a largura da fechada, sem aviso');
   const campo = bloco.getByRole('spinbutton', { name: /Comprimento da caixa para o entre-peças/ });
   await campo.fill('250');
   const t2 = (await bloco.innerText()).replace(/\s+/g, ' ');
   checar(/\(caixa de 250 mm\)/.test(t2), 'revisar: trocar a caixa ali refaz o entre-pecas na hora');
-  checar(!/Confira a caixa/.test(t2), 'revisar: digitada a caixa, o aviso sai');
+  checar(!/\(largura da caixa fechada, do cadastro\)/.test(t2), 'revisar: digitada a caixa, o campo deixa de dizer que e a do cadastro');
 }
 await revisar.getByRole('button', { name: 'Salvar medição' }).click();
 await p.locator('[aria-label="Medição salva"]').waitFor({ timeout: 6000 });
@@ -297,6 +300,43 @@ await p.locator('[aria-label="Medição salva"]').waitFor({ timeout: 6000 });
   checar(e?.distanciaMm === 100 && e?.metodo === 'caixa' && e?.caixas >= 3 && e?.caixaMm === 250
     && Math.abs(e?.atrasoMs - 1000) <= 60 && Math.abs(e?.intervaloMs - 8000) <= 200,
   `a esteira sobe com a medicao salva: distancia, tempo de A ate B, caixa a caixa, intervalo e a caixa (${JSON.stringify(e)})`);
+}
+
+/* --------- produto SEM a largura no cadastro: o quadro pede, nunca a aberta */
+// O painel antigo (.gs antes da v5.73) ou o codigo sem MEDIDA_EXT_LARGURA: o
+// campo fica vazio e diz o que falta; a MEDIDA DA CAIXA (300, a aberta) nao
+// entra no lugar — na seladora daria o entre-pecas pela metade, calado.
+{
+  const ctx2 = await navegador.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: FUSO });
+  const p2 = await ctx2.newPage();
+  await semearSessao(p2);
+  p2.on('pageerror', (e) => erros.push(e.message));
+  const { largura, ...semLargura } = ALVOS.produtos[0];
+  await simularServidor(p2, { ...ALVOS, produtos: [semLargura] });
+  await p2.goto(`${BASE}/analise/embalagem/video`);
+  const prep2 = p2.getByRole('region', { name: 'Preparar a medição por vídeo' });
+  await prep2.waitFor({ timeout: 8000 });
+  await p2.locator('input[type="file"]').setInputFiles(VIDEO);
+  await prep2.getByText(/de vídeo/).waitFor({ timeout: 8000 });
+  await p2.locator('input[aria-label="Data e hora em que a filmagem começou"]').fill(HOJE_8H);
+  await p2.locator('select[aria-label="Produto embalado"]').selectOption('Rack Sirius 1.6');
+  await p2.getByRole('button', { name: 'Começar a marcar' }).click();
+  const auto2 = p2.getByRole('region', { name: 'Marcação automática' });
+  await auto2.waitFor({ timeout: 4000 });
+  await irPara(p2, 4);
+  // A e B ja' guardadas com a maquina? Este contexto e' novo: desenha as duas.
+  await auto2.getByRole('button', { name: 'Desenhar o retângulo' }).click();
+  await arrastar(p2, { x: 0.455, y: 0.40 }, { x: 0.485, y: 0.60 });
+  const linhaB2 = p2.locator('[aria-label="Linha B: velocidade e entre-peças"]');
+  await linhaB2.getByRole('button', { name: 'Desenhar a linha B' }).click();
+  await arrastar(p2, { x: 0.61, y: 0.40 }, { x: 0.64, y: 0.60 });
+  const campo2 = linhaB2.getByRole('spinbutton', { name: /Comprimento da caixa/ });
+  await campo2.waitFor({ timeout: 4000 });
+  checar(largura === 200 && await campo2.inputValue() === ''
+    && /sem a largura da caixa fechada no cadastro: digite/.test(await linhaB2.innerText())
+    && !/voltar ao cadastro/.test(await linhaB2.innerText()),
+  'sem a largura no cadastro: a caixa fica vazia e o quadro pede a medida (nunca a aberta, 300 mm)');
+  await ctx2.close();
 }
 
 checar(!erros.length, `sem erro no console da pagina${erros.length ? `: ${erros.join(' | ')}` : ''}`);

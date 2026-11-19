@@ -26,6 +26,12 @@
  * painel antigo: 'uep') e a eficiencia; cada produto traz a esteira e a caixa
  * (medida, velocidade, entre-peças) para a tela escrever a conta.
  *
+ * v2.119.0 (.gs v5.73, PPCP 19/11/2026: "PARA VIDEO CRONOANALISE VAMOS USAR
+ * LARGURA"): cada produto traz tambem a `largura` — a caixa FECHADA, da
+ * MEDIDA_EXT_LARGURA do cadastro (ERP). E' a caixa do video na seladora; a
+ * `medida` (MEDIDA DA CAIXA) e' a ABERTA, do comeco da linha, e fica so' na
+ * conta do alvo. Vem mesmo sem esteira; sem ela (painel antigo), null.
+ *
  * Mora em /maquinas (?alvo=1) pela mesma razao da demanda: o plano Hobby da
  * Vercel aceita 12 funcoes e o projeto esta' nelas. Qualquer usuario logado
  * le (o tablet da embalagem precisa); nada e' gravado.
@@ -86,6 +92,8 @@ export function respostaDosAlvos(corpo) {
         return {
           ...linha, esteiraMs: esteira ? Math.round(esteira * 1000) : null,
           medida: caixa ? medida : null, vel: caixa ? vel : null, entre: caixa ? entre : null,
+          // .gs v5.73: a caixa fechada (a do video), independente da esteira
+          largura: positivo(p.largura),
         };
       });
     return { estado: 'ok', ref, produtos, semanas: semanasDoPainel(corpo.semanas) };

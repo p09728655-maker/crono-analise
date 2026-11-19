@@ -84,17 +84,34 @@ export function alvoDoProduto(lido, peca, { semRede = false, data = null } = {})
   const p = mapaDe(lido).get(nomeChave(nome));
   if (!p) return { alvoMs: null, estado: 'fora-da-lista' };
   const esteira = lido.ref?.metodo === 'esteira';
-  if (!(p.alvoMs > 0)) return { alvoMs: null, estado: esteira ? 'sem-esteira' : 'sem-uep', rot: p.rot };
+  // A largura (a caixa fechada, a do video) vai mesmo sem alvo: o video mede
+  // a caixa de um produto sem velocidade no cadastro (v2.119.0).
+  if (!(p.alvoMs > 0)) return { alvoMs: null, estado: esteira ? 'sem-esteira' : 'sem-uep', rot: p.rot, largura: p.largura ?? null };
   return {
     alvoMs: p.alvoMs, estado: 'ok', rot: p.rot, uep: p.uep,
     metodo: esteira ? 'esteira' : 'uep',
     eficiencia: esteira ? lido.ref?.eficiencia ?? null : null,
     esteiraMs: esteira ? p.esteiraMs ?? null : null,
     medida: esteira ? p.medida ?? null : null, vel: esteira ? p.vel ?? null : null, entre: esteira ? p.entre ?? null : null,
+    largura: p.largura ?? null,
     sUep: lido.ref?.sUep ?? null, metaUep: lido.ref?.metaUep ?? null, setupDia: lido.ref?.setupDia ?? null,
     minDia: lido.ref?.minDia ?? null, lidoEm: lido.lidoEm ?? null,
     semana: semanaDoProduto(semanaDaData(lido, data ?? new Date()), p.uep, { esteira }),
   };
+}
+
+/**
+ * A CAIXA DO VIDEO (v2.119.0; PPCP, 19/11/2026: "PARA VIDEO CRONOANALISE
+ * VAMOS USAR LARGURA"): a LARGURA da caixa fechada, do cadastro do painel
+ * (MEDIDA_EXT_LARGURA, do ERP), em mm inteiros. O video mede na seladora, onde
+ * a caixa passa FECHADA (440 na Mesa Cabeceira Sleep); a `medida` do cadastro
+ * e' a ABERTA (825), do comeco da linha, e com ela o entre-pecas saia metade
+ * do real. Sem a largura: null — nunca a aberta no lugar (o quadro pede a
+ * medida).
+ */
+export function caixaDoVideo(alvo) {
+  const l = Number(alvo?.largura);
+  return Number.isFinite(l) && l > 0 ? Math.round(l) : null;
 }
 
 /** dd/mm/aaaa → aaaammdd (0 se nao for data). */

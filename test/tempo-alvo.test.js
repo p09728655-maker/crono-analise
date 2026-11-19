@@ -8,7 +8,7 @@ import {
   afterEach, describe, expect, it,
 } from 'vitest';
 import {
-  alvoDaJuncao, alvoDoProduto, alvoEmSegundos, avisoDoAlvo, contaDoAlvo, descontaSetup, explicacaoDaRegua,
+  alvoDaJuncao, alvoDoProduto, alvoEmSegundos, avisoDoAlvo, caixaDoVideo, contaDoAlvo, descontaSetup, explicacaoDaRegua,
   explicacaoDoAlvo, fraseDaSemana, idadeDoAlvo, medidoXAlvo, semAlvo, semAlvoCurto, semanaDaData, semanaDoProduto,
   vereditoDaSemana,
 } from '../src/domain/tempoAlvo.js';
@@ -392,7 +392,7 @@ describe('o tempo-alvo pela esteira (.gs v5.65)', () => {
   it('o servidor lê o método, a eficiência e, por produto, a esteira e a caixa (só com os três)', () => {
     expect(L.ref).toMatchObject({ metodo: 'esteira', eficiencia: 85, eficienciaOrigem: 'planilha' });
     expect(L.produtos[0]).toEqual({
-      rot: '501151 · RACK MOVE 1.6', uep: 3.01, alvoMs: 19420, esteiraMs: 16510, medida: 2076, vel: 9, entre: 400,
+      rot: '501151 · RACK MOVE 1.6', uep: 3.01, alvoMs: 19420, esteiraMs: 16510, medida: 2076, vel: 9, entre: 400, largura: null,
     });
     expect(L.produtos[1]).toMatchObject({ esteiraMs: 12830, medida: null, vel: null, entre: null });
     expect(L.produtos[2]).toMatchObject({ alvoMs: null, esteiraMs: null });
@@ -425,7 +425,7 @@ describe('o tempo-alvo pela esteira (.gs v5.65)', () => {
 
   it('sem medida da caixa (mesmo com UEP): sem alvo, com o motivo da esteira — nunca a UEP no lugar', () => {
     const a = alvoDoProduto(L, '501160 · BERCO ALGODAO DOCE · VOL 1/2');
-    expect(a).toEqual({ alvoMs: null, estado: 'sem-esteira', rot: '501160 · BERCO ALGODAO DOCE · VOL 1/2' });
+    expect(a).toEqual({ alvoMs: null, estado: 'sem-esteira', rot: '501160 · BERCO ALGODAO DOCE · VOL 1/2', largura: null });
     expect(semAlvo('sem-esteira')).toMatch(/medida da caixa ou a velocidade da esteira/);
     expect(semAlvoCurto('sem-esteira')).toBe('produto sem medida da caixa no painel');
   });
@@ -461,5 +461,56 @@ describe('o tempo-alvo pela esteira (.gs v5.65)', () => {
   it('a régua de todos os alvos, por extenso, para o quadro do PC', () => {
     expect(explicacaoDaRegua(L.ref)).toBe('Tempo-alvo de cada produto = a esteira dele — (medida da caixa + entre-peças) ÷ velocidade, '
       + 'do cadastro do painel — ÷ 85%. Os 85% são a eficiência da embalagem do painel: a linha com o produto rodando, paradas e lacunas dentro.');
+  });
+});
+
+/*
+ * A CAIXA DO VIDEO E' A FECHADA (v2.119.0 / .gs v5.73). PPCP, 19/11/2026,
+ * com as colunas da medida externa do ERP na PRODUTO_CODIGO: "PARA VIDEO
+ * CRONOANALISE VAMOS USAR LARGURA". A Mesa Cabeceira Sleep: 825 mm aberta
+ * (MEDIDA DA CAIXA, a da esteira) e 440 fechada (MEDIDA_EXT_LARGURA) — a
+ * mesma 440 medida na seladora em 18/11.
+ */
+describe('a caixa do vídeo: a largura da caixa fechada (.gs v5.73)', () => {
+  const PAINEL = {
+    ok: true,
+    ref: {
+      metodo: 'esteira', eficiencia: 85, eficienciaOrigem: 'planilha',
+      metaUep: 2761, metaOrigem: 'planilha', minDia: 527, setupsDia: 4, setupMin: 8.2, setupOrigem: 'planilha',
+      setupDia: 32.8, minProd: 494.2, sUep: 10.739,
+    },
+    produtos: [
+      { rot: '501094 · MESA CABECEIRA SLEEP', uep: 1.13, esteira: 8.17, alvo: 9.61, medida: 825, vel: 9, entre: 400, largura: 440 },
+      // sem velocidade no cadastro: sem esteira nem alvo, mas com a caixa fechada
+      { rot: '501130 · MESA LATERAL', uep: 1, esteira: null, alvo: null, medida: null, vel: null, entre: null, largura: 670 },
+      // o EXPOSITOR U: 0 × 0 × 0 no ERP, a planilha em branco — e lixo do painel
+      { rot: '501076 · EXPOSITOR U', uep: 2, esteira: 16.03, alvo: 18.86, medida: 1770, vel: 9, entre: 400, largura: null },
+      { rot: '501200 · RACK LIXO', uep: 1, esteira: 9.33, alvo: 10.98, medida: 1000, vel: 9, entre: 400, largura: 'abc' },
+    ],
+  };
+  const L = respostaDosAlvos(PAINEL);
+
+  it('o servidor guarda a largura de cada produto; lixo, 0 ou ausente: null (o painel antigo não manda)', () => {
+    expect(L.produtos.map((p) => p.largura)).toEqual([440, 670, null, null]);
+    expect(respostaDosAlvos({ ...PAINEL, produtos: [{ ...PAINEL.produtos[0], largura: 0 }] }).produtos[0].largura).toBeNull();
+    const { largura, ...antigo } = PAINEL.produtos[0];
+    expect(largura).toBe(440);
+    expect(respostaDosAlvos({ ...PAINEL, produtos: [antigo] }).produtos[0].largura).toBeNull();
+  });
+
+  it('o alvo do produto leva a largura — também o produto sem esteira (o vídeo mede a caixa dele)', () => {
+    expect(alvoDoProduto(L, '501094 · MESA CABECEIRA SLEEP')).toMatchObject({ estado: 'ok', medida: 825, largura: 440 });
+    expect(alvoDoProduto(L, '501130 · MESA LATERAL')).toMatchObject({ estado: 'sem-esteira', alvoMs: null, largura: 670 });
+    expect(alvoDoProduto(L, '501076 · EXPOSITOR U').largura).toBeNull();
+  });
+
+  it('a caixa do vídeo é a largura (440), nunca a medida aberta (825); sem largura, null — o quadro pede a medida', () => {
+    expect(caixaDoVideo(alvoDoProduto(L, '501094 · MESA CABECEIRA SLEEP'))).toBe(440);
+    expect(caixaDoVideo(alvoDoProduto(L, '501130 · MESA LATERAL'))).toBe(670);
+    expect(caixaDoVideo(alvoDoProduto(L, '501076 · EXPOSITOR U'))).toBeNull();
+    expect(caixaDoVideo({ medida: 825 })).toBeNull();
+    expect(caixaDoVideo({ largura: 439.6 })).toBe(440);
+    expect(caixaDoVideo(null)).toBeNull();
+    expect(caixaDoVideo(alvoDoProduto(L, 'fora da lista'))).toBeNull();
   });
 });

@@ -13,6 +13,17 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.119.0',
+    data: '2026-11-19',
+    titulo: 'No vídeo, a caixa vem fechada: a largura do cadastro',
+    itens: [
+      'A CAIXA DO VÍDEO É A FECHADA: o quadro da linha B e a revisão já trazem a LARGURA da caixa fechada, da medida externa do ERP no cadastro do painel (coluna MEDIDA_EXT_LARGURA da PRODUTO_CODIGO). Antes vinha a MEDIDA DA CAIXA, que é a caixa ABERTA do começo da linha (825 mm contra 440 na Mesa Cabeceira Sleep), e na seladora o entre-peças saía a metade do real se ninguém digitasse a medida.',
+      'O aviso "Confira a caixa" saiu: a caixa que vem do cadastro já é a fechada. Ela ainda pode ser trocada no quadro (por exemplo, câmera no começo da linha), e "voltar ao cadastro" volta para a largura.',
+      'PRODUTO SEM A LARGURA NO CADASTRO: o campo fica vazio e pede a medida — a caixa aberta nunca entra no lugar. Sem a caixa, a velocidade vai com a medição e o entre-peças não. Até o painel ser reimplantado com o .gs v5.73, todo produto fica assim.',
+      'O tempo-alvo não muda: ele continua pela esteira com a caixa aberta (medida da caixa + entre-peças ÷ velocidade), como o painel calcula.',
+    ],
+  },
+  {
     versao: '2.118.0',
     data: '2026-11-19',
     titulo: 'Arquivar vários estudos de uma vez',
