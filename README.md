@@ -469,6 +469,22 @@ do produto dele**.
   cada 130 ms, e a média de 0,5 s sobre poucos quadros vira escada — no vídeo de
   teste a 6,0 m/min o caixa a caixa dava 5,5. Fixture real:
   `test/fixtures/sinal-seladora-27s.json` (só números: ms, fração A, fração B).
+  **Na medição salva e na folha** (v2.115.0, PPCP 19/11/2026: *"coloca na
+  impressão velocidade e entre peças"*): o `salvarMedicao` manda `esteira`
+  (`esteiraParaSalvar`: só a LEITURA do vídeo inteiro, nunca o teste, e só o que
+  o quadro mostra — linha B válida, distância, sem `suspeito`). O banco guarda as
+  ENTRADAS da conta em `esteira_distancia_mm`, `esteira_atraso_ms`,
+  `esteira_metodo`, `esteira_caixas`, `esteira_intervalo_ms`, `esteira_caixa_mm`
+  (`conferencias_esteira_chk`: só `origem = 'video'`; tempo, distância e método
+  juntos; ⚠ `IS NOT NULL` por extenso — num CHECK, `NULL > 0` passa). O servidor
+  (`esteiraDaConferencia`) não recusa a medição por causa da esteira: o que não
+  serve vira null. A folha e o volume a volume escrevem `fraseDaEsteira` (pela
+  `esteiraPelasLinhas`, a mesma conta da tela), depois das contas do alvo e da
+  semana — fora da reserva do gráfico, então vai para a 2ª página quando a 1ª
+  está cheia. A caixa digitada mora no componente que salva (`caixa`, chave
+  máquina|produto) e vai no rascunho. Testes: `test/esteira-na-medicao.test.js`
+  (o caminho inteiro no vídeo real), `test/api.integracao.test.js`, e os e2e
+  `video-esteira` (sobe com a medição) e `embalagem` (sai na folha).
 - **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão
   mostram o `normalMs` da `leituraPecaAPeca` — o "por volume sem as lacunas"
   do Volume a volume, o passo da linha —, com "—" abaixo de 10 intervalos. A medição vai direto ao `/sync`, sem a fila

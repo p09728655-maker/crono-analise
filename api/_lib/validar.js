@@ -119,6 +119,32 @@ export function relogioDasMarcas(valor, { marcas, duracaoMs } = {}) {
 }
 
 /**
+ * A ESTEIRA PELAS LINHAS A E B (v2.115.0): { distanciaMm, atrasoMs, metodo,
+ * caixas, intervaloMs, caixaMm } — ver `esteira_*` no schema. Mesma politica
+ * das marcas: nao lanca, vira null quando nao serve — a esteira e' um dado a
+ * mais da medicao, e uma recusa por causa dela faria a medicao inteira nao
+ * salvar. So' na medicao por video. Os opcionais que nao servem viram null
+ * sozinhos (sem o intervalo, a folha nao da' caixa + vao; sem a caixa, nao
+ * da' entre-pecas); sem a distancia, o tempo ou o metodo, nada vale.
+ */
+export function esteiraDaConferencia(valor, { origem } = {}) {
+  if (origem !== 'video' || !valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const inteiroEm = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : null);
+  const distanciaMm = inteiroEm(valor.distanciaMm, 1, 100_000);
+  const atrasoMs = inteiroEm(valor.atrasoMs, 1, 600_000);
+  const metodo = ['caixa', 'sinal'].includes(valor.metodo) ? valor.metodo : null;
+  if (distanciaMm == null || atrasoMs == null || metodo == null) return null;
+  return {
+    distanciaMm,
+    atrasoMs,
+    metodo,
+    caixas: metodo === 'caixa' ? inteiroEm(valor.caixas, 1, MAX_MARCAS) : null,
+    intervaloMs: inteiroEm(valor.intervaloMs, 1, 3_600_000),
+    caixaMm: inteiroEm(valor.caixaMm, 1, 100_000),
+  };
+}
+
+/**
  * O setup marcado ao vivo dentro do trecho entre o primeiro e o ultimo
  * toque. Mesma politica: vira null quando nao serve. Nao pode passar do que
  * o trecho parou (relogio menos o trecho rodando das marcas), e nao existe

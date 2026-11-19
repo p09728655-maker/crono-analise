@@ -14,6 +14,7 @@ import { formatarSegundos } from './crono/formato.js';
 import {
   contaDoAlvo, fraseDaSemana, semAlvo, semAlvoCurto,
 } from './tempoAlvo.js';
+import { esteiraPelasLinhas } from './deteccaoVolumes.js';
 
 /** Takt e intervalo em SEGUNDOS, sempre: "72.0 s", nunca "1min12s". */
 const seg = (ms) => (Number.isFinite(ms) && ms > 0 ? `${formatarSegundos(ms)} s` : '—');
@@ -460,5 +461,47 @@ export function roubadosPelasParadas(conferencia) {
     paradaMs: p.paradaMs,
     setupMs: calc.setupMs,
     porHoraRodando: p.ritmoPotencial,
+  };
+}
+
+/**
+ * A ESTEIRA PELAS LINHAS A E B, na tela e na folha do Takt Time (v2.115.0,
+ * PPCP 19/11: "coloca na impressao velocidade e entre pecas"). Sai das
+ * entradas guardadas na medicao por video (`esteira_*`) pela MESMA conta da
+ * tela de video (esteiraPelasLinhas), e diz de onde veio cada numero: a
+ * distancia, o tempo da ponta e quantas caixas. Numeros com ponto, como o
+ * quadro da esteira no video. O entre-pecas e' o que a linha praticou no
+ * video, nao um padrao — a frase diz.
+ *
+ * @returns { rotulo, texto } ou null (medicao sem esteira)
+ */
+export function fraseDaEsteira(conferencia) {
+  const c = conferencia || {};
+  const distanciaMm = Number(c.esteira_distancia_mm);
+  const atrasoMs = Number(c.esteira_atraso_ms);
+  const caixaMm = Number(c.esteira_caixa_mm) > 0 ? Number(c.esteira_caixa_mm) : null;
+  const intervaloMs = Number(c.esteira_intervalo_ms) > 0 ? Number(c.esteira_intervalo_ms) : null;
+  const r = esteiraPelasLinhas({ atrasoMs, distanciaMm, intervaloTipicoMs: intervaloMs, comprimentoMm: caixaMm });
+  if (!r) return null;
+  const n0 = (v) => String(Math.round(v));
+  const n1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
+  const n2 = (v) => (Math.round(v * 100) / 100).toFixed(2);
+  const partes = [`velocidade ${n1(r.velocidadeMMin)} m/min`];
+  if (r.passoMm == null) {
+    partes.push('caixa + vão e entre-peças — (o intervalo entre as caixas não fechou)');
+  } else {
+    partes.push(`caixa + vão ${n0(r.passoMm)} mm (uma caixa a cada ${n1(intervaloMs / 1000)} s)`);
+    partes.push(r.entrePecasMm != null
+      ? `entre-peças ≈ ${n0(r.entrePecasMm)} mm (caixa de ${n0(caixaMm)} mm)`
+      : 'entre-peças — (sem a medida da caixa)');
+  }
+  const caixas = Number(c.esteira_caixas) > 0 ? Number(c.esteira_caixas) : null;
+  const como = c.esteira_metodo === 'caixa'
+    ? `a mediana${caixas ? ` de ${caixas} ${caixas === 1 ? 'caixa' : 'caixas'}` : ''}, caixa a caixa`
+    : 'pelo vídeo inteiro';
+  return {
+    rotulo: 'Esteira, pelas linhas A e B',
+    texto: `${partes.join(' · ')}. A ponta da caixa leva ${n2(atrasoMs / 1000)} s de A até B (${n0(distanciaMm)} mm), `
+      + `${como}. É o que a linha praticou neste vídeo, não um padrão.`,
   };
 }

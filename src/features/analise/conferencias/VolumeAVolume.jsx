@@ -10,8 +10,8 @@ import {
   alvoDaJuncao, alvoDoProduto, avisoDoAlvo, descontaSetup, explicacaoDoAlvo, fraseDaSemana,
 } from '../../../domain/tempoAlvo.js';
 import {
-  deixaramDe, deixouDeEmbalar, frasesDasParadas, frasesVolumeAVolume, naoSaiu, numerosDaLeitura, pctDoParado,
-  porHoraDaMedicao, qtdParadas, roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
+  deixaramDe, deixouDeEmbalar, fraseDaEsteira, frasesDasParadas, frasesVolumeAVolume, naoSaiu, numerosDaLeitura,
+  pctDoParado, porHoraDaMedicao, qtdParadas, roubadosPelasLacunas, roubadosPelasParadas, tempoSomado,
 } from '../../../domain/volumeAVolume.js';
 import {
   CRITERIOS_JUNCAO, PREFIXO_JUNCAO, faixaDaJuncao, frasesDaJuncao, horaDaMedicao, idsDaJuncao, juntarMedicoes,
@@ -691,6 +691,14 @@ export default function VolumeAVolume({
             <p key={c.id} style={est.vavObs}>
               <span style={est.vavObsRotulo}>Obs. do analista{ehJuncao ? ` · ${horaDaMedicao(c)}` : ''}</span>
               {c.observacao}
+            </p>
+          ))}
+          {/* A esteira medida pelas linhas A e B no video (v2.115.0): a
+              mesma frase da folha. */}
+          {esteirasDas(medicoes).map(({ c, e }) => (
+            <p key={`esteira-${c.id}`} style={est.vavObs}>
+              <span style={est.vavObsRotulo}>{e.rotulo}{ehJuncao ? ` · ${horaDaMedicao(c)}` : ''}</span>
+              {e.texto}
             </p>
           ))}
 
@@ -1745,6 +1753,16 @@ function FolhaVolumeAVolume({
         {(fraseDaSemana(alvo) || tempo?.texto) && (
           <p style={impF.tempoSemana} data-conta-semana>{fraseDaSemana(alvo) || tempo.texto}</p>
         )}
+        {/* A ESTEIRA PELAS LINHAS A E B (v2.115.0, PPCP 19/11: "coloca na
+            impressao velocidade e entre pecas"): da medicao por video que leu
+            o video com as duas linhas. Depois das contas do alvo e da semana:
+            fora da reserva do grafico, entao cai na 2a pagina quando a 1a
+            nao tem lugar. */}
+        {esteirasDas(medicoes).map(({ c, e }) => (
+          <p key={`esteira-${c.id}`} style={{ margin: '0 0 10px' }}>
+            <strong>{e.rotulo}{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {e.texto}
+          </p>
+        ))}
         {medicoes.filter((c) => c.observacao).map((c) => (
           <p key={c.id} style={{ margin: '0 0 10px' }}>
             <strong>Obs. do analista{juncao ? ` (${horaDaMedicao(c)})` : ''}:</strong> {c.observacao}
@@ -1873,6 +1891,9 @@ function FolhaVolumeAVolume({
 }
 
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** As medicoes com a esteira das linhas A e B, cada uma com a frase dela. */
+const esteirasDas = (medicoes) => medicoes.map((c) => ({ c, e: fraseDaEsteira(c) })).filter((x) => x.e);
 
 /** De onde vieram as marcas, quando nao foi o tablet (ver `origem` no schema). */
 function porVideo(medicoes) {
