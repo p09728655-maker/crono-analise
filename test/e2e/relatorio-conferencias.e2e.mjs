@@ -18,6 +18,13 @@ const EXEC = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome
 let falhas = 0;
 const checar = (ok, msg) => { console.log(`${ok ? 'OK  ' : 'FALHA'} ${msg}`); if (!ok) falhas++; };
 
+/* AS SUB-ABAS (v2.117.0): cada quadro mora numa sub-aba (RESUMO, RITMO,
+   PARADAS, MEDICOES). O teste clica na dela antes de ler, como quem usa. */
+async function aba(pg, id) {
+  const botao = pg.locator(`[role="tab"][data-sub="${id}"]`);
+  if (await botao.count()) await botao.click();
+}
+
 const navegador = await chromium.launch({ executablePath: EXEC });
 const ctx = await navegador.newContext({ viewport: { width: 1440, height: 900 } });
 const p = await ctx.newPage();
@@ -166,6 +173,7 @@ await movel.close();
   /* ------------------- observacao da medicao: na tabela e no papel */
   // O rotulo "Obs." vai em caixa alta pelo estilo, e innerText devolve o
   // texto como se ve: por isso o /i.
+  await aba(p2, 'medicoes');
   checar(/Obs\.\s*Operador novo no posto/i.test(await p2.locator('section[aria-label="Todas as medições"]').innerText()),
     'a observacao escrita no aparelho aparece embaixo da medicao no PC');
   checar(/Obs\.: Operador novo no posto/.test(impresso),
@@ -181,10 +189,14 @@ await movel.close();
    * marcada nesta carga, o quadro NAO aparece — comparar seria inventar
    * perda. Ele entra depois, quando o teste cadastra o setup.
    */
+  await aba(p2, 'paradas');
+  checar(/Nenhuma parada marcada nas medições deste período/.test(await p2.locator('main').innerText()),
+    'sub-aba PARADAS sem parada marcada: diz que nao ha, em vez de ficar em branco');
   checar(await p2.locator('[aria-label="Comparativo com e sem parada"]').count() === 0,
     'sem parada marcada, o comparativo nao aparece — nao ha perda a mostrar');
 
   /* -------------------- painel: numeros do topo em portugues de fabrica */
+  await aba(p2, 'resumo');
   const kpis = p2.locator('[aria-label="Resumo do período"]');
   const textoKpis = await kpis.innerText();
   checar(/Ritmo médio/i.test(textoKpis) && /838 pç\/h/.test(textoKpis),
@@ -199,6 +211,7 @@ await movel.close();
     'maquina medida ha pouco tempo leva a nota discreta, nao um selo');
 
   /* --------------------------- ritmo por peca, com pecas por minuto */
+  await aba(p2, 'ritmo');
   const refPecas = p2.locator('[aria-label="Ritmo por peça"]');
   const textoRef = await refPecas.innerText();
   checar(/Princesa Fundo/.test(textoRef) && /Lateral Mesa/.test(textoRef),
@@ -222,6 +235,7 @@ await movel.close();
     'o quadro cabe no painel: nenhuma coluna escondida atras de rolagem');
 
   /* ------------------- analise do periodo, gerada pelo algoritmo */
+  await aba(p2, 'resumo');
   const analise = p2.locator('[aria-label="Análise do período"]');
   const textoAnalise = await analise.innerText();
   checar(/sem IA, sem custo/i.test(textoAnalise),
@@ -280,6 +294,7 @@ await movel.close();
     'e a escolha de mostrar tambem fica gravada');
 
   /* ------------- filtro na lateral abre o grafico por conferencia */
+  await aba(p2, 'ritmo');
   const grafico = p2.locator('figure').first();
   checar(/Ritmo por máquina/.test(await grafico.textContent()),
     'sem filtro, o grafico compara maquinas (uma barra por maquina)');
@@ -295,6 +310,7 @@ await movel.close();
   /* ------------------- o filtro vale para o relatorio inteiro e o papel */
   checar(/Imprimir esta máquina/.test(await p2.locator('nav').innerText()),
     'com a maquina filtrada, o botao diz o que vai sair: "Imprimir esta máquina"');
+  await aba(p2, 'resumo');
   const kpisFiltrados = await kpis.innerText();
   checar(/864 pç\/h/.test(kpisFiltrados),
     'os numeros do topo seguem o filtro (720 pc em 50 min = 864 pc/h)');
@@ -305,6 +321,7 @@ await movel.close();
     'a folha filtrada NAO leva as outras maquinas — imprime so a escolhida');
 
   await p2.getByRole('button', { name: /^Todas/ }).click();
+  await aba(p2, 'ritmo');
   checar(/Ritmo por máquina/.test(await grafico.textContent()),
     'voltar a Todas devolve a comparacao entre maquinas');
   checar(/Imprimir todas/.test(await p2.locator('nav').innerText()),
@@ -313,6 +330,7 @@ await movel.close();
     'sem filtro, a folha volta a cobrir todas as maquinas');
 
 
+  await aba(p2, 'medicoes');
   await p2.getByRole('button', { name: /Excluir medição de Furadeira14/ }).click();
   await p2.getByRole('button', { name: /Excluir definitivamente/ }).click();
   await p2.waitForTimeout(600);
@@ -364,6 +382,7 @@ await movel.close();
   checar(/Paradas \(1\)/.test(depois), 'a linha passa a mostrar que ha parada marcada');
 
   /* ---- com a parada marcada, o comparativo aparece, na tela e no papel */
+  await aba(p2, 'paradas');
   const quadro = p2.locator('[aria-label="Comparativo com e sem parada"]');
   await quadro.waitFor({ timeout: 4000 });
   const textoQuadro = await quadro.innerText();
@@ -400,6 +419,7 @@ await movel.close();
    * fim da tabela — e a tela parecia nao ter feito nada. O aviso agora
    * flutua preso a' janela; o teste mede a posicao dele, nao so a presenca.
    */
+  await aba(p2, 'medicoes');
   recusarLinha = true;
   const botaoArquivar = p2.getByRole('button', { name: 'Arquivar' }).first();
   await botaoArquivar.scrollIntoViewIfNeeded();
@@ -432,6 +452,7 @@ await movel.close();
 
   await p2.getByRole('button', { name: /^Furadeira 03/ }).click();
   await p2.waitForTimeout(300);
+  await aba(p2, 'medicoes');
   const cabecalho = await p2.locator('section[aria-label="Todas as medições"]').innerText();
   checar(/Todas as medições · Furadeira 03/.test(cabecalho),
     'o cabecalho da tabela diz de qual maquina sao as linhas');
@@ -490,10 +511,12 @@ await movel.close();
   await p2.waitForTimeout(700);
   await p2.getByRole('button', { name: /^Todas/ }).click();
   await p2.waitForTimeout(300);
+  await aba(p2, 'ritmo');
   const pecasAntes = await p2.locator('[aria-label="Ritmo por peça"]').innerText();
   checar(/Lateral Mesa/.test(pecasAntes) && /Princesa Fundo/.test(pecasAntes),
     'as duas grafias aparecem como duas pecas diferentes no Ritmo por peça');
 
+  await aba(p2, 'medicoes');
   await p2.getByRole('button', { name: 'Princesa Fundo', exact: true }).click();
   const janelaNome = p2.locator('[aria-label="Nome da peça"]').first();
   await janelaNome.waitFor({ timeout: 4000 });
@@ -506,6 +529,7 @@ await movel.close();
   const renomeada = patches.filter((x) => 'peca' in x).pop();
   checar(!!renomeada && renomeada.peca === 'Lateral Mesa',
     'o novo nome vai para o servidor');
+  await aba(p2, 'ritmo');
   const pecasDepois = await p2.locator('[aria-label="Ritmo por peça"]').innerText();
   checar(!/Princesa Fundo/.test(pecasDepois),
     'a grafia velha some do Ritmo por peça');
@@ -513,6 +537,7 @@ await movel.close();
     'as duas medicoes viram UMA peca so (420 + 300 = 720 pc)');
 
   // E com irmas na lista, a correcao alcanca todas de uma vez.
+  await aba(p2, 'medicoes');
   await p2.getByRole('button', { name: 'Lateral Mesa', exact: true }).first().click();
   await janelaNome.waitFor({ timeout: 4000 });
   checar(/Corrigir também a outra medição com este mesmo nome/.test(await janelaNome.innerText()),
@@ -523,6 +548,48 @@ await movel.close();
   const loteNome = patches.filter((x) => Array.isArray(x.ids) && 'peca' in x).pop();
   checar(!!loteNome && loteNome.ids.length === 2 && loteNome.peca === 'LATERAL MESA 380',
     'a correcao vai para as duas medicoes numa unica ida');
+
+  /* ---- SUB-ABA MEDICOES: buscar, marcar e arquivar as marcadas (v2.117.0) */
+  /**
+   * PPCP 19/11: "quando tenho que arquivar esta dando rolagem absurda". A
+   * tabela tem a sua sub-aba, a busca acha a medicao sem rolar, e o
+   * "Arquivar as marcadas" fica na faixa presa no topo.
+   */
+  await aba(p2, 'medicoes');
+  const busca = p2.getByRole('searchbox', { name: /Buscar medição/ });
+  await busca.fill('xyz sem medicao');
+  checar(/Nenhuma medição com “xyz sem medicao”/.test(await p2.locator('section[aria-label="Todas as medições"]').innerText()),
+    'busca sem resultado diz que nao achou, com o caminho de volta');
+  await p2.getByRole('button', { name: 'Limpar a busca' }).click();
+  await busca.fill('mesa  380');
+  const achadas = p2.locator('section[aria-label="Todas as medições"] tbody input[type="checkbox"]');
+  checar(await achadas.count() === 2,
+    `a busca acha as duas medicoes da peca, sem acento nem espaco extra (${await achadas.count()})`);
+  checar(/2 de \d+ medição\(ões\)/.test(await p2.locator('section[aria-label="Todas as medições"]').innerText()),
+    'a busca diz quantas achou de quantas havia');
+  await p2.getByRole('checkbox', { name: 'Marcar todas as da lista' }).check();
+  const marcadasBarra = p2.getByRole('region', { name: 'Medições marcadas' });
+  checar(/2 marcadas/.test(await marcadasBarra.innerText()),
+    'marcar todas marca so as achadas pela busca, e a faixa diz quantas');
+  // A faixa fica presa no topo: rolada a pagina, o botao continua a vista.
+  await p2.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const caixaBarra = await marcadasBarra.boundingBox();
+  checar(!!caixaBarra && caixaBarra.y >= 0 && caixaBarra.y < 120,
+    `rolada a pagina, a faixa com o "Arquivar as marcadas" continua no topo da tela (y = ${caixaBarra && Math.round(caixaBarra.y)})`);
+  await p2.getByRole('button', { name: 'Arquivar as 2 marcadas' }).click();
+  const janelaMarcadas = p2.locator('[aria-label="Arquivar medições marcadas"]');
+  await janelaMarcadas.waitFor({ timeout: 4000 });
+  checar(/Arquivar as 2 medições marcadas\?/.test(await janelaMarcadas.innerText())
+    && /Nada é apagado/.test(await janelaMarcadas.innerText()),
+  'a confirmacao diz quantas marcadas saem e que nada e apagado');
+  const antesMarcadas = patches.length;
+  await p2.getByRole('button', { name: 'Arquivar 2' }).click();
+  await p2.waitForTimeout(900);
+  const loteMarcadas = patches.slice(antesMarcadas).find((x) => Array.isArray(x.ids));
+  checar(!!loteMarcadas && loteMarcadas.ids.length === 2 && loteMarcadas.arquivada === true,
+    'as marcadas vao numa unica ida, so as duas');
+  checar(await p2.getByRole('region', { name: 'Medições marcadas' }).count() === 0,
+    'arquivadas, a faixa das marcadas some');
 
   await ctx2.close();
 }
@@ -574,6 +641,8 @@ await movel.close();
   }));
 
   await p3.goto(`${BASE}/analise/conferencias`);
+  await p3.locator('[role="tab"][data-sub="ritmo"]').waitFor({ timeout: 10000 });
+  await aba(p3, 'ritmo');
   const quadro = p3.locator('[aria-label="Tendência do ritmo no tempo"]').first();
   await quadro.waitFor({ timeout: 10000 });
   await p3.waitForTimeout(500);
@@ -710,6 +779,7 @@ await movel.close();
   // O titulo da tabela ja' diz o que foi escolhido: mandar "escolha uma
   // maquina em MAQUINAS" duas linhas abaixo e' pedir o que acabou de ser
   // feito, na mesma lateral.
+  await aba(p4, 'medicoes');
   const tabela = await p4.locator('[aria-label="Todas as medições"]').first().innerText();
   checar(/Todas as medições · 0002 · FURADEIRA/.test(tabela),
     'a tabela diz de qual GRUPO sao as linhas');
@@ -719,6 +789,7 @@ await movel.close();
   // O PROGRAMA DA SEMANA e' cadastro de GRUPO: com o grupo inteiro em tela
   // o quadro tem de aparecer. Ele sumia — a conta exigia uma maquina so'
   // por engano, e era justamente aqui que ele mais serve.
+  await aba(p4, 'resumo');
   checar(await p4.locator('[aria-label="Programa da semana"]').count() === 1,
     'com o grupo em tela, o quadro do programa da semana aparece');
 

@@ -764,6 +764,31 @@ export const est = {
   // "Nao analisadas / Analisadas": a analisada sai da fila e fica a um
   // clique, para reabrir ou imprimir.
   embVistas: { display: 'flex', gap: espaco.xs, flexWrap: 'wrap', marginTop: espaco.sm },
+  /* AS SUB-ABAS DO RITMO POR MAQUINA (v2.117.0, PPCP 19/11: "melhorar o
+     fluxo igual fizemos no app painel"): uma tarefa por sub-aba, como no
+     painel. A faixa fica presa no topo ao rolar e leva a barra das medicoes
+     marcadas: trocar de tarefa e arquivar nunca pedem subir a pagina. */
+  subAbas: {
+    position: 'sticky', top: 0, zIndex: 5,
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: espaco.xs,
+    margin: `0 0 ${espaco.lg}px`, padding: `${espaco.sm}px 0`,
+    background: t.fundo, borderBottom: `1px solid ${t.borda}`,
+  },
+  subLista: { display: 'flex', flexWrap: 'wrap', gap: espaco.xs },
+  subMarcadas: {
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: espaco.sm, marginLeft: 'auto',
+  },
+  subMarcadasTexto: { ...tipo('legenda'), fontWeight: 700, color: t.texto },
+  subVazia: { ...tipo('corpo'), color: t.textoMedio, margin: `${espaco.lg}px 0` },
+  medBuscaLinha: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: espaco.md, marginTop: espaco.sm },
+  medBusca: {
+    minHeight: 36, width: 'min(380px, 100%)', boxSizing: 'border-box', padding: `0 ${espaco.md}px`,
+    background: t.papel, borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
+    color: t.texto, ...tipo('corpo'), fontFamily: 'inherit',
+  },
+  medContagem: { ...tipo('legenda'), ...numeros, color: t.textoFraco },
+  tdMarca: { padding: `${espaco.sm}px ${espaco.md}px`, borderBottom: `1px solid ${t.borda}`, width: 1 },
+  caixaMarca: { width: 18, height: 18, margin: 0, cursor: 'pointer' },
   botaoLinhaAtivo: {
     minHeight: 32, padding: `0 ${espaco.md}px`, background: t.texto,
     borderWidth: 1, borderStyle: 'solid', borderColor: t.texto, borderRadius: raio.sm,

@@ -1941,7 +1941,19 @@ db/schema.sql
 
 `RelatorioConferencias.jsx` é o modelo: o arquivo que fica na rota é só o
 **arranjo** — a ordem dos quadros, o que abre e fecha, onde cada erro é
-mostrado. Quem carrega e grava é `useConferencias`; quem decide quando
+mostrado. Desde a v2.117.0 (PPCP 19/11/2026: *"quando tenho que arquivar está
+dando rolagem absurda"* → *"melhorar o fluxo igual fizemos no app painel"*) o
+arranjo é em **SUB-ABAS POR TAREFA**, como no painel (`SUBS`: RESUMO · RITMO ·
+PARADAS · MEDIÇÕES; `ritmo.sub-aba` no `sessionStorage`). A faixa
+(`est.subAbas`) fica presa no topo e leva a barra das marcadas; trocar de
+sub-aba não lê nada (os números já estão no `useLeitura`). Quadro novo entra
+numa sub-aba, nunca empilhado de novo. A folha impressa é outro componente
+(`ImpressaoConferencias`) e leva tudo. MEDIÇÕES: busca (`filtrarPorBusca`:
+peça, máquina ou data, sem acento) e marcar → "Arquivar as N marcadas" pelo
+mesmo lote do servidor (`arquivarConferencias`, `lote.marcadas`); só conta como
+marcada a que está na tela (`marcadasNaTela`). Nas ARQUIVADAS não há sub-aba.
+⚠ Teste de ponta a ponta que lê um quadro clica antes na sub-aba dele
+(`aba(p, 'ritmo')` no `relatorio-conferencias.e2e.mjs`). Quem carrega e grava é `useConferencias`; quem decide quando
 recalcular é `useLeitura`; as contas moram no domínio
 (`domain/relatorioConferencias.js` para os números do topo, as barras por
 medição e a lateral por grupo). Cada quadro da tela é um componente sem

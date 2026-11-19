@@ -137,6 +137,27 @@ export function filtrarPorPeriodo(conferencias, dias, agora = Date.now()) {
   });
 }
 
+/** Sem acento, minusculas e os espacos juntados: "Mesa  Cabeceira" acha "mesa cabeceira". */
+const paraBusca = (texto) => String(texto ?? '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * A BUSCA DA SUB-ABA MEDICOES (v2.117.0, PPCP 19/11: "quando tenho que
+ * arquivar esta dando rolagem absurda"): cada palavra digitada tem de
+ * aparecer na peca, na maquina ou na data da medicao (como a tabela a
+ * escreve), sem acento e sem diferenca de maiuscula — "sleep 18/11" acha a
+ * Mesa Cabeceira Sleep do dia 18. Vazio devolve a lista inteira.
+ */
+export function filtrarPorBusca(conferencias, texto) {
+  const palavras = paraBusca(texto).split(' ').filter(Boolean);
+  if (!palavras.length) return conferencias;
+  return conferencias.filter((c) => {
+    const onde = paraBusca(`${c.peca || ''} ${c.maquina || ''} ${formatarDataHora(c.salvo_em)}`);
+    return palavras.every((p) => onde.includes(p));
+  });
+}
+
 /** O mesmo corte, sobre os resumos (por maquina ou por peca x maquina). */
 export function filtrarResumo(resumo, maquina) {
   if (!maquina) return resumo;

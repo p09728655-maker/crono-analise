@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.117.0',
+    data: '2026-11-19',
+    titulo: 'Ritmo por máquina em sub-abas, e arquivar as marcadas',
+    itens: [
+      'SUB-ABAS, COMO NO PAINEL: o relatório empilhava onze quadros, e a tabela das medições — onde se arquiva — vinha no fim, depois de metros de gráficos. Agora cada tarefa tem a sua sub-aba: RESUMO (os números do período, o programa da semana, cada máquina e a análise escrita), RITMO (a comparação entre as máquinas, o ciclo, o ritmo por peça e os gráficos), PARADAS (o que a parada custou e o pareto) e MEDIÇÕES (a tabela). A faixa das sub-abas fica presa no topo ao rolar. A folha impressa não muda: continua levando tudo.',
+      'BUSCAR NAS MEDIÇÕES: um campo acha a medição pela peça, pela máquina ou pela data (ex.: "sleep 18/11"), sem acento nem maiúscula, e diz quantas achou.',
+      'ARQUIVAR AS MARCADAS: cada linha tem a sua caixa (e a do cabeçalho marca todas as que a lista mostra). A faixa presa no topo diz quantas estão marcadas e tem o "Arquivar as N marcadas", com a confirmação de sempre — nada é apagado, e voltam em Arquivadas. Só conta como marcada a medição que está na tela: trocar de máquina, de período ou buscar não deixa marcada escondida.',
+    ],
+  },
+  {
     versao: '2.116.0',
     data: '2026-11-19',
     titulo: 'A esteira em destaque na 1ª página da folha do Takt Time',

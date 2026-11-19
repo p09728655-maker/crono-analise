@@ -1807,6 +1807,8 @@ const NOME_LONGO = 'RACK SIRIUS 1.6 C/ PAINEL OFF WHITE/FREIJO 2 VOLUMES';
   const texto = (await kpis.innerText()).replace(/\s+/g, ' ');
   checar(/TEMPO PARADO 7 min nenhuma em troca\/setup/i.test(texto) && !/nenhuma parada marcada/.test(texto),
     `TEMPO PARADO com parada marcada nao diz "nenhuma parada marcada" (${texto.slice(0, 200)})`);
+  // O quadro mora na sub-aba PARADAS do Ritmo por maquina (v2.117.0).
+  await s.locator('[role="tab"][data-sub="paradas"]').click();
   const custo = (await s.locator('[aria-label="Comparativo com e sem parada"]').innerText()).replace(/\s+/g, ' ');
   // Numero e unidade sao elementos vizinhos: o innerText os cola ("150volumes").
   checar(/150\s*volumes/.test(custo) && /vol\/h/.test(custo) && !/peças|pç/.test(custo),
