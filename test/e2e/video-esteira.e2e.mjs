@@ -246,17 +246,31 @@ if (FOTOS) await p.screenshot({ path: `${FOTOS}/video-esteira-leitura.png` });
 
 /* ------------------- salvar: a esteira vai com a medicao (v2.115.0) */
 // O que a leitura mediu (100 mm em ~1,0 s, uma caixa a cada 8 s) e a caixa
-// digitada no quadro (200 mm) sobem com a medicao, para a folha do Takt Time.
+// (200 mm no quadro, trocada para 250 na revisao) sobem com a medicao, para a
+// folha do Takt Time.
 await irPara(p, 39);
 await p.evaluate(() => document.activeElement?.blur());
 await p.keyboard.press('f');
 const revisar = p.locator('[aria-label="Revisar a medição"]');
 await revisar.waitFor({ timeout: 6000 });
+{
+  // A REVISAO mostra o que vai (v2.115.1): a mesma frase da folha, e a caixa
+  // do entre-pecas para acertar antes de salvar.
+  const bloco = revisar.locator('[aria-label="Esteira que vai com a medição"]');
+  const t = (await bloco.innerText().catch(() => '')).replace(/\s+/g, ' ');
+  // A mesma folga da leitura (± 0,3 m/min): o navegador nao entrega sempre os mesmos quadros.
+  checar(/velocidade (5\.[789]|6\.[0123]) m\/min · caixa \+ vão \d+ mm .*entre-peças ≈ \d+ mm \(caixa de 200 mm\).*caixa a caixa/.test(t),
+    `revisar: a esteira que vai com a medicao, a mesma frase da folha (${t.slice(0, 160)})`);
+  const campo = bloco.getByRole('spinbutton', { name: /Comprimento da caixa para o entre-peças/ });
+  await campo.fill('250');
+  const t2 = (await bloco.innerText()).replace(/\s+/g, ' ');
+  checar(/\(caixa de 250 mm\)/.test(t2), 'revisar: trocar a caixa ali refaz o entre-pecas na hora');
+}
 await revisar.getByRole('button', { name: 'Salvar medição' }).click();
 await p.locator('[aria-label="Medição salva"]').waitFor({ timeout: 6000 });
 {
   const e = enviados.at(-1)?.esteira;
-  checar(e?.distanciaMm === 100 && e?.metodo === 'caixa' && e?.caixas >= 3 && e?.caixaMm === 200
+  checar(e?.distanciaMm === 100 && e?.metodo === 'caixa' && e?.caixas >= 3 && e?.caixaMm === 250
     && Math.abs(e?.atrasoMs - 1000) <= 60 && Math.abs(e?.intervaloMs - 8000) <= 200,
   `a esteira sobe com a medicao salva: distancia, tempo de A ate B, caixa a caixa, intervalo e a caixa (${JSON.stringify(e)})`);
 }

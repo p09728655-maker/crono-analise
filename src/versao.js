@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.115.1',
+    data: '2026-11-19',
+    titulo: 'A revisão mostra a esteira que vai com a medição',
+    itens: [
+      'NA REVISÃO, ANTES DE SALVAR: a linha "Esteira, pelas linhas A e B" aparece como vai sair na folha do Takt Time — velocidade, caixa + vão, entre-peças e de onde veio cada número —, com o campo da caixa ali mesmo. Na 2.115.0 a esteira ia com a medição, mas a revisão não mostrava, e parecia que não tinha ido.',
+      'CONFIRA A CAIXA: quando ela vem do cadastro, a revisão avisa que é a caixa aberta, do começo da linha. Na seladora a caixa passa fechada (na Mesa Cabeceira Sleep, 440 mm contra 825): com a do cadastro, o entre-peças sairia uns 340 mm em vez de uns 720.',
+      'Quando a leitura teve linha B mas o quadro da esteira não deu os números (sem a distância, ou com aviso), a revisão diz que a esteira não vai e por quê.',
+    ],
+  },
+  {
     versao: '2.115.0',
     data: '2026-11-19',
     titulo: 'Velocidade e entre-peças na impressão do Takt Time',

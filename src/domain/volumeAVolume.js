@@ -465,6 +465,23 @@ export function roubadosPelasParadas(conferencia) {
 }
 
 /**
+ * A esteira como a medicao salva a guarda (`esteira_*`), a partir do que o
+ * video manda salvar (esteiraParaSalvar): a revisao, antes de salvar, escreve
+ * a MESMA frase que a folha vai imprimir (v2.115.1).
+ */
+export function esteiraEmColunas(e) {
+  if (!e) return {};
+  return {
+    esteira_distancia_mm: e.distanciaMm ?? null,
+    esteira_atraso_ms: e.atrasoMs ?? null,
+    esteira_metodo: e.metodo ?? null,
+    esteira_caixas: e.caixas ?? null,
+    esteira_intervalo_ms: e.intervaloMs ?? null,
+    esteira_caixa_mm: e.caixaMm ?? null,
+  };
+}
+
+/**
  * A ESTEIRA PELAS LINHAS A E B, na tela e na folha do Takt Time (v2.115.0,
  * PPCP 19/11: "coloca na impressao velocidade e entre pecas"). Sai das
  * entradas guardadas na medicao por video (`esteira_*`) pela MESMA conta da

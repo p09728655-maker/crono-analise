@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import {
   detectarVolumes, esteiraParaSalvar, esteiraPelasLinhas, linhaBDaLeitura, ocupacaoTipica, saidasDosVolumes,
 } from '../src/domain/deteccaoVolumes.js';
-import { fraseDaEsteira } from '../src/domain/volumeAVolume.js';
+import { esteiraEmColunas, fraseDaEsteira } from '../src/domain/volumeAVolume.js';
 import { esteiraDaConferencia } from '../api/_lib/validar.js';
 
 const LINHAS = {
@@ -83,6 +83,13 @@ describe('fraseDaEsteira — a folha do Takt Time', () => {
     esteira_distancia_mm: e.distanciaMm, esteira_atraso_ms: e.atrasoMs, esteira_metodo: e.metodo,
     esteira_caixas: e.caixas, esteira_intervalo_ms: e.intervaloMs, esteira_caixa_mm: e.caixaMm,
   }).map(([k, v]) => [k, v ?? null]));
+
+  it('a revisao, antes de salvar, escreve a MESMA frase que a folha (esteiraEmColunas)', () => {
+    const e = { distanciaMm: 310, atrasoMs: 1604, metodo: 'caixa', caixas: 51, intervaloMs: 6100, caixaMm: 440 };
+    expect(fraseDaEsteira(esteiraEmColunas(e))).toEqual(fraseDaEsteira(linha(e)));
+    expect(esteiraEmColunas(null)).toEqual({});
+    expect(fraseDaEsteira(esteiraEmColunas(null))).toBeNull();
+  });
 
   it('medicao sem esteira: nada', () => {
     expect(fraseDaEsteira({})).toBeNull();

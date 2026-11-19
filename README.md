@@ -482,7 +482,11 @@ do produto dele**.
   `esteiraPelasLinhas`, a mesma conta da tela), depois das contas do alvo e da
   semana — fora da reserva do gráfico, então vai para a 2ª página quando a 1ª
   está cheia. A caixa digitada mora no componente que salva (`caixa`, chave
-  máquina|produto) e vai no rascunho. Testes: `test/esteira-na-medicao.test.js`
+  máquina|produto) e vai no rascunho. A REVISÃO (v2.115.1) mostra a mesma frase
+  (`esteiraEmColunas` → `fraseDaEsteira`) com o campo da caixa, e avisa quando a
+  caixa é a do cadastro: ⚠ o cadastro tem a caixa ABERTA (825 na Mesa Cabeceira
+  Sleep); na seladora ela passa fechada (440), e com a do cadastro o
+  entre-peças sai metade do real. Testes: `test/esteira-na-medicao.test.js`
   (o caminho inteiro no vídeo real), `test/api.integracao.test.js`, e os e2e
   `video-esteira` (sobe com a medição) e `embalagem` (sai na folha).
 - **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão
