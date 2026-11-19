@@ -1953,7 +1953,14 @@ peça, máquina ou data, sem acento) e marcar → "Arquivar as N marcadas" pelo
 mesmo lote do servidor (`arquivarConferencias`, `lote.marcadas`); só conta como
 marcada a que está na tela (`marcadasNaTela`). Nas ARQUIVADAS não há sub-aba.
 ⚠ Teste de ponta a ponta que lê um quadro clica antes na sub-aba dele
-(`aba(p, 'ritmo')` no `relatorio-conferencias.e2e.mjs`). Quem carrega e grava é `useConferencias`; quem decide quando
+(`aba(p, 'ritmo')` no `relatorio-conferencias.e2e.mjs`).
+
+**Arquivar vários estudos** (v2.118.0, PPCP 19/11/2026): a lista do PC marca
+(`marcados` em `ListaEstudos`, a caixa por linha e por produto em
+`TabelaEstudos`) e a barra presa no topo (`est.barraMarcados`, FORA do
+`areaRolagem`, onde o sticky não prende) abre `ConfirmarArquivarVarios`. ⚠ O
+lote manda `PATCH status: 'arquivado'` um por um — nunca o `DELETE`, que apaga
+o estudo sem ciclo. Recusa no meio para o lote e diz em qual parou. Quem carrega e grava é `useConferencias`; quem decide quando
 recalcular é `useLeitura`; as contas moram no domínio
 (`domain/relatorioConferencias.js` para os números do topo, as barras por
 medição e a lateral por grupo). Cada quadro da tela é um componente sem

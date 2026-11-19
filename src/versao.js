@@ -13,6 +13,16 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.118.0',
+    data: '2026-11-19',
+    titulo: 'Arquivar vários estudos de uma vez',
+    itens: [
+      'MARCAR E ARQUIVAR: na lista de estudos do PC, cada estudo tem a sua caixa, e a do cabeçalho marca todos os do produto. A barra presa no topo diz quantos estão marcados e tem o "Arquivar os N marcados".',
+      'O LOTE SÓ ARQUIVA, NUNCA APAGA: o × de cada linha apaga o estudo sem ciclo (rascunho, teste); em lote isso seria apagar vários preparos sem ver um por um. Todos os marcados vão para Arquivados, com ou sem ciclo, e voltam com um clique. A confirmação lista os nomes, diz quantos ciclos ficam guardados e quantos estão no tablet (saem da coleta do posto também).',
+      'Se o servidor recusar um no meio, o lote para ali e diz quantos já foram e em qual parou; os que faltam continuam marcados para tentar de novo. Só conta como marcado o estudo que está na tela: buscar ou trocar de produto não deixa marcado escondido.',
+    ],
+  },
+  {
     versao: '2.117.0',
     data: '2026-11-19',
     titulo: 'Ritmo por máquina em sub-abas, e arquivar as marcadas',

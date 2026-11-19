@@ -25,6 +25,7 @@ import EstudosArquivados from './lista/EstudosArquivados.jsx';
 import ProximasAcoes from './lista/ProximasAcoes.jsx';
 import PainelResumo from './lista/PainelResumo.jsx';
 import ConfirmarRemocao from './lista/ConfirmarRemocao.jsx';
+import ConfirmarArquivarVarios from './lista/ConfirmarArquivarVarios.jsx';
 import FormularioEstudo from './lista/FormularioEstudo.jsx';
 import VazioAnalise from './lista/VazioAnalise.jsx';
 
@@ -57,6 +58,9 @@ export default function ListaEstudos({
   const [verAnalistas, setVerAnalistas] = useState(false);
   const [busca, setBusca] = useState('');
   const [saindo, setSaindo] = useState(false);
+  // ARQUIVAR VARIOS (v2.118.0): os ids marcados e a janela de confirmar.
+  const [marcados, setMarcados] = useState([]);
+  const [arquivandoVarios, setArquivandoVarios] = useState(false);
 
   const analise = modo === 'analise';
   const t = useMemo(() => tema(analise), [analise]);
@@ -106,6 +110,32 @@ export default function ListaEstudos({
   // Um estudo pertence a um produto; a lista plana misturava tudo.
   const grupos = agruparPorProduto(encontrados);
   const visiveis = filtro ? grupos.filter((g) => g.chave === filtro) : grupos;
+
+  /* ARQUIVAR VARIOS (v2.118.0, PPCP 19/11: "ter opcao para arquivar mais de
+     um estudo de uma vez"). So' conta como marcado o estudo que esta' na
+     tela: buscar ou trocar de produto nao deixa marcado escondido. */
+  const naTela = visiveis.flatMap((g) => g.estudos);
+  const estudosMarcados = naTela.filter((e) => marcados.includes(e.id));
+  const marcar = (e) => setMarcados((ids) => (ids.includes(e.id) ? ids.filter((x) => x !== e.id) : [...ids, e.id]));
+  const marcarGrupo = (ids, marcar) => setMarcados((atuais) => (marcar
+    ? [...new Set([...atuais, ...ids])]
+    : atuais.filter((id) => !ids.includes(id))));
+  // Um por um, em sequencia (o servidor arquiva estudo a estudo). Uma recusa
+  // para ali: os que ja' foram saem da lista e da marcacao; os outros ficam.
+  const arquivarMarcados = async () => {
+    const lista = estudosMarcados;
+    for (let i = 0; i < lista.length; i++) {
+      try {
+        await atualizarEstudo(lista[i].id, { status: 'arquivado' });
+      } catch (e) {
+        const feitos = lista.slice(0, i).map((x) => x.id);
+        setMarcados((ids) => ids.filter((id) => !feitos.includes(id)));
+        await carregar();
+        return { feitos: i, total: lista.length, erro: e.message, emQual: lista[i].nome };
+      }
+    }
+    return { feitos: lista.length, total: lista.length };
+  };
 
   const lateral = analise && (
     <MenuLateral
@@ -297,6 +327,19 @@ export default function ListaEstudos({
                   largura minima so'. Se cada tabela rolasse por conta propria,
                   rolar uma desalinharia as outras — que e' justamente o que
                   esta grade veio consertar. */}
+              {/* A barra das marcadas, presa no topo, FORA da area que rola de
+                  lado: la' dentro o sticky nao prende. */}
+              {analise && estudosMarcados.length > 0 && (
+                <div style={est.barraMarcados} role="region" aria-label="Estudos marcados">
+                  <span style={est.barraMarcadosTexto}>
+                    {estudosMarcados.length === 1 ? '1 estudo marcado' : `${estudosMarcados.length} estudos marcados`}
+                  </span>
+                  <button type="button" style={est.botaoLinha} onClick={() => setMarcados([])}>Desmarcar</button>
+                  <button type="button" style={est.botaoPerigo} onClick={() => setArquivandoVarios(true)}>
+                    {estudosMarcados.length === 1 ? 'Arquivar o marcado' : `Arquivar os ${estudosMarcados.length} marcados`}
+                  </button>
+                </div>
+              )}
               <div style={analise ? est.areaRolagem : undefined}>
               <div style={analise ? est.grade : undefined}>
               {visiveis.map((grupo) => (
@@ -314,6 +357,8 @@ export default function ListaEstudos({
                     ? <TabelaEstudos
                         estudos={grupo.estudos} est={est} aoAbrir={aoAbrir}
                         aoEditar={aoEditar} aoRemover={setRemovendo} aoImprimir={aoImprimir}
+                        marcados={new Set(marcados)} aoMarcar={marcar} aoMarcarGrupo={marcarGrupo}
+                        grupoRotulo={grupo.rotulo}
                         aoTrocarColeta={async (e) => {
                           await atualizarEstudo(e.id, { status: e.status === 'coletando' ? 'concluido' : 'coletando' });
                           await carregar();
@@ -409,6 +454,16 @@ export default function ListaEstudos({
           eu={eu}
           aoSalvar={criar}
           aoCancelar={() => setCriando(false)}
+        />
+      )}
+
+      {arquivandoVarios && estudosMarcados.length > 0 && (
+        <ConfirmarArquivarVarios
+          est={est}
+          estudos={estudosMarcados}
+          aoConfirmar={arquivarMarcados}
+          aoCancelar={() => setArquivandoVarios(false)}
+          aoConcluir={async () => { setArquivandoVarios(false); setMarcados([]); await carregar(); }}
         />
       )}
 

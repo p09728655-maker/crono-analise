@@ -3,8 +3,13 @@ import { formatarData } from './formato.js';
 
 export default function TabelaEstudos({
   estudos, est, aoAbrir, aoEditar, aoRemover, aoTrocarColeta, aoImprimir,
+  // ARQUIVAR VARIOS (v2.118.0): `marcados` (Set de ids) e quem marca. Sem
+  // eles, a tabela de sempre.
+  marcados = null, aoMarcar = null, aoMarcarGrupo = null, grupoRotulo = '',
 }) {
   const [sobre, setSobre] = useState(null);
+  const comMarca = Boolean(marcados && aoMarcar);
+  const todos = comMarca && estudos.length > 0 && estudos.every((e) => marcados.has(e.id));
 
   return (
     <div style={est.painel}>
@@ -15,6 +20,7 @@ export default function TabelaEstudos({
             nao se alinhavam. Com colgroup + table-layout fixo, a grade e' a
             mesma em toda a lista — o olho desce a coluna sem tropecar. */}
         <colgroup>
+          {comMarca && <col style={{ width: 44 }} />}
           {/* O nome do estudo fica com o que sobra: e' o unico texto que
               cresce de verdade, e as demais colunas tem tamanho conhecido. */}
           <col />
@@ -31,6 +37,15 @@ export default function TabelaEstudos({
         </colgroup>
         <thead>
           <tr>
+            {comMarca && (
+              <th style={est.thMarca}>
+                <input
+                  type="checkbox" style={est.caixaMarca} checked={todos} disabled={!estudos.length}
+                  onChange={() => aoMarcarGrupo(estudos.map((e) => e.id), !todos)}
+                  aria-label={`${todos ? 'Desmarcar' : 'Marcar'} todos os estudos de ${grupoRotulo || 'este grupo'}`}
+                />
+              </th>
+            )}
             <th style={est.th}>Estudo</th>
             <th style={est.th}>Recurso</th>
             <th style={est.th}>Analista</th>
@@ -48,6 +63,14 @@ export default function TabelaEstudos({
               onMouseEnter={() => setSobre(e.id)}
               onMouseLeave={() => setSobre(null)}
             >
+              {comMarca && (
+                <td style={est.tdMarca}>
+                  <input
+                    type="checkbox" style={est.caixaMarca} checked={marcados.has(e.id)}
+                    onChange={() => aoMarcar(e)} aria-label={`Marcar o estudo ${e.nome}`}
+                  />
+                </td>
+              )}
               {/* O NOME abre a analise. Continua sendo o caminho de quem
                   quer VER o estudo — o botao Imprimir, na ponta da linha,
                   e' o de quem quer o PAPEL.
