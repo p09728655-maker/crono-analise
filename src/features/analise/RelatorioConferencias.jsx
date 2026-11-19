@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect, useMemo, useRef, useState,
+} from 'react';
 import { VERSAO } from '../../versao.js';
 import {
-  TODAS, escopoDaLateral, filtrarPorPeriodo, loteDaMaquina, quandoMediu,
+  TODAS, escopoDaLateral, filtrarPorBusca, filtrarPorPeriodo, loteDaMaquina, quandoMediu,
 } from '../../domain/relatorioConferencias.js';
 import { leituraDaDemanda, lerCodigoSemana } from '../../domain/demandaSemanal.js';
 import { caminhos } from '../../lib/dispositivo.js';
@@ -108,6 +110,36 @@ const lerPeriodo = () => {
   } catch { return PERIODO_PADRAO; }
 };
 
+/**
+ * AS SUB-ABAS (v2.117.0, PPCP 19/11/2026: "quando tenho que arquivar esta
+ * dando rolagem absurda" → "melhorar o fluxo igual fizemos no app painel").
+ * A tela empilhava onze quadros, e a tabela das medicoes — onde se arquiva —
+ * vinha no fim, depois de dois metros de graficos. Como no painel: uma
+ * TAREFA por sub-aba, a faixa presa no topo, e trocar de sub-aba nao le nada
+ * de novo (os numeros ja' estao calculados). A folha impressa nao muda: ela
+ * e' outro componente (ImpressaoConferencias) e leva tudo.
+ *  - RESUMO: os numeros do periodo, o programa da semana ("isso atende?"),
+ *    cada maquina e a analise escrita;
+ *  - RITMO: a comparacao entre as maquinas, o ciclo, o ritmo por peca e os
+ *    graficos;
+ *  - PARADAS: o que a parada custou e o pareto;
+ *  - MEDICOES: a tabela, com busca e arquivar as marcadas.
+ * A escolhida fica na memoria da sessao (como a sub-aba do painel).
+ */
+const SUBS = [
+  { id: 'resumo', rotulo: 'Resumo' },
+  { id: 'ritmo', rotulo: 'Ritmo' },
+  { id: 'paradas', rotulo: 'Paradas' },
+  { id: 'medicoes', rotulo: 'Medições' },
+];
+const CHAVE_SUB = 'ritmo.sub-aba';
+const lerSub = () => {
+  try {
+    const s = sessionStorage.getItem(CHAVE_SUB);
+    return SUBS.some((x) => x.id === s) ? s : 'resumo';
+  } catch { return 'resumo'; }
+};
+
 const CHAVE_PROGRAMA_PAPEL = 'ritmo.programa-na-impressao';
 const lerProgramaNoPapel = () => {
   try { return localStorage.getItem(CHAVE_PROGRAMA_PAPEL) !== '0'; } catch { return true; }
@@ -160,6 +192,22 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   const [analiseNoPapel, setAnaliseNoPapel] = useState(lerAnaliseNoPapel);
   const [programaNoPapel, setProgramaNoPapel] = useState(lerProgramaNoPapel);
   const [periodoDias, setPeriodoDias] = useState(lerPeriodo);
+  const [sub, setSub] = useState(lerSub);
+  const [busca, setBusca] = useState('');
+  const [marcadas, setMarcadas] = useState([]);
+  const refFaixa = useRef(null);
+
+  // Trocar de sub-aba volta a faixa ao topo da tela quando ela ja' passou
+  // dele: a sub-aba nova comeca pelo comeco, nao no meio da rolagem da outra.
+  const trocarSub = (k) => {
+    setSub(k);
+    try { sessionStorage.setItem(CHAVE_SUB, k); } catch { /* sem armazenamento */ }
+    const faixa = refFaixa.current;
+    if (faixa && faixa.parentElement) {
+      const topo = faixa.parentElement.getBoundingClientRect().top + window.scrollY;
+      if (window.scrollY > topo) window.scrollTo({ top: topo });
+    }
+  };
 
   const trocarPeriodo = (dias) => {
     setPeriodoDias(dias);
@@ -181,7 +229,7 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   // Trocar de face (ativas x arquivadas) derruba o filtro: a maquina
   // escolhida pode nao existir do outro lado, e a tela ficaria vazia sem
   // dizer por que.
-  const trocarFace = () => { setSelecao(null); dados.alternarArquivadas(); };
+  const trocarFace = () => { setSelecao(null); setMarcadas([]); dados.alternarArquivadas(); };
   const fecharJanela = (fechar) => () => { limparErro(); fechar(null); };
 
   /**
@@ -226,6 +274,19 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
   } = leitura;
 
   const lote = loteDaMaquina({ filtro, visiveis, verArquivadas });
+
+  /* A SUB-ABA MEDICOES (v2.117.0): a busca corta a tabela, e so' conta
+     como marcada a medicao que esta' na tela — trocar de maquina, de periodo
+     ou buscar nao deixa marcada escondida para arquivar sem ver. */
+  const linhasDaTabela = useMemo(() => filtrarPorBusca(visiveis, busca), [visiveis, busca]);
+  const marcadasNaTela = useMemo(() => {
+    const ids = new Set(linhasDaTabela.map((c) => c.id));
+    return marcadas.filter((id) => ids.has(id));
+  }, [marcadas, linhasDaTabela]);
+  const marcar = (c) => setMarcadas((ids) => (ids.includes(c.id) ? ids.filter((x) => x !== c.id) : [...ids, c.id]));
+  const arquivarMarcadas = () => setConfirmandoLote({
+    maquina: filtro || null, ids: marcadasNaTela, arquivada: !verArquivadas, marcadas: true,
+  });
 
   /**
    * O PROGRAMA DA SEMANA so' se compara com UM grupo de maquina.
@@ -466,75 +527,13 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
             />
           )}
 
-          {estado === 'pronto' && linhasDoPeriodo.length > 0 && (
-            <>
-              {!verArquivadas && painel && <KpisDoPeriodo painel={painel} unidade={unidadeDaTela} />}
-
-              {/* O PROGRAMA DA SEMANA vem logo depois dos numeros do topo e
-                  antes de tudo o mais: e' o unico quadro que responde "isso
-                  atende?", e quem abre o relatorio para a reuniao procura
-                  essa resposta antes de procurar o ritmo. Nao aparece nas
-                  arquivadas — ritmo nao sai de arquivada. */}
-              {!verArquivadas && leituraDemanda && (
-                <PainelDemanda
-                  leitura={leituraDemanda}
-                  grupoNome={grupoDoCadastro ? `${grupoDoCadastro.codigo} · ${grupoDoCadastro.nome}` : null}
-                  aoConfigurar={() => setVerDemanda(true)}
-                  daPlanilha={Boolean(planilhaDoGrupo?.ativa)}
-                  /* Vazio LIMPA a escolha e devolve o quadro ao automatico
-                     (a semana que contem a medicao). Explicito de
-                     proposito: lerCodigoSemana('') ja' devolve null, mas
-                     depender disso amarraria a volta ao automatico a um
-                     detalhe do parser. */
-                  aoTrocarSemana={(chave) => setSemanaEscolhida(chave ? lerCodigoSemana(chave) : null)}
-                  noPapel={programaNoPapel}
-                  aoAlternarPapel={alternarProgramaNoPapel}
-                />
-              )}
-
-              {!verArquivadas && comparativo && (
-                <ComparativoParadas
-                  comparativo={comparativo} resumo={resumoVisivel} escopo={escopo} unidade={unidadeDaTela}
-                />
-              )}
-
-              <CartoesMaquina resumo={resumoVisivel} grupoDe={grupoDe} nominalDe={nominalDe} />
-
-              {!verArquivadas && <ComparativoMaquinas comparativo={entreMaquinas} />}
-
-              {!verArquivadas && <RitmoPorCiclo classes={porCiclo.classes} mistas={porCiclo.mistas} />}
-
-              {!verArquivadas && resumoPecasVisivel.length > 0 && (
-                <TabelaRitmoPorPeca resumoPecas={resumoPecasVisivel} unidade={unidadeDaTela} />
-              )}
-
-              {!verArquivadas && (
-                <GraficosRitmo
-                  unidade={unidadeDaTela}
-                  resumo={resumoVisivel}
-                  filtro={filtro}
-                  barrasDoFiltro={barrasDoFiltro}
-                  curvaDoDia={curvaDoDia}
-                  conferencias={visiveis}
-                />
-              )}
-
-              {!verArquivadas && painel && painel.pareto.totalMs > 0 && (
-                <ParetoParadas pareto={painel.pareto} />
-              )}
-
-              {!verArquivadas && (
-                <AnalisePeriodo
-                  secoes={analise}
-                  resumo={resumoVisivel}
-                  noPapel={analiseNoPapel}
-                  aoAlternarPapel={alternarAnaliseNoPapel}
-                />
-              )}
-
+          {estado === 'pronto' && linhasDoPeriodo.length > 0 && (() => {
+            const n = marcadasNaTela.length;
+            const tabela = (
               <TabelaMedicoes
                 unidade={unidadeDaTela}
-                linhas={visiveis}
+                linhas={linhasDaTabela}
+                total={visiveis.length}
                 escopo={escopo}
                 filtro={filtro}
                 verArquivadas={verArquivadas}
@@ -545,9 +544,136 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
                 aoEditarParadas={setEditandoParadas}
                 aoAlternarArquivo={dados.alternarArquivo}
                 aoExcluir={setConfirmando}
+                busca={busca}
+                aoBuscar={setBusca}
+                marcadas={new Set(marcadasNaTela)}
+                aoMarcar={marcar}
+                aoMarcarTodas={setMarcadas}
               />
-            </>
-          )}
+            );
+            const cartoes = <CartoesMaquina resumo={resumoVisivel} grupoDe={grupoDe} nominalDe={nominalDe} />;
+            const temParada = Boolean(comparativo) || (painel && painel.pareto.totalMs > 0);
+            return (
+              <>
+                {/* A FAIXA DAS SUB-ABAS, presa no topo, com a barra das
+                    marcadas na ponta. Nas ARQUIVADAS nao ha' sub-aba (so'
+                    os cartoes e a tabela): a faixa so' aparece para levar a
+                    barra das marcadas. */}
+                {(!verArquivadas || n > 0) && (
+                  <div ref={refFaixa} style={est.subAbas}>
+                    {!verArquivadas && (
+                      <div role="tablist" aria-label="Sub-abas do relatório" style={est.subLista}>
+                        {SUBS.map((x) => (
+                          <button
+                            key={x.id} type="button" role="tab" data-sub={x.id}
+                            aria-selected={sub === x.id}
+                            style={sub === x.id ? est.botaoLinhaAtivo : est.botaoLinha}
+                            onClick={() => trocarSub(x.id)}
+                          >
+                            {x.id === 'medicoes' ? `${x.rotulo} (${visiveis.length})` : x.rotulo}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {n > 0 && (
+                      <div style={est.subMarcadas} role="region" aria-label="Medições marcadas">
+                        <span style={est.subMarcadasTexto}>{n === 1 ? '1 marcada' : `${n} marcadas`}</span>
+                        <button type="button" style={est.botaoLinha} onClick={() => setMarcadas([])}>
+                          Desmarcar
+                        </button>
+                        <button
+                          type="button" style={est.botaoLote} onClick={arquivarMarcadas}
+                          disabled={ocupado === 'lote'}
+                        >
+                          {`${verArquivadas ? 'Restaurar' : 'Arquivar'} ${n === 1 ? 'a marcada' : `as ${n} marcadas`}`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {verArquivadas && (
+                  <>
+                    {cartoes}
+                    {tabela}
+                  </>
+                )}
+
+                {/* RESUMO: os numeros do topo e, logo depois, o PROGRAMA DA
+                    SEMANA — o unico quadro que responde "isso atende?", e
+                    quem abre o relatorio para a reuniao procura essa
+                    resposta antes de procurar o ritmo. */}
+                {!verArquivadas && sub === 'resumo' && (
+                  <>
+                    {painel && <KpisDoPeriodo painel={painel} unidade={unidadeDaTela} />}
+                    {leituraDemanda && (
+                      <PainelDemanda
+                        leitura={leituraDemanda}
+                        grupoNome={grupoDoCadastro ? `${grupoDoCadastro.codigo} · ${grupoDoCadastro.nome}` : null}
+                        aoConfigurar={() => setVerDemanda(true)}
+                        daPlanilha={Boolean(planilhaDoGrupo?.ativa)}
+                        /* Vazio LIMPA a escolha e devolve o quadro ao automatico
+                           (a semana que contem a medicao). Explicito de
+                           proposito: lerCodigoSemana('') ja' devolve null, mas
+                           depender disso amarraria a volta ao automatico a um
+                           detalhe do parser. */
+                        aoTrocarSemana={(chave) => setSemanaEscolhida(chave ? lerCodigoSemana(chave) : null)}
+                        noPapel={programaNoPapel}
+                        aoAlternarPapel={alternarProgramaNoPapel}
+                      />
+                    )}
+                    {cartoes}
+                    <AnalisePeriodo
+                      secoes={analise}
+                      resumo={resumoVisivel}
+                      noPapel={analiseNoPapel}
+                      aoAlternarPapel={alternarAnaliseNoPapel}
+                    />
+                  </>
+                )}
+
+                {/* RITMO: cada maquina contra as outras (pressupoe ter visto
+                    cada uma, no Resumo), a regua do ciclo (que responde a
+                    duvida que a comparacao levanta), o ritmo por peca e os
+                    graficos. */}
+                {!verArquivadas && sub === 'ritmo' && (
+                  <>
+                    <ComparativoMaquinas comparativo={entreMaquinas} />
+                    <RitmoPorCiclo classes={porCiclo.classes} mistas={porCiclo.mistas} />
+                    {resumoPecasVisivel.length > 0 && (
+                      <TabelaRitmoPorPeca resumoPecas={resumoPecasVisivel} unidade={unidadeDaTela} />
+                    )}
+                    <GraficosRitmo
+                      unidade={unidadeDaTela}
+                      resumo={resumoVisivel}
+                      filtro={filtro}
+                      barrasDoFiltro={barrasDoFiltro}
+                      curvaDoDia={curvaDoDia}
+                      conferencias={visiveis}
+                    />
+                  </>
+                )}
+
+                {!verArquivadas && sub === 'paradas' && (
+                  <>
+                    {comparativo && (
+                      <ComparativoParadas
+                        comparativo={comparativo} resumo={resumoVisivel} escopo={escopo} unidade={unidadeDaTela}
+                      />
+                    )}
+                    {painel && painel.pareto.totalMs > 0 && <ParetoParadas pareto={painel.pareto} />}
+                    {!temParada && (
+                      <p style={est.subVazia} role="status">
+                        Nenhuma parada marcada nas medições deste período.
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {!verArquivadas && sub === 'medicoes' && tabela}
+              </>
+            );
+          })()}
         </main>
 
         {verVersoes && (
@@ -608,7 +734,12 @@ export default function RelatorioConferencias({ aoVoltar, aoVerInicio }) {
                nao tem mais o que mostrar, e a tela ficaria vazia sem dizer
                por que. */
             aoConfirmar={() => dados.alternarArquivoDaMaquina(
-              confirmandoLote, () => { setConfirmandoLote(null); setSelecao(null); },
+              confirmandoLote, () => {
+                setConfirmandoLote(null);
+                // As MARCADAS saem e a maquina continua escolhida: a lista
+                // dela segue na tela, com o resto.
+                if (confirmandoLote.marcadas) setMarcadas([]); else setSelecao(null);
+              },
             )}
           />
         )}

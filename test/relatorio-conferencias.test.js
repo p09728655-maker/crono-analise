@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   TODAS, aproveitamentoDoNominal, barrasPorMedicao, escopoDaLateral, filtrarPorGrupo, filtrarPorMaquina,
-  filtrarPorPeriodo, filtrarResumo, formatarDataHora, formatarNominal, itensDaLateral, loteDaMaquina,
+  filtrarPorBusca, filtrarPorPeriodo, filtrarResumo, formatarDataHora, formatarNominal, itensDaLateral, loteDaMaquina,
   mapaNominalDoCadastro, resumoDoPeriodo,
 } from '../src/domain/relatorioConferencias.js';
 
@@ -318,6 +318,30 @@ describe('loteDaMaquina — arquivar o que esta na tela', () => {
  * sempre, e o "ritmo medio" do topo virava a media de meses — numero que
  * nao e' o ritmo de nada, sustentando decisao de capacidade.
  */
+describe('filtrarPorBusca — a sub-aba Medições (v2.117.0)', () => {
+  const L = [
+    { id: 1, peca: '501094 · MESA CABECEIRA SLEEP', maquina: 'EMBALAGEM 01', salvo_em: '2026-11-18T17:19:00Z' },
+    { id: 2, peca: 'Penteadeira Eloá - caixa 1/2', maquina: 'EMBALAGEM 01', salvo_em: '2026-10-21T13:39:00Z' },
+    { id: 3, peca: 'Lateral Mesa', maquina: 'Furadeira 03', salvo_em: '2026-11-18T12:00:00Z' },
+  ];
+  const ids = (texto) => filtrarPorBusca(L, texto).map((c) => c.id);
+
+  it('vazio (ou so espacos) devolve a lista inteira', () => {
+    expect(ids('')).toEqual([1, 2, 3]);
+    expect(ids('   ')).toEqual([1, 2, 3]);
+    expect(filtrarPorBusca(L, null)).toBe(L);
+  });
+
+  it('cada palavra tem de aparecer na peca, na maquina ou na data — sem acento, sem maiuscula', () => {
+    expect(ids('sleep')).toEqual([1]);
+    expect(ids('eloa')).toEqual([2]);
+    expect(ids('MESA')).toEqual([1, 3]);
+    expect(ids('mesa furadeira')).toEqual([3]);
+    expect(ids('mesa  18/11')).toEqual([1, 3]);
+    expect(ids('madero')).toEqual([]);
+  });
+});
+
 describe('filtrarPorPeriodo', () => {
   const AGORA = Date.parse('2026-09-15T12:00:00Z');
   const em = (iso) => ({ iniciado_em: iso, maquina: 'FURADEIRA 16' });

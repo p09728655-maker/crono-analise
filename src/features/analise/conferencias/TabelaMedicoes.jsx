@@ -15,14 +15,23 @@ import { porMinuto } from './formato.js';
  * inteira precisa ficar ao lado das linhas que vao sair, nao escondido
  * so' na lateral — o mesmo lugar do "Arquivar" de cada linha. O lote so'
  * existe com a maquina escolhida na lateral (ver loteDaMaquina).
+ *
+ * BUSCA E MARCAR (v2.117.0, PPCP 19/11: "quando tenho que arquivar esta
+ * dando rolagem absurda"): a busca corta as linhas (peca, maquina ou data —
+ * filtrarPorBusca) e cada linha tem a sua caixa; o "Arquivar as N marcadas"
+ * fica na faixa das sub-abas, presa no topo. `linhas` ja' chega cortada pela
+ * busca; `total` e' quantas havia antes dela.
  */
 export default function TabelaMedicoes({
   linhas, escopo, filtro, verArquivadas, lote, ocupado,
   aoArquivarLote, aoRenomear, aoEditarParadas, aoAlternarArquivo, aoExcluir,
+  busca = '', aoBuscar = null, total = null, marcadas = null, aoMarcar = null, aoMarcarTodas = null,
   // A unidade da tela (ver useLeitura): volumes so' com a embalagem sozinha.
   unidade: u = { singular: 'peça', plural: 'peças', abrev: 'pç' },
 }) {
   const U = `${u.plural.charAt(0).toUpperCase()}${u.plural.slice(1)}`;
+  const comMarca = Boolean(marcadas && aoMarcar);
+  const todasMarcadas = comMarca && linhas.length > 0 && linhas.every((c) => marcadas.has(c.id));
   /**
    * A frase do LOTE. Com um GRUPO escolhido ela nao pode ser "escolha uma
    * máquina em MÁQUINAS": o usuário acabou de escolher nessa mesma lateral,
@@ -65,6 +74,21 @@ export default function TabelaMedicoes({
           <p style={est.painelDica}>
             {dicaLote}
           </p>
+          {aoBuscar && (
+            <div style={est.medBuscaLinha}>
+              <input
+                type="search" style={est.medBusca} value={busca}
+                onChange={(e) => aoBuscar(e.target.value)}
+                placeholder="Buscar peça, máquina ou data (ex.: sleep 18/11)"
+                aria-label="Buscar medição por peça, máquina ou data"
+              />
+              <span style={est.medContagem} role="status">
+                {busca.trim()
+                  ? `${linhas.length} de ${total ?? linhas.length} medição(ões)`
+                  : `${linhas.length} medição(ões)`}
+              </span>
+            </div>
+          )}
         </div>
         {lote && (
           <button
@@ -80,6 +104,17 @@ export default function TabelaMedicoes({
       <table style={est.tabela}>
         <thead>
           <tr>
+            {comMarca && (
+              <th style={{ ...est.th, width: 1 }}>
+                <input
+                  type="checkbox" style={est.caixaMarca} checked={todasMarcadas}
+                  disabled={!linhas.length}
+                  onChange={() => aoMarcarTodas(todasMarcadas ? [] : linhas.map((c) => c.id))}
+                  aria-label={todasMarcadas ? 'Desmarcar todas as da lista' : 'Marcar todas as da lista'}
+                  title={todasMarcadas ? 'Desmarcar todas' : 'Marcar todas as que a lista mostra (com a busca, só as achadas)'}
+                />
+              </th>
+            )}
             <th style={est.th}>Data</th>
             <th style={est.th}>Máquina</th>
             <th style={est.th}>Peça</th>
@@ -94,6 +129,14 @@ export default function TabelaMedicoes({
           </tr>
         </thead>
         <tbody>
+          {!linhas.length && busca.trim() && (
+            <tr>
+              <td style={est.tdObservacao} colSpan={comMarca ? 12 : 11} role="status">
+                Nenhuma medição com “{busca.trim()}” nesta lista.{' '}
+                <button type="button" style={est.botaoLinha} onClick={() => aoBuscar('')}>Limpar a busca</button>
+              </td>
+            </tr>
+          )}
           {linhas.map((c) => {
             const calc = conferenciaRapida({
               duracaoMs: Number(c.duracao_ms), pecas: c.pecas, paradas: c.paradas,
@@ -104,6 +147,15 @@ export default function TabelaMedicoes({
             return (
               <Fragment key={c.id}>
               <tr>
+                {comMarca && (
+                  <td style={est.tdMarca}>
+                    <input
+                      type="checkbox" style={est.caixaMarca} checked={marcadas.has(c.id)}
+                      onChange={() => aoMarcar(c)} disabled={travada}
+                      aria-label={`Marcar a medição de ${c.peca || 'sem nome'} em ${formatarDataHora(c.salvo_em)}`}
+                    />
+                  </td>
+                )}
                 <td style={est.tdFraco}>{formatarDataHora(c.salvo_em)}</td>
                 <td style={est.tdCurto}>{c.maquina || '—'}</td>
                 {/* O NOME DA PECA e' clicavel: e' texto digitado no aparelho,
@@ -179,7 +231,7 @@ export default function TabelaMedicoes({
                   12a coluna nao cabe. Fica embaixo, onde o olho ja' esta'. */}
               {c.observacao && (
                 <tr>
-                  <td style={est.tdObservacao} colSpan={11}>
+                  <td style={est.tdObservacao} colSpan={comMarca ? 12 : 11}>
                     <span style={est.rotuloObservacao}>Obs.</span>
                     {c.observacao}
                   </td>

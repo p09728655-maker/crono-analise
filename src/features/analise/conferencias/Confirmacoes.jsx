@@ -13,13 +13,15 @@ import { est } from './estilos.js';
  * arquivar e excluir e' a que custa dado.
  */
 export function ConfirmarLote({ lote, erro, ocupado, aoCancelar, aoConfirmar }) {
+  // As MARCADAS na sub-aba Medicoes (v2.117.0) ou a maquina inteira.
+  const deQuem = lote.marcadas
+    ? (lote.ids.length === 1 ? 'a medição marcada' : `as ${lote.ids.length} medições marcadas`)
+    : `as medições da ${lote.maquina}`;
   return (
-    <div style={est.modal} role="dialog" aria-label="Arquivar máquina">
+    <div style={est.modal} role="dialog" aria-label={lote.marcadas ? 'Arquivar medições marcadas' : 'Arquivar máquina'}>
       <div style={est.caixaModal}>
         <h2 style={est.tituloModal}>
-          {lote.arquivada
-            ? `Arquivar as medições da ${lote.maquina}?`
-            : `Restaurar as medições da ${lote.maquina}?`}
+          {lote.arquivada ? `Arquivar ${deQuem}?` : `Restaurar ${deQuem}?`}
         </h2>
         <p style={est.textoModal}>
           {lote.arquivada

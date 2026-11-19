@@ -465,6 +465,47 @@ export function roubadosPelasParadas(conferencia) {
 }
 
 /**
+ * A esteira como a medicao salva a guarda (`esteira_*`), a partir do que o
+ * video manda salvar (esteiraParaSalvar): a revisao, antes de salvar, escreve
+ * a MESMA frase que a folha vai imprimir (v2.115.1).
+ */
+export function esteiraEmColunas(e) {
+  if (!e) return {};
+  return {
+    esteira_distancia_mm: e.distanciaMm ?? null,
+    esteira_atraso_ms: e.atrasoMs ?? null,
+    esteira_metodo: e.metodo ?? null,
+    esteira_caixas: e.caixas ?? null,
+    esteira_intervalo_ms: e.intervaloMs ?? null,
+    esteira_caixa_mm: e.caixaMm ?? null,
+  };
+}
+
+/** As entradas guardadas (`esteira_*`) e a conta da tela de video, ou null sem esteira. */
+function contaDaEsteira(conferencia) {
+  const c = conferencia || {};
+  const distanciaMm = Number(c.esteira_distancia_mm);
+  const atrasoMs = Number(c.esteira_atraso_ms);
+  const caixaMm = Number(c.esteira_caixa_mm) > 0 ? Number(c.esteira_caixa_mm) : null;
+  const intervaloMs = Number(c.esteira_intervalo_ms) > 0 ? Number(c.esteira_intervalo_ms) : null;
+  const r = esteiraPelasLinhas({ atrasoMs, distanciaMm, intervaloTipicoMs: intervaloMs, comprimentoMm: caixaMm });
+  if (!r) return null;
+  const caixas = Number(c.esteira_caixas) > 0 ? Number(c.esteira_caixas) : null;
+  const como = c.esteira_metodo === 'caixa'
+    ? `a mediana${caixas ? ` de ${caixas} ${caixas === 1 ? 'caixa' : 'caixas'}` : ''}, caixa a caixa`
+    : 'pelo vídeo inteiro';
+  // Curto, para o campo da folha: caixa a caixa sem a contagem, ou o video inteiro.
+  const comoCurto = c.esteira_metodo === 'caixa' ? 'caixa a caixa' : 'pelo vídeo inteiro';
+  return {
+    ...r, distanciaMm, atrasoMs, caixaMm, intervaloMs, como, comoCurto,
+    caixas: c.esteira_metodo === 'caixa' ? caixas : null,
+  };
+}
+const mm0 = (v) => String(Math.round(v));
+const dec1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
+const dec2 = (v) => (Math.round(v * 100) / 100).toFixed(2);
+
+/**
  * A ESTEIRA PELAS LINHAS A E B, na tela e na folha do Takt Time (v2.115.0,
  * PPCP 19/11: "coloca na impressao velocidade e entre pecas"). Sai das
  * entradas guardadas na medicao por video (`esteira_*`) pela MESMA conta da
@@ -476,32 +517,63 @@ export function roubadosPelasParadas(conferencia) {
  * @returns { rotulo, texto } ou null (medicao sem esteira)
  */
 export function fraseDaEsteira(conferencia) {
-  const c = conferencia || {};
-  const distanciaMm = Number(c.esteira_distancia_mm);
-  const atrasoMs = Number(c.esteira_atraso_ms);
-  const caixaMm = Number(c.esteira_caixa_mm) > 0 ? Number(c.esteira_caixa_mm) : null;
-  const intervaloMs = Number(c.esteira_intervalo_ms) > 0 ? Number(c.esteira_intervalo_ms) : null;
-  const r = esteiraPelasLinhas({ atrasoMs, distanciaMm, intervaloTipicoMs: intervaloMs, comprimentoMm: caixaMm });
-  if (!r) return null;
-  const n0 = (v) => String(Math.round(v));
-  const n1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
-  const n2 = (v) => (Math.round(v * 100) / 100).toFixed(2);
-  const partes = [`velocidade ${n1(r.velocidadeMMin)} m/min`];
-  if (r.passoMm == null) {
+  const e = contaDaEsteira(conferencia);
+  if (!e) return null;
+  const partes = [`velocidade ${dec1(e.velocidadeMMin)} m/min`];
+  if (e.passoMm == null) {
     partes.push('caixa + vão e entre-peças — (o intervalo entre as caixas não fechou)');
   } else {
-    partes.push(`caixa + vão ${n0(r.passoMm)} mm (uma caixa a cada ${n1(intervaloMs / 1000)} s)`);
-    partes.push(r.entrePecasMm != null
-      ? `entre-peças ≈ ${n0(r.entrePecasMm)} mm (caixa de ${n0(caixaMm)} mm)`
+    partes.push(`caixa + vão ${mm0(e.passoMm)} mm (uma caixa a cada ${dec1(e.intervaloMs / 1000)} s)`);
+    partes.push(e.entrePecasMm != null
+      ? `entre-peças ≈ ${mm0(e.entrePecasMm)} mm (caixa de ${mm0(e.caixaMm)} mm)`
       : 'entre-peças — (sem a medida da caixa)');
   }
-  const caixas = Number(c.esteira_caixas) > 0 ? Number(c.esteira_caixas) : null;
-  const como = c.esteira_metodo === 'caixa'
-    ? `a mediana${caixas ? ` de ${caixas} ${caixas === 1 ? 'caixa' : 'caixas'}` : ''}, caixa a caixa`
-    : 'pelo vídeo inteiro';
   return {
     rotulo: 'Esteira, pelas linhas A e B',
-    texto: `${partes.join(' · ')}. A ponta da caixa leva ${n2(atrasoMs / 1000)} s de A até B (${n0(distanciaMm)} mm), `
-      + `${como}. É o que a linha praticou neste vídeo, não um padrão.`,
+    texto: `${partes.join(' · ')}. A ponta da caixa leva ${dec2(e.atrasoMs / 1000)} s de A até B (${mm0(e.distanciaMm)} mm), `
+      + `${e.como}. É o que a linha praticou neste vídeo, não um padrão.`,
   };
+}
+
+/**
+ * A ESTEIRA NA FOLHA, em campos (v2.116.0, PPCP 19/11: "melhorar a informacao
+ * na impressao, ela e' importante"): os mesmos numeros da frase, na 1a pagina,
+ * no formato dos outros numeros da folha, com o CADASTRO do produto ao lado —
+ * e' contra ele (velocidade e entre-pecas) que o tempo-alvo e' calculado.
+ * Medido e cadastro lado a lado, sem veredito: o video mede onde as linhas
+ * estao (na seladora a caixa passa fechada), o cadastro e' da esteira do
+ * produto.
+ *
+ * @returns [{ rotulo, valor, sub }] ou null (medicao sem esteira)
+ */
+export function camposDaEsteira(conferencia, alvo = null) {
+  const e = contaDaEsteira(conferencia);
+  if (!e) return null;
+  const cadastro = (v, fmt, un) => (Number(v) > 0 ? `cadastro: ${fmt(Number(v))} ${un}` : null);
+  const semPasso = e.passoMm == null;
+  return [
+    {
+      rotulo: 'Velocidade da esteira',
+      valor: `${dec1(e.velocidadeMMin)} m/min`,
+      sub: cadastro(alvo?.vel, dec1, 'm/min') || 'medida no vídeo',
+    },
+    {
+      rotulo: 'Caixa + vão',
+      valor: semPasso ? '—' : `${mm0(e.passoMm)} mm`,
+      sub: semPasso ? 'o intervalo entre as caixas não fechou' : `uma caixa a cada ${dec1(e.intervaloMs / 1000)} s`,
+    },
+    {
+      rotulo: 'Entre-peças',
+      valor: e.entrePecasMm != null ? `≈ ${mm0(e.entrePecasMm)} mm` : '—',
+      sub: [
+        semPasso ? 'sem o caixa + vão' : (e.caixaMm ? `caixa de ${mm0(e.caixaMm)} mm` : 'falta a medida da caixa'),
+        cadastro(alvo?.entre, mm0, 'mm'),
+      ].filter(Boolean).join(' · '),
+    },
+    {
+      rotulo: 'Ponta da caixa de A até B',
+      valor: `${dec2(e.atrasoMs / 1000)} s`,
+      sub: `${mm0(e.distanciaMm)} mm · ${e.caixas ? `mediana de ${e.caixas} caixas` : e.comoCurto}`,
+    },
+  ];
 }

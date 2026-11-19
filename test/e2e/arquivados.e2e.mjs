@@ -119,6 +119,48 @@ for (const modo of ['analise', 'coleta']) {
   await ctx.close();
 }
 
+/* ---------- ARQUIVAR VARIOS de uma vez, no PC (v2.118.0): so' arquiva, nunca apaga */
+{
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
+  const p = await ctx.newPage();
+  const erros = [];
+  p.on('pageerror', (e) => erros.push(e.message));
+  await p.goto(`${PAGINA}?modo=analise&comconcluido=1`);
+  await p.getByText('Estudo pronto').first().waitFor({ timeout: 8000 });
+  const caixas = p.getByRole('checkbox', { name: /^Marcar o estudo / });
+  const total = await caixas.count();
+  checar(total >= 2, `PC: cada estudo tem a sua caixa para marcar (${total})`);
+  await caixas.nth(0).check();
+  await caixas.nth(1).check();
+  const barra = p.getByRole('region', { name: 'Estudos marcados' });
+  checar(/2 estudos marcados/.test(await barra.innerText()), 'PC: a barra diz quantos estao marcados');
+  await barra.getByRole('button', { name: 'Arquivar os 2 marcados' }).click();
+  const dialogo = p.getByRole('dialog', { name: 'Arquivar estudos marcados' });
+  const texto = await dialogo.innerText();
+  checar(/Arquivar os 2 estudos marcados\?/.test(texto) && /nada é apagado/i.test(texto),
+    'PC: a confirmacao diz quantos e que nada e apagado');
+  await dialogo.getByRole('button', { name: 'Arquivar os 2' }).click();
+  await p.waitForFunction(() => window.__patches.length >= 2, { timeout: 8000 });
+  const patches = await p.evaluate(() => window.__patches);
+  checar(patches.length === 2 && patches.every((x) => x.corpo.status === 'arquivado'),
+    'PC: cada marcado vai como status "arquivado" — o lote nunca apaga');
+  checar((await p.evaluate(() => window.__deletes.length)) === 0, 'PC: nenhum DELETE no lote');
+  await dialogo.waitFor({ state: 'detached', timeout: 8000 });
+  checar(await p.getByRole('region', { name: 'Estudos marcados' }).count() === 0,
+    'PC: arquivados, a janela fecha e a barra some');
+  // Marcar todos de um produto pelo cabecalho, e desmarcar.
+  const doGrupo = p.getByRole('checkbox', { name: /^Marcar todos os estudos de / }).first();
+  if (await doGrupo.count()) {
+    await doGrupo.check();
+    checar(await p.getByRole('region', { name: 'Estudos marcados' }).count() === 1,
+      'PC: a caixa do cabecalho marca todos os estudos do produto');
+    await p.getByRole('region', { name: 'Estudos marcados' }).getByRole('button', { name: 'Desmarcar' }).click();
+    checar(await p.getByRole('region', { name: 'Estudos marcados' }).count() === 0, 'PC: desmarcar limpa a marcacao');
+  }
+  checar(erros.length === 0, `arquivar varios: sem erro de pagina (${erros.join('; ') || 'nenhum'})`);
+  await ctx.close();
+}
+
 /* --------------- concluido: so no PC, com o caminho de volta ao tablet */
 {
   // PC: o estudo concluido aparece, com o botao de devolver ao tablet.

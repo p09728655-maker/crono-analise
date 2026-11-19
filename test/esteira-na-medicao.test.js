@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import {
   detectarVolumes, esteiraParaSalvar, esteiraPelasLinhas, linhaBDaLeitura, ocupacaoTipica, saidasDosVolumes,
 } from '../src/domain/deteccaoVolumes.js';
-import { fraseDaEsteira } from '../src/domain/volumeAVolume.js';
+import { camposDaEsteira, esteiraEmColunas, fraseDaEsteira } from '../src/domain/volumeAVolume.js';
 import { esteiraDaConferencia } from '../api/_lib/validar.js';
 
 const LINHAS = {
@@ -83,6 +83,39 @@ describe('fraseDaEsteira — a folha do Takt Time', () => {
     esteira_distancia_mm: e.distanciaMm, esteira_atraso_ms: e.atrasoMs, esteira_metodo: e.metodo,
     esteira_caixas: e.caixas, esteira_intervalo_ms: e.intervaloMs, esteira_caixa_mm: e.caixaMm,
   }).map(([k, v]) => [k, v ?? null]));
+
+  it('a revisao, antes de salvar, escreve a MESMA frase que a folha (esteiraEmColunas)', () => {
+    const e = { distanciaMm: 310, atrasoMs: 1604, metodo: 'caixa', caixas: 51, intervaloMs: 6100, caixaMm: 440 };
+    expect(fraseDaEsteira(esteiraEmColunas(e))).toEqual(fraseDaEsteira(linha(e)));
+    expect(esteiraEmColunas(null)).toEqual({});
+    expect(fraseDaEsteira(esteiraEmColunas(null))).toBeNull();
+  });
+
+  it('a FOLHA em campos (v2.116.0): os numeros da frase, com o cadastro do produto ao lado', () => {
+    const c = linha({ distanciaMm: 310, atrasoMs: 1620, metodo: 'caixa', caixas: 52, intervaloMs: 5998, caixaMm: 440 });
+    const campos = camposDaEsteira(c, { vel: 9, entre: 400, medida: 825 });
+    expect(campos.map((k) => [k.rotulo, k.valor, k.sub])).toEqual([
+      ['Velocidade da esteira', '11.5 m/min', 'cadastro: 9.0 m/min'],
+      ['Caixa + vão', '1148 mm', 'uma caixa a cada 6.0 s'],
+      ['Entre-peças', '≈ 708 mm', 'caixa de 440 mm · cadastro: 400 mm'],
+      ['Ponta da caixa de A até B', '1.62 s', '310 mm · mediana de 52 caixas'],
+    ]);
+    // Os mesmos numeros da frase da tela.
+    const f = fraseDaEsteira(c).texto;
+    for (const v of ['11.5 m/min', '1148 mm', '≈ 708 mm', '1.62 s']) expect(f).toContain(v);
+  });
+
+  it('a folha sem cadastro, sem caixa, sem intervalo, pelo video inteiro: diz o que falta, sem inventar', () => {
+    const semCaixa = camposDaEsteira(linha({ distanciaMm: 310, atrasoMs: 1620, metodo: 'caixa', intervaloMs: 6000 }));
+    expect(semCaixa[0].sub).toBe('medida no vídeo');
+    expect(semCaixa[2]).toMatchObject({ valor: '—', sub: 'falta a medida da caixa' });
+    expect(semCaixa[3].sub).toBe('310 mm · caixa a caixa');
+    const semPasso = camposDaEsteira(linha({ distanciaMm: 310, atrasoMs: 1670, metodo: 'sinal' }), { vel: 9, entre: 400 });
+    expect(semPasso[1]).toMatchObject({ valor: '—', sub: 'o intervalo entre as caixas não fechou' });
+    expect(semPasso[2]).toMatchObject({ valor: '—', sub: 'sem o caixa + vão · cadastro: 400 mm' });
+    expect(semPasso[3].sub).toBe('310 mm · pelo vídeo inteiro');
+    expect(camposDaEsteira({})).toBeNull();
+  });
 
   it('medicao sem esteira: nada', () => {
     expect(fraseDaEsteira({})).toBeNull();

@@ -305,6 +305,23 @@ export function estilos(t, analise) {
       borderWidth: 1, borderStyle: 'solid', borderColor: t.borda, borderRadius: raio.sm,
       color: t.texto, ...tipo('legenda'), fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
     },
+    /* ARQUIVAR VARIOS ESTUDOS (v2.118.0, PPCP 19/11: "ter opcao para
+       arquivar mais de um estudo de uma vez"). A barra fica fora da area que
+       rola de lado (la' o sticky nao prende): presa no topo da tela. */
+    barraMarcados: {
+      position: 'sticky', top: 0, zIndex: 5,
+      display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: espaco.md,
+      margin: `0 0 ${espaco.md}px`, padding: `${espaco.sm}px ${espaco.md}px`,
+      background: '#EAF2FC', borderWidth: 1, borderStyle: 'solid', borderColor: '#BBD3F0', borderRadius: raio.md,
+    },
+    barraMarcadosTexto: { flex: '1 1 220px', ...tipo('corpoF'), color: t.texto },
+    thMarca: {
+      padding: `${espaco.md}px ${espaco.sm}px ${espaco.md}px ${espaco.lg}px`, background: t.realce,
+      borderBottom: `1px solid ${t.borda}`,
+    },
+    tdMarca: { padding: `0 ${espaco.sm}px 0 ${espaco.lg}px`, borderBottom: `1px solid ${t.borda}` },
+    caixaMarca: { width: 18, height: 18, margin: 0, cursor: 'pointer', verticalAlign: 'middle' },
+    listaModal: { margin: 0, paddingLeft: espaco.xl, ...tipo('legenda'), color: t.medio },
     botaoRemover: {
       width: 32, height: 32, background: 'transparent', border: 'none',
       borderRadius: raio.sm, color: t.fraco, fontSize: 18, lineHeight: 1,

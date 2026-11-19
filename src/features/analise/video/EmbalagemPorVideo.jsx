@@ -34,6 +34,7 @@ import { useTemposAlvo } from '../../../lib/temposAlvo.js';
 import {
   descontaSetup, explicacaoDoAlvo, fraseDaSemana, semAlvo,
 } from '../../../domain/tempoAlvo.js';
+import { esteiraEmColunas, fraseDaEsteira } from '../../../domain/volumeAVolume.js';
 import { GraficoIntervalos } from '../graficos/Intervalos.jsx';
 import { ESTILO_TAKT, PainelTakt } from '../../coleta/rapida/CronometroAoVivo.jsx';
 import { est } from '../conferencias/estilos.js';
@@ -356,6 +357,10 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
   const caixaTexto = caixa?.chave === chaveCaixa ? caixa.texto : null;
   const trocarCaixa = (texto) => setCaixa(texto == null ? null : { chave: chaveCaixa, texto });
   const caixaMm = caixaTexto != null ? mmDigitado(caixaTexto) : (alvo?.medida > 0 ? alvo.medida : null);
+  // A esteira pelas linhas A e B da LEITURA do video (nunca a do teste de
+  // 2 min), so' quando o quadro mostra os numeros: o que a revisao mostra e o
+  // que o Salvar manda (v2.115.0; na revisao desde a v2.115.1).
+  const esteira = esteiraParaSalvar({ linhaB: automatica.resultado?.linhaB, retangulo, caixaMm });
 
   /* --------------------------------------------------------- arquivo */
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -946,9 +951,7 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
       observacao: observacao.trim() || null, paradas: med.paradas,
       marcasMs: med.marcasMs, marcasRelogioMs: med.marcasRelogioMs, marcasSetupMs: med.marcasSetupMs,
       salvoEm: med.salvoEm,
-      // A esteira pelas linhas A e B da LEITURA do video (nunca a do teste de
-      // 2 min), so' quando o quadro mostra os numeros (v2.115.0).
-      esteira: esteiraParaSalvar({ linhaB: automatica.resultado?.linhaB, retangulo, caixaMm }),
+      esteira,
     };
     // Antes de enviar: se a resposta nao voltar e o PC fechar, o rascunho ja'
     // sabe que esta marcacao pode estar no servidor.
@@ -1228,6 +1231,8 @@ export default function EmbalagemPorVideo({ aoVoltar, aoVerInicio }) {
                   salvar={salvar} aoSalvar={() => salvarMedicao()}
                   mexida={mexida} aoArquivarESalvar={arquivarESalvar} aoDescartarMexida={descartarMexida}
                   aoVoltar={() => { setFimMs(null); setEtapa('marcar'); }}
+                  esteira={esteira} temLinhaB={Boolean(automatica.resultado?.linhaB)}
+                  caixaTexto={caixaTexto} caixaCadastro={alvo?.medida > 0 ? Math.round(alvo.medida) : null} aoCaixa={trocarCaixa}
                 />
               )}
             </div>
@@ -1622,8 +1627,10 @@ function Numero({
 function Revisar({
   medicao, numeros, alvo, maquina, produto, observacao, aoObservacao, salvar, aoSalvar, aoVoltar,
   mexida, aoArquivarESalvar, aoDescartarMexida, conferencia = null,
+  esteira = null, temLinhaB = false, caixaTexto = null, caixaCadastro = null, aoCaixa,
 }) {
   const { porVolume, leitura, calc } = numeros;
+  const fraseEsteira = esteira ? fraseDaEsteira(esteiraEmColunas(esteira)) : null;
   const acima = alvo?.alvoMs > 0 && porVolume > alvo.alvoMs;
   const inicio = new Date(medicao.iniciadoEm);
   const fim = new Date(medicao.salvoEm);
@@ -1659,6 +1666,44 @@ function Revisar({
       )}
       {conferencia && <p style={ev.dica}><TextoConferencia c={conferencia} /></p>}
       {leitura && <GraficoIntervalos leitura={leitura} unidade={VOLUME} altura={240} />}
+      {/* A ESTEIRA QUE VAI COM A MEDICAO (v2.115.1): a mesma frase que a folha
+          do Takt Time imprime, e a caixa do entre-pecas para acertar aqui —
+          antes de salvar, que depois nao muda. */}
+      {fraseEsteira && (
+        <div style={ev.esteira} aria-label="Esteira que vai com a medição">
+          <p style={ev.esteiraTitulo}>{fraseEsteira.rotulo} — vai com a medição e sai na folha do Takt Time</p>
+          <p style={{ ...ev.dica, margin: 0 }}>{fraseEsteira.texto}</p>
+          <label style={ev.esteiraRegua}>
+            <span style={ev.dica}>Caixa para o entre-peças:</span>
+            <input
+              type="number" min="1" step="1" inputMode="numeric" style={ev.esteiraCampo} placeholder="mm"
+              value={caixaTexto ?? (caixaCadastro ?? '')}
+              onChange={(e) => aoCaixa(e.target.value)} disabled={salvar.estado === 'enviando'}
+              aria-label="Comprimento da caixa para o entre-peças, em mm"
+            />
+            <span style={ev.dica}>
+              mm{caixaTexto == null && caixaCadastro ? ' (do cadastro do produto)' : ''} — no sentido da esteira; no fim
+              da linha, a caixa fechada.
+            </span>
+          </label>
+          {/* O cadastro tem a caixa ABERTA (a do comeco da linha, PPCP 18/11:
+              "825 caixa aberta"); na seladora ela passa fechada. Com a do
+              cadastro, o entre-pecas da seladora sai metade do real, calado. */}
+          {caixaTexto == null && caixaCadastro && (
+            <p style={ev.aviso} role="status">
+              Confira a caixa: {caixaCadastro} mm é a do cadastro, a caixa aberta do começo da linha. Se as linhas A e B
+              estão no fim da linha (seladora), a caixa passa fechada — digite a medida dela antes de salvar, senão o
+              entre-peças sai errado na folha.
+            </p>
+          )}
+        </div>
+      )}
+      {!fraseEsteira && temLinhaB && (
+        <p style={ev.aviso} role="status">
+          A esteira das linhas A e B não vai com esta medição: o quadro da esteira não deu os números (falta a distância
+          de A até B, ou ele mostrou um aviso). Em “Voltar a marcar” dá para ver o porquê e corrigir.
+        </p>
+      )}
       <label style={ev.campo}>
         <span style={ev.rotulo}>Observação (opcional)</span>
         <textarea

@@ -13,6 +13,46 @@ export const VERSAO = version;
 
 export const HISTORICO = [
   {
+    versao: '2.118.0',
+    data: '2026-11-19',
+    titulo: 'Arquivar vários estudos de uma vez',
+    itens: [
+      'MARCAR E ARQUIVAR: na lista de estudos do PC, cada estudo tem a sua caixa, e a do cabeçalho marca todos os do produto. A barra presa no topo diz quantos estão marcados e tem o "Arquivar os N marcados".',
+      'O LOTE SÓ ARQUIVA, NUNCA APAGA: o × de cada linha apaga o estudo sem ciclo (rascunho, teste); em lote isso seria apagar vários preparos sem ver um por um. Todos os marcados vão para Arquivados, com ou sem ciclo, e voltam com um clique. A confirmação lista os nomes, diz quantos ciclos ficam guardados e quantos estão no tablet (saem da coleta do posto também).',
+      'Se o servidor recusar um no meio, o lote para ali e diz quantos já foram e em qual parou; os que faltam continuam marcados para tentar de novo. Só conta como marcado o estudo que está na tela: buscar ou trocar de produto não deixa marcado escondido.',
+    ],
+  },
+  {
+    versao: '2.117.0',
+    data: '2026-11-19',
+    titulo: 'Ritmo por máquina em sub-abas, e arquivar as marcadas',
+    itens: [
+      'SUB-ABAS, COMO NO PAINEL: o relatório empilhava onze quadros, e a tabela das medições — onde se arquiva — vinha no fim, depois de metros de gráficos. Agora cada tarefa tem a sua sub-aba: RESUMO (os números do período, o programa da semana, cada máquina e a análise escrita), RITMO (a comparação entre as máquinas, o ciclo, o ritmo por peça e os gráficos), PARADAS (o que a parada custou e o pareto) e MEDIÇÕES (a tabela). A faixa das sub-abas fica presa no topo ao rolar. A folha impressa não muda: continua levando tudo.',
+      'BUSCAR NAS MEDIÇÕES: um campo acha a medição pela peça, pela máquina ou pela data (ex.: "sleep 18/11"), sem acento nem maiúscula, e diz quantas achou.',
+      'ARQUIVAR AS MARCADAS: cada linha tem a sua caixa (e a do cabeçalho marca todas as que a lista mostra). A faixa presa no topo diz quantas estão marcadas e tem o "Arquivar as N marcadas", com a confirmação de sempre — nada é apagado, e voltam em Arquivadas. Só conta como marcada a medição que está na tela: trocar de máquina, de período ou buscar não deixa marcada escondida.',
+    ],
+  },
+  {
+    versao: '2.116.0',
+    data: '2026-11-19',
+    titulo: 'A esteira em destaque na 1ª página da folha do Takt Time',
+    itens: [
+      'A FAIXA "ESTEIRA NO VÍDEO" NA 1ª PÁGINA: velocidade da esteira, caixa + vão, entre-peças e o tempo da ponta da caixa de A até B saem em campos, no formato dos outros números da folha, logo abaixo deles e antes do gráfico. Na 2.115.0 era uma frase depois das contas, e caía na 2ª página.',
+      'COM O CADASTRO AO LADO: a velocidade e o entre-peças medidos vêm com os do cadastro do produto (os que o tempo-alvo usa), para comparar no papel. Sem veredito: o vídeo mede onde as linhas estão (na seladora a caixa passa fechada), o cadastro é da esteira do produto.',
+      'O gráfico encolhe o que a faixa ocupa e continua na 1ª página, com a conta do tempo-alvo. Quando a folha aperta, a linha da carga da semana ("a programação da semana pede X%") vai para a 2ª — como já ia quando o tempo-alvo é pela esteira.',
+    ],
+  },
+  {
+    versao: '2.115.1',
+    data: '2026-11-19',
+    titulo: 'A revisão mostra a esteira que vai com a medição',
+    itens: [
+      'NA REVISÃO, ANTES DE SALVAR: a linha "Esteira, pelas linhas A e B" aparece como vai sair na folha do Takt Time — velocidade, caixa + vão, entre-peças e de onde veio cada número —, com o campo da caixa ali mesmo. Na 2.115.0 a esteira ia com a medição, mas a revisão não mostrava, e parecia que não tinha ido.',
+      'CONFIRA A CAIXA: quando ela vem do cadastro, a revisão avisa que é a caixa aberta, do começo da linha. Na seladora a caixa passa fechada (na Mesa Cabeceira Sleep, 440 mm contra 825): com a do cadastro, o entre-peças sairia uns 340 mm em vez de uns 720.',
+      'Quando a leitura teve linha B mas o quadro da esteira não deu os números (sem a distância, ou com aviso), a revisão diz que a esteira não vai e por quê.',
+    ],
+  },
+  {
     versao: '2.115.0',
     data: '2026-11-19',
     titulo: 'Velocidade e entre-peças na impressão do Takt Time',

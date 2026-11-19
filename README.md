@@ -482,7 +482,19 @@ do produto dele**.
   `esteiraPelasLinhas`, a mesma conta da tela), depois das contas do alvo e da
   semana — fora da reserva do gráfico, então vai para a 2ª página quando a 1ª
   está cheia. A caixa digitada mora no componente que salva (`caixa`, chave
-  máquina|produto) e vai no rascunho. Testes: `test/esteira-na-medicao.test.js`
+  máquina|produto) e vai no rascunho. A REVISÃO (v2.115.1) mostra a mesma frase
+  (`esteiraEmColunas` → `fraseDaEsteira`) com o campo da caixa, e avisa quando a
+  caixa é a do cadastro: ⚠ o cadastro tem a caixa ABERTA (825 na Mesa Cabeceira
+  Sleep); na seladora ela passa fechada (440), e com a do cadastro o
+  entre-peças sai metade do real. **Na folha, em campos na 1ª página**
+  (v2.116.0, PPCP: *"melhorar a informação na impressão, ela é importante"*):
+  `camposDaEsteira(conferencia, alvo)` — velocidade, caixa + vão, entre-peças e a
+  ponta de A até B, com o cadastro do produto ao lado (`alvo.vel`, `alvo.entre`),
+  numa faixa (`data-esteira-folha`) entre os números e o gráfico; o gráfico
+  mede o que vem antes dele e encolhe. A prioridade da 1ª página fica: gráfico,
+  conta do tempo-alvo, e por último a carga da semana (vai para a 2ª quando
+  aperta). A tela do volume a volume segue com a frase (`fraseDaEsteira`): os
+  mesmos números (`contaDaEsteira`, uma conta para as duas). Testes: `test/esteira-na-medicao.test.js`
   (o caminho inteiro no vídeo real), `test/api.integracao.test.js`, e os e2e
   `video-esteira` (sobe com a medição) e `embalagem` (sai na folha).
 - **Sem as lacunas no vídeo** (v2.112.1): o painel das marcas e a revisão
@@ -1929,7 +1941,26 @@ db/schema.sql
 
 `RelatorioConferencias.jsx` é o modelo: o arquivo que fica na rota é só o
 **arranjo** — a ordem dos quadros, o que abre e fecha, onde cada erro é
-mostrado. Quem carrega e grava é `useConferencias`; quem decide quando
+mostrado. Desde a v2.117.0 (PPCP 19/11/2026: *"quando tenho que arquivar está
+dando rolagem absurda"* → *"melhorar o fluxo igual fizemos no app painel"*) o
+arranjo é em **SUB-ABAS POR TAREFA**, como no painel (`SUBS`: RESUMO · RITMO ·
+PARADAS · MEDIÇÕES; `ritmo.sub-aba` no `sessionStorage`). A faixa
+(`est.subAbas`) fica presa no topo e leva a barra das marcadas; trocar de
+sub-aba não lê nada (os números já estão no `useLeitura`). Quadro novo entra
+numa sub-aba, nunca empilhado de novo. A folha impressa é outro componente
+(`ImpressaoConferencias`) e leva tudo. MEDIÇÕES: busca (`filtrarPorBusca`:
+peça, máquina ou data, sem acento) e marcar → "Arquivar as N marcadas" pelo
+mesmo lote do servidor (`arquivarConferencias`, `lote.marcadas`); só conta como
+marcada a que está na tela (`marcadasNaTela`). Nas ARQUIVADAS não há sub-aba.
+⚠ Teste de ponta a ponta que lê um quadro clica antes na sub-aba dele
+(`aba(p, 'ritmo')` no `relatorio-conferencias.e2e.mjs`).
+
+**Arquivar vários estudos** (v2.118.0, PPCP 19/11/2026): a lista do PC marca
+(`marcados` em `ListaEstudos`, a caixa por linha e por produto em
+`TabelaEstudos`) e a barra presa no topo (`est.barraMarcados`, FORA do
+`areaRolagem`, onde o sticky não prende) abre `ConfirmarArquivarVarios`. ⚠ O
+lote manda `PATCH status: 'arquivado'` um por um — nunca o `DELETE`, que apaga
+o estudo sem ciclo. Recusa no meio para o lote e diz em qual parou. Quem carrega e grava é `useConferencias`; quem decide quando
 recalcular é `useLeitura`; as contas moram no domínio
 (`domain/relatorioConferencias.js` para os números do topo, as barras por
 medição e a lateral por grupo). Cada quadro da tela é um componente sem
