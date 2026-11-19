@@ -35,11 +35,29 @@ describe('esteiraParaSalvar — o que vai com a medicao e o que o quadro mostra'
     })).toEqual({ distanciaMm: 310, atrasoMs: 1604, metodo: 'caixa', caixas: 51, intervaloMs: 6100, caixaMm: 440 });
   });
 
-  it('sem a caixa e sem o intervalo: vai a velocidade, sem os dois', () => {
+  it('com a caixa e sem o intervalo: vai a velocidade, sem o caixa + vao', () => {
     const e = esteiraParaSalvar({
-      linhaB: congelada({ ...valida, metodo: 'sinal', intervaloTipicoMs: null }), retangulo: { ...LINHAS, distanciaMm: 310 },
+      linhaB: congelada({ ...valida, metodo: 'sinal', intervaloTipicoMs: null }), retangulo: { ...LINHAS, distanciaMm: 310 }, caixaMm: 440,
     });
-    expect(e).toEqual({ distanciaMm: 310, atrasoMs: 1604, metodo: 'sinal', caixas: null, intervaloMs: null, caixaMm: null });
+    expect(e).toEqual({ distanciaMm: 310, atrasoMs: 1604, metodo: 'sinal', caixas: null, intervaloMs: null, caixaMm: 440 });
+  });
+
+  /* SEM A CAIXA, NADA (revisao da v2.119.0). A leitura com ocupacao de 200 ms
+     (a B a mais de uma caixa + vao da A) e' recusada com a caixa — 440, ou a
+     825 aberta de antes. Sem caixa, o `suspeito` desligava e a folha imprimia
+     "Velocidade da esteira 11.6 m/min", um numero que a tela recusaria. */
+  it('sem a caixa a esteira nao vai: sem ela a leitura nao se confere pela propria caixa', () => {
+    const ret = { ...LINHAS, distanciaMm: 310 };
+    const trocada = congelada({ ...valida, ocupacaoMs: 200 });
+    expect(esteiraParaSalvar({ linhaB: trocada, retangulo: ret, caixaMm: 440 })).toBeNull();
+    expect(esteiraParaSalvar({ linhaB: trocada, retangulo: ret, caixaMm: 825 })).toBeNull();
+    expect(esteiraParaSalvar({ linhaB: trocada, retangulo: ret })).toBeNull();
+    expect(esteiraParaSalvar({ linhaB: congelada(valida), retangulo: ret, caixaMm: null })).toBeNull();
+    expect(esteiraParaSalvar({ linhaB: congelada(valida), retangulo: ret, caixaMm: 0 })).toBeNull();
+    // exigeCaixa: false — so' para a tela saber que a unica coisa que falta e' a caixa
+    expect(esteiraParaSalvar({ linhaB: congelada(valida), retangulo: ret, exigeCaixa: false }))
+      .toMatchObject({ distanciaMm: 310, caixaMm: null });
+    expect(esteiraParaSalvar({ linhaB: congelada(valida, null), retangulo: { ...LINHAS, distanciaMm: null }, exigeCaixa: false })).toBeNull();
   });
 
   it('o que o quadro recusa nao vai: linha B que nao vale, sem distancia, atraso trocado', () => {
@@ -55,7 +73,7 @@ describe('esteiraParaSalvar — o que vai com a medicao e o que o quadro mostra'
 
   it('as linhas mudaram depois da leitura: vale a distancia congelada com ela', () => {
     const outraA = { ...LINHAS, x: 0.1, distanciaMm: null };
-    expect(esteiraParaSalvar({ linhaB: congelada(valida, 300), retangulo: outraA })?.distanciaMm).toBe(300);
+    expect(esteiraParaSalvar({ linhaB: congelada(valida, 300), retangulo: outraA, caixaMm: 440 })?.distanciaMm).toBe(300);
   });
 });
 
@@ -91,13 +109,17 @@ describe('fraseDaEsteira — a folha do Takt Time', () => {
     expect(fraseDaEsteira(esteiraEmColunas(null))).toBeNull();
   });
 
-  it('a FOLHA em campos (v2.116.0): os numeros da frase, com o cadastro do produto ao lado', () => {
+  /* O cadastro vai ao lado do CAIXA + VAO, nao do entre-pecas (revisao da
+     v2.119.0): o ENTRE_PECAS do cadastro (400) e' o vao com a caixa ABERTA
+     (825); o video mede com a FECHADA (440). "≈ 708 mm · cadastro: 400 mm"
+     dava 77% a mais de vao numa linha MAIS apertada: 1148 contra 1225. */
+  it('a FOLHA em campos (v2.116.0): os numeros da frase, com o cadastro do produto ao lado do caixa + vao', () => {
     const c = linha({ distanciaMm: 310, atrasoMs: 1620, metodo: 'caixa', caixas: 52, intervaloMs: 5998, caixaMm: 440 });
     const campos = camposDaEsteira(c, { vel: 9, entre: 400, medida: 825 });
     expect(campos.map((k) => [k.rotulo, k.valor, k.sub])).toEqual([
       ['Velocidade da esteira', '11.5 m/min', 'cadastro: 9.0 m/min'],
-      ['Caixa + vão', '1148 mm', 'uma caixa a cada 6.0 s'],
-      ['Entre-peças', '≈ 708 mm', 'caixa de 440 mm · cadastro: 400 mm'],
+      ['Caixa + vão', '1148 mm', 'uma caixa a cada 6.0 s · cadastro: 1225 mm'],
+      ['Entre-peças', '≈ 708 mm', 'caixa de 440 mm'],
       ['Ponta da caixa de A até B', '1.62 s', '310 mm · mediana de 52 caixas'],
     ]);
     // Os mesmos numeros da frase da tela.
@@ -110,9 +132,12 @@ describe('fraseDaEsteira — a folha do Takt Time', () => {
     expect(semCaixa[0].sub).toBe('medida no vídeo');
     expect(semCaixa[2]).toMatchObject({ valor: '—', sub: 'falta a medida da caixa' });
     expect(semCaixa[3].sub).toBe('310 mm · caixa a caixa');
-    const semPasso = camposDaEsteira(linha({ distanciaMm: 310, atrasoMs: 1670, metodo: 'sinal' }), { vel: 9, entre: 400 });
-    expect(semPasso[1]).toMatchObject({ valor: '—', sub: 'o intervalo entre as caixas não fechou' });
-    expect(semPasso[2]).toMatchObject({ valor: '—', sub: 'sem o caixa + vão · cadastro: 400 mm' });
+    const semPasso = camposDaEsteira(linha({ distanciaMm: 310, atrasoMs: 1670, metodo: 'sinal' }), { vel: 9, entre: 400, medida: 825 });
+    expect(semPasso[1]).toMatchObject({ valor: '—', sub: 'o intervalo entre as caixas não fechou · cadastro: 1225 mm' });
+    expect(semPasso[2]).toMatchObject({ valor: '—', sub: 'sem o caixa + vão' });
+    // sem a medida no cadastro (o jogo de caixas diferentes): sem o caixa + vao do cadastro, nunca so' o entre
+    expect(camposDaEsteira(linha({ distanciaMm: 310, atrasoMs: 1670, metodo: 'sinal' }), { vel: 9, entre: 400 })[1].sub)
+      .toBe('o intervalo entre as caixas não fechou');
     expect(semPasso[3].sub).toBe('310 mm · pelo vídeo inteiro');
     expect(camposDaEsteira({})).toBeNull();
   });

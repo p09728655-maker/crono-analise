@@ -19,7 +19,9 @@ export const HISTORICO = [
     itens: [
       'A CAIXA DO VÍDEO É A FECHADA: o quadro da linha B e a revisão já trazem a LARGURA da caixa fechada, da medida externa do ERP no cadastro do painel (coluna MEDIDA_EXT_LARGURA da PRODUTO_CODIGO). Antes vinha a MEDIDA DA CAIXA, que é a caixa ABERTA do começo da linha (825 mm contra 440 na Mesa Cabeceira Sleep), e na seladora o entre-peças saía a metade do real se ninguém digitasse a medida.',
       'O aviso "Confira a caixa" saiu: a caixa que vem do cadastro já é a fechada. Ela ainda pode ser trocada no quadro (por exemplo, câmera no começo da linha), e "voltar ao cadastro" volta para a largura.',
-      'PRODUTO SEM A LARGURA NO CADASTRO: o campo fica vazio e pede a medida — a caixa aberta nunca entra no lugar. Sem a caixa, a velocidade vai com a medição e o entre-peças não. Até o painel ser reimplantado com o .gs v5.73, todo produto fica assim.',
+      'PRODUTO SEM A LARGURA: o campo fica vazio e pede a medida — a caixa aberta nunca entra no lugar — e diz por quê: "falta reimplantar o .gs v5.73" (o painel ainda não manda a largura de nenhum produto) ou "sem a largura deste produto no cadastro".',
+      'SEM A CAIXA, A ESTEIRA NÃO VAI COM A MEDIÇÃO: sem ela a leitura não se confere pela própria caixa, e uma velocidade errada (linha B longe demais) ia para a folha. A revisão mostra o campo da caixa; digitar traz a esteira de volta.',
+      'O CADASTRO FICA AO LADO DO CAIXA + VÃO, NÃO DO ENTRE-PEÇAS: o entre-peças do cadastro é o vão com a caixa ABERTA, e o vídeo mede com a fechada — "≈ 708 mm · cadastro: 400 mm" na Mesa Cabeceira Sleep parecia vão demais numa linha que estava mais apertada (caixa + vão 1148 contra 1225 do cadastro). Na tela e na folha.',
       'O tempo-alvo não muda: ele continua pela esteira com a caixa aberta (medida da caixa + entre-peças ÷ velocidade), como o painel calcula.',
     ],
   },

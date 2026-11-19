@@ -828,12 +828,21 @@ export function distanciaDaLeitura(linhaB, retangulo) {
  * resto saem delas na folha (esteiraPelasLinhas), a mesma conta da tela.
  * Inteiros, como o banco guarda (ver `esteira_*` no schema).
  *
+ * SEM A CAIXA, NADA (v2.119.0, revisao): sem o comprimento da caixa a leitura
+ * nao se confere pela propria caixa (o `suspeito` de esteiraPelasLinhas
+ * desliga) e uma velocidade que a tela recusaria iria para o papel. Com
+ * `exigeCaixa: false` devolve o que iria sem ela — so' para a tela saber que
+ * a UNICA coisa que falta e' a caixa (e mostrar o campo).
+ *
  * @returns { distanciaMm, atrasoMs, metodo, caixas, intervaloMs, caixaMm } ou null
  */
-export function esteiraParaSalvar({ linhaB, retangulo, caixaMm } = {}) {
+export function esteiraParaSalvar({
+  linhaB, retangulo, caixaMm, exigeCaixa = true,
+} = {}) {
   if (!linhaBValida(linhaB)) return null;
   const { distanciaMm } = distanciaDaLeitura(linhaB, retangulo);
   const caixa = Number(caixaMm) > 0 ? Math.round(Number(caixaMm)) : null;
+  if (exigeCaixa && !caixa) return null;
   const r = esteiraPelasLinhas({ ...linhaB, distanciaMm, comprimentoMm: caixa });
   if (!r || r.suspeito) return null;
   const metodo = linhaB.metodo === 'caixa' ? 'caixa' : 'sinal';

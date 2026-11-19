@@ -73,6 +73,10 @@ export function respostaDosAlvos(corpo) {
       minDia: positivo(r.minDia),
       minProd: positivo(r.minProd),
       sUep: positivo(r.sUep),
+      // .gs v5.73 manda a chave `largura` em todo produto (null quando nao
+      // tem); o painel antigo nunca manda. Distingue "falta reimplantar" de
+      // "falta no cadastro" (revisao da v2.119.0).
+      largura: corpo.produtos.some((p) => p && typeof p === 'object' && Object.hasOwn(p, 'largura')),
     };
     if (!ref.metaUep || !ref.sUep) {
       return { estado: 'erro', mensagem: 'O painel mandou os tempos-alvo sem a régua (META UEP e segundos por UEP).' };

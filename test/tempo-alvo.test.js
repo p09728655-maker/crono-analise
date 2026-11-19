@@ -8,7 +8,8 @@ import {
   afterEach, describe, expect, it,
 } from 'vitest';
 import {
-  alvoDaJuncao, alvoDoProduto, alvoEmSegundos, avisoDoAlvo, caixaDoVideo, contaDoAlvo, descontaSetup, explicacaoDaRegua,
+  alvoDaJuncao, alvoDoProduto, alvoEmSegundos, avisoDoAlvo, avisoSemCaixa, caixaDoVideo, contaDoAlvo, descontaSetup,
+  explicacaoDaRegua,
   explicacaoDoAlvo, fraseDaSemana, idadeDoAlvo, medidoXAlvo, semAlvo, semAlvoCurto, semanaDaData, semanaDoProduto,
   vereditoDaSemana,
 } from '../src/domain/tempoAlvo.js';
@@ -425,7 +426,9 @@ describe('o tempo-alvo pela esteira (.gs v5.65)', () => {
 
   it('sem medida da caixa (mesmo com UEP): sem alvo, com o motivo da esteira — nunca a UEP no lugar', () => {
     const a = alvoDoProduto(L, '501160 · BERCO ALGODAO DOCE · VOL 1/2');
-    expect(a).toEqual({ alvoMs: null, estado: 'sem-esteira', rot: '501160 · BERCO ALGODAO DOCE · VOL 1/2', largura: null });
+    expect(a).toEqual({
+      alvoMs: null, estado: 'sem-esteira', rot: '501160 · BERCO ALGODAO DOCE · VOL 1/2', largura: null, larguraNoPainel: false,
+    });
     expect(semAlvo('sem-esteira')).toMatch(/medida da caixa ou a velocidade da esteira/);
     expect(semAlvoCurto('sem-esteira')).toBe('produto sem medida da caixa no painel');
   });
@@ -500,8 +503,26 @@ describe('a caixa do vídeo: a largura da caixa fechada (.gs v5.73)', () => {
 
   it('o alvo do produto leva a largura — também o produto sem esteira (o vídeo mede a caixa dele)', () => {
     expect(alvoDoProduto(L, '501094 · MESA CABECEIRA SLEEP')).toMatchObject({ estado: 'ok', medida: 825, largura: 440 });
-    expect(alvoDoProduto(L, '501130 · MESA LATERAL')).toMatchObject({ estado: 'sem-esteira', alvoMs: null, largura: 670 });
+    expect(alvoDoProduto(L, '501130 · MESA LATERAL')).toMatchObject({ estado: 'sem-esteira', alvoMs: null, largura: 670, larguraNoPainel: true });
     expect(alvoDoProduto(L, '501076 · EXPOSITOR U').largura).toBeNull();
+  });
+
+  /* Por que falta a caixa (revisao da v2.119.0): o painel antes do .gs v5.73
+     nao manda a chave `largura` em produto nenhum — "falta reimplantar", nao
+     "falta no cadastro" (o PPCP acharia a 440 na coluna). O v5.73 manda a
+     chave sempre (null quando nao tem). */
+  it('o aviso sem caixa distingue o painel antigo (sem a chave) do cadastro sem a largura', () => {
+    expect(L.ref.largura).toBe(true);
+    expect(avisoSemCaixa(alvoDoProduto(L, '501094 · MESA CABECEIRA SLEEP'))).toBeNull();
+    expect(avisoSemCaixa(alvoDoProduto(L, '501076 · EXPOSITOR U'))).toMatch(/^Sem a largura da caixa fechada deste produto no cadastro do painel \(MEDIDA_EXT_LARGURA/);
+    const antigo = respostaDosAlvos({ ...PAINEL, produtos: PAINEL.produtos.map(({ largura: _l, ...p }) => p) });
+    expect(antigo.ref.largura).toBe(false);
+    const a = alvoDoProduto(antigo, '501094 · MESA CABECEIRA SLEEP');
+    expect([a.largura, a.larguraNoPainel, caixaDoVideo(a)]).toEqual([null, false, null]);
+    expect(avisoSemCaixa(a)).toMatch(/^O painel ainda não manda a largura da caixa fechada: falta reimplantar o \.gs v5\.73/);
+    expect(avisoSemCaixa(alvoDoProduto(antigo, '501130 · MESA LATERAL'))).toMatch(/falta reimplantar/);
+    expect(avisoSemCaixa({ estado: 'gs-antigo', alvoMs: null })).toMatch(/falta reimplantar/);
+    expect(avisoSemCaixa(null)).toMatch(/^Sem a largura/);
   });
 
   it('a caixa do vídeo é a largura (440), nunca a medida aberta (825); sem largura, null — o quadro pede a medida', () => {

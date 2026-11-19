@@ -86,14 +86,19 @@ export function alvoDoProduto(lido, peca, { semRede = false, data = null } = {})
   const esteira = lido.ref?.metodo === 'esteira';
   // A largura (a caixa fechada, a do video) vai mesmo sem alvo: o video mede
   // a caixa de um produto sem velocidade no cadastro (v2.119.0).
-  if (!(p.alvoMs > 0)) return { alvoMs: null, estado: esteira ? 'sem-esteira' : 'sem-uep', rot: p.rot, largura: p.largura ?? null };
+  const larguraNoPainel = lido.ref?.largura === true;
+  if (!(p.alvoMs > 0)) {
+    return {
+      alvoMs: null, estado: esteira ? 'sem-esteira' : 'sem-uep', rot: p.rot, largura: p.largura ?? null, larguraNoPainel,
+    };
+  }
   return {
     alvoMs: p.alvoMs, estado: 'ok', rot: p.rot, uep: p.uep,
     metodo: esteira ? 'esteira' : 'uep',
     eficiencia: esteira ? lido.ref?.eficiencia ?? null : null,
     esteiraMs: esteira ? p.esteiraMs ?? null : null,
     medida: esteira ? p.medida ?? null : null, vel: esteira ? p.vel ?? null : null, entre: esteira ? p.entre ?? null : null,
-    largura: p.largura ?? null,
+    largura: p.largura ?? null, larguraNoPainel,
     sUep: lido.ref?.sUep ?? null, metaUep: lido.ref?.metaUep ?? null, setupDia: lido.ref?.setupDia ?? null,
     minDia: lido.ref?.minDia ?? null, lidoEm: lido.lidoEm ?? null,
     semana: semanaDoProduto(semanaDaData(lido, data ?? new Date()), p.uep, { esteira }),
@@ -112,6 +117,22 @@ export function alvoDoProduto(lido, peca, { semRede = false, data = null } = {})
 export function caixaDoVideo(alvo) {
   const l = Number(alvo?.largura);
   return Number.isFinite(l) && l > 0 ? Math.round(l) : null;
+}
+
+/**
+ * POR QUE FALTA A CAIXA DO VIDEO (revisao da v2.119.0) — a frase da tela, ou
+ * null quando ha' caixa. O painel antes do .gs v5.73 nao manda a largura de
+ * produto nenhum: a frase diz que falta reimplantar, nao que falta no
+ * cadastro (o PPCP acharia a 440 na coluna e nao entenderia o aviso).
+ */
+export function avisoSemCaixa(alvo) {
+  if (caixaDoVideo(alvo)) return null;
+  if (alvo?.larguraNoPainel === false || alvo?.estado === 'gs-antigo') {
+    return 'O painel ainda não manda a largura da caixa fechada: falta reimplantar o .gs v5.73 no Apps Script. '
+      + 'Digite a medida da caixa.';
+  }
+  return 'Sem a largura da caixa fechada deste produto no cadastro do painel (MEDIDA_EXT_LARGURA, na PRODUTO_CODIGO; '
+    + 'num jogo de volumes com caixas diferentes, escolha o volume). Digite a medida da caixa.';
 }
 
 /** dd/mm/aaaa → aaaammdd (0 se nao for data). */
